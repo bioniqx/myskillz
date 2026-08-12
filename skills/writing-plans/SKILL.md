@@ -7,53 +7,92 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 ## Overview
 
-Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything they need to know: which files to touch for each task, code, testing, docs they might need to check, how to test it. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
-
-Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.
+Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything: which files to touch, actual code, how to test, what to commit. Assume a skilled developer who knows nothing about our toolset, problem domain, or good test design. DRY. YAGNI. TDD. Frequent commits.
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
-**Context:** If working in an isolated worktree, it should have been created via the `superpowers:using-git-worktrees` skill at execution time.
+**Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md` (user preferences override).
+**Scratch dir for parallel work:** `docs/superpowers/plans/.work/<feature-name>/` — deleted after assembly.
 
-**Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
-- (User preferences for plan location override this default)
+**Speed doctrine:** the slow part of planning is writing task bodies with real code. Never write them serially when there are 4+ tasks — lock the contracts once, then fan task bodies out to parallel subagents (max 64, all dispatched in a single message). Serial effort goes only where divergence is possible: the Contract Table.
 
 ## Scope Check
 
-If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
+If the spec covers multiple independent subsystems, suggest one plan per subsystem — each producing working, testable software on its own. Independent subsystem plans can themselves be built concurrently (split the 64-agent budget between them).
 
-## File Structure
+## Pipeline
 
-Before defining tasks, map out which files will be created or modified and what each one is responsible for. This is where decomposition decisions get locked in.
+### Route (decide during the single spec read)
 
-- Design units with clear boundaries and well-defined interfaces. Each file should have one clear responsibility.
-- You reason best about code you can hold in context at once, and your edits are more reliable when files are focused. Prefer smaller, focused files over large ones that do too much.
-- Files that change together should live together. Split by responsibility, not by technical layer.
-- In existing codebases, follow established patterns. If the codebase uses large files, don't unilaterally restructure - but if a file you're modifying has grown unwieldy, including a split in the plan is reasonable.
+| Estimated tasks | Path |
+|---|---|
+| ≤ 3 | **Inline**: write the whole plan in one pass, then run Final Checks yourself. Subagent overhead isn't worth it. |
+| 4+ | **Fan-out**: Phases 1–3 below. |
 
-This structure informs the task decomposition. Each task should produce self-contained changes that make sense independently.
+Read the spec exactly once; estimate the task count during that read.
 
-## Task Right-Sizing
+### Phase 1 — Skeleton (serial; this is where quality is locked)
 
-A task is the smallest unit that carries its own test cycle and is worth a
-fresh reviewer's gate. When drawing task boundaries: fold setup,
-configuration, scaffolding, and documentation steps into the task whose
-deliverable needs them; split only where a reviewer could meaningfully
-reject one task while approving its neighbor. Each task ends with an
-independently testable deliverable.
+Write the plan file with:
 
-## Bite-Sized Task Granularity
+1. **Header + Global Constraints** (template below)
+2. **File Structure** — every file created/modified, one clear responsibility each. Prefer small focused files; split by responsibility, not technical layer; follow existing codebase patterns.
+3. **Contract Table** — one row per task: task number/name, files, and **exact** Produces/Consumes signatures (function names, parameter and return types, verbatim). This is the single source of truth parallel writers copy from. Ambiguous signatures are the *only* way parallel writing diverges — spend the effort here, not in review.
 
-**Each step is one action (2-5 minutes):**
-- "Write the failing test" - step
-- "Run it to make sure it fails" - step
-- "Implement the minimal code to make the test pass" - step
-- "Run the tests and make sure they pass" - step
-- "Commit" - step
+Then write one brief per task at `.work/<feature>/briefs/task-NN.md` (zero-padded NN). Each brief is **self-sufficient** — a writer never reads the spec:
+
+- Verbatim spec excerpts relevant to this task (copy, don't summarize)
+- Its own Contract Table row + the rows it consumes
+- Global Constraints (copy them in — writers don't open the plan file)
+- Exact file paths (Create / Modify / Test)
+
+### Phase 2 — Fan-out (parallel, max 64)
+
+Dispatch **all** task writers in **ONE message** so they run concurrently — one `Task` (general-purpose) per task:
+
+- N ≤ 64 → one writer per task.
+- N > 64 → chunk *contiguous* tasks (⌈N/64⌉ per writer) so writers never exceed 64. Contiguous chunks keep consumed contracts local.
+
+Each writer writes only its own file `.work/<feature>/tasks/task-NN.md` — isolated outputs, zero write contention, no shared state. Use the Task Writer Prompt below verbatim, pasting in the Task Structure template.
+
+### Phase 3 — Assemble + Verify (mechanical, fast)
+
+1. **Assemble** with a single command — zero-padded names guarantee order:
+   `cat .work/<feature>/tasks/task-*.md >> docs/superpowers/plans/<plan>.md`
+2. **Signature check:** grep each Contract Table signature against the assembled plan. Any mismatch → fix inline. Contracts were locked in Phase 1, so consistency is a grep, not a re-read.
+3. **Placeholder scan:** grep the assembled plan for `TBD|TODO|implement later|appropriate error handling|similar to Task`. Hits → fix inline.
+4. **Coverage skim:** each spec section maps to a task. Gap → write the missing task inline (or dispatch one more writer).
+5. **Plans > 10 tasks:** dispatch parallel reviewers per `plan-document-reviewer-prompt.md`, sharded into contiguous task ranges, all in ONE message. Fix real issues; ignore advisory notes.
+6. Delete `.work/<feature>/`.
+
+Fix-and-move-on: never re-run a full review after a fix.
+
+## Task Writer Prompt
+
+```
+You are writing Task NN of an implementation plan. Everything you need is in
+this prompt and your brief. Do NOT read the spec, the plan, or explore the
+codebase. You MAY read only files listed under "Modify" in your brief.
+
+Brief: <absolute path to .work/<feature>/briefs/task-NN.md>
+Write EXACTLY one file: <absolute path to .work/<feature>/tasks/task-NN.md>
+
+Format — follow exactly:
+<paste the Task Structure template here>
+
+Rules:
+- Copy Interfaces signatures VERBATIM from your brief's contract rows.
+- Bite-sized steps, one action each (2–5 min), TDD cycle per behavior:
+  write failing test → run to see it fail (exact command + expected failure)
+  → minimal implementation → run to see it pass → commit.
+- Real code in every code step. The implementer sees ONLY your task file.
+- Banned content (self-check before returning): "TBD", "TODO", "implement
+  later", "add appropriate error handling/validation", tests described but
+  not written, "similar to Task N", any symbol not defined in your brief.
+- Return only the text: "task-NN written". Do not echo the task body.
+```
 
 ## Plan Document Header
-
-**Every plan MUST start with this header:**
 
 ```markdown
 # [Feature Name] Implementation Plan
@@ -69,9 +108,8 @@ independently testable deliverable.
 ## Global Constraints
 
 [The spec's project-wide requirements — version floors, dependency limits,
-naming and copy rules, platform requirements — one line each, with exact
-values copied verbatim from the spec. Every task's requirements implicitly
-include this section.]
+naming and copy rules, platform requirements — one line each, exact values
+copied verbatim from the spec. Every task implicitly includes this section.]
 
 ---
 ```
@@ -88,9 +126,9 @@ include this section.]
 
 **Interfaces:**
 - Consumes: [what this task uses from earlier tasks — exact signatures]
-- Produces: [what later tasks rely on — exact function names, parameter
-  and return types. A task's implementer sees only their own task; this
-  block is how they learn the names and types neighboring tasks use.]
+- Produces: [what later tasks rely on — exact names, parameter and return
+  types. A task's implementer sees only their own task; this block is how
+  they learn what neighboring tasks expect.]
 
 - [ ] **Step 1: Write the failing test**
 
@@ -125,44 +163,36 @@ git commit -m "feat: add specific feature"
 ```
 ````
 
+## Task Right-Sizing
+
+A task is the smallest unit that carries its own test cycle and is worth a fresh reviewer's gate. Fold setup, configuration, scaffolding, and docs into the task whose deliverable needs them; split only where a reviewer could reject one task while approving its neighbor. Each task ends with an independently testable deliverable.
+
 ## No Placeholders
 
-Every step must contain the actual content an engineer needs. These are **plan failures** — never write them:
+Every step must contain the actual content an engineer needs. **Plan failures** — never write, always scan for:
+
 - "TBD", "TODO", "implement later", "fill in details"
 - "Add appropriate error handling" / "add validation" / "handle edge cases"
 - "Write tests for the above" (without actual test code)
-- "Similar to Task N" (repeat the code — the engineer may be reading tasks out of order)
-- Steps that describe what to do without showing how (code blocks required for code steps)
-- References to types, functions, or methods not defined in any task
+- "Similar to Task N" (repeat the code — tasks may be read out of order)
+- Steps describing *what* without *how* (code blocks required for code steps)
+- References to types/functions/methods not defined in any task
 
-## Self-Review
+## Final Checks (inline path only)
 
-After writing the complete plan, look at the spec with fresh eyes and check the plan against it. This is a checklist you run yourself — not a subagent dispatch.
-
-**1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
-
-**2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
-
-**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
-
-If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
+Fan-out plans are verified in Phase 3. For inline plans, check yourself: (1) every spec requirement maps to a task; (2) placeholder scan per the list above; (3) signatures used in later tasks match earlier definitions exactly. Fix inline; no re-review.
 
 ## Execution Handoff
 
-After saving the plan, offer execution choice:
+After saving the plan, offer:
 
 **"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Two execution options:**
 
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
+**1. Subagent-Driven (recommended)** — fresh subagent per task, review between tasks, fast iteration. Independent tasks (per the Contract Table) may execute concurrently.
 
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
+**2. Inline Execution** — execute in this session via executing-plans, batch execution with checkpoints.
 
 **Which approach?"**
 
-**If Subagent-Driven chosen:**
-- **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development
-- Fresh subagent per task + two-stage review
-
-**If Inline Execution chosen:**
-- **REQUIRED SUB-SKILL:** Use superpowers:executing-plans
-- Batch execution with checkpoints for review
+- Subagent-Driven → REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
+- Inline → REQUIRED SUB-SKILL: `superpowers:executing-plans`
