@@ -2,6 +2,14 @@
 
 Browser-based visual brainstorming companion for showing mockups, diagrams, and options.
 
+## Speed Rules
+
+- **Read this guide only after the user accepts the companion** — never preload it.
+- **Never block on the server.** `start-server.sh` backgrounds itself and returns JSON immediately. Do not sleep, poll, or wait for the browser to connect.
+- **Same-turn screen + message:** write the HTML screen file and your user-facing summary/question in the same turn, then end the turn. Never write a screen in one turn and describe it in the next.
+- **Never poll `$STATE_DIR/events`.** Read it exactly once — on your next turn, after the user responds in the terminal.
+- **Batch server ops with other work:** the liveness check (`server-info` exists, `server-stopped` doesn't) rides in the same message as writing the screen file, not as a separate step.
+
 ## When to Use
 
 Decide per-question, not per-session. The test: **would the user understand this better by seeing it than reading it?**

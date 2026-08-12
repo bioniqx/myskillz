@@ -1,49 +1,40 @@
-# Spec Document Reviewer Prompt Template
+# Parallel Spec Review — Dispatch Template
 
-Use this template when dispatching a spec document reviewer subagent.
+**When to use:** only for large or multi-component specs (>~120 lines or >3 components). Smaller specs get the inline self-review in SKILL.md Step 4 — dispatching agents for a small spec is slower than just reading it.
 
-**Purpose:** Verify the spec is complete, consistent, and ready for implementation planning.
+**How to dispatch:** ALL reviewers in ONE message so they run concurrently. Read-only. Fastest model available (haiku). 5 reviewers standard; for very large specs, shard the completeness and consistency reviewers per major section — total cap 64 concurrent.
 
-**Dispatch after:** Spec document is written to docs/superpowers/specs/
+| Reviewer | Single dimension it checks |
+|----------|---------------------------|
+| completeness | TODOs, placeholders, "TBD", missing/incomplete sections |
+| consistency | internal contradictions; architecture vs. feature-description mismatches |
+| clarity | requirements ambiguous enough to be built two different ways |
+| scope | covers multiple independent subsystems / needs decomposition |
+| yagni | unrequested features, over-engineering |
+
+## Per-reviewer prompt
 
 ```
-Subagent (general-purpose):
-  description: "Review spec document"
+Subagent (Explore or general-purpose, model: haiku):
+  description: "Spec review: [DIMENSION]"
   prompt: |
-    You are a spec document reviewer. Verify this spec is complete and ready for planning.
+    You are a spec reviewer checking exactly ONE dimension: [DIMENSION] — [dimension description from table].
 
-    **Spec to review:** [SPEC_FILE_PATH]
+    Spec to review: [SPEC_FILE_PATH]
 
-    ## What to Check
+    Calibration: only flag issues that would cause real problems during
+    implementation planning. Minor wording, stylistic preferences, and
+    "this section is less detailed than others" are NOT issues.
 
-    | Category | What to Look For |
-    |----------|------------------|
-    | Completeness | TODOs, placeholders, "TBD", incomplete sections |
-    | Consistency | Internal contradictions, conflicting requirements |
-    | Clarity | Requirements ambiguous enough to cause someone to build the wrong thing |
-    | Scope | Focused enough for a single plan — not covering multiple independent subsystems |
-    | YAGNI | Unrequested features, over-engineering |
-
-    ## Calibration
-
-    **Only flag issues that would cause real problems during implementation planning.**
-    A missing section, a contradiction, or a requirement so ambiguous it could be
-    interpreted two different ways — those are issues. Minor wording improvements,
-    stylistic preferences, and "sections less detailed than others" are not.
-
-    Approve unless there are serious gaps that would lead to a flawed plan.
-
-    ## Output Format
-
-    ## Spec Review
-
-    **Status:** Approved | Issues Found
-
-    **Issues (if any):**
-    - [Section X]: [specific issue] - [why it matters for planning]
-
-    **Recommendations (advisory, do not block approval):**
-    - [suggestions for improvement]
+    Output (compact, nothing else):
+    STATUS: PASS | FAIL
+    ISSUES:            (omit entirely if PASS)
+    - [section]: [issue] — [why it matters for planning]
+    NOTES: [max 2 advisory suggestions, optional]
 ```
 
-**Reviewer returns:** Status, Issues (if any), Recommendations
+## Aggregation
+
+- Any FAIL → fix the flagged issues inline in the spec. Do NOT re-dispatch reviewers — fix and move on.
+- All PASS → proceed to commit and hand-off.
+- Advisory NOTES never block.
