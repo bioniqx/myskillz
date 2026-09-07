@@ -1,0 +1,9 @@
+{
+  "name": "req-audit",
+  "version": "2.0.0",
+  "description": "Requirements ↔ code audit: up to 64 parallel read-only investigators, adversarial verification, scripted report. Bundles the skill, three worker agents (rca-investigator, rca-verifier, rca-parser) and the audit guard hooks.",
+  "author": {
+    "name": "bioniqx"
+  },
+  "keywords": ["audit", "requirements", "traceability", "spec", "compliance", "parallel"]
+}
