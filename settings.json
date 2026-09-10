@@ -1,96 +1,101 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(git:*)",
-      "Bash(python3 <abs>/devteam.py:*)"
-    ],
-    "deny": [
-      "Bash(git push:*)"
-    ],
-    "defaultMode": "auto"
+  "agentPushNotifEnabled" : true,
+  "askUserQuestionTimeout" : "never",
+  "autoCompactEnabled" : true,
+  "awaySummaryEnabled" : false,
+  "editorMode" : "normal",
+  "effortLevel" : "high",
+  "enabledPlugins" : {
+    "claude-md-management@claude-plugins-official" : false,
+    "code-review@claude-plugins-official" : false,
+    "code-simplifier@claude-plugins-official" : false,
+    "coderabbit@claude-plugins-official" : false,
+    "feature-dev@claude-plugins-official" : false,
+    "frontend-design@claude-plugins-official" : true,
+    "handoff@handoff" : true,
+    "insecure-defaults@trailofbits" : false,
+    "pr-review-toolkit@claude-plugins-official" : false,
+    "skill-improver@trailofbits" : true,
+    "static-analysis@trailofbits" : false,
+    "superpowers@claude-plugins-official" : false,
+    "workflow-skill-design@trailofbits" : true
   },
-  "model": "claude-fable-5-1[1m]",
-  "skillOverrides": {
-    "find-skills": "off",
-    "grill-me": "off",
-    "grill-with-docs": "off"
+  "env" : {
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS" : "64",
+    "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY" : "64"
   },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "CMD=$(jq -r '.tool_input.command // empty'); if printf '%s' \"$CMD\" | grep -Eq '(^|[^[:alnum:]_])git[[:space:]]+push([^[:alnum:]_]|$)'; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"git push bi chan theo cau hinh he thong (~/.claude/settings.json). git commit va cac lenh git khac deu duoc phep.\"}}'; else exit 0; fi"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "rtk hook claude"
-          }
-        ]
-      }
-    ]
-  },
-  "worktree": {
-    "baseRef": "fresh",
-    "symlinkDirectories": [
-      "node_modules"
-    ]
-  },
-  "enabledPlugins": {
-    "claude-md-management@claude-plugins-official": false,
-    "code-review@claude-plugins-official": false,
-    "code-simplifier@claude-plugins-official": false,
-    "coderabbit@claude-plugins-official": false,
-    "feature-dev@claude-plugins-official": false,
-    "frontend-design@claude-plugins-official": true,
-    "handoff@handoff": true,
-    "insecure-defaults@trailofbits": false,
-    "pr-review-toolkit@claude-plugins-official": false,
-    "skill-improver@trailofbits": true,
-    "static-analysis@trailofbits": false,
-    "superpowers@claude-plugins-official": false,
-    "workflow-skill-design@trailofbits": true
-  },
-  "extraKnownMarketplaces": {
-    "addy-agent-skills": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/addyosmani/agent-skills.git"
+  "extraKnownMarketplaces" : {
+    "addy-agent-skills" : {
+      "source" : {
+        "source" : "git",
+        "url" : "https:\/\/github.com\/addyosmani\/agent-skills.git"
       }
     },
-    "handoff": {
-      "source": {
-        "source": "github",
-        "repo": "thepushkarp/handoff"
+    "handoff" : {
+      "source" : {
+        "repo" : "thepushkarp\/handoff",
+        "source" : "github"
       }
     },
-    "trailofbits": {
-      "source": {
-        "source": "github",
-        "repo": "trailofbits/skills"
+    "trailofbits" : {
+      "source" : {
+        "repo" : "trailofbits\/skills",
+        "source" : "github"
       }
     }
   },
-  "effortLevel": "high",
-  "awaySummaryEnabled": false,
-  "askUserQuestionTimeout": "never",
-  "skipDangerousModePermissionPrompt": true,
-  "theme": "auto",
-  "editorMode": "normal",
-  "preferredNotifChannel": "auto",
-  "autoCompactEnabled": true,
-  "remoteControlAtStartup": true,
-  "inputNeededNotifEnabled": true,
-  "agentPushNotifEnabled": true,
-  "env": {
-    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
-    "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "64"
+  "hooks" : {
+    "PreToolUse" : [
+      {
+        "hooks" : [
+          {
+            "command" : "CMD=$(jq -r '.tool_input.command \/\/ empty'); if printf '%s' \"$CMD\" | grep -Eq '(^|[^[:alnum:]_])git[[:space:]]+push([^[:alnum:]_]|$)'; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"git push bi chan theo cau hinh he thong (~\/.claude\/settings.json). git commit va cac lenh git khac deu duoc phep.\"}}'; else exit 0; fi",
+            "type" : "command"
+          }
+        ],
+        "matcher" : "Bash"
+      },
+      {
+        "hooks" : [
+          {
+            "command" : "rtk hook claude",
+            "type" : "command"
+          }
+        ],
+        "matcher" : "Bash"
+      }
+    ]
+  },
+  "inputNeededNotifEnabled" : true,
+  "model" : "sonnet",
+  "modelSettings" : {
+    "claude-sonnet-5" : {
+      "effortLevel" : "high"
+    }
+  },
+  "permissions" : {
+    "allow" : [
+      "Bash(git:*)",
+      "Bash(python3 <abs>\/devteam.py:*)"
+    ],
+    "defaultMode" : "auto",
+    "deny" : [
+      "Bash(git push:*)"
+    ]
+  },
+  "preferredNotifChannel" : "auto",
+  "remoteControlAtStartup" : true,
+  "skillOverrides" : {
+    "find-skills" : "off",
+    "grill-me" : "off",
+    "grill-with-docs" : "off"
+  },
+  "skipDangerousModePermissionPrompt" : true,
+  "theme" : "auto",
+  "worktree" : {
+    "baseRef" : "fresh",
+    "symlinkDirectories" : [
+      "node_modules"
+    ]
   }
 }
