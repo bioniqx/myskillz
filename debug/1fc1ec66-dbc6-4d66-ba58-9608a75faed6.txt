@@ -1,0 +1,805 @@
+2026-09-14T10:04:22.793Z [DEBUG] Started caffeinate to prevent sleep
+2026-09-14T10:04:22.801Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:04:22.801Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:04:22.801Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:04:22.802Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:04:22.802Z [DEBUG] Total plugin output styles loaded: 0
+2026-09-14T10:04:22.803Z [DEBUG] Sending 32 skills via attachment (initial)
+2026-09-14T10:04:22.809Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:04:22.809Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.e455a4b2a184
+2026-09-14T10:04:22.810Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:04:22.810Z [DEBUG] Temp file written successfully, size: 174574 bytes
+2026-09-14T10:04:22.810Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.e455a4b2a184 to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:04:22.810Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:04:22.839Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:22.849Z [DEBUG] FileHistory: Added snapshot for edd2589f-bab4-4b4f-a9af-ea2f26b41c87, tracking 0 files
+2026-09-14T10:04:22.852Z [DEBUG] act_dont_rederive_arm_active source=growthbook
+2026-09-14T10:04:22.854Z [DEBUG] [engine] yield system/init (first)
+2026-09-14T10:04:22.854Z [DEBUG] [engine] turn 1 start
+2026-09-14T10:04:22.856Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:04:22.863Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:04:22.864Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000;
+2026-09-14T10:04:22.864Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:22.865Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:22.866Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:22.867Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:04:22.867Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=fea7d897-7ae5-4fec-b69b-52782ccbaed3 source=repl_main_thread
+2026-09-14T10:04:22.871Z [DEBUG] [remote-bridge] Sending 2 message(s)
+2026-09-14T10:04:24.021Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:04:24.021Z [DEBUG] [API:timing] first byte after 1154ms
+2026-09-14T10:04:24.109Z [DEBUG] High write ratio: blit=2524, write=24870 (90.8% writes), screen=76x97
+2026-09-14T10:04:24.116Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:04:24.116Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.a463e4ca67d9
+2026-09-14T10:04:24.116Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:04:24.116Z [DEBUG] Temp file written successfully, size: 174574 bytes
+2026-09-14T10:04:24.116Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.a463e4ca67d9 to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:04:24.117Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:04:24.150Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:25.721Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:25.724Z [DEBUG] High write ratio: blit=7178, write=24702 (77.5% writes), screen=76x97
+2026-09-14T10:04:27.309Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:27.313Z [DEBUG] High write ratio: blit=7275, write=24678 (77.2% writes), screen=76x97
+2026-09-14T10:04:27.324Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:27.328Z [DEBUG] Hooks: Checking first line for async: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"rtk ls -la && echo \"---PKG---\" && cat package.json 2>/dev/null | head -60","description":"List project files and read package.json"}}}
+2026-09-14T10:04:27.329Z [DEBUG] Hooks: Parsed initial response: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"rtk ls -la && echo \"---PKG---\" && cat package.json 2>/dev/null | head -60","description":"List project files and read package.json"}}}
+2026-09-14T10:04:27.329Z [DEBUG] Hooks: Initial response is not async, continuing normal processing
+2026-09-14T10:04:27.329Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:27.330Z [DEBUG] Successfully parsed and validated hook JSON output
+2026-09-14T10:04:27.330Z [DEBUG] "Hook PreToolUse:Bash (PreToolUse) success:\n{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecisionReason\":\"RTK auto-rewrite\",\"updatedInput\":{\"command\":\"rtk ls -la && echo \\\"---PKG---\\\" && cat package.json 2>/dev/null | head -60\",\"description\":\"List project files and read package.json\"}}}"
+2026-09-14T10:04:27.330Z [DEBUG] Hook PreToolUse (rtk hook claude) modified tool input keys: [command, description]
+2026-09-14T10:04:27.343Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01WKdWLirTtPuCnhY2grzMUF permissionDecisionMs=12
+2026-09-14T10:04:27.476Z [DEBUG] Creating shell snapshot for zsh (/bin/zsh)
+2026-09-14T10:04:27.476Z [DEBUG] Looking for shell config file: /Users/yamazaki-ethan/.zshrc
+2026-09-14T10:04:27.477Z [DEBUG] Snapshots directory: /Users/yamazaki-ethan/.claude/shell-snapshots
+2026-09-14T10:04:27.477Z [DEBUG] Creating snapshot at: /Users/yamazaki-ethan/.claude/shell-snapshots/snapshot-zsh-1789380267477-s4vqry.sh
+2026-09-14T10:04:27.477Z [DEBUG] Execution timeout: 10000ms
+2026-09-14T10:04:27.496Z [DEBUG] Spawn-env probe captured 64 keys
+2026-09-14T10:04:27.539Z [DEBUG] Plugin autoupdate: checking installed plugins
+2026-09-14T10:04:27.540Z [DEBUG] Skipping refresh for marketplace 'claude-plugins-official' — refreshed 0s ago
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin claude-md-management from source: "./plugins/claude-md-management"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin code-review from source: "./plugins/code-review"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin code-simplifier from source: "./plugins/code-simplifier"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin coderabbit from source: {"source":"url","url":"https://github.com/coderabbitai/skills.git","sha":"929b0ec6dae6871abf20f78e7e502d6b836e1379"}
+2026-09-14T10:04:27.570Z [DEBUG] Using provided version for coderabbit@claude-plugins-official: 1.1.1
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin feature-dev from source: "./plugins/feature-dev"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin frontend-design from source: "./plugins/frontend-design"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin handoff from source: "./plugins/handoff"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin insecure-defaults from source: "./plugins/insecure-defaults"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin pr-review-toolkit from source: "./plugins/pr-review-toolkit"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin skill-improver from source: "./plugins/skill-improver"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin static-analysis from source: "./plugins/static-analysis"
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin superpowers from source: {"source":"url","url":"https://github.com/obra/superpowers.git","sha":"b36e0829c6d0140e93cfef2ca599b1b07d4a7797"}
+2026-09-14T10:04:27.570Z [DEBUG] Using provided version for superpowers@claude-plugins-official: 6.3.0
+2026-09-14T10:04:27.570Z [DEBUG] Loading plugin workflow-skill-design from source: "./plugins/workflow-skill-design"
+2026-09-14T10:04:27.571Z [DEBUG] [plugins] skipping hidden skills-dir entry '.DS_Store': dot-prefixed dirs are never adopted as plugins
+2026-09-14T10:04:27.571Z [DEBUG] Using versioned cached plugin coderabbit from /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/coderabbit/1.1.1
+2026-09-14T10:04:27.572Z [DEBUG] Using versioned cached plugin superpowers from /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/superpowers/6.3.0
+2026-09-14T10:04:27.574Z [DEBUG] Using manifest version for handoff@handoff: 0.2.0
+2026-09-14T10:04:27.574Z [DEBUG] Using manifest version for claude-md-management@claude-plugins-official: 1.0.0
+2026-09-14T10:04:27.575Z [DEBUG] Using manifest version for skill-improver@trailofbits: 1.0.4
+2026-09-14T10:04:27.575Z [DEBUG] Using manifest version for static-analysis@trailofbits: 1.2.2
+2026-09-14T10:04:27.575Z [DEBUG] Using manifest version for insecure-defaults@trailofbits: 1.0.1
+2026-09-14T10:04:27.575Z [DEBUG] Using manifest version for workflow-skill-design@trailofbits: 1.0.2
+2026-09-14T10:04:27.575Z [DEBUG] Using manifest version for code-simplifier@claude-plugins-official: 1.0.0
+2026-09-14T10:04:27.575Z [DEBUG] Using marketplace snapshot SHA for pr-review-toolkit@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.575Z [DEBUG] Using marketplace snapshot SHA for frontend-design@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.575Z [DEBUG] Using marketplace snapshot SHA for code-review@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.575Z [DEBUG] Using marketplace snapshot SHA for feature-dev@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.576Z [DEBUG] Read hooks.json for plugin req-audit (enabled=true): /Users/yamazaki-ethan/.claude/skills/requirements-code-audit/hooks/hooks.json
+2026-09-14T10:04:27.576Z [DEBUG] Read hooks.json for plugin superpowers (enabled=false; will NOT register, plugin is disabled): /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/superpowers/6.3.0/hooks/hooks.json
+2026-09-14T10:04:27.576Z [DEBUG] Plugin handoff@handoff version 0.2.0 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/handoff/handoff/0.2.0
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin handoff to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/handoff/handoff/0.2.0
+2026-09-14T10:04:27.576Z [DEBUG] Loaded 1 skills-as-plugins
+2026-09-14T10:04:27.576Z [DEBUG] Plugin claude-md-management@claude-plugins-official version 1.0.0 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/claude-md-management/1.0.0
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin claude-md-management to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/claude-md-management/1.0.0
+2026-09-14T10:04:27.576Z [DEBUG] Plugin skill-improver@trailofbits version 1.0.4 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/skill-improver/1.0.4
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin skill-improver to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/skill-improver/1.0.4
+2026-09-14T10:04:27.576Z [DEBUG] Plugin static-analysis@trailofbits version 1.2.2 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/static-analysis/1.2.2
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin static-analysis to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/static-analysis/1.2.2
+2026-09-14T10:04:27.576Z [DEBUG] Plugin insecure-defaults@trailofbits version 1.0.1 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/insecure-defaults/1.0.1
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin insecure-defaults to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/insecure-defaults/1.0.1
+2026-09-14T10:04:27.576Z [DEBUG] Plugin code-simplifier@claude-plugins-official version 1.0.0 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/code-simplifier/1.0.0
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin code-simplifier to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/code-simplifier/1.0.0
+2026-09-14T10:04:27.576Z [DEBUG] Plugin pr-review-toolkit@claude-plugins-official version 022b3c274938 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/pr-review-toolkit/022b3c274938
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin pr-review-toolkit to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/pr-review-toolkit/022b3c274938
+2026-09-14T10:04:27.576Z [DEBUG] Plugin workflow-skill-design@trailofbits version 1.0.2 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/workflow-skill-design/1.0.2
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin workflow-skill-design to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/workflow-skill-design/1.0.2
+2026-09-14T10:04:27.576Z [DEBUG] Plugin frontend-design@claude-plugins-official version 022b3c274938 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/frontend-design/022b3c274938
+2026-09-14T10:04:27.576Z [DEBUG] Copied plugin frontend-design to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/frontend-design/022b3c274938
+2026-09-14T10:04:27.577Z [DEBUG] Plugin feature-dev@claude-plugins-official version 022b3c274938 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/feature-dev/022b3c274938
+2026-09-14T10:04:27.577Z [DEBUG] Copied plugin feature-dev to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/feature-dev/022b3c274938
+2026-09-14T10:04:27.577Z [DEBUG] Plugin code-review@claude-plugins-official version 022b3c274938 already cached at /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/code-review/022b3c274938
+2026-09-14T10:04:27.577Z [DEBUG] Copied plugin code-review to versioned cache: /Users/yamazaki-ethan/.claude/plugins/cache/claude-plugins-official/code-review/022b3c274938
+2026-09-14T10:04:27.578Z [DEBUG] Read hooks.json for plugin handoff (enabled=true): /Users/yamazaki-ethan/.claude/plugins/cache/handoff/handoff/0.2.0/hooks/hooks.json
+2026-09-14T10:04:27.578Z [DEBUG] Read hooks.json for plugin skill-improver (enabled=true): /Users/yamazaki-ethan/.claude/plugins/cache/trailofbits/skill-improver/1.0.4/hooks/hooks.json
+2026-09-14T10:04:27.584Z [DEBUG] Found 14 plugins (5 enabled, 9 disabled)
+2026-09-14T10:04:27.591Z [DEBUG] Caching plugin from source: {"source":"url","url":"https://github.com/obra/superpowers.git","sha":"b36e0829c6d0140e93cfef2ca599b1b07d4a7797"} to temporary path /Users/yamazaki-ethan/.claude/plugins/cache/temp_git_1789380267591_4uctbb
+2026-09-14T10:04:27.592Z [DEBUG] Caching plugin from source: {"source":"url","url":"https://github.com/coderabbitai/skills.git","sha":"929b0ec6dae6871abf20f78e7e502d6b836e1379"} to temporary path /Users/yamazaki-ethan/.claude/plugins/cache/temp_git_1789380267592_bs0dp8
+2026-09-14T10:04:27.595Z [DEBUG] Using manifest version for claude-md-management@claude-plugins-official: 1.0.0
+2026-09-14T10:04:27.596Z [DEBUG] Using manifest version for code-simplifier@claude-plugins-official: 1.0.0
+2026-09-14T10:04:27.596Z [DEBUG] Using marketplace snapshot SHA for feature-dev@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.596Z [DEBUG] Using marketplace snapshot SHA for code-review@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.596Z [DEBUG] Using marketplace snapshot SHA for pr-review-toolkit@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.596Z [DEBUG] Using marketplace snapshot SHA for frontend-design@claude-plugins-official: 022b3c274938
+2026-09-14T10:04:27.798Z [DEBUG] wheel accel: window (native) · base=1 · platform=darwin · TERM_PROGRAM=iTerm.app
+2026-09-14T10:04:27.799Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:04:28.011Z [DEBUG] Shell snapshot created successfully (12581 bytes)
+2026-09-14T10:04:28.012Z [DEBUG] No session environment scripts found
+2026-09-14T10:04:28.012Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:04:28.059Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01WKdWLirTtPuCnhY2grzMUF outcome=ok durationMs=716
+2026-09-14T10:04:28.063Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:28.072Z [DEBUG] High write ratio: blit=7081, write=25144 (78.0% writes), screen=76x97
+2026-09-14T10:04:28.083Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:28.094Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:28.095Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:28.098Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:28.102Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01RbYqH72kY47rZ8n354zZYC permissionDecisionMs=3
+2026-09-14T10:04:28.104Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:04:28.118Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01RbYqH72kY47rZ8n354zZYC outcome=ok durationMs=16
+2026-09-14T10:04:28.122Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:04:28.122Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:04:28.122Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:04:28.122Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:04:28.123Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:04:28.125Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:04:28.126Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39DfxwbpZwUiSnSZ6dM;
+2026-09-14T10:04:28.126Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:28.127Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:28.127Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:28.127Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:04:28.128Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=a524b3da-0764-4921-a388-753e85a20019 source=repl_main_thread
+2026-09-14T10:04:28.128Z [DEBUG] Stored paste 5db377aa6e993276 to /Users/yamazaki-ethan/.claude/paste-cache/5db377aa6e993276.txt
+2026-09-14T10:04:28.131Z [DEBUG] [remote-bridge] Sending 2 message(s)
+2026-09-14T10:04:28.148Z [DEBUG] High write ratio: blit=510, write=11171 (95.6% writes), screen=76x97
+2026-09-14T10:04:28.690Z [DEBUG] High write ratio: blit=995, write=10050 (91.0% writes), screen=76x97
+2026-09-14T10:04:28.757Z [DEBUG] High write ratio: blit=801, write=9804 (92.4% writes), screen=76x97
+2026-09-14T10:04:28.808Z [DEBUG] High write ratio: blit=898, write=9486 (91.4% writes), screen=76x97
+2026-09-14T10:04:28.998Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:04:29.223Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:04:29.223Z [DEBUG] [API:timing] first byte after 1095ms
+2026-09-14T10:04:29.653Z [DEBUG] MCP server "claude.ai ZipRecruiter": CLAUDEAI-PROXY connection dropped after 14s uptime
+2026-09-14T10:04:29.653Z [DEBUG] MCP server "claude.ai ZipRecruiter": Connection error: Error POSTing to endpoint: {"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/","title":"Error 502: Bad gateway","status":502,"detail":"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.","instance":"a3ae9139ace6fd67","error_code":502,"error_name":"origin_bad_gateway","error_category":"origin","ray_id":"a3ae9139ace6fd67","timestamp":"2026-09-14T10:04:29Z","zone":"mcp-proxy.anthropic.com","cloudflare_error":true,"retryable":true,"retry_after":60,"owner_action_required":true,"what_you_should_do":"**Wait and retry.** Back off for at least 60 seconds. If the error persists, the website operator should check their origin server health and configuration.","footer":"This error was generated by Cloudflare on behalf of the website owner."}
+2026-09-14T10:04:29.654Z [DEBUG] MCP server "claude.ai ZipRecruiter": subscriptions/listen re-open attempt 2 failed: Error POSTing to endpoint: {"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/","title":"Error 502: Bad gateway","status":502,"detail":"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.","instance":"a3ae9139ace6fd67","error_code":502,"error_name":"origin_bad_gateway","error_category":"origin","ray_id":"a3ae9139ace6fd67","timestamp":"2026-09-14T10:04:29Z","zone":"mcp-proxy.anthropic.com","cloudflare_error":true,"retryable":true,"retry_after":60,"owner_action_required":true,"what_you_should_do":"**Wait and retry.** Back off for at least 60 seconds. If the error persists, the website operator should check their origin server health and configuration.","footer":"This error was generated by Cloudflare on behalf of the website owner."}
+2026-09-14T10:04:32.091Z [DEBUG] Cloned repository from https://github.com/coderabbitai/skills.git to /Users/yamazaki-ethan/.claude/plugins/cache/temp_git_1789380267592_bs0dp8
+2026-09-14T10:04:32.091Z [DEBUG] Successfully cached plugin coderabbit to /Users/yamazaki-ethan/.claude/plugins/cache/temp_git_1789380267592_bs0dp8
+2026-09-14T10:04:32.091Z [DEBUG] Using manifest version for coderabbit@claude-plugins-official: 1.1.1
+2026-09-14T10:04:32.813Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:04:33.244Z [DEBUG] Cloned repository from https://github.com/obra/superpowers.git to /Users/yamazaki-ethan/.claude/plugins/cache/temp_git_1789380267591_4uctbb
+2026-09-14T10:04:33.244Z [DEBUG] Successfully cached plugin superpowers to /Users/yamazaki-ethan/.claude/plugins/cache/temp_git_1789380267591_4uctbb
+2026-09-14T10:04:33.244Z [DEBUG] Using manifest version for superpowers@claude-plugins-official: 6.3.0
+2026-09-14T10:04:33.451Z [DEBUG] High write ratio: blit=0, write=11199 (100.0% writes), screen=76x97
+2026-09-14T10:04:36.697Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:36.700Z [DEBUG] High write ratio: blit=7275, write=24229 (76.9% writes), screen=76x97
+2026-09-14T10:04:39.177Z [DEBUG] MCP server "claude.ai ZipRecruiter": CLAUDEAI-PROXY connection dropped after 23s uptime
+2026-09-14T10:04:39.177Z [DEBUG] MCP server "claude.ai ZipRecruiter": Connection error: Error POSTing to endpoint: {"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/","title":"Error 502: Bad gateway","status":502,"detail":"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.","instance":"a3ae9176ace8f3fb","error_code":502,"error_name":"origin_bad_gateway","error_category":"origin","ray_id":"a3ae9176ace8f3fb","timestamp":"2026-09-14T10:04:39Z","zone":"mcp-proxy.anthropic.com","cloudflare_error":true,"retryable":true,"retry_after":60,"owner_action_required":true,"what_you_should_do":"**Wait and retry.** Back off for at least 60 seconds. If the error persists, the website operator should check their origin server health and configuration.","footer":"This error was generated by Cloudflare on behalf of the website owner."}
+2026-09-14T10:04:39.177Z [DEBUG] MCP server "claude.ai ZipRecruiter": subscriptions/listen re-open attempt 3 failed: Error POSTing to endpoint: {"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/","title":"Error 502: Bad gateway","status":502,"detail":"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.","instance":"a3ae9176ace8f3fb","error_code":502,"error_name":"origin_bad_gateway","error_category":"origin","ray_id":"a3ae9176ace8f3fb","timestamp":"2026-09-14T10:04:39Z","zone":"mcp-proxy.anthropic.com","cloudflare_error":true,"retryable":true,"retry_after":60,"owner_action_required":true,"what_you_should_do":"**Wait and retry.** Back off for at least 60 seconds. If the error persists, the website operator should check their origin server health and configuration.","footer":"This error was generated by Cloudflare on behalf of the website owner."}
+2026-09-14T10:04:39.827Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:39.839Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:39.839Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:39.843Z [DEBUG] Hooks: Checking first line for async: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"echo \"===_config.yml===\" && rtk read _config.yml && echo \"===index head===\" && rtk read index.html --max-lines 30 && echo \"===liquid tags in index===\" && rtk grep -c '{%\\|{{' index.html; echo \"===root files===\" && ls -a | head -40; echo \"===Gemfile?===\" && rtk ls Gemfile* 2>/dev/null; echo \"===wrangler?===\" && rtk ls wrangler* 2>/dev/null; echo \"===gh workflows===\" && rtk ls -R .github 2>/dev/null","description":"Inspect Jekyll config and index.html"}}}
+2026-09-14T10:04:39.843Z [DEBUG] Hooks: Parsed initial response: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"echo \"===_config.yml===\" && rtk read _config.yml && echo \"===index head===\" && rtk read index.html --max-lines 30 && echo \"===liquid tags in index===\" && rtk grep -c '{%\\|{{' index.html; echo \"===root files===\" && ls -a | head -40; echo \"===Gemfile?===\" && rtk ls Gemfile* 2>/dev/null; echo \"===wrangler?===\" && rtk ls wrangler* 2>/dev/null; echo \"===gh workflows===\" && rtk ls -R .github 2>/dev/null","description":"Inspect Jekyll config and index.html"}}}
+2026-09-14T10:04:39.843Z [DEBUG] Hooks: Initial response is not async, continuing normal processing
+2026-09-14T10:04:39.844Z [DEBUG] High write ratio: blit=487, write=10395 (95.5% writes), screen=76x97
+2026-09-14T10:04:39.845Z [DEBUG] Successfully parsed and validated hook JSON output
+2026-09-14T10:04:39.845Z [DEBUG] "Hook PreToolUse:Bash (PreToolUse) success:\n{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecisionReason\":\"RTK auto-rewrite\",\"updatedInput\":{\"command\":\"echo \\\"===_config.yml===\\\" && rtk read _config.yml && echo \\\"===index head===\\\" && rtk read index.html --max-lines 30 && echo \\\"===liquid tags in index===\\\" && rtk grep -c '{%\\\\|{{' index.html; echo \\\"===root files===\\\" && ls -a | head -40; echo \\\"===Gemfile?===\\\" && rtk ls Gemfile* 2>/dev/null; echo \\\"===wrangler?===\\\" && rtk ls wrangler* 2>/dev/null; echo \\\"===gh workflows===\\\" && rtk ls -R .github 2>/dev/null\",\"description\":\"Inspect Jekyll config and index.html\"}}}"
+2026-09-14T10:04:39.845Z [DEBUG] Hook PreToolUse (rtk hook claude) modified tool input keys: [command, description]
+2026-09-14T10:04:39.861Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01DE9ZC4NUUEPfUkhXd6rpiv permissionDecisionMs=16
+2026-09-14T10:04:39.890Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:04:39.944Z [WARN] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01DE9ZC4NUUEPfUkhXd6rpiv outcome=error durationMs=83
+2026-09-14T10:04:39.944Z [DEBUG] Bash tool error (83ms): Shell command failed
+2026-09-14T10:04:39.947Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:04:39.947Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:04:39.947Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:04:39.947Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:04:39.948Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:04:39.949Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:04:39.950Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39E48wLjsLBERrfKqWi;
+2026-09-14T10:04:39.950Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:39.950Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:39.951Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:39.951Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:04:39.952Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=f91c9a26-02fa-4ad4-9cd2-fc123ab85d48 source=repl_main_thread
+2026-09-14T10:04:39.953Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:40.952Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:04:40.952Z [DEBUG] [API:timing] first byte after 1001ms
+2026-09-14T10:04:46.187Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:48.576Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:48.580Z [DEBUG] High write ratio: blit=485, write=10521 (95.6% writes), screen=76x97
+2026-09-14T10:04:48.591Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:48.591Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:48.595Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:48.604Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_0148hAFBzC74Nb38sNZvjyqW permissionDecisionMs=8
+2026-09-14T10:04:48.608Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:04:48.647Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_0148hAFBzC74Nb38sNZvjyqW outcome=ok durationMs=43
+2026-09-14T10:04:48.649Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:04:48.649Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:04:48.649Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:04:48.649Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:04:48.650Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:04:48.652Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:04:48.653Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39EvutYZsx1fZTbdQfD;
+2026-09-14T10:04:48.653Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:48.653Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:48.654Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:48.654Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:04:48.654Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=48ff9873-ec67-4254-b568-dc490250f94f source=repl_main_thread
+2026-09-14T10:04:48.656Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:49.294Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:04:49.566Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:04:49.566Z [DEBUG] [API:timing] first byte after 912ms
+2026-09-14T10:04:50.096Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:50.623Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:04:50.660Z [DEBUG] High write ratio: blit=485, write=10850 (95.7% writes), screen=76x97
+2026-09-14T10:04:50.707Z [DEBUG] High write ratio: blit=7010, write=25159 (78.2% writes), screen=76x97
+2026-09-14T10:04:51.134Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:51.143Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:51.145Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:51.150Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:04:51.154Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01GP6zL4joeF9YVB49vw3k1J permissionDecisionMs=3
+2026-09-14T10:04:51.158Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:04:51.179Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01GP6zL4joeF9YVB49vw3k1J outcome=ok durationMs=25
+2026-09-14T10:04:51.182Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:04:51.182Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:04:51.182Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:04:51.182Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:04:51.183Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:04:51.185Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:04:51.186Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39FZpQJ3aR9fTh4RvpA;
+2026-09-14T10:04:51.186Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:51.186Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:51.187Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:04:51.187Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:04:51.188Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=28a2c746-ace8-4bff-858b-87bda643626e source=repl_main_thread
+2026-09-14T10:04:51.190Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:04:51.991Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:04:51.991Z [DEBUG] [API:timing] first byte after 804ms
+2026-09-14T10:04:52.680Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → blurred
+2026-09-14T10:05:08.547Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:05:16.187Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:19.064Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:19.097Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:19.097Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:19.097Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:19.105Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01MgyYy1ipVPbQVowGbFngbk permissionDecisionMs=7
+2026-09-14T10:05:19.132Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:05:19.551Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01MgyYy1ipVPbQVowGbFngbk outcome=ok durationMs=446
+2026-09-14T10:05:19.554Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:05:19.554Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:05:19.554Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:05:19.554Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:05:19.554Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:05:19.556Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:05:19.557Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39Fkc3by6PEAQs2wrL6;
+2026-09-14T10:05:19.557Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:19.557Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:19.558Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:19.558Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:05:19.558Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=313b2988-3b54-47ec-9f45-4e8bb668cca7 source=repl_main_thread
+2026-09-14T10:05:19.561Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:20.846Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:05:20.846Z [DEBUG] [API:timing] first byte after 1289ms
+2026-09-14T10:05:22.847Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:05:22.847Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.467bba96f7af
+2026-09-14T10:05:22.848Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:05:22.849Z [DEBUG] Temp file written successfully, size: 174574 bytes
+2026-09-14T10:05:22.849Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.467bba96f7af to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:05:22.849Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:05:28.588Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:28.945Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:05:32.257Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:32.271Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.a93; cc_entrypoint=cli; cch=00000;
+2026-09-14T10:05:32.272Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=64c4a15f-ac92-4c4e-9091-611b009c75b7 source=side_query
+2026-09-14T10:05:32.273Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:32.273Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:32.274Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:32.278Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_014YFAyJzfKTGSzHMiG5nBVW permissionDecisionMs=3
+2026-09-14T10:05:32.304Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:05:32.415Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_014YFAyJzfKTGSzHMiG5nBVW outcome=ok durationMs=137
+2026-09-14T10:05:32.418Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:05:32.418Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:05:32.418Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:05:32.418Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:05:32.419Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:05:32.421Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:05:32.421Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39Hrt8T6Z3bRPSVZVAa;
+2026-09-14T10:05:32.422Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:32.422Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:32.423Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:32.423Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:05:32.423Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=5294e9e5-43b1-4d3b-8ecf-83f88056fa8d source=repl_main_thread
+2026-09-14T10:05:32.426Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:33.599Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:05:33.599Z [DEBUG] [API:timing] first byte after 1176ms
+2026-09-14T10:05:34.899Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:34.916Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:34.916Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:34.918Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:34.923Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01KttMhRrgibr5EcZ5i5Pt69 permissionDecisionMs=5
+2026-09-14T10:05:34.957Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:05:49.339Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:05:49.686Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01KttMhRrgibr5EcZ5i5Pt69 outcome=ok durationMs=14763
+2026-09-14T10:05:49.716Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:05:49.716Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:05:49.716Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:05:49.716Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:05:49.717Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:05:49.719Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:05:49.720Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39Jo4iehAJX9JtSd8oo;
+2026-09-14T10:05:49.720Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:49.720Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:49.721Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:49.721Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:05:49.722Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=75e4f0bb-9db6-4e57-b858-3f4556c7ac46 source=repl_main_thread
+2026-09-14T10:05:49.724Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:50.649Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:05:50.649Z [DEBUG] [API:timing] first byte after 928ms
+2026-09-14T10:05:55.452Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:57.386Z [DEBUG] [skills] idle — switching poll interval to 30000ms
+2026-09-14T10:05:57.583Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:05:57.593Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:57.596Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:57.603Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:05:57.621Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_013jFTwqQybMdHYfaz9rhCYk permissionDecisionMs=17
+2026-09-14T10:05:57.645Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:05:59.387Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_013jFTwqQybMdHYfaz9rhCYk outcome=ok durationMs=1766
+2026-09-14T10:05:59.390Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:05:59.390Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:05:59.390Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:05:59.390Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:05:59.391Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:05:59.393Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:05:59.393Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39L4uEuNGmTQnQZbNSx;
+2026-09-14T10:05:59.394Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:59.394Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:59.395Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:05:59.395Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:05:59.395Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=55db540c-66fa-4438-9861-c50edf93e090 source=repl_main_thread
+2026-09-14T10:05:59.398Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:00.395Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:00.395Z [DEBUG] [API:timing] first byte after 1000ms
+2026-09-14T10:06:03.233Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:04.639Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:04.646Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:04.647Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:04.648Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:04.657Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01TZmCejzVoMt79q2DtvEcs4 permissionDecisionMs=8
+2026-09-14T10:06:04.661Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:06:04.705Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01TZmCejzVoMt79q2DtvEcs4 outcome=ok durationMs=48
+2026-09-14T10:06:04.708Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:06:04.708Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:06:04.708Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:06:04.708Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:06:04.709Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:06:04.710Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:06:04.711Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39LnZkvaM1W1Levq989;
+2026-09-14T10:06:04.711Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:04.712Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:04.712Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:04.713Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:06:04.713Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=fe733412-a253-408f-88f2-bd59fb4ac5fb source=repl_main_thread
+2026-09-14T10:06:04.715Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:05.798Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:05.798Z [DEBUG] [API:timing] first byte after 1086ms
+2026-09-14T10:06:10.453Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:06:12.704Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:14.715Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:14.720Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:14.721Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:14.722Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:14.732Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01FcUUGFrMmJipe1vXwyXyJy permissionDecisionMs=10
+2026-09-14T10:06:14.758Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:06:17.822Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01FcUUGFrMmJipe1vXwyXyJy outcome=ok durationMs=3090
+2026-09-14T10:06:17.827Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:06:17.827Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:06:17.827Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:06:17.827Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:06:17.828Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:06:17.829Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:06:17.831Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39MBMiBS68WNU9ThJhG;
+2026-09-14T10:06:17.831Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:17.832Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:17.832Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:17.832Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:06:17.833Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=246f623b-cd1c-4217-a4a7-bbdfbfbab586 source=repl_main_thread
+2026-09-14T10:06:17.836Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:18.687Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:18.687Z [DEBUG] [API:timing] first byte after 855ms
+2026-09-14T10:06:21.316Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:22.366Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:22.383Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:22.384Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:22.384Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:22.388Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_018UWjyjcywureMa8zrsSNg7 permissionDecisionMs=3
+2026-09-14T10:06:22.391Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:06:22.420Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_018UWjyjcywureMa8zrsSNg7 outcome=ok durationMs=32
+2026-09-14T10:06:22.423Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:06:22.423Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:06:22.423Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:06:22.423Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:06:22.424Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:06:22.425Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:06:22.426Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39N97ZAnxCoykFpLNDq;
+2026-09-14T10:06:22.426Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:22.427Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:22.427Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:22.427Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:06:22.428Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=040bec17-4f5c-4e70-a6f3-8e7f60c4d43b source=repl_main_thread
+2026-09-14T10:06:22.430Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:23.420Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:23.420Z [DEBUG] [API:timing] first byte after 993ms
+2026-09-14T10:06:29.692Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:06:32.285Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:06:32.286Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.cdc9100fd0c3
+2026-09-14T10:06:32.286Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:06:32.287Z [DEBUG] Temp file written successfully, size: 174574 bytes
+2026-09-14T10:06:32.287Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.cdc9100fd0c3 to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:06:32.287Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:06:36.004Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:37.735Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:37.756Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:37.758Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:37.760Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:37.773Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01LxnnjdUL4ZVgo2orWXN79D permissionDecisionMs=12
+2026-09-14T10:06:37.794Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:06:39.371Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01LxnnjdUL4ZVgo2orWXN79D outcome=ok durationMs=1598
+2026-09-14T10:06:39.374Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:06:39.374Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:06:39.374Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:06:39.374Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:06:39.375Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:06:39.376Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:06:39.377Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39NV1NmRVfRi5ZMAeb6;
+2026-09-14T10:06:39.377Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:39.378Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:39.378Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:39.378Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:06:39.379Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=c6cc2566-9761-4c83-9473-6dbb26fc3e32 source=repl_main_thread
+2026-09-14T10:06:39.382Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:40.461Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:40.461Z [DEBUG] [API:timing] first byte after 1083ms
+2026-09-14T10:06:41.919Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:43.962Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:43.966Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:43.967Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:43.968Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:43.977Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01AxAA1Dw5tTNB4sVX4k1AJt permissionDecisionMs=9
+2026-09-14T10:06:44.007Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:06:45.543Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01AxAA1Dw5tTNB4sVX4k1AJt outcome=ok durationMs=1566
+2026-09-14T10:06:45.547Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:06:45.547Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:06:45.547Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:06:45.547Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:06:45.548Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:06:45.549Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:06:45.550Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39PjK8eET9zyfJNKWD1;
+2026-09-14T10:06:45.550Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:45.551Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:45.552Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:45.552Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:06:45.553Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=53a6f4b1-0bf4-4909-84ee-39f0aa952fd3 source=repl_main_thread
+2026-09-14T10:06:45.555Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:46.479Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:46.479Z [DEBUG] [API:timing] first byte after 927ms
+2026-09-14T10:06:47.536Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:47.610Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:06:49.382Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:49.388Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:49.389Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:06:49.395Z [DEBUG] Hooks: Checking first line for async: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"sed -n '530,540p' /tmp/wr.log && echo \"=== ignored count ===\" && rtk grep -c 'Ignoring asset' /tmp/wr.log && echo \"=== non-ignore lines after 535 ===\" && sed -n '536,898p' /tmp/wr.log | grep -v 'Ignoring asset' | head -20","description":"Inspect final asset manifest in debug log"}}}
+2026-09-14T10:06:49.395Z [DEBUG] Hooks: Parsed initial response: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"sed -n '530,540p' /tmp/wr.log && echo \"=== ignored count ===\" && rtk grep -c 'Ignoring asset' /tmp/wr.log && echo \"=== non-ignore lines after 535 ===\" && sed -n '536,898p' /tmp/wr.log | grep -v 'Ignoring asset' | head -20","description":"Inspect final asset manifest in debug log"}}}
+2026-09-14T10:06:49.395Z [DEBUG] Hooks: Initial response is not async, continuing normal processing
+2026-09-14T10:06:49.396Z [DEBUG] Successfully parsed and validated hook JSON output
+2026-09-14T10:06:49.396Z [DEBUG] "Hook PreToolUse:Bash (PreToolUse) success:\n{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecisionReason\":\"RTK auto-rewrite\",\"updatedInput\":{\"command\":\"sed -n '530,540p' /tmp/wr.log && echo \\\"=== ignored count ===\\\" && rtk grep -c 'Ignoring asset' /tmp/wr.log && echo \\\"=== non-ignore lines after 535 ===\\\" && sed -n '536,898p' /tmp/wr.log | grep -v 'Ignoring asset' | head -20\",\"description\":\"Inspect final asset manifest in debug log\"}}}"
+2026-09-14T10:06:49.396Z [DEBUG] Hook PreToolUse (rtk hook claude) modified tool input keys: [command, description]
+2026-09-14T10:06:49.407Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01XGadVQyDZrUSbydw6hft73 permissionDecisionMs=10
+2026-09-14T10:06:49.432Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:06:49.485Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01XGadVQyDZrUSbydw6hft73 outcome=ok durationMs=78
+2026-09-14T10:06:49.488Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:06:49.488Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:06:49.488Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:06:49.488Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:06:49.489Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:06:49.490Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:06:49.491Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39QBZStqrH9usn4jgLN;
+2026-09-14T10:06:49.491Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:49.492Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:49.492Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:06:49.492Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:06:49.493Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=f970964d-7b17-4964-87a9-f29954672759 source=repl_main_thread
+2026-09-14T10:06:49.495Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:06:50.486Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:06:50.486Z [DEBUG] [API:timing] first byte after 994ms
+2026-09-14T10:07:02.879Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:07:05.769Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:07:05.786Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:07:05.787Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:07:05.797Z [DEBUG] Hooks: Checking first line for async: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"echo \"index.html ignored? ->\" && (grep -c 'Ignoring asset: index.html' /tmp/wr.log || true) && echo \"=== .assetsignore ===\" && rtk read .assetsignore && echo \"=== wrangler.jsonc ===\" && rtk read wrangler.jsonc && echo \"=== git status ===\" && rtk git status --short","description":"Verify index.html kept and show final config"}}}
+2026-09-14T10:07:05.797Z [DEBUG] Hooks: Parsed initial response: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecisionReason":"RTK auto-rewrite","updatedInput":{"command":"echo \"index.html ignored? ->\" && (grep -c 'Ignoring asset: index.html' /tmp/wr.log || true) && echo \"=== .assetsignore ===\" && rtk read .assetsignore && echo \"=== wrangler.jsonc ===\" && rtk read wrangler.jsonc && echo \"=== git status ===\" && rtk git status --short","description":"Verify index.html kept and show final config"}}}
+2026-09-14T10:07:05.797Z [DEBUG] Hooks: Initial response is not async, continuing normal processing
+2026-09-14T10:07:05.798Z [DEBUG] Successfully parsed and validated hook JSON output
+2026-09-14T10:07:05.798Z [DEBUG] "Hook PreToolUse:Bash (PreToolUse) success:\n{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecisionReason\":\"RTK auto-rewrite\",\"updatedInput\":{\"command\":\"echo \\\"index.html ignored? ->\\\" && (grep -c 'Ignoring asset: index.html' /tmp/wr.log || true) && echo \\\"=== .assetsignore ===\\\" && rtk read .assetsignore && echo \\\"=== wrangler.jsonc ===\\\" && rtk read wrangler.jsonc && echo \\\"=== git status ===\\\" && rtk git status --short\",\"description\":\"Verify index.html kept and show final config\"}}}"
+2026-09-14T10:07:05.798Z [DEBUG] Hook PreToolUse (rtk hook claude) modified tool input keys: [command, description]
+2026-09-14T10:07:05.801Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_012n6h2aj7X6YF2AMqXCmDRQ permissionDecisionMs=2
+2026-09-14T10:07:05.825Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-09-14T10:07:05.896Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_012n6h2aj7X6YF2AMqXCmDRQ outcome=ok durationMs=95
+2026-09-14T10:07:05.899Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-09-14T10:07:05.899Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-09-14T10:07:05.899Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-09-14T10:07:05.899Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-09-14T10:07:05.899Z [DEBUG] autocompact: tokens=[REDACTED] level=ok effectiveWindow=980000
+2026-09-14T10:07:05.901Z [DEBUG] Dynamic tool loading: 0/320 deferred tools included
+2026-09-14T10:07:05.901Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.c09; cc_entrypoint=cli; cch=00000; cc_prev_req=req_011Cf39QUWvMbPrumPCdAnGW;
+2026-09-14T10:07:05.901Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:07:05.902Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:07:05.903Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:07:05.903Z [DEBUG] [API:timing] dispatching to firstParty model=claude-opus-5
+2026-09-14T10:07:05.903Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=b41ef313-9734-4947-aaf5-2eac5d81a320 source=repl_main_thread
+2026-09-14T10:07:05.906Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:07:06.916Z [DEBUG] Stream started - received first chunk
+2026-09-14T10:07:06.917Z [DEBUG] [API:timing] first byte after 1014ms
+2026-09-14T10:07:08.368Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:07:08.915Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:07:23.283Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.270.a93; cc_entrypoint=cli; cch=00000;
+2026-09-14T10:07:23.283Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=711f4b7c-4cbf-46dc-b5c1-20ab85b3297f source=side_query
+2026-09-14T10:07:23.289Z [DEBUG] [remote-bridge] Sending 1 message(s)
+2026-09-14T10:07:23.298Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:07:23.305Z [DEBUG] Hook output does not start with {, treating as plain text
+2026-09-14T10:07:23.306Z [DEBUG] [engine] turn 1 end (turns=17 usage in=32 out=11069 cost=$1.2865 api=156176ms stop=end_turn resultLen=1510)
+2026-09-14T10:07:23.308Z [DEBUG] [remote-bridge] Sent result success is_error=false num_turns=17
+2026-09-14T10:07:23.310Z [DEBUG] [sessionRegistry] sweep permitted (domain darwin)
+2026-09-14T10:07:23.316Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:07:23.316Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.186e71097456
+2026-09-14T10:07:23.317Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:07:23.317Z [DEBUG] Temp file written successfully, size: 174574 bytes
+2026-09-14T10:07:23.317Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.186e71097456 to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:07:23.317Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:07:30.225Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:07:37.769Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:07:37.769Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.8bcec831a887
+2026-09-14T10:07:37.770Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:07:37.771Z [DEBUG] Temp file written successfully, size: 174574 bytes
+2026-09-14T10:07:37.771Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.8bcec831a887 to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:07:37.771Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:07:49.052Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:07:53.315Z [DEBUG] Stopped sleep inhibitor, allowing sleep
+2026-09-14T10:08:00.831Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → focused
+2026-09-14T10:08:00.831Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:08:03.086Z [DEBUG] High write ratio: blit=0, write=11437 (100.0% writes), screen=76x97
+2026-09-14T10:08:03.136Z [DEBUG] High write ratio: blit=607, write=3850 (86.4% writes), screen=76x97
+2026-09-14T10:08:03.149Z [DEBUG] High write ratio: blit=0, write=4548 (100.0% writes), screen=76x97
+2026-09-14T10:08:07.398Z [DEBUG] [skills] active — switching poll interval to 2000ms
+2026-09-14T10:08:07.701Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/yamazaki-ethan/.claude/skills, project=[]
+2026-09-14T10:08:07.709Z [DEBUG] Failed to stat directory /Library/Application Support/ClaudeCode/.claude/commands: ENOENT: no such file or directory, stat '/Library/Application Support/ClaudeCode/.claude/commands'
+2026-09-14T10:08:07.744Z [DEBUG] Loaded 12 unique skills (12 unconditional, 0 conditional, managed: 0, user: 11, project: 0, additional: 0, legacy commands: 1)
+2026-09-14T10:08:10.879Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:08:14.816Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → blurred
+2026-09-14T10:08:31.719Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:08:53.084Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:09:07.403Z [DEBUG] [skills] idle — switching poll interval to 30000ms
+2026-09-14T10:09:13.657Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:09:17.944Z [DEBUG] High write ratio: blit=2231, write=3015 (57.5% writes), screen=76x97
+2026-09-14T10:09:17.958Z [DEBUG] High write ratio: blit=2231, write=3015 (57.5% writes), screen=76x97
+2026-09-14T10:09:18.102Z [DEBUG] High write ratio: blit=2231, write=3015 (57.5% writes), screen=76x97
+2026-09-14T10:09:18.731Z [DEBUG] High write ratio: blit=2231, write=3015 (57.5% writes), screen=76x97
+2026-09-14T10:09:21.003Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.018Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.022Z [DEBUG] High write ratio: blit=485, write=4468 (90.2% writes), screen=76x97
+2026-09-14T10:09:21.042Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.067Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.256Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.272Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.288Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.304Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.518Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.533Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.549Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.566Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse skipped (terminal blurred)
+2026-09-14T10:09:21.885Z [DEBUG] High write ratio: blit=776, write=4261 (84.6% writes), screen=76x97
+2026-09-14T10:09:27.405Z [DEBUG] [skills] active — switching poll interval to 2000ms
+2026-09-14T10:09:27.708Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/yamazaki-ethan/.claude/skills, project=[]
+2026-09-14T10:09:27.714Z [DEBUG] Failed to stat directory /Library/Application Support/ClaudeCode/.claude/commands: ENOENT: no such file or directory, stat '/Library/Application Support/ClaudeCode/.claude/commands'
+2026-09-14T10:09:27.748Z [DEBUG] Loaded 12 unique skills (12 unconditional, 0 conditional, managed: 0, user: 11, project: 0, additional: 0, legacy commands: 1)
+2026-09-14T10:09:33.934Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:09:52.074Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:10:11.997Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:10:27.410Z [DEBUG] [skills] idle — switching poll interval to 30000ms
+2026-09-14T10:10:32.435Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:10:51.173Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:11:11.794Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:11:29.823Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:11:50.608Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:12:11.602Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:12:33.377Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:12:52.598Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:13:13.817Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:13:32.850Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:13:52.482Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:14:10.590Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:14:32.388Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:14:51.083Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:15:11.630Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:15:30.800Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:15:49.927Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:16:11.850Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:16:30.521Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:16:52.031Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:17:11.706Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:17:32.926Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:17:50.836Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:18:09.813Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:18:29.577Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:18:49.994Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:19:08.178Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:19:29.889Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:19:49.819Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:20:08.883Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:20:28.561Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:20:50.145Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:21:11.556Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:21:32.589Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:21:50.932Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:22:09.057Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:22:30.768Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:22:50.485Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:23:08.663Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:23:27.351Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:23:47.075Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:24:06.169Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:24:25.765Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:24:27.784Z [DEBUG] Cleaned up old image cache: /Users/yamazaki-ethan/.claude/image-cache/52f1cd19-3c1f-4805-88f9-5d9a76dd6c6e
+2026-09-14T10:24:43.951Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:25:04.486Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:25:22.727Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:25:43.871Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:26:04.693Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:26:22.888Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:26:44.539Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:27:05.110Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:27:26.998Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:27:48.462Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:28:06.620Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:28:26.769Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:28:47.482Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:29:06.222Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:29:24.272Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:29:42.306Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:30:02.756Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:30:22.104Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:30:40.054Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:30:58.773Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:31:19.223Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:31:37.284Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:31:58.769Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:32:18.628Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:32:37.868Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:32:58.695Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:33:20.222Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:33:39.042Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:33:59.260Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:34:09.969Z [DEBUG] Checking for native installer update to version 2.1.270
+2026-09-14T10:34:10.018Z [DEBUG] Found 2.1.270 at /Users/yamazaki-ethan/.local/bin/claude, skipping install
+2026-09-14T10:34:18.242Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:34:38.184Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:34:57.450Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:35:18.515Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:35:38.568Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:35:57.292Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:36:15.964Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:36:36.993Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:36:56.635Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:37:18.360Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:37:39.423Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:37:59.612Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:38:19.006Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:38:40.669Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:39:01.752Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:39:20.122Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:39:40.337Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:40:00.733Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:41:03.471Z [DEBUG] SSETransport: Event seq=75 event_id=6432e85e-8cdd-47a9-a2d2-1be881563278 event_type=control_request payload_type=control_request attestation=DEVICE_ATTESTATION_STATUS_ABSENT session=cse_01KxrUmrP5SFKtbneJDu1nT3
+2026-09-14T10:41:03.472Z [DEBUG] [bridge:repl] Inbound control_request subtype=initialize
+2026-09-14T10:41:03.473Z [DEBUG] [bridge:repl] Sent control_response for initialize request_id=sdieprrzvd result=success
+2026-09-14T10:41:03.473Z [DEBUG] CCRClient: resuming stream deltas (watcher)
+2026-09-14T10:41:03.478Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:41:03.533Z [DEBUG] SSETransport: Event seq=76 event_id=b6a18ef1-765c-4741-a5d4-dbad3b836f43 event_type=control_request payload_type=control_request attestation=DEVICE_ATTESTATION_STATUS_VERIFIED session=cse_01KxrUmrP5SFKtbneJDu1nT3
+2026-09-14T10:41:03.534Z [DEBUG] [bridge:repl] Inbound control_request subtype=initialize
+2026-09-14T10:41:03.534Z [DEBUG] [bridge:repl] Sent control_response for initialize request_id=n2um0d5jmeb result=success
+2026-09-14T10:41:03.535Z [DEBUG] Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on
+2026-09-14T10:41:04.172Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:41:04.367Z [DEBUG] SSETransport: Event seq=83 event_id=c35ff11e-c984-457f-afee-c0fa5a495748 event_type=control_request payload_type=control_request attestation=DEVICE_ATTESTATION_STATUS_VERIFIED session=cse_01KxrUmrP5SFKtbneJDu1nT3
+2026-09-14T10:41:04.367Z [DEBUG] [bridge:repl] Inbound control_request subtype=get_context_usage
+2026-09-14T10:41:04.400Z [DEBUG] SSETransport: Event seq=84 event_id=00c5e041-dbf1-4b34-9c01-9a2f2445a3da event_type=control_request payload_type=control_request attestation=DEVICE_ATTESTATION_STATUS_VERIFIED session=cse_01KxrUmrP5SFKtbneJDu1nT3
+2026-09-14T10:41:04.400Z [DEBUG] [bridge:repl] Inbound control_request subtype=get_context_usage
+2026-09-14T10:41:04.415Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=34ca1063-5635-41c7-9c14-d2b4543edca2 source=count_tokens
+2026-09-14T10:41:04.416Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=1219bd8b-80f7-4f49-94f3-e463dbb2d2ec source=count_tokens
+2026-09-14T10:41:04.416Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=2227c7ee-19b5-42ae-a12b-c5992ac5fdf3 source=count_tokens
+2026-09-14T10:41:04.417Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=513c5074-03e5-428f-b72a-862ce3cd0890 source=count_tokens
+2026-09-14T10:41:04.417Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=bb5038b4-5480-4cda-8848-01a2b32cd152 source=count_tokens
+2026-09-14T10:41:04.417Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=87648f7f-7fd0-4406-a059-18905dc291a8 source=count_tokens
+2026-09-14T10:41:04.417Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=71a1e78b-d5e8-4175-b5f2-5297aba8b803 source=count_tokens
+2026-09-14T10:41:04.417Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=d62cb047-2305-43e0-9c94-7bae2500aaf6 source=count_tokens
+2026-09-14T10:41:04.418Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=a13725dc-7dd7-45a3-b153-e524123057ed source=count_tokens
+2026-09-14T10:41:04.418Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=4e71f3b7-302e-4847-9d1d-8d5cf7c9e9e2 source=count_tokens
+2026-09-14T10:41:04.418Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=40431ccc-9594-47a8-abf7-0614e0242a93 source=count_tokens
+2026-09-14T10:41:04.418Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=c3e5ab77-5ba0-4715-8007-44859d8b7a1e source=count_tokens
+2026-09-14T10:41:04.418Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=c09e1574-05e6-4a45-9234-a7c0da725431 source=count_tokens
+2026-09-14T10:41:04.418Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=c19ba3c7-fbf4-49d4-9829-b4c11ae18105 source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=4b6d0910-1370-4791-9657-11ec4de7856b source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=f2ba4235-385a-4177-a788-5bee701b4624 source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=83787c24-c633-4600-99f0-42bf4ae69985 source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=a41c7c8f-3a5c-4916-965d-e46c27f8a86d source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=44a6e758-8fea-44ab-8bc3-cc33bc6baf97 source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=65a351e8-756c-4f00-8bb5-a75d2579d0de source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=05da600c-8e36-4dda-979f-89795326bbaa source=count_tokens
+2026-09-14T10:41:04.419Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=57e24299-6c29-4abb-a325-5daebefc0889 source=count_tokens
+2026-09-14T10:41:04.420Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=4ea6ed6a-1046-4cac-bfcd-abd14ed94f02 source=count_tokens
+2026-09-14T10:41:04.420Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=8c247096-5977-4834-9151-a7739f33de72 source=count_tokens
+2026-09-14T10:41:04.420Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=9258bc47-4caa-4c4d-ae2d-a15abe958318 source=count_tokens
+2026-09-14T10:41:04.420Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=250c121a-76b8-467f-b949-4de5e9fa7221 source=count_tokens
+2026-09-14T10:41:04.420Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=405bc714-47fb-4573-8bc4-b53c25a88be9 source=count_tokens
+2026-09-14T10:41:04.421Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=829c36c9-fafe-4450-aa5d-6c04a9cedf2e source=count_tokens
+2026-09-14T10:41:05.295Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=d645e252-1dcc-4921-afa5-cdb04f7bc4bb source=count_tokens
+2026-09-14T10:41:05.295Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=3f3927ee-95f7-46b8-bcea-2a5caa13b5cb source=count_tokens
+2026-09-14T10:41:05.296Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=25d40a8d-0d4a-4446-b3c9-8bb3dc8903bb source=count_tokens
+2026-09-14T10:41:05.296Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=c9f7a78b-e928-4e6c-ab5c-11be25787d0f source=count_tokens
+2026-09-14T10:41:05.297Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=14179df9-b5ca-4621-808f-bb48ddd17906 source=count_tokens
+2026-09-14T10:41:05.297Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=8718a96f-d410-40fa-8fe6-945909d1fd48 source=count_tokens
+2026-09-14T10:41:05.298Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=e7947294-2c22-4bf7-b9bc-e292a414feb7 source=count_tokens
+2026-09-14T10:41:05.298Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=68e7c6db-d462-4e0c-b060-a7d30d2c4a88 source=count_tokens
+2026-09-14T10:41:05.299Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=0efad2a1-b588-47fe-b91e-b28d9e9580fb source=count_tokens
+2026-09-14T10:41:05.300Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=6fa65f04-1927-4ede-afb8-c7a155efb026 source=count_tokens
+2026-09-14T10:41:05.300Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=9bad4018-63c8-46b4-8f53-53e4f63a0fa1 source=count_tokens
+2026-09-14T10:41:05.301Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=9cbec097-44c4-467f-ae44-dcb56b459a61 source=count_tokens
+2026-09-14T10:41:05.301Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=d8a2bf85-1370-4fa2-b25b-ff8b7201151b source=count_tokens
+2026-09-14T10:41:05.302Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=ad313020-d29a-429e-a83c-472f416a7e87 source=count_tokens
+2026-09-14T10:41:05.302Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=03c7c7d8-738a-4453-bebb-a6a3e612f5e9 source=count_tokens
+2026-09-14T10:41:05.302Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=339e4a29-9fc9-4be7-af9b-8f0787fbfbce source=count_tokens
+2026-09-14T10:41:05.302Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=3de69997-daba-4e88-8f73-a1844688e1d7 source=count_tokens
+2026-09-14T10:41:05.303Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=5dae93c8-200f-414b-8cb6-3dfc548fe628 source=count_tokens
+2026-09-14T10:41:05.303Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=923004e2-a8c8-4e42-a77b-0b5b09b79992 source=count_tokens
+2026-09-14T10:41:05.304Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=520402e7-9800-425f-8e7e-329d0435b12a source=count_tokens
+2026-09-14T10:41:05.304Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=e9a1e49f-1ca0-4a3c-af72-90fda0881de9 source=count_tokens
+2026-09-14T10:41:05.304Z [DEBUG] [API REQUEST] /v1/messages/count_tokens x-client-request-id=cb899e49-afb0-4726-95a0-7a0ef33bb8e1 source=count_tokens
+2026-09-14T10:41:05.770Z [DEBUG] [bridge:repl] Sent control_response for get_context_usage request_id=get_context_usage-1789382463965-8ng799 result=success
+2026-09-14T10:41:05.770Z [DEBUG] [bridge:repl] Sent control_response for get_context_usage request_id=get_context_usage-1789382463997-pxfadk result=success
+2026-09-14T10:41:05.982Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:42:08.079Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:43:13.673Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:44:14.011Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:45:18.606Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:46:21.282Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:47:26.535Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:48:29.973Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:48:32.028Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → focused
+2026-09-14T10:48:32.029Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:48:33.561Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → blurred
+2026-09-14T10:48:36.040Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → focused
+2026-09-14T10:48:36.655Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → blurred
+2026-09-14T10:48:54.448Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] terminal focus → focused
+2026-09-14T10:48:54.448Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] pulse → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:48:54.490Z [DEBUG] High write ratio: blit=0, write=4717 (100.0% writes), screen=76x97
+2026-09-14T10:48:54.506Z [DEBUG] High write ratio: blit=3395, write=5903 (63.5% writes), screen=76x97
+2026-09-14T10:48:55.017Z [DEBUG] CCRClient: Heartbeat sent
+2026-09-14T10:48:57.422Z [DEBUG] [bridge:repl] Hook cleanup: starting teardown for session=cse_01KxrUmrP5SFKtbneJDu1nT3 reason=host_exit
+2026-09-14T10:48:57.424Z [DEBUG] [REPL:unmount] REPL unmounting
+2026-09-14T10:48:57.427Z [DEBUG] [uds-messaging] Shutting down
+2026-09-14T10:48:57.431Z [DEBUG] [presence session=cse_01KxrUmrP5SFKtbneJDu1nT3] clear → https://api.anthropic.com/v1/code/sessions/cse_01KxrUmrP5SFKtbneJDu1nT3/client/presence
+2026-09-14T10:48:57.432Z [DEBUG] LSP server manager shut down successfully
+2026-09-14T10:48:57.437Z [DEBUG] [concurrentSessions] updatePidFile failed: ENOENT: no such file or directory, open '/Users/yamazaki-ethan/.claude/sessions/17329.json'
+2026-09-14T10:48:57.437Z [DEBUG] Cleaned up session snapshot: /Users/yamazaki-ethan/.claude/shell-snapshots/snapshot-zsh-1789380267477-s4vqry.sh
+2026-09-14T10:48:57.441Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:48:57.441Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.e3c90ee30e5c
+2026-09-14T10:48:57.442Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:48:57.442Z [DEBUG] Temp file written successfully, size: 174191 bytes
+2026-09-14T10:48:57.442Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.e3c90ee30e5c to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:48:57.442Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:48:57.769Z [DEBUG] CCRClient: no subscribers reported; dropping stream deltas until one is
+2026-09-14T10:48:57.960Z [DEBUG] [code-session] Archive session_01KxrUmrP5SFKtbneJDu1nT3 status=200
+2026-09-14T10:48:57.962Z [ERROR] SSETransport: Stream read error: The operation was aborted.
+2026-09-14T10:48:57.966Z [DEBUG] Preserving file permissions: 100600
+2026-09-14T10:48:57.966Z [DEBUG] Writing to temp file: /Users/yamazaki-ethan/.claude.json.tmp.17329.52491cf1291d
+2026-09-14T10:48:57.966Z [DEBUG] Applied original permissions to temp file
+2026-09-14T10:48:57.966Z [DEBUG] Temp file written successfully, size: 174046 bytes
+2026-09-14T10:48:57.966Z [DEBUG] Renaming /Users/yamazaki-ethan/.claude.json.tmp.17329.52491cf1291d to /Users/yamazaki-ethan/.claude.json
+2026-09-14T10:48:57.967Z [DEBUG] File /Users/yamazaki-ethan/.claude.json written atomically
+2026-09-14T10:48:58.295Z [DEBUG] [remote-bridge] Torn down (archive=200)

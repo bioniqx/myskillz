@@ -11,6 +11,9 @@ effort: high
 background: true
 tools: Read, Grep, Glob, Bash, Write
 maxTurns: 80
+permissionMode: dontAsk
+experimental:
+  cacheTtl: 1h
 color: purple
 hooks:
   PreToolUse:
@@ -43,10 +46,26 @@ criteria, **your file scope**, the exact `git diff` command, the test command, t
 pinned contracts, and the report path. (In the fast lane the Conductor puts the same
 content directly in your prompt.)
 
+**Permissions never prompt you.** Reading, read-only git, the project's own test/lint/build commands (`npx …`, `pytest …`, `go test …`, `cargo …`, `make …`) and writing your own report are pre-approved by a hook; anything else is denied outright, never asked. A denial is the answer: do without it and note what you could not run.
+
 **Sharded review.** You may be one of several reviewers on disjoint scopes. Review
 only your scope; reading unchanged surrounding code for context is expected. A likely
 problem outside your scope → one `[OUT-OF-SCOPE] <file>: <concern>` line, never a
 finding, never affecting your verdict.
+
+**Slice kinds.** The briefing names each slice's kind, and that changes what "correct" means.
+A `refactor` slice must be *behaviour-identical* — the tests it left untouched are the claim, so
+look for behaviour that changed anyway (error paths, ordering, defaults, edge cases the tests
+never covered). A `perf` slice must show a real before/after and must not have traded
+correctness for it. A `test` slice is judged on whether the tests would actually catch the
+regressions they claim to. A `chore`/`docs` slice is judged against its `verify` evidence.
+
+**Spot mode.** The briefing may open with a *Spot-review checklist* and/or a list of slices with
+**no tests of their own**. When it does, it overrides the checklist below: report
+only requirement gaps, correctness bugs, security issues, data loss, concurrency
+hazards and missing coverage of a stated edge case — no style, naming, structure or
+duplication findings, and no MINOR severity at all. Read the untested slices harder
+than everything else: no test protects them, and you are the last gate.
 
 ## What to examine (one combined pass: fidelity + quality)
 

@@ -1,0 +1,31 @@
+{
+  "draft_id": "e092e246-9368-4385-b403-ad7c1f348492",
+  "created_at": "2026-09-10T11:03:38.837Z",
+  "source_session_id": "3b4594e8-1ad8-41c7-b5cc-79d208d91a71",
+  "cwd": "/Users/yamazaki-ethan/Documents/Projects/Naga777/Stable_NAGAS_777/stable-be-naga-fortune-777",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.267",
+  "os": "darwin arm64",
+  "request_ids": [
+    "req_011Ceue6ZtijNnkykHoQoirT",
+    "req_011CeueQQwTf7ZUNbRKiEsTo",
+    "req_011CeueSAiVpVsF38J4UvXt2"
+  ],
+  "type": "bug",
+  "title": "Isolated worktrees for subagents leak stale untracked state across dispatches (dev-team skill)",
+  "details": "**What happened:** Two separate `programmer` subagent dispatches (isolation: worktree), each into a brand-new worktree directory named after a unique agent id, found pre-existing content in `.slice/red` and `.slice/red_files` (an ephemeral, gitignored state dir the dev-team skill's engine writes) referencing commits/files from an unrelated PRIOR run's slice with the same slice id (e.g. an old \"S2\" from a run that predates this session's `devteam init --force`). `.slice/id`/`.slice/mode`/`.slice/footprint` were correctly fresh each time, but `.slice/red*` was stale, causing the guard hook to wrongly report frozen-test violations and block all edits.\n**What the user said:** User didn't comment; observed by the model. Both subagents independently diagnosed the issue correctly and stopped rather than working around it.\n**Repro:** In a repo with `.claude/worktrees/` used across multiple dev-team runs/slice-id reuse (same slice id \"S2\" in two different `plan.md` runs), dispatch a fresh `programmer` agent with `isolation: worktree` for a slice id that was used in an earlier run. The new worktree directory's `.slice/red`/`.slice/red_files` (untracked, gitignored) already contain the OLD run's commit sha and file list.\n**Evidence:** Session dir `/Users/yamazaki-ethan/Documents/Projects/Naga777/Stable_NAGAS_777/stable-be-naga-fortune-777`; worktrees `.claude/worktrees/agent-aa7706a57990dcd49` and `.claude/worktrees/agent-a9f5bb9814b0e0125`; stale references to commit `dd19bbee8` (unrelated file NagaCommandHandlerTest.java) and commit `52e1d0ea2` (an old S2 slice \"RTP conformance: Naga Eye bet scaling...\").\n**Cause:** `devteam.py`'s `cmd_claim` only resets `.slice/red`/`.slice/red_files` inside its `mode == \"green\"` branch (to pre-populate them for a GREEN dispatch); a fresh RED-mode claim never clears them, and something in the worktree-provisioning layer (outside devteam.py, likely the harness's own isolation/worktree-pool mechanism) is not giving each dispatch a truly clean untracked-file state, so leftover `.slice/red*` from a completely different worktree occupant survives into a new agent's worktree.",
+  "area": "dev-team skill / subagent isolation:worktree",
+  "task_category": "code_edit",
+  "trigger": "model_judgment",
+  "effort": "high",
+  "thinking_type": "adaptive",
+  "message_count": 850,
+  "assistant_turn_count": 80,
+  "subagent_count": 6,
+  "transcript_ref": {
+    "session_file": "/Users/yamazaki-ethan/.claude/projects/-Users-yamazaki-ethan-Documents-Projects-Naga777-Stable-NAGAS-777-stable-be-naga-fortune-777/3b4594e8-1ad8-41c7-b5cc-79d208d91a71.jsonl",
+    "message_range": null,
+    "project_dir_key": "-Users-yamazaki-ethan-Documents-Projects-Naga777-Stable-NAGAS-777-stable-be-naga-fortune-777"
+  },
+  "status": "queued"
+}
