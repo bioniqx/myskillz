@@ -352,7 +352,7 @@ check "a chore/docs/perf slice with no verify command is refused" 'printf "\140\
 check "a code slice whose footprint has no test path is warned about" 'printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"echo t\"},\"slices\":[{\"id\":\"Z\",\"title\":\"z\",\"deps\":[],\"files\":[\"src/z.js\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > warn.md; D init warn.md --force 2>&1 | grep -q "cannot write its own tests"'
 D reset --yes >/dev/null 2>&1; D init plan.md >/dev/null 2>&1
 OUT=$(D dispatch R1 R2 C1 D1 T1 X1 2>&1)
-check "a trivial slice is routed to a cheaper model" '[[ "$OUT" == *"model: haiku"* ]]'
+check "a trivial slice is routed to a cheaper model" '[[ "$OUT" == *"model: sonnet"* ]]'
 check "a research slice goes to the investigator with no claim command" '[[ "$OUT" == *"[RESEARCH]"* && "$OUT" == *"subagent_type: investigator"* ]]'
 check "every other kind still goes to the programmer in MODE WORK" '[[ "$OUT" == *"[REFACTOR/WORK]"* && "$OUT" == *"[DOCS/WORK]"* ]]'
 check "a chore briefing pins the slice's own verify command" 'grep -q "verify (THIS slice.s evidence command): .*echo verified" .claude/dev-team/briefs/C1.md'
@@ -730,8 +730,8 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch T1 D1 D2 N1 2>&1)
-check "a trivial slice rides haiku" '[[ "$OUT" == *"description: \"T1\", model: haiku"* ]]'
-check "a small docs slice rides haiku too" '[[ "$OUT" == *"description: \"D1\", model: haiku"* ]]'
+check "a trivial slice rides sonnet" '[[ "$OUT" == *"description: \"T1\", model: sonnet"* ]]'
+check "a small docs slice rides sonnet too" '[[ "$OUT" == *"description: \"D1\", model: sonnet"* ]]'
 check "a LARGE docs slice keeps the default model" '[[ "$OUT" == *"description: \"D2\", prompt:"* ]]'
 check "a normal code slice keeps the default model" '[[ "$OUT" == *"description: \"N1\", prompt:"* ]]'
 check "the prompt is the bare claim command and nothing else" '[[ "$OUT" == *"prompt: \"python3 "*"devteam.py"*" claim N1\""* ]]'

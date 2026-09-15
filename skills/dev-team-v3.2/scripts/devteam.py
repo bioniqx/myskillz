@@ -135,8 +135,8 @@ KIND_MODE = {          # kind -> the programmer mode a normal (non-high-risk) di
 KINDS = tuple(KIND_MODE)
 SIZES = ("trivial", "small", "large")
 SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
-SIZE_MODEL = {"trivial": "haiku"}      # per-invocation Agent `model:` override (small/large: default)
-KIND_MODEL = {"docs": "haiku"}         # mechanical kinds ride the fastest model unless the slice is `large`
+SIZE_MODEL = {"trivial": "sonnet"}      # per-invocation Agent `model:` override (small/large: default)
+KIND_MODEL = {"docs": "sonnet"}         # mechanical kinds ride the fastest model unless the slice is `large`
 # assertion tokens used by the static vacuous-test check (replaces the RED verification run)
 # Only call-shaped assertions count: a bare word like `require`, `should` or `verify` appears in
 # ordinary imports, comments and identifiers, and would wave a vacuous test straight through.
@@ -1200,7 +1200,7 @@ def do_dispatch(root, st, ids, force=False):
 
 def dispatch_model(s):
     """Per-invocation Agent `model:` override. A trivial slice (or a docs slice that is not large) on
-    haiku finishes in a fraction of the time; the mechanical gates and the reviewer catch what a
+    sonnet finishes in a fraction of the time; the mechanical gates and the reviewer catch what a
     smaller model gets wrong."""
     explicit = (s.get("model") or "").strip()
     if explicit:
@@ -2030,7 +2030,7 @@ def cmd_start(a):
         "Launch every Agent call above in ONE message, then end the turn. "
         "On each wake-up (completion notification, background result, user answer): `next` — no ids needed.",
         "TIP: `/fast` (Opus fast mode, usage credits) makes the Conductor and the opus reviewers/leader "
-        "up to 2.5x faster; combine with this skill's haiku/sonnet routing for the lanes.")
+        "up to 2.5x faster; combine with this skill's sonnet/sonnet routing for the lanes.")
 
 
 PROBE_RULES = [
@@ -2403,7 +2403,7 @@ def cmd_doctor(a):
         fixes["subagentPromptCacheTtl"] = "1h"
     if str(os.environ.get("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") or env.get("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") or "") == "1":
         problems.append("CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 is set — it overrides every agent's model, so the "
-                        "haiku/sonnet/opus routing this skill relies on is disabled (unset it; not auto-fixed)")
+                        "sonnet/sonnet/opus routing this skill relies on is disabled (unset it; not auto-fixed)")
     wt = st.get("worktree", {}) if isinstance(st.get("worktree"), dict) else {}
     if wt.get("baseRef") != "head":
         problems.append("worktree.baseRef is not \"head\" — subagent worktrees would branch from the default branch instead of the integration HEAD")

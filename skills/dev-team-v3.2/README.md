@@ -47,7 +47,7 @@ Claude Code ≥ 2.1.267 (từ bản này `effort:` trong frontmatter agent mới
 python3. Không cài agent qua plugin (plugin bỏ qua `hooks`). Phải **trust đúng thư mục repo** (không
 phải thư mục cha): hook trong frontmatter agent của repo chỉ được nạp khi chính thư mục đó được trust.
 Muốn nhanh hơn nữa: gõ `/fast` (Opus fast mode, trừ usage credits) — Conductor và reviewer/leader
-trên opus nhanh tới 2.5×; các lane programmer đã chạy sonnet/haiku.
+trên opus nhanh tới 2.5×; các lane programmer đã chạy sonnet/sonnet.
 
 ## v3.2 thay đổi gì so với v3.1 (kiểm toán theo docs Claude Code 2.1.272, 9/2026)
 
@@ -61,8 +61,8 @@ riêng trong `selftest.sh` (**247 check**, 183 → 247).
 | Conductor phải gõ `next <ids…>` — đọc thông báo, chép id | **Stop gate tự ghi marker** `.claude/dev-team/slices/<id>.done` (hoặc `.blocked` kèm đúng câu hỏi) → `devteam next` **không cần tham số**: tự gộp mọi lane đã xong, research có report, review, checkpoint. `.blocked` được in một lần dạng `BLOCKED S3: <câu hỏi>`. Marker giả vô hại: integrate kiểm lại toàn bộ |
 | Block dispatch 7 dòng/agent; prompt 3 dòng | **1 dòng/agent**, prompt chỉ là lệnh `claim` (agent file dặn chạy nó đầu tiên) → output token của Conductor khi phóng 64 agent giảm ~50% — đây là critical path thật |
 | "Resume không tốn slot" | Sai theo docs: resume **lấy slot mà không kiểm cap** → engine giữ chỗ cho review `CHANGES_REQUIRED` chưa re-review |
-| Cache subagent mặc định 5 phút (chỉ frontmatter xin 1h) | `doctor --fix` ghi thêm `subagentPromptCacheTtl: "1h"`; cảnh báo nếu `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` (nó vô hiệu hoá routing haiku/sonnet/opus) |
-| `trivial` → haiku | thêm `docs` (không `large`) → haiku |
+| Cache subagent mặc định 5 phút (chỉ frontmatter xin 1h) | `doctor --fix` ghi thêm `subagentPromptCacheTtl: "1h"`; cảnh báo nếu `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` (nó vô hiệu hoá routing sonnet/sonnet/opus) |
+| `trivial` → sonnet | thêm `docs` (không `large`) → sonnet |
 | Final review ≤ 8 shard × 12 file | ≤ 12 shard × 10 file |
 | Dự án chưa có git → `init` lỗi | `start` tự `git init` + commit rỗng (greenfield) |
 | Kết thúc phải tự viết tóm tắt | `finish` ghi `.claude/dev-team/summary.md` sẵn cho `gh pr create --body-file` |
@@ -157,7 +157,7 @@ scheduler, cùng worktree, cùng cơ chế merge.
 - **Critical path tính theo khối lượng, không theo số chặng.** `size` (`trivial`/`small`/`large`
   → trọng số 1/3/8) là trọng số; engine khởi động chuỗi *nặng* nhất trước (LPT), nên một chuỗi
   3 slice vặt không còn chen trước một slice lớn.
-- **Slice `trivial` được dispatch với `model: haiku`** (Agent tool hỗ trợ override model theo
+- **Slice `trivial` được dispatch với `model: sonnet`** (Agent tool hỗ trợ override model theo
   từng lời gọi, và giữ nguyên model đó khi resume). Gate cơ học bắt lỗi mà model nhỏ mắc phải.
 
 ### 6. Sửa theo tài liệu Claude Code hiện hành (9/2026)
