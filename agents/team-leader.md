@@ -11,7 +11,7 @@ description: >-
   VERIFICATION: judges whether delivered code fulfills the user's intent. Reasoning-
   heavy, read-only; remembers each repository's map across sessions.
 model: opus
-effort: high
+effort: xhigh
 tools: Read, Grep, Glob, Bash, Write, WebSearch, WebFetch
 memory: project
 maxTurns: 120
