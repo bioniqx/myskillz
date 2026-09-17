@@ -1,4 +1,5 @@
 {
+  "syncClaudeAiPlugins": false,
   "env": {
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
     "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "64"

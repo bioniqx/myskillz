@@ -1,0 +1,1189 @@
+#!/usr/bin/env python3
+"""plan_tool.py v8 - deterministic engine for writing-plans (stdlib only, Python 3.8+).
+
+  context   [SPEC] [--thorough]                  repo/spec/parallelism snapshot (skill-load injection; never fails)
+  contracts PLAN [--spec S] [--agents K]         validate contracts, write writer briefs, print DISPATCH
+  lint-task PLAN TASKFILE [--mark ok|rev]        lint one task body; on success touch TASKFILE.<mark>
+  hook-lint                                      PostToolUse hook: lint a written task file -> additionalContext
+  wait      PLAN [--review] [--timeout S] [--idle S]   block until every task (or review) file lints OK
+  review    PLAN [--all] [--size N] [--agents K] pick risky tasks, write reviewer briefs, print DISPATCH
+  assemble  PLAN [--clean]                       full check, render canonical plan, splice task bodies
+  check     PLAN [--spec S]                      same as assemble for a plan with inline tasks (<= 3 tasks)
+  setup     [--scope user|project] [--apply]     raise subagent cap to 64, pre-approve tools, install writer agent
+Common: --allow WORD (repeatable) exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
+"""
+import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SKILL_DIR = os.path.dirname(HERE)
+TOOL = os.path.abspath(__file__)
+MAX_AGENTS = 64
+DEFAULT_CAP = 20
+ID_RE = r"T\d{2,3}"
+CONTRACT_HEAD = re.compile(r"^####\s+(%s)\s*[:·—-]\s*(.+?)\s*$" % ID_RE)
+FIELD = re.compile(r"^-\s+(Depends|Parallel|Files|Produces|Consumes|Read|Spec|Tier):\s*(.*)$")
+TASK_HEAD = re.compile(r"^###\s+(%s)\s*:\s*(.+?)\s*$" % ID_RE)
+TICK = re.compile(r"`([^`\n]+)`")
+TASKS_MARK = "<!-- TASKS -->"
+WAVES_OPEN, WAVES_CLOSE = "<!-- WAVES -->", "<!-- /WAVES -->"
+TIER_MODEL = {"light": "haiku", "std": "sonnet", "deep": "opus"}
+TIER_RANK = {"light": 0, "std": 1, "deep": 2}
+
+PLACEHOLDERS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b", r"implement(ed)? later",
+    r"fill in (the )?details", r"add appropriate (error handling|validation)",
+    r"handle (the )?edge cases", r"similar to (task\s*|T)\d+", r"same as (task\s*|T)\d+",
+    r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
+PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
+    r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
+    r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b", r"\binvoke (the |a )?skill\b"]
+PH_RE = [re.compile(p, re.I) for p in PLACEHOLDERS]
+PO_RE = [re.compile(p, re.I) for p in PORTABILITY]
+
+PROTOCOL = """## Execution Protocol (for any AI agent or human engineer)
+
+1. A task may start only when every task in its **Depends** and **Runs after**
+   lists is complete. Single worker: run tasks in ID order.
+2. Parallel workers: follow **Execution Waves**. Tasks in the same wave touch
+   disjoint files and MAY run concurrently (marked `[P]`). Never run two tasks
+   that modify the same file at once.
+3. Within a task, execute steps top to bottom and mark each checkbox `- [x]`
+   when done. To resume, continue from the first unchecked step.
+4. Run every command exactly as written and compare with **Expected**. On
+   mismatch, stop and fix before continuing.
+5. Code blocks are the implementation - copy them verbatim. Signatures under
+   **Interfaces** are contracts with other tasks: never rename, reorder
+   parameters, or change types.
+6. Commit exactly where the plan says, with the given message, staging only the
+   listed paths. Never batch commits across tasks.
+7. **Global Constraints** apply to every task.
+8. If anything is ambiguous, missing, or contradicts the codebase, STOP and ask
+   the requester. Do not invent behavior.
+"""
+NOTE = """> **Execution note:** This plan is self-contained and tool-agnostic. Any AI
+> agent or human engineer can execute it with only a shell, a code editor, and
+> git. Follow the Execution Protocol below."""
+
+
+# ------------------------------------------------------------------ utils
+def num(tid):
+    return int(tid[1:])
+
+
+def norm_path(p):
+    p = re.sub(r":\d+(-\d+)?$", "", p.strip())
+    while p.startswith("./"):
+        p = p[2:]
+    return p
+
+
+def load(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def save(path, text):
+    d = os.path.dirname(os.path.abspath(path))
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def touch(path):
+    with open(path, "w") as f:
+        f.write(str(time.time()))
+
+
+def repo_root(start):
+    d = os.path.abspath(start if os.path.isdir(start) else os.path.dirname(os.path.abspath(start)))
+    while True:
+        if os.path.exists(os.path.join(d, ".git")):
+            return d
+        nd = os.path.dirname(d)
+        if nd == d:
+            return os.getcwd()
+        d = nd
+
+
+def qtool():
+    return "python3 " + shlex.quote(TOOL)
+
+
+def default_work(plan):
+    p = os.path.abspath(plan)
+    return os.path.join(os.path.dirname(p), ".work", os.path.splitext(os.path.basename(p))[0])
+
+
+def load_work(plan):
+    w = default_work(plan)
+    try:
+        return w, json.loads(load(os.path.join(w, "work.json")))
+    except (OSError, ValueError):
+        return w, {}
+
+
+def report(errs, warns, ok_msg, extra=None):
+    for w in warns:
+        print("WARN " + w)
+    for e in errs:
+        print("ERR  " + e)
+    if errs:
+        print("FAIL: %d error(s)" % len(errs))
+        return 1
+    print(ok_msg)
+    for line in extra or []:
+        print(line)
+    return 0
+
+
+def cap_from_env():
+    v = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "").strip()
+    return (int(v), True) if v.isdigit() and int(v) > 0 else (DEFAULT_CAP, False)
+
+
+# ------------------------------------------------------------------ parsing
+def section(text, title):
+    """Body of '## <title>' up to the next level-2 heading or marker."""
+    out, on = [], False
+    for l in text.splitlines():
+        if re.match(r"^##\s+%s\b" % re.escape(title), l):
+            on = True
+            continue
+        if on and (re.match(r"^##\s", l) or l.strip() in (TASKS_MARK, WAVES_OPEN)):
+            break
+        if on:
+            out.append(l)
+    return "\n".join(out).strip() if on else None
+
+
+def parse_contracts(text):
+    lines = text.splitlines()
+    start = next((i for i, l in enumerate(lines) if re.match(r"^##\s+Contracts\b", l)), None)
+    if start is None:
+        return None, ["no '## Contracts' section"]
+    cs, errs, cur, field = [], [], None, None
+    for i in range(start + 1, len(lines)):
+        l = lines[i]
+        if re.match(r"^##\s", l) or l.strip() in (TASKS_MARK, WAVES_OPEN) or TASK_HEAD.match(l):
+            break
+        m = CONTRACT_HEAD.match(l)
+        if m:
+            cur = {"id": m.group(1), "name": m.group(2), "line": i + 1, "raw": {}, "text": [l]}
+            cs.append(cur)
+            field = None
+            continue
+        if cur is None:
+            continue
+        if l.strip():
+            cur["text"].append(l)
+        f = FIELD.match(l)
+        if f:
+            field = f.group(1)
+            if field in cur["raw"]:
+                errs.append("%s: duplicate field %s" % (cur["id"], field))
+            cur["raw"][field] = f.group(2)
+            continue
+        if field and l.strip():
+            cur["raw"][field] += "\n" + l
+    for c in cs:
+        r = c["raw"]
+        c["text"] = "\n".join(c["text"])
+        c["deps"] = re.findall(ID_RE, r.get("Depends", ""))
+        c["files"] = [norm_path(x) for x in TICK.findall(r.get("Files", ""))]
+        c["produces"] = TICK.findall(r.get("Produces", ""))
+        c["reads"] = [norm_path(x) for x in TICK.findall(r.get("Read", ""))]
+        cons, ext = [], []
+        s = r.get("Consumes", "")
+        for m in TICK.finditer(s):
+            tail = s[m.end():m.end() + 40].lower()
+            (ext if "existing" in tail.split("`")[0] else cons).append(m.group(1))
+        c["consumes"], c["external"], c["consumes_explicit"] = cons, ext, "Consumes" in r
+        c["spec"] = [(int(a), int(b or a)) for a, b in re.findall(r"L(\d+)(?:\s*-\s*L?(\d+))?", r.get("Spec", ""))]
+        t = r.get("Tier", "").strip().lower()
+        c["tier"] = t if t in TIER_RANK else "std"
+        if t and t not in TIER_RANK:
+            errs.append("%s: Tier must be light|deep (got %r)" % (c["id"], t))
+        if not c["files"]:
+            errs.append("%s: '- Files:' needs at least one `backticked` path" % c["id"])
+    return cs, errs
+
+
+def scan(text, allow, label, skip_contracts=False):
+    errs, inside, fence = [], False, False
+    allow = {a.lower() for a in allow}
+    for n, l in enumerate(text.splitlines(), 1):
+        if skip_contracts:
+            if re.match(r"^##\s+Contracts\b", l):
+                inside = True
+            elif re.match(r"^##\s", l) or l.strip() in (TASKS_MARK, WAVES_OPEN):
+                inside = False
+        if inside:
+            continue
+        for kind, pats in (("placeholder", PH_RE), ("portability", PO_RE)):
+            for p in pats:
+                for m in p.finditer(l):
+                    if m.group(0).lower() not in allow:
+                        errs.append("%s:%d %s %r: %s" % (label, n, kind, m.group(0), l.strip()[:100]))
+    return errs
+
+
+def code_blocks(text):
+    """[(info, body, start_line)] ; None if a fence is unbalanced."""
+    blocks, open_n, info, buf, start = [], 0, "", [], 0
+    for n, l in enumerate(text.splitlines(), 1):
+        m = re.match(r"^\s*(`{3,}|~{3,})(.*)$", l)
+        if m and open_n == 0:
+            open_n, info, buf, start = len(m.group(1)), m.group(2).strip(), [], n
+            continue
+        if m and len(m.group(1)) >= open_n and not m.group(2).strip():
+            blocks.append((info, "\n".join(buf), start))
+            open_n = 0
+            continue
+        if open_n:
+            buf.append(l)
+    return None if open_n else blocks
+
+
+# ------------------------------------------------------------------ analysis
+def analyze(cs, spec_path=None, repo=None):
+    errs, warns = [], []
+    if not cs:
+        return ["Contracts section has no '#### TNN: Name' entries"], warns
+    width = 3 if len(cs) > 99 else 2
+    for i, c in enumerate(cs, 1):
+        want = "T%0*d" % (width, i)
+        if c["id"] != want:
+            errs.append("%s: expected id %s (sequential, zero-padded, no gaps)" % (c["id"], want))
+    cmap = {c["id"]: c for c in cs}
+    if len(cmap) != len(cs):
+        errs.append("duplicate task ids")
+    producers = {}
+    for c in cs:
+        for s in c["produces"]:
+            if s in producers:
+                warns.append("%s and %s both produce `%s`" % (producers[s], c["id"], s))
+            producers.setdefault(s, c["id"])
+    for c in cs:
+        deps = set()
+        for d in c["deps"]:
+            if d not in cmap:
+                errs.append("%s: depends on unknown %s" % (c["id"], d))
+            elif num(d) >= num(c["id"]):
+                errs.append("%s: depends on later/self task %s (deps must have lower ids)" % (c["id"], d))
+            else:
+                deps.add(d)
+        if not c["consumes_explicit"]:
+            c["consumes"] = [s for d in sorted(deps, key=num) for s in cmap[d]["produces"]]
+        for s in c["consumes"]:
+            src = producers.get(s)
+            if src is None:
+                errs.append("%s: consumes `%s` which no task produces verbatim (fix signature or mark '(existing)')" % (c["id"], s))
+            elif src == c["id"]:
+                continue
+            elif num(src) > num(c["id"]):
+                errs.append("%s: consumes `%s` from later task %s - renumber so producers come first" % (c["id"], s, src))
+            else:
+                deps.add(src)
+        c["deps_all"] = sorted(deps, key=num)
+        c["consumers"] = []
+    for c in cs:
+        for s in c["consumes"]:
+            src = producers.get(s)
+            if src and src != c["id"] and src in cmap:
+                cmap[src]["consumers"].append((c["id"], s))
+    # ancestors over declared + derived deps
+    anc = {}
+    for c in cs:
+        a = set()
+        for d in c["deps_all"]:
+            a.add(d)
+            a |= anc.get(d, set())
+        anc[c["id"]] = a
+    # same-file ordering: each file forms an ID-ordered chain
+    owners = {}
+    for c in cs:
+        c["after"] = []
+        for f in dict.fromkeys(c["files"]):
+            owners.setdefault(f, []).append(c["id"])
+    for f, ts in owners.items():
+        for prev, cur in zip(ts, ts[1:]):
+            if prev not in anc[cur] and prev not in cmap[cur]["after"]:
+                cmap[cur]["after"].append(prev)
+        if len(ts) >= 4:
+            warns.append("hot file `%s` is touched by %d tasks (%s) - it serializes them; split it or wire it in one final task" % (f, len(ts), ", ".join(ts)))
+    wave = {}
+    for c in cs:
+        preds = c["deps_all"] + c["after"]
+        wave[c["id"]] = 1 + max([wave[p] for p in preds if p in wave] or [0])
+    by = {}
+    for c in cs:
+        c["wave"] = wave[c["id"]]
+        by.setdefault(c["wave"], []).append(c["id"])
+    for c in cs:
+        c["p"] = len(by[c["wave"]]) > 1
+    if repo:
+        for c in cs:
+            for r in c["reads"]:
+                if not os.path.isfile(os.path.join(repo, r)):
+                    warns.append("%s: Read path `%s` not found" % (c["id"], r))
+    if spec_path:
+        warns += spec_coverage(cs, spec_path)
+    return errs, warns
+
+
+def spec_coverage(cs, spec_path):
+    try:
+        lines = load(spec_path).splitlines()
+    except OSError as e:
+        return ["spec unreadable: %s" % e]
+    out = ["%s: no 'Spec: L<a>-<b>' pointer" % c["id"] for c in cs if not c["spec"]]
+    ranges = [r for c in cs for r in c["spec"]]
+    for c in cs:
+        for a, b in c["spec"]:
+            if a < 1 or b > len(lines) or a > b:
+                out.append("%s: Spec range L%d-%d outside spec (1-%d)" % (c["id"], a, b, len(lines)))
+    heads = [(i + 1, l.strip()) for i, l in enumerate(lines) if re.match(r"^#{1,6}\s", l)]
+    for k, (ln, h) in enumerate(heads):
+        end = (heads[k + 1][0] - 1) if k + 1 < len(heads) else len(lines)
+        body = [x for x in range(ln + 1, end + 1) if lines[x - 1].strip()]
+        if body and not any(a <= x <= b for x in body for a, b in ranges):
+            out.append("spec uncovered L%d-%d %s" % (ln, end, h[:70]))
+    return out
+
+
+def waves_block(cs):
+    by = {}
+    for c in cs:
+        by.setdefault(c["wave"], []).append(c)
+    rows = ["## Execution Waves", "",
+            "Every task in a wave has all its Depends/Runs-after tasks in earlier waves. Tasks in the",
+            "same wave touch disjoint files, so a wave's `[P]` tasks may all run at once.", ""]
+    for k in sorted(by):
+        rows.append("- **Wave %d:** %s" % (k, ", ".join(c["id"] + (" [P]" if c["p"] else "") for c in by[k])))
+    width = max(len(v) for v in by.values())
+    return "\n".join(rows), len(by), width
+
+
+# ------------------------------------------------------------------ task bodies
+GEN_LINE = re.compile(r"^\*\*(Depends|Runs after):\*\*")
+
+
+def strip_generated(section_text):
+    """Remove heading / Depends / Runs after / Interfaces that precede **Files:** (script regenerates them)."""
+    lines = section_text.strip("\n").splitlines()
+    fi = next((i for i, l in enumerate(lines) if l.strip().startswith("**Files:**")), None)
+    head, rest = (lines[:fi], lines[fi:]) if fi is not None else ([], lines)
+    out, i = [], 0
+    while i < len(head):
+        l = head[i]
+        if TASK_HEAD.match(l) or GEN_LINE.match(l):
+            i += 1
+            continue
+        if l.strip() == "**Interfaces:**":
+            i += 1
+            while i < len(head) and (not head[i].strip() or head[i].lstrip().startswith("- ") or head[i].startswith("  ")):
+                i += 1
+            continue
+        out.append(l)
+        i += 1
+    body = "\n".join(out + rest).strip()
+    body = re.sub(r"\n-{3,}\s*$", "", body).strip()
+    return body + "\n"
+
+
+def render_task(c, body):
+    rows = ["### %s: %s%s" % (c["id"], c["name"], " [P]" if c["p"] else ""), "",
+            "**Depends:** %s" % (", ".join(c["deps_all"]) or "—")]
+    if c["after"]:
+        rows += ["", "**Runs after:** %s (same files)" % ", ".join(c["after"])]
+    iface = []
+    if c["consumes"]:
+        iface.append("- Consumes: " + "; ".join("`%s`" % s for s in c["consumes"]))
+    if c["external"]:
+        iface.append("- Uses existing: " + "; ".join("`%s`" % s for s in c["external"]))
+    if c["produces"]:
+        iface.append("- Produces: " + "; ".join("`%s`" % s for s in c["produces"]))
+    if iface:
+        rows += ["", "**Interfaces:**"] + iface
+    return "\n".join(rows) + "\n\n" + body.strip() + "\n"
+
+
+def files_block(body):
+    lines = body.splitlines()
+    fi = next((i for i, l in enumerate(lines) if l.strip().startswith("**Files:**")), None)
+    if fi is None:
+        return None
+    paths = []
+    for l in lines[fi + 1:]:
+        if not l.strip():
+            if paths:
+                break
+            continue
+        if not l.lstrip().startswith("- ") or l.lstrip().startswith("- ["):
+            break
+        paths += [norm_path(x) for x in TICK.findall(l) if "/" in x or "." in x]  # skip `Symbol` mentions
+    return paths
+
+
+def syntax_errors(blocks, label):
+    errs = []
+    for info, src, line in blocks:
+        words = info.lower().replace("{", " ").replace("}", " ").split()
+        if not words or "fragment" in words or not src.strip():
+            continue
+        lang = words[0]
+        where = "%s: code block at body L%d (%s)" % (label, line, lang)
+        hint = " - fix it, or open the fence as ```%s fragment if intentionally partial" % lang
+        try:
+            if lang in ("python", "py", "python3"):
+                flags = getattr(ast, "PyCF_ALLOW_TOP_LEVEL_AWAIT", 0)
+                compile(textwrap.dedent(src), "<block>", "exec", flags=flags, dont_inherit=True)
+            elif lang == "json":
+                json.loads(src)
+            elif lang == "toml":
+                try:
+                    import tomllib
+                except ImportError:
+                    continue
+                tomllib.loads(src)
+            elif lang in ("bash", "sh") and shutil.which("bash"):
+                p = subprocess.run(["bash", "-n"], input=src, capture_output=True, text=True, timeout=10)
+                if p.returncode:
+                    errs.append("%s: %s%s" % (where, p.stderr.strip().splitlines()[-1][:160], hint))
+            elif lang in ("js", "javascript", "mjs", "cjs") and shutil.which("node"):
+                ext = ".mjs" if re.search(r"^\s*(import|export)\s", src, re.M) else ".cjs"
+                with tempfile.NamedTemporaryFile("w", suffix=ext, delete=False) as tf:
+                    tf.write(src)
+                try:
+                    p = subprocess.run(["node", "--check", tf.name], capture_output=True, text=True, timeout=15)
+                finally:
+                    os.unlink(tf.name)
+                if p.returncode:
+                    msg = [x for x in p.stderr.splitlines() if "Error" in x] or p.stderr.splitlines() or ["syntax error"]
+                    errs.append("%s: %s%s" % (where, msg[0][:160], hint))
+        except SyntaxError as e:
+            errs.append("%s: python syntax line %s: %s%s" % (where, e.lineno, e.msg, hint))
+        except ValueError as e:
+            errs.append("%s: %s%s" % (where, str(e)[:160], hint))
+        except Exception as e:  # tomllib.TOMLDecodeError, timeouts
+            errs.append("%s: %s%s" % (where, str(e)[:160], hint))
+    return errs
+
+
+def lint_body(c, body, allow, label, repo=None, earlier_files=()):
+    errs, warns = [], []
+    if re.search(r"^#{1,3}\s", body, re.M):
+        errs.append("%s: '#', '##' or '###' heading inside a task body breaks plan structure (use '####' or bold)" % label)
+    paths = files_block(body)
+    if paths is None:
+        errs.append("%s: body must start with a '**Files:**' list" % label)
+        paths = []
+    contract = set(c["files"])
+    for p in paths:
+        if p not in contract:
+            errs.append("%s: Files lists `%s` which is not in the contract Files (breaks parallel safety)" % (label, p))
+    for f in c["files"]:
+        if f not in paths:
+            errs.append("%s: contract file `%s` missing from the **Files:** list" % (label, f))
+    if repo:
+        for l in body.splitlines():
+            m = re.match(r"^\s*-\s+(Create|Modify)\s*:\s*`([^`]+)`", l)
+            if not m:
+                continue
+            p = norm_path(m.group(2))
+            exists = os.path.exists(os.path.join(repo, p))
+            if m.group(1) == "Create" and exists:
+                warns.append("%s: Create `%s` already exists - should it be Modify?" % (label, p))
+            if m.group(1) == "Modify" and not exists and p not in earlier_files:
+                warns.append("%s: Modify `%s` does not exist and no earlier task creates it" % (label, p))
+    for s in c["produces"]:
+        if s not in body:
+            errs.append("%s: produced signature not written verbatim in the body: `%s`" % (label, s))
+    steps = [int(x) for x in re.findall(r"^- \[[ x]\] \*\*Step (\d+)", body, re.M)]
+    if not steps:
+        errs.append("%s: no '- [ ] **Step N: ...**' checkboxes" % label)
+    elif steps != list(range(1, len(steps) + 1)):
+        errs.append("%s: steps must be numbered 1..%d in order (got %s)" % (label, len(steps), steps))
+    blocks = code_blocks(body)
+    if blocks is None:
+        errs.append("%s: unbalanced code fence" % label)
+        blocks = []
+    elif not blocks:
+        errs.append("%s: no code block" % label)
+    if "git commit" not in body:
+        errs.append("%s: no commit step" % label)
+    lines = body.splitlines()
+    in_fence = False
+    for i, l in enumerate(lines):
+        if re.match(r"^\s*(`{3,}|~{3,})", l):
+            in_fence = not in_fence
+        if in_fence or not re.match(r"^\s*(\*\*)?Run:", l):
+            continue
+        ok = False
+        for m in lines[i + 1:]:
+            if re.match(r"^\s*(\*\*)?Expected:", m):
+                ok = True
+                break
+            if re.match(r"^\s*(\*\*)?Run:", m) or re.match(r"^- \[[ x]\] \*\*Step", m):
+                break
+        if not ok and not re.search(r"Expected:", l):
+            errs.append("%s: 'Run:' at body L%d has no 'Expected:' before the next Run/Step" % (label, i + 1))
+    for info, src, line in blocks:
+        for l in src.splitlines():
+            m = re.match(r"^\s*git add\s+(.+)$", l)
+            if not m:
+                continue
+            try:
+                toks = [t for t in shlex.split(m.group(1)) if not t.startswith("-")]
+            except ValueError:
+                toks = m.group(1).split()
+            bad = [t for t in toks if t in (".", "*", ":/") or "*" in t]
+            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", m.group(1)):
+                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, m.group(1).strip()))
+                continue
+            for t in toks:
+                t = norm_path(t)
+                if t in contract:
+                    continue
+                if any(f.startswith(t.rstrip("/") + "/") for f in contract):
+                    warns.append("%s: `git add %s` stages a directory - prefer explicit file paths" % (label, t))
+                else:
+                    errs.append("%s: `git add` path `%s` is not in the contract Files" % (label, t))
+    errs += syntax_errors(blocks, label)
+    errs += scan(body, allow, label)
+    return errs, warns
+
+
+# ------------------------------------------------------------------ briefs
+def numbered(path, a, b, width=5):
+    try:
+        lines = load(path).splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    a, b = max(1, a), min(len(lines), b)
+    return "\n".join("%*d| %s" % (width, i, lines[i - 1]) for i in range(a, b + 1))
+
+
+def merge_ranges(rs):
+    out = []
+    for a, b in sorted(rs):
+        if out and a <= out[-1][1] + 1:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def inline_files(paths, repo, budget_lines=1500, per_file=400):
+    inl, refs, used = [], [], 0
+    for p in dict.fromkeys(paths):
+        full = os.path.join(repo, p)
+        if not os.path.isfile(full):
+            continue
+        try:
+            if os.path.getsize(full) > 250000:
+                refs.append("%s (large)" % p)
+                continue
+            text = load(full)
+        except (OSError, UnicodeDecodeError):
+            continue
+        n = len(text.splitlines())
+        if n <= per_file and used + n <= budget_lines:
+            used += n
+            inl.append("#### `%s` (%d lines)\n\n````text\n%s\n````" % (p, n, numbered(full, 1, n)))
+        else:
+            refs.append("%s (%d lines)" % (p, n))
+    return inl, refs
+
+
+def partition(cs, k):
+    if len(cs) <= k:
+        return [[c] for c in cs]
+    w = [2.0 + sum(b - a + 1 for a, b in c["spec"]) / 30.0 + 0.5 * len(c["files"]) + 0.5 * len(c["produces"]) for c in cs]
+
+    def groups(limit):
+        out, cur, acc = [], [], 0.0
+        for c, x in zip(cs, w):
+            if cur and acc + x > limit:
+                out.append(cur)
+                cur, acc = [], 0.0
+            cur.append(c)
+            acc += x
+        return out + ([cur] if cur else [])
+
+    lo, hi = max(w), sum(w)
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        if len(groups(mid)) <= k:
+            hi = mid
+        else:
+            lo = mid
+    out = groups(hi)
+    weight = {id(c): x for c, x in zip(cs, w)}
+    while len(out) < k:  # use every free slot: split the heaviest multi-task group
+        cand = [g for g in out if len(g) > 1]
+        if not cand:
+            break
+        g = max(cand, key=lambda g: sum(weight[id(c)] for c in g))
+        i = out.index(g)
+        half, acc, total = 1, 0.0, sum(weight[id(c)] for c in g)
+        for j, c in enumerate(g[:-1], 1):
+            acc += weight[id(c)]
+            if acc >= total / 2:
+                half = j
+                break
+        out[i:i + 1] = [g[:half], g[half:]]
+    return out
+
+
+def plan_header(plan):
+    lines = plan.splitlines()
+    first = next((i for i, l in enumerate(lines) if re.match(r"^##\s", l)), len(lines))
+    return "\n".join(l for l in lines[:first] if not l.startswith(">")).strip()
+
+
+def writer_brief(plan_path, plan, cs_group, cmap, work, spec_path, repo, allow):
+    ids = [c["id"] for c in cs_group]
+    outs = {c["id"]: os.path.join(work, "tasks", c["id"] + ".md") for c in cs_group}
+    lint = "; ".join("%s lint-task %s %s" % (qtool(), shlex.quote(plan_path), shlex.quote(outs[t])) for t in ids)
+    tmpl = load(os.path.join(SKILL_DIR, "task-writer-prompt.md"))
+    parts = [tmpl.replace("{TASKS}", ", ".join(ids)).replace("{LINT}", lint)
+             .replace("{OUT}", "\n".join("- %s -> `%s`" % (t, outs[t]) for t in ids))]
+    parts.append("## Plan header\n\n" + plan_header(plan))
+    for title in ("Global Constraints", "References", "File Structure"):
+        s = section(plan, title)
+        if s:
+            parts.append("## %s\n\n%s" % (title, s))
+    for c in cs_group:
+        blk = ["## Contract %s (locked)" % c["id"], "", c["text"], "",
+               "- Resolved Depends: %s" % (", ".join(c["deps_all"]) or "—")]
+        if c["after"]:
+            blk.append("- Runs after (same files): %s - code against the file state AFTER those tasks" % ", ".join(c["after"]))
+        for s in c["consumes"]:
+            blk.append("- Consumes `%s` (from contract of its producer - call it exactly like this)" % s)
+        for t, s in c["consumers"]:
+            blk.append("- %s will call your `%s` - make it complete and exact" % (t, s))
+        parts.append("\n".join(blk))
+        if spec_path and c["spec"]:
+            ex = [numbered(spec_path, a, b) or "" for a, b in merge_ranges(c["spec"])]
+            parts.append("## Spec excerpt for %s (`%s`)\n\n````text\n%s\n````" % (c["id"], os.path.relpath(spec_path, repo), "\n  ...\n".join(ex)))
+    paths = [f for c in cs_group for f in c["files"]] + [r for c in cs_group for r in c["reads"]]
+    ref = section(plan, "References")
+    if ref:
+        paths += [norm_path(x) for x in TICK.findall(ref)]
+    inl, refs = inline_files(paths, repo)
+    if inl:
+        parts.append("## Existing files (inlined, with line numbers - use them for Modify ranges and patterns)\n\n" + "\n\n".join(inl))
+    if refs:
+        parts.append("## Read before writing (ONE message of parallel Reads, repo root `%s`)\n\n" % repo + "\n".join("- `%s`" % r for r in refs))
+    return "\n\n".join(parts) + "\n"
+
+
+def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
+    tmpl = load(os.path.join(SKILL_DIR, "plan-reviewer-prompt.md"))
+    files = [os.path.join(work, "tasks", c["id"] + ".md") for c in cs_group]
+    lint = "; ".join("%s lint-task %s %s --mark rev" % (qtool(), shlex.quote(plan_path), shlex.quote(f)) for f in files)
+    parts = [tmpl.replace("{TASKS}", ", ".join(c["id"] for c in cs_group)).replace("{LINT}", lint)
+             .replace("{FILES}", "\n".join("- `%s`" % f for f in files))]
+    gc = section(plan, "Global Constraints")
+    if gc:
+        parts.append("## Global Constraints\n\n" + gc)
+    for c in cs_group:
+        parts.append("## Contract %s\n\n%s\n\n- Resolved Depends: %s" % (c["id"], c["text"], ", ".join(c["deps_all"]) or "—"))
+        if spec_path and c["spec"]:
+            ex = [numbered(spec_path, a, b) or "" for a, b in merge_ranges(c["spec"])]
+            parts.append("## Spec excerpt for %s\n\n````text\n%s\n````" % (c["id"], "\n  ...\n".join(ex)))
+    return "\n\n".join(parts) + "\n"
+
+
+def dispatch_lines(groups, work, kind):
+    rows = []
+    for gid, g in groups:
+        tier = max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
+        model = "sonnet" if kind == "review" else TIER_MODEL[tier]
+        span = g[0]["id"] if len(g) == 1 else "%s-%s" % (g[0]["id"], g[-1]["id"])
+        rows.append("%-4s %-7s %-9s %s" % (gid, model, span, os.path.join(work, kind + "-briefs" if kind == "review" else "briefs", gid + ".md")))
+    return rows
+
+
+def agent_installed(repo):
+    for base in (os.path.join(repo, ".claude", "agents"), os.path.join(os.path.expanduser("~"), ".claude", "agents")):
+        if os.path.isfile(os.path.join(base, "plan-task-writer.md")):
+            return base
+    return None
+
+
+# ------------------------------------------------------------------ commands
+def cmd_contracts(a):
+    plan_path = os.path.abspath(a.plan)
+    plan = load(plan_path)
+    cs, errs = parse_contracts(plan)
+    if cs is None:
+        return report(errs, [], "")
+    repo = repo_root(plan_path)
+    spec = os.path.abspath(a.spec) if a.spec else None
+    e2, warns = analyze(cs, spec, repo)
+    errs += e2 + scan(plan.split(TASKS_MARK, 1)[0], a.allow, os.path.basename(plan_path), skip_contracts=True)
+    if errs:
+        return report(errs, warns, "")
+    cap, from_env = cap_from_env()
+    k = max(1, min(MAX_AGENTS, a.agents or cap))
+    work = default_work(plan_path)
+    shutil.rmtree(os.path.join(work, "briefs"), ignore_errors=True)
+    os.makedirs(os.path.join(work, "tasks"), exist_ok=True)
+    cmap = {c["id"]: c for c in cs}
+    parts = partition(cs, k)
+    groups = [((g[0]["id"] if len(parts) == len(cs) else "W%02d" % (i + 1)), g) for i, g in enumerate(parts)]
+    for gid, g in groups:
+        save(os.path.join(work, "briefs", gid + ".md"), writer_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
+    save(os.path.join(work, "work.json"), json.dumps({
+        "plan": plan_path, "spec": spec, "repo": repo, "allow": a.allow, "agents": k,
+        "tasks": [c["id"] for c in cs], "groups": {gid: [c["id"] for c in g] for gid, g in groups}, "review": []}, indent=1))
+    _, n, width = waves_block(cs)
+    agent = "plan-task-writer" if agent_installed(repo) else "general-purpose"
+    head = ["WORK %s" % work,
+            "DISPATCH %d writers in ONE message | subagent_type=%s | model per row | description 'plan <ID>'" % (len(groups), agent),
+            "prompt (verbatim): Read <brief path> and follow it exactly.",
+            "ID   MODEL   TASKS     BRIEF"]
+    note = [] if from_env or a.agents else ["NOTE parallel cap = %d (default); run `%s setup` once to raise it to 64" % (DEFAULT_CAP, qtool())]
+    return report([], warns, "OK contracts: %d tasks | %d waves | max wave width %d | %d writers (cap %d)" % (len(cs), n, width, len(groups), k),
+                  note + head + dispatch_lines(groups, work, "write") + ["THEN run: %s wait %s" % (qtool(), shlex.quote(plan_path))])
+
+
+def task_label(path):
+    m = re.search(r"(T\d{2,3})\.md$", os.path.basename(path))
+    return m.group(1) if m else None
+
+
+def lint_file(plan_path, task_path, allow_extra=()):
+    plan = load(plan_path)
+    cs, errs = parse_contracts(plan)
+    tid = task_label(task_path)
+    c = next((x for x in (cs or []) if tid and x["id"] == tid), None)
+    if c is None:
+        return errs + ["no contract matches %s" % os.path.basename(task_path)], [], None
+    _, work = load_work(plan_path)
+    analyze(cs, None, None)
+    allow = list(work.get("allow", [])) + list(allow_extra)
+    repo = work.get("repo") or repo_root(plan_path)
+    earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
+    e, w = lint_body(c, strip_generated(load(task_path)), allow, c["id"], repo, earlier)
+    return e, w, c
+
+
+def cmd_lint_task(a):
+    e, w, c = lint_file(os.path.abspath(a.plan), a.task, a.allow)
+    rc = report(e, w, "OK %s" % (c["id"] if c else ""))
+    if rc == 0:
+        touch(a.task + "." + a.mark)
+        if w:
+            with open(a.task + ".warn", "w") as f:
+                f.write("\n".join(w))
+    return rc
+
+
+def cmd_hook_lint(a):
+    try:
+        data = json.load(sys.stdin)
+        path = (data.get("tool_input") or {}).get("file_path") or ""
+        m = re.search(r"[\\/]\.work[\\/][^\\/]+[\\/]tasks[\\/]T\d{2,3}\.md$", path)
+        if not m:
+            return 0
+        work = os.path.dirname(os.path.dirname(path))
+        info = json.loads(load(os.path.join(work, "work.json")))
+        e, w, c = lint_file(info["plan"], path)
+        if not e:
+            touch(path + ".ok")
+            msg = "plan-lint: OK %s%s" % (c["id"], "".join("\nWARN " + x for x in w))
+        else:
+            msg = "plan-lint: FAIL %d error(s) - fix with Edit (re-linted automatically):\n%s" % (len(e), "\n".join("ERR  " + x for x in e[:25]))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": msg}}))
+    except Exception as ex:  # never break the writer
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "plan-lint: unavailable (%s) - run LINT with Bash" % ex}}))
+    return 0
+
+
+def done_state(path, mark):
+    if not os.path.exists(path):
+        return "absent"
+    mk = path + "." + mark
+    if os.path.exists(mk) and os.stat(mk).st_mtime_ns >= os.stat(path).st_mtime_ns:
+        return "done"
+    return "not-reviewed" if mark == "rev" else "unlinted-or-failing"
+
+
+def cmd_wait(a):
+    plan_path = os.path.abspath(a.plan)
+    work, info = load_work(plan_path)
+    if not info:
+        return report(["no work.json - run contracts first"], [], "")
+    ids = info.get("review", []) if a.review else info.get("tasks", [])
+    mark = "rev" if a.review else "ok"
+    t0 = last = time.time()
+    seen = -1
+    while True:
+        st = {t: done_state(os.path.join(work, "tasks", t + ".md"), mark) for t in ids}
+        ndone = sum(1 for v in st.values() if v == "done")
+        if ndone != seen:
+            seen, last = ndone, time.time()
+        if ndone == len(ids):
+            print("DONE %d/%d %s in %.0fs" % (ndone, len(ids), "reviews" if a.review else "tasks", time.time() - t0))
+            return 0
+        if time.time() - t0 > a.timeout or time.time() - last > a.idle:
+            pend = ["%s:%s" % (t, v) for t, v in st.items() if v != "done"]
+            print("PENDING %d/%d after %.0fs (%s) -> %s" % (ndone, len(ids), time.time() - t0,
+                  "timeout" if time.time() - t0 > a.timeout else "no progress for %ds" % a.idle, " ".join(pend)))
+            print("If their agents are still running, run wait again; if they returned FAIL or stopped, re-dispatch only these IDs.")
+            return 1
+        time.sleep(0.5)
+
+
+def collect_tasks(work):
+    tdir = os.path.join(work, "tasks")
+    out = {}
+    for f in sorted(os.listdir(tdir)) if os.path.isdir(tdir) else []:
+        m = re.match(r"^(T\d{2,3})\.md$", f)
+        if m:
+            out[m.group(1)] = load(os.path.join(tdir, f))
+    return out
+
+
+def cmd_review(a):
+    plan_path = os.path.abspath(a.plan)
+    plan = load(plan_path)
+    work, info = load_work(plan_path)
+    cs, errs = parse_contracts(plan)
+    if cs is None or not info:
+        return report(errs or ["no work.json - run contracts first"], [], "")
+    analyze(cs, None, None)
+    tasks = collect_tasks(work)
+    picked = []
+    for c in cs:
+        body = tasks.get(c["id"], "")
+        why = []
+        if a.all:
+            why.append("all")
+        if c["tier"] == "deep":
+            why.append("tier deep")
+        if len(body.splitlines()) > 250:
+            why.append("long body")
+        if len(c["consumes"]) >= 3:
+            why.append("consumes %d" % len(c["consumes"]))
+        if os.path.exists(os.path.join(work, "tasks", c["id"] + ".md.warn")):
+            why.append("lint warnings")
+        if why and body:
+            picked.append((c, why))
+    shutil.rmtree(os.path.join(work, "review-briefs"), ignore_errors=True)
+    if not picked:
+        info["review"] = []
+        save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
+        print("NONE - no risky tasks; skip review and run assemble")
+        return 0
+    k = max(1, min(MAX_AGENTS, a.agents or info.get("agents") or DEFAULT_CAP))
+    size = a.size or max(1, -(-len(picked) // k))  # default: spread over every free slot
+    chunks = [[c for c, _ in picked[i:i + size]] for i in range(0, len(picked), size)]
+    while len(chunks) > k:
+        chunks = [chunks[i] + (chunks[i + 1] if i + 1 < len(chunks) else []) for i in range(0, len(chunks), 2)]
+    groups = [("R%02d" % (i + 1), g) for i, g in enumerate(chunks)]
+    spec = info.get("spec")
+    for gid, g in groups:
+        save(os.path.join(work, "review-briefs", gid + ".md"), reviewer_brief(plan_path, plan, g, work, spec, info.get("repo") or repo_root(plan_path)))
+    info["review"] = [c["id"] for c, _ in picked]
+    save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
+    rows = ["REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked)),
+            "DISPATCH %d reviewers in ONE message | subagent_type=general-purpose | model sonnet | description 'review <ID>'" % len(groups),
+            "prompt (verbatim): Read <brief path> and follow it exactly.",
+            "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
+    rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
+    for r in rows:
+        print(r)
+    return 0
+
+
+def render_plan(plan_head, cs, bodies):
+    head = plan_head.rstrip() + "\n"
+    if "Execution note" not in head:
+        head = re.sub(r"^(# .*\n)", lambda m: m.group(1) + "\n" + NOTE + "\n", head, count=1, flags=re.M)
+    if not re.search(r"^## Execution Protocol", head, re.M):
+        m = re.search(r"^## ", head, re.M)
+        head = head[:m.start()] + PROTOCOL + "\n" + head[m.start():] if m else head + "\n" + PROTOCOL
+    if not re.search(r"^## File Structure", head, re.M):
+        dirs = {}
+        for c in cs:
+            for f in c["files"]:
+                d, b = os.path.split(f)
+                dirs.setdefault(d, {}).setdefault(b, []).append(c["id"])
+        fs = "## File Structure\n\n" + "\n".join("- `%s/` \u2014 %s" % (d or ".", ", ".join(
+            "%s (%s)" % (b, ", ".join(t)) for b, t in fl.items())) for d, fl in dirs.items()) + "\n\n"
+        m = re.search(r"^## Contracts", head, re.M)
+        head = head[:m.start()] + fs + head[m.start():]
+    block, n, width = waves_block(cs)
+    wv = WAVES_OPEN + "\n" + block + "\n" + WAVES_CLOSE
+    if WAVES_OPEN in head:
+        head = re.sub(re.escape(WAVES_OPEN) + r".*?(" + re.escape(WAVES_CLOSE) + r"|\Z)", lambda m: wv, head, count=1, flags=re.S)
+    else:
+        head = head.rstrip() + "\n\n" + wv + "\n"
+    tasks = "\n---\n\n".join(render_task(c, bodies[c["id"]]) for c in cs)
+    return head.rstrip() + "\n\n" + TASKS_MARK + "\n\n" + tasks, n, width
+
+
+def full_check(plan_path, plan, cs, bodies, spec, allow):
+    repo = repo_root(plan_path)
+    errs, warns = analyze(cs, spec, repo)
+    if errs:
+        return errs, warns
+    for c in cs:
+        if c["id"] not in bodies:
+            errs.append("%s: task body missing" % c["id"])
+            continue
+        earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
+        e, w = lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier)
+        errs += e
+        warns += w
+    ids = {c["id"] for c in cs}
+    errs += ["%s: task body has no contract" % t for t in sorted(set(bodies) - ids)]
+    head = plan.split(TASKS_MARK, 1)[0]
+    errs += scan(head, allow, "header", skip_contracts=True)
+    return errs, warns
+
+
+def cmd_assemble(a):
+    plan_path = os.path.abspath(a.plan)
+    plan = load(plan_path)
+    work, info = load_work(plan_path)
+    cs, errs = parse_contracts(plan)
+    if cs is None:
+        return report(errs, [], "")
+    bodies = {t: strip_generated(x) for t, x in collect_tasks(work).items()}
+    spec = a.spec or info.get("spec")
+    allow = list(info.get("allow", [])) + a.allow
+    e2, warns = full_check(plan_path, plan, cs, bodies, spec, allow)
+    if errs + e2:
+        return report(errs + e2, warns, "")
+    head = re.split(r"^" + re.escape(TASKS_MARK) + r"\s*$", plan, maxsplit=1, flags=re.M)[0]
+    head = re.sub(re.escape(WAVES_OPEN) + r".*?" + re.escape(WAVES_CLOSE) + r"\s*", "", head, flags=re.S)
+    out, n, width = render_plan(head, cs, bodies)
+    save(plan_path, out)
+    if a.clean:
+        shutil.rmtree(work, ignore_errors=True)
+        parent = os.path.dirname(work)
+        if os.path.isdir(parent) and not os.listdir(parent):
+            os.rmdir(parent)
+    return report([], warns, "OK assembled %d tasks -> %s | %d waves | max wave width %d%s"
+                  % (len(cs), plan_path, n, width, " | workdir removed" if a.clean else ""))
+
+
+def cmd_check(a):
+    plan_path = os.path.abspath(a.plan)
+    plan = load(plan_path)
+    cs, errs = parse_contracts(plan)
+    if cs is None:
+        return report(errs, [], "")
+    lines = plan.splitlines(True)
+    first = next((i for i, l in enumerate(lines) if TASK_HEAD.match(l) or l.strip() == TASKS_MARK), len(lines))
+    head, rest = "".join(lines[:first]), "".join(lines[first:])
+    bodies, cur = {}, None
+    for l in rest.splitlines(True):
+        m = TASK_HEAD.match(l)
+        if m:
+            cur = m.group(1)
+            bodies[cur] = ""
+        if cur:
+            bodies[cur] += l
+    bodies = {k: strip_generated(v) for k, v in bodies.items()}
+    e2, warns = full_check(plan_path, plan, cs, bodies, a.spec, a.allow)
+    if errs + e2:
+        return report(errs + e2, warns, "")
+    head = re.sub(re.escape(WAVES_OPEN) + r".*?" + re.escape(WAVES_CLOSE) + r"\s*", "", head, flags=re.S)
+    out, n, width = render_plan(head, cs, bodies)
+    save(plan_path, out)
+    return report([], warns, "OK plan: %d tasks | %d waves | max wave width %d -> %s" % (len(cs), n, width, plan_path))
+
+
+# ------------------------------------------------------------------ context (never fails)
+def sh(cmd, cwd=None, timeout=8):
+    try:
+        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+        return p.stdout if p.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def cmd_context(a):
+    out = []
+    try:
+        cwd = os.getcwd()
+        repo = repo_root(cwd)
+        out.append("date %s | cwd %s | repo %s" % (time.strftime("%Y-%m-%d"), cwd, repo))
+        out.append("tool: %s" % qtool())
+        cap, env = cap_from_env()
+        k = min(MAX_AGENTS, cap)
+        out.append("parallel: subagent cap %d%s -> writers per wave <= %d%s" % (
+            cap, "" if env else " (default; CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS unset)", k,
+            "" if k >= MAX_AGENTS else " | one-time boost to 64: %s setup --apply (then restart)" % qtool()))
+        ag = agent_installed(repo)
+        out.append("writer agent: %s" % ("plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
+        args = a.rest or []
+        if "--thorough" in args:
+            out.append("mode: THOROUGH -> review every task (review --all)")
+        spec = next((x for x in args if not x.startswith("--") and os.path.isfile(x)), None)
+        branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).strip()
+        files = sh(["git", "ls-files"], repo).splitlines()
+        if not files:
+            for root, dirs, fs in os.walk(repo):
+                dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("node_modules", "venv", ".venv", "dist", "build", "__pycache__", "target")]
+                files += [os.path.relpath(os.path.join(root, f), repo) for f in fs]
+                if len(files) > 20000:
+                    break
+        dirty = len(sh(["git", "status", "--porcelain"], repo).splitlines())
+        out.append("git: branch %s | %d dirty | %d files" % (branch or "-", dirty, len(files)))
+        plans = os.path.join(repo, "docs", "superpowers", "plans")
+        specs_dir = os.path.join(repo, "docs", "superpowers", "specs")
+        out.append("plan path: docs/superpowers/plans/%s-<feature>.md (%d existing plans)" % (
+            time.strftime("%Y-%m-%d"), len([f for f in os.listdir(plans) if f.endswith(".md")]) if os.path.isdir(plans) else 0))
+        if not spec and os.path.isdir(specs_dir):
+            recent = sorted((os.path.join(specs_dir, f) for f in os.listdir(specs_dir) if f.endswith(".md")), key=os.path.getmtime, reverse=True)[:5]
+            if recent:
+                out.append("recent specs: " + ", ".join(os.path.relpath(p, repo) for p in recent))
+        if spec:
+            sl = load(spec).splitlines()
+            out.append("spec: %s (%d lines) - heading map (use for Spec: L ranges):" % (os.path.relpath(os.path.abspath(spec), repo), len(sl)))
+            heads = [(i + 1, l.strip()) for i, l in enumerate(sl) if re.match(r"^#{1,6}\s", l)]
+            for j, (ln, h) in enumerate(heads[:80]):
+                end = heads[j + 1][0] - 1 if j + 1 < len(heads) else len(sl)
+                out.append("  L%d-%d %s" % (ln, end, h[:90]))
+        marks = {"pyproject.toml": "python", "setup.py": "python", "requirements.txt": "python", "package.json": "node",
+                 "go.mod": "go", "Cargo.toml": "rust", "pom.xml": "java/maven", "build.gradle": "java/gradle",
+                 "build.gradle.kts": "kotlin/gradle", "Gemfile": "ruby", "composer.json": "php", "mix.exs": "elixir",
+                 "CMakeLists.txt": "c/c++", "Makefile": "make", "deno.json": "deno", "pubspec.yaml": "dart"}
+        found = [f for f in marks if os.path.isfile(os.path.join(repo, f))]
+        stack = sorted(set(marks[f] for f in found))
+        tests = []
+        pj = os.path.join(repo, "package.json")
+        if os.path.isfile(pj):
+            try:
+                scr = json.loads(load(pj)).get("scripts", {})
+                tests += ["npm run %s -> %s" % (k2, v) for k2, v in scr.items() if re.search(r"test|lint|check|typecheck", k2)][:6]
+            except ValueError:
+                pass
+        pp = os.path.join(repo, "pyproject.toml")
+        if os.path.isfile(pp) and "pytest" in load(pp):
+            tests.append("pytest (configured in pyproject.toml)")
+        if "go" in stack:
+            tests.append("go test ./...")
+        if "rust" in stack:
+            tests.append("cargo test")
+        out.append("stack: %s | markers: %s" % (", ".join(stack) or "?", ", ".join(found) or "-"))
+        if tests:
+            out.append("test/check cmds: " + " ; ".join(tests))
+        for md in ("CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"):
+            if os.path.isfile(os.path.join(repo, md)):
+                out.append("conventions file: %s (%d lines) - copy binding rules into Global Constraints" % (md, len(load(os.path.join(repo, md)).splitlines())))
+        testf = [f for f in files if re.search(r"(^|/)(tests?|__tests__|spec)/|(_test|\.test|\.spec|test_)[^/]*$", f)]
+        out.append("test files: %d (e.g. %s)" % (len(testf), ", ".join(testf[:4]) or "-"))
+        recent = []
+        for l in sh(["git", "log", "-n", "40", "--name-only", "--pretty=format:"], repo).splitlines():
+            if l.strip() and l not in recent and os.path.exists(os.path.join(repo, l)):
+                recent.append(l)
+        if recent:
+            out.append("recently changed (pattern candidates): " + ", ".join(recent[:15]))
+        dirs = {}
+        for f in files:
+            d = f.split("/", 1)[0] if "/" in f else "."
+            dirs[d] = dirs.get(d, 0) + 1
+        out.append("top-level: " + ", ".join("%s(%d)" % (d, n) for d, n in sorted(dirs.items(), key=lambda x: -x[1])[:25]))
+        skip = re.compile(r"(^|/)(node_modules|vendor|dist|build|\.venv|venv|__pycache__|target|\.next)/|\.(lock|min\.js|map|png|jpg|svg|ico|woff2?)$")
+        shown = [f for f in files if not skip.search(f)]
+        out.append("files (%d of %d):" % (min(250, len(shown)), len(files)))
+        out.append("  " + "\n  ".join(shown[:250]))
+    except Exception as ex:
+        out.append("context partial: %s" % ex)
+    print("\n".join(out))
+    return 0
+
+
+# ------------------------------------------------------------------ setup
+AGENT_TEMPLATE = os.path.join(SKILL_DIR, "agents", "plan-task-writer.md")
+
+
+def cmd_setup(a):
+    home = os.path.expanduser("~")
+    if a.scope == "user":
+        settings = os.path.join(home, ".claude", "settings.json")
+        agents = os.path.join(home, ".claude", "agents")
+        edit_rule = "Edit(**/docs/superpowers/plans/**)"
+    else:
+        root = repo_root(os.getcwd())
+        settings = os.path.join(root, ".claude", "settings.local.json")
+        agents = os.path.join(root, ".claude", "agents")
+        edit_rule = "Edit(/docs/superpowers/plans/**)"
+    try:
+        cur = json.loads(load(settings)) if os.path.exists(settings) else {}
+    except ValueError as e:
+        print("ERR  %s is not valid JSON (%s) - fix it first; nothing changed" % (settings, e))
+        return 1
+    new = json.loads(json.dumps(cur))
+    changes = []
+    env = new.setdefault("env", {})
+    v = str(env.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", ""))
+    if not (v.isdigit() and int(v) >= MAX_AGENTS):
+        env["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(MAX_AGENTS)
+        changes.append("env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS = %d (was %s)" % (MAX_AGENTS, v or "unset -> 20"))
+    allow = new.setdefault("permissions", {}).setdefault("allow", [])
+    for rule in ("Bash(%s *)" % qtool(), edit_rule):
+        if rule not in allow:
+            allow.append(rule)
+            changes.append("permissions.allow += %s" % rule)
+    agent_path = os.path.join(agents, "plan-task-writer.md")
+    agent_text = load(AGENT_TEMPLATE).replace("__PLAN_TOOL__", qtool())
+    if not os.path.exists(agent_path) or load(agent_path) != agent_text:
+        changes.append("write agent %s (sonnet, effort medium, auto-lint PostToolUse hook)" % agent_path)
+    if not changes:
+        print("OK setup already complete (%s scope)" % a.scope)
+        return 0
+    print(("APPLY" if a.apply else "DRY-RUN") + " %s scope:" % a.scope)
+    for c in changes:
+        print("  - " + c)
+    if not a.apply:
+        print("Re-run with --apply to write these changes.")
+        return 0
+    if any(c.startswith(("env.", "permissions.")) for c in changes):
+        if os.path.exists(settings):
+            shutil.copy2(settings, settings + ".bak")
+        save(settings, json.dumps(new, indent=2) + "\n")
+    save(agent_path, agent_text)
+    print("OK written (backup: %s.bak). Restart Claude Code so the env and agent load." % settings)
+    return 0
+
+
+# ------------------------------------------------------------------ main
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd")
+    sub.required = True
+
+    def common(p):
+        p.add_argument("--allow", action="append", default=[], help="exempt a scan hit, e.g. TODO")
+        return p
+    p = sub.add_parser("context"); p.add_argument("rest", nargs=argparse.REMAINDER); p.set_defaults(fn=cmd_context)
+    p = common(sub.add_parser("contracts")); p.add_argument("plan"); p.add_argument("--spec"); p.add_argument("--agents", type=int); p.set_defaults(fn=cmd_contracts)
+    p = common(sub.add_parser("lint-task")); p.add_argument("plan"); p.add_argument("task"); p.add_argument("--mark", default="ok", choices=["ok", "rev"]); p.set_defaults(fn=cmd_lint_task)
+    p = sub.add_parser("hook-lint"); p.set_defaults(fn=cmd_hook_lint)
+    p = sub.add_parser("wait"); p.add_argument("plan"); p.add_argument("--review", action="store_true")
+    p.add_argument("--timeout", type=int, default=560); p.add_argument("--idle", type=int, default=240); p.set_defaults(fn=cmd_wait)
+    p = sub.add_parser("review"); p.add_argument("plan"); p.add_argument("--all", action="store_true"); p.add_argument("--size", type=int)
+    p.add_argument("--agents", type=int); p.set_defaults(fn=cmd_review)
+    p = common(sub.add_parser("assemble")); p.add_argument("plan"); p.add_argument("--spec"); p.add_argument("--clean", action="store_true"); p.set_defaults(fn=cmd_assemble)
+    p = common(sub.add_parser("check")); p.add_argument("plan"); p.add_argument("--spec"); p.set_defaults(fn=cmd_check)
+    p = sub.add_parser("setup"); p.add_argument("--scope", choices=["user", "project"], default="user"); p.add_argument("--apply", action="store_true"); p.set_defaults(fn=cmd_setup)
+    a = ap.parse_args(argv)
+    try:
+        return a.fn(a)
+    except OSError as e:
+        print("ERR  %s" % e)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

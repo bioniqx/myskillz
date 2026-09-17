@@ -1,250 +1,142 @@
 ---
 name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan at maximum speed - contracts locked once, task bodies fanned out to up to 64 parallel writers from script-built briefs, verified by a deterministic linter.
+argument-hint: "[spec-path] [--thorough]"
+allowed-tools: Bash(python3 *)
+compatibility: Claude Code v2.1.217+ recommended (subagent cap setting); python3 3.8+
 ---
 
-# Writing Plans
+# Writing Plans (v8 - max-parallel)
 
-## Overview
+Write implementation plans for an engineer with zero context and questionable taste: exact files, real code, exact commands with expected output, commits. DRY. YAGNI. TDD.
 
-Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything: which files to touch, actual code, how to test, what to commit. Assume a skilled developer who knows nothing about our toolset, problem domain, or good test design. DRY. YAGNI. TDD. Frequent commits.
+**Announce:** "I'm using the writing-plans skill to create the implementation plan."
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+## Context (computed when the skill loaded)
 
-**Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md` (user preferences override).
-**Scratch dir for parallel work:** `docs/superpowers/plans/.work/<feature-name>/` — deleted after assembly.
+```!
+python3 "${CLAUDE_SKILL_DIR}/scripts/plan_tool.py" context $ARGUMENTS
+```
 
-**Speed doctrine:** the slow part of planning is writing task bodies with real code. Never write them serially when there are 4+ tasks — lock the contracts once, then fan task bodies out to parallel subagents (max 64, all dispatched in a single message). Serial effort goes only where divergence is possible: the Contract Table.
+If the block above shows a raw command instead of output, run `python3 <this skill dir>/scripts/plan_tool.py context <spec>` in the same message as your Phase 0 reads. `TOOL` below = the `tool:` line of the context (use it verbatim).
+
+## Speed Doctrine
+
+1. **Serial only where divergence is born** (the Contracts). Everything else runs in parallel, one message per wave.
+2. **Never type what the script generates:** Execution Protocol, File Structure, Execution Waves, `[P]`, Depends/Runs-after lines, Interfaces blocks, writer briefs. Output tokens are the bottleneck.
+3. **Machines check, models judge.** Structure, placeholders, portability, file ownership, signatures, Run/Expected, `git add` scope and code-block syntax are one script call - never a model re-read.
+4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the fan-out to the cap from the context line; never dispatch more.
+5. **Keep the cache warm.** Don't change model or effort mid-skill (each change re-reads the whole conversation uncached). Writers get facts from briefs, not from exploring.
+6. **Fix-and-move-on.** After a fix, re-run only the script - no re-review.
 
 ## Portability Rule (the plan is the product)
 
-The *process* below may use Claude-specific machinery (subagents, skills, the Task tool). The *product* — the plan file — must not. The finished plan is a self-contained, plain-Markdown document executable by **any** AI agent (Claude, DeepSeek, Qwen, GLM, Codex, Gemini, …) or human engineer with only a shell, an editor, and git. This follows the AGENTS.md / Spec Kit conventions that cross-agent tooling standardized on: plain Markdown, checkbox steps, sequential task IDs (`T01`, `T02`, …), explicit `Depends:` lists, and a `[P]` marker on tasks safe to run in parallel.
-
-Concretely, the plan body must NEVER contain:
-
-- References to vendor tools, skills, sub-skills, subagents, plugins, or slash commands ("use superpowers:X", "dispatch a Task agent", "invoke skill Y")
-- Instructions that only work in one harness ("open a new Claude session", "use your Edit tool")
-- Anything the executor can't do with shell + editor + git
-
-Everything the executor needs travels inside the plan: the Execution Protocol, Global Constraints, real code, exact commands, and expected outputs.
+The process uses subagents; the plan file must not mention them. It is plain Markdown any AI agent or human with a shell, an editor and git can execute. The linter enforces this.
 
 ## Scope Check
 
-If the spec covers multiple independent subsystems, suggest one plan per subsystem — each producing working, testable software on its own. Independent subsystem plans can themselves be built concurrently (split the 64-agent budget between them).
+Independent subsystems -> one plan each; plans may be produced concurrently with the writer budget split between them.
 
 ## Pipeline
 
-### Route (decide during the single spec read)
+### Phase 0 - Load (ONE message)
 
-| Estimated tasks | Path |
-|---|---|
-| ≤ 3 | **Inline**: write the whole plan in one pass, then run Final Checks yourself. Subagent overhead isn't worth it. |
-| 4+ | **Fan-out**: Phases 1–3 below. |
+Read the spec fully and 2-5 pattern files picked from the context (a test, a similar module, build config) - all in one message of parallel Reads. Only when the repo is large and you cannot locate the affected code from the context: add up to 3 narrow `Explore` agents in that same message. Estimate the task count N.
 
-Read the spec exactly once; estimate the task count during that read.
+**N <= 3 -> Inline path. N >= 4 -> Fan-out (Phases 1-4).**
 
-### Phase 1 — Skeleton (serial; this is where quality is locked)
+### Phase 1 - Contracts (serial, ONE Write)
 
-Write the plan file with:
-
-1. **Header + Execution Protocol + Global Constraints** (template below)
-2. **File Structure** — every file created/modified, one clear responsibility each. Prefer small focused files; split by responsibility, not technical layer; follow existing codebase patterns.
-3. **Contract Table** — one row per task: task ID (`TNN`, zero-padded, matching brief/task file numbering), name, **Depends** (task IDs that must complete first, or "—"), **[P]** if parallel-safe (no shared files with any other `[P]` task, no dependency on an incomplete task), files, and **exact** Produces/Consumes signatures (function names, parameter and return types, verbatim). This is the single source of truth parallel writers copy from. Ambiguous signatures are the *only* way parallel writing diverges — spend the effort here, not in review.
-
-Then write one brief per task at `.work/<feature>/briefs/task-NN.md` (zero-padded NN). Each brief is **self-sufficient** — a writer never reads the spec:
-
-- Verbatim spec excerpts relevant to this task (copy, don't summarize)
-- Its own Contract Table row + the rows it consumes
-- Global Constraints (copy them in — writers don't open the plan file)
-- Exact file paths (Create / Modify / Test)
-
-### Phase 2 — Fan-out (parallel, max 64)
-
-Dispatch **all** task writers in **ONE message** so they run concurrently — one `Task` (general-purpose) per task:
-
-- N ≤ 64 → one writer per task.
-- N > 64 → chunk *contiguous* tasks (⌈N/64⌉ per writer) so writers never exceed 64. Contiguous chunks keep consumed contracts local.
-
-Each writer writes only its own file `.work/<feature>/tasks/task-NN.md` — isolated outputs, zero write contention, no shared state. Use the Task Writer Prompt below verbatim, pasting in the Task Structure template.
-
-### Phase 3 — Assemble + Verify (mechanical, fast)
-
-1. **Assemble** with a single command — zero-padded names guarantee order:
-   `cat .work/<feature>/tasks/task-*.md >> docs/superpowers/plans/<plan>.md`
-2. **Signature check:** grep each Contract Table signature against the assembled plan. Any mismatch → fix inline. Contracts were locked in Phase 1, so consistency is a grep, not a re-read.
-3. **Placeholder scan:** grep the assembled plan for `TBD|TODO|implement later|appropriate error handling|similar to Task`. Hits → fix inline.
-4. **Portability scan:** grep the assembled plan (case-insensitive) for `superpowers|sub-skill|subskill|subagent|slash command|Task tool|Claude|Anthropic|Copilot|Cursor|skill:`. Any hit in the plan body → rewrite that line in tool-neutral language (plain shell commands, plain instructions). The plan must run on any model.
-5. **Coverage skim:** each spec section maps to a task. Gap → write the missing task inline (or dispatch one more writer).
-6. **Plans > 10 tasks:** dispatch parallel reviewers per `plan-document-reviewer-prompt.md`, sharded into contiguous task ranges, all in ONE message. Fix real issues; ignore advisory notes.
-7. Delete `.work/<feature>/`.
-
-Fix-and-move-on: never re-run a full review after a fix.
-
-## Task Writer Prompt
-
-```
-You are writing Task NN of an implementation plan. Everything you need is in
-this prompt and your brief. Do NOT read the spec, the plan, or explore the
-codebase. You MAY read only files listed under "Modify" in your brief.
-
-Brief: <absolute path to .work/<feature>/briefs/task-NN.md>
-Write EXACTLY one file: <absolute path to .work/<feature>/tasks/task-NN.md>
-
-Format — follow exactly:
-<paste the Task Structure template here>
-
-Rules:
-- Copy Interfaces signatures VERBATIM from your brief's contract rows.
-- Copy the Depends list and [P] marker VERBATIM from your brief's contract row.
-- Bite-sized steps, one action each (2–5 min), TDD cycle per behavior:
-  write failing test → run to see it fail (exact command + expected failure)
-  → minimal implementation → run to see it pass → commit.
-- Real code in every code step. The implementer sees ONLY your task file.
-- The implementer may be ANY AI model or a human: write plain instructions
-  and shell commands only — never reference skills, subagents, plugins,
-  vendor tools, or any specific AI product.
-- Banned content (self-check before returning): "TBD", "TODO", "implement
-  later", "add appropriate error handling/validation", tests described but
-  not written, "similar to Task N", any symbol not defined in your brief,
-  any vendor/tool/skill/subagent reference.
-- Return only the text: "task-NN written". Do not echo the task body.
-```
-
-## Plan Document Header
+Write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` containing only:
 
 ````markdown
-# [Feature Name] Implementation Plan
+# [Feature] Implementation Plan
 
-> **Execution note:** This plan is self-contained and tool-agnostic. Any AI
-> agent or human engineer can execute it with only a shell, a code editor,
-> and git. No specific AI product, skill, or plugin is required. Follow the
-> Execution Protocol below.
+**Goal:** [one sentence]
 
-**Goal:** [One sentence describing what this builds]
+**Architecture:** [2-3 sentences]
 
-**Architecture:** [2-3 sentences about approach]
-
-**Tech Stack:** [Key technologies/libraries]
-
-## Execution Protocol (for any AI agent or human engineer)
-
-1. Execute tasks in ID order (T01, T02, …). A task may start only when every
-   task in its **Depends** list is complete.
-2. Tasks marked `[P]` touch disjoint files and have no incomplete
-   dependencies: an orchestrator that supports parallel workers MAY run them
-   concurrently; a single agent simply runs them in ID order. Never run two
-   tasks that modify the same file at the same time.
-3. Within a task, execute steps top to bottom. Mark each checkbox `- [x]`
-   when done — the checkboxes are the progress ledger; to resume an
-   interrupted run, continue from the first unchecked step.
-4. Run every command exactly as written and compare the output to the stated
-   Expected result. On mismatch, stop and fix before continuing — never
-   proceed past a failing step.
-5. Code blocks are the implementation — copy them verbatim. Signatures in
-   each task's **Interfaces** block are contracts with other tasks: do not
-   rename, reorder parameters, or change types.
-6. Commit exactly where the plan says to commit, with the given message.
-   Never batch commits across tasks.
-7. Global Constraints below apply to every task.
-8. If anything is ambiguous, missing, or contradicts the codebase, STOP and
-   ask the requester. Do not invent behavior.
+**Tech Stack:** [key technologies]
 
 ## Global Constraints
 
-[The spec's project-wide requirements — version floors, dependency limits,
-naming and copy rules, platform requirements — one line each, exact values
-copied verbatim from the spec. Every task implicitly includes this section.]
+- [project-wide rule with exact values from the spec / CLAUDE.md - one per line]
 
----
+## References
+
+- `path/to/pattern_file.py` - [why every writer should see it]   (optional section; inlined into every brief)
+
+## Contracts
+
+#### T01: Config loader
+- Files: `src/config.py`, `tests/test_config.py`
+- Produces: `def load_config(path: Path) -> Config`; `class Config`
+- Consumes: `class Path` (existing)
+- Spec: L12-40
+
+#### T02: HTTP app
+- Depends: T01
+- Files: `src/api.py`, `tests/test_api.py`
+- Produces: `def create_app(config: Config) -> App`
+- Read: `src/legacy_app.py`
+- Spec: L41-77, L120-131
+- Tier: deep
 ````
 
-## Task Structure
+Contract rules (quality is locked here):
+- IDs sequential `T01..` (`T001` if > 99). A producer's ID is lower than its consumers'.
+- `Files` (required): every path the task creates/modifies/tests. Tasks sharing a file are auto-serialized (Runs after), so give each task its own files; wire shared registries in one final task.
+- `Produces`: exact backticked declarations (name, params, types, return) as they will appear in code. `Consumes`: copy the producer's text byte-for-byte; `(existing)` for codebase symbols. Omit `Consumes` to mean "all Produces of my Depends". Depends are auto-added from Consumes.
+- `Spec`: line ranges from the context heading map; writers get exactly these lines.
+- `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs -> haiku) or `deep` (algorithmic, security, concurrency -> opus). Default: sonnet.
+- Right-size: smallest unit with its own test cycle a reviewer could reject independently.
 
-````markdown
-### T[NN]: [Component Name] [P]
+Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if the context shows ultracode or a raised cap it could not read). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table and the next command.
 
-**Depends:** T[XX], T[YY] (or "—")
+### Phase 2 - Fan-out writers (ONE message)
 
-**Files:**
-- Create: `exact/path/to/file.py`
-- Modify: `exact/path/to/existing.py:123-145`
-- Test: `tests/exact/path/to/test.py`
+For every DISPATCH row, one Agent call - all in a single message:
+- `subagent_type`: as printed (`plan-task-writer` when installed; if the call says the type is unknown, use `general-purpose`)
+- `model`: the row's MODEL
+- `description`: `plan <ID>`
+- `prompt`: `Read <BRIEF> and follow it exactly.` - nothing else; the brief carries contract, spec lines, inlined files, rules and lint command.
 
-**Interfaces:**
-- Consumes: [what this task uses from earlier tasks — exact signatures]
-- Produces: [what later tasks rely on — exact names, parameter and return
-  types. A task's implementer sees only their own task; this block is how
-  they learn what neighboring tasks expect.]
+A call refused with "Concurrent subagent limit reached" means other subagents hold slots: don't retry it in a loop - dispatch those rows again after the next completion notification.
 
-- [ ] **Step 1: Write the failing test**
+Then, in your next message, run the printed `TOOL wait <plan>` with Bash `timeout: 600000`. It blocks until every task file lints OK. Don't act on individual completion notifications while waiting.
+- `DONE` -> Phase 3.
+- `PENDING` -> if those agents are still running, run `wait` again. If they returned `FAIL` or stopped: re-dispatch only those IDs in one message (same prompt), or fix a small issue yourself with Edit + `TOOL lint-task <plan> <task file>`.
 
-```python
-def test_specific_behavior():
-    result = function(input)
-    assert result == expected
-```
+### Phase 3 - Risk-based review (ONE message)
 
-- [ ] **Step 2: Run test to verify it fails**
+Run `TOOL review <plan>` (`--all` when invoked with `--thorough` or the user asks for maximum assurance). `NONE` -> skip to Phase 4. Otherwise dispatch its rows exactly like Phase 2 (`general-purpose`, `sonnet`), then run the printed `wait --review`. Reviewers fix their own task files in place. An "Unfixable (needs contract change)" line -> edit that contract, re-run `contracts`, re-dispatch only the affected writers, `wait`.
 
-Run: `pytest tests/path/test.py::test_name -v`
-Expected: FAIL with "function not defined"
+### Phase 4 - Assemble (ONE command)
 
-- [ ] **Step 3: Write minimal implementation**
+`TOOL assemble <plan> --clean` - re-lints everything, then renders the canonical plan: execution note, Execution Protocol, File Structure (if you wrote none), Execution Waves, and each task's heading/`[P]`/Depends/Runs-after/Interfaces, then deletes the scratch dir. On `ERR` nothing is written: fix the named task file, re-run. Legitimate project vocabulary (e.g. a TODO app): add `--allow TODO`.
 
-```python
-def function(input):
-    return expected
-```
+## Inline Path (N <= 3)
 
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pytest tests/path/test.py::test_name -v`
-Expected: PASS
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/path/test.py src/path/file.py
-git commit -m "feat: add specific feature"
-```
-````
-
-`[P]` appears only when the Contract Table marks the task parallel-safe; omit it otherwise.
-
-## Task Right-Sizing
-
-A task is the smallest unit that carries its own test cycle and is worth a fresh reviewer's gate. Fold setup, configuration, scaffolding, and docs into the task whose deliverable needs them; split only where a reviewer could reject one task while approving its neighbor. Each task ends with an independently testable deliverable.
-
-## No Placeholders
-
-Every step must contain the actual content an engineer needs. **Plan failures** — never write, always scan for:
-
-- "TBD", "TODO", "implement later", "fill in details"
-- "Add appropriate error handling" / "add validation" / "handle edge cases"
-- "Write tests for the above" (without actual test code)
-- "Similar to Task N" (repeat the code — tasks may be read out of order)
-- Steps describing *what* without *how* (code blocks required for code steps)
-- References to types/functions/methods not defined in any task
-- References to skills, subagents, plugins, or any specific AI product/tool (the plan must be executable by any model or human)
-
-## Final Checks (inline path only)
-
-Fan-out plans are verified in Phase 3. For inline plans, check yourself: (1) every spec requirement maps to a task; (2) placeholder scan per the list above; (3) portability scan — no vendor/tool/skill/subagent references, Execution Protocol present; (4) signatures used in later tasks match earlier definitions exactly; (5) every task has an ID, a Depends line, and correct `[P]` marking. Fix inline; no re-review.
+Read `task-writer-prompt.md` in this skill dir for the body format. Write the skeleton + Contracts, then `<!-- TASKS -->`, then each task as `### T01: Name` followed by its body - all in ONE Write. Run `TOOL check <plan> --spec <spec>`; fix `ERR`s; done (it renders the same canonical plan).
 
 ## Execution Handoff
 
-After saving the plan, offer:
+After `OK`, offer (waves/width from the script output):
 
-**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. The plan is self-contained — any AI agent or engineer can execute it by following its embedded Execution Protocol. Execution options:**
+**"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K tasks in parallel. It is self-contained: any agent or engineer can execute it via its Execution Protocol. Options:**
 
-**1. Subagent-Driven here (recommended in this session)** — fresh subagent per task, review between tasks, fast iteration. Tasks marked `[P]` in the Contract Table may execute concurrently.
+**1. Subagent-Driven here (recommended)** - fresh subagent per task, review between tasks; each wave's `[P]` tasks dispatched together in one message (within the subagent cap).
 
-**2. Inline Execution here** — execute in this session, batch execution with checkpoints.
+**2. Inline Execution here** - sequential, with checkpoints.
 
-**3. Hand off to another agent/model** — give the plan file to any coding agent (DeepSeek, Qwen, GLM, Codex, Gemini, a human, …) with the single instruction: *"Execute this plan following its Execution Protocol."* Nothing else is needed.
+**3. Hand off** - give the file to any coding agent or human with: *"Execute this plan following its Execution Protocol."*
 
 **Which approach?"**
 
-- Subagent-Driven → REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
-- Inline → REQUIRED SUB-SKILL: `superpowers:executing-plans`
-- Hand off → no further action; the plan document carries everything.
+- Subagent-Driven -> REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
+- Inline -> REQUIRED SUB-SKILL: `superpowers:executing-plans`
+- Hand off -> nothing else; the plan carries everything.
+
+## One-time speed setup (tell the user when the context shows cap < 64)
+
+`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn). Never run `--apply` without the user's consent. Optional: `/fast` speeds the serial contract phase on Opus.

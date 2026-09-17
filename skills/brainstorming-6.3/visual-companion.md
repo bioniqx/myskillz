@@ -21,8 +21,8 @@ layouts?" is browser.
 The loop is human-gated; hide machine latency inside the human wait.
 
 - **One turn, one bundle.** Liveness check + `events` read + new screen
-  write + any read-only exploration for upcoming questions are batched
-  tool calls in a single message. Never spread across messages.
+  write + any read-only exploration or web lanes for upcoming questions
+  are batched tool calls in a single message. Never spread across messages.
 - **Pre-draft the next screen** while the user looks at the current
   one, but do NOT write it to `screen_dir` early — the server serves the
   newest file, so writing early replaces what they are looking at.
@@ -45,9 +45,10 @@ frame template (header, theme CSS, connection status, interactivity).
 ## Starting
 
 ```bash
-# Only after the user accepts. --open opens their browser on the first
-# screen; --project-dir persists mockups and enables same-port restart.
-scripts/start-server.sh --project-dir /path/to/project --open
+# Only after the user accepts. <skill_dir> is printed in SKILL.md's Live
+# context. --open opens their browser on the first screen; --project-dir
+# persists mockups and enables same-port restart.
+<skill_dir>/scripts/start-server.sh --project-dir /path/to/project --open
 # → {"type":"server-started","port":52341,"url":"http://localhost:52341/?key=…",
 #    "screen_dir":".../.superpowers/brainstorm/<id>/content",
 #    "state_dir":".../.superpowers/brainstorm/<id>/state"}
@@ -92,7 +93,7 @@ Unreachable URL in containers → `--host 0.0.0.0 --url-host localhost`.
    ```
 
 Server auto-exits after 4h idle (`--idle-timeout-minutes`). Stop with
-`scripts/stop-server.sh $SESSION_DIR`; `--project-dir` sessions keep
+`<skill_dir>/scripts/stop-server.sh $SESSION_DIR`; `--project-dir` sessions keep
 their mockups, `/tmp` sessions are deleted.
 
 ## Writing fragments

@@ -1,127 +1,79 @@
 ---
 name: git-diff-summary
 description: Use when the user wants to understand or summarize what the current branch changed versus the main branch — describing what the new code does, drafting a commit or PR/MR message, or reviewing branch changes before committing. Triggers on requests like "so sánh với main", "tóm tắt thay đổi", "mô tả code đã làm gì", "viết commit message", "what did this branch do", "summarize my changes vs main".
+argument-hint: "[base-branch]"
+allowed-tools: Read Bash(bash *gather.sh*) Bash(git diff *) Bash(git log *) Bash(git show *)
 ---
 
-# git-diff-summary (speed-optimized)
+# git-diff-summary
 
-Compare **current branch (incl. uncommitted changes)** vs a **freshly-updated main**, then emit:
-1. **Mô tả tiếng Việt** (non-technical) — 2. **English conventional commit message**.
+Goal: diff **merge-base(fresh base) → working tree** (committed + staged + unstaged + untracked), then output **Part 1 Vietnamese description** + **Part 2 English commit message**.
 
-Core diff rule: always diff from **merge-base → working tree** (`git diff "$(git merge-base REF HEAD)"`). Never `git diff main HEAD` — it misses uncommitted work and pulls in main's later commits.
+## Context — already gathered (0 tool calls)
 
-## Performance rules (read first)
-
-1. **ONE tool call for all context.** Never run git commands one-by-one across multiple bash calls — round-trips are the #1 latency cost. Run the single gather script below; it returns everything (branch, intent, stat, size, and the full diff when small).
-2. **Fetch never blocks.** The script backgrounds `git fetch` behind a 10s `timeout` while local state is read in parallel; on failure it falls back to cached `origin/main` → local `main` and prints `WARN_STALE_BASE`.
-3. **Size-gated reading.** Small diff → already in the script output, analyze immediately, zero extra calls. Only large diffs pay for more work.
-4. **Fan-out, max 64.** Large diffs are partitioned and read by parallel subagents — **spawn all Task calls in a single message** so they run concurrently. Cap at 64.
-5. **Never dump a huge diff into main context.** Main agent sees numstat + subagent summaries only.
-6. **Exclude noise up front.** Lockfiles / generated / minified files are excluded from content reads (still counted in numstat).
-
-## Step 1 — One-shot gather (single bash call)
-
-Defaults: `REMOTE=origin`, `BASE_BRANCH=main`. If the user names another base (`master`, `develop`…), set it. Run exactly this in **one** bash call:
-
-```bash
-set -u; export GIT_PAGER=cat GIT_OPTIONAL_LOCKS=0
-REMOTE=${REMOTE:-origin}; BASE_BRANCH=${BASE_BRANCH:-main}
-EXC=':(exclude)**/package-lock.json' ; EXC2=':(exclude)**/*.min.*' ; EXC3=':(exclude)**/yarn.lock' ; EXC4=':(exclude)**/pnpm-lock.yaml' ; EXC5=':(exclude)**/*.snap' ; EXC6=':(exclude)dist/**' ; EXC7=':(exclude)build/**'
-
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo NOT_A_REPO; exit 0; }
-# fetch in background while we read local state
-( timeout 10 git fetch --no-tags --quiet "$REMOTE" "$BASE_BRANCH" 2>/dev/null ) & FP=$!
-echo "== BRANCH =="; git branch --show-current
-echo "== STYLE =="; git log -n 5 --format='%s'
-wait "$FP"; FRC=$?
-
-if [ "$FRC" -eq 0 ] || git rev-parse -q --verify "$REMOTE/$BASE_BRANCH" >/dev/null; then
-  REF="$REMOTE/$BASE_BRANCH"; [ "$FRC" -ne 0 ] && echo WARN_STALE_BASE
-elif git rev-parse -q --verify "$BASE_BRANCH" >/dev/null; then
-  REF="$BASE_BRANCH"; echo WARN_STALE_BASE_LOCAL
-else echo NO_BASE; exit 0; fi
-
-MB=$(git merge-base "$REF" HEAD) || { echo NO_MERGE_BASE; exit 0; }
-echo "== REF == $REF"; echo "== MB == $MB"
-echo "== INTENT =="; git log "$REF"..HEAD --format='%s%n%b'
-echo "== NUMSTAT =="; git diff --numstat "$MB"
-F=$(git diff --name-only "$MB" | wc -l | tr -d ' ')
-L=$(git diff --numstat "$MB" -- . "$EXC" "$EXC2" "$EXC3" "$EXC4" "$EXC5" "$EXC6" "$EXC7" | awk '{s+=$1+$2} END{print s+0}')
-echo "== SIZE == files=$F lines=$L"
-if [ "$F" -eq 0 ]; then echo EMPTY_DIFF
-elif [ "$L" -le 1500 ] && [ "$F" -le 30 ]; then
-  echo "== DIFF =="; git diff --find-renames "$MB" -- . "$EXC" "$EXC2" "$EXC3" "$EXC4" "$EXC5" "$EXC6" "$EXC7"
-else echo FAN_OUT
-fi
+```!
+bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh" $ARGUMENTS
 ```
 
-Interpret markers:
-- `NOT_A_REPO` → tell the user, stop. Empty `== BRANCH ==` → detached HEAD: warn, ask how to proceed.
-- `NO_BASE` → ask for the correct base branch (or auto-detect: `git symbolic-ref refs/remotes/$REMOTE/HEAD`).
-- `WARN_STALE_BASE*` → prepend a one-line stale-base warning to the final answer.
-- `EMPTY_DIFF` → say there are no changes vs base, stop.
-- `== DIFF ==` present → **fast path**: skip Step 2, write the answer now.
-- `FAN_OUT` → Step 2.
+If the block above shows the raw command instead of output (harness without `!` injection), run it once with Bash: `bash <this skill dir>/scripts/gather.sh [base]`. If the user named a base branch that differs from `REF`, re-run with it. Never run git commands one by one.
 
-## Step 2 — Parallel fan-out (only when `FAN_OUT`)
+What the script already did (don't redo): background `git fetch` of only the base branch (6s hard timeout, no prompts, skipped if fetched <5 min ago) · speculative diff on the cached base in parallel (reused when merge-base is unchanged) · untracked files included · lockfiles/generated/minified/`*.meta`/dist excluded from content but listed in NUMSTAT · ticket parsed from branch · diff pre-split into chunks that each fit one Read.
 
-**Partition** files from `== NUMSTAT ==` (no extra git calls needed):
-- Group by top-level directory / feature area so related context stays together.
-- Greedy bin-pack groups into buckets of **~1500–2500 changed lines** each.
-- `N = min(64, number_of_buckets)`. Typical repos need 2–8; never exceed 64.
+## Act on the markers — pick the fastest path
 
-**Dispatch all N subagents in ONE message** (parallel Task calls). Use the fastest available model (haiku if offered, else sonnet) — extraction is mechanical; synthesis quality lives in the main agent. Each brief:
-
-> Read-only task. Run: `GIT_OPTIONAL_LOCKS=0 git --no-pager diff --find-renames <MB> -- <file list>`. Return ≤15 bullets: per feature/area — what changed behaviorally (user-visible effect old→new), plus notable risks (migrations, API changes, deleted behavior). No code quotes, no line numbers. ≤200 words.
-
-(`git diff` reads are lock-free and safe at 64-way concurrency with `GIT_OPTIONAL_LOCKS=0`.)
-
-**Synthesize** subagent bullets + `== INTENT ==` into the two output parts. If a bucket's summary is ambiguous, prefer re-briefing that one subagent over reading the raw diff yourself.
-
-## Output contract (produce BOTH, in this order)
-
-**Part 1 — Mô tả thay đổi (tiếng Việt), luôn luôn tiếng Việt**, for a non-technical reader (PM/QA/manager). Structure, exactly:
-1. One-sentence summary — what the branch delivers, from the player's/operator's side.
-2. Groups by **user-facing feature name** (e.g. "Vòng quay Rush", "Ví tiền") — never file/class/module names.
-3. 1–4 bullets per group, each shaped as:
-   - `Trước đây <old behaviour> → giờ <new behaviour>`
-   - `Thêm/Sửa <what the user sees> để <benefit>`
-4. **"Ảnh hưởng"** (only when real) — 1–3 lines: what users notice + release risk/caveat.
-
-Style: sentences ≲25 words, everyday vocabulary, user/game as subject. Jargon only when unavoidable, first occurrence explained in Vietnamese. Plain-wording table (extend as needed):
-
-| Technical | Part 1 wording |
+| Marker | Action |
 |---|---|
-| endpoint / API | màn hình … lấy dữ liệu từ máy chủ |
-| cache / Redis | bộ nhớ tạm để chạy nhanh hơn |
-| race condition | hai thao tác cùng lúc gây ra kết quả sai |
-| refactor | dọn lại code cho gọn, cách chạy giữ nguyên |
-| migration | đổi cấu trúc dữ liệu đang lưu |
-| null / NPE | thiếu dữ liệu nên hệ thống báo lỗi |
+| `NOT_A_REPO` / `EMPTY_DIFF` | Say so in one line. Stop. |
+| `NO_BASE` / `NO_MERGE_BASE` | Ask the user for the base branch. |
+| `WARN_STALE_BASE*` / `WARN_BASE_ARG_IGNORED` | First line of the answer = one-line warning. Continue. |
+| `(detached HEAD)` | Mention it; continue. |
+| `ONLY_NOISE_OR_BINARY` | Describe from NUMSTAT paths. |
+| `MODE=INLINE` | Diff is above. **Write the answer now** — no more tool calls. |
+| `MODE=READ` | **One message, all Read calls in parallel** (one per chunk path). Then answer. |
+| `MODE=FAN_OUT` | Step below. |
 
-Bullet quality bar:
+### FAN_OUT (big diffs only)
+
+In **ONE message**, launch one `Agent` per listed chunk (≤64; they run concurrently): `subagent_type: general-purpose`, `model: haiku`, description `diff chunk NNN`. Prompt (fill path):
+
+> Read-only. Read `<chunk path>` fully (if the Read is truncated, continue with offset until the end). It is a git diff of one area of a branch. Reply ONLY with ≤10 bullets, ≤150 words, no code, no line numbers:
+> `AREA: <feature/area name inferred from paths+code>`
+> `- OLD→NEW: <behavior change a user/operator would notice>` (or `- ADD:` / `- REMOVE:` / `- INTERNAL:` for refactor-only)
+> `- RISK: <migration, API/contract change, deleted behavior, config/env>` (only if real)
+
+Then synthesize from subagent bullets + `INTENT` + `NUMSTAT` only. Never Read chunks yourself in this mode; if one summary is unclear, re-ask that one agent (SendMessage).
+
+## Output contract (both parts, this order, nothing else)
+
+**Part 1 — Mô tả thay đổi (luôn tiếng Việt)** for PM/QA/manager, non-technical:
+1. One-sentence summary of what the branch delivers, from the player's/operator's side.
+2. Groups named by **user-facing feature** (e.g. "Vòng quay Rush", "Ví tiền") — never file/class/module names.
+3. 1–4 bullets per group: `Trước đây <cũ> → giờ <mới>` or `Thêm/Sửa <người dùng thấy gì> để <lợi ích>`.
+4. **Ảnh hưởng** (only if real): 1–3 lines — what users notice + release risk.
+
+Sentences ≲25 words, everyday words, user/game as subject; unavoidable jargon explained once. Wording: endpoint/API → "màn hình … lấy dữ liệu từ máy chủ" · cache/Redis → "bộ nhớ tạm để chạy nhanh hơn" · race condition → "hai thao tác cùng lúc gây kết quả sai" · refactor → "dọn lại code cho gọn, cách chạy giữ nguyên" · migration → "đổi cấu trúc dữ liệu đang lưu" · null/NPE → "thiếu dữ liệu nên hệ thống báo lỗi".
+
+Quality bar:
 > **Hũ thưởng (Jackpot)**
-> - Trước đây nổ hũ xong số tiền hiển thị vẫn là số cũ trong vài giây → giờ về 0 ngay khi trả thưởng.
-> - Thêm hũ nhỏ vào danh sách hũ, người chơi thấy đủ 4 mức thưởng thay vì 3.
+> - Trước đây nổ hũ xong số tiền vẫn hiện số cũ vài giây → giờ về 0 ngay khi trả thưởng.
+> - Thêm hũ nhỏ, người chơi thấy đủ 4 mức thưởng thay vì 3.
 
-**Part 2 — English commit message**, in a fenced code block:
+**Part 2 — English commit message**, fenced code block:
 
 ```
-type(scope): imperative summary ≤ ~72 chars
+type(scope): imperative summary ≤72 chars
 
 - key change
 - key change
 ```
 
-- **type**: dominant change wins — `feat`/`fix`/`refactor`/`perf`/`chore`/`docs`/`test`/`build`; brand-new functionality → `feat`.
-- **scope**: ticket from branch name via `[A-Z][A-Z0-9]+-[0-9]+` (branch `FRUITS-7029-...` → `FRUITS-7029`); no ticket → short area name or omit.
-- Imperative, English; mirror the repo style seen in `== STYLE ==` (already gathered — no extra call).
+- type = dominant change: `feat` (new functionality) / `fix` / `refactor` / `perf` / `chore` / `docs` / `test` / `build`.
+- scope = `TICKET` from the header; if `none` → short area name or omit.
+- Mirror the tone/format of `STYLE` subjects.
 
-## Common mistakes
+## Don'ts
 
-- Multiple sequential bash calls for context — everything belongs in the Step 1 single call.
-- `git diff main HEAD` / `git diff main` — wrong base; use merge-base → working tree.
-- Silent stale base — always surface `WARN_STALE_BASE`.
-- Dumping a `FAN_OUT`-sized diff into main context instead of parallel subagents.
-- Part 1 written as a developer changelog (files/classes/internals) — audience is PM/QA.
-- Swapped languages (Part 1 must be Vietnamese, Part 2 English) or a forgotten ticket scope.
+- Extra git/bash calls "to double-check" — the header is authoritative.
+- `git diff main HEAD` (misses uncommitted work, pulls in main's newer commits).
+- Reading FAN_OUT chunks in the main context, or launching subagents across several messages.
+- Part 1 as a dev changelog (files, classes, internals); swapped languages; missing ticket scope; silent stale-base.
