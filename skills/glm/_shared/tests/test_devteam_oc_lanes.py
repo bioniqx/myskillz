@@ -169,6 +169,43 @@ class LaneRunTest(RepoCase):
         self.assertIn("dev-team gate — you are not done yet", calls[1]["brief"])
         note = json.loads(self.state("slices", "S1.done").read_text())["note"]
         self.assertIn("gave up", note)
+        self.assertFalse(self.state("slices", "S1.blocked").exists())
+
+    def test_pid_file_removed_after_lane_run_finishes(self):
+        self.devteam("dispatch", "S1", DEVTEAM_HARNESS="opencode",
+                     FAKE_OC_REPLY="## Status: Blocked\nneed the schema")
+        self.assertTrue(self.wait_for(self.state("slices", "S1.blocked")), self.lane_log())
+        self.assertTrue(self.wait_for(self.state("lanes", "S1.end")))
+        self.assertFalse(self.state("lanes", "S1.pid").exists())
+
+    def test_gate_exit_other_than_2_without_marker_writes_blocked_naming_the_code(self):
+        self.devteam("dispatch", "S1")
+        root = Path(self.repo)
+        d = devteam.lanes_dir(root)
+        d.mkdir(parents=True, exist_ok=True)
+        spec = {"id": "S1", "agent": "programmer", "model": "flash", "prompt": "do it", "writer": True}
+        (d / "S1.lane.json").write_text(json.dumps(spec))
+        real_run = subprocess.run
+
+        def fake_run(cmd, *args, **kwargs):
+            if any("guard.py" in str(c) for c in cmd):
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            return real_run(cmd, *args, **kwargs)
+
+        old_cwd = os.getcwd()
+        os.chdir(self.repo)
+        try:
+            with mock.patch.dict(os.environ, self.env, clear=True), \
+                    mock.patch.object(devteam.subprocess, "run", side_effect=fake_run):
+                devteam.cmd_lane_run(SimpleNamespace(lane_id="S1"))
+        finally:
+            os.chdir(old_cwd)
+        marker = self.state("slices", "S1.blocked")
+        self.assertTrue(marker.exists())
+        self.assertFalse(self.state("slices", "S1.done").exists())
+        note = json.loads(marker.read_text())["note"]
+        self.assertIn("0", note)
+        self.assertFalse(self.state("lanes", "S1.pid").exists())
 
     def test_missing_binary_blocks_the_writer_slice(self):
         start = time.monotonic()
@@ -251,6 +288,21 @@ class LaneProcessGroupTest(RepoCase):
             os.killpg(pid, 9)
         except OSError:
             pass
+
+    def test_launch_lane_does_not_kill_an_unrelated_process_group(self):
+        st = {"provider": "glm"}
+        d = devteam.lanes_dir(Path(self.repo))
+        d.mkdir(parents=True, exist_ok=True)
+        unrelated = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(self._killpg_safe, unrelated.pid)
+        (d / "rev-r1.pid").write_text(str(unrelated.pid))
+        env = dict(self.env, FAKE_OC_SLEEP="0")
+        with mock.patch.dict(os.environ, env, clear=True):
+            pid2 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "code-reviewer", "", "read r1.md")
+        self.addCleanup(self._killpg_safe, pid2)
+        self.assertTrue(_alive(unrelated.pid))
+        unrelated.terminate()
+        unrelated.wait(timeout=5)
 
 
 class WaitTest(RepoCase):
