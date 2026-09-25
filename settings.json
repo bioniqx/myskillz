@@ -14,7 +14,7 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
+  "model": "sonnet",
   "skillOverrides": {
     "find-skills": "off",
     "grill-me": "off",
@@ -90,7 +90,10 @@
       "effortLevel": "high"
     },
     "claude-opus-5": {
-      "effortLevel": "high"
+      "effortLevel": "xhigh"
+    },
+    "claude-opus-5-5": {
+      "effortLevel": "xhigh"
     }
   },
   "awaySummaryEnabled": false,

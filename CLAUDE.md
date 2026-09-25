@@ -69,8 +69,3 @@ Personal defaults for **every project**. A project's own CLAUDE.md overrides thi
 - **No code/file content in terminal by default** — no source, diffs, config, JSON/YAML, stack traces, command dumps, or `path:line` references. Describe changes in terse prose; the user opens the editor himself. Exception: anh Châu explicitly asks to see code/JSON or asks for an explanation that needs it ("giải thích đoạn này", "cho xem code") → print freely for that reply, then revert to the default.
 - **Failures always quote evidence**: show the few lines that name the error — never a bare "it failed" (rule 6).
 
-# graphify
-
-- `/graphify` → use the installed graphify skill (`~/.claude/skills/graphify/SKILL.md`) before doing anything else.
-
-@RTK.md

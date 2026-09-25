@@ -126,7 +126,10 @@ def ensure_red_cache(wt, sd, sid, globs):
     """If commit-red wasn't used, discover the RED commit by subject and cache its frozen files."""
     if (sd / "red").exists():
         return
-    log = git(["log", "--format=%H%x1f%s", "-n", "200"], wt)
+    # Only this slice's own commits: an older run may have reused the same slice id.
+    base = (read_lines(sd / "base") or [""])[0]
+    rng = [f"{base}..HEAD"] if base else ["-n", "200"]
+    log = git(["log", "--format=%H%x1f%s", *rng], wt)
     red = None
     for line in log.splitlines():
         h, _, subj = line.partition("\x1f")
