@@ -86,6 +86,25 @@ class KeyDiscovery(IsolatedHome):
         with self.env():
             self.assertEqual(audit.discover_key(), (None, None))
 
+    def test_non_zai_provider_in_auth_json_is_skipped_for_zai_coding_plan(self):
+        a = self.put(".local/share/opencode/auth.json", {
+            "openai": {"type": "api", "key": "sk-openai-0123456789ab"},
+            "zai-coding-plan": {"type": "api", "key": "zai-0123456789abcdef"},
+        })
+        with self.env():
+            self.assertEqual(audit.discover_key(), ("zai-0123456789abcdef", a))
+
+    def test_falls_back_to_settings_json_when_auth_json_has_no_zai_provider(self):
+        self.put(".local/share/opencode/auth.json",
+                 {"openai": {"type": "api", "key": "sk-openai-0123456789ab"}})
+        p = self.put(".claude/settings.json", {"env": {"ZAI_API_KEY": "settings-key-0123456789ab"}})
+        with self.env():
+            self.assertEqual(audit.discover_key(), ("settings-key-0123456789ab", p))
+
+    def test_discover_key_is_zai_client_find_key(self):
+        self.assertIs(audit.discover_key, audit.zai_client.find_key)
+        self.assertFalse(hasattr(audit, "_walk_for_key"))
+
 
 class BaseAndRoute(unittest.TestCase):
     def test_default_base_is_coding_openai(self):
