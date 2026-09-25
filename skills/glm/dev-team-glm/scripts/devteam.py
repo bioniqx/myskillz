@@ -695,6 +695,84 @@ def scan_transcripts(root, st):
     return sig
 
 
+def _oc_harness():
+    """The vendored oc_harness.py next to this script."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import oc_harness
+    return oc_harness
+
+
+def _lane_kind(st, name):
+    s = st["slices"].get(name)
+    if s is None:
+        return "review"
+    return "research" if s.get("mode") == "research" else "slice"
+
+
+def lane_signals(root, st) -> dict:
+    """OpenCode counterpart of scan_transcripts: the same signal dict, read from what the lane runner
+    wrote to .claude/dev-team/lanes/ (`<id>.jsonl` events, `<id>.done` results). Throttling = a JSON
+    error event carrying 429/1302/1305; a lane that ended FAIL/STALL/TIMEOUT is reported as down.
+    Incremental (offsets live in the governor state) and tolerant: an odd file or line is skipped."""
+    g = st.setdefault("gov", new_gov(provider_of(st), resolve_tier()))
+    seen = g.setdefault("lanes", {})
+    created = float(st.get("created") or 0)
+    sig = {"throttle": [], "down": [], "spawn_fail": [], "spawned": {}}
+    d = state_dir(root) / "lanes"
+    if not d.is_dir():
+        return sig
+    throttle_re = _oc_harness().THROTTLE_RE
+    for f in sorted(d.glob("*.jsonl")):
+        try:
+            size, mtime = f.stat().st_size, f.stat().st_mtime
+        except OSError:
+            continue
+        rec = seen.setdefault(f.stem, {})
+        if "off" not in rec and mtime + 2 < created:
+            rec["off"] = size                         # a previous run's lane: start at its end
+            continue
+        off = rec.get("off", 0)
+        if size < off:
+            off = 0
+        if size == off:
+            continue
+        try:
+            with f.open("rb") as fh:
+                fh.seek(off)
+                chunk = fh.read(SCAN_MAX_BYTES)
+        except OSError:
+            continue
+        end = chunk.rfind(b"\n")
+        if end < 0:
+            rec["off"] = off + (len(chunk) if len(chunk) >= SCAN_MAX_BYTES else 0)
+            continue
+        rec["off"] = off + end + 1
+        t = time.time()
+        for ln in chunk[:end].split(b"\n"):
+            if b'"error"' in ln and throttle_re.search(ln.decode("utf-8", "replace")):
+                sig["throttle"].append(t)
+    for f in sorted(d.glob("*.done")):
+        try:
+            mtime = f.stat().st_mtime
+        except OSError:
+            continue
+        rec = seen.setdefault(f.stem, {})
+        if mtime + 2 < created or rec.get("done") == mtime:
+            continue
+        rec["done"] = mtime
+        try:
+            res = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(res, dict) or res.get("status") in (None, "OK"):
+            continue
+        text = f"{res.get('status')}: {res.get('error') or res.get('last_event') or 'no error event'}"[:240]
+        sig["down"].append((_lane_kind(st, f.stem), f.stem, text, str(int(mtime)), mtime))  # (kind, name, text, id, ts) — scan_transcripts' shape
+    return sig
+
+
 def mark_utilization(st, inflight_n, cap):
     """Grow the window only while it is actually used: a narrow stretch of the DAG must not ratchet the
     window to its ceiling and then launch all of it at once when the plan widens again."""
@@ -710,7 +788,8 @@ def govern(root, st, successes):
     st.setdefault("gov", new_gov(provider_of(st), resolve_tier()))
     g = st["gov"]
     enabled = gov_enabled(st)
-    sig = scan_transcripts(root, st)                 # always: re-queue / LANE DOWN are correctness, not throttling
+    oc = is_opencode()
+    sig = lane_signals(root, st) if oc else scan_transcripts(root, st)   # always: re-queue / LANE DOWN are correctness
     t = time.time()
     bound = max(GOV_MIN, min(gov_ceiling(st), concurrency_limit(), HARD_CAP))
     # 1. Agent spawns that failed: the lane never started — put the slice back, untouched
@@ -779,6 +858,11 @@ def govern(root, st, successes):
             if kind == "research" and (state_dir(root) / "research" / f"{name}.md").exists():
                 continue
         elif kind == "review" and name.split("-")[0] not in open_reviews:
+            continue
+        if oc:
+            lines.append(f"LANE DOWN {name} ({kind}): the lane process ended {text[:120]}"
+                         + (f"\n  → `fail {name}` then `retry {name}` (the worktree is kept for salvage)"
+                            if kind == "slice" else f"\n  → relaunch it: `lane-run {name}`"))
             continue
         lines.append(f"LANE DOWN {name} ({kind}): the API failed after retries — {text[:120]}"
                      f"\n  → SendMessage that agent \"continue\" (warm: same context"
@@ -3147,8 +3231,111 @@ def merged_settings(root):
     return m
 
 
+OC_AGENT_NAMES = ("programmer", "code-reviewer", "spot-reviewer", "investigator", "team-leader")
+OC_GUARD_PATH_RE = re.compile(r"""([^\s"'`]+/scripts/guard\.py)""")
+
+
+def oc_plugin_problems(home, major):
+    """The installed guard plugin: present, guard.py path resolved, dialect = detected major, loads."""
+    pdir = Path(home) / ".config" / "opencode" / "plugins"
+    found = [p for p in sorted(pdir.glob("*.js")) if "guard.py" in p.read_text(errors="replace")] \
+        if pdir.is_dir() else []
+    if not found:
+        return [f"guard plugin not installed in {pdir} (OpenCode tool calls would run unchecked)"]
+    p = found[0]
+    text = p.read_text(errors="replace")
+    problems = []
+    m = OC_GUARD_PATH_RE.search(text)
+    if "{{SKILL_DIR}}" in text or (m and not Path(m.group(1)).exists()):
+        problems.append(f"plugin {p.name}: its guard.py path does not resolve (every tool call would fail open)")
+    v2 = "Plugin.define" in text
+    if major and v2 != (major >= 2):
+        problems.append(f"plugin {p.name} is written for OpenCode v{2 if v2 else 1} but opencode is v{major} — "
+                        "re-run install-opencode.sh")
+    node = shutil.which("node")
+    if node:
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            probe = Path(td) / "plugin.mjs"
+            probe.write_text(text)
+            r = sh([node, "--check", str(probe)], check=False)
+        if r.returncode != 0:
+            err = [ln for ln in (r.stderr or r.stdout).splitlines() if ln.strip()]
+            why = next((ln for ln in err if "Error" in ln), err[0] if err else "node --check failed")
+            problems.append(f"plugin {p.name} fails to load: {why.strip()[:160]}")
+    return problems
+
+
+def doctor_opencode(a, root):
+    """`doctor --harness opencode`: OpenCode binary, installed skill and major, agents, guard plugin,
+    provider config and git excludes. `--fix` re-installs through oc_harness.install for the detected
+    major; the provider config is never written (it holds the user's own settings)."""
+    oc = _oc_harness()
+    home = str(Path.home())
+    skill_dir = Path(__file__).resolve().parent.parent
+    problems, notes, reinstall = [], [], False
+    gv = git(["--version"]).split()[-1]
+    notes.append(f"git {gv}, python {sys.version.split()[0]}, root {root}, harness opencode")
+    if git(["status", "--porcelain", "--untracked-files=no"], root):
+        problems.append("uncommitted tracked changes in the integration checkout (commit/stash before a run)")
+    major = oc.detect()
+    if not major:
+        problems.append("opencode not found on PATH — install OpenCode 1.18.x or v2 first (not auto-fixed)")
+    else:
+        notes.append(f"opencode v{major}, provider {oc.PROVIDER}")
+        for ln in oc.check(str(skill_dir)):
+            if ln.startswith(("FAIL", "MISSING")):
+                problems.append(ln)
+                reinstall = True
+            else:
+                notes.append(ln)
+    adir = Path(home) / ".config" / "opencode" / "agents"
+    for name in OC_AGENT_NAMES:
+        if not (adir / f"{name}.md").exists():
+            problems.append(f"agent {name} not installed in {adir}")
+            reinstall = True
+    plugin = oc_plugin_problems(home, major)
+    problems += plugin
+    reinstall = reinstall or bool(plugin)
+    cfgs = [Path(home) / ".config" / "opencode" / n for n in ("opencode.json", "opencode.jsonc")] \
+        + [root / "opencode.json", root / "opencode.jsonc"]
+    if not any(p.exists() and oc.PROVIDER in p.read_text(errors="replace") for p in cfgs):
+        snippet = f"python3 {q(Path(__file__).resolve().parent / 'oc_harness.py')} snippet {major or 1}"
+        problems.append(f"no opencode.json names the {oc.PROVIDER} provider — merge the output of `{snippet}` "
+                        "into ~/.config/opencode/opencode.json (not auto-fixed)")
+    excl = common_dir(root) / "info" / "exclude"
+    have_excl = excl.read_text() if excl.exists() else ""
+    fix_excl = any(ln not in have_excl for ln in EXCLUDE_LINES)
+    if fix_excl:
+        problems.append("git info/exclude lacks dev-team entries (.claude/dev-team/, .slice/, dep dirs)")
+    notes.append(f"governor tier {resolve_tier()} (start/ceiling {TIERS[resolve_tier()]}); lane signals from "
+                 f"{state_dir(root) / 'lanes'}")
+    out(*[f"- {n}" for n in notes])
+    if not problems:
+        out("DOCTOR: all good")
+        return
+    out("DOCTOR found:", *[f"  ✗ {p}" for p in problems])
+    if not a.fix:
+        out("run `doctor --harness opencode --fix` to install the dev-team agents, guard plugin and skill "
+            "for the detected OpenCode major and update git excludes")
+        return
+    if reinstall and major:
+        for path in oc.install(str(skill_dir), major, home):
+            out(f"installed {path}")
+    elif reinstall:
+        out("opencode not found — install it, then run `doctor --harness opencode --fix` again")
+    if fix_excl:
+        ensure_excludes(root)
+        out("updated git info/exclude")
+    if reinstall and major:
+        out("RESTART OpenCode so it loads the new agents and plugin.")
+
+
 def cmd_doctor(a):
     root = toplevel()
+    harness = getattr(a, "harness", None) or ("opencode" if is_opencode() else "claude")
+    if harness == "opencode":
+        return doctor_opencode(a, root)
     problems, notes, fixes = [], [], {}
     gv = git(["--version"]).split()[-1]
     notes.append(f"git {gv}, python {sys.version.split()[0]}, root {root}")
@@ -3701,7 +3888,7 @@ def main(argv=None):
     pr = sp.add_parser("stats"); pr.add_argument("--all", action="store_true"); pr.set_defaults(fn=cmd_stats)
     pr = sp.add_parser("finish"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_finish)
     pr = sp.add_parser("reset"); pr.add_argument("--yes", action="store_true"); pr.set_defaults(fn=cmd_reset)
-    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.set_defaults(fn=cmd_doctor)
+    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "opencode"]); pr.set_defaults(fn=cmd_doctor)
     pr = sp.add_parser("allow"); pr.add_argument("cmds", nargs="+"); pr.set_defaults(fn=cmd_allow)
     pr = sp.add_parser("claim"); pr.add_argument("id"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_claim)
     pr = sp.add_parser("bind"); pr.add_argument("id"); pr.add_argument("worktree"); pr.set_defaults(fn=cmd_bind)
