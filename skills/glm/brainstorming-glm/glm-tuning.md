@@ -111,3 +111,19 @@ coding tasks.
 UNVERIFIED: the exact ceiling on parallel tool calls per GLM-5.3 turn.
 Public reports observe as few as two in one turn without an explicit
 instruction; R4 is written to hold either way.
+
+## 6. OpenCode harness
+
+Install with `python3 skills/glm/_shared/oc_harness.py install
+skills/glm/brainstorming-glm`, which renders `opencode/agents/explorer.md`
+and `opencode/agents/researcher.md` plus `opencode/commands/brainstorm.md`
+into the detected v1 or v2 dialect and writes `.oc-major` under the installed
+skill folder. Tool-name map: `task` for a lane, `todowrite` for TaskCreate,
+`webfetch` for WebFetch; AskUserQuestion becomes plain-text numbered
+questions with approval as item 1.
+
+OpenCode process lanes: v1 drops `reasoning_effort` for `glm-*` models, so
+every lane launched through `oc_harness.py run` executes at `max` regardless
+of the `effort` frontmatter key; keep tool-free work in the api lane via
+`zai_client.py` when a lower effort matters.
+

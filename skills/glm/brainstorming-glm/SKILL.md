@@ -1,5 +1,5 @@
 ---
-name: brainstorming-glm
+name: brainstorming
 description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 64 parallel lanes across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
@@ -303,6 +303,12 @@ never stall.
 | Workflow | Run waves of lanes. |
 | `!` preprocessing (raw `!` above) | Run `scripts/context.sh` as your first round-1 call. |
 | TaskCreate | Track state in the message per R5. |
+
+On OpenCode, lanes run through `oc_harness run` with the neutral `explorer`
+(read-only) and `researcher` (web) agents installed under `opencode/agents/`.
+Tool-name map: `task` for a lane, `todowrite` for TaskCreate,
+`webfetch` for WebFetch; AskUserQuestion becomes plain-text numbered
+questions with approval as item 1.
 
 ## Visual companion
 
