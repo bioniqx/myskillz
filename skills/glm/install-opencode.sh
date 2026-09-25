@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install all five Phase 1 GLM skills into OpenCode and print the config snippet.
+# Install all six GLM skills into OpenCode and print the config snippet.
 set -eu
 
 MAJOR=""

@@ -30,6 +30,8 @@ PHASE1_SKILLS = [
     "doc-generator-glm",
 ]
 
+ALL_SKILLS = PHASE1_SKILLS + ["dev-team-glm"]
+
 
 def extract_description(frontmatter):
     """Read the 'description' YAML value: quoted, plain, or a >-/>/|-/| block scalar."""
@@ -64,7 +66,7 @@ class TestVendoredCopies(unittest.TestCase):
             shared_path = os.path.join(shared_dir, shared_file)
             with open(shared_path, "rb") as fh:
                 shared_hash = hashlib.sha256(fh.read()).hexdigest()
-            for skill in PHASE1_SKILLS:
+            for skill in ALL_SKILLS:
                 vendor_path = os.path.join(GLM_ROOT, skill, "scripts", shared_file)
                 if not os.path.exists(vendor_path):
                     continue
@@ -97,7 +99,7 @@ class TestScriptsCompile(unittest.TestCase):
 
 class TestSkillMdHygiene(unittest.TestCase):
     def test_skill_md_hygiene(self):
-        for skill in PHASE1_SKILLS:
+        for skill in ALL_SKILLS:
             expected_name = skill[:-4] if skill.endswith("-glm") else skill
             skill_md = os.path.join(GLM_ROOT, skill, "SKILL.md")
             with open(skill_md, encoding="utf-8") as fh:
@@ -157,21 +159,29 @@ class TestInstallOpencodeScript(unittest.TestCase):
         finally:
             shutil.rmtree(home, ignore_errors=True)
 
-    def test_dev_team_glm_installed(self):
-        """Verify dev-team-glm is installed and its doctor check passes on OpenCode."""
-        old_opencode = os.environ.get("OPENCODE")
-        os.environ["OPENCODE"] = "1"
-        try:
-            dev_team_path = os.path.join(GLM_ROOT, "dev-team-glm", "scripts", "devteam.py")
-            self.assertTrue(os.path.exists(dev_team_path), "dev-team-glm script not found at %s" % dev_team_path)
+    def test_dev_team_glm_doctor_reports_opencode_content(self):
+        """devteam.py doctor --harness opencode runs hermetically (isolated HOME, no shared
+        os.environ mutation) and its output actually names the harness and a verdict line,
+        not just an exit code."""
+        dev_team_path = os.path.join(GLM_ROOT, "dev-team-glm", "scripts", "devteam.py")
+        self.assertTrue(os.path.exists(dev_team_path), "dev-team-glm script not found at %s" % dev_team_path)
 
-            result = subprocess.run([sys.executable, dev_team_path, "doctor"], capture_output=True)
-            self.assertEqual(result.returncode, 0, "devteam.py doctor failed: %s" % result.stderr.decode())
+        home = tempfile.mkdtemp()
+        try:
+            env = dict(os.environ)
+            env["HOME"] = home
+            env["OPENCODE"] = "1"
+            result = subprocess.run(
+                [sys.executable, dev_team_path, "doctor"],
+                capture_output=True, text=True, timeout=60, env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("harness opencode", result.stdout)
+            self.assertIn("governor tier", result.stdout)
+            self.assertTrue(
+                "DOCTOR: all good" in result.stdout or "DOCTOR found:" in result.stdout,
+                "doctor output has no verdict line: %r" % result.stdout)
         finally:
-            if old_opencode is None:
-                os.environ.pop("OPENCODE", None)
-            else:
-                os.environ["OPENCODE"] = old_opencode
+            shutil.rmtree(home, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -35,14 +35,14 @@ python3 dev-team-glm/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
 
-# Install all five Phase 1 skills into OpenCode and print the config snippet
+# Install all Phase 1 + Phase 2 skills into OpenCode and print the config snippet
 sh install-opencode.sh [--major N] [--home DIR]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
 
 # Full Python suite (all _shared/tests). Never rewrite tracked __pycache__/*.pyc, so pass this env var.
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/glm/_shared/tests -t skills/glm/_shared/tests
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests
 ```
 
 `_shared/*.py` (`zai_client.py`, `oc_harness.py`) is the source of truth; each skill's `scripts/` copy is
