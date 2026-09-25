@@ -1,3 +1,5 @@
+import argparse
+import importlib.util
 import io
 import json
 import os
@@ -6,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -255,6 +258,54 @@ class MainTests(unittest.TestCase):
             finally:
                 sys.stderr = sys_stderr
         self.assertEqual(rc, 2)
+
+
+class InstallFromOwnDestinationTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="oc-selfinstall-")
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = os.path.join(self.tmp, "home")
+        skills_root = os.path.join(self.home, ".config", "opencode", "skills")
+        os.makedirs(skills_root)
+        self.skill_dst = make_skill(skills_root, "systematic-debugging", "systematic-debugging")
+
+    def test_install_from_its_own_destination_does_not_delete_it(self):
+        written = oc_harness.install(self.skill_dst, 1, self.home)
+        self.assertIn(self.skill_dst, written)
+        self.assertTrue(os.path.isfile(os.path.join(self.skill_dst, "SKILL.md")))
+        self.assertTrue(os.path.isdir(os.path.join(self.skill_dst, "scripts")))
+        with open(os.path.join(self.skill_dst, ".oc-major")) as fh:
+            self.assertEqual(fh.read().strip(), "1")
+        agent = os.path.join(self.home, ".config", "opencode", "agents", "worker.md")
+        self.assertTrue(os.path.isfile(agent))
+
+
+class AuditSetupFromInstalledCopyTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="oc-audit-selfinstall-")
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = os.path.join(self.tmp, "home")
+        src = os.path.normpath(os.path.join(
+            os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm"))
+        self.installed = os.path.join(
+            self.home, ".config", "opencode", "skills", "requirements-code-audit")
+        os.makedirs(os.path.dirname(self.installed))
+        shutil.copytree(src, self.installed, ignore=shutil.ignore_patterns("__pycache__"))
+
+    def test_setup_run_from_installed_copy_leaves_it_in_place(self):
+        audit_path = os.path.join(self.installed, "scripts", "audit.py")
+        spec = importlib.util.spec_from_file_location("audit_installed_f22", audit_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        args = argparse.Namespace(harness="opencode", dry_run=False)
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=False), \
+                mock.patch.object(oc_harness, "detect", return_value=2):
+            with redirect_stdout(buf):
+                rc = mod.cmd_setup(args)
+        self.assertEqual(rc or 0, 0, buf.getvalue())
+        self.assertTrue(os.path.isdir(self.installed), buf.getvalue())
+        self.assertTrue(os.path.isfile(os.path.join(self.installed, "SKILL.md")))
 
 
 if __name__ == "__main__":
