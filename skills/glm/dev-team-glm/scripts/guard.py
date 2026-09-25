@@ -747,7 +747,7 @@ def guard_oc(inp):
     prog = role == "programmer"
     cwd = inp.get("cwd") or os.getcwd()
     base = {"cwd": cwd, "agent_type": role}
-    if tool == "bash":
+    if tool in ("bash", "shell"):
         check = guard_bash if prog else guard_bash_ro
         out = oc_capture(check, dict(base, tool_input={"command": args.get("command") or ""}))
         if not out.strip():
