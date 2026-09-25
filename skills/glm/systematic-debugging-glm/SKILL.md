@@ -1,5 +1,5 @@
 ---
-name: systematic-debugging-glm
+name: systematic-debugging
 description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many, and fan-out to 64 parallel workers from inside the tools, so width costs no extra model turns.
 license: MIT
 metadata:
