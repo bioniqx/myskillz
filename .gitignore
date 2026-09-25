@@ -20,3 +20,4 @@
 /telemetry/
 .DS_Store
 skills/.DS_Store
+__pycache__/
