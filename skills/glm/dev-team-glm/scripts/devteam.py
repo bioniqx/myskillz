@@ -1822,11 +1822,20 @@ def lane_process_finished(d, lane_id):
 
 def terminate_lane_process(d, lane_id):
     """Kill a previous `lane-run` for this lane id (and its whole process group, so the `opencode`
-    child dies too) if it is still alive, so two runs never share one lane id at once."""
+    child dies too) if it is still alive, so two runs never share one lane id at once. Only kills
+    it when the recorded pid still names a `devteam.py lane-run <lane_id>` process — a reused pid
+    could otherwise belong to an unrelated process."""
     pid_file = d / f"{lane_id}.pid"
     try:
         pid = int(pid_file.read_text().strip())
     except (OSError, ValueError):
+        return
+    try:
+        cmdline = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
+                                 text=True, capture_output=True).stdout
+    except OSError:
+        return
+    if "lane-run" not in cmdline or lane_id not in cmdline:
         return
     try:
         os.killpg(pid, signal.SIGKILL)
@@ -1872,7 +1881,7 @@ def lane_worktree(root, st, lane_id):
     if not (wt / ".git").exists():
         wt.parent.mkdir(parents=True, exist_ok=True)
         git(["worktree", "prune"], root, check=False)
-        base = slice_state(st, lane_id)["base_sha"] or git(["rev-parse", "HEAD"], root)
+        base = slice_state(st, lane_id)["base_sha"]
         git(["worktree", "add", "-f", "-B", f"devteam/{lane_id}", str(wt), base], root)
     return wt
 
@@ -1904,8 +1913,18 @@ def lane_error_marker(d, lane_id, message):
 
 
 def slice_marker_exists(root, sid):
-    d = state_dir(root) / "slices"
-    return (d / f"{sid}.done").exists() or (d / f"{sid}.blocked").exists()
+    return marker_file(root, sid, "done").exists() or marker_file(root, sid, "blocked").exists()
+
+
+def clear_own_pid_file(d, lane_id):
+    """Drop lanes/<id>.pid once this process is done with it, but only if it still holds our own
+    pid — a relaunch may already have overwritten it with a newer lane-run's pid."""
+    pid_file = d / f"{lane_id}.pid"
+    try:
+        if int(pid_file.read_text().strip()) == os.getpid():
+            pid_file.unlink()
+    except (OSError, ValueError):
+        pass
 
 
 def slice_blocked_marker(root, wt, sid, note):
@@ -1938,8 +1957,10 @@ def cmd_lane_run(a):
         except (Exception, SystemExit) as e:
             lane_error_marker(d, spec["id"], f"lane-run failed: {e}")
             out(f"LANE {spec['id']}: ERROR ({e})")
+            clear_own_pid_file(d, spec["id"])
             return
         out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']})")
+        clear_own_pid_file(d, spec["id"])
         return
     wt = None
     try:
@@ -1959,6 +1980,9 @@ def cmd_lane_run(a):
                                   text=True, capture_output=True)
             out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']}), stop gate exit {gate.returncode}")
             if gate.returncode != 2:
+                if not slice_marker_exists(root, spec["id"]):
+                    slice_blocked_marker(root, wt, spec["id"],
+                                          f"stop gate exited {gate.returncode} without writing a slice marker")
                 return
             note = "\n\n" + gate.stderr
         if not slice_marker_exists(root, spec["id"]):
@@ -1970,6 +1994,7 @@ def cmd_lane_run(a):
         out(f"LANE {spec['id']}: ERROR ({e})")
     finally:
         write_atomic(d / f"{spec['id']}.end", str(int(time.time())))
+        clear_own_pid_file(d, spec["id"])
 
 
 def lane_marks(root):
