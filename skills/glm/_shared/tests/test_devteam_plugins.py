@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -113,6 +114,53 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
     )
 
 
+def _run_v2_shaped(tmp_dir, skill_dir, role, tool, args, shape):
+    """Like _run_v2, but drives the hook with a chosen real-v2 payload shape:
+    'output_args' (args under output.args), 'input_args' (args under
+    input.args) or 'input_input' (args under input.input)."""
+    source = _load_plugin_source(V2_PATH, skill_dir)
+    plugin_path = os.path.join(tmp_dir, "plugin.mjs")
+    with open(plugin_path, "w") as f:
+        f.write(source)
+    driver_path = os.path.join(tmp_dir, "driver.mjs")
+    if shape == "output_args":
+        input_obj = {"tool": tool}
+        output_obj = {"args": args}
+    elif shape == "input_args":
+        input_obj = {"tool": tool, "args": args}
+        output_obj = {}
+    elif shape == "input_input":
+        input_obj = {"tool": tool, "input": args}
+        output_obj = {}
+    else:
+        raise ValueError("unknown shape: %r" % (shape,))
+    driver = textwrap.dedent(
+        """\
+        import plugin from "%s";
+        const hooks = await plugin({ directory: "/tmp/work" });
+        try {
+          await hooks["tool.execute.before"](
+            %s,
+            %s
+          );
+          process.stdout.write("ALLOWED");
+        } catch (err) {
+          process.stdout.write("DENIED:" + err.message);
+        }
+        """
+    ) % (plugin_path, json.dumps(input_obj), json.dumps(output_obj))
+    with open(driver_path, "w") as f:
+        f.write(driver)
+    env = dict(os.environ)
+    if role is None:
+        env.pop("DEVTEAM_ROLE", None)
+    else:
+        env["DEVTEAM_ROLE"] = role
+    return subprocess.run(
+        ["node", driver_path], capture_output=True, text=True, env=env, timeout=30
+    )
+
+
 class TestDevteamPlugins(unittest.TestCase):
     def test_plugin_paths_resolve_from_file_not_cwd(self):
         # The module must resolve plugin paths off its own __file__, not the
@@ -124,7 +172,7 @@ class TestDevteamPlugins(unittest.TestCase):
         with tempfile.TemporaryDirectory() as unrelated_cwd:
             result = subprocess.run(
                 [
-                    "python3",
+                    sys.executable,
                     "-m",
                     "unittest",
                     "discover",
@@ -296,6 +344,55 @@ class TestDevteamPlugins(unittest.TestCase):
                 "code-reviewer",
                 "edit",
                 {"filePath": "a.py", "oldString": "x", "newString": "y"},
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "DENIED:blocked edit"
+
+    def test_v2_denies_with_args_under_input(self):
+        # Real opencode v2 tool.execute.before may deliver the call args
+        # nested under input.args instead of output.args.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            _write_guard_stub(
+                skill_dir,
+                {
+                    "hookSpecificOutput": {
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": "blocked edit",
+                    }
+                },
+            )
+            result = _run_v2_shaped(
+                tmp_dir,
+                skill_dir,
+                "code-reviewer",
+                "edit",
+                {"filePath": "a.py", "oldString": "x", "newString": "y"},
+                "input_args",
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "DENIED:blocked edit"
+
+    def test_v2_denies_with_args_under_input_input(self):
+        # Or nested under input.input (the raw tool-call arguments field).
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            _write_guard_stub(
+                skill_dir,
+                {
+                    "hookSpecificOutput": {
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": "blocked edit",
+                    }
+                },
+            )
+            result = _run_v2_shaped(
+                tmp_dir,
+                skill_dir,
+                "code-reviewer",
+                "edit",
+                {"filePath": "a.py", "oldString": "x", "newString": "y"},
+                "input_input",
             )
             assert result.returncode == 0, result.stderr
             assert result.stdout == "DENIED:blocked edit"

@@ -1,4 +1,11 @@
 // Shape: async (ctx) => ({ "tool.execute.before": async (input, output) => {...} })
+// The installed opencode v2.0.16 binary triggers this hook from one internal
+// call site (Tool service, tool.execute.before): the tool name and call
+// arguments travel together as `{tool, sessionID, agent, messageID, id,
+// input}` (`input` holding the raw args). Depending on how that event is
+// adapted for the external plugin's two-argument (input, output) hook
+// signature, the args may land as output.args, input.args or input.input;
+// the tool name is always at input.tool.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -8,9 +15,10 @@ export default async (ctx) => {
       if (!process.env.DEVTEAM_ROLE) return;
       let decision = null;
       try {
+        const args = output?.args ?? input?.args ?? input?.input;
         const payload = JSON.stringify({
           tool: input.tool,
-          args: output.args,
+          args,
           cwd: ctx.directory,
           role: process.env.DEVTEAM_ROLE,
         });

@@ -141,16 +141,7 @@ def render_command(text: str, major: int, skill_dir: str) -> str:
 
 
 def config_snippet(major: int, deny: list) -> str:
-    # major is accepted (not just ignored) so the signature documents that the
-    # skill-denial shape below is version-checked, not a leftover v1 default.
-    # Verified against the installed opencode v2.0.16 binary: both the
-    # top-level config schema and the per-agent frontmatter schema declare
-    # `permission` as `PermissionConfig` = union(action, record<pattern,
-    # action>) in both major 1 and major 2 -- the nested-map shape
-    # {"skill": {"<name>": "deny"}} below, not the {action, resource, effect}
-    # rule-list (that shape is `Permission.Ruleset`, used only for the
-    # runtime permission ask/reply protocol, never for opencode.json).
-    del major
+    # Verified against the installed opencode v2.0.16 binary: `permission` is `PermissionConfig`, the same nested-map shape ({"skill": {"<name>": "deny"}}) in both major 1 and major 2.
     config = {
         "$schema": "https://opencode.ai/config.json",
         "provider": {
@@ -179,7 +170,7 @@ THROTTLE_RE = re.compile(
     r"|\b429 Too Many Requests\b",
     re.I,
 )
-RUN_FLAGS = ["--agent", "--model", "--format", "--auto"]
+RUN_FLAGS = ["--agent", "--model", "--format", "--auto", "--standalone"]
 
 
 def check_run_flags(major: int, binary: str = "opencode") -> list:
@@ -203,11 +194,19 @@ def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list:
         with open(brief) as f:
             brief = f.read()
     if major < 2:
-        return [binary, "run", "--dir", lane.get("dir") or ".", "--agent", lane["agent"],
+        # Absolute, so opencode's own --dir resolution can't re-resolve it a
+        # second time against the subprocess cwd _start_lane already set to
+        # this same directory (which would turn "docs" into "docs/docs").
+        lane_dir = os.path.abspath(lane.get("dir") or ".")
+        return [binary, "run", "--dir", lane_dir, "--agent", lane["agent"],
                 "-m", model, "--format", "json", "--auto", brief]
     # v2 has no --dir flag; the lane's working directory is instead passed as
-    # the subprocess cwd (see _start_lane).
-    return [binary, "run", "--agent", lane["agent"], "--model", model,
+    # the subprocess cwd (see _start_lane). --standalone runs a private
+    # server in this process instead of talking to opencode's managed
+    # background service, so the plugin sees this process's env
+    # (DEVTEAM_ROLE/DEVTEAM_SLICE) instead of running inside a shared,
+    # long-lived service process.
+    return [binary, "run", "--standalone", "--agent", lane["agent"], "--model", model,
             "--format", "json", "--auto", brief]
 
 
@@ -246,9 +245,16 @@ def _start_lane(lane, out_dir, major, binary, width):
     err_file = open(err_path, "w")
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (lane.get("env") or {}).items()})
-    proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env,
-                            start_new_session=True, cwd=lane.get("dir") or ".")
+    cwd = os.path.abspath(lane.get("dir") or ".")
+    try:
+        proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env,
+                                start_new_session=True, cwd=cwd)
+    except OSError as exc:
+        # A bad lane dir (or any other spawn failure) must not crash the
+        # whole wave; the caller turns this into a per-lane FAIL result.
+        err_file.close()
+        return {"id": lane_id, "start_error": str(exc)}
     now = time.monotonic()
     state = {"id": lane_id, "proc": proc, "err_path": err_path, "err_file": err_file,
              "out": os.path.join(out_dir, lane_id + ".jsonl"), "start": now, "last": now,
@@ -305,8 +311,13 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
     if not major:
         raise SystemExit("opencode not found: " + binary)
     missing = check_run_flags(major, binary)
-    if missing:
-        raise SystemExit("opencode run --help lacks flag(s): " + ", ".join(missing))
+    # --standalone is not a hard precondition here: build_run_cmd always
+    # passes it for major 2, so an installed opencode too old to support it
+    # surfaces as a normal per-lane FAIL (unrecognized flag) instead of
+    # blocking the whole wave up front.
+    hard_missing = [f for f in missing if f != "--standalone"]
+    if hard_missing:
+        raise SystemExit("opencode run --help lacks flag(s): " + ", ".join(hard_missing))
     os.makedirs(out_dir, exist_ok=True)
     width = max(1, min(int(width), 64))
     pending = list(lanes)
@@ -315,7 +326,17 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
     try:
         while pending or running:
             while pending and len(running) < width:
-                running.append(_start_lane(pending.pop(0), out_dir, major, binary, width))
+                state = _start_lane(pending.pop(0), out_dir, major, binary, width)
+                if "start_error" in state:
+                    lane_id = state["id"]
+                    result = {"id": lane_id, "status": "FAIL", "exit": None,
+                              "error": state["start_error"], "last_event": "", "throttles": 0,
+                              "width": width, "out": os.path.join(out_dir, lane_id + ".jsonl")}
+                    with open(os.path.join(out_dir, lane_id + ".done"), "w") as f:
+                        json.dump(result, f, indent=2)
+                    results[lane_id] = result
+                else:
+                    running.append(state)
             time.sleep(0.05)
             for state in list(running):
                 width = _absorb(state, width)

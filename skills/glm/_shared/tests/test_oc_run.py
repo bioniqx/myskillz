@@ -58,10 +58,21 @@ class BuildRunCmdTest(unittest.TestCase):
     def test_v2_command_uses_long_model_flag_and_no_dir(self):
         cmd = oc_harness.build_run_cmd(lane("a", "look", dir="/tmp/repo", model="pro"), 2, binary="oc2")
         self.assertEqual(cmd, [
-            "oc2", "run", "--agent", "worker",
+            "oc2", "run", "--standalone", "--agent", "worker",
             "--model", "zai-coding-plan/glm-5.3", "--format", "json", "--auto", "look",
         ])
         self.assertNotIn("--dir", cmd)
+
+    def test_v2_command_includes_standalone(self):
+        # v2 talks to a managed background service by default, so plugins
+        # (and our lane env) never run in the lane's own process unless
+        # --standalone is passed.
+        cmd = oc_harness.build_run_cmd(lane("a", "look"), 2)
+        self.assertIn("--standalone", cmd)
+
+    def test_v1_command_has_no_standalone(self):
+        cmd = oc_harness.build_run_cmd(lane("a", "look", dir="/tmp/repo"), 1)
+        self.assertNotIn("--standalone", cmd)
 
     def test_brief_file_is_read(self):
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
@@ -76,16 +87,33 @@ class CheckRunFlagsTest(unittest.TestCase):
         self.assertEqual(oc_harness.check_run_flags(1, binary="/nonexistent/opencode"), [])
 
     def test_v2_all_flags_present(self):
+        # stub_opencode.py's own FLAGS list predates --standalone, so it can
+        # never print that flag; it is the one entry this stub always misses.
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": ""}):
-            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), [])
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--standalone"])
 
     def test_v2_missing_flag_named(self):
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--auto"}):
-            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--auto"])
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--auto", "--standalone"])
 
     def test_v2_missing_dir_flag_is_not_required(self):
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--dir"}):
-            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), [])
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--standalone"])
+
+    def test_v2_standalone_missing_when_absent_from_help(self):
+        with mock.patch("oc_harness.subprocess.run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="--agent --model --format --auto", stderr=""
+            )
+            self.assertIn("--standalone", oc_harness.check_run_flags(2, binary="opencode"))
+
+    def test_v2_standalone_satisfied_when_present_in_help(self):
+        with mock.patch("oc_harness.subprocess.run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0,
+                stdout="--agent --model --format --auto --standalone", stderr="",
+            )
+            self.assertNotIn("--standalone", oc_harness.check_run_flags(2, binary="opencode"))
 
 
 class KillGroupTest(unittest.TestCase):
