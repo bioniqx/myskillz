@@ -214,8 +214,7 @@ SPAWN_REFUSED_RE = re.compile(r"Concurrent subagent limit reached", re.I)
 # Only call-shaped assertions count: a bare word like `require`, `should` or `verify` appears in
 # ordinary imports, comments and identifiers, and would wave a vacuous test straight through.
 ASSERT_TOKENS = re.compile(
-    r"(\bassert\b|\bassert\s*[!(]|\bassert_eq!|\bassert_ne!|assertEquals\s*\(|assertTrue\s*\(|"
-    r"assertFalse\s*\(|assertThat\s*\(|assertRaises|assertCountEqual|assertAlmostEqual|"
+    r"(\bassert\b|\bassert\s*[!(]|\bassert_eq!|\bassert_ne!|\bassert[A-Z]\w*\s*\(|\bself\.fail\s*\(|"
     r"XCTAssert|EXPECT_[A-Z]|ASSERT_[A-Z]|\bexpect\s*\(|\.should\b|\bshould\s*\(|"
     r"\bt\.Error|\bt\.Fatal|\bAssert\.[A-Za-z]|\bShould\(\)|require\.[A-Za-z]+\s*\(|"
     r"\.to(Be|Equal|Throw|Contain|Match|HaveBeenCalled)[A-Za-z]*\s*\(|"

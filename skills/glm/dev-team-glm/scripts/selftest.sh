@@ -572,6 +572,8 @@ check "writing .slice/red by redirection is denied" '[[ "$(bq "echo deadbeef > .
 PYWRITE='python3 -c "open('"'"'.slice/red'"'"','"'"'w'"'"').write('"'"'x'"'"')"'
 check "writing .slice/red from python is denied" '[[ "$(bq "$PYWRITE")" == *"dev-team metadata"* ]]' 
 check "an ordinary read-only git command still passes (pre-approved)" '[[ "$(bq "git status --porcelain")" != *deny* ]]'
+check "git stash list is not denied (it is on the read-only allow-list)" '[[ "$(bq "git stash list")" != *deny* ]]'
+check "git stash (push) is still denied" '[[ "$(bq "git stash")" == *"Conductor"* ]]'
 
 echo "== v3.1 read-only roles cannot rewrite the run"
 eq() { printf '{"cwd":"%s","tool_input":{"file_path":"%s"}}' "$RF" "$1" | python3 "$G" edit-ro; }
@@ -596,6 +598,8 @@ check "the English word should in a comment does not count" '[[ "$(vac "// this 
 test(\"a\", () => { foo(1); });")" != "0" ]]'
 check "a real assertion call does count" '[[ "$(vac "test(\"a\", () => { assert.equal(1,1); });")" == "0" ]]'
 check "expect(...) counts" '[[ "$(vac "test(\"a\", () => { expect(x).toBe(1); });")" == "0" ]]'
+check "unittest assertEqual/assertIn count" '[[ "$(vac "def test_a(self):
+    self.assertEqual(1, 1); self.assertIn(1, [1])")" == "0" ]]'
 
 echo "== v3.1 verdict parsing fails closed"
 RV="$(newrepo rv)"; cd "$RV"

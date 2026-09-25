@@ -210,7 +210,7 @@ def normalize_git(cmd):
 
 
 BASH_DENY = [
-    (r"\bgit\s+(push|rebase|filter-branch|worktree|merge|stash|switch|cherry-pick|revert)\b", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+(push|rebase|filter-branch|worktree|merge|stash(?!\s+(?:list|show)\b)|switch|cherry-pick|revert)\b", "integration/history commands are the Conductor's"),
     (r"\bgit\s+reset\s+(--hard|--merge|--soft)\b", "history rewriting is forbidden in a slice worktree"),
     (r"\bgit\s+branch\s+(-[dDmM]\b|--delete|--move|--force)", "branch surgery is forbidden in a slice worktree"),
     (r"\bgit\s+commit\b[^|;&]*--amend", "--amend would rewrite the RED audit trail; make a new commit"),
@@ -651,7 +651,7 @@ BASH_RO_DENY = [
     r"\bsed\s+-[a-zA-Z]*i",
     r"\bperl\s+-[a-zA-Z]*i",
     r"(^|[^&<>])>{1,2}(?!\s*/dev/null\b|&)",
-    r"\bgit\s+(add|commit|checkout|switch|reset|merge|rebase|push|pull|fetch|stash|clean|rm|mv|tag|apply|cherry-pick|revert|worktree|branch\s+-[dDmM]|filter-branch)\b",
+    r"\bgit\s+(add|commit|checkout|switch|reset|merge|rebase|push|pull|fetch|stash(?!\s+(?:list|show)\b)|clean|rm|mv|tag|apply|cherry-pick|revert|worktree|branch\s+-[dDmM]|filter-branch)\b",
     r"\b(npm|pnpm|yarn|bun)\s+(install|i|add|remove|uninstall|update|publish|link)\b",
     r"\b(pip|pip3|poetry|uv|conda|cargo|go|gem|composer)\s+(install|add|remove|uninstall|update|publish)\b",
     r"\bpython[0-9.]*\s+-c\s+.*open\([^)]*['\"][wa]",
