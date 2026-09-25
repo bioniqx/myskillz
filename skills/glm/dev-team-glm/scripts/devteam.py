@@ -769,7 +769,7 @@ def lane_signals(root, st) -> dict:
         if not isinstance(res, dict) or res.get("status") in (None, "OK"):
             continue
         text = f"{res.get('status')}: {res.get('error') or res.get('last_event') or 'no error event'}"[:240]
-        sig["down"].append((_lane_kind(st, f.stem), f.stem, text, str(int(mtime)), mtime))
+        sig["down"].append((_lane_kind(st, f.stem), f.stem, text, str(int(mtime)), mtime))  # (kind, name, text, id, ts) — scan_transcripts' shape
     return sig
 
 
