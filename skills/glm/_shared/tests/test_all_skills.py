@@ -143,6 +143,36 @@ class TestInstallOpencodeScript(unittest.TestCase):
         finally:
             shutil.rmtree(home, ignore_errors=True)
 
+    def test_install_opencode_installs_dev_team_with_plugin(self):
+        home = tempfile.mkdtemp()
+        try:
+            result = subprocess.run(
+                ["sh", self.script, "--major", "1", "--home", home],
+                capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            dst = os.path.join(home, ".config", "opencode", "skills", "dev-team")
+            self.assertTrue(os.path.isdir(dst), "missing installed skill dir %s" % dst)
+            plugin = os.path.join(home, ".config", "opencode", "plugins", "devteam-guard.js")
+            self.assertTrue(os.path.isfile(plugin), "missing installed plugin %s" % plugin)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_dev_team_glm_installed(self):
+        """Verify dev-team-glm is installed and its doctor check passes on OpenCode."""
+        old_opencode = os.environ.get("OPENCODE")
+        os.environ["OPENCODE"] = "1"
+        try:
+            dev_team_path = os.path.join(GLM_ROOT, "dev-team-glm", "scripts", "devteam.py")
+            self.assertTrue(os.path.exists(dev_team_path), "dev-team-glm script not found at %s" % dev_team_path)
+
+            result = subprocess.run([sys.executable, dev_team_path, "doctor"], capture_output=True)
+            self.assertEqual(result.returncode, 0, "devteam.py doctor failed: %s" % result.stderr.decode())
+        finally:
+            if old_opencode is None:
+                os.environ.pop("OPENCODE", None)
+            else:
+                os.environ["OPENCODE"] = old_opencode
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,5 +44,12 @@ for skill in $SKILLS; do
     python3 "$HARNESS" install "$skill_path" "$MAJOR" "$HOME_DIR"
 done
 
+DEV_TEAM_PATH="$SCRIPT_DIR/dev-team-glm"
+if [ ! -d "$DEV_TEAM_PATH" ]; then
+    echo "Error: $DEV_TEAM_PATH not found" >&2
+    exit 1
+fi
+python3 "$HARNESS" install "$DEV_TEAM_PATH" "$MAJOR" "$HOME_DIR"
+
 python3 "$HARNESS" snippet "$MAJOR"
 echo "# Also export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 so OpenCode skips the Claude-tuned originals in ~/.claude/skills"
