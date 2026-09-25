@@ -47,10 +47,16 @@ MAX_STOP_BLOCKS = 2
 STATE_DIRNAME = ".claude/dev-team"
 
 
+def deny_json(reason):
+    """The hookSpecificOutput JSON for a deny, without exiting — `deny()` prints-and-exits with it;
+    `guard_oc` also needs it as a string to compare across candidate paths before choosing one."""
+    return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                              "permissionDecision": "deny",
+                                              "permissionDecisionReason": reason}})
+
+
 def deny(reason):
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                             "permissionDecision": "deny",
-                                             "permissionDecisionReason": reason}}))
+    print(deny_json(reason))
     sys.exit(0)
 
 
@@ -760,11 +766,8 @@ def guard_oc(inp):
     for p in paths:
         ap = p if os.path.isabs(p) else os.path.abspath(os.path.join(cwd, p))
         if find_slice_root(os.path.dirname(ap)) is None:
-            out = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                                      "permissionDecision": "deny",
-                                                      "permissionDecisionReason":
-                                                      f"`{p}` is outside any slice worktree. OpenCode has no "
-                                                      "interactive fallback for an unclaimed path."}})
+            out = deny_json(f"`{p}` is outside any slice worktree. OpenCode has no interactive "
+                            "fallback for an unclaimed path.")
             break
         out = oc_capture(check, dict(base, tool_input={"file_path": p}))
         if '"permissionDecision": "deny"' in out:
