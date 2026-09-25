@@ -76,7 +76,8 @@ class TestOcHarnessRender(unittest.TestCase):
             "Agent prompt body.\n"
         )
         v1 = oc_harness.render_agent(text_v1, 1)
-        self.assertIn("mode: subagent", v1)
+        # v1 `opencode run --agent` falls back to the default agent for mode: subagent
+        self.assertIn("mode: all", v1)
         self.assertIn("hidden: true", v1)
         self.assertIn("model: zai-coding-plan/glm-5.3-flash", v1)
         self.assertIn("reasoningEffort: low", v1)
@@ -113,7 +114,10 @@ class TestOcHarnessRender(unittest.TestCase):
         self.assertNotIn("effect:", v2)
         self.assertIn('description: "Test agent"', v2)
         self.assertNotIn("request:", v2)
-        self.assertIn("options:\n  reasoning_effort: max", v2)
+        self.assertIn("mode: subagent", v2)
+        # v2 ignores frontmatter effort (it rides on the --model #variant suffix instead)
+        self.assertNotIn("reasoning_effort", v2)
+        self.assertNotIn("options:", v2)
         self.assertIn("temperature: 0.2", v2)
         self.assertNotIn("    temperature: 0.2", v2)
 

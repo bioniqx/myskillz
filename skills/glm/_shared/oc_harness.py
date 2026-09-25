@@ -14,6 +14,7 @@ import time
 
 PROVIDER = "zai-coding-plan"
 MODELS = {"flash": "glm-5.3-flash", "pro": "glm-5.3"}
+EFFORTS = ("low", "high", "max")
 
 
 def detect(binary: str = "opencode") -> int:
@@ -80,7 +81,8 @@ def render_agent(text: str, major: int) -> str:
 
     lines = ["---"]
     lines.append("description: {}".format(json.dumps(description)))
-    lines.append("mode: subagent")
+    # v1 `opencode run --agent` silently falls back to the default agent for a `mode: subagent` agent
+    lines.append("mode: {}".format("all" if major == 1 else "subagent"))
     lines.append("hidden: true")
     lines.append("model: {}".format(model_id))
     if major == 1:
@@ -124,8 +126,7 @@ def render_agent(text: str, major: int) -> str:
         lines.append("  webfetch: {}".format(web_perm))
         if write_paths:
             lines.append("  task: deny")
-        lines.append("options:")
-        lines.append("  reasoning_effort: {}".format(effort))
+        # v2 ignores frontmatter effort; build_run_cmd sends it as the --model #variant suffix.
     lines.append("---")
     lines.append("")
     lines.append(body)
@@ -177,11 +178,14 @@ def check_run_flags(major: int, binary: str = "opencode") -> list:
     """Return the run flags missing from `opencode run --help` (v2 only)."""
     if major < 2:
         return []
+    # to a file, not a pipe: v2 exits before flushing piped help output past ~512 bytes
     try:
-        proc = subprocess.run([binary, "run", "--help"], capture_output=True, text=True, timeout=30)
+        with tempfile.TemporaryFile() as out:
+            subprocess.run([binary, "run", "--help"], stdout=out, stderr=subprocess.STDOUT, timeout=30)
+            out.seek(0)
+            text = out.read().decode("utf-8", "replace")
     except (OSError, subprocess.TimeoutExpired):
         return list(RUN_FLAGS)
-    text = proc.stdout + proc.stderr
     return [f for f in RUN_FLAGS if not re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(f), text)]
 
 
@@ -189,6 +193,10 @@ def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list:
     model = lane.get("model") or "pro"
     if "/" not in model:
         model = PROVIDER + "/" + MODELS.get(model, model)
+    # v2 takes effort only as a model variant (`glm-5.3#high`); v1 takes it from the agent's
+    # frontmatter `reasoningEffort` and rejects the suffix.
+    if major >= 2 and lane.get("effort") in EFFORTS:
+        model += "#" + lane["effort"]
     brief = lane["brief"]
     if os.path.isfile(brief):
         with open(brief) as f:
@@ -246,6 +254,9 @@ def _start_lane(lane, out_dir, major, binary, width):
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (lane.get("env") or {}).items()})
     cwd = os.path.abspath(lane.get("dir") or ".")
+    # v2 --standalone takes its project root from $PWD, not the real cwd: an inherited PWD would
+    # point the lane's file tools at the caller's directory.
+    env["PWD"] = cwd
     try:
         proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env,
@@ -507,7 +518,7 @@ def probe_effort(binary: str = "opencode", home: str = "") -> str:
             fh.write(render_agent(PROBE_AGENT % level, major))
         written.append(path)
         lanes.append({"id": "probe-" + level, "agent": "glm-probe-" + level, "model": "flash",
-                      "dir": out_dir, "brief": PROBE_BRIEF, "timeout": 300})
+                      "effort": level, "dir": out_dir, "brief": PROBE_BRIEF, "timeout": 300})
     try:
         rows = run_lanes(lanes, out_dir, width=2, binary=binary, major=major)
         tokens = {r["id"]: reasoning_tokens(r["out"]) for r in rows if r.get("status") == "OK"}

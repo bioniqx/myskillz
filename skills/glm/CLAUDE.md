@@ -41,7 +41,8 @@ sh install-opencode.sh [--major N] [--home DIR]
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
 
-# Full Python suite (all _shared/tests). Never rewrite tracked __pycache__/*.pyc, so pass this env var.
+# Full Python suite (all _shared/tests). __pycache__ is untracked/ignored; pass this env var to
+# keep skill dirs free of bytecode.
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests
 ```
 
@@ -52,8 +53,8 @@ The Python suite under `_shared/tests` is the main automated suite and runs on e
 `selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
 (temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
 engine behaviour gets a check there. It was written for GNU userland (the README reports 308/308). On
-macOS it currently reports 302 pass, 6 fail. At least one failure comes from the test itself, not the
-engine: BSD `sed` rejects the GNU-style `sed -i` call. Run it on Linux before trusting a red result.
+macOS it currently reports 324 pass, 5 fail — pre-existing macOS/BSD-userland failures. Run it on
+Linux before trusting a red result.
 `systematic-debugging-glm/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
 
@@ -66,7 +67,9 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   pick `opus` over `sonnet` for cost reasons.
 - **Thinking is always on.** `reasoning_effort` accepts only `low | high | max` (no `medium`) and defaults
   to `max`. Effort is the real latency dial, so every tier maps to one explicit effort. Claude Code forwards
-  effort only when `*_SUPPORTED_CAPABILITIES` includes `effort`.
+  effort only when `*_SUPPORTED_CAPABILITIES` includes `effort`. On OpenCode, effort reaches GLM via
+  frontmatter `reasoningEffort` on v1 (agents are rendered `mode: all`) and via the `--model <id>#<effort>`
+  suffix that `oc_harness.py` adds on v2; v2 ignores frontmatter effort.
 - **GLM emits few parallel tool calls per turn, and OpenCode runs subagents serially.** Fan-out therefore
   lives inside the Python tools: each one opens up to 64 threads and calls the Z.ai API directly (the "api
   lane"). A single model turn replaces many batched tool calls. Each tool has an **agent lane** fallback
@@ -114,7 +117,8 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   programmer role gets `edit`/`bash` checks; any other role gets read-only (`edit-ro`/`bash-ro`) with
   `agent_type` set to the role; no role prints nothing (silent allow). Plugin failures allow calls (same
   fail-open as Python-side guard). v2 `opencode run` has no `--dir` flag; lanes instead run with the lane's
-  working directory passed as the subprocess `cwd` (v1 keeps `--dir`).
+  working directory passed as the subprocess `cwd` and `$PWD` (v2 `--standalone` resolves its project root
+  from `$PWD`; v1 keeps `--dir`).
 - **systematic-debugging-glm**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
   `experiment` (a separate worktree for each control and treatment arm) and `scan` (64 API workers). Helper
   shell scripts: `stress.sh` (Wilson CI and Fisher test), `bisect-parallel.sh` and `find-polluter.sh`.

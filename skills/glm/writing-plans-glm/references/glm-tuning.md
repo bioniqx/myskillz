@@ -89,7 +89,9 @@ injection in skills, which is why call 1 is an explicit shell call; the `/plan`
 command injects the skill directory and argument string, then loads the skill.
 The `plan-task-writer` agent provides the fallback when an API key is not
 available; `oc_harness.py run` starts a subprocess for tool-using agent lanes.
-Subagents live in `~/.config/opencode/agents/` with `mode: subagent`. Headless
+Subagents live in `~/.config/opencode/agents/`, rendered with `mode: all` on v1 (a `mode: subagent`
+agent is silently swapped for the default `build` agent by `opencode run --agent`) and `mode:
+subagent` on v2. Headless
 runs are `opencode run -m <provider>/<model> --auto "<prompt>"`.
 
 **ZCode.** Skills live in `~/.zcode/skills/<name>/SKILL.md` and are invoked with

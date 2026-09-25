@@ -71,6 +71,14 @@ class ReadEventsTest(unittest.TestCase):
         self.assertEqual(state["error"], '{"error": "boom"}')
 
 
+def help_text(text):
+    """subprocess.run stand-in: check_run_flags reads `run --help` from the file passed as stdout."""
+    def run(cmd, stdout=None, **kwargs):
+        stdout.write(text.encode())
+        return subprocess.CompletedProcess(cmd, 0)
+    return run
+
+
 class BuildRunCmdTest(unittest.TestCase):
     def test_v1_command(self):
         cmd = oc_harness.build_run_cmd(lane("a", "look", dir="/tmp/repo"), 1)
@@ -93,6 +101,21 @@ class BuildRunCmdTest(unittest.TestCase):
         # --standalone is passed.
         cmd = oc_harness.build_run_cmd(lane("a", "look"), 2)
         self.assertIn("--standalone", cmd)
+
+    def test_v2_effort_rides_on_the_model_variant(self):
+        cmd = oc_harness.build_run_cmd(lane("a", "look", model="pro", effort="max"), 2)
+        self.assertIn("zai-coding-plan/glm-5.3#max", cmd)
+
+    def test_v2_invalid_or_missing_effort_adds_no_variant(self):
+        for extra in ({}, {"effort": "medium"}):
+            with self.subTest(extra=extra):
+                cmd = oc_harness.build_run_cmd(lane("a", "look", **extra), 2)
+                self.assertIn("zai-coding-plan/glm-5.3-flash", cmd)
+
+    def test_v1_never_gets_a_variant_suffix(self):
+        # v1.18 rejects `#variant`; it reads effort from the agent's reasoningEffort instead
+        cmd = oc_harness.build_run_cmd(lane("a", "look", effort="high"), 1)
+        self.assertIn("zai-coding-plan/glm-5.3-flash", cmd)
 
     def test_v1_command_has_no_standalone(self):
         cmd = oc_harness.build_run_cmd(lane("a", "look", dir="/tmp/repo"), 1)
@@ -123,18 +146,12 @@ class CheckRunFlagsTest(unittest.TestCase):
             self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), [])
 
     def test_v2_standalone_missing_when_absent_from_help(self):
-        with mock.patch("oc_harness.subprocess.run") as run:
-            run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="--agent --model --format --auto", stderr=""
-            )
+        with mock.patch("oc_harness.subprocess.run", side_effect=help_text("--agent --model --format --auto")):
             self.assertIn("--standalone", oc_harness.check_run_flags(2, binary="opencode"))
 
     def test_v2_standalone_satisfied_when_present_in_help(self):
-        with mock.patch("oc_harness.subprocess.run") as run:
-            run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0,
-                stdout="--agent --model --format --auto --standalone", stderr="",
-            )
+        with mock.patch("oc_harness.subprocess.run",
+                        side_effect=help_text("--agent --model --format --auto --standalone")):
             self.assertNotIn("--standalone", oc_harness.check_run_flags(2, binary="opencode"))
 
 

@@ -323,7 +323,8 @@ python3 "$H/oc_harness.py" run <lanes.json> --out "$OUT"
 `<lanes.json>` is a JSON array of lane objects you write before the
 call. Each lane needs `id` (unique string), `agent` (`explorer` or
 `researcher`, the neutral read-only/web agents installed under
-`opencode/agents/`), `model` (`flash` or `pro`), `dir` (working directory
+`opencode/agents/`), `model` (`flash` or `pro`), `effort` (`low` for these lanes; OpenCode v2
+sends it as the model variant), `dir` (working directory
 for that lane) and `brief` (the per-lane user message: task, root/stack,
 today's date, this lane's slice or angle, the siblings it must stay out
 of, and its one question — the same fields the Code/Web lane templates

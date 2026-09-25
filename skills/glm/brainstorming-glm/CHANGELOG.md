@@ -1,3 +1,18 @@
+# 9.2-glm (from 9.1) — OpenCode effort correction
+
+Corrects the 9.1 claim that OpenCode process lanes always run at `max`.
+Live end-to-end runs against the real v1.18.32 and v2.0.16 binaries (a mock
+OpenAI-compatible provider logging every request body) showed the actual
+cause was different: a `mode: subagent` agent makes `opencode run --agent`
+on v1 silently fall back to the built-in `build` agent, so the agent's
+`reasoningEffort` frontmatter was never applied. Rendering v1 agents with
+`mode: all` fixes that, and `reasoningEffort` then reaches the wire
+verbatim as `reasoning_effort`. On v2, agent-frontmatter effort (any form)
+is never sent; the only working lever is a `#<effort>` variant suffix on
+the explicit `--model` flag, so `oc_harness.py` now appends it when a lane
+carries an `effort` field. `lanes.json` lane dicts may now carry an
+optional `effort: low|high|max` key for this purpose.
+
 # 9.1-glm (from 9.0) — OpenCode layer
 
 Adds an OpenCode installation path alongside Claude Code, unchanged. New

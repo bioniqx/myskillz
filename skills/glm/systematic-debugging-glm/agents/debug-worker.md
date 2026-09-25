@@ -24,4 +24,4 @@ FIX: <at most 10 lines of diff, or n/a>
 NEW LEADS: <at most 2, or n/a>
 ```
 
-Install: copy this file to `~/.zcode/agents/debug-worker.md` (ZCode) or `~/.config/opencode/agents/debug-worker.md` (OpenCode). On a harness that dispatches subagents one at a time, prefer `debug_tool.py scan` with an API key — it opens its own 64 threads and does not queue.
+Install: copy this file to `~/.zcode/agents/debug-worker.md` (ZCode). For OpenCode run `install-opencode.sh`, which renders `opencode/agents/debug-worker.md` for the installed major. On a harness that dispatches subagents one at a time, prefer `debug_tool.py scan` with an API key — it opens its own 64 threads and does not queue.

@@ -1798,6 +1798,12 @@ def oc_model(st, agent, model):
     return OC_MODELS.get(alias, alias)
 
 
+def oc_effort(st, agent):
+    """GLM effort (low|high|max) for the role; a non-GLM value such as `medium` becomes high."""
+    effort = PROVIDERS[provider_of(st)]["agents"].get(agent, ("", "high"))[1]
+    return effort if effort in ("low", "high", "max") else "high"
+
+
 def lanes_dir(root):
     return state_dir(Path(root)) / "lanes"
 
@@ -1860,7 +1866,7 @@ def launch_lane(root, st, lane_id, agent, model, prompt) -> int:
         except OSError:
             pass
     spec = {"id": lane_id, "agent": OC_AGENTS.get(agent, agent), "model": oc_model(st, agent, model),
-            "prompt": prompt, "writer": agent in WRITER_AGENTS}
+            "effort": oc_effort(st, agent), "prompt": prompt, "writer": agent in WRITER_AGENTS}
     write_atomic(d / f"{lane_id}.lane.json", json.dumps(spec))
     with open(d / f"{lane_id}.log", "w") as log:
         proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "lane-run", lane_id],
@@ -1957,7 +1963,8 @@ def cmd_lane_run(a):
         sys.path.insert(0, str(here))
     import oc_harness
     binary = os.environ.get("DEVTEAM_OC_BIN") or "opencode"
-    lane = {"id": spec["id"], "agent": spec["agent"], "model": spec["model"], "dir": str(root),
+    lane = {"id": spec["id"], "agent": spec["agent"], "model": spec["model"], "effort": spec.get("effort"),
+            "dir": str(root),
             "brief": spec["prompt"], "env": {"DEVTEAM_ROLE": spec["agent"], "DEVTEAM_SLICE": spec["id"]}}
     if not spec.get("writer"):
         try:

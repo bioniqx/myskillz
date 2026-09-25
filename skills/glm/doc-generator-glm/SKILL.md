@@ -320,15 +320,16 @@ and writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
 
 Set `model` on every lane — `oc_harness.MODELS` maps `"flash"` to `glm-5.3-flash` and `"pro"` to
 `glm-5.3`; omitting it makes `build_run_cmd` default the lane to `glm-5.3`, silently overriding
-doc-writer's flash. Writer lanes use `model: "flash"`; reviewer lanes use `agent: "doc-reviewer"`
-with `model: "pro"`, same pattern otherwise.
+doc-writer's flash. Writer lanes use `model: "flash"`, `effort: "low"`; reviewer lanes use
+`agent: "doc-reviewer"` with `model: "pro"`, `effort: "high"`, same pattern otherwise.
 
-Effort is not reliably controllable on process lanes: v1 drops `reasoning_effort` for `glm-*`
-models, and the rendered v2 agent puts `reasoning_effort` under `options:` instead — whether GLM
-actually receives it through OpenCode is unverified. Until confirmed, treat every writer and
-reviewer lane as running at GLM's default `max` regardless of the `effort` key in
-`doc-writer.md`/`doc-reviewer.md` frontmatter. Once the `run` command exits,
-read each lane's 5-line return from
+Effort control differs by major: v1 renders agents with `mode: all` (needed because a `mode:
+subagent` agent is silently swapped for the default `build` agent by `opencode run --agent`) and
+forwards frontmatter `reasoningEffort` as `reasoning_effort` on the wire. v2 ignores
+agent-frontmatter effort entirely; `oc_harness.py` instead appends `#<effort>` to the `--model`
+flag when a lane dict carries an `effort` field, and that variant suffix is what reaches GLM. On v2 a
+lane with no `effort` field runs at GLM's default `max`; v1 always uses the agent's own `reasoningEffort`. Once the `run` command
+exits, read each lane's 5-line return from
 `<out_dir>/<id>.jsonl` — never every doc body back — before reporting. Everything else in §§1-7
 (turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
 

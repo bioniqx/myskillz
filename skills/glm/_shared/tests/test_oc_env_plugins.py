@@ -5,6 +5,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -38,6 +39,24 @@ class LaneEnvTest(unittest.TestCase):
             self.assertEqual(fh.read(), "programmer")
         self.assertEqual(os.environ.get("DEVTEAM_ROLE"), before)
 
+
+    def test_lane_pwd_is_the_lane_dir(self):
+        # opencode v2 --standalone resolves its project root from $PWD, not the real cwd; a shell
+        # wrapper would reset PWD itself, so inspect the env handed to Popen directly
+        lane_dir = os.path.join(self.tmp, "lane")
+        os.mkdir(lane_dir)
+        seen = {}
+
+        def popen(cmd, **kwargs):
+            seen.update(kwargs)
+            raise OSError("stop after capture")
+
+        lane = {"id": "a", "agent": "programmer", "model": "flash", "dir": lane_dir, "brief": "go"}
+        with mock.patch.dict(os.environ, {"PWD": self.tmp}), \
+                mock.patch("oc_harness.subprocess.Popen", side_effect=popen):
+            oc_harness.run_lanes([lane], os.path.join(self.tmp, "out"), binary=self.binary, major=1)
+        self.assertEqual(seen["env"]["PWD"], os.path.abspath(lane_dir))
+        self.assertEqual(seen["cwd"], os.path.abspath(lane_dir))
 
 class PluginInstallTest(unittest.TestCase):
     def setUp(self):

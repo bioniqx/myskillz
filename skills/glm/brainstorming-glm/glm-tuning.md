@@ -122,8 +122,13 @@ skill folder. Tool-name map: `task` for a lane, `todowrite` for TaskCreate,
 `webfetch` for WebFetch; AskUserQuestion becomes plain-text numbered
 questions with approval as item 1.
 
-OpenCode process lanes: v1 drops `reasoning_effort` for `glm-*` models, so
-every lane launched through `oc_harness.py run` executes at `max` regardless
-of the `effort` frontmatter key; keep tool-free work in the api lane via
-`zai_client.py` when a lower effort matters.
+OpenCode process lanes: v1 renders agents with `mode: all` (a `mode:
+subagent` agent is silently swapped for the default `build` agent by
+`opencode run --agent`) and forwards frontmatter `reasoningEffort` as
+`reasoning_effort` on the wire. v2 ignores agent-frontmatter effort
+entirely; `oc_harness.py` instead appends `#<effort>` to the `--model` flag
+(`low|high|max`) when a lane dict in `lanes.json` carries an `effort`
+field, and that variant suffix is what reaches GLM. On v2 a lane with no
+`effort` field runs at GLM's default `max`; v1 always uses the agent's own
+`reasoningEffort`.
 

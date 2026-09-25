@@ -22,7 +22,8 @@ For ZCode, by hand instead:
 | ZCode | `~/.zcode/skills/requirements-code-audit/` | `~/.zcode/agents/rca-*.md` from `agents/zcode/` |
 
 OpenCode's `~/.config/opencode/agents/rca-*.md` are rendered from the neutral sources in `opencode/agents/`
-(model id, `mode: subagent`, permissions) — never copy those sources by hand, since the raw files omit the
+(model id, `mode: all` on v1 so `opencode run --agent` actually uses the agent instead of falling back to
+`build`, `mode: subagent` on v2, permissions) — never copy those sources by hand, since the raw files omit the
 fields OpenCode requires. Use `python3 requirements-code-audit/scripts/audit.py setup --harness opencode` or,
 directly, `python3 requirements-code-audit/scripts/oc_harness.py install requirements-code-audit <major>`.
 

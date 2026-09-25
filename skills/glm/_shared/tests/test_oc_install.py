@@ -84,7 +84,7 @@ class InstallTests(unittest.TestCase):
         with open(agent) as fh:
             text = fh.read()
         self.assertIn("mode: subagent", text)
-        self.assertIn("reasoning_effort: high", text)
+        self.assertNotIn("reasoning_effort", text)
         with open(command) as fh:
             text = fh.read()
         dst = os.path.join(self.root, "skills", "systematic-debugging")

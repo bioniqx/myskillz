@@ -335,5 +335,14 @@ class WaitTest(RepoCase):
         self.assertTrue(self.state("slices", "S1.blocked").exists(), self.lane_log())
 
 
+class OcEffortTest(unittest.TestCase):
+    def test_role_effort_is_a_glm_value(self):
+        st = {"provider": "glm"}
+        self.assertEqual(devteam.oc_effort(st, "programmer-lite"), "low")
+        self.assertEqual(devteam.oc_effort(st, "team-leader"), "max")
+        # the anthropic table's `medium` is not a GLM effort (v2 rejects the `#medium` variant)
+        self.assertEqual(devteam.oc_effort({"provider": "anthropic"}, "programmer"), "high")
+
+
 if __name__ == "__main__":
     unittest.main()
