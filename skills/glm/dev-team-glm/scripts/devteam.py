@@ -94,6 +94,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -1792,10 +1793,25 @@ def lanes_dir(root):
     return state_dir(Path(root)) / "lanes"
 
 
+def terminate_lane_process(d, lane_id):
+    """Kill a previous `lane-run` for this lane id (and its whole process group, so the `opencode`
+    child dies too) if it is still alive, so two runs never share one lane id at once."""
+    pid_file = d / f"{lane_id}.pid"
+    try:
+        pid = int(pid_file.read_text().strip())
+    except (OSError, ValueError):
+        return
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+
+
 def launch_lane(root, st, lane_id, agent, model, prompt) -> int:
     """Start `devteam.py lane-run <lane_id>` as a detached process; return its pid."""
     d = lanes_dir(root)
     d.mkdir(parents=True, exist_ok=True)
+    terminate_lane_process(d, lane_id)
     for ext in (".done", ".jsonl", ".err"):
         try:
             (d / f"{lane_id}{ext}").unlink()
@@ -1808,6 +1824,7 @@ def launch_lane(root, st, lane_id, agent, model, prompt) -> int:
         proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "lane-run", lane_id],
                                 cwd=str(root), stdin=subprocess.DEVNULL, stdout=log,
                                 stderr=subprocess.STDOUT, start_new_session=True)
+    write_atomic(d / f"{lane_id}.pid", str(proc.pid))
     return proc.pid
 
 
@@ -1828,7 +1845,7 @@ def lane_worktree(root, st, lane_id):
     if not (wt / ".git").exists():
         wt.parent.mkdir(parents=True, exist_ok=True)
         git(["worktree", "prune"], root, check=False)
-        base = slice_state(st, lane_id)["base_sha"]
+        base = slice_state(st, lane_id)["base_sha"] or git(["rev-parse", "HEAD"], root)
         git(["worktree", "add", "-f", "-B", f"devteam/{lane_id}", str(wt), base], root)
     return wt
 
@@ -1851,6 +1868,29 @@ def lane_text(path):
     return text
 
 
+def lane_error_marker(d, lane_id, message):
+    """Non-writer lane whose run raised before oc_harness could write its own `.done`: write one
+    ourselves with status ERROR, in the same shape `_finish` uses, so `lane_marks` still sees it."""
+    result = {"id": lane_id, "status": "ERROR", "exit": None, "error": message, "last_event": "",
+              "throttles": 0, "width": 1, "out": str(d / f"{lane_id}.jsonl")}
+    write_atomic(d / f"{lane_id}.done", json.dumps(result, indent=2))
+
+
+def slice_marker_exists(root, sid):
+    d = state_dir(root) / "slices"
+    return (d / f"{sid}.done").exists() or (d / f"{sid}.blocked").exists()
+
+
+def slice_blocked_marker(root, wt, sid, note):
+    """Writer lane that ended (raised, or exhausted MAX_LANE_RUNS) without guard.py ever writing a
+    slice marker itself: write slices/<id>.blocked so `devteam wait`/`next` still see it finish."""
+    d = state_dir(root) / "slices"
+    d.mkdir(parents=True, exist_ok=True)
+    branch = git(["rev-parse", "--abbrev-ref", "HEAD"], wt, check=False) if wt else ""
+    write_atomic(d / f"{sid}.blocked", json.dumps({"t": int(time.time()), "worktree": str(wt or ""),
+                                                    "branch": branch, "note": note[:600]}))
+
+
 def cmd_lane_run(a):
     """One OpenCode lane, end to end: worktree + claim for a programmer, `opencode run` through
     oc_harness, then the guard.py Stop gate (re-run once per block) so `.done`/`.blocked` markers
@@ -1866,27 +1906,41 @@ def cmd_lane_run(a):
     lane = {"id": spec["id"], "agent": spec["agent"], "model": spec["model"], "dir": str(root),
             "brief": spec["prompt"], "env": {"DEVTEAM_ROLE": spec["agent"], "DEVTEAM_SLICE": spec["id"]}}
     if not spec.get("writer"):
-        r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
+        try:
+            r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
+        except (Exception, SystemExit) as e:
+            lane_error_marker(d, spec["id"], f"lane-run failed: {e}")
+            out(f"LANE {spec['id']}: ERROR ({e})")
+            return
         out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']})")
         return
-    st = load_state(root)
-    wt = lane_worktree(root, st, spec["id"])
-    lane["dir"] = str(wt)
-    claim = subprocess.run([sys.executable, str(here / "devteam.py"), "claim", spec["id"]],
-                           cwd=str(wt), text=True, capture_output=True)
-    if claim.returncode != 0:
-        raise DevteamError(f"claim {spec['id']} failed: {claim.stderr.strip() or claim.stdout.strip()}")
-    brief, note = claim.stdout, ""
-    for _ in range(MAX_LANE_RUNS):
-        lane["brief"] = brief + note
-        r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
-        payload = json.dumps({"cwd": str(wt), "last_assistant_message": lane_text(r["out"])})
-        gate = subprocess.run([sys.executable, str(here / "guard.py"), "stop"], input=payload,
-                              text=True, capture_output=True)
-        out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']}), stop gate exit {gate.returncode}")
-        if gate.returncode != 2:
-            return
-        note = "\n\n" + gate.stderr
+    wt = None
+    try:
+        st = load_state(root)
+        wt = lane_worktree(root, st, spec["id"])
+        lane["dir"] = str(wt)
+        claim = subprocess.run([sys.executable, str(here / "devteam.py"), "claim", spec["id"]],
+                               cwd=str(wt), text=True, capture_output=True)
+        if claim.returncode != 0:
+            raise DevteamError(f"claim {spec['id']} failed: {claim.stderr.strip() or claim.stdout.strip()}")
+        brief, note = claim.stdout, ""
+        for _ in range(MAX_LANE_RUNS):
+            lane["brief"] = brief + note
+            r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
+            payload = json.dumps({"cwd": str(wt), "last_assistant_message": lane_text(r["out"])})
+            gate = subprocess.run([sys.executable, str(here / "guard.py"), "stop"], input=payload,
+                                  text=True, capture_output=True)
+            out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']}), stop gate exit {gate.returncode}")
+            if gate.returncode != 2:
+                return
+            note = "\n\n" + gate.stderr
+        if not slice_marker_exists(root, spec["id"]):
+            slice_blocked_marker(root, wt, spec["id"],
+                                  "lane-run exhausted its retries without the stop gate ever finishing the slice")
+    except (Exception, SystemExit) as e:
+        if not slice_marker_exists(root, spec["id"]):
+            slice_blocked_marker(root, wt, spec["id"], f"lane-run failed: {e}")
+        out(f"LANE {spec['id']}: ERROR ({e})")
 
 
 def lane_marks(root):
