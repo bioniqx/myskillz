@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import re
-import select
 import shutil
 import signal
 import subprocess
@@ -247,9 +246,12 @@ def _start_lane(lane, out_dir, major, binary, width):
 def _kill_group(proc):
     """Kill the lane's whole process group, not just its immediate pid, so a
     child that inherited our stdout pipe (and would otherwise keep it open
-    forever) dies too."""
+    forever) dies too. `_start_lane` passes start_new_session=True, which makes
+    the process group id equal proc.pid, so this still works even after
+    proc.poll()/wait() has already reaped the leader (getpgid(proc.pid) would
+    fail at that point; proc.pid stays valid to killpg regardless)."""
     try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        os.killpg(proc.pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError, OSError):
         try:
             proc.kill()
@@ -314,16 +316,16 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
                         continue
                     _kill_group(state["proc"])
                 state["proc"].wait()
-                state["reader"].join()
+                # The lane's own process may have exited on its own while a
+                # descendant it spawned (inheriting our stdout pipe) lives on;
+                # kill the whole group so the reader thread's read() gets EOF
+                # instead of blocking forever on that descendant.
+                _kill_group(state["proc"])
+                state["reader"].join(5)
                 width = _absorb(state, width)
                 running.remove(state)
                 results[state["id"]] = _finish(state, status, out_dir)
     except BaseException:
-        if running:
-            # A lane started microseconds ago may still be mid fork/exec; give
-            # it a brief moment to finish that and spawn any child of its own
-            # before we kill the whole group, so the child dies with it too.
-            select.select([], [], [], 0.2)
         for state in running:
             _kill_group(state["proc"])
         raise
