@@ -15,11 +15,13 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on OpenCode and ZCod
   setup     [--apply]                  configure harness (opencode | zcode | claude | auto)
 Common: --allow WORD exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
-import argparse, ast, json, os, random, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
-import urllib.error, urllib.request
+import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 64
@@ -32,10 +34,9 @@ GLM = {
     "std":   ("glm-5.3-flash", "high", "haiku"),
     "deep":  ("glm-5.3",       "max",  "sonnet"),
 }
-EFFORT_BUDGET = {"low": 2048, "high": 8192, "max": 24576}
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
-DEFAULT_BASE = "https://api.z.ai/api/anthropic"
-KEY_ENV = ("PLAN_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY", "ZHIPUAI_API_KEY", "GLM_API_KEY",
+DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
+KEY_ENV = ("PLAN_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
            "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
 
 ID_RE = r"T\d{2,3}"
@@ -198,13 +199,13 @@ def _json_or_none(path):
         return None
 
 
-KEY_FIELDS = ("apiKey", "api_key", "apikey", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
-              "ZAI_API_KEY", "Z_AI_API_KEY", "ZHIPUAI_API_KEY", "GLM_API_KEY", "token", "key")
+KEY_FIELDS = ("ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
+              "apiKey", "api_key", "key")
 
 
 def _looks_like_key(s):
     s = (s or "").strip()
-    return bool(re.fullmatch(r"[A-Za-z0-9_\-]{20,200}(\.[A-Za-z0-9_\-]{6,64})?", s)) and any(c.isdigit() for c in s)
+    return len(s) >= 16 and " " not in s
 
 
 def _walk_for_key(obj, depth=0):
@@ -234,50 +235,50 @@ def _walk_for_key(obj, depth=0):
                 return r
     return None
 
+KEY_FILES = (
+    os.path.expanduser("~/.local/share/opencode/auth.json"),
+    os.path.expanduser("~/.config/opencode/auth.json"),
+    os.path.expanduser("~/.config/opencode/opencode.json"),
+    os.path.join(os.getcwd(), "opencode.json"),
+    os.path.expanduser("~/.claude/settings.json"),
+    os.path.expanduser("~/.claude/settings.local.json"),
+    os.path.expanduser("~/.zcode/settings.json"),
+    os.path.expanduser("~/.zcode/auth.json"),
+    os.path.expanduser("~/.zcode/config.json"),
+)
+
+
 def find_credentials():
-    """-> (key, base_url, protocol, source) ; key may be None."""
-    base = (os.environ.get("PLAN_BASE_URL") or os.environ.get("ANTHROPIC_BASE_URL")
-            or os.environ.get("ZAI_BASE_URL") or "").strip().rstrip("/")
+    """-> (key, base_url, protocol, source) ; key may be None. Never reads ANTHROPIC_BASE_URL."""
+    base = (os.environ.get("PLAN_BASE_URL") or os.environ.get("ZAI_BASE_URL")
+            or os.environ.get("GLM_BASE_URL") or "").strip().rstrip("/")
     for e in KEY_ENV:
         v = os.environ.get(e, "").strip()
         if v:
             return v, base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), "env:" + e
-    home = os.path.expanduser("~")
-    cands = [os.path.join(home, ".claude", "settings.json"),
-             os.path.join(home, ".claude", "settings.local.json"),
-             os.path.join(os.getcwd(), ".claude", "settings.local.json"),
-             os.path.join(home, ".config", "opencode", "opencode.json"),
-             os.path.join(home, ".config", "opencode", "auth.json"),
-             os.path.join(os.getcwd(), "opencode.json"),
-             os.path.join(home, ".zcode", "settings.json"),
-             os.path.join(home, ".zcode", "config.json"),
-             os.path.join(home, ".zcode", "auth.json")]
-    for p in cands:
+    for p in KEY_FILES:
         data = _json_or_none(p)
         if not data:
             continue
         env = data.get("env") if isinstance(data, dict) else None
         if isinstance(env, dict):
-            b = (env.get("ANTHROPIC_BASE_URL") or base or "").strip().rstrip("/")
             for e in KEY_ENV:
                 if env.get(e):
-                    return str(env[e]).strip(), b or DEFAULT_BASE, protocol_for(b or DEFAULT_BASE), p
+                    return str(env[e]).strip(), base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), p
         k = _walk_for_key(data)
         if k:
-            b = base or DEFAULT_BASE
-            return k, b, protocol_for(b), p
+            return k, base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), p
     return None, base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), "-"
 
 
 def protocol_for(base):
+    """openai (default coding endpoint) unless base contains '/anthropic'."""
     b = (base or "").lower()
     if os.environ.get("PLAN_PROTOCOL"):
         return os.environ["PLAN_PROTOCOL"]
     if "/anthropic" in b:
         return "anthropic"
-    if "paas/v4" in b or "/coding" in b or "openai" in b or "/v1" in b:
-        return "openai"
-    return "anthropic"
+    return "openai"
 
 
 def model_for(tier, api=True):
@@ -320,72 +321,32 @@ class Budget:
                 self.reason = why
 
 
-def _post(url, headers, payload, timeout):
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8", "replace"))
+_CLIENT_LOCK = threading.Lock()
+
+
+def _client_for(cfg):
+    """One zai_client.Client (and its AIMD gate) shared by every call_model() call for this cfg."""
+    with _CLIENT_LOCK:
+        c = cfg.get("_client")
+        if c is None:
+            c = zai_client.Client(cfg["key"], base=cfg["base"], route=cfg["protocol"])
+            cfg["_client"] = c
+        return c
 
 
 def call_model(cfg, system_blocks, user_text, tier, budget, max_tokens=16000, timeout=900):
-    """One completion. Returns (text, error). Retries on 429/5xx with jitter."""
+    """One completion via the shared zai_client.Client (AIMD gate + retries live there).
+    Returns (text, error)."""
     model, effort = model_for(tier)
-    key, base, proto = cfg["key"], cfg["base"], cfg["protocol"]
-    last = "unknown"
-    for attempt in range(4):
-        if budget.blown():
-            return "", "aborted: %s" % budget.reason
-        try:
-            if proto == "anthropic":
-                url = base + "/v1/messages"
-                head = {"content-type": "application/json", "x-api-key": key,
-                        "authorization": "Bearer " + key, "anthropic-version": "2023-06-01"}
-                body = {"model": model, "max_tokens": max_tokens,
-                        "system": [{"type": "text", "text": system_blocks[0],
-                                    "cache_control": {"type": "ephemeral"}}],
-                        "messages": [{"role": "user", "content": user_text}]}
-                if cfg.get("thinking", True):
-                    body["thinking"] = {"type": "enabled", "budget_tokens": EFFORT_BUDGET[effort]}
-                r = _post(url, head, body, timeout)
-                parts = [b.get("text", "") for b in r.get("content", []) if b.get("type") == "text"]
-                out = "".join(parts).strip()
-            else:
-                url = base + ("/chat/completions" if not base.endswith("/chat/completions") else "")
-                head = {"content-type": "application/json", "authorization": "Bearer " + key}
-                body = {"model": model, "max_tokens": max_tokens, "reasoning_effort": effort,
-                        "messages": [{"role": "system", "content": system_blocks[0]},
-                                     {"role": "user", "content": user_text}]}
-                r = _post(url, head, body, timeout)
-                ch = (r.get("choices") or [{}])[0]
-                out = ((ch.get("message") or {}).get("content") or "").strip()
-            if out:
-                return out, ""
-            last = "empty response"
-        except urllib.error.HTTPError as e:
-            try:
-                detail = e.read().decode("utf-8", "replace")[:300]
-            except Exception:
-                detail = ""
-            last = "HTTP %s %s" % (e.code, detail)
-            if e.code == 400 and cfg.get("thinking", True) and re.search(r"thinking|reasoning", detail, re.I):
-                cfg["thinking"] = False
-                continue
-            if e.code in (401, 403, 404):
-                budget.hit(last)
-                return "", last
-            if e.code not in (408, 409, 429, 500, 502, 503, 504, 529):
-                budget.hit(last)
-                return "", last
-        except urllib.error.URLError as e:
-            last = "URLError: %s" % str(e.reason)[:160]
-            if re.search(r"refused|not known|Name or service|unreachable|certificate", last, re.I):
-                budget.hit(last)
-                return "", last
-        except Exception as e:
-            last = "%s: %s" % (type(e).__name__, str(e)[:200])
-        time.sleep(min(20, (2 ** attempt) + random.random() * 1.5))
-    budget.hit(last)
-    return "", last
+    if budget.blown():
+        return "", "aborted: %s" % budget.reason
+    client = _client_for(cfg)
+    client.timeout = timeout
+    try:
+        return client.call(model, effort, system_blocks[0], user_text, max_tokens, retries=3), ""
+    except zai_client.ApiError as e:
+        budget.hit(str(e))
+        return "", str(e)
 
 
 def pmap(fn, items, workers):
@@ -1730,7 +1691,7 @@ def cmd_doctor(a):
         print("")
         print("To enable the api lane, export one of: %s" % ", ".join(KEY_ENV[:5]))
         print("  export ZAI_API_KEY=<your GLM Coding Plan key>")
-        print("  export ANTHROPIC_BASE_URL=%s   # optional, this is the default" % DEFAULT_BASE)
+        print("  export ZAI_BASE_URL=%s   # optional, this is the default" % DEFAULT_BASE)
         return 1
     if not a.ping:
         print("\nRun with --ping to send a 1-token probe to the endpoint.")
@@ -1756,6 +1717,12 @@ per task (`T07 OK` or `T07 FAIL: <first error>`). Never echo the body.
 
 def agent_file(harness):
     if harness == "opencode":
+        neutral = os.path.join(SKILL_DIR, "opencode", "agents", "plan-task-writer.md")
+        if os.path.exists(neutral):
+            if HERE not in sys.path:
+                sys.path.insert(0, HERE)
+            import oc_harness  # vendored next to this script by _shared/sync.sh
+            return oc_harness.render_agent(load(neutral), oc_harness.detect() or 1)
         fm = ("---\n"
               "description: Writes implementation-plan task bodies from a writing-plans brief file. "
               "Use only when given a writing-plans brief path.\n"
@@ -1855,7 +1822,7 @@ def cmd_setup(a):
     print("")
     print("Fastest lane (recommended) - script-side fan-out, no subagents:")
     print("  export ZAI_API_KEY=<GLM Coding Plan key>")
-    print("  export ANTHROPIC_BASE_URL=%s" % DEFAULT_BASE)
+    print("  export ZAI_BASE_URL=%s" % DEFAULT_BASE)
     if harness == "opencode":
         print("Agent-lane fallback on OpenCode dispatches subagents one at a time;")
         print("  export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true   # lets them overlap")
