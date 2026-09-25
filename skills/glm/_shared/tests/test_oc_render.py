@@ -94,16 +94,37 @@ class TestOcHarnessRender(unittest.TestCase):
         v2 = oc_harness.render_agent(text_v2, 2)
         self.assertIn("model: zai-coding-plan/glm-5.3", v2)
         self.assertNotIn("glm-5.3-flash", v2)
-        self.assertIn("permissions:", v2)
-        self.assertIn("  - action: edit\n    resource: \"*\"\n    effect: deny", v2)
-        self.assertIn("  - action: shell\n    resource: \"*\"\n    effect: deny", v2)
-        self.assertIn("  - action: webfetch\n    resource: \"*\"\n    effect: allow", v2)
-        self.assertNotIn("action: bash", v2)
+        self.assertNotIn("permissions:", v2)
+        self.assertIn("permission:", v2)
+        self.assertIn("  edit: deny", v2)
+        self.assertIn("  bash: deny", v2)
+        self.assertIn("  webfetch: allow", v2)
+        self.assertNotIn("action:", v2)
+        self.assertNotIn("resource:", v2)
+        self.assertNotIn("effect:", v2)
         self.assertIn('description: "Test agent"', v2)
         self.assertNotIn("request:", v2)
         self.assertIn("options:\n  reasoning_effort: max", v2)
         self.assertIn("temperature: 0.2", v2)
         self.assertNotIn("    temperature: 0.2", v2)
+
+    def test_render_agent_v2_permission_matches_v1_nested_map_shape(self):
+        text = (
+            "---\n"
+            "description: Shape agent\n"
+            "model: flash\n"
+            "effort: high\n"
+            "access: write\n"
+            "bash: true\n"
+            "web: true\n"
+            "---\n"
+            "Agent prompt body.\n"
+        )
+        v1 = oc_harness.render_agent(text, 1)
+        v2 = oc_harness.render_agent(text, 2)
+        v1_perm_lines = [ln for ln in v1.splitlines() if ln == "permission:" or ln.startswith("  edit") or ln.startswith("  bash") or ln.startswith("  webfetch")]
+        v2_perm_lines = [ln for ln in v2.splitlines() if ln == "permission:" or ln.startswith("  edit") or ln.startswith("  bash") or ln.startswith("  webfetch")]
+        self.assertEqual(v1_perm_lines, v2_perm_lines)
 
     def test_render_command_replaces_skill_dir_and_keeps_arguments(self):
         text = (
@@ -159,8 +180,10 @@ class TestOcHarnessRender(unittest.TestCase):
             "Agent prompt body.\n"
         )
         v2 = oc_harness.render_agent(text, 2)
-        self.assertIn('  - action: edit\n    resource: ".audit/**"\n    effect: allow', v2)
-        self.assertIn('  - action: edit\n    resource: "*"\n    effect: deny', v2)
+        self.assertIn("  edit:\n", v2)
+        self.assertIn('    "*": deny\n', v2)
+        self.assertIn('    ".audit/**": allow', v2)
+        self.assertNotIn("edit: allow", v2)
 
     def test_render_agent_write_paths_no_unrestricted_edit_allow_v1(self):
         text = (
@@ -196,9 +219,10 @@ class TestOcHarnessRender(unittest.TestCase):
             self.assertIn('".audit/**": allow', v1)
             self.assertIn("task: deny", v1)
             v2 = oc_harness.render_agent(text, 2)
-            self.assertIn('  - action: edit\n    resource: ".audit/**"\n    effect: allow', v2)
-            self.assertIn('  - action: edit\n    resource: "*"\n    effect: deny', v2)
-            self.assertIn('  - action: task\n    resource: "*"\n    effect: deny', v2)
+            self.assertIn('    ".audit/**": allow', v2)
+            self.assertIn('    "*": deny', v2)
+            self.assertIn("  task: deny", v2)
+            self.assertNotIn("edit: allow", v2)
 
     def test_config_snippet_contains_provider_and_deny_list(self):
         snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
