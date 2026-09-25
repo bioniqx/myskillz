@@ -203,8 +203,10 @@ def _start_lane(lane, out_dir, major, binary, width):
     lane_id = str(lane["id"])
     err_path = os.path.join(out_dir, lane_id + ".err")
     err_file = open(err_path, "w")
+    env = dict(os.environ)
+    env.update({k: str(v) for k, v in (lane.get("env") or {}).items()})
     proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1)
+                            stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env)
     now = time.monotonic()
     state = {"id": lane_id, "proc": proc, "err_path": err_path, "err_file": err_file,
              "out": os.path.join(out_dir, lane_id + ".jsonl"), "start": now, "last": now,
@@ -327,6 +329,20 @@ def install(skill_dir: str, major: int, home: str = "") -> list:
             else:
                 text = render_command(text, major, skill_dst)
             path = os.path.join(dst, fname)
+            with open(path, "w") as fh:
+                fh.write(text)
+            written.append(path)
+    plugins_src = os.path.join(skill_dir, "opencode", "plugins")
+    suffix = ".v%d.js" % major
+    if os.path.isdir(plugins_src):
+        plugins_dst = os.path.join(root, "plugins")
+        os.makedirs(plugins_dst, exist_ok=True)
+        for fname in sorted(os.listdir(plugins_src)):
+            if not fname.endswith(suffix):
+                continue
+            with open(os.path.join(plugins_src, fname)) as fh:
+                text = fh.read().replace("{{SKILL_DIR}}", skill_dst)
+            path = os.path.join(plugins_dst, fname[:-len(suffix)] + ".js")
             with open(path, "w") as fh:
                 fh.write(text)
             written.append(path)
