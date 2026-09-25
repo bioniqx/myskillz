@@ -208,6 +208,42 @@ class GuardOcTest(unittest.TestCase):
         finally:
             shutil.rmtree(outside, ignore_errors=True)
 
+    def test_programmer_shell_push_denies(self):
+        rc, out = self.oc("shell", {"command": "git push origin main"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(decision(out)[0], "deny")
+
+    def test_programmer_shell_read_only_git_allows(self):
+        rc, out = self.oc("shell", {"command": "git status"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(decision(out), ("allow", "dev-team: pre-approved — read-only git"))
+
+    def test_v2_edit_capable_tools_route_to_edit_checks(self):
+        for tool, args in (
+            ("edit", {"filePath": "src/a.py", "oldString": "a", "newString": "b"}),
+            ("write", {"filePath": "src/a.py", "content": "x"}),
+            ("patch", {"patchText": "*** Begin Patch\n*** Update File: src/a.py\n@@\n-x\n+y\n*** End Patch\n"}),
+            ("apply_patch", {"patchText": "*** Begin Patch\n*** Update File: src/a.py\n@@\n-x\n+y\n*** End Patch\n"}),
+        ):
+            with self.subTest(tool=tool):
+                rc, out = self.oc(tool, args)
+                self.assertEqual(rc, 0)
+                self.assertEqual(decision(out)[0], "allow")
+
+    def test_v2_edit_capable_tools_deny_outside_footprint(self):
+        for tool, args in (
+            ("edit", {"filePath": "docs/x.md", "oldString": "a", "newString": "b"}),
+            ("write", {"filePath": "docs/x.md", "content": "x"}),
+            ("patch", {"patchText": "*** Begin Patch\n*** Add File: docs/x.md\n+hi\n*** End Patch\n"}),
+            ("apply_patch", {"patchText": "*** Begin Patch\n*** Add File: docs/x.md\n+hi\n*** End Patch\n"}),
+        ):
+            with self.subTest(tool=tool):
+                rc, out = self.oc(tool, args)
+                self.assertEqual(rc, 0)
+                verdict, reason = decision(out)
+                self.assertEqual(verdict, "deny")
+                self.assertIn("docs/x.md", reason)
+
     def test_guard_oc_function_no_role(self):
         spec = importlib.util.spec_from_file_location("devteam_guard", GUARD)
         mod = importlib.util.module_from_spec(spec)
