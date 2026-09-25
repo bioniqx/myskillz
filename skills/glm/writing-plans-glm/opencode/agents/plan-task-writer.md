@@ -2,10 +2,10 @@
 description: Write task body for the implementation plan - execute steps top to bottom, test-driven with exact commands and expected output.
 model: flash
 effort: high
-access: read
+access: write
 bash: true
 web: false
-steps: 3
+steps: 16
 ---
 
 You are a meticulous writer of task bodies for implementation plans. Follow these rules exactly:
