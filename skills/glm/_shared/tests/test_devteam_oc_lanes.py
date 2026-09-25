@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -56,13 +57,16 @@ class HarnessTest(unittest.TestCase):
 
 
 FAKE_OC = '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 argv = sys.argv[1:]
 if argv[:1] == ["--version"]:
     print("1.18.0")
     sys.exit(0)
 if "--help" in argv:
     print("--dir --agent --model --format --auto")
+    sys.exit(0)
+if os.environ.get("FAKE_OC_SLEEP"):
+    time.sleep(float(os.environ["FAKE_OC_SLEEP"]))
     sys.exit(0)
 with open(os.environ["FAKE_OC_LOG"], "a") as f:
     f.write(json.dumps({"brief": argv[-1], "dir": argv[argv.index("--dir") + 1],
@@ -165,6 +169,87 @@ class LaneRunTest(RepoCase):
         self.assertIn("dev-team gate — you are not done yet", calls[1]["brief"])
         note = json.loads(self.state("slices", "S1.done").read_text())["note"]
         self.assertIn("gave up", note)
+
+    def test_missing_binary_blocks_the_writer_slice(self):
+        start = time.monotonic()
+        out = self.devteam("dispatch", "S1", DEVTEAM_HARNESS="opencode",
+                           DEVTEAM_OC_BIN="/no/such/opencode-binary-xyz")
+        self.assertIn("LANE S1", out)
+        self.assertTrue(self.wait_for(self.state("slices", "S1.blocked")), self.lane_log())
+        note = json.loads(self.state("slices", "S1.blocked").read_text())["note"]
+        self.assertIn("lane-run failed", note)
+        wout = self.devteam("wait", "--timeout", "30")
+        self.assertLess(time.monotonic() - start, 20)
+        self.assertIn("NEXT: devteam next", wout)
+
+    def test_non_writer_lane_error_writes_done_with_status_error(self):
+        st = {"provider": "glm"}
+        env = dict(self.env, DEVTEAM_OC_BIN="/no/such/opencode-binary-xyz")
+        with mock.patch.dict(os.environ, env, clear=True):
+            devteam.launch_lane(Path(self.repo), st, "review-r9", "code-reviewer", "", "read r9.md")
+        done = self.state("lanes", "review-r9.done")
+        self.assertTrue(self.wait_for(done))
+        data = json.loads(done.read_text())
+        self.assertEqual(data["status"], "ERROR")
+        self.assertTrue(data.get("error"))
+
+    def test_writer_loop_exhausts_without_marker_writes_blocked(self):
+        root = Path(self.repo)
+        d = devteam.lanes_dir(root)
+        d.mkdir(parents=True, exist_ok=True)
+        spec = {"id": "S1", "agent": "programmer", "model": "flash", "prompt": "do it", "writer": True}
+        (d / "S1.lane.json").write_text(json.dumps(spec))
+        real_run = subprocess.run
+
+        def fake_run(cmd, *args, **kwargs):
+            if any("guard.py" in str(c) for c in cmd):
+                return subprocess.CompletedProcess(cmd, 2, "", "blocked forever")
+            return real_run(cmd, *args, **kwargs)
+
+        old_cwd = os.getcwd()
+        os.chdir(self.repo)
+        try:
+            with mock.patch.dict(os.environ, self.env, clear=True), \
+                    mock.patch.object(devteam.subprocess, "run", side_effect=fake_run):
+                devteam.cmd_lane_run(SimpleNamespace(lane_id="S1"))
+        finally:
+            os.chdir(old_cwd)
+        marker = self.state("slices", "S1.blocked")
+        self.assertTrue(marker.exists())
+        self.assertFalse(self.state("slices", "S1.done").exists())
+        note = json.loads(marker.read_text())["note"]
+        self.assertIn("exhausted", note)
+
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+class LaneProcessGroupTest(RepoCase):
+    def test_relaunching_same_lane_id_kills_the_previous_process_group(self):
+        st = {"provider": "glm"}
+        env = dict(self.env, FAKE_OC_SLEEP="20")
+        with mock.patch.dict(os.environ, env, clear=True):
+            pid1 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "code-reviewer", "", "read r1.md")
+            self.assertTrue(self.wait_for(self.state("lanes", "rev-r1.pid")))
+            self.assertTrue(_alive(pid1))
+            pid2 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "code-reviewer", "", "read again")
+        self.addCleanup(self._killpg_safe, pid2)
+        self.assertNotEqual(pid1, pid2)
+        deadline = time.monotonic() + 10
+        while _alive(pid1) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        self.assertFalse(_alive(pid1))
+
+    def _killpg_safe(self, pid):
+        try:
+            os.killpg(pid, 9)
+        except OSError:
+            pass
 
 
 class WaitTest(RepoCase):
