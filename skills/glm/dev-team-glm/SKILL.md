@@ -1,5 +1,5 @@
 ---
-name: dev-team-glm
+name: dev-team
 description: >-
   Use for ANY non-trivial software-development work in a codebase: implement, build, add,
   create, extend a feature; fix or debug a bug; refactor or clean up; migrate, upgrade or
@@ -42,6 +42,21 @@ You are the **Conductor**. `devteam <cmd>` below means `python3 ${CLAUDE_SKILL_D
 **Each turn = read what arrived → ONE engine call → launch everything it printed, as parallel tool
 calls in ONE message → end the turn.** GLM always thinks before answering, so every extra turn,
 tool call or paragraph you write sits on the critical path of every running lane. No narration.
+
+#### OpenCode protocol
+
+On OpenCode, when `DEVTEAM_HARNESS=opencode` or `OPENCODE` is set, the Conductor routes every lane through worktrees:
+
+| Command | Purpose |
+| --- | --- |
+| `devteam start <plan.md>` | Initialize the run: `doctor --fix` installs agents, creates git worktrees at `.claude/dev-team/wt/<id>`, checks the plan, and prints ready lanes. Each lane process gets `env DEVTEAM_ROLE=<agent>` and `DEVTEAM_SLICE=<id>`. |
+| `devteam wait [--timeout 100]` | Block up to `--timeout` seconds (default 100, below OpenCode's 120s bash-tool limit) for a new lane result or completion marker in `.claude/dev-team/lanes/`. Print `NEXT: devteam next` when a marker arrives. |
+| `devteam next` | Read all lane JSON output and markers (`.done`/`.blocked`), merge results, queue fixes, dispatch ready lanes and any retries, print the endgame. Stop gate runs after each programmer lane: `lane-run` pipes `{"cwd": <worktree>, "last_assistant_message": <text>}` to `guard.py stop`; exit 2 means blocked, re-run once per block with gate stderr appended to brief, force-finish after 2 blocks. The governor reads lane files instead of Claude Code transcripts: a lane ending `FAIL`/`STALL`/`TIMEOUT` in `.claude/dev-team/lanes/<id>.done` prints `LANE DOWN <id> (<kind>): the lane process ended <error>` — a stuck slice retries cold (`fail <id>` then `retry <id>`, worktree kept for salvage); a stuck review/research lane just relaunches (`lane-run <id>`). |
+| `devteam retry <id> [--files ...]` | Cold retry: create a fresh worktree, switch to a stronger model (GLM-5.3), re-dispatch with optional file scope. |
+
+Lanes run `python3 <devteam.py> lane-run <id>` in their worktree; it claims the slice, runs through vendored `oc_harness.run_lanes`, and pipes stop-gate JSON. Markers go to `.claude/dev-team/slices/<id>.done|.blocked` (stop gate only). Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner only). Tools: `edit`/`write`/`patch` (file operations) and `bash` (shell commands) are checked by `guard.py oc` mode (programmer → existing checks; other roles → read-only with role in agent_type; no role → silent allow). Plugins (v1 and v2) forward calls to `python3 guard.py oc` on stdin and throw `Error(reason)` on deny; allow on any plugin-side failure.
+
+Dev-team agents must be launched only through the engine's process lane (`devteam next` / `lane-run`), which sets `DEVTEAM_ROLE` and `DEVTEAM_SLICE` per lane — an agent spawned via OpenCode's own task tool gets neither, so the `devteam-guard` plugin becomes a no-op for it and its rendered agent has edit/bash allowed; never dispatch dev-team roles that way.
 
 ## Route first (one line to the user, then act)
 

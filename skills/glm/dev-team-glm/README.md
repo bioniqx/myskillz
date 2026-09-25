@@ -49,6 +49,21 @@ Anthropic bằng cấu hình đúng cho GLM, cộng thêm bộ **governor** tự
 Yêu cầu: Claude Code ≥ 2.1.267, git ≥ 2.31, python3. Phải trust đúng thư mục repo (hook trong frontmatter
 agent chỉ nạp khi thư mục đó được trust).
 
+#### OpenCode
+
+Trên OpenCode (khi `DEVTEAM_HARNESS=opencode` hoặc `OPENCODE` được set), devteam chạy mỗi lane trong một git worktree riêng qua `oc_harness run`:
+
+1. **Cài đặt:** `oc_harness.install` sao chép plugin guard (v1 hoặc v2 tùy major version) và các agent vào home OpenCode.
+2. **Start:** `devteam start` tạo worktree tại `.claude/dev-team/wt/<id>` từ branch `devteam/<id>`, chạy `doctor --fix`, ghi env `DEVTEAM_ROLE`/`DEVTEAM_SLICE`.
+3. **Vòng lặp:** `devteam wait` chặn tối đa 100s đợi kết quả lane → `devteam next` đọc output JSON, chạy stop gate (kiểm tra qua `guard.py oc`), dispatch lane mới + retry.
+4. **Stop gate:** Sau mỗi programmer lane, `lane-run` gọi `guard.py stop` với `{"cwd": <worktree>, "last_assistant_message": <text>}`; exit 2 = blocked, retry tối đa 2 lần với stderr gate thêm vào brief.
+5. **Markers:** `.done` và `.blocked` ghi vào `.claude/dev-team/slices/<id>.*` (stop gate); lane output ghi `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner).
+6. **Tool guards:** Plugin v1/v2 pipe JSON (tương tự Claude hook) đến `guard.py oc`; programmer dùng kiểm tra hiện tại, role khác → read-only, không role → im lặng. Lỗi plugin → allow (fail-open).
+7. **Retry:** `devteam retry <id>` tạo worktree mới, nâng lên GLM-5.3, có thể mở rộng file scope.
+8. **Lane chết:** Governor đọc file lane (`.claude/dev-team/lanes/<id>.done`) thay vì transcript; lane kết thúc `FAIL`/`STALL`/`TIMEOUT` → in `LANE DOWN <id> (<kind>)` kèm cách sửa: slice thì `fail <id>` rồi `retry <id>` (giữ worktree để cứu dữ liệu); review/research thì chạy lại bằng `lane-run <id>`.
+9. **Doctor:** `python3 devteam.py doctor --harness opencode` kiểm tra agent, plugin, config, major version match.
+10. **Chỉ dispatch qua engine:** Agent dev-team chỉ được khởi chạy qua lane của engine (`devteam next` / `lane-run`), nơi gán `DEVTEAM_ROLE`/`DEVTEAM_SLICE` cho từng lane — agent tự spawn bằng task tool của OpenCode không có hai biến này nên plugin `devteam-guard` thành no-op và agent được render sẽ có quyền edit/bash mở, không bao giờ dispatch role dev-team theo cách đó.
+
 ## Biến môi trường
 
 | Biến | Tác dụng |
