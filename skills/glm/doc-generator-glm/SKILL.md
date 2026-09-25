@@ -323,10 +323,12 @@ Set `model` on every lane — `oc_harness.MODELS` maps `"flash"` to `glm-5.3-fla
 doc-writer's flash. Writer lanes use `model: "flash"`; reviewer lanes use `agent: "doc-reviewer"`
 with `model: "pro"`, same pattern otherwise.
 
-Effort is not controllable on process lanes: v1 drops `reasoning_effort` for `glm-*` models, and
-v2 does not yet send `request.body` overlays either, so every writer and reviewer lane runs at
-GLM's default `max` regardless of the `effort` key in `doc-writer.md`/`doc-reviewer.md`
-frontmatter. Once the `run` command exits, read each lane's 5-line return from
+Effort is not reliably controllable on process lanes: v1 drops `reasoning_effort` for `glm-*`
+models, and v2 agents have no `request` key at all — the rendered v2 agent writes `effort` under
+`options: reasoning_effort:` instead, and whether GLM actually honors it is unverified. Until
+confirmed, treat every writer and reviewer lane as running at GLM's default `max` regardless of
+the `effort` key in `doc-writer.md`/`doc-reviewer.md` frontmatter. Once the `run` command exits,
+read each lane's 5-line return from
 `<out_dir>/<id>.jsonl` — never every doc body back — before reporting. Everything else in §§1-7
 (turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
 

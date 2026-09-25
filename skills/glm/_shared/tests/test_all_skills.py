@@ -1,9 +1,9 @@
 """All-skill hygiene checks and the root installer script.
 
-Verifies: shared modules are vendored byte-identically into each Phase 1
-skill's scripts/, every .py file in skills/glm compiles, every SKILL.md has
+Verifies: shared modules are vendored byte-identically into each of the six
+skills' scripts/, every .py file in skills/glm compiles, every SKILL.md has
 name == directory (no -glm suffix) and a description <= 1024 chars, and
-install-opencode.sh installs the five Phase 1 skills and prints the snippet.
+install-opencode.sh installs all six skills and prints the snippet.
 """
 
 import hashlib
@@ -76,7 +76,7 @@ class TestVendoredCopies(unittest.TestCase):
                 self.assertEqual(
                     shared_hash, vendor_hash,
                     "%s does not match %s" % (vendor_path, shared_path))
-        self.assertTrue(found_any, "no vendored copies found under any Phase 1 skill/scripts/")
+        self.assertTrue(found_any, "no vendored copies found under any skill's scripts/")
 
 
 class TestScriptsCompile(unittest.TestCase):
@@ -169,10 +169,11 @@ class TestInstallOpencodeScript(unittest.TestCase):
         home = tempfile.mkdtemp()
         try:
             env = dict(os.environ)
+            env.pop("DEVTEAM_HARNESS", None)
             env["HOME"] = home
             env["OPENCODE"] = "1"
             result = subprocess.run(
-                [sys.executable, dev_team_path, "doctor"],
+                [sys.executable, dev_team_path, "doctor", "--harness", "opencode"],
                 capture_output=True, text=True, timeout=60, env=env)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("harness opencode", result.stdout)
