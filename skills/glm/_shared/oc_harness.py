@@ -1,9 +1,13 @@
 """Shared OpenCode harness: version detection and v1/v2 dialect rendering."""
 
+import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
+import sys
+import tempfile
 import threading
 import time
 
@@ -272,3 +276,203 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
             running.remove(state)
             results[state["id"]] = _finish(state, status, out_dir)
     return [results[str(item["id"])] for item in lanes]
+
+
+PROBE_AGENT = (
+    "---\n"
+    "description: effort probe\n"
+    "model: flash\n"
+    "effort: %s\n"
+    "access: read\n"
+    "bash: false\n"
+    "web: false\n"
+    "steps: 1\n"
+    "---\n"
+    "Answer with the number only.\n"
+)
+PROBE_BRIEF = "How many prime numbers are below 100? Answer with the number only."
+
+
+def skill_name(skill_dir: str) -> str:
+    """Install name = SKILL.md frontmatter name without a trailing -glm."""
+    with open(os.path.join(skill_dir, "SKILL.md")) as fh:
+        fields, _ = parse_frontmatter(fh.read())
+    name = str(fields.get("name") or os.path.basename(os.path.normpath(skill_dir)))
+    return name[:-4] if name.endswith("-glm") else name
+
+
+def install(skill_dir: str, major: int, home: str = "") -> list:
+    if major not in (1, 2):
+        raise ValueError("major must be 1 or 2, got %r" % (major,))
+    root = os.path.join(home or os.path.expanduser("~"), ".config", "opencode")
+    skill_dst = os.path.join(root, "skills", skill_name(skill_dir))
+    if os.path.isdir(skill_dst):
+        shutil.rmtree(skill_dst)
+    shutil.copytree(skill_dir, skill_dst,
+                    ignore=shutil.ignore_patterns("__pycache__", ".idea", ".DS_Store"))
+    written = [skill_dst]
+    for kind in ("agents", "commands"):
+        src = os.path.join(skill_dir, "opencode", kind)
+        if not os.path.isdir(src):
+            continue
+        dst = os.path.join(root, kind)
+        os.makedirs(dst, exist_ok=True)
+        for fname in sorted(os.listdir(src)):
+            if not fname.endswith(".md"):
+                continue
+            with open(os.path.join(src, fname)) as fh:
+                text = fh.read()
+            if kind == "agents":
+                text = render_agent(text, major)
+            else:
+                text = render_command(text, major, skill_dst)
+            path = os.path.join(dst, fname)
+            with open(path, "w") as fh:
+                fh.write(text)
+            written.append(path)
+    marker = os.path.join(skill_dst, ".oc-major")
+    with open(marker, "w") as fh:
+        fh.write(str(major))
+    written.append(marker)
+    return written
+
+
+def check(skill_dir: str) -> list:
+    name = skill_name(skill_dir)
+    marker = os.path.join(os.path.expanduser("~"), ".config", "opencode", "skills", name, ".oc-major")
+    if not os.path.isfile(marker):
+        return ["MISSING: %s is not installed for OpenCode" % name]
+    with open(marker) as fh:
+        major = int(fh.read().strip())
+    lines = ["INSTALLED: %s (major %d)" % (name, major)]
+    detected = detect()
+    if not detected:
+        lines.append("FAIL: opencode binary not found")
+        return lines
+    if detected != major:
+        lines.append("FAIL: installed major %d != detected major %d, re-run install-opencode.sh" % (major, detected))
+    for flag in check_run_flags(detected):
+        lines.append("FAIL: opencode run lacks %s" % flag)
+    return lines
+
+
+def _reasoning(obj) -> int:
+    if isinstance(obj, dict):
+        tokens = obj.get("tokens")
+        if isinstance(tokens, dict) and isinstance(tokens.get("reasoning"), int):
+            return tokens["reasoning"]
+        return sum(_reasoning(v) for v in obj.values())
+    if isinstance(obj, list):
+        return sum(_reasoning(v) for v in obj)
+    return 0
+
+
+def reasoning_tokens(path: str) -> int:
+    """Sum `tokens.reasoning` over every JSON event in one lane's .jsonl output."""
+    total = 0
+    try:
+        with open(path) as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return 0
+    for line in lines:
+        try:
+            total += _reasoning(json.loads(line))
+        except ValueError:
+            continue
+    return total
+
+
+def probe_effort(binary: str = "opencode", home: str = "") -> str:
+    """Run the same prompt at low and max effort; honored when max reasons >1.5x longer."""
+    major = detect(binary)
+    if not major:
+        return "unknown"
+    agents_dir = os.path.join(home or os.path.expanduser("~"), ".config", "opencode", "agents")
+    os.makedirs(agents_dir, exist_ok=True)
+    out_dir = tempfile.mkdtemp(prefix="oc-probe-")
+    lanes, written = [], []
+    for level in ("low", "max"):
+        path = os.path.join(agents_dir, "glm-probe-%s.md" % level)
+        with open(path, "w") as fh:
+            fh.write(render_agent(PROBE_AGENT % level, major))
+        written.append(path)
+        lanes.append({"id": "probe-" + level, "agent": "glm-probe-" + level, "model": "flash",
+                      "dir": out_dir, "brief": PROBE_BRIEF, "timeout": 300})
+    try:
+        rows = run_lanes(lanes, out_dir, width=2, binary=binary, major=major)
+    finally:
+        for path in written:
+            if os.path.isfile(path):
+                os.remove(path)
+    tokens = {r["id"]: reasoning_tokens(r["out"]) for r in rows if r.get("status") == "OK"}
+    low, high = tokens.get("probe-low", 0), tokens.get("probe-max", 0)
+    if not low or not high:
+        return "unknown"
+    return "honored" if high > 1.5 * low else "ignored"
+
+
+def main(argv: list = None) -> int:
+    parser = argparse.ArgumentParser(prog="oc_harness.py", description="OpenCode harness helpers")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("detect", help="print the OpenCode major version (0 = not found)")
+    p = sub.add_parser("install", help="install one skill with its agents and commands")
+    p.add_argument("skill_dir")
+    p.add_argument("major", nargs="?", type=int, default=0)
+    p.add_argument("home", nargs="?", default="")
+    p = sub.add_parser("check", help="verify installed skills against the local opencode")
+    p.add_argument("skill_dirs", nargs="+")
+    p = sub.add_parser("snippet", help="print the opencode.json snippet")
+    p.add_argument("major", nargs="?", type=int, default=0)
+    p = sub.add_parser("run", help="run a lanes JSON file as parallel opencode processes")
+    p.add_argument("lanes_json")
+    p.add_argument("--out", default=".oc-lanes")
+    p.add_argument("--width", type=int, default=int(os.environ.get("OC_MAX_LANES") or 8))
+    p.add_argument("--stall", type=int, default=180)
+    sub.add_parser("probe-effort", help="check whether OpenCode passes reasoning effort to GLM")
+    try:
+        a = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code or 0)
+
+    if a.cmd == "detect":
+        major = detect()
+        print(major)
+        return 0 if major else 1
+    if a.cmd == "install":
+        major = a.major or detect()
+        if not major:
+            print("opencode not found; pass the major version (1 or 2)")
+            return 1
+        for path in install(a.skill_dir, major, a.home):
+            print(path)
+        print("NEXT: python3 %s snippet %d  (merge into opencode.json once)" % (os.path.abspath(__file__), major))
+        return 0
+    if a.cmd == "check":
+        failed = False
+        for skill_dir in a.skill_dirs:
+            for line in check(skill_dir):
+                print(line)
+                failed = failed or line.startswith(("FAIL", "MISSING"))
+        return 1 if failed else 0
+    if a.cmd == "snippet":
+        print(config_snippet(a.major or detect() or 1, []))
+        return 0
+    if a.cmd == "run":
+        with open(a.lanes_json) as fh:
+            lanes = json.load(fh)
+        rows = run_lanes(lanes, a.out, width=max(1, min(64, a.width)), stall=a.stall)
+        for r in rows:
+            print("LANE %s %s exit=%s %s" % (r["id"], r["status"], r.get("exit"), r.get("error") or ""))
+        bad = [r["id"] for r in rows if r["status"] != "OK"]
+        if bad:
+            print("NEXT: rerun only lanes %s after fixing the errors above" % ", ".join(bad))
+            return 1
+        print("NEXT: read %s/<id>.jsonl for each lane's output" % a.out)
+        return 0
+    print("EFFORT %s" % probe_effort())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
