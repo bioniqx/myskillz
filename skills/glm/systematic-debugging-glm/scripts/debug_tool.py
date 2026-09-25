@@ -30,6 +30,9 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 SKILL = SCRIPTS.parent
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+import zai_client
 MAXJ = 64
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
@@ -665,78 +668,17 @@ SYS_PROMPT = (
     "NEW LEADS: <at most 2, or n/a>"
 )
 
-KEY_FIELDS = ("ZAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "GLM_API_KEY",
-              "apiKey", "api_key", "token")
-
-
 def find_key():
-    for v in ("ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"):
-        if os.environ.get(v):
-            return os.environ[v], "env:" + v
-    home = Path.home()
-    for f in (home / ".claude/settings.json", home / ".config/opencode/opencode.json",
-              home / ".config/opencode/auth.json", home / ".zcode/settings.json",
-              home / ".zcode/config.json"):
-        try:
-            data = json.loads(f.read_text())
-        except Exception:
-            continue
-        stack = [data]
-        while stack:
-            cur = stack.pop()
-            if isinstance(cur, dict):
-                for k, v in cur.items():
-                    if isinstance(v, str) and k in KEY_FIELDS and len(v) > 12:
-                        return v, "file:%s#%s" % (f, k)
-                    if isinstance(v, (dict, list)):
-                        stack.append(v)
-            elif isinstance(cur, list):
-                stack.extend(cur)
-    return None, None
+    return zai_client.find_key()
 
 
 def api_call(key, base, model, effort, system, user, max_tokens, anthropic):
-    if anthropic:
-        url = base.rstrip("/") + "/v1/messages"
-        body = {"model": model, "max_tokens": max_tokens, "system": system,
-                "messages": [{"role": "user", "content": user}],
-                "thinking": {"type": "enabled"}, "reasoning_effort": effort}
-        hdr = {"content-type": "application/json", "x-api-key": key,
-               "authorization": "Bearer " + key, "anthropic-version": "2023-06-01"}
-    else:
-        url = base.rstrip("/") + "/chat/completions"
-        body = {"model": model, "max_tokens": max_tokens, "reasoning_effort": effort,
-                "messages": [{"role": "system", "content": system},
-                             {"role": "user", "content": user}]}
-        hdr = {"content-type": "application/json", "authorization": "Bearer " + key}
-
-    def post(payload):
-        req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=hdr, method="POST")
-        with urllib.request.urlopen(req, timeout=900) as r:
-            return json.loads(r.read().decode())
-
-    for attempt in range(3):
-        try:
-            d = post(body)
-            if anthropic:
-                return "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
-            return d["choices"][0]["message"].get("content") or ""
-        except urllib.error.HTTPError as e:
-            msg = e.read().decode("utf-8", "replace")[:300]
-            if e.code == 400 and re.search(r"reasoning|thinking", msg, re.I):
-                body.pop("reasoning_effort", None)
-                body.pop("thinking", None)
-                continue
-            if e.code in (408, 409, 429, 500, 502, 503, 504) and attempt < 2:
-                time.sleep(2 * (attempt + 1))
-                continue
-            return "VERDICT: INCONCLUSIVE\nEVIDENCE: HTTP %d %s" % (e.code, msg)
-        except Exception as e:
-            if attempt < 2:
-                time.sleep(2 * (attempt + 1))
-                continue
-            return "VERDICT: INCONCLUSIVE\nEVIDENCE: %s" % e
-    return "VERDICT: INCONCLUSIVE\nEVIDENCE: exhausted retries"
+    route = "anthropic" if anthropic else "openai"
+    client = zai_client.Client(key, base=base, route=route)
+    try:
+        return client.call(model, effort, system, user, max_tokens)
+    except Exception as e:
+        return "VERDICT: INCONCLUSIVE\nEVIDENCE: %s" % e
 
 
 def build_tasks(a, root):
@@ -896,7 +838,8 @@ SETUP = {
 }
 # export ZAI_API_KEY=<GLM Coding Plan key>
 # Skill goes in ~/.config/opencode/skills/systematic-debugging/ (or .opencode/skills/ per project).
-# NOTE: subagents are dispatched one at a time here. Use debug_tool.py experiment/scan/run for width.""",
+# NOTE: subagents are dispatched one at a time here. Use debug_tool.py experiment/scan/run for width.
+# Agent-lane fallback on OpenCode uses oc_harness.py run instead of a serial DISPATCH table.""",
     "zcode": """# ZCode
 # Settings -> Model Settings -> Z.ai account or API key; thinking effort is per-model in the UI.
 # Skill:  ~/.zcode/skills/systematic-debugging/SKILL.md
