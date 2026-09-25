@@ -1,11 +1,9 @@
-// Shape: Plugin.define({ id: "devteam-guard", setup })
-import { Plugin } from "@opencode/plugin";
+// Shape: async (ctx) => ({ "tool.execute.before": async (input, output) => {...} })
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-export default Plugin.define({
-  id: "devteam-guard",
-  setup: (ctx) => ({
+export default async (ctx) => {
+  return {
     "tool.execute.before": async (input, output) => {
       if (!process.env.DEVTEAM_ROLE) return;
       let decision = null;
@@ -13,7 +11,7 @@ export default Plugin.define({
         const payload = JSON.stringify({
           tool: input.tool,
           args: output.args,
-          cwd: ctx.location.directory,
+          cwd: ctx.directory,
           role: process.env.DEVTEAM_ROLE,
         });
         const guardScript = path.join("{{SKILL_DIR}}", "scripts", "guard.py");
@@ -36,5 +34,5 @@ export default Plugin.define({
         );
       }
     },
-  }),
-});
+  };
+};
