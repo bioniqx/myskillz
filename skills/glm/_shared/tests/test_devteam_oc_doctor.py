@@ -273,6 +273,7 @@ class DoctorOpenCodeTest(unittest.TestCase):
     def test_plugin_ok(self):
         for major in (1, 2):
             with self.subTest(major=major):
+                os.environ["STUB_OC_VERSION"] = "2.0.0" if major == 2 else "1.18.32"
                 self.install_plugin(major)
                 out = self.doctor()
                 self.assertIn("harness opencode", out)
