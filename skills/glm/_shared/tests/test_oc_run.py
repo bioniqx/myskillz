@@ -151,6 +151,40 @@ class RunLanesTest(unittest.TestCase):
         self.assertIn("--format", str(ctx.exception))
         self.assertFalse(os.path.exists(os.path.join(self.out, "a.done")))
 
+    def test_stall_kills_lane_and_its_child_process_group(self):
+        pid_file = os.path.join(self.out, "child.pid")
+        start = time.monotonic()
+        with mock.patch.dict(os.environ, {"STUB_CHILD_PID_FILE": pid_file}):
+            results = oc_harness.run_lanes([lane("z", "stall_child")], self.out, stall=1,
+                                           binary=STUB, major=1)
+        self.assertLess(time.monotonic() - start, 5)
+        self.assertEqual(results[0]["status"], "STALL")
+        for _ in range(50):
+            if os.path.exists(pid_file):
+                break
+            time.sleep(0.05)
+        with open(pid_file) as f:
+            child_pid = int(f.read().strip())
+        time.sleep(0.3)
+        with self.assertRaises(OSError):
+            os.kill(child_pid, 0)
+
+    def test_exception_kills_running_lane_process_groups(self):
+        pid_file = os.path.join(self.out, "child2.pid")
+        with mock.patch.dict(os.environ, {"STUB_CHILD_PID_FILE": pid_file}):
+            with mock.patch("oc_harness.time.sleep", side_effect=RuntimeError("boom")):
+                with self.assertRaises(RuntimeError):
+                    oc_harness.run_lanes([lane("x", "stall_child")], self.out, binary=STUB, major=1)
+        for _ in range(50):
+            if os.path.exists(pid_file):
+                break
+            time.sleep(0.05)
+        with open(pid_file) as f:
+            child_pid = int(f.read().strip())
+        time.sleep(0.3)
+        with self.assertRaises(OSError):
+            os.kill(child_pid, 0)
+
     def test_detects_major_when_not_given(self):
         log = os.path.join(self.out, "argv.log")
         env = {"STUB_OC_LOG": log, "STUB_OC_VERSION": "2.0.1", "STUB_OC_MISSING": ""}
