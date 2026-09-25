@@ -46,6 +46,16 @@ def main(argv):
                 f.write(str(child.pid))
         time.sleep(60)
         return 0
+    if "exit_child" in brief:
+        # Like stall_child, but this process exits on its own right away,
+        # leaving the child (which still holds our stdout pipe) as the only
+        # thing keeping the pipe open.
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        pid_file = os.environ.get("STUB_CHILD_PID_FILE")
+        if pid_file:
+            with open(pid_file, "w") as f:
+                f.write(str(child.pid))
+        return 0
     if "throttle" in brief:
         inner = json.dumps({"error": {"code": "1302", "message": "High concurrency"}})
         emit({"type": "error", "error": {"name": "APIError", "data": {"message": inner}}})
