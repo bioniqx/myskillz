@@ -73,6 +73,7 @@ def render_agent(text: str, major: int) -> str:
     bash = fields.get("bash", False)
     web = fields.get("web", False)
     temperature = fields.get("temperature")
+    write_paths = fields.get("write_paths") if access == "write" else None
 
     edit_perm = "allow" if access == "write" else "deny"
     bash_perm = "allow" if bash else "deny"
@@ -89,18 +90,36 @@ def render_agent(text: str, major: int) -> str:
         if steps is not None:
             lines.append("steps: {}".format(steps))
         lines.append("permission:")
-        lines.append("  edit: {}".format(edit_perm))
+        if write_paths:
+            lines.append("  edit:")
+            lines.append('    "*": deny')
+            lines.append('    "{}": allow'.format(write_paths))
+        else:
+            lines.append("  edit: {}".format(edit_perm))
         lines.append("  bash: {}".format(bash_perm))
         lines.append("  webfetch: {}".format(web_perm))
+        if write_paths:
+            lines.append("  task: deny")
         lines.append("reasoningEffort: {}".format(effort))
     else:
         if steps is not None:
             lines.append("steps: {}".format(steps))
         lines.append("permissions:")
-        for action, effect in (("edit", edit_perm), ("bash", bash_perm), ("webfetch", web_perm)):
+        if write_paths:
+            lines.append("  - action: edit")
+            lines.append('    resource: "{}"'.format(write_paths))
+            lines.append("    effect: allow")
+            edit_effect = "deny"
+        else:
+            edit_effect = edit_perm
+        for action, effect in (("edit", edit_effect), ("bash", bash_perm), ("webfetch", web_perm)):
             lines.append("  - action: {}".format(action))
             lines.append('    resource: "*"')
             lines.append("    effect: {}".format(effect))
+        if write_paths:
+            lines.append("  - action: task")
+            lines.append('    resource: "*"')
+            lines.append("    effect: deny")
         lines.append("request:")
         lines.append("  body:")
         lines.append("    reasoning_effort: {}".format(effort))
