@@ -109,7 +109,7 @@ run_prog S3 w5 tests/combo.test.js src/combo.js
 ( cd "$R/.claude/worktrees/w5" && echo hack >> src/a.js && git -c commit.gpgsign=false commit -qam "outside" )
 OUT=$(D integrate S3 2>&1)
 check "S3 footprint violation rejected" '[[ "$OUT" == *"S3: REJECTED — files outside the footprint: src/a.js"* ]]'
-sed -i 's#"files":\["src/combo.js","tests/combo.test.js"\]#"files":["src/combo.js","src/a.js","tests/combo.test.js"]#' plan.md
+sed 's#"files":\["src/combo.js","tests/combo.test.js"\]#"files":["src/combo.js","src/a.js","tests/combo.test.js"]#' plan.md > plan.md.tmp && mv plan.md.tmp plan.md
 cp plan.md .claude/dev-team/plan.md
 OUT=$(D retry S3 2>&1)
 check "retry re-queued S3" '[[ "$OUT" == *"S3: re-queued"* ]]'
