@@ -308,11 +308,14 @@ On OpenCode, `CLAUDE_SKILL_DIR` is not set. Resolve the scripts directory
 first, then run the harness from it:
 
 ```bash
-H="$(ls -d ~/.config/opencode/skills/brainstorming/scripts \
-  .opencode/skills/brainstorming/scripts \
-  ~/.claude/skills/brainstorming/scripts \
-  .claude/skills/brainstorming/scripts 2>/dev/null | head -1)"
-python3 $H/oc_harness.py run <lanes.json>
+H=""
+for d in ~/.config/opencode/skills/brainstorming \
+  .opencode/skills/brainstorming \
+  ~/.claude/skills/brainstorming \
+  .claude/skills/brainstorming; do
+  if [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
+done
+python3 "$H/oc_harness.py" run <lanes.json>
 ```
 
 `<lanes.json>` is a JSON array of lane objects you write before the
