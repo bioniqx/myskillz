@@ -5,7 +5,8 @@ import tempfile
 import textwrap
 import unittest
 
-REPO_ROOT = os.getcwd()
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", "..", ".."))
 PLUGIN_DIR = os.path.join(REPO_ROOT, "skills/glm/dev-team-glm/opencode/plugins")
 V1_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v1.js")
 V2_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v2.js")
@@ -113,6 +114,36 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
 
 
 class TestDevteamPlugins(unittest.TestCase):
+    def test_plugin_paths_resolve_from_file_not_cwd(self):
+        # The module must resolve plugin paths off its own __file__, not the
+        # process cwd. Prove it by running this same test file as a
+        # subprocess from an unrelated cwd (a tmp dir with no skills/ tree)
+        # and confirming it still finds and loads the real plugin sources.
+        assert os.path.isfile(V1_PATH), V1_PATH
+        assert os.path.isfile(V2_PATH), V2_PATH
+        with tempfile.TemporaryDirectory() as unrelated_cwd:
+            result = subprocess.run(
+                [
+                    "python3",
+                    "-m",
+                    "unittest",
+                    "discover",
+                    "-s",
+                    TESTS_DIR,
+                    "-t",
+                    TESTS_DIR,
+                    "-p",
+                    os.path.basename(__file__),
+                    "-k",
+                    "test_v2_shape_has_no_plugin_package",
+                ],
+                cwd=unrelated_cwd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+
     def test_v2_shape_has_no_plugin_package(self):
         with open(V2_PATH) as f:
             source = f.read()
