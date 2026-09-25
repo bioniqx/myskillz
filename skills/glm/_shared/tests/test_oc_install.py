@@ -200,6 +200,41 @@ class MainTests(unittest.TestCase):
         rc, _ = self.run_main(["run", lanes, "--out", os.path.join(self.tmp, "out")])
         self.assertEqual(rc, 1)
 
+    def test_detect_returns_one_when_missing(self):
+        Patch(self, detect=lambda binary="opencode": 0)
+        rc, out = self.run_main(["detect"])
+        self.assertEqual(rc, 1)
+        self.assertIn("0", out)
+
+    def test_detect_prints_major_and_returns_zero(self):
+        Patch(self, detect=lambda binary="opencode": 2)
+        rc, out = self.run_main(["detect"])
+        self.assertEqual(rc, 0)
+        self.assertIn("2", out)
+
+    def test_check_returns_one_on_fail_line(self):
+        Patch(self, check=lambda skill_dir: ["MISSING: foo is not installed for OpenCode"])
+        rc, out = self.run_main(["check", self.skill])
+        self.assertEqual(rc, 1)
+        self.assertIn("MISSING: foo is not installed for OpenCode", out)
+
+    def test_check_returns_zero_for_clean_install(self):
+        Patch(self, check=lambda skill_dir: ["INSTALLED: systematic-debugging (major 1)"])
+        rc, out = self.run_main(["check", self.skill])
+        self.assertEqual(rc, 0)
+        self.assertIn("INSTALLED: systematic-debugging (major 1)", out)
+
+    def test_snippet_prints_provider_and_returns_zero(self):
+        rc, out = self.run_main(["snippet", "1"])
+        self.assertEqual(rc, 0)
+        self.assertIn("zai-coding-plan", out)
+
+    def test_probe_effort_prints_effort_line_and_returns_zero(self):
+        Patch(self, probe_effort=lambda binary="opencode", home="": "honored")
+        rc, out = self.run_main(["probe-effort"])
+        self.assertEqual(rc, 0)
+        self.assertIn("EFFORT honored", out)
+
     def test_unknown_command_returns_two(self):
         buf = io.StringIO()
         with redirect_stdout(buf):
