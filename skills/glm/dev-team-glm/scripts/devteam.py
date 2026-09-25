@@ -1684,27 +1684,187 @@ def dispatch_model(s, st=None):
     return dispatch_route(st or {"provider": "glm"}, s, s.get("mode") or "slice")[1]
 
 
+OC_AGENTS = {"programmer-lite": "programmer"}          # OpenCode has one programmer agent
+OC_MODELS = {"haiku": "flash", "sonnet": "pro", "opus": "pro"}
+WRITER_AGENTS = ("programmer", "programmer-lite")
+MAX_LANE_RUNS = 4          # guard.py force-finishes after MAX_STOP_BLOCKS = 2, so 3 runs is the real ceiling
+
+
+def is_opencode() -> bool:
+    """OpenCode path: DEVTEAM_HARNESS=opencode, or DEVTEAM_HARNESS unset and OPENCODE non-empty."""
+    harness = os.environ.get("DEVTEAM_HARNESS")
+    if harness is not None:
+        return harness == "opencode"
+    return bool(os.environ.get("OPENCODE"))
+
+
+def oc_model(st, agent, model):
+    """Neutral OpenCode model (`flash` / `pro`) for a Claude alias or the role's default alias."""
+    alias = model or PROVIDERS[provider_of(st)]["agents"].get(agent, ("opus", ""))[0]
+    return OC_MODELS.get(alias, alias)
+
+
+def lanes_dir(root):
+    return state_dir(Path(root)) / "lanes"
+
+
+def launch_lane(root, st, lane_id, agent, model, prompt) -> int:
+    """Start `devteam.py lane-run <lane_id>` as a detached process; return its pid."""
+    d = lanes_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    for ext in (".done", ".jsonl", ".err"):
+        try:
+            (d / f"{lane_id}{ext}").unlink()
+        except OSError:
+            pass
+    spec = {"id": lane_id, "agent": OC_AGENTS.get(agent, agent), "model": oc_model(st, agent, model),
+            "prompt": prompt, "writer": agent in WRITER_AGENTS}
+    write_atomic(d / f"{lane_id}.lane.json", json.dumps(spec))
+    with open(d / f"{lane_id}.log", "w") as log:
+        proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "lane-run", lane_id],
+                                cwd=str(root), stdin=subprocess.DEVNULL, stdout=log,
+                                stderr=subprocess.STDOUT, start_new_session=True)
+    return proc.pid
+
+
+def emit_agent(root, st, agent, model, prompt, label) -> str:
+    """The launch line for one agent: the Claude Code `Agent →` instruction, or on OpenCode a lane
+    process started right now (the Conductor then only waits)."""
+    if not is_opencode():
+        return (f"Agent → subagent_type: {agent}, description: \"{label}\"" + (f", model: {model}" if model else "")
+                + f", prompt: \"{prompt}\"")
+    lane_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", label).strip("-") or "lane"
+    pid = launch_lane(root, st, lane_id, agent, model, prompt)
+    return f"LANE {lane_id} → {agent} (pid {pid}) running; `devteam wait` wakes you when a lane finishes"
+
+
+def lane_worktree(root, st, lane_id):
+    """`<root>/.claude/dev-team/wt/<id>` on branch `devteam/<id>`, created from the slice's base."""
+    wt = state_dir(Path(root)) / "wt" / lane_id
+    if not (wt / ".git").exists():
+        wt.parent.mkdir(parents=True, exist_ok=True)
+        git(["worktree", "prune"], root, check=False)
+        base = slice_state(st, lane_id)["base_sha"]
+        git(["worktree", "add", "-f", "-B", f"devteam/{lane_id}", str(wt), base], root)
+    return wt
+
+
+def lane_text(path):
+    """Final assistant text of a lane: the last `text` part in its JSON event stream."""
+    try:
+        lines = Path(path).read_text(errors="replace").splitlines()
+    except OSError:
+        return ""
+    text = ""
+    for ln in lines:
+        try:
+            ev = json.loads(ln)
+        except ValueError:
+            continue
+        part = ev.get("part") if isinstance(ev, dict) else None
+        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+            text = part["text"]
+    return text
+
+
+def cmd_lane_run(a):
+    """One OpenCode lane, end to end: worktree + claim for a programmer, `opencode run` through
+    oc_harness, then the guard.py Stop gate (re-run once per block) so `.done`/`.blocked` markers
+    appear exactly as on Claude Code."""
+    root = find_root()
+    d = lanes_dir(root)
+    spec = json.loads((d / f"{a.lane_id}.lane.json").read_text())
+    here = Path(__file__).resolve().parent
+    if str(here) not in sys.path:
+        sys.path.insert(0, str(here))
+    import oc_harness
+    binary = os.environ.get("DEVTEAM_OC_BIN") or "opencode"
+    lane = {"id": spec["id"], "agent": spec["agent"], "model": spec["model"], "dir": str(root),
+            "brief": spec["prompt"], "env": {"DEVTEAM_ROLE": spec["agent"], "DEVTEAM_SLICE": spec["id"]}}
+    if not spec.get("writer"):
+        r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
+        out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']})")
+        return
+    st = load_state(root)
+    wt = lane_worktree(root, st, spec["id"])
+    lane["dir"] = str(wt)
+    claim = subprocess.run([sys.executable, str(here / "devteam.py"), "claim", spec["id"]],
+                           cwd=str(wt), text=True, capture_output=True)
+    if claim.returncode != 0:
+        raise DevteamError(f"claim {spec['id']} failed: {claim.stderr.strip() or claim.stdout.strip()}")
+    brief, note = claim.stdout, ""
+    for _ in range(MAX_LANE_RUNS):
+        lane["brief"] = brief + note
+        r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
+        payload = json.dumps({"cwd": str(wt), "last_assistant_message": lane_text(r["out"])})
+        gate = subprocess.run([sys.executable, str(here / "guard.py"), "stop"], input=payload,
+                              text=True, capture_output=True)
+        out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']}), stop gate exit {gate.returncode}")
+        if gate.returncode != 2:
+            return
+        note = "\n\n" + gate.stderr
+
+
+def lane_marks(root):
+    """{path: mtime} of every completion signal: slice markers, plus lane results of non-writer
+    lanes (a programmer lane is finished only when its Stop gate writes the slice marker)."""
+    sd = state_dir(Path(root))
+    paths = glob.glob(str(sd / "slices" / "*.done")) + glob.glob(str(sd / "slices" / "*.blocked"))
+    for p in glob.glob(str(sd / "lanes" / "*.done")):
+        try:
+            spec = json.loads(Path(p[:-len(".done")] + ".lane.json").read_text())
+        except (OSError, ValueError):
+            spec = {}
+        if not spec.get("writer"):
+            paths.append(p)
+    seen = {}
+    for p in paths:
+        try:
+            seen[p] = os.path.getmtime(p)
+        except OSError:
+            pass
+    return seen
+
+
+def cmd_wait(a):
+    """Block up to --timeout seconds until a lane finishes, then point the Conductor at `next`."""
+    root = find_root()
+    try:
+        st = load_state(root)
+    except DevteamError:
+        st = None
+    start = lane_marks(root)
+    deadline = time.monotonic() + max(0, a.timeout)
+    found = bool(st and any(finished_lanes(root, st)))
+    while not found and time.monotonic() < deadline:
+        time.sleep(0.5)
+        cur = lane_marks(root)
+        found = any(start.get(k) != v for k, v in cur.items())
+    out("WAIT: a lane finished" if found else f"WAIT: nothing finished in {a.timeout}s (lanes keep running)",
+        "NEXT: devteam next")
+
+
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
     tokens for 64 launches sit on the critical path, and the briefing file already holds everything.
-    The programmer/investigator system prompts say 'your prompt is the command — run it first'."""
+    The programmer/investigator system prompts say 'your prompt is the command — run it first'.
+    On OpenCode `emit_agent` starts each lane itself and prints a LANE line instead."""
     sp = q(st["script"])
+    root = Path(st["root"])
     for sid, s, mode in blocks:
         kind = slice_kind(s)
         if mode == "research":
-            brief = state_dir(Path(st["root"])) / "briefs" / f"{sid}.md"
+            brief = state_dir(root) / "briefs" / f"{sid}.md"
             strong = (PROVIDERS[provider_of(st)]["escalate"] and not s.get("model")
                       and (s.get("size") == "large" or int(s.get("attempt") or 0) >= 2))
             model = (s.get("model") or "").strip() or (PROVIDERS[provider_of(st)]["strong"] if strong else "")
             out(f"=== DISPATCH {sid} [RESEARCH] — {s['title'][:50]}",
-                f"Agent → subagent_type: investigator, description: \"{sid}\"" + (f", model: {model}" if model else "")
-                + f", prompt: \"Read {brief} and follow it exactly.\"",
+                emit_agent(root, st, "investigator", model, f"Read {brief} and follow it exactly.", sid),
                 "")
             continue
         agent, model, label = dispatch_route(st, s, mode)
         out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}   ({label})",
-            f"Agent → subagent_type: {agent}, description: \"{sid}\"" + (f", model: {model}" if model else "")
-            + f", prompt: \"python3 {sp} claim {sid}\"",
+            emit_agent(root, st, agent, model, f"python3 {sp} claim {sid}", sid),
             "")
     if skipped:
         out("SKIPPED: " + "; ".join(skipped))
@@ -2198,8 +2358,8 @@ def do_review_batch(root, st, force=False, shards=1):
                   ""]
         write_atomic(state_dir(root) / "reviews" / f"{name}.md", "\n".join(lines))
         out(f"=== REVIEW {name}: {len(take)} slices, {len(scope)} files",
-            f"Agent → subagent_type: {'spot-reviewer' if spot else 'code-reviewer'}, description: \"review {name}\", "
-            f"prompt: \"Read {state_dir(root) / 'reviews' / (name + '.md')} and follow it exactly.\"",
+            emit_agent(root, st, 'spot-reviewer' if spot else 'code-reviewer', "",
+                      f"Read {state_dir(root) / 'reviews' / (name + '.md')} and follow it exactly.", f"review {name}"),
             "")
     out("Nothing to report afterwards: the next `next` reads each shard's verdict out of its report file "
         "and queues its fix slices itself.")
@@ -2240,7 +2400,7 @@ def cmd_verify_brief(a):
               "(title, files, criteria) so the Conductor can queue it."]
     p = state_dir(root) / "reviews" / "verification.md"
     write_atomic(p, "\n".join(lines))
-    out(f"Agent → subagent_type: team-leader, description: \"verify intent\", prompt: \"MODE: VERIFICATION. Read {p} and follow it.\"")
+    out(emit_agent(root, st, "team-leader", "", f"MODE: VERIFICATION. Read {p} and follow it.", "verify intent"))
 
 
 def cmd_checkpoint(a):
@@ -3554,6 +3714,8 @@ def main(argv=None):
     pr.add_argument("--request"); pr.add_argument("--test"); pr.add_argument("--spot", action="store_true"); pr.set_defaults(fn=cmd_review_pr)
     pr = sp.add_parser("brief-debug"); pr.add_argument("symptom"); pr.add_argument("-n", type=int, default=4)
     pr.add_argument("--context"); pr.set_defaults(fn=cmd_brief_debug)
+    pr = sp.add_parser("lane-run"); pr.add_argument("lane_id"); pr.set_defaults(fn=cmd_lane_run)
+    pr = sp.add_parser("wait"); pr.add_argument("--timeout", type=int, default=100); pr.set_defaults(fn=cmd_wait)
 
     a = p.parse_args(argv)
     try:
