@@ -122,6 +122,27 @@ class TestOcHarnessRender(unittest.TestCase):
         self.assertIn("$ARGUMENTS", rendered)
         self.assertNotIn("{{SKILL_DIR}}", rendered)
 
+    def test_parse_frontmatter_unquotes_value_with_embedded_colon(self):
+        fields, _ = oc_harness.parse_frontmatter('---\ndescription: "a: b"\n---\nbody\n')
+        self.assertEqual(fields["description"], "a: b")
+
+    def test_parse_frontmatter_unquotes_model_value(self):
+        fields, _ = oc_harness.parse_frontmatter('---\nmodel: "flash"\n---\nbody\n')
+        self.assertEqual(fields["model"], "flash")
+
+    def test_render_agent_quoted_description_and_model(self):
+        text = (
+            "---\n"
+            'description: "a: b"\n'
+            'model: "flash"\n'
+            "---\n"
+            "body\n"
+        )
+        rendered = oc_harness.render_agent(text, 1)
+        self.assertIn('description: "a: b"', rendered)
+        self.assertNotIn('\\"a: b\\"', rendered)
+        self.assertIn("model: zai-coding-plan/glm-5.3-flash", rendered)
+
     def test_config_snippet_contains_provider_and_deny_list(self):
         snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
         data = json.loads(snippet)

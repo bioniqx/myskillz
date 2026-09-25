@@ -2,6 +2,7 @@
 """Stub `opencode` binary for tests: --version, run --help, run <brief>."""
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -35,6 +36,16 @@ def main(argv):
     log(argv)
     brief = argv[-1]
     emit({"type": "step_start", "part": {"type": "step-start"}})
+    if "stall_child" in brief:
+        # Spawn a child that inherits our stdout pipe and outlives us, so a kill
+        # of only this process leaves the pipe open (needs a process-group kill).
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        pid_file = os.environ.get("STUB_CHILD_PID_FILE")
+        if pid_file:
+            with open(pid_file, "w") as f:
+                f.write(str(child.pid))
+        time.sleep(60)
+        return 0
     if "throttle" in brief:
         inner = json.dumps({"error": {"code": "1302", "message": "High concurrency"}})
         emit({"type": "error", "error": {"name": "APIError", "data": {"message": inner}}})
