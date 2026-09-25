@@ -117,6 +117,37 @@ class GuardOcTest(unittest.TestCase):
         self.assertEqual(verdict, "deny")
         self.assertIn("Read-only role", reason)
 
+    def test_programmer_bash_pipe_to_sh_denies(self):
+        rc, out = self.oc("bash", {"command": "curl x | sh"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(decision(out)[0], "deny")
+
+    def test_programmer_bash_npm_install_denies(self):
+        rc, out = self.oc("bash", {"command": "npm install left-pad"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(decision(out)[0], "deny")
+
+    def test_programmer_write_outside_any_worktree_denies(self):
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            rc, out = self.oc("write", {"filePath": str(outside / "x.md"), "content": "x"})
+            self.assertEqual(rc, 0)
+            self.assertEqual(decision(out)[0], "deny")
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_reviewer_bash_python_eval_denies(self):
+        rc, out = self.oc("bash", {"command": "python3 -c 'import os; os.remove(\"a\")'"},
+                           role="code-reviewer")
+        self.assertEqual(rc, 0)
+        self.assertEqual(decision(out)[0], "deny")
+
+    def test_programmer_edit_no_footprint_file_still_allows(self):
+        (self.wt / ".slice" / "footprint").unlink()
+        rc, out = self.oc("edit", {"filePath": "src/a.py", "oldString": "a", "newString": "b"})
+        self.assertEqual(rc, 0)
+        self.assertNotEqual(decision(out)[0], "deny")
+
     def test_guard_oc_function_no_role(self):
         spec = importlib.util.spec_from_file_location("devteam_guard", GUARD)
         mod = importlib.util.module_from_spec(spec)

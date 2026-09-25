@@ -47,10 +47,16 @@ MAX_STOP_BLOCKS = 2
 STATE_DIRNAME = ".claude/dev-team"
 
 
+def deny_json(reason):
+    """The hookSpecificOutput JSON for a deny, without exiting — `deny()` prints-and-exits with it;
+    `guard_oc` also needs it as a string to compare across candidate paths before choosing one."""
+    return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                              "permissionDecision": "deny",
+                                              "permissionDecisionReason": reason}})
+
+
 def deny(reason):
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                             "permissionDecision": "deny",
-                                             "permissionDecisionReason": reason}}))
+    print(deny_json(reason))
     sys.exit(0)
 
 
@@ -727,16 +733,28 @@ def oc_capture(check, inp):
 
 
 def guard_oc(inp):
-    """OpenCode plugin bridge: {"tool", "args", "cwd", "role"} -> the existing check for that role."""
+    """OpenCode plugin bridge: {"tool", "args", "cwd", "role"} -> the existing check for that role.
+
+    OC has no interactive human to fall through to, so anything a Claude-side check leaves silent
+    (its "defer to the normal ask-flow" signal) is made an explicit deny here instead — except the
+    one silence that check already means as a real allow (a footprint-free edit inside the agent's
+    own claimed worktree)."""
     role = (inp.get("role") or "").strip()
     if not role:
         allow()
     tool = (inp.get("tool") or "").lower()
     args = inp.get("args") or {}
     prog = role == "programmer"
-    base = {"cwd": inp.get("cwd") or os.getcwd(), "agent_type": role}
+    cwd = inp.get("cwd") or os.getcwd()
+    base = {"cwd": cwd, "agent_type": role}
     if tool == "bash":
-        (guard_bash if prog else guard_bash_ro)(dict(base, tool_input={"command": args.get("command") or ""}))
+        check = guard_bash if prog else guard_bash_ro
+        out = oc_capture(check, dict(base, tool_input={"command": args.get("command") or ""}))
+        if not out.strip():
+            deny("dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
+                 "explicitly pre-approved is denied instead of silently allowed.")
+        sys.stdout.write(out)
+        sys.exit(0)
     if tool in ("edit", "write"):
         paths = [args.get("filePath") or ""]
     elif tool in ("patch", "apply_patch"):
@@ -746,6 +764,11 @@ def guard_oc(inp):
     check = guard_edit if prog else guard_edit_ro
     out = ""
     for p in paths:
+        ap = p if os.path.isabs(p) else os.path.abspath(os.path.join(cwd, p))
+        if find_slice_root(os.path.dirname(ap)) is None:
+            out = deny_json(f"`{p}` is outside any slice worktree. OpenCode has no interactive "
+                            "fallback for an unclaimed path.")
+            break
         out = oc_capture(check, dict(base, tool_input={"file_path": p}))
         if '"permissionDecision": "deny"' in out:
             break
