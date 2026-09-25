@@ -29,7 +29,10 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
         self.text = read(SKILL_MD)
 
     def test_gives_exact_run_command(self):
-        self.assertIn("oc_harness.py run <lanes.json>", self.text)
+        self.assertRegex(self.text, r'oc_harness\.py"? run <lanes\.json>')
+
+    def test_resolver_checks_for_oc_harness_script(self):
+        self.assertIn("scripts/oc_harness.py", self.text)
 
     def test_gives_lane_fields(self):
         for field in ("id", "agent", "model", "dir", "brief"):
