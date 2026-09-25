@@ -40,13 +40,20 @@ sh install-opencode.sh [--major N] [--home DIR]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
+
+# Full Python suite (all _shared/tests). Never rewrite tracked __pycache__/*.pyc, so pass this env var.
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/glm/_shared/tests -t skills/glm/_shared/tests
 ```
 
-`selftest.sh` is the only automated suite. It isolates itself (temp `HOME`, `DEVTEAM_PROVIDER=glm`,
-`DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New engine behaviour gets a check there.
-It was written for GNU userland (the README reports 308/308). On macOS it currently reports 302 pass,
-6 fail. At least one failure comes from the test itself, not the engine: BSD `sed` rejects the
-GNU-style `sed -i` call. Run it on Linux before trusting a red result.
+`_shared/*.py` (`zai_client.py`, `oc_harness.py`) is the source of truth; each skill's `scripts/` copy is
+vendored from it by `sh skills/glm/_shared/sync.sh` — never edit a vendored copy by hand.
+
+The Python suite under `_shared/tests` is the main automated suite and runs on every change.
+`selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
+(temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
+engine behaviour gets a check there. It was written for GNU userland (the README reports 308/308). On
+macOS it currently reports 302 pass, 6 fail. At least one failure comes from the test itself, not the
+engine: BSD `sed` rejects the GNU-style `sed -i` call. Run it on Linux before trusting a red result.
 `systematic-debugging-glm/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
 
@@ -126,8 +133,9 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   (use real GLM ids plus `thoughtLevel`). Check description length after editing.
 - **Installed folder names drop the `-glm` suffix.** Bootstrap path-resolution loops search for
   `systematic-debugging`, `writing-plans`, `dev-team` and so on across the `.opencode`, `.config/opencode`,
-  `.claude`, `.agents` and `.zcode` skill dirs. Frontmatter `name` is inconsistent: most use `*-glm`, but
-  `doc-generator-glm` uses `doc-generator`, the same name as the sibling original.
+  `.claude`, `.agents` and `.zcode` skill dirs. Every SKILL.md frontmatter `name` drops the `-glm` suffix
+  (`brainstorming`, `dev-team`, `doc-generator`, `requirements-code-audit`, `systematic-debugging`,
+  `writing-plans`); `test_all_skills.py` enforces this.
 - Version tags: the debugging, audit and writing-plans ports are `9.0-glm` / v9, brainstorming is `9.0-glm`
   (per its CHANGELOG), and dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
   one exists.
