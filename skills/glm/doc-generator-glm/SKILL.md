@@ -296,6 +296,30 @@ subagent.
 
 ---
 
+## 8. OPENCODE LANE (harness = opencode)
+
+`sh skills/glm/_shared/sync.sh` copies `_shared/oc_harness.py` into this skill's `scripts/`
+directory, printing `synced <path>` for the copy — never edit the copy, only
+`skills/glm/_shared/oc_harness.py`. This skill has no tool-free text-only fan-out, so it does not
+get a `zai_client.py` copy. Once installed, `opencode/agents/doc-writer.md`,
+`opencode/agents/doc-reviewer.md` and `opencode/commands/docs.md` are rendered into this OpenCode
+major's dialect and the `/docs` command is available.
+
+Under the OpenCode harness, Turn 2's writer wave and Turn 3's review wave replace each Task call
+with one lane dict per doc (`id`, `agent: "doc-writer"`, `dir`, `brief`), the same fact packs and
+briefs as §3.3 and §4 inlined as `brief`, then a single
+`oc_harness.py run_lanes(lanes, out_dir, width=10)` call runs the whole wave concurrently and
+writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
+
+Effort is not controllable on process lanes: v1 drops `reasoning_effort` for `glm-*` models, so
+every writer and reviewer lane runs at `max` regardless of the `effort` key in
+`doc-writer.md`/`doc-reviewer.md` frontmatter (that key only sets the model when Claude/ZCode
+render the same agent source). Reviewer lanes use `agent: "doc-reviewer"` with the same pattern.
+Read each `$D/$file` back once `run_lanes` returns, before reporting. Everything else in §§1-7
+(turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
+
+---
+
 ## Appendix A — optional ZCode subagents (paste once, then reference by name)
 
 Cuts per-Task prompt size and forces low thinking effort. `~/.zcode/agents/doc-writer.md`:
