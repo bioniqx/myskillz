@@ -358,10 +358,11 @@ def install(skill_dir: str, major: int, home: str = "") -> list:
         raise ValueError("major must be 1 or 2, got %r" % (major,))
     root = os.path.join(home or os.path.expanduser("~"), ".config", "opencode")
     skill_dst = os.path.join(root, "skills", skill_name(skill_dir))
-    if os.path.isdir(skill_dst):
-        shutil.rmtree(skill_dst)
-    shutil.copytree(skill_dir, skill_dst,
-                    ignore=shutil.ignore_patterns("__pycache__", ".idea", ".DS_Store"))
+    if os.path.realpath(skill_dir) != os.path.realpath(skill_dst):
+        if os.path.isdir(skill_dst):
+            shutil.rmtree(skill_dst)
+        shutil.copytree(skill_dir, skill_dst,
+                        ignore=shutil.ignore_patterns("__pycache__", ".idea", ".DS_Store"))
     written = [skill_dst]
     for kind in ("agents", "commands"):
         src = os.path.join(skill_dir, "opencode", kind)
