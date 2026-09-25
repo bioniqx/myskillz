@@ -4,7 +4,9 @@ import argparse
 import json
 import os
 import re
+import select
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -41,7 +43,12 @@ def parse_frontmatter(text: str) -> tuple:
             key, _, value = line.partition(":")
             key = key.strip()
             value = value.strip()
-            if value == "true":
+            if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+                try:
+                    value = json.loads(value)
+                except ValueError:
+                    value = value[1:-1]
+            elif value == "true":
                 value = True
             elif value == "false":
                 value = False
@@ -206,7 +213,8 @@ def _start_lane(lane, out_dir, major, binary, width):
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (lane.get("env") or {}).items()})
     proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env)
+                            stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env,
+                            start_new_session=True)
     now = time.monotonic()
     state = {"id": lane_id, "proc": proc, "err_path": err_path, "err_file": err_file,
              "out": os.path.join(out_dir, lane_id + ".jsonl"), "start": now, "last": now,
@@ -215,6 +223,19 @@ def _start_lane(lane, out_dir, major, binary, width):
     state["reader"] = threading.Thread(target=_read_events, args=(state,), daemon=True)
     state["reader"].start()
     return state
+
+
+def _kill_group(proc):
+    """Kill the lane's whole process group, not just its immediate pid, so a
+    child that inherited our stdout pipe (and would otherwise keep it open
+    forever) dies too."""
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
 
 
 def _absorb(state, width):
@@ -254,29 +275,39 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
     pending = list(lanes)
     running = []
     results = {}
-    while pending or running:
-        while pending and len(running) < width:
-            running.append(_start_lane(pending.pop(0), out_dir, major, binary, width))
-        time.sleep(0.05)
-        for state in list(running):
-            width = _absorb(state, width)
-            status = None
-            if state["proc"].poll() is None:
-                now = time.monotonic()
-                if now - state["last"] > stall:
-                    status = "STALL"
-                    state["error"] = "no event for %ss, last event: %s" % (stall, state["last_event"] or "none")
-                elif state["timeout"] and now - state["start"] > state["timeout"]:
-                    status = "TIMEOUT"
-                    state["error"] = "timeout after %ss, last event: %s" % (state["timeout"], state["last_event"] or "none")
-                else:
-                    continue
-                state["proc"].kill()
-            state["proc"].wait()
-            state["reader"].join()
-            width = _absorb(state, width)
-            running.remove(state)
-            results[state["id"]] = _finish(state, status, out_dir)
+    try:
+        while pending or running:
+            while pending and len(running) < width:
+                running.append(_start_lane(pending.pop(0), out_dir, major, binary, width))
+            time.sleep(0.05)
+            for state in list(running):
+                width = _absorb(state, width)
+                status = None
+                if state["proc"].poll() is None:
+                    now = time.monotonic()
+                    if now - state["last"] > stall:
+                        status = "STALL"
+                        state["error"] = "no event for %ss, last event: %s" % (stall, state["last_event"] or "none")
+                    elif state["timeout"] and now - state["start"] > state["timeout"]:
+                        status = "TIMEOUT"
+                        state["error"] = "timeout after %ss, last event: %s" % (state["timeout"], state["last_event"] or "none")
+                    else:
+                        continue
+                    _kill_group(state["proc"])
+                state["proc"].wait()
+                state["reader"].join()
+                width = _absorb(state, width)
+                running.remove(state)
+                results[state["id"]] = _finish(state, status, out_dir)
+    except BaseException:
+        if running:
+            # A lane started microseconds ago may still be mid fork/exec; give
+            # it a brief moment to finish that and spawn any child of its own
+            # before we kill the whole group, so the child dies with it too.
+            select.select([], [], [], 0.2)
+        for state in running:
+            _kill_group(state["proc"])
+        raise
     return [results[str(item["id"])] for item in lanes]
 
 
