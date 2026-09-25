@@ -4,6 +4,7 @@ model: pro
 effort: max
 temperature: 0.0
 access: write
+write_paths: .audit/**
 bash: false
 web: false
 ---
