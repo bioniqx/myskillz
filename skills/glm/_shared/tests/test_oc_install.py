@@ -218,6 +218,16 @@ class MainTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("MISSING: foo is not installed for OpenCode", out)
 
+    def test_check_returns_one_on_fail_line_after_installed_line(self):
+        Patch(self, check=lambda skill_dir: [
+            "INSTALLED: x (major 1)",
+            "FAIL: opencode run lacks --agent",
+        ])
+        rc, out = self.run_main(["check", self.skill])
+        self.assertEqual(rc, 1)
+        self.assertIn("INSTALLED: x (major 1)", out)
+        self.assertIn("FAIL: opencode run lacks --agent", out)
+
     def test_check_returns_zero_for_clean_install(self):
         Patch(self, check=lambda skill_dir: ["INSTALLED: systematic-debugging (major 1)"])
         rc, out = self.run_main(["check", self.skill])
