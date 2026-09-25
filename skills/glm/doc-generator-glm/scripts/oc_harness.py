@@ -311,13 +311,8 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
     if not major:
         raise SystemExit("opencode not found: " + binary)
     missing = check_run_flags(major, binary)
-    # --standalone is not a hard precondition here: build_run_cmd always
-    # passes it for major 2, so an installed opencode too old to support it
-    # surfaces as a normal per-lane FAIL (unrecognized flag) instead of
-    # blocking the whole wave up front.
-    hard_missing = [f for f in missing if f != "--standalone"]
-    if hard_missing:
-        raise SystemExit("opencode run --help lacks flag(s): " + ", ".join(hard_missing))
+    if missing:
+        raise SystemExit("opencode run --help lacks flag(s): " + ", ".join(missing))
     os.makedirs(out_dir, exist_ok=True)
     width = max(1, min(int(width), 64))
     pending = list(lanes)
