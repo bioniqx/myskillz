@@ -105,17 +105,17 @@ def render_agent(text: str, major: int) -> str:
         if steps is not None:
             lines.append("steps: {}".format(steps))
         lines.append("permissions:")
-        if write_paths:
-            lines.append("  - action: edit")
-            lines.append('    resource: "{}"'.format(write_paths))
-            lines.append("    effect: allow")
-            edit_effect = "deny"
-        else:
-            edit_effect = edit_perm
+        edit_effect = "deny" if write_paths else edit_perm
         for action, effect in (("edit", edit_effect), ("bash", bash_perm), ("webfetch", web_perm)):
             lines.append("  - action: {}".format(action))
             lines.append('    resource: "*"')
             lines.append("    effect: {}".format(effect))
+            if action == "edit" and write_paths:
+                # Rules are evaluated last-match-wins, so this more specific
+                # allow must come after the wildcard deny above.
+                lines.append("  - action: edit")
+                lines.append('    resource: "{}"'.format(write_paths))
+                lines.append("    effect: allow")
         if write_paths:
             lines.append("  - action: task")
             lines.append('    resource: "*"')
