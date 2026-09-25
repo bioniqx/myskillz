@@ -34,6 +34,12 @@ python3 dev-team-glm/scripts/devteam.py doctor        # --fix writes .claude/set
 
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
+
+# Install all five Phase 1 skills into OpenCode and print the config snippet
+sh install-opencode.sh [--major N] [--home DIR]
+
+# Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
+python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
 ```
 
 `selftest.sh` is the only automated suite. It isolates itself (temp `HOME`, `DEVTEAM_PROVIDER=glm`,
