@@ -18,7 +18,6 @@ GLM = os.path.dirname(os.path.dirname(HERE))
 SCRIPTS = os.path.join(GLM, "dev-team-glm", "scripts")
 SKILL_DIR = os.path.join(GLM, "dev-team-glm")
 STUB = os.path.join(HERE, "stub_opencode.py")
-GUARD = os.path.join(SCRIPTS, "guard.py")
 sys.path.insert(0, SCRIPTS)
 
 import oc_harness  # noqa: E402  (the vendored copy next to devteam.py)
@@ -48,7 +47,7 @@ class _LaneCase(unittest.TestCase):
             "created": now - 10, "provider": "glm",
             "reviews": {"r1": {"status": "dispatched", "shards": 2}},
             "slices": {
-                "S1": {"status": "inflight", "mode": "slice", "dispatched": now - 5, "history": []},
+                "S1": {"status": "inflight", "mode": "slice", "dispatched": now - 5, "history": [], "attempt": 2},
                 "R1": {"status": "inflight", "mode": "research", "dispatched": now - 5, "history": []},
             },
             "gov": dt.new_gov("glm", "pro"),
@@ -123,6 +122,43 @@ class GovernHarnessTest(_LaneCase):
         self.assertIn("FAIL: boom", down[0])
         self.assertIn("`retry S1`", down[0])
         self.assertNotIn("SendMessage", down[0])
+        self.assertNotIn("the worktree is kept", down[0])
+        self.assertIn("attempt/S1-2", down[0])
+
+    def test_review_shard_lane_down_reported_when_dispatched(self):
+        # emit_agent prefixes the lane id "review-" (label "review r1"); the review dict key is "r1".
+        self.write("review-r1.done", json.dumps({"id": "review-r1", "status": "FAIL", "error": "boom"}))
+        env = dict(self.ENV, DEVTEAM_HARNESS="opencode")
+        with mock.patch.dict(os.environ, env):
+            lines = dt.govern(self.root, self.st, 0)
+        down = [ln for ln in lines if ln.startswith("LANE DOWN review-r1 (review)")]
+        self.assertEqual(len(down), 1)
+
+    def test_writer_lane_fail_suppressed_while_lane_run_alive(self):
+        proc = subprocess.Popen(["sleep", "5"])
+        try:
+            self.lanes.mkdir(parents=True, exist_ok=True)
+            (self.lanes / "S1.pid").write_text(str(proc.pid))
+            self.write("S1.done", json.dumps({"id": "S1", "status": "FAIL", "error": "boom"}))
+            env = dict(self.ENV, DEVTEAM_HARNESS="opencode")
+            with mock.patch.dict(os.environ, env):
+                lines = dt.govern(self.root, self.st, 0)
+            self.assertEqual([ln for ln in lines if ln.startswith("LANE DOWN S1")], [])
+        finally:
+            proc.terminate()
+            proc.wait()
+
+    def test_writer_lane_fail_reported_once_lane_run_finished(self):
+        self.lanes.mkdir(parents=True, exist_ok=True)
+        (self.lanes / "S1.pid").write_text("999999999")  # not a live pid
+        (self.lanes / "S1.end").write_text("1")           # the lane-run process wrote its end marker
+        self.write("S1.done", json.dumps({"id": "S1", "status": "FAIL", "error": "boom"}))
+        env = dict(self.ENV, DEVTEAM_HARNESS="opencode")
+        with mock.patch.dict(os.environ, env):
+            lines = dt.govern(self.root, self.st, 0)
+        down = [ln for ln in lines if ln.startswith("LANE DOWN S1")]
+        self.assertEqual(len(down), 1)
+        self.assertIn("FAIL: boom", down[0])
 
     def test_claude_reads_transcripts(self):
         self.write("S1.jsonl", THROTTLE_EVENT + "\n")
@@ -134,19 +170,6 @@ class GovernHarnessTest(_LaneCase):
         scan.assert_called_once()
         self.assertEqual(lines, [])
         self.assertEqual(self.st["gov"]["cap"], 6)
-
-
-V1_PLUGIN = ('import { spawnSync } from "node:child_process";\n'
-             'export const DevteamGuard = async ({ directory }) => ({\n'
-             '  "tool.execute.before": async (input, output) => {\n'
-             '    spawnSync("python3", ["%s", "oc"], { cwd: directory });\n'
-             '  },\n'
-             '});\n')
-V2_PLUGIN = ('import { Plugin } from "@opencode/plugin";\n'
-             'export default Plugin.define({ id: "devteam-guard", setup: (ctx) => ({\n'
-             '  "tool.execute.before": async (input, output) => {},\n'
-             '}) });\n'
-             '// python3 %s oc\n')
 
 
 class DoctorOpenCodeTest(unittest.TestCase):
@@ -192,6 +215,10 @@ class DoctorOpenCodeTest(unittest.TestCase):
         with open(os.path.join(d, "guard.js"), "w") as f:
             f.write(text)
 
+    def install_plugin(self, major):
+        """The real plugin file a full `oc_harness.install` writes, not a hand-typed fixture."""
+        oc_harness.install(SKILL_DIR, major, self.home)
+
     def test_reports_missing_install(self):
         out = self.doctor()
         self.assertIn("harness opencode", out)
@@ -230,26 +257,40 @@ class DoctorOpenCodeTest(unittest.TestCase):
         self.assertIn("opencode not found on PATH", out)
 
     def test_plugin_wrong_dialect(self):
-        self.plugin(V2_PLUGIN % GUARD)
+        # STUB_OC_VERSION detects major 1; installing the v2 plugin must not match its template.
+        self.install_plugin(2)
         out = self.doctor()
-        self.assertIn("plugin guard.js is written for OpenCode v2 but opencode is v1", out)
+        self.assertIn("plugin devteam-guard.js does not match the OpenCode v1 template", out)
         self.assertIn("re-run install-opencode.sh", out)
 
-    def test_plugin_ok(self):
-        self.plugin(V1_PLUGIN % GUARD)
+    def test_plugin_v2_install_not_flagged(self):
+        os.environ["STUB_OC_VERSION"] = "2.0.0"
+        self.install_plugin(2)
         out = self.doctor()
-        self.assertIn("harness opencode", out)
-        self.assertNotIn("guard plugin not installed", out)
-        self.assertNotIn("plugin guard.js", out)
+        self.assertNotIn("does not match the OpenCode v2 template", out)
+        self.assertNotIn("guard.py path does not resolve", out)
+
+    def test_plugin_ok(self):
+        for major in (1, 2):
+            with self.subTest(major=major):
+                self.install_plugin(major)
+                out = self.doctor()
+                self.assertIn("harness opencode", out)
+                self.assertNotIn("guard plugin not installed", out)
+                self.assertNotIn("guard.py path does not resolve", out)
+                self.assertNotIn("does not match the OpenCode v", out)
 
     def test_plugin_unresolved(self):
-        self.plugin(V1_PLUGIN % "{{SKILL_DIR}}/scripts/guard.py")
-        out = self.doctor()
-        self.assertIn("plugin guard.js: its guard.py path does not resolve", out)
+        for major in (1, 2):
+            with self.subTest(major=major):
+                self.install_plugin(major)
+                shutil.rmtree(os.path.join(self.oc, "skills", self.name))
+                out = self.doctor()
+                self.assertIn("plugin devteam-guard.js: its guard.py path does not resolve", out)
 
     @unittest.skipUnless(shutil.which("node"), "node not installed")
     def test_plugin_load_error(self):
-        self.plugin("export const DevteamGuard = async ({ directory }) => ({ // python3 %s oc\n" % GUARD)
+        self.plugin("export const DevteamGuard = async ({ directory }) => ({\n// guard.py\n")
         out = self.doctor()
         self.assertIn("plugin guard.js fails to load", out)
 

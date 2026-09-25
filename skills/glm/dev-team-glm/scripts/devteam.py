@@ -762,15 +762,19 @@ def lane_signals(root, st) -> dict:
         rec = seen.setdefault(f.stem, {})
         if mtime + 2 < created or rec.get("done") == mtime:
             continue
-        rec["done"] = mtime
         try:
             res = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
         if not isinstance(res, dict) or res.get("status") in (None, "OK"):
+            rec["done"] = mtime
             continue
+        kind = _lane_kind(st, f.stem)
+        if kind == "slice" and not lane_process_finished(d, f.stem):
+            continue                                  # a writer's lane-run may still retry this FAIL — re-check later
+        rec["done"] = mtime
         text = f"{res.get('status')}: {res.get('error') or res.get('last_event') or 'no error event'}"[:240]
-        sig["down"].append((_lane_kind(st, f.stem), f.stem, text, str(int(mtime)), mtime))  # (kind, name, text, id, ts) — scan_transcripts' shape
+        sig["down"].append((kind, f.stem, text, str(int(mtime)), mtime))  # (kind, name, text, id, ts) — scan_transcripts' shape
     return sig
 
 
@@ -858,11 +862,16 @@ def govern(root, st, successes):
                 continue                              # finished, re-queued, or a previous attempt's transcript
             if kind == "research" and (state_dir(root) / "research" / f"{name}.md").exists():
                 continue
-        elif kind == "review" and name.split("-")[0] not in open_reviews:
-            continue
+        elif kind == "review":
+            # on OpenCode `name` is the full lane id (emit_agent prefixes it "review-"); on Claude
+            # Code it is already just the review id, parsed straight out of the transcript prompt.
+            rid = name[len("review-"):] if oc and name.startswith("review-") else name
+            if rid.split("-")[0] not in open_reviews:
+                continue
         if oc:
             lines.append(f"LANE DOWN {name} ({kind}): the lane process ended {text[:120]}"
-                         + (f"\n  → `fail {name}` then `retry {name}` (the worktree is kept for salvage)"
+                         + (f"\n  → `fail {name}` then `retry {name}` (kept for salvage on branch "
+                            f"`attempt/{name}-{s.get('attempt') or 1}`)"
                             if kind == "slice" else f"\n  → relaunch it: `lane-run {name}`"))
             continue
         lines.append(f"LANE DOWN {name} ({kind}): the API failed after retries — {text[:120]}"
@@ -1793,6 +1802,24 @@ def lanes_dir(root):
     return state_dir(Path(root)) / "lanes"
 
 
+def lane_process_finished(d, lane_id):
+    """A writer's `lane-run` retries internally before it exits, so a mid-retry FAIL `.done` is not
+    final. Finished = its end marker was written, or its recorded pid is no longer running."""
+    if (d / f"{lane_id}.end").exists():
+        return True
+    try:
+        pid = int((d / f"{lane_id}.pid").read_text().strip())
+    except (OSError, ValueError):
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def terminate_lane_process(d, lane_id):
     """Kill a previous `lane-run` for this lane id (and its whole process group, so the `opencode`
     child dies too) if it is still alive, so two runs never share one lane id at once."""
@@ -1812,7 +1839,7 @@ def launch_lane(root, st, lane_id, agent, model, prompt) -> int:
     d = lanes_dir(root)
     d.mkdir(parents=True, exist_ok=True)
     terminate_lane_process(d, lane_id)
-    for ext in (".done", ".jsonl", ".err"):
+    for ext in (".done", ".jsonl", ".err", ".end"):
         try:
             (d / f"{lane_id}{ext}").unlink()
         except OSError:
@@ -1941,6 +1968,8 @@ def cmd_lane_run(a):
         if not slice_marker_exists(root, spec["id"]):
             slice_blocked_marker(root, wt, spec["id"], f"lane-run failed: {e}")
         out(f"LANE {spec['id']}: ERROR ({e})")
+    finally:
+        write_atomic(d / f"{spec['id']}.end", str(int(time.time())))
 
 
 def lane_marks(root):
@@ -3286,11 +3315,14 @@ def merged_settings(root):
 
 
 OC_AGENT_NAMES = ("programmer", "code-reviewer", "spot-reviewer", "investigator", "team-leader")
-OC_GUARD_PATH_RE = re.compile(r"""([^\s"'`]+/scripts/guard\.py)""")
+# The real templates pass SKILL_DIR and "scripts"/"guard.py" as separate path.join() args, not one
+# concatenated string, so the path is only ever findable as path.join()'s first argument.
+OC_GUARD_PATH_RE = re.compile(r'path\.join\(\s*"([^"]+)"\s*,\s*"scripts"\s*,\s*"guard\.py"\s*\)')
 
 
-def oc_plugin_problems(home, major):
-    """The installed guard plugin: present, guard.py path resolved, dialect = detected major, loads."""
+def oc_plugin_problems(home, major, skill_dir):
+    """The installed guard plugin: present, guard.py path resolved, matches what install() would
+    write for the detected major (else the wrong dialect is installed), loads."""
     pdir = Path(home) / ".config" / "opencode" / "plugins"
     found = [p for p in sorted(pdir.glob("*.js")) if "guard.py" in p.read_text(errors="replace")] \
         if pdir.is_dir() else []
@@ -3300,12 +3332,14 @@ def oc_plugin_problems(home, major):
     text = p.read_text(errors="replace")
     problems = []
     m = OC_GUARD_PATH_RE.search(text)
-    if "{{SKILL_DIR}}" in text or (m and not Path(m.group(1)).exists()):
+    if "{{SKILL_DIR}}" in text or not m or not Path(m.group(1), "scripts", "guard.py").exists():
         problems.append(f"plugin {p.name}: its guard.py path does not resolve (every tool call would fail open)")
-    v2 = "Plugin.define" in text
-    if major and v2 != (major >= 2):
-        problems.append(f"plugin {p.name} is written for OpenCode v{2 if v2 else 1} but opencode is v{major} — "
-                        "re-run install-opencode.sh")
+    if major:
+        src = Path(skill_dir) / "opencode" / "plugins" / f"{p.stem}.v{major}.js"
+        skill_dst = str(Path(home) / ".config" / "opencode" / "skills" / _oc_harness().skill_name(str(skill_dir)))
+        if src.exists() and text != src.read_text().replace("{{SKILL_DIR}}", skill_dst):
+            problems.append(f"plugin {p.name} does not match the OpenCode v{major} template — "
+                            "re-run install-opencode.sh")
     node = shutil.which("node")
     if node:
         import tempfile
@@ -3348,7 +3382,7 @@ def doctor_opencode(a, root):
         if not (adir / f"{name}.md").exists():
             problems.append(f"agent {name} not installed in {adir}")
             reinstall = True
-    plugin = oc_plugin_problems(home, major)
+    plugin = oc_plugin_problems(home, major, skill_dir)
     problems += plugin
     reinstall = reinstall or bool(plugin)
     cfgs = [Path(home) / ".config" / "opencode" / n for n in ("opencode.json", "opencode.jsonc")] \
