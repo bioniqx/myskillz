@@ -19,11 +19,15 @@
                     test/lint commands are `allow`ed so a reviewer can gather evidence without a prompt.
   guard.py perm     PermissionRequest (settings.json only, optional): same allow-list as `bash`, in the
                     PermissionRequest output schema. Not needed when the PreToolUse hooks are installed.
+  guard.py oc       OpenCode plugin bridge: {"tool", "args", "cwd", "role"} on stdin. edit/write/patch map to
+                    tool_input.file_path, bash to tool_input.command. Role programmer -> edit/bash, any other
+                    role -> edit-ro/bash-ro with agent_type = role, no role -> silent allow.
 
 Fail-open by design: any internal error allows the action (the integrator re-checks at merge time).
 Deny/allow = JSON on stdout (exit 0). Stop-block = exit 2 with the reason on stderr.
 """
 import fnmatch
+import io
 import json
 import os
 import re
@@ -702,6 +706,54 @@ def guard_bash_ro(inp):
     allow(bash_allow_reason(raw, None, footprint=[], pinned=plan_commands(root), readonly=True))
 
 
+OC_PATCH_PATH = re.compile(r"^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$", re.M)
+
+
+def oc_patch_paths(text):
+    return [p.strip() for p in OC_PATCH_PATH.findall(text or "") if p.strip()]
+
+
+def oc_capture(check, inp):
+    """Run one Claude-shaped check and return what it printed (it always ends in sys.exit)."""
+    buf = io.StringIO()
+    old, sys.stdout = sys.stdout, buf
+    try:
+        check(inp)
+    except SystemExit:
+        pass
+    finally:
+        sys.stdout = old
+    return buf.getvalue()
+
+
+def guard_oc(inp):
+    """OpenCode plugin bridge: {"tool", "args", "cwd", "role"} -> the existing check for that role."""
+    role = (inp.get("role") or "").strip()
+    if not role:
+        allow()
+    tool = (inp.get("tool") or "").lower()
+    args = inp.get("args") or {}
+    prog = role == "programmer"
+    base = {"cwd": inp.get("cwd") or os.getcwd(), "agent_type": role}
+    if tool == "bash":
+        (guard_bash if prog else guard_bash_ro)(dict(base, tool_input={"command": args.get("command") or ""}))
+    if tool in ("edit", "write"):
+        paths = [args.get("filePath") or ""]
+    elif tool in ("patch", "apply_patch"):
+        paths = oc_patch_paths(args.get("patchText"))
+    else:
+        allow()
+    check = guard_edit if prog else guard_edit_ro
+    out = ""
+    for p in paths:
+        out = oc_capture(check, dict(base, tool_input={"file_path": p}))
+        if '"permissionDecision": "deny"' in out:
+            break
+    if out:
+        sys.stdout.write(out)
+    allow()
+
+
 def main():
     if len(sys.argv) < 2:
         allow()
@@ -712,7 +764,7 @@ def main():
         allow()
     try:
         {"edit": guard_edit, "bash": guard_bash, "stop": guard_stop, "perm": guard_perm,
-         "edit-ro": guard_edit_ro, "bash-ro": guard_bash_ro}.get(mode, lambda i: allow())(inp)
+         "edit-ro": guard_edit_ro, "bash-ro": guard_bash_ro, "oc": guard_oc}.get(mode, lambda i: allow())(inp)
     except SystemExit:
         raise
     except Exception:
