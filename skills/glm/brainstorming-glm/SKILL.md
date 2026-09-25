@@ -304,9 +304,18 @@ never stall.
 | `!` preprocessing (raw `!` above) | Run `scripts/context.sh` as your first round-1 call. |
 | TaskCreate | Track state in the message per R5. |
 
-On OpenCode, lanes run through the exact command
-`python3 ${CLAUDE_SKILL_DIR}/scripts/oc_harness.py run <lanes.json>`,
-where `<lanes.json>` is a JSON array of lane objects you write before the
+On OpenCode, `CLAUDE_SKILL_DIR` is not set. Resolve the scripts directory
+first, then run the harness from it:
+
+```bash
+H="$(ls -d ~/.config/opencode/skills/brainstorming/scripts \
+  .opencode/skills/brainstorming/scripts \
+  ~/.claude/skills/brainstorming/scripts \
+  .claude/skills/brainstorming/scripts 2>/dev/null | head -1)"
+python3 $H/oc_harness.py run <lanes.json>
+```
+
+`<lanes.json>` is a JSON array of lane objects you write before the
 call. Each lane needs `id` (unique string), `agent` (`explorer` or
 `researcher`, the neutral read-only/web agents installed under
 `opencode/agents/`), `model` (`flash` or `pro`), `dir` (working directory
