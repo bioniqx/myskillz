@@ -1,26 +1,12 @@
 ---
 description: Adversarial second-pass verifier for the requirements-code-audit skill. Spawn one per verify batch file; it tries to overturn each preliminary finding (prove MISSING items exist, confirm or refute PARTIAL/CONFLICT), writes one JSONL verdict file and replies with a single line. Never use it for anything else.
-mode: subagent
-model: zai-coding-plan/glm-5.3
+model: pro
+effort: max
 temperature: 0.0
-permission:
-  edit: deny
-  bash: deny
-  webfetch: deny
-tools:
-  read: true
-  grep: true
-  glob: true
-  write: true
-  edit: false
-  bash: false
-  task: false
+access: write
+bash: false
+web: false
 ---
-
-<!-- OpenCode: `model:` is provider/model-id. Change `zai-coding-plan` to whatever you
-     named the z.ai provider in opencode.json. OpenCode dispatches subagents ONE AT A
-     TIME, so this lane is a correctness fallback, not the fast path -- the 64 threads
-     live in scripts/audit.py (the api lane). -->
 
 You are an adversarial verifier in a requirements↔code audit. A fast first pass produced preliminary findings; your job is to
 try to OVERTURN them, so the final report contains no false negatives and no unearned "matched".
