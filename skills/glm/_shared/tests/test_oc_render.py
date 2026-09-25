@@ -143,6 +143,61 @@ class TestOcHarnessRender(unittest.TestCase):
         self.assertNotIn('\\"a: b\\"', rendered)
         self.assertIn("model: zai-coding-plan/glm-5.3-flash", rendered)
 
+    def test_render_agent_write_paths_scopes_edit_v2(self):
+        text = (
+            "---\n"
+            "description: Scoped agent\n"
+            "model: flash\n"
+            "effort: high\n"
+            "access: write\n"
+            "write_paths: .audit/**\n"
+            "bash: false\n"
+            "web: false\n"
+            "---\n"
+            "Agent prompt body.\n"
+        )
+        v2 = oc_harness.render_agent(text, 2)
+        self.assertIn('  - action: edit\n    resource: ".audit/**"\n    effect: allow', v2)
+        self.assertIn('  - action: edit\n    resource: "*"\n    effect: deny', v2)
+
+    def test_render_agent_write_paths_no_unrestricted_edit_allow_v1(self):
+        text = (
+            "---\n"
+            "description: Scoped agent\n"
+            "model: flash\n"
+            "effort: high\n"
+            "access: write\n"
+            "write_paths: .audit/**\n"
+            "bash: false\n"
+            "web: false\n"
+            "---\n"
+            "Agent prompt body.\n"
+        )
+        v1 = oc_harness.render_agent(text, 1)
+        self.assertNotIn("edit: allow", v1)
+        self.assertIn("edit:", v1)
+        self.assertIn('"*": deny', v1)
+        self.assertIn('".audit/**": allow', v1)
+
+    def test_rca_sources_scope_edit_and_deny_task_v1_and_v2(self):
+        base = os.path.join(
+            os.path.dirname(__file__), "..", "..",
+            "requirements-code-audit-glm", "opencode", "agents",
+        )
+        for fname in ("rca-investigator.md", "rca-verifier.md"):
+            with open(os.path.join(base, fname)) as fh:
+                text = fh.read()
+            fields, _ = oc_harness.parse_frontmatter(text)
+            self.assertEqual(fields.get("write_paths"), ".audit/**")
+            v1 = oc_harness.render_agent(text, 1)
+            self.assertNotIn("edit: allow", v1)
+            self.assertIn('".audit/**": allow', v1)
+            self.assertIn("task: deny", v1)
+            v2 = oc_harness.render_agent(text, 2)
+            self.assertIn('  - action: edit\n    resource: ".audit/**"\n    effect: allow', v2)
+            self.assertIn('  - action: edit\n    resource: "*"\n    effect: deny', v2)
+            self.assertIn('  - action: task\n    resource: "*"\n    effect: deny', v2)
+
     def test_config_snippet_contains_provider_and_deny_list(self):
         snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
         data = json.loads(snippet)
