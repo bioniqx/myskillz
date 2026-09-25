@@ -23,6 +23,23 @@ def _write_guard_stub(skill_dir, decision):
     return guard_path
 
 
+def _write_recording_stub(skill_dir, decision, record_path):
+    scripts_dir = os.path.join(skill_dir, "scripts")
+    os.makedirs(scripts_dir, exist_ok=True)
+    guard_path = os.path.join(scripts_dir, "guard.py")
+    with open(guard_path, "w") as f:
+        f.write(
+            "import json\nimport sys\n\n"
+            "argv = sys.argv[1:]\n"
+            "stdin_data = json.loads(sys.stdin.read())\n"
+            "with open(%s, 'w') as rec:\n"
+            "    json.dump({'argv': argv, 'stdin': stdin_data}, rec)\n"
+            "print(json.dumps(%s))\n"
+            % (json.dumps(record_path), json.dumps(decision))
+        )
+    return guard_path
+
+
 def _load_plugin_source(path, skill_dir):
     with open(path) as f:
         source = f.read()
@@ -153,6 +170,90 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v1(tmp_dir, skill_dir, None, "bash", {"command": "ls"})
             assert result.returncode == 0, result.stderr
             assert result.stdout == "ALLOWED"
+
+    def test_v1_records_argv_and_stdin(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            record_path = os.path.join(tmp_dir, "record.json")
+            _write_recording_stub(skill_dir, {}, record_path)
+            result = _run_v1(
+                tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"}
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "ALLOWED"
+            with open(record_path) as f:
+                record = json.load(f)
+            assert record["argv"] == ["oc"]
+            assert record["stdin"] == {
+                "tool": "bash",
+                "args": {"command": "ls"},
+                "cwd": "/tmp/work",
+                "role": "programmer",
+            }
+
+    def test_v2_records_argv_and_stdin(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            record_path = os.path.join(tmp_dir, "record.json")
+            _write_recording_stub(skill_dir, {}, record_path)
+            result = _run_v2(
+                tmp_dir,
+                skill_dir,
+                "code-reviewer",
+                "edit",
+                {"filePath": "a.py", "oldString": "x", "newString": "y"},
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "ALLOWED"
+            with open(record_path) as f:
+                record = json.load(f)
+            assert record["argv"] == ["oc"]
+            assert record["stdin"] == {
+                "tool": "edit",
+                "args": {"filePath": "a.py", "oldString": "x", "newString": "y"},
+                "cwd": "/tmp/work",
+                "role": "code-reviewer",
+            }
+
+    def test_v1_no_role_allows_and_never_invokes_stub(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            record_path = os.path.join(tmp_dir, "record.json")
+            _write_recording_stub(
+                skill_dir,
+                {
+                    "hookSpecificOutput": {
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": "should never run",
+                    }
+                },
+                record_path,
+            )
+            result = _run_v1(tmp_dir, skill_dir, None, "bash", {"command": "rm -rf /"})
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "ALLOWED"
+            assert not os.path.exists(record_path), "guard stub was invoked with no role set"
+
+    def test_v2_no_role_allows_and_never_invokes_stub(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            record_path = os.path.join(tmp_dir, "record.json")
+            _write_recording_stub(
+                skill_dir,
+                {
+                    "hookSpecificOutput": {
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": "should never run",
+                    }
+                },
+                record_path,
+            )
+            result = _run_v2(
+                tmp_dir, skill_dir, None, "bash", {"command": "rm -rf /"}
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "ALLOWED"
+            assert not os.path.exists(record_path), "guard stub was invoked with no role set"
 
     def test_v2_denies_and_throws(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
