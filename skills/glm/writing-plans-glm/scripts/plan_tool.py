@@ -192,83 +192,11 @@ def detect_harness():
     return "unknown", "-"
 
 
-def _json_or_none(path):
-    try:
-        return json.loads(load(path))
-    except Exception:
-        return None
-
-
-KEY_FIELDS = ("ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
-              "apiKey", "api_key", "key")
-
-
-def _looks_like_key(s):
-    s = (s or "").strip()
-    return len(s) >= 16 and " " not in s
-
-
-def _walk_for_key(obj, depth=0):
-    """Find an api key in a nested config, only under an explicitly named key field."""
-    if depth > 6:
-        return None
-    if isinstance(obj, dict):
-        for k in KEY_FIELDS:
-            v = obj.get(k)
-            if isinstance(v, str) and _looks_like_key(v):
-                return v.strip()
-        for k, v in obj.items():
-            if isinstance(v, (dict, list)) and re.search(r"z\.?ai|zhipu|bigmodel|anthropic|glm|coding", str(k), re.I):
-                r = _walk_for_key(v, depth + 1)
-                if r:
-                    return r
-        for v in obj.values():
-            if isinstance(v, (dict, list)):
-                r = _walk_for_key(v, depth + 1)
-                if r:
-                    return r
-        return None
-    if isinstance(obj, list):
-        for v in obj:
-            r = _walk_for_key(v, depth + 1)
-            if r:
-                return r
-    return None
-
-KEY_FILES = (
-    os.path.expanduser("~/.local/share/opencode/auth.json"),
-    os.path.expanduser("~/.config/opencode/auth.json"),
-    os.path.expanduser("~/.config/opencode/opencode.json"),
-    os.path.join(os.getcwd(), "opencode.json"),
-    os.path.expanduser("~/.claude/settings.json"),
-    os.path.expanduser("~/.claude/settings.local.json"),
-    os.path.expanduser("~/.zcode/settings.json"),
-    os.path.expanduser("~/.zcode/auth.json"),
-    os.path.expanduser("~/.zcode/config.json"),
-)
-
-
 def find_credentials():
     """-> (key, base_url, protocol, source) ; key may be None. Never reads ANTHROPIC_BASE_URL."""
-    base = (os.environ.get("PLAN_BASE_URL") or os.environ.get("ZAI_BASE_URL")
-            or os.environ.get("GLM_BASE_URL") or "").strip().rstrip("/")
-    for e in KEY_ENV:
-        v = os.environ.get(e, "").strip()
-        if v:
-            return v, base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), "env:" + e
-    for p in KEY_FILES:
-        data = _json_or_none(p)
-        if not data:
-            continue
-        env = data.get("env") if isinstance(data, dict) else None
-        if isinstance(env, dict):
-            for e in KEY_ENV:
-                if env.get(e):
-                    return str(env[e]).strip(), base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), p
-        k = _walk_for_key(data)
-        if k:
-            return k, base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), p
-    return None, base or DEFAULT_BASE, protocol_for(base or DEFAULT_BASE), "-"
+    base = zai_client.find_base(os.environ.get("PLAN_BASE_URL", ""))
+    key, source = zai_client.find_key(extra_env=("PLAN_API_KEY",))
+    return key, base, protocol_for(base), source or "-"
 
 
 def protocol_for(base):
