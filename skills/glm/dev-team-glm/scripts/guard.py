@@ -765,7 +765,7 @@ def guard_oc(inp):
     out = ""
     for p in paths:
         ap = p if os.path.isabs(p) else os.path.abspath(os.path.join(cwd, p))
-        if find_slice_root(os.path.dirname(ap)) is None:
+        if prog and find_slice_root(os.path.dirname(ap)) is None:
             out = deny_json(f"`{p}` is outside any slice worktree. OpenCode has no interactive "
                             "fallback for an unclaimed path.")
             break
