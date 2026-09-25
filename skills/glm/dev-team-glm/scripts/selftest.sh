@@ -1040,6 +1040,103 @@ assert rc_status == 0, rc_status
 assert rc_next == 1 and "was cut off" in err.getvalue(), (rc_next, err.getvalue())
 PY2'
 
+echo "== OpenCode harness: start/wait/next against a stub opencode on PATH"
+ROC="$(newrepo rocx)"; cd "$ROC"
+cat > plan.md <<'EOF'
+```json
+{"request":"oc port","commands":{"test":"true"},"slices":[{"id":"O1","title":"oc slice","deps":[],"files":["src/o1.js","tests/o1.test.js"],"risk":"low","criteria":["works"]}]}
+```
+EOF
+OCBIN="$(mktemp -d)"
+export DEVTEAM_PY="$S/devteam.py"
+cat > "$OCBIN/opencode" <<'SH'
+#!/usr/bin/env bash
+set -u
+if [ "${1:-}" = "--version" ]; then echo "1.18.32"; exit 0; fi
+DIR=""; prev=""
+for a in "$@"; do
+  [ "$prev" = "--dir" ] && DIR="$a"
+  prev="$a"
+done
+if [ "${DEVTEAM_SLICE:-}" = "O1" ] && [ "${DEVTEAM_ROLE:-}" = "programmer" ] && [ -n "$DIR" ]; then
+  ( cd "$DIR" \
+    && mkdir -p tests \
+    && printf 'test("o1", () => { assert.equal(1, 1); });\n' > tests/o1.test.js \
+    && python3 "$DEVTEAM_PY" commit-red o1 >/dev/null 2>&1 \
+    && echo "impl o1" > src/o1.js \
+    && python3 "$DEVTEAM_PY" commit-green o1 >/dev/null 2>&1 )
+fi
+printf '%s\n' '{"type":"text","part":{"type":"text","text":"## Status: Complete -- ## Gate: node -e 1 -> ok"}}'
+exit 0
+SH
+chmod +x "$OCBIN/opencode"
+OLDPATH="$PATH"
+export PATH="$OCBIN:$PATH"
+export DEVTEAM_HARNESS=opencode
+OUT=$(D start plan.md 2>&1)
+check "opencode start dispatches O1 through the OpenCode seam" '[[ "$OUT" == *"DISPATCH O1"* ]]'
+WAITOUT=$(D wait --timeout 30 2>&1)
+check "devteam.py wait blocks until the lane result appears then tells the Conductor what to run next" '[[ "$WAITOUT" == *"NEXT: devteam next"* ]]'
+check "opencode worktree created at wt/<lane> and claimed" '[ -d "$ROC/.claude/dev-team/wt/O1" ] && [ -d "$ROC/.claude/dev-team/wt/O1/.slice" ] && [ -f "$ROC/.claude/dev-team/lanes/O1.jsonl" ]'
+check "lane-run writes .done through guard.py stop" '[ -f "$ROC/.claude/dev-team/slices/O1.done" ]'
+DENYOUT=$(printf '{"cwd":"%s","tool":"edit","role":"programmer","args":{"filePath":"%s/outside.js","oldString":"a","newString":"b"}}' "$ROC/.claude/dev-team/wt/O1" "$ROC/.claude/dev-team/wt/O1" | python3 "$G" oc)
+check "guard.py oc denies an out-of-footprint edit" '[[ "$DENYOUT" == *deny* ]]'
+
+echo "== OpenCode plugin shim round-trip through guard.py for both plugin files"
+PLUGDIR="$S/../opencode/plugins"
+check "v1 plugin file devteam-guard.v1.js exists" '[ -f "$PLUGDIR/devteam-guard.v1.js" ]'
+check "v2 plugin file devteam-guard.v2.js exists" '[ -f "$PLUGDIR/devteam-guard.v2.js" ]'
+check "v1 plugin exports DevteamGuard with the tool.execute.before hook" 'grep -q "DevteamGuard" "$PLUGDIR/devteam-guard.v1.js" && grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v1.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v1.js"'
+check "v2 plugin exports Plugin.define({ id: \"devteam-guard\", setup }) with the tool.execute.before hook" 'grep -q "devteam-guard" "$PLUGDIR/devteam-guard.v2.js" && grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v2.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v2.js"'
+sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v1.js" > "$TMP/v1.mjs"
+sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v2.js" > "$TMP/v2.mjs"
+mkdir -p "$TMP/node_modules/@opencode/plugin"
+cat > "$TMP/node_modules/@opencode/plugin/package.json" <<'JSON'
+{"name":"@opencode/plugin","version":"0.0.0","type":"module","main":"index.mjs"}
+JSON
+cat > "$TMP/node_modules/@opencode/plugin/index.mjs" <<'JS'
+export const Plugin = { define: (def) => def };
+JS
+cat > "$TMP/v1check.js" <<'JS'
+const path = require("path");
+(async () => {
+  const mod = await import(process.argv[2]);
+  const hooks = await mod.DevteamGuard({ directory: process.cwd() });
+  try {
+    await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), "outside.js"), oldString: "a", newString: "b" } });
+    console.log("ALLOWED");
+  } catch (e) {
+    console.log("DENIED: " + e.message);
+  }
+})();
+JS
+V1RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v1check.js" "$TMP/v1.mjs" 2>&1)
+check "DevteamGuard (v1 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V1RES" == *"DENIED"* ]]'
+cat > "$TMP/v2check.js" <<'JS'
+const path = require("path");
+(async () => {
+  const mod = await import(process.argv[2]);
+  const plugin = mod.default;
+  const hooks = await plugin.setup({ location: { directory: process.cwd() } });
+  try {
+    await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), "outside.js"), oldString: "a", newString: "b" } });
+    console.log("ALLOWED");
+  } catch (e) {
+    console.log("DENIED: " + e.message);
+  }
+})();
+JS
+V2RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v2check.js" "$TMP/v2.mjs" 2>&1)
+check "Plugin.define({ id: \"devteam-guard\", setup }) (v2 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V2RES" == *"DENIED"* ]]'
+cd "$ROC"
+NEXTOUT=$(D next 2>&1)
+check "opencode next integrates the finished lane" '[[ "$NEXTOUT" == *"O1: MERGED"* ]]'
+printf '{"type":"assistant","text":"working"}\n{"type":"system","subtype":"api_error","level":"error","error":{"status":429,"error":{"code":"1302","message":"rate limit"}},"timestamp":"2026-01-01T00:00:00.000Z"}\n' > "$ROC/.claude/dev-team/lanes/O1.jsonl"
+GOVOUT=$(DEVTEAM_GOVERNOR=on D next 2>&1)
+check "a 1302 throttle row shrinks the governor window (opencode lanes)" '[[ "$GOVOUT" == *"THROTTLED"* && "$GOVOUT" == *"window"*"→"* ]]'
+export PATH="$OLDPATH"
+unset DEVTEAM_HARNESS DEVTEAM_PY
+
 echo
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
