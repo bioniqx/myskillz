@@ -103,9 +103,11 @@ def render_agent(text: str, major: int) -> str:
     else:
         if steps is not None:
             lines.append("steps: {}".format(steps))
+        if temperature is not None:
+            lines.append("temperature: {}".format(temperature))
         lines.append("permissions:")
         edit_effect = "deny" if write_paths else edit_perm
-        for action, effect in (("edit", edit_effect), ("bash", bash_perm), ("webfetch", web_perm)):
+        for action, effect in (("edit", edit_effect), ("shell", bash_perm), ("webfetch", web_perm)):
             lines.append("  - action: {}".format(action))
             lines.append('    resource: "*"')
             lines.append("    effect: {}".format(effect))
@@ -119,11 +121,8 @@ def render_agent(text: str, major: int) -> str:
             lines.append("  - action: task")
             lines.append('    resource: "*"')
             lines.append("    effect: deny")
-        lines.append("request:")
-        lines.append("  body:")
-        lines.append("    reasoning_effort: {}".format(effort))
-        if temperature is not None:
-            lines.append("    temperature: {}".format(temperature))
+        lines.append("options:")
+        lines.append("  reasoning_effort: {}".format(effort))
     lines.append("---")
     lines.append("")
     lines.append(body)
@@ -167,7 +166,7 @@ THROTTLE_RE = re.compile(
     r"|\b429 Too Many Requests\b",
     re.I,
 )
-RUN_FLAGS = ["--dir", "--agent", "--model", "--format", "--auto"]
+RUN_FLAGS = ["--agent", "--model", "--format", "--auto"]
 
 
 def check_run_flags(major: int, binary: str = "opencode") -> list:
@@ -190,9 +189,13 @@ def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list:
     if os.path.isfile(brief):
         with open(brief) as f:
             brief = f.read()
-    model_flag = "-m" if major < 2 else "--model"
-    return [binary, "run", "--dir", lane.get("dir") or ".", "--agent", lane["agent"],
-            model_flag, model, "--format", "json", "--auto", brief]
+    if major < 2:
+        return [binary, "run", "--dir", lane.get("dir") or ".", "--agent", lane["agent"],
+                "-m", model, "--format", "json", "--auto", brief]
+    # v2 has no --dir flag; the lane's working directory is instead passed as
+    # the subprocess cwd (see _start_lane).
+    return [binary, "run", "--agent", lane["agent"], "--model", model,
+            "--format", "json", "--auto", brief]
 
 
 def _read_events(state):
@@ -232,7 +235,7 @@ def _start_lane(lane, out_dir, major, binary, width):
     env.update({k: str(v) for k, v in (lane.get("env") or {}).items()})
     proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env,
-                            start_new_session=True)
+                            start_new_session=True, cwd=lane.get("dir") or ".")
     now = time.monotonic()
     state = {"id": lane_id, "proc": proc, "err_path": err_path, "err_file": err_file,
              "out": os.path.join(out_dir, lane_id + ".jsonl"), "start": now, "last": now,

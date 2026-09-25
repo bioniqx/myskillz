@@ -96,12 +96,14 @@ class TestOcHarnessRender(unittest.TestCase):
         self.assertNotIn("glm-5.3-flash", v2)
         self.assertIn("permissions:", v2)
         self.assertIn("  - action: edit\n    resource: \"*\"\n    effect: deny", v2)
-        self.assertIn("  - action: bash\n    resource: \"*\"\n    effect: deny", v2)
+        self.assertIn("  - action: shell\n    resource: \"*\"\n    effect: deny", v2)
         self.assertIn("  - action: webfetch\n    resource: \"*\"\n    effect: allow", v2)
+        self.assertNotIn("action: bash", v2)
         self.assertIn('description: "Test agent"', v2)
-        self.assertIn("request:", v2)
-        self.assertIn("reasoning_effort: max", v2)
+        self.assertNotIn("request:", v2)
+        self.assertIn("options:\n  reasoning_effort: max", v2)
         self.assertIn("temperature: 0.2", v2)
+        self.assertNotIn("    temperature: 0.2", v2)
 
     def test_render_command_replaces_skill_dir_and_keeps_arguments(self):
         text = (
