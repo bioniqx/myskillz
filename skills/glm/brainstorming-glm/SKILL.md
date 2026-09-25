@@ -304,11 +304,24 @@ never stall.
 | `!` preprocessing (raw `!` above) | Run `scripts/context.sh` as your first round-1 call. |
 | TaskCreate | Track state in the message per R5. |
 
-On OpenCode, lanes run through `oc_harness run` with the neutral `explorer`
-(read-only) and `researcher` (web) agents installed under `opencode/agents/`.
-Tool-name map: `task` for a lane, `todowrite` for TaskCreate,
-`webfetch` for WebFetch; AskUserQuestion becomes plain-text numbered
-questions with approval as item 1.
+On OpenCode, lanes run through the exact command
+`python3 ${CLAUDE_SKILL_DIR}/scripts/oc_harness.py run <lanes.json>`,
+where `<lanes.json>` is a JSON array of lane objects you write before the
+call. Each lane needs `id` (unique string), `agent` (`explorer` or
+`researcher`, the neutral read-only/web agents installed under
+`opencode/agents/`), `model` (`flash` or `pro`), `dir` (working directory
+for that lane) and `brief` (the per-lane user message: task, root/stack,
+today's date, this lane's slice or angle, the siblings it must stay out
+of, and its one question — the same fields the Code/Web lane templates
+in R11 fill per lane). Results land under the run's `--out` directory
+(default `.oc-lanes`) as `<id>.jsonl` (the lane's streamed
+FINDINGS/CLAIMS output — read this), `<id>.err` and `<id>.done` (status
+JSON); read `<id>.jsonl` for each lane once `oc_harness run` reports it
+`OK`.
+Tool-name map: `task` for a lane — and ONLY as the fallback when
+`oc_harness run` is unavailable — `todowrite` for TaskCreate, `webfetch`
+for WebFetch; AskUserQuestion becomes plain-text numbered questions with
+approval as item 1.
 
 ## Visual companion
 

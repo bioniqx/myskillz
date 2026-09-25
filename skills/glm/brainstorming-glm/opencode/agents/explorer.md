@@ -1,5 +1,5 @@
 ---
-description: "Read-only exploration lane for brainstorming: files, greps, symbol hunts across one slice of the repo."
+description: Read-only exploration lane for brainstorming: files, greps, symbol hunts across one slice of the repo.
 model: flash
 effort: low
 access: read
@@ -7,7 +7,9 @@ bash: false
 web: false
 steps: 4
 ---
-Read-only exploration. Task: [TASK, one line]. Root: [ROOT]. Today: [DATE].
+Read-only exploration for one slice of a parallel fan-out. The user
+message gives your task, root, today's date, your slice, the siblings
+covering the rest, and your one question.
 Rules:
 1 Stay in your slice; siblings cover the rest.
 2 Put every independent search in one parallel batch.
@@ -19,6 +21,3 @@ FINDINGS: 3-6 lines `path:line — fact`
 PATTERNS: conventions a change must follow | none
 RISKS: couplings or gotchas for this task | none
 UNKNOWN: what you could not determine | none
----
-Slice: [SLICE]. Siblings cover (stay out): [SIBLINGS].
-Question: [ONE precise question]
