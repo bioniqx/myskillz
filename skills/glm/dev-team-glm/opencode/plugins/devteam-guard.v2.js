@@ -9,10 +9,11 @@
 // input}) from its one internal call site before every tool call — the tool
 // name is always at event.tool and the raw call arguments at event.input. An
 // error thrown by the hook function propagates and blocks the call. The
-// string "tool.execute.before" does not occur in the binary, and the plugin
-// api object built for setup() has no "directory" field — there is no
-// ctx.directory in v2; lanes run --standalone with cwd set to the lane dir,
-// so process.cwd() is the lane's directory.
+// dotted event name "tool" + "." + "execute.before" never appears together
+// as a single string in the binary, and the plugin api object built for
+// setup() has no "directory" field — v2 gives the plugin no per-call
+// directory context; lanes run --standalone with cwd set to the lane dir, so
+// process.cwd() is the lane's directory.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 

@@ -104,9 +104,12 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   team-leader) are set in env `DEVTEAM_ROLE` per lane. The plugins (`skills/glm/dev-team-glm/opencode/
   plugins/`) define v1 and v2 shapes; at install time, `oc_harness.install()` copies the matching major
   version to `<home>/.config/opencode/plugins/`. v1 plugin exports a `DevteamGuard` hook; v2 exports
-  `export default async (ctx) => ({ "tool.execute.before": async (input, output) => {...} })`, using
-  `ctx.directory` for the lane's cwd (from opencode.ai/v2/docs/build/plugins). Both hooks run before
-  tool execution: on receipt of `edit`, `write`, `patch`/`apply_patch`, or `bash` tools, they call `python3
+  `export default { id: 'devteam-guard', setup: async (api) => { api.tool.hook('execute.before', async
+  (event) => {...}) } }` — the real shape the installed v2.0.16 binary validates and calls (verified from
+  the binary: `PluginModule.load` requires a default export matching `{id, effect}` or `{id, setup}`, and
+  `api.tool.hook` forwards to the Tool service's `execute.before` trigger, whose event carries `tool` and
+  `input`). There is no `ctx.directory` in v2; the plugin uses `process.cwd()` instead. Both hooks run
+  before tool execution: on receipt of `edit`, `write`, `patch`/`apply_patch`, or `bash` tools, they call `python3
   guard.py oc` with JSON on stdin and throw `Error(reason)` if the decision is `deny`. Guard mode choice:
   programmer role gets `edit`/`bash` checks; any other role gets read-only (`edit-ro`/`bash-ro`) with
   `agent_type` set to the role; no role prints nothing (silent allow). Plugin failures allow calls (same
