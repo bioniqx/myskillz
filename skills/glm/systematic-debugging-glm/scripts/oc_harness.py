@@ -105,22 +105,25 @@ def render_agent(text: str, major: int) -> str:
             lines.append("steps: {}".format(steps))
         if temperature is not None:
             lines.append("temperature: {}".format(temperature))
-        lines.append("permissions:")
-        edit_effect = "deny" if write_paths else edit_perm
-        for action, effect in (("edit", edit_effect), ("shell", bash_perm), ("webfetch", web_perm)):
-            lines.append("  - action: {}".format(action))
-            lines.append('    resource: "*"')
-            lines.append("    effect: {}".format(effect))
-            if action == "edit" and write_paths:
-                # Rules are evaluated last-match-wins, so this more specific
-                # allow must come after the wildcard deny above.
-                lines.append("  - action: edit")
-                lines.append('    resource: "{}"'.format(write_paths))
-                lines.append("    effect: allow")
+        # Verified against the installed opencode v2.0.16 binary (strings):
+        # AgentConfig.permission is PermissionConfig, the same nested-map
+        # shape v1 uses -- not the {action, resource, effect} rule list
+        # (that shape is the runtime Permission.Ruleset, never the agent
+        # frontmatter schema). Object keys are read, edit, glob, grep,
+        # list, bash, task, external_directory, webfetch, skill, ...; the
+        # tool is renamed "shell" in transcripts, but the permission key
+        # itself is still "bash".
+        lines.append("permission:")
         if write_paths:
-            lines.append("  - action: task")
-            lines.append('    resource: "*"')
-            lines.append("    effect: deny")
+            lines.append("  edit:")
+            lines.append('    "*": deny')
+            lines.append('    "{}": allow'.format(write_paths))
+        else:
+            lines.append("  edit: {}".format(edit_perm))
+        lines.append("  bash: {}".format(bash_perm))
+        lines.append("  webfetch: {}".format(web_perm))
+        if write_paths:
+            lines.append("  task: deny")
         lines.append("options:")
         lines.append("  reasoning_effort: {}".format(effort))
     lines.append("---")
