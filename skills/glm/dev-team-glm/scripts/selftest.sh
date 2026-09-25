@@ -22,6 +22,7 @@ git -c commit.gpgsign=false add -A && git -c commit.gpgsign=false commit -qm ini
 pass=0; fail=0
 ok()  { pass=$((pass+1)); echo "  ok   $1"; }
 bad() { fail=$((fail+1)); echo "  FAIL $1"; }
+skip() { echo "  SKIP $1"; }
 check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 hook() { printf '%s' "$2" | python3 "$G" "$1"; }
 # a minimally REAL test file: the engine statically refuses tests with no assertion / no case
@@ -1088,46 +1089,55 @@ check "v1 plugin file devteam-guard.v1.js exists" '[ -f "$PLUGDIR/devteam-guard.
 check "v2 plugin file devteam-guard.v2.js exists" '[ -f "$PLUGDIR/devteam-guard.v2.js" ]'
 check "v1 plugin exports DevteamGuard with the tool.execute.before hook" 'grep -q "DevteamGuard" "$PLUGDIR/devteam-guard.v1.js" && grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v1.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v1.js"'
 check "v2 plugin exports Plugin.define({ id: \"devteam-guard\", setup }) with the tool.execute.before hook" 'grep -q "devteam-guard" "$PLUGDIR/devteam-guard.v2.js" && grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v2.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v2.js"'
-sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v1.js" > "$TMP/v1.mjs"
-sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v2.js" > "$TMP/v2.mjs"
-mkdir -p "$TMP/node_modules/@opencode/plugin"
-cat > "$TMP/node_modules/@opencode/plugin/package.json" <<'JSON'
+if command -v node >/dev/null 2>&1; then
+  sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v1.js" > "$TMP/v1.mjs"
+  sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v2.js" > "$TMP/v2.mjs"
+  mkdir -p "$TMP/node_modules/@opencode/plugin"
+  cat > "$TMP/node_modules/@opencode/plugin/package.json" <<'JSON'
 {"name":"@opencode/plugin","version":"0.0.0","type":"module","main":"index.mjs"}
 JSON
-cat > "$TMP/node_modules/@opencode/plugin/index.mjs" <<'JS'
+  cat > "$TMP/node_modules/@opencode/plugin/index.mjs" <<'JS'
 export const Plugin = { define: (def) => def };
 JS
-cat > "$TMP/v1check.js" <<'JS'
+  cat > "$TMP/v1check.js" <<'JS'
 const path = require("path");
 (async () => {
   const mod = await import(process.argv[2]);
   const hooks = await mod.DevteamGuard({ directory: process.cwd() });
   try {
-    await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), "outside.js"), oldString: "a", newString: "b" } });
+    await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), process.argv[3]), oldString: "a", newString: "b" } });
     console.log("ALLOWED");
   } catch (e) {
     console.log("DENIED: " + e.message);
   }
 })();
 JS
-V1RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v1check.js" "$TMP/v1.mjs" 2>&1)
-check "DevteamGuard (v1 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V1RES" == *"DENIED"* ]]'
-cat > "$TMP/v2check.js" <<'JS'
+  V1RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v1check.js" "$TMP/v1.mjs" outside.js 2>&1)
+  check "DevteamGuard (v1 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V1RES" == *"outside your slice footprint"* ]]'
+  V1OK=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v1check.js" "$TMP/v1.mjs" src/o1.js 2>&1)
+  check "DevteamGuard (v1 plugin) allows an in-footprint edit of src/o1.js via guard.py oc" '[[ "$V1OK" == *"ALLOWED"* ]]'
+  cat > "$TMP/v2check.js" <<'JS'
 const path = require("path");
 (async () => {
   const mod = await import(process.argv[2]);
   const plugin = mod.default;
   const hooks = await plugin.setup({ location: { directory: process.cwd() } });
   try {
-    await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), "outside.js"), oldString: "a", newString: "b" } });
+    await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), process.argv[3]), oldString: "a", newString: "b" } });
     console.log("ALLOWED");
   } catch (e) {
     console.log("DENIED: " + e.message);
   }
 })();
 JS
-V2RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v2check.js" "$TMP/v2.mjs" 2>&1)
-check "Plugin.define({ id: \"devteam-guard\", setup }) (v2 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V2RES" == *"DENIED"* ]]'
+  V2RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v2check.js" "$TMP/v2.mjs" outside.js 2>&1)
+  check "Plugin.define({ id: \"devteam-guard\", setup }) (v2 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V2RES" == *"outside your slice footprint"* ]]'
+  V2OK=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v2check.js" "$TMP/v2.mjs" src/o1.js 2>&1)
+  check "Plugin.define({ id: \"devteam-guard\", setup }) (v2 plugin) allows an in-footprint edit of src/o1.js via guard.py oc" '[[ "$V2OK" == *"ALLOWED"* ]]'
+else
+  skip "node not on PATH: v1/v2 plugin round-trip (deny) checks skipped"
+  skip "node not on PATH: v1/v2 plugin round-trip (allow) checks skipped"
+fi
 cd "$ROC"
 NEXTOUT=$(D next 2>&1)
 check "opencode next integrates the finished lane" '[[ "$NEXTOUT" == *"O1: MERGED"* ]]'
