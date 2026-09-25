@@ -46,7 +46,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shar
 ```
 
 `_shared/*.py` (`zai_client.py`, `oc_harness.py`) is the source of truth; each skill's `scripts/` copy is
-vendored from it by `sh skills/glm/_shared/sync.sh` — never edit a vendored copy by hand.
+vendored from it by `sh _shared/sync.sh` — never edit a vendored copy by hand.
 
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
 `selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
@@ -103,13 +103,15 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   **Plugin role mapping:** OpenCode agent names (programmer, code-reviewer, spot-reviewer, investigator,
   team-leader) are set in env `DEVTEAM_ROLE` per lane. The plugins (`skills/glm/dev-team-glm/opencode/
   plugins/`) define v1 and v2 shapes; at install time, `oc_harness.install()` copies the matching major
-  version to `<home>/.config/opencode/plugins/`. v1 plugin exports `DevteamGuard` hook; v2 exports a
-  `Plugin.define` with id `devteam-guard` (from opencode.ai/v2/docs/build/plugins). Both hooks run before
+  version to `<home>/.config/opencode/plugins/`. v1 plugin exports a `DevteamGuard` hook; v2 exports
+  `export default async (ctx) => ({ "tool.execute.before": async (input, output) => {...} })`, using
+  `ctx.directory` for the lane's cwd (from opencode.ai/v2/docs/build/plugins). Both hooks run before
   tool execution: on receipt of `edit`, `write`, `patch`/`apply_patch`, or `bash` tools, they call `python3
   guard.py oc` with JSON on stdin and throw `Error(reason)` if the decision is `deny`. Guard mode choice:
   programmer role gets `edit`/`bash` checks; any other role gets read-only (`edit-ro`/`bash-ro`) with
   `agent_type` set to the role; no role prints nothing (silent allow). Plugin failures allow calls (same
-  fail-open as Python-side guard).
+  fail-open as Python-side guard). v2 `opencode run` has no `--dir` flag; lanes instead run with the lane's
+  working directory passed as the subprocess `cwd` (v1 keeps `--dir`).
 - **systematic-debugging-glm**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
   `experiment` (a separate worktree for each control and treatment arm) and `scan` (64 API workers). Helper
   shell scripts: `stress.sh` (Wilson CI and Fisher test), `bisect-parallel.sh` and `find-polluter.sh`.
