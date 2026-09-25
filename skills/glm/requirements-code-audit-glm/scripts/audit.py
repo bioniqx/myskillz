@@ -68,10 +68,6 @@ CONF = ["high", "medium", "low"]
 STRENGTHS = ["MUST", "SHOULD", "MAY"]
 
 DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
-KEY_ENV = ["ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
-           "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"]
-KEY_FIELDS = ["ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
-              "apiKey", "api_key", "key"]
 BASE_ENV = ["ZAI_BASE_URL", "GLM_BASE_URL"]  # ANTHROPIC_BASE_URL is never read
 
 # --------------------------------------------------------------------------- tiny helpers
@@ -182,52 +178,7 @@ def batch_key(name):
 # --------------------------------------------------------------------------- credentials
 
 
-def _walk_for_key(obj, depth=0):
-    """Pull a key only out of a field whose NAME says it is one. No blind scanning."""
-    if depth > 6 or not isinstance(obj, (dict, list)):
-        return None
-    if isinstance(obj, dict):
-        for f in KEY_FIELDS:
-            v = obj.get(f)
-            if isinstance(v, str) and len(v) >= 16 and " " not in v:
-                return v
-        for v in obj.values():
-            got = _walk_for_key(v, depth + 1)
-            if got:
-                return got
-    else:
-        for v in obj:
-            got = _walk_for_key(v, depth + 1)
-            if got:
-                return got
-    return None
-
-
-def discover_key():
-    for e in KEY_ENV:
-        v = (os.environ.get(e) or "").strip()
-        if v:
-            return v, "env:" + e
-    home = os.path.expanduser("~")
-    cands = [
-        os.path.join(home, ".local", "share", "opencode", "auth.json"),
-        os.path.join(home, ".config", "opencode", "auth.json"),
-        os.path.join(home, ".config", "opencode", "opencode.json"),
-        os.path.join(".", "opencode.json"),
-        os.path.join(home, ".claude", "settings.json"),
-        os.path.join(home, ".claude", "settings.local.json"),
-        os.path.join(home, ".zcode", "settings.json"),
-        os.path.join(home, ".zcode", "auth.json"),
-        os.path.join(home, ".zcode", "config.json"),
-    ]
-    for p in cands:
-        obj = read_json(p)
-        if obj is None:
-            continue
-        got = _walk_for_key(obj)
-        if got:
-            return got, p
-    return None, None
+discover_key = zai_client.find_key
 
 
 def discover_base():
