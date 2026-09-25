@@ -1839,7 +1839,7 @@ def launch_lane(root, st, lane_id, agent, model, prompt) -> int:
     d = lanes_dir(root)
     d.mkdir(parents=True, exist_ok=True)
     terminate_lane_process(d, lane_id)
-    for ext in (".done", ".jsonl", ".err"):
+    for ext in (".done", ".jsonl", ".err", ".end"):
         try:
             (d / f"{lane_id}{ext}").unlink()
         except OSError:
