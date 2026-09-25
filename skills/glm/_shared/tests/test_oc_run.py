@@ -55,12 +55,13 @@ class BuildRunCmdTest(unittest.TestCase):
             "-m", "zai-coding-plan/glm-5.3-flash", "--format", "json", "--auto", "look",
         ])
 
-    def test_v2_command_uses_long_model_flag(self):
+    def test_v2_command_uses_long_model_flag_and_no_dir(self):
         cmd = oc_harness.build_run_cmd(lane("a", "look", dir="/tmp/repo", model="pro"), 2, binary="oc2")
         self.assertEqual(cmd, [
-            "oc2", "run", "--dir", "/tmp/repo", "--agent", "worker",
+            "oc2", "run", "--agent", "worker",
             "--model", "zai-coding-plan/glm-5.3", "--format", "json", "--auto", "look",
         ])
+        self.assertNotIn("--dir", cmd)
 
     def test_brief_file_is_read(self):
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
@@ -81,6 +82,10 @@ class CheckRunFlagsTest(unittest.TestCase):
     def test_v2_missing_flag_named(self):
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--auto"}):
             self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--auto"])
+
+    def test_v2_missing_dir_flag_is_not_required(self):
+        with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--dir"}):
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), [])
 
 
 class KillGroupTest(unittest.TestCase):
@@ -255,6 +260,31 @@ class RunLanesTest(unittest.TestCase):
                     os.kill(child_pid, signal.SIGKILL)
                 except OSError:
                     pass
+
+    def test_v2_lane_starts_with_cwd_set_to_lane_dir_and_no_dir_flag_in_argv(self):
+        argv_log = os.path.join(self.out, "argv.log")
+        lane_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, lane_dir, True)
+        with mock.patch.dict(os.environ, {"STUB_OC_LOG": argv_log, "STUB_OC_MISSING": ""}):
+            with mock.patch("oc_harness.subprocess.Popen", wraps=subprocess.Popen) as popen:
+                results = oc_harness.run_lanes(
+                    [lane("a", "one", dir=lane_dir)], self.out, binary=STUB, major=2
+                )
+        self.assertEqual(results[0]["status"], "OK")
+        _, kwargs = popen.call_args
+        self.assertEqual(kwargs.get("cwd"), lane_dir)
+        self.assertNotIn("--dir", self.read_argvs(argv_log)[0])
+
+    def test_v1_lane_also_starts_with_cwd_set_to_lane_dir(self):
+        lane_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, lane_dir, True)
+        with mock.patch("oc_harness.subprocess.Popen", wraps=subprocess.Popen) as popen:
+            results = oc_harness.run_lanes(
+                [lane("a", "one", dir=lane_dir)], self.out, binary=STUB, major=1
+            )
+        self.assertEqual(results[0]["status"], "OK")
+        _, kwargs = popen.call_args
+        self.assertEqual(kwargs.get("cwd"), lane_dir)
 
     def test_detects_major_when_not_given(self):
         log = os.path.join(self.out, "argv.log")
