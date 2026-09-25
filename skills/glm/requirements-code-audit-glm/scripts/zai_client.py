@@ -50,6 +50,14 @@ KEY_FILES = ("~/.local/share/opencode/auth.json", "~/.config/opencode/auth.json"
              "~/.claude/settings.json", "~/.claude/settings.local.json",
              "~/.zcode/settings.json", "~/.zcode/auth.json", "~/.zcode/config.json")
 
+ZAI_PROVIDERS = ("zai-coding-plan", "zai", "zhipuai-coding-plan", "zhipuai")
+
+
+def _valid_key(v):
+    """A real secret: a plain string, long enough, no spaces, not a `{...}` template."""
+    return (isinstance(v, str) and len(v) >= 16 and " " not in v
+            and not (v.startswith("{") and v.endswith("}")))
+
 
 def _walk_for_key(obj, depth=0):
     """Take a key only from a field whose name says it is one."""
@@ -58,7 +66,7 @@ def _walk_for_key(obj, depth=0):
     if isinstance(obj, dict):
         for f in KEY_FIELDS:
             v = obj.get(f)
-            if isinstance(v, str) and len(v) >= 16 and " " not in v:
+            if _valid_key(v):
                 return v
         items = list(obj.values())
     elif isinstance(obj, list):
@@ -69,6 +77,28 @@ def _walk_for_key(obj, depth=0):
         got = _walk_for_key(v, depth + 1)
         if got:
             return got
+    return None
+
+
+def _opencode_key(obj):
+    """Key from an OpenCode auth.json/opencode.json shape, scoped to Z.ai provider ids only."""
+    if not isinstance(obj, dict):
+        return None
+    for pid in ZAI_PROVIDERS:
+        entry = obj.get(pid)
+        if isinstance(entry, dict):
+            for f in ("key", "apiKey", "api_key"):
+                if _valid_key(entry.get(f)):
+                    return entry.get(f)
+    providers = obj.get("provider")
+    if isinstance(providers, dict):
+        for pid in ZAI_PROVIDERS:
+            entry = providers.get(pid)
+            options = entry.get("options") if isinstance(entry, dict) else None
+            if isinstance(options, dict):
+                for f in ("apiKey", "api_key", "key"):
+                    if _valid_key(options.get(f)):
+                        return options.get(f)
     return None
 
 
@@ -85,7 +115,7 @@ def find_key(extra_env: tuple = ()) -> tuple:
                 obj = json.load(f)
         except (OSError, ValueError):
             continue
-        got = _walk_for_key(obj)
+        got = _opencode_key(obj) if "opencode" in p else _walk_for_key(obj)
         if got:
             return got, path
     return None, None
