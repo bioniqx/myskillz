@@ -82,20 +82,48 @@ def _run_v1(tmp_dir, skill_dir, role, tool, args):
 
 
 def _run_v2(tmp_dir, skill_dir, role, tool, args):
+    # Drives the plugin the way the real v2.0.16 binary does: import its
+    # default export ({id, setup}), call setup(api) with a fake api whose
+    # tool.hook(name, fn) records the registered hook, then invoke that hook
+    # with the real event shape {tool, sessionID, agent, messageID, id,
+    # input}.
     source = _load_plugin_source(V2_PATH, skill_dir)
     plugin_path = os.path.join(tmp_dir, "plugin.mjs")
     with open(plugin_path, "w") as f:
         f.write(source)
+    work_dir = os.path.join(tmp_dir, "work")
+    os.makedirs(work_dir, exist_ok=True)
     driver_path = os.path.join(tmp_dir, "driver.mjs")
     driver = textwrap.dedent(
         """\
         import plugin from "%s";
-        const hooks = await plugin({ directory: "/tmp/work" });
+        if (typeof plugin.id !== "string" || plugin.id.length === 0) {
+          throw new Error("plugin.id must be a non-empty string");
+        }
+        if (typeof plugin.setup !== "function") {
+          throw new Error("plugin.setup must be a function");
+        }
+        const hooks = {};
+        const api = {
+          tool: {
+            hook: (name, fn) => {
+              hooks[name] = fn;
+            },
+          },
+        };
+        await plugin.setup(api);
+        if (typeof hooks["execute.before"] !== "function") {
+          throw new Error("plugin did not register an execute.before hook");
+        }
         try {
-          await hooks["tool.execute.before"](
-            { tool: "%s" },
-            { args: %s }
-          );
+          await hooks["execute.before"]({
+            tool: "%s",
+            sessionID: "s",
+            agent: "a",
+            messageID: "m",
+            id: "c",
+            input: %s,
+          });
           process.stdout.write("ALLOWED");
         } catch (err) {
           process.stdout.write("DENIED:" + err.message);
@@ -110,54 +138,12 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
     else:
         env["DEVTEAM_ROLE"] = role
     return subprocess.run(
-        ["node", driver_path], capture_output=True, text=True, env=env, timeout=30
-    )
-
-
-def _run_v2_shaped(tmp_dir, skill_dir, role, tool, args, shape):
-    """Like _run_v2, but drives the hook with a chosen real-v2 payload shape:
-    'output_args' (args under output.args), 'input_args' (args under
-    input.args) or 'input_input' (args under input.input)."""
-    source = _load_plugin_source(V2_PATH, skill_dir)
-    plugin_path = os.path.join(tmp_dir, "plugin.mjs")
-    with open(plugin_path, "w") as f:
-        f.write(source)
-    driver_path = os.path.join(tmp_dir, "driver.mjs")
-    if shape == "output_args":
-        input_obj = {"tool": tool}
-        output_obj = {"args": args}
-    elif shape == "input_args":
-        input_obj = {"tool": tool, "args": args}
-        output_obj = {}
-    elif shape == "input_input":
-        input_obj = {"tool": tool, "input": args}
-        output_obj = {}
-    else:
-        raise ValueError("unknown shape: %r" % (shape,))
-    driver = textwrap.dedent(
-        """\
-        import plugin from "%s";
-        const hooks = await plugin({ directory: "/tmp/work" });
-        try {
-          await hooks["tool.execute.before"](
-            %s,
-            %s
-          );
-          process.stdout.write("ALLOWED");
-        } catch (err) {
-          process.stdout.write("DENIED:" + err.message);
-        }
-        """
-    ) % (plugin_path, json.dumps(input_obj), json.dumps(output_obj))
-    with open(driver_path, "w") as f:
-        f.write(driver)
-    env = dict(os.environ)
-    if role is None:
-        env.pop("DEVTEAM_ROLE", None)
-    else:
-        env["DEVTEAM_ROLE"] = role
-    return subprocess.run(
-        ["node", driver_path], capture_output=True, text=True, env=env, timeout=30
+        ["node", driver_path],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+        cwd=work_dir,
     )
 
 
@@ -197,7 +183,11 @@ class TestDevteamPlugins(unittest.TestCase):
             source = f.read()
         assert "@opencode/plugin" not in source
         assert "Plugin.define" not in source
-        assert "ctx.directory" in source
+        assert "tool.execute.before" not in source
+        assert "ctx.directory" not in source
+        assert "id: \"devteam-guard\"" in source
+        assert "setup:" in source
+        assert "api.tool.hook" in source
 
     def test_v1_denies_and_throws(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -279,10 +269,11 @@ class TestDevteamPlugins(unittest.TestCase):
             with open(record_path) as f:
                 record = json.load(f)
             assert record["argv"] == ["oc"]
+            expected_cwd = os.path.realpath(os.path.join(tmp_dir, "work"))
             assert record["stdin"] == {
                 "tool": "edit",
                 "args": {"filePath": "a.py", "oldString": "x", "newString": "y"},
-                "cwd": "/tmp/work",
+                "cwd": expected_cwd,
                 "role": "code-reviewer",
             }
 
@@ -347,56 +338,6 @@ class TestDevteamPlugins(unittest.TestCase):
             )
             assert result.returncode == 0, result.stderr
             assert result.stdout == "DENIED:blocked edit"
-
-    def test_v2_denies_with_args_under_input(self):
-        # Real opencode v2 tool.execute.before may deliver the call args
-        # nested under input.args instead of output.args.
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            skill_dir = os.path.join(tmp_dir, "skill")
-            _write_guard_stub(
-                skill_dir,
-                {
-                    "hookSpecificOutput": {
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": "blocked edit",
-                    }
-                },
-            )
-            result = _run_v2_shaped(
-                tmp_dir,
-                skill_dir,
-                "code-reviewer",
-                "edit",
-                {"filePath": "a.py", "oldString": "x", "newString": "y"},
-                "input_args",
-            )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "DENIED:blocked edit"
-
-    def test_v2_denies_with_args_under_input_input(self):
-        # Or nested under input.input (the raw tool-call arguments field).
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            skill_dir = os.path.join(tmp_dir, "skill")
-            _write_guard_stub(
-                skill_dir,
-                {
-                    "hookSpecificOutput": {
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": "blocked edit",
-                    }
-                },
-            )
-            result = _run_v2_shaped(
-                tmp_dir,
-                skill_dir,
-                "code-reviewer",
-                "edit",
-                {"filePath": "a.py", "oldString": "x", "newString": "y"},
-                "input_input",
-            )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "DENIED:blocked edit"
-
 
 if __name__ == "__main__":
     unittest.main()
