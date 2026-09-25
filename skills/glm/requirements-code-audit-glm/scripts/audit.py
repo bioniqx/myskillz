@@ -32,6 +32,7 @@ import threading
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+import zai_client  # vendored by skills/glm/_shared/sync.sh
 
 VERSION = "9.0-glm"
 
@@ -66,12 +67,12 @@ FINAL_STATUSES = STATUSES[:5]
 CONF = ["high", "medium", "low"]
 STRENGTHS = ["MUST", "SHOULD", "MAY"]
 
-DEFAULT_BASE = "https://api.z.ai/api/anthropic"
-KEY_ENV = ["ZAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "GLM_API_KEY", "ZHIPUAI_API_KEY",
-           "ANTHROPIC_API_KEY"]
-KEY_FIELDS = ["ZAI_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "apiKey",
-              "api_key", "token", "key"]
-BASE_ENV = ["ZAI_BASE_URL", "ANTHROPIC_BASE_URL", "GLM_BASE_URL"]
+DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
+KEY_ENV = ["ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
+           "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"]
+KEY_FIELDS = ["ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
+              "apiKey", "api_key", "key"]
+BASE_ENV = ["ZAI_BASE_URL", "GLM_BASE_URL"]  # ANTHROPIC_BASE_URL is never read
 
 # --------------------------------------------------------------------------- tiny helpers
 
@@ -209,12 +210,15 @@ def discover_key():
             return v, "env:" + e
     home = os.path.expanduser("~")
     cands = [
+        os.path.join(home, ".local", "share", "opencode", "auth.json"),
+        os.path.join(home, ".config", "opencode", "auth.json"),
+        os.path.join(home, ".config", "opencode", "opencode.json"),
+        os.path.join(".", "opencode.json"),
+        os.path.join(home, ".claude", "settings.json"),
+        os.path.join(home, ".claude", "settings.local.json"),
         os.path.join(home, ".zcode", "settings.json"),
         os.path.join(home, ".zcode", "auth.json"),
         os.path.join(home, ".zcode", "config.json"),
-        os.path.join(home, ".config", "opencode", "auth.json"),
-        os.path.join(home, ".config", "opencode", "opencode.json"),
-        os.path.join(home, ".claude", "settings.json"),
     ]
     for p in cands:
         obj = read_json(p)
@@ -235,12 +239,7 @@ def discover_base():
 
 
 def route_of(base):
-    b = (base or "").lower()
-    if "/anthropic" in b:
-        return "anthropic"
-    if "/paas" in b or "/v4" in b or "openai" in b or "/compatible" in b:
-        return "openai"
-    return "anthropic"
+    return "anthropic" if "/anthropic" in (base or "").lower() else "openai"
 
 
 def endpoint_of(base, route):
@@ -1053,201 +1052,30 @@ def verify_task(it, prelim, regions, ret2, tried):
 
 # --------------------------------------------------------------------------- API client
 
-class ApiError(Exception):
-    def __init__(self, status, body):
-        Exception.__init__(self, "HTTP %s: %s" % (status, clip(body, 240)))
-        self.status = status
-        self.body = body or ""
+class Client(zai_client.Client):
+    """Transport, retries, 429/1302/1305 backoff and the shared AIMD width live
+    in the vendored zai_client. This adapter keeps audit's call() shape and the
+    per-run counters that run, parse and doctor print."""
 
-
-_SHAPE_LOCK = threading.Lock()
-_SHAPE = {"reasoning_effort": True, "thinking": True, "cache": True}
-_TL = threading.local()
-
-
-def _conn(host, port):
-    """Keep-alive per thread: with 64 threads and several waves this removes a
-    TLS handshake per request. Honours HTTPS_PROXY via CONNECT."""
-    import http.client
-    cur = getattr(_TL, "conn", None)
-    if cur is not None and getattr(_TL, "key", None) == (host, port):
-        return cur
-    proxy = (os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or "").strip()
-    if proxy:
-        m = re.match(r"^(?:https?://)?(?:[^@/]+@)?([^:/]+)(?::(\d+))?", proxy)
-        ph, pp = (m.group(1), int(m.group(2) or 443)) if m else (host, port)
-        c = http.client.HTTPSConnection(ph, pp, timeout=900)
-        c.set_tunnel(host, port)
-    else:
-        c = http.client.HTTPSConnection(host, port, timeout=900)
-    _TL.conn = c
-    _TL.key = (host, port)
-    return c
-
-
-def _drop_conn():
-    c = getattr(_TL, "conn", None)
-    if c is not None:
-        try:
-            c.close()
-        except Exception:
-            pass
-    _TL.conn = None
-
-
-def _post(url, headers, payload):
-    from urllib.parse import urlsplit
-    u = urlsplit(url)
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    host = u.hostname
-    port = u.port or 443
-    path = u.path + (("?" + u.query) if u.query else "")
-    hdr = dict(headers)
-    hdr["Content-Length"] = str(len(body))
-    hdr["Connection"] = "keep-alive"
-    for attempt in (0, 1):
-        try:
-            c = _conn(host, port)
-            c.request("POST", path, body=body, headers=hdr)
-            r = c.getresponse()
-            data = r.read()
-            if r.status >= 400:
-                raise ApiError(r.status, data.decode("utf-8", "replace"))
-            return json.loads(data.decode("utf-8", "replace"))
-        except ApiError:
-            raise
-        except Exception:
-            _drop_conn()
-            if attempt:
-                raise
-    raise ApiError(0, "unreachable")
-
-
-def build_payload(route, model, effort, prefix, task, max_tokens, shape):
-    if route == "openai":
-        p = {"model": model, "max_tokens": max_tokens, "temperature": 0.0,
-             "messages": [{"role": "system", "content": prefix},
-                          {"role": "user", "content": task}]}
-        if shape["reasoning_effort"]:
-            p["reasoning_effort"] = effort
-        if shape["thinking"]:
-            p["thinking"] = {"type": "enabled", "clear_thinking": False}
-        return p
-    sysblk = {"type": "text", "text": prefix}
-    if shape["cache"]:
-        sysblk["cache_control"] = {"type": "ephemeral"}
-    p = {"model": model, "max_tokens": max_tokens, "temperature": 0.0,
-         "system": [sysblk],
-         "messages": [{"role": "user", "content": [{"type": "text", "text": task}]}]}
-    if shape["reasoning_effort"]:
-        p["reasoning_effort"] = effort
-    if shape["thinking"]:
-        p["thinking"] = {"type": "enabled", "clear_thinking": False}
-    return p
-
-
-def extract_text(route, resp):
-    if route == "openai":
-        try:
-            ch = resp["choices"][0]["message"]
-            return ch.get("content") or ""
-        except Exception:
-            return ""
-    out = []
-    for blk in resp.get("content") or []:
-        if isinstance(blk, dict) and blk.get("type") == "text":
-            out.append(blk.get("text") or "")
-        elif isinstance(blk, str):
-            out.append(blk)
-    return "\n".join(out)
-
-
-_BAD_FIELD = re.compile(r"(reasoning_effort|thinking|cache_control|budget_tokens|"
-                        r"clear_thinking|unknown field|unexpected keyword|unsupported)", re.I)
-
-
-class Client(object):
-    def __init__(self, base, key, route, timeout=900):
+    def __init__(self, base, key, route=None, timeout=900):
+        zai_client.Client.__init__(self, base=base, key=key)  # shared-client constructor
         self.base = base
-        self.key = key
-        self.route = route
-        self.url = endpoint_of(base, route)
+        self.route = route or route_of(base)
         self.timeout = timeout
         self.calls = 0
         self.in_tok = 0
         self.out_tok = 0
         self.cache_read = 0
-        self._lock = threading.Lock()
-
-    def headers(self):
-        h = {"Content-Type": "application/json", "Accept": "application/json",
-             "User-Agent": "requirements-code-audit/%s" % VERSION}
-        if self.route == "openai":
-            h["Authorization"] = "Bearer " + self.key
-        else:
-            h["x-api-key"] = self.key
-            h["Authorization"] = "Bearer " + self.key
-            h["anthropic-version"] = "2023-06-01"
-        return h
-
-    def _account(self, resp):
-        u = resp.get("usage") or {}
-        with self._lock:
-            self.calls += 1
-            self.in_tok += int(u.get("input_tokens") or u.get("prompt_tokens") or 0)
-            self.out_tok += int(u.get("output_tokens") or u.get("completion_tokens") or 0)
-            self.cache_read += int(u.get("cache_read_input_tokens") or 0)
 
     def call(self, model, effort, prefix, task, max_tokens, retries=3):
-        last = None
-        attempt = 0
-        shape_tries = 0
-        while attempt <= retries:
-            with _SHAPE_LOCK:
-                shape = dict(_SHAPE)
-            payload = build_payload(self.route, model, effort, prefix, task, max_tokens, shape)
-            try:
-                resp = _post(self.url, self.headers(), payload)
-                self._account(resp)
-                return extract_text(self.route, resp)
-            except ApiError as e:
-                last = e
-                if e.status == 400 and _BAD_FIELD.search(e.body) and shape_tries < 4:
-                    # The gateway refused one of the GLM-specific fields. Drop it
-                    # once, globally, and retry WITHOUT spending a retry: the
-                    # discovered shape then holds for every later request.
-                    shape_tries += 1
-                    with _SHAPE_LOCK:
-                        dropped = False
-                        for f, pat in (("reasoning_effort", r"reasoning"),
-                                       ("thinking", r"thinking|clear_thinking|budget_tokens"),
-                                       ("cache", r"cache")):
-                            if _SHAPE[f] and re.search(pat, e.body, re.I):
-                                _SHAPE[f] = False
-                                dropped = True
-                                break
-                        if not dropped:
-                            for f in ("reasoning_effort", "thinking", "cache"):
-                                if _SHAPE[f]:
-                                    _SHAPE[f] = False
-                                    dropped = True
-                                    break
-                    if dropped:
-                        continue
-                    raise
-                attempt += 1
-                if e.status in (408, 409, 425, 429, 500, 502, 503, 504, 529) and attempt <= retries:
-                    time.sleep(min(30.0, (2 ** attempt) * 1.5 + random.random() * 1.5))
-                    continue
-                raise
-            except Exception as e:
-                last = e
-                attempt += 1
-                if attempt <= retries:
-                    time.sleep(min(20.0, (2 ** attempt) + random.random()))
-                    continue
-                raise
-        raise last or ApiError(0, "no attempt made")
+        # explicit base-class call: self.call(...) would recurse into this override
+        text = zai_client.Client.call(self, model, effort, prefix, task, max_tokens, retries=retries)
+        s = zai_client.Client.stats(self)  # shared-client's cumulative totals, not just this reply
+        self.calls = s["calls"]
+        self.in_tok = s["in_tok"]
+        self.out_tok = s["out_tok"]
+        self.cache_read = s["cache_read"]
+        return text or ""
 
 
 def extract_json(text):
@@ -2768,14 +2596,15 @@ def cmd_doctor(a):
                 print("ping %-14s ok  %s  %r" % (model, fmt_dur(now() - t0), clip(txt, 40)))
             except Exception as e:
                 print("ping %-14s FAIL  %s" % (model, clip(str(e), 200)))
-        with _SHAPE_LOCK:
-            print("request shape accepted: " + ", ".join(
-                "%s=%s" % (k, v) for k, v in sorted(_SHAPE.items())))
 
 
 SETUP_ENV = u"""export ZAI_API_KEY=<your GLM Coding Plan key>
 export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY"""
+
+SETUP_ENV_OPENCODE = (u"export ZAI_API_KEY=<your GLM Coding Plan key>\n"
+                      u"# the api lane calls https://api.z.ai/api/coding/paas/v4"
+                      u" (override with ZAI_BASE_URL)")
 
 
 def cmd_setup(a):
@@ -2783,14 +2612,30 @@ def cmd_setup(a):
     root = os.path.dirname(here)
     home = os.path.expanduser("~")
     h = a.harness
-    if h == "zcode":
-        sk = os.path.join(home, ".zcode", "skills", "requirements-code-audit")
-        ag = os.path.join(home, ".zcode", "agents")
-        src = os.path.join(root, "agents", "zcode")
-    else:
-        sk = os.path.join(home, ".config", "opencode", "skills", "requirements-code-audit")
-        ag = os.path.join(home, ".config", "opencode", "agents")
-        src = os.path.join(root, "agents", "opencode")
+    if h != "zcode":
+        import oc_harness  # vendored next to this script by _shared/sync.sh
+        major = oc_harness.detect()
+        print("harness   opencode (major %s)" % (major or "not found"))
+        if a.dry_run:
+            print("(dry run -- nothing written)")
+        elif not major:
+            print("opencode not found: install it, then re-run setup")
+            return 1
+        else:
+            for path in oc_harness.install(root, major):
+                print("  installed %s" % path)
+        print("")
+        print("Environment (the api lane needs only the key; OpenCode's own")
+        print("zai-coding-plan login also works, audit.py reads its auth.json):")
+        print(SETUP_ENV_OPENCODE)
+        print("\nOpenCode: agents run on zai-coding-plan/glm-5.3-flash (workers) and")
+        print("zai-coding-plan/glm-5.3 (judgment). The api lane holds the 64 threads; the")
+        print("agent-lane fallback runs through oc_harness.py run, one opencode process per lane.")
+        print("\nVerify with: python3 %s doctor --ping" % os.path.join(here, "audit.py"))
+        return 0
+    sk = os.path.join(home, ".zcode", "skills", "requirements-code-audit")
+    ag = os.path.join(home, ".zcode", "agents")
+    src = os.path.join(root, "agents", "zcode")
     print("harness   %s" % h)
     print("skill  ->  %s" % sk)
     print("agents ->  %s  (from %s)" % (ag, os.path.relpath(src, root)))
@@ -2812,16 +2657,10 @@ def cmd_setup(a):
     print("")
     print("Environment (the api lane needs the key; the agent lane needs the route):")
     print(SETUP_ENV)
-    if h == "zcode":
-        print("\nZCode: invoke with  $requirements-code-audit <spec file>")
-        print("Subagents launched together run in parallel there, so the agent lane is")
-        print("usable as a fallback. Agent files use `model:` with a real GLM id and")
-        print("`thoughtLevel:` -- ZCode has no haiku/sonnet aliases.")
-    else:
-        print("\nOpenCode: the skill is also picked up from ~/.claude/skills/ and")
-        print("~/.agents/skills/. Set the model ids in the agent files to your configured")
-        print("provider (e.g. zai-coding-plan/glm-5.3-flash). OpenCode dispatches subagents")
-        print("sequentially, so keep the api lane -- that is where the 64 threads are.")
+    print("\nZCode: invoke with  $requirements-code-audit <spec file>")
+    print("Subagents launched together run in parallel there, so the agent lane is")
+    print("usable as a fallback. Agent files use `model:` with a real GLM id and")
+    print("`thoughtLevel:` -- ZCode has no haiku/sonnet aliases.")
     print("\nVerify with: python3 %s doctor --ping" % os.path.join(sk, "scripts", "audit.py"))
 
 
