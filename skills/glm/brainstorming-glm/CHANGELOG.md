@@ -1,3 +1,20 @@
+# 9.1-glm (from 9.0) — OpenCode layer
+
+Adds an OpenCode installation path alongside Claude Code, unchanged. New
+neutral agent sources `opencode/agents/explorer.md` (read-only, mirrors the
+Code lane rules) and `opencode/agents/researcher.md` (web, mirrors the Web
+lane rules), plus command source `opencode/commands/brainstorm.md` that
+injects `context.sh` output and the skill path, then loads the skill with
+`$ARGUMENTS`. `oc_harness.py install` renders these into the detected v1 or
+v2 dialect. SKILL.md frontmatter `name` changed to `brainstorming` (drop the
+`-glm` suffix, matching the installed directory) and gained a note in the
+harness fallback table: OpenCode's tool names are `task` for a lane,
+`todowrite` for TaskCreate, `webfetch` for WebFetch, and AskUserQuestion
+becomes plain-text numbered questions. `glm-tuning.md` gained a new
+OpenCode harness section covering the install command and the v1 caveat
+that `reasoning_effort` is dropped for `glm-*` process lanes, so every
+OpenCode-side lane runs at `max`.
+
 # 9.0-glm (from 8.0) — tuned for GLM-5.3 and GLM-5.3-Flash
 
 The uploaded folder was named `brainstorming-6.3` but its SKILL.md and
