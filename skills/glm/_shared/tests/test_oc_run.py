@@ -1,9 +1,12 @@
 import json
 import os
 import shutil
+import signal
 import stat
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -78,6 +81,23 @@ class CheckRunFlagsTest(unittest.TestCase):
     def test_v2_missing_flag_named(self):
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--auto"}):
             self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--auto"])
+
+
+class KillGroupTest(unittest.TestCase):
+    def test_kills_via_killpg_on_pid_directly(self):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+        proc.wait()  # leader already reaped: getpgid(proc.pid) would now fail
+        with mock.patch("oc_harness.os.killpg") as killpg, \
+             mock.patch("oc_harness.os.getpgid") as getpgid:
+            oc_harness._kill_group(proc)
+        killpg.assert_called_once_with(proc.pid, signal.SIGKILL)
+        getpgid.assert_not_called()
+
+    def test_survives_missing_process_group(self):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        with mock.patch("oc_harness.os.killpg", side_effect=ProcessLookupError()):
+            oc_harness._kill_group(proc)  # must not raise
 
 
 class RunLanesTest(unittest.TestCase):
@@ -171,19 +191,70 @@ class RunLanesTest(unittest.TestCase):
 
     def test_exception_kills_running_lane_process_groups(self):
         pid_file = os.path.join(self.out, "child2.pid")
+
+        def sleep_side_effect(*_a, **_kw):
+            # Only blow up once the stub's grandchild actually exists, so the
+            # kill below has a real process-group descendant to reap.
+            if os.path.exists(pid_file):
+                raise RuntimeError("boom")
+
         with mock.patch.dict(os.environ, {"STUB_CHILD_PID_FILE": pid_file}):
-            with mock.patch("oc_harness.time.sleep", side_effect=RuntimeError("boom")):
+            with mock.patch("oc_harness.time.sleep", side_effect=sleep_side_effect):
                 with self.assertRaises(RuntimeError):
                     oc_harness.run_lanes([lane("x", "stall_child")], self.out, binary=STUB, major=1)
-        for _ in range(50):
-            if os.path.exists(pid_file):
-                break
-            time.sleep(0.05)
         with open(pid_file) as f:
             child_pid = int(f.read().strip())
         time.sleep(0.3)
         with self.assertRaises(OSError):
             os.kill(child_pid, 0)
+
+    def test_lane_that_exits_on_its_own_but_leaves_child_holding_stdout_still_returns_promptly(self):
+        pid_file = os.path.join(self.out, "child3.pid")
+        start = time.monotonic()
+        with mock.patch.dict(os.environ, {"STUB_CHILD_PID_FILE": pid_file}):
+            results = oc_harness.run_lanes([lane("e", "exit_child")], self.out, binary=STUB, major=1)
+        self.assertLess(time.monotonic() - start, 5)
+        self.assertEqual(results[0]["status"], "OK")
+        with open(pid_file) as f:
+            child_pid = int(f.read().strip())
+        time.sleep(0.3)
+        with self.assertRaises(OSError):
+            os.kill(child_pid, 0)
+
+    def test_reader_join_is_bounded(self):
+        original_join = threading.Thread.join
+        calls = []
+
+        def fake_join(self, timeout=None):
+            calls.append(timeout)
+            return original_join(self, timeout)
+
+        with mock.patch.object(threading.Thread, "join", fake_join):
+            oc_harness.run_lanes([lane("a", "one")], self.out, binary=STUB, major=1)
+        self.assertTrue(calls)
+        self.assertTrue(all(t is not None for t in calls))
+
+    def test_bounded_join_lets_scheduler_proceed_even_if_group_kill_is_a_no_op(self):
+        # A descendant outside the group (or a kill that otherwise fails to
+        # close the pipe) must not block the scheduler loop forever: the
+        # bounded reader.join() has to let run_lanes return regardless.
+        pid_file = os.path.join(self.out, "child4.pid")
+        start = time.monotonic()
+        try:
+            with mock.patch.dict(os.environ, {"STUB_CHILD_PID_FILE": pid_file}):
+                with mock.patch("oc_harness._kill_group"):
+                    results = oc_harness.run_lanes([lane("e", "exit_child")], self.out,
+                                                   binary=STUB, major=1)
+            self.assertLess(time.monotonic() - start, 10)
+            self.assertEqual(results[0]["status"], "OK")
+        finally:
+            if os.path.exists(pid_file):
+                with open(pid_file) as f:
+                    child_pid = int(f.read().strip())
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except OSError:
+                    pass
 
     def test_detects_major_when_not_given(self):
         log = os.path.join(self.out, "argv.log")
