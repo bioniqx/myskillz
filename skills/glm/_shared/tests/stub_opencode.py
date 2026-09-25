@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 
-FLAGS = ["--dir", "--agent", "--model", "--format", "--auto"]
+FLAGS = ["--dir", "--agent", "--model", "--format", "--auto", "--standalone"]
 
 
 def emit(event):
