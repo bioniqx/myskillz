@@ -87,18 +87,16 @@ class CheckRunFlagsTest(unittest.TestCase):
         self.assertEqual(oc_harness.check_run_flags(1, binary="/nonexistent/opencode"), [])
 
     def test_v2_all_flags_present(self):
-        # stub_opencode.py's own FLAGS list predates --standalone, so it can
-        # never print that flag; it is the one entry this stub always misses.
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": ""}):
-            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--standalone"])
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), [])
 
     def test_v2_missing_flag_named(self):
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--auto"}):
-            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--auto", "--standalone"])
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--auto"])
 
     def test_v2_missing_dir_flag_is_not_required(self):
         with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--dir"}):
-            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), ["--standalone"])
+            self.assertEqual(oc_harness.check_run_flags(2, binary=STUB), [])
 
     def test_v2_standalone_missing_when_absent_from_help(self):
         with mock.patch("oc_harness.subprocess.run") as run:
@@ -203,6 +201,41 @@ class RunLanesTest(unittest.TestCase):
                 oc_harness.run_lanes([lane("a", "one")], self.out, binary=STUB, major=2)
         self.assertIn("--format", str(ctx.exception))
         self.assertFalse(os.path.exists(os.path.join(self.out, "a.done")))
+
+    def test_missing_standalone_flag_stops_run(self):
+        # No special case: --standalone missing from `opencode run --help`
+        # blocks the whole wave just like any other RUN_FLAG.
+        with mock.patch.dict(os.environ, {"STUB_OC_MISSING": "--standalone"}):
+            with self.assertRaises(SystemExit) as ctx:
+                oc_harness.run_lanes([lane("a", "one")], self.out, binary=STUB, major=2)
+        self.assertIn("--standalone", str(ctx.exception))
+        self.assertFalse(os.path.exists(os.path.join(self.out, "a.done")))
+
+    def test_v1_relative_dir_resolves_once(self):
+        log = os.path.join(self.out, "argv.log")
+        lane_dir_abs = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, lane_dir_abs, True)
+        rel_dir = os.path.relpath(lane_dir_abs, os.getcwd())
+        with mock.patch.dict(os.environ, {"STUB_OC_LOG": log}):
+            with mock.patch("oc_harness.subprocess.Popen", wraps=subprocess.Popen) as popen:
+                results = oc_harness.run_lanes(
+                    [lane("a", "one", dir=rel_dir)], self.out, binary=STUB, major=1
+                )
+        self.assertEqual(results[0]["status"], "OK")
+        _, kwargs = popen.call_args
+        self.assertEqual(kwargs.get("cwd"), lane_dir_abs)
+        argv = self.read_argvs(log)[0]
+        self.assertEqual(argv[argv.index("--dir") + 1], lane_dir_abs)
+
+    def test_missing_lane_dir_fails_lane_not_whole_wave(self):
+        results = oc_harness.run_lanes(
+            [lane("bad", "one", dir="/nonexistent/lane/dir/xyz"), lane("good", "two")],
+            self.out, binary=STUB, major=1,
+        )
+        by_id = {r["id"]: r for r in results}
+        self.assertEqual(by_id["bad"]["status"], "FAIL")
+        self.assertTrue(by_id["bad"]["error"])
+        self.assertEqual(by_id["good"]["status"], "OK")
 
     def test_stall_kills_lane_and_its_child_process_group(self):
         pid_file = os.path.join(self.out, "child.pid")
