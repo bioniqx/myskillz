@@ -83,9 +83,14 @@ with the general endpoint.
 `~/.config/opencode/skills/<name>/`, or any `~/.claude/skills/` or
 `~/.agents/skills/` directory. Only `name`, `description`, `license`,
 `compatibility` and `metadata` are read from the frontmatter; everything else is
-ignored, not an error. There is no `!` command injection in skills, which is why
-call 1 is an explicit shell call. Subagents live in `~/.config/opencode/agents/`
-with `mode: subagent`. Headless runs are `opencode run -m <provider>/<model> --auto "<prompt>"`.
+ignored, not an error. The skill frontmatter `name` field (without `-glm`
+suffix) is used for command and agent discovery. There is no `!` command
+injection in skills, which is why call 1 is an explicit shell call; the `/plan`
+command injects the skill directory and argument string, then loads the skill.
+The `plan-task-writer` agent provides the fallback when an API key is not
+available; `oc_harness.py run` starts a subprocess for tool-using agent lanes.
+Subagents live in `~/.config/opencode/agents/` with `mode: subagent`. Headless
+runs are `opencode run -m <provider>/<model> --auto "<prompt>"`.
 
 **ZCode.** Skills live in `~/.zcode/skills/<name>/SKILL.md` and are invoked with
 `$writing-plans`. The description is capped at 1024 characters and the body at

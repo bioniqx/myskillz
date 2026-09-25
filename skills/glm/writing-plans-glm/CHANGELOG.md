@@ -88,3 +88,6 @@ are unchanged in behavior and still drive the agent lane.
 3. `python3 <skill>/scripts/plan_tool.py doctor --ping`
 4. Optional: `python3 <skill>/scripts/plan_tool.py setup --apply` for the
    agent-lane fallback subagent.
+5. On OpenCode: the skill is discoverable as `writing-plans` (the `name:` field in
+   SKILL.md without the `-glm` suffix). Use `/plan <spec-path>` in any OpenCode
+   session with the zai-coding-plan provider enabled.
