@@ -13,12 +13,18 @@ python3 requirements-code-audit/scripts/audit.py setup --harness opencode
 ```
 
 That copies the skill to the harness's skills directory and the matching agent files to its agents directory
-(`--dry-run` prints what it would do). By hand instead:
+(`--dry-run` prints what it would do).
+
+For ZCode, by hand instead:
 
 | Harness | Skill | Agents (fallback lane) |
 |---|---|---|
 | ZCode | `~/.zcode/skills/requirements-code-audit/` | `~/.zcode/agents/rca-*.md` from `agents/zcode/` |
-| OpenCode | `~/.config/opencode/skills/requirements-code-audit/` (also reads `~/.claude/skills/` and `~/.agents/skills/`) | `~/.config/opencode/agents/rca-*.md` from `opencode/agents/` |
+
+OpenCode's `~/.config/opencode/agents/rca-*.md` are rendered from the neutral sources in `opencode/agents/`
+(model id, `mode: subagent`, permissions) — never copy those sources by hand, since the raw files omit the
+fields OpenCode requires. Use `python3 requirements-code-audit/scripts/audit.py setup --harness opencode` or,
+directly, `python3 requirements-code-audit/scripts/oc_harness.py install requirements-code-audit <major>`.
 
 Invoke it in ZCode with `$requirements-code-audit <spec file>`; in OpenCode the agent loads it through its
 `skill` tool by name.
