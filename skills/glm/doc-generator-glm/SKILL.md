@@ -307,8 +307,9 @@ get a `zai_client.py` copy. Once installed, `opencode/agents/doc-writer.md`,
 major's dialect and the `/docs` command is available.
 
 Under the OpenCode harness, Turn 2's writer wave and Turn 3's review wave replace each Task call
-with one lane dict per doc (keys `id`, `agent: "doc-writer"`, `dir`, `brief`), the same fact packs
-and briefs as §3.3 and §4 inlined as `brief`. Write the lanes to a JSON file, then run:
+with one lane dict per doc (keys `id`, `agent: "doc-writer"`, `model: "flash"`, `dir`, `brief`),
+the same fact packs and briefs as §3.3 and §4 inlined as `brief`. Write the lanes to a JSON file,
+then run:
 
 ```
 python3 <skill_dir>/scripts/oc_harness.py run <lanes.json> --out <out_dir> --width 10
@@ -317,14 +318,18 @@ python3 <skill_dir>/scripts/oc_harness.py run <lanes.json> --out <out_dir> --wid
 `<skill_dir>` is the path `/docs` injects for this skill. This runs the whole wave concurrently
 and writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
 
-Effort is not controllable on process lanes: v1 drops `reasoning_effort` for `glm-*` models, so
-every writer and reviewer lane runs at `max` regardless of the `effort` key in
-`doc-writer.md`/`doc-reviewer.md` frontmatter — that key only sets the model when Claude/ZCode
-render the same agent source, not on this process lane. Reviewer lanes use
-`agent: "doc-reviewer"` with the same pattern. Once the `run` command exits, read each lane's
-5-line return from `<out_dir>/<id>.jsonl` — never every doc body back — before reporting.
-Everything else in §§1-7 (turn budget, decision table, catalog, diff-skip, finish checks) stays
-identical.
+Set `model` on every lane — `oc_harness.MODELS` maps `"flash"` to `glm-5.3-flash` and `"pro"` to
+`glm-5.3`; omitting it makes `build_run_cmd` default the lane to `glm-5.3`, silently overriding
+doc-writer's flash. Writer lanes use `model: "flash"`; reviewer lanes use `agent: "doc-reviewer"`
+with `model: "pro"`, same pattern otherwise.
+
+Effort is not controllable on process lanes: v1 drops `reasoning_effort` for `glm-*` models, and
+v2 does not yet send `request.body` overlays either, so every writer and reviewer lane runs at
+GLM's default `max` regardless of the `effort` key in `doc-writer.md`/`doc-reviewer.md`
+frontmatter — that key is written only into the rendered OpenCode agent file, which this process
+lane does not read. Once the `run` command exits, read each lane's 5-line return from
+`<out_dir>/<id>.jsonl` — never every doc body back — before reporting. Everything else in §§1-7
+(turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
 
 ---
 
