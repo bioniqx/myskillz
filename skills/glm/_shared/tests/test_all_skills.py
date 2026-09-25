@@ -79,16 +79,20 @@ class TestVendoredCopies(unittest.TestCase):
 
 class TestScriptsCompile(unittest.TestCase):
     def test_all_scripts_compile(self):
-        for root, dirs, files in os.walk(GLM_ROOT):
-            if "__pycache__" in dirs:
-                dirs.remove("__pycache__")
-            for fname in files:
-                if fname.endswith(".py"):
-                    filepath = os.path.join(root, fname)
-                    try:
-                        py_compile.compile(filepath, doraise=True)
-                    except py_compile.PyCompileError as exc:
-                        self.fail("%s has syntax error: %s" % (filepath, exc))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            n = 0
+            for root, dirs, files in os.walk(GLM_ROOT):
+                if "__pycache__" in dirs:
+                    dirs.remove("__pycache__")
+                for fname in files:
+                    if fname.endswith(".py"):
+                        filepath = os.path.join(root, fname)
+                        n += 1
+                        cfile = os.path.join(tmpdir, "%d.pyc" % n)
+                        try:
+                            py_compile.compile(filepath, cfile=cfile, doraise=True)
+                        except py_compile.PyCompileError as exc:
+                            self.fail("%s has syntax error: %s" % (filepath, exc))
 
 
 class TestSkillMdHygiene(unittest.TestCase):
