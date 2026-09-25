@@ -81,21 +81,6 @@ def _run_v1(tmp_dir, skill_dir, role, tool, args):
 
 def _run_v2(tmp_dir, skill_dir, role, tool, args):
     source = _load_plugin_source(V2_PATH, skill_dir)
-    node_modules = os.path.join(tmp_dir, "node_modules", "@opencode", "plugin")
-    os.makedirs(node_modules, exist_ok=True)
-    with open(os.path.join(node_modules, "package.json"), "w") as f:
-        f.write(
-            json.dumps(
-                {
-                    "name": "@opencode/plugin",
-                    "version": "0.0.0",
-                    "type": "module",
-                    "main": "index.mjs",
-                }
-            )
-        )
-    with open(os.path.join(node_modules, "index.mjs"), "w") as f:
-        f.write("export const Plugin = { define: (config) => config };\n")
     plugin_path = os.path.join(tmp_dir, "plugin.mjs")
     with open(plugin_path, "w") as f:
         f.write(source)
@@ -103,7 +88,7 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
     driver = textwrap.dedent(
         """\
         import plugin from "%s";
-        const hooks = plugin.setup({ location: { directory: "/tmp/work" } });
+        const hooks = await plugin({ directory: "/tmp/work" });
         try {
           await hooks["tool.execute.before"](
             { tool: "%s" },
@@ -128,6 +113,13 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
 
 
 class TestDevteamPlugins(unittest.TestCase):
+    def test_v2_shape_has_no_plugin_package(self):
+        with open(V2_PATH) as f:
+            source = f.read()
+        assert "@opencode/plugin" not in source
+        assert "Plugin.define" not in source
+        assert "ctx.directory" in source
+
     def test_v1_denies_and_throws(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
