@@ -15,7 +15,8 @@ description: >-
 
 Codebase in, correct Markdown docs out, in **≤ 4 main-thread turns**. This file is
 self-contained: every brief, template and script you need is below. **Never read any
-other file of this skill — there are none.**
+other file of this skill — there are none.** (Under the OpenCode harness, §8's
+`scripts/oc_harness.py` is the one exception: it is executed as a subprocess, never read.)
 
 ---
 
@@ -306,17 +307,24 @@ get a `zai_client.py` copy. Once installed, `opencode/agents/doc-writer.md`,
 major's dialect and the `/docs` command is available.
 
 Under the OpenCode harness, Turn 2's writer wave and Turn 3's review wave replace each Task call
-with one lane dict per doc (`id`, `agent: "doc-writer"`, `dir`, `brief`), the same fact packs and
-briefs as §3.3 and §4 inlined as `brief`, then a single
-`oc_harness.py run_lanes(lanes, out_dir, width=10)` call runs the whole wave concurrently and
-writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
+with one lane dict per doc (keys `id`, `agent: "doc-writer"`, `dir`, `brief`), the same fact packs
+and briefs as §3.3 and §4 inlined as `brief`. Write the lanes to a JSON file, then run:
+
+```
+python3 <skill_dir>/scripts/oc_harness.py run <lanes.json> --out <out_dir> --width 10
+```
+
+`<skill_dir>` is the path `/docs` injects for this skill. This runs the whole wave concurrently
+and writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
 
 Effort is not controllable on process lanes: v1 drops `reasoning_effort` for `glm-*` models, so
 every writer and reviewer lane runs at `max` regardless of the `effort` key in
-`doc-writer.md`/`doc-reviewer.md` frontmatter (that key only sets the model when Claude/ZCode
-render the same agent source). Reviewer lanes use `agent: "doc-reviewer"` with the same pattern.
-Read each `$D/$file` back once `run_lanes` returns, before reporting. Everything else in §§1-7
-(turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
+`doc-writer.md`/`doc-reviewer.md` frontmatter — that key only sets the model when Claude/ZCode
+render the same agent source, not on this process lane. Reviewer lanes use
+`agent: "doc-reviewer"` with the same pattern. Once the `run` command exits, read each lane's
+5-line return from `<out_dir>/<id>.jsonl` — never every doc body back — before reporting.
+Everything else in §§1-7 (turn budget, decision table, catalog, diff-skip, finish checks) stays
+identical.
 
 ---
 
