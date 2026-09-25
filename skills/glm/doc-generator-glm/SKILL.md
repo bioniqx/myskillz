@@ -326,8 +326,7 @@ with `model: "pro"`, same pattern otherwise.
 Effort is not controllable on process lanes: v1 drops `reasoning_effort` for `glm-*` models, and
 v2 does not yet send `request.body` overlays either, so every writer and reviewer lane runs at
 GLM's default `max` regardless of the `effort` key in `doc-writer.md`/`doc-reviewer.md`
-frontmatter — that key is written only into the rendered OpenCode agent file, which this process
-lane does not read. Once the `run` command exits, read each lane's 5-line return from
+frontmatter. Once the `run` command exits, read each lane's 5-line return from
 `<out_dir>/<id>.jsonl` — never every doc body back — before reporting. Everything else in §§1-7
 (turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
 
