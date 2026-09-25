@@ -4,7 +4,7 @@ description: Implementation engineer for the dev-team workflow. Each dispatch is
 model: flash
 effort: high
 temperature: 1.0
-access: internal
+access: write
 bash: true
 web: false
 steps: 150

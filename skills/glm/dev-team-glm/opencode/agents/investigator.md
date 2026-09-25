@@ -4,7 +4,7 @@ description: Read-only investigator for the dev-team workflow. Runs one angle of
 model: flash
 effort: high
 temperature: 1.0
-access: internal
+access: write
 bash: true
 web: true
 steps: 60

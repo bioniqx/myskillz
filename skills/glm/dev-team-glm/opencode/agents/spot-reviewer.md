@@ -4,7 +4,7 @@ description: Fast correctness-and-security-only reviewer for the dev-team workfl
 model: flash
 effort: high
 temperature: 1.0
-access: internal
+access: write
 bash: true
 web: false
 steps: 50

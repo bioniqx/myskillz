@@ -4,7 +4,7 @@ description: Independent senior code reviewer for the dev-team workflow. Read-on
 model: pro
 effort: high
 temperature: 1.0
-access: internal
+access: write
 bash: true
 web: false
 steps: 80

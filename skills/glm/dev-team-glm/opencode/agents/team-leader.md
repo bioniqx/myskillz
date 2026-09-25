@@ -4,7 +4,7 @@ description: Senior technical lead for the dev-team workflow. PLANNING: deep ana
 model: pro
 effort: max
 temperature: 1.0
-access: internal
+access: write
 bash: true
 web: true
 steps: 120
