@@ -194,6 +194,7 @@ class LaneRunTest(RepoCase):
         self.assertTrue(data.get("error"))
 
     def test_writer_loop_exhausts_without_marker_writes_blocked(self):
+        self.devteam("dispatch", "S1")
         root = Path(self.repo)
         d = devteam.lanes_dir(root)
         d.mkdir(parents=True, exist_ok=True)
