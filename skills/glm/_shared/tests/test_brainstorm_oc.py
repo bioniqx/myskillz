@@ -38,14 +38,34 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
         for field in ("id", "agent", "model", "dir", "brief"):
             self.assertIn("`%s`" % field, self.text)
 
+    def _opencode_lane_section(self):
+        start = self.text.find("On OpenCode, `CLAUDE_SKILL_DIR`")
+        self.assertNotEqual(start, -1, "OpenCode lane section not found")
+        end = self.text.find("## Visual companion", start)
+        self.assertNotEqual(end, -1, "OpenCode lane section end marker not found")
+        return self.text[start:end]
+
     def test_states_what_brief_contains(self):
-        self.assertIn("brief", self.text.lower())
-        self.assertIn("task", self.text.lower())
-        self.assertIn("question", self.text.lower())
+        section = self._opencode_lane_section()
+        self.assertIn("brief", section.lower())
+        self.assertIn("task", section.lower())
+        self.assertIn("question", section.lower())
 
     def test_states_where_and_how_lane_output_is_read(self):
-        self.assertIn(".jsonl", self.text)
-        self.assertIn(".oc-lanes", self.text)
+        section = self._opencode_lane_section()
+        self.assertIn(".jsonl", section)
+        self.assertIn("--out", section)
+
+    def test_resolver_guards_empty_h(self):
+        section = self._opencode_lane_section()
+        self.assertIn('[ -n "$H" ]', section)
+        self.assertIn("not found", section.lower())
+
+    def test_run_command_uses_temp_out_dir(self):
+        section = self._opencode_lane_section()
+        self.assertIn("mktemp -d", section)
+        self.assertIn('--out "$OUT"', section)
+        self.assertIn("Results land under `$OUT`", section)
 
     def test_states_task_tool_is_only_fallback(self):
         idx = self.text.find("`task`")

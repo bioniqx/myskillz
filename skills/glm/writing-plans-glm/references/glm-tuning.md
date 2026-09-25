@@ -107,7 +107,6 @@ from Settings, by symlink or copy.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `LANE agent` when you expected api | no key found | `doctor`, then export `ZAI_API_KEY` |
-| `HTTP 400 ... thinking` | gateway rejects the thinking field | the script retries once without it; `--no-thinking` makes it permanent |
 | Many `LINT` rows after the fan-out | contracts too vague - signatures or Files under-specified | tighten `Produces` and `Files`, re-run with `--resume` |
 | Writers invent symbols | `Spec` ranges miss the section | widen the ranges from the heading map |
 | Bodies truncated mid-code | `--max-tokens` too low for a huge task | raise it, or split the contract |

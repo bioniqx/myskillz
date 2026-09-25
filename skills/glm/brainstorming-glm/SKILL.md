@@ -315,7 +315,9 @@ for d in ~/.config/opencode/skills/brainstorming \
   .claude/skills/brainstorming; do
   if [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
 done
-python3 "$H/oc_harness.py" run <lanes.json>
+[ -n "$H" ] || { echo "oc_harness.py not found — run install-opencode.sh"; exit 1; }
+OUT="$(mktemp -d)"
+python3 "$H/oc_harness.py" run <lanes.json> --out "$OUT"
 ```
 
 `<lanes.json>` is a JSON array of lane objects you write before the
@@ -325,11 +327,10 @@ call. Each lane needs `id` (unique string), `agent` (`explorer` or
 for that lane) and `brief` (the per-lane user message: task, root/stack,
 today's date, this lane's slice or angle, the siblings it must stay out
 of, and its one question — the same fields the Code/Web lane templates
-in R11 fill per lane). Results land under the run's `--out` directory
-(default `.oc-lanes`) as `<id>.jsonl` (the lane's streamed
-FINDINGS/CLAIMS output — read this), `<id>.err` and `<id>.done` (status
-JSON); read `<id>.jsonl` for each lane once `oc_harness run` reports it
-`OK`.
+in R11 fill per lane). Results land under `$OUT` as `<id>.jsonl` (the
+lane's streamed FINDINGS/CLAIMS output — read this), `<id>.err` and
+`<id>.done` (status JSON); read `<id>.jsonl` for each lane once
+`oc_harness run` reports it `OK`.
 Tool-name map: `task` for a lane — and ONLY as the fallback when
 `oc_harness run` is unavailable — `todowrite` for TaskCreate, `webfetch`
 for WebFetch; AskUserQuestion becomes plain-text numbered questions with

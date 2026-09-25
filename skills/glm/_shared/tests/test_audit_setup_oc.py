@@ -49,14 +49,29 @@ class OpenCodeAgentInstall(IsolatedHome):
         self.assertIn("mode: subagent", inv_text)
         self.assertIn("model: zai-coding-plan/glm-5.3-flash", inv_text)
         self.assertIn("mode: subagent", ver_text)
-        self.assertIn("model: zai-coding-plan/glm-5.3", ver_text)
+        # anchored: "glm-5.3" alone must not also match "glm-5.3-flash"
+        self.assertRegex(ver_text, r"(?m)^model: zai-coding-plan/glm-5\.3$")
 
-    def test_never_prints_installed_period_when_nothing_written(self):
+    def test_prints_installed_paths_from_install(self):
+        with mock.patch.object(oc_harness, "detect", return_value=2), \
+             mock.patch.object(oc_harness, "install", return_value=["/x/a.md", "/x/b.md"]):
+            rc, out = self.run_setup()
+        self.assertEqual(rc or 0, 0)
+        self.assertIn("  installed /x/a.md", out)
+        self.assertIn("  installed /x/b.md", out)
+
+    def test_prints_nothing_installed_when_install_returns_empty(self):
         with mock.patch.object(oc_harness, "detect", return_value=2), \
              mock.patch.object(oc_harness, "install", return_value=[]):
             rc, out = self.run_setup()
         self.assertEqual(rc or 0, 0)
-        self.assertNotIn("installed.", out)
+        self.assertNotIn("  installed ", out)
+
+    def test_returns_1_when_opencode_not_found(self):
+        with mock.patch.object(oc_harness, "detect", return_value=0):
+            rc, out = self.run_setup()
+        self.assertEqual(rc, 1)
+        self.assertIn("opencode not found", out)
 
 
 class SetupDocInstructions(unittest.TestCase):

@@ -152,7 +152,16 @@ class TestFindKey(unittest.TestCase):
 class TestGate(unittest.TestCase):
     def test_halves_on_throttle(self):
         g = zai_client.Gate(8)
-        self.assertEqual([g.throttled() for _ in range(4)], [4, 2, 1, 1])
+        with mock.patch("zai_client.time.monotonic", side_effect=[0, 3, 6, 9]):
+            self.assertEqual([g.throttled() for _ in range(4)], [4, 2, 1, 1])
+
+    def test_throttle_debounced_within_window(self):
+        """A burst of concurrent 429s inside one window halves width only once."""
+        g = zai_client.Gate(8)
+        with mock.patch("zai_client.time.monotonic", side_effect=[0, 0.1, 1, 1.9]):
+            self.assertEqual([g.throttled() for _ in range(4)], [4, 4, 4, 4])
+        with mock.patch("zai_client.time.monotonic", return_value=10):
+            self.assertEqual(g.throttled(), 2)
 
     def test_grows_after_clean_window(self):
         g = zai_client.Gate(8)
@@ -189,6 +198,24 @@ class TestGate(unittest.TestCase):
         self.assertEqual(self.run_six(g), 2)
         g.throttled()
         self.assertEqual(self.run_six(g), 1)
+
+
+class TestApiErrorThrottle(unittest.TestCase):
+    def test_rate_frequency_codes_transient_regardless_of_status(self):
+        for code in ("1302", "1305", "1313"):
+            self.assertTrue(zai_client.ApiError(429, code).throttle)
+            self.assertTrue(zai_client.ApiError(200, code).throttle)
+
+    def test_429_empty_code_transient(self):
+        self.assertTrue(zai_client.ApiError(429, "").throttle)
+
+    def test_429_terminal_business_code_not_transient(self):
+        for code in ("1113", "1308", "1309", "1310", "1311", "1314", "1315", "1316", "1317"):
+            self.assertFalse(zai_client.ApiError(429, code).throttle)
+
+    def test_non_429_without_throttle_code_not_transient(self):
+        self.assertFalse(zai_client.ApiError(200, "").throttle)
+        self.assertFalse(zai_client.ApiError(400, "1113").throttle)
 
 
 from fakeapi import chat, fail, messages, start_fake  # noqa: E402
@@ -281,6 +308,17 @@ class TestClient(_FakeCase):
         self.assertEqual(len(fake.requests), 1)
         self.assertEqual(c.stats()["errors"], 1)
 
+    def test_malformed_body_counts_as_error_not_ok(self):
+        fake = self.serve({"status": 200, "body": {"usage": {"prompt_tokens": 5}}})
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            with self.assertRaises(zai_client.ApiError) as cm:
+                c.call("glm-5.3", "high", "S", "U", 10)
+        self.assertIn("no choices", str(cm.exception))
+        sleep.assert_not_called()
+        st = c.stats()
+        self.assertEqual((st["calls"], st["ok"], st["errors"], st["in_tok"]), (1, 0, 1, 0))
+
     def test_gate_caps_requests(self):
         reply = dict(chat("x"), delay=0.1)
         fake = self.serve(reply)
@@ -338,6 +376,18 @@ class TestRetry(_FakeCase):
         self.assertEqual(len(fake.requests), 3)
         self.assertEqual(sleep.call_count, 2)
         self.assertEqual(c.stats()["errors"], 1)
+
+    def test_terminal_business_code_429_not_retried(self):
+        fake = self.serve(fail(429, "1113", "insufficient balance"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            with self.assertRaises(zai_client.ApiError) as cm:
+                c.call("glm-5.3", "high", "S", "U", 10)
+        self.assertEqual((cm.exception.status, cm.exception.code), (429, "1113"))
+        self.assertEqual(len(fake.requests), 1)
+        sleep.assert_not_called()
+        st = c.stats()
+        self.assertEqual((st["retries"], st["throttles"], st["errors"]), (0, 0, 1))
 
     def test_no_response(self):
         s = socket.socket()

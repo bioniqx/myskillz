@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import stat
@@ -28,13 +29,14 @@ class LaneEnvTest(unittest.TestCase):
 
     def test_lane_env_reaches_the_process(self):
         env_out = os.path.join(self.tmp, "role.txt")
+        before = os.environ.get("DEVTEAM_ROLE")
         lane = {"id": "a", "agent": "programmer", "model": "flash", "dir": self.tmp, "brief": "go",
                 "env": {"DEVTEAM_ROLE": "programmer", "ENV_OUT": env_out}}
         rows = oc_harness.run_lanes([lane], os.path.join(self.tmp, "out"), binary=self.binary, major=1)
         self.assertEqual(rows[0]["status"], "OK")
         with open(env_out) as fh:
             self.assertEqual(fh.read(), "programmer")
-        self.assertNotIn("DEVTEAM_ROLE", os.environ)
+        self.assertEqual(os.environ.get("DEVTEAM_ROLE"), before)
 
 
 class PluginInstallTest(unittest.TestCase):
@@ -69,6 +71,22 @@ class PluginInstallTest(unittest.TestCase):
     def test_v1_install_uses_the_v1_source(self):
         oc_harness.install(self.skill, 1, self.home)
         self.assertIn("// v1", self.installed_plugin())
+
+    def test_plugin_substitution_json_escapes_special_characters_in_skill_dst(self):
+        # Real templates put SKILL_DIR inside a double-quoted JS string literal
+        # (path.join("{{SKILL_DIR}}", "scripts", "guard.py")); a raw quote or
+        # backslash in skill_dst would break that literal if pasted in unescaped.
+        path_v2 = os.path.join(self.skill, "opencode", "plugins", "devteam-guard.v2.js")
+        with open(path_v2, "w") as fh:
+            fh.write('const GUARD = "{{SKILL_DIR}}/scripts/guard.py"\n')
+        home = os.path.join(self.tmp, 'ho"me')
+        oc_harness.install(self.skill, 2, home)
+        plugin_path = os.path.join(home, ".config", "opencode", "plugins", "devteam-guard.js")
+        with open(plugin_path) as fh:
+            text = fh.read()
+        skill_dst = os.path.join(home, ".config", "opencode", "skills", "dev-team")
+        self.assertIn(json.dumps(skill_dst)[1:-1] + "/scripts/guard.py", text)
+        self.assertNotIn('"' + skill_dst, text)
 
 
 if __name__ == "__main__":

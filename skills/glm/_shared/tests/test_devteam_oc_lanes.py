@@ -204,7 +204,7 @@ class LaneRunTest(RepoCase):
         self.assertTrue(marker.exists())
         self.assertFalse(self.state("slices", "S1.done").exists())
         note = json.loads(marker.read_text())["note"]
-        self.assertIn("0", note)
+        self.assertIn("exited 0", note)
         self.assertFalse(self.state("lanes", "S1.pid").exists())
 
     def test_missing_binary_blocks_the_writer_slice(self):
@@ -257,6 +257,12 @@ class LaneRunTest(RepoCase):
         self.assertFalse(self.state("slices", "S1.done").exists())
         note = json.loads(marker.read_text())["note"]
         self.assertIn("exhausted", note)
+
+    def test_lane_worktree_without_base_sha_raises_devteam_error(self):
+        root = Path(self.repo)
+        st = devteam.load_state(root)  # S1 was `init`ed but never dispatched: base_sha is still None
+        with self.assertRaisesRegex(devteam.DevteamError, "S1"):
+            devteam.lane_worktree(root, st, "S1")
 
 
 def _alive(pid):

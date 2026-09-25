@@ -271,7 +271,8 @@ def call_model(cfg, system_blocks, user_text, tier, budget, max_tokens=16000, ti
     client = _client_for(cfg)
     client.timeout = timeout
     try:
-        return client.call(model, effort, system_blocks[0], user_text, max_tokens, retries=3), ""
+        text = client.call(model, effort, system_blocks[0], user_text, max_tokens, retries=3)
+        return (text, "") if text else ("", "empty response")
     except zai_client.ApiError as e:
         budget.hit(str(e))
         return "", str(e)
@@ -1008,7 +1009,7 @@ def cmd_build(a):
         return report(["no API key found (checked %s and harness config files); "
                        "run `%s doctor`, or use --lane agent" % (", ".join(KEY_ENV), qtool())], warns, "")
 
-    cfg = {"key": key, "base": base, "protocol": proto, "thinking": not a.no_thinking}
+    cfg = {"key": key, "base": base, "protocol": proto}
     workers = workers_cap(a.workers)
     prefix = shared_prefix(plan, repo)
     budget = Budget(limit=max(4, workers // 4))
@@ -1624,7 +1625,7 @@ def cmd_doctor(a):
     if not a.ping:
         print("\nRun with --ping to send a 1-token probe to the endpoint.")
         return 0
-    cfg = {"key": key, "base": base, "protocol": proto, "thinking": False}
+    cfg = {"key": key, "base": base, "protocol": proto}
     t0 = time.time()
     txt, err = call_model(cfg, ["You reply with one word."], "Reply with the single word: ready",
                           "light", Budget(limit=1), max_tokens=64, timeout=90)
@@ -1785,7 +1786,6 @@ def main(argv=None):
     p.add_argument("--max-tokens", type=int, default=16000)
     p.add_argument("--thorough", action="store_true", help="review every task, not only risky ones")
     p.add_argument("--no-review", action="store_true")
-    p.add_argument("--no-thinking", action="store_true", help="omit the thinking/effort field")
     p.add_argument("--resume", action="store_true", help="skip tasks that already lint OK")
     p.add_argument("--keep-work", action="store_true")
     p.set_defaults(fn=cmd_build)

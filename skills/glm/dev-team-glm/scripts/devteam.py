@@ -838,7 +838,8 @@ def govern(root, st, successes):
         g["cap"] = max(GOV_MIN, old // 2)
         g["cut_at"], g["cuts"] = t, int(g.get("cuts") or 0) + 1
         lines.append(f"THROTTLED: {len(fresh)} rate-limit/overload signal(s) from the API → window {old} → {g['cap']} "
-                     "(running lanes keep going; Claude Code retries them)")
+                     + ("(running lanes keep going; the engine launches fewer new lanes until it recovers)" if oc else
+                        "(running lanes keep going; Claude Code retries them)"))
     elif enabled and successes and not fresh and g.get("saturated", True) \
             and t - float(g.get("cut_at") or 0) >= GOV_COOLDOWN_S:
         # 3. additive increase: slow start (+1 per finished lane) until the first cut, then +1 per wake-up
@@ -871,7 +872,7 @@ def govern(root, st, successes):
             lines.append(f"LANE DOWN {name} ({kind}): the lane process ended {text[:120]}"
                          + (f"\n  → `fail {name}` then `retry {name}` (kept for salvage on branch "
                             f"`attempt/{name}-{s.get('attempt') or 1}`)"
-                            if kind == "slice" else f"\n  → relaunch it: `lane-run {name}`"))
+                            if kind == "slice" else f"\n  → relaunch it in the background: `lane-run {name} &`"))
             continue
         lines.append(f"LANE DOWN {name} ({kind}): the API failed after retries — {text[:120]}"
                      f"\n  → SendMessage that agent \"continue\" (warm: same context"
@@ -1822,8 +1823,9 @@ def lane_process_finished(d, lane_id):
 def terminate_lane_process(d, lane_id):
     """Kill a previous `lane-run` for this lane id (and its whole process group, so the `opencode`
     child dies too) if it is still alive, so two runs never share one lane id at once. Only kills
-    it when the recorded pid still names a `devteam.py lane-run <lane_id>` process — a reused pid
-    could otherwise belong to an unrelated process."""
+    it when the recorded pid still names a `devteam.py lane-run <lane_id>` process — a substring
+    check would let lane S1 match S12's process, so a reused pid must match the exact adjacent
+    argv tokens `lane-run <lane_id>`."""
     pid_file = d / f"{lane_id}.pid"
     try:
         pid = int(pid_file.read_text().strip())
@@ -1834,7 +1836,12 @@ def terminate_lane_process(d, lane_id):
                                  text=True, capture_output=True).stdout
     except OSError:
         return
-    if "lane-run" not in cmdline or lane_id not in cmdline:
+    tokens = cmdline.split()
+    try:
+        i = tokens.index("lane-run")
+    except ValueError:
+        return
+    if i + 1 >= len(tokens) or tokens[i + 1] != lane_id:
         return
     try:
         os.killpg(pid, signal.SIGKILL)
@@ -1881,6 +1888,8 @@ def lane_worktree(root, st, lane_id):
         wt.parent.mkdir(parents=True, exist_ok=True)
         git(["worktree", "prune"], root, check=False)
         base = slice_state(st, lane_id)["base_sha"]
+        if not base:
+            raise DevteamError(f"{lane_id}: no base_sha recorded — this slice was never dispatched/claimed")
         git(["worktree", "add", "-f", "-B", f"devteam/{lane_id}", str(wt), base], root)
     return wt
 
@@ -1992,8 +2001,8 @@ def cmd_lane_run(a):
             slice_blocked_marker(root, wt, spec["id"], f"lane-run failed: {e}")
         out(f"LANE {spec['id']}: ERROR ({e})")
     finally:
-        write_atomic(d / f"{spec['id']}.end", str(int(time.time())))
         clear_own_pid_file(d, spec["id"])
+        write_atomic(d / f"{spec['id']}.end", str(int(time.time())))
 
 
 def lane_marks(root):
@@ -3356,12 +3365,12 @@ def oc_plugin_problems(home, major, skill_dir):
     text = p.read_text(errors="replace")
     problems = []
     m = OC_GUARD_PATH_RE.search(text)
-    if "{{SKILL_DIR}}" in text or not m or not Path(m.group(1), "scripts", "guard.py").exists():
+    if "{{SKILL_DIR}}" in text or not m or not Path(json.loads(f'"{m.group(1)}"'), "scripts", "guard.py").exists():
         problems.append(f"plugin {p.name}: its guard.py path does not resolve (every tool call would fail open)")
     if major:
         src = Path(skill_dir) / "opencode" / "plugins" / f"{p.stem}.v{major}.js"
         skill_dst = str(Path(home) / ".config" / "opencode" / "skills" / _oc_harness().skill_name(str(skill_dir)))
-        if src.exists() and text != src.read_text().replace("{{SKILL_DIR}}", skill_dst):
+        if src.exists() and text != src.read_text().replace("{{SKILL_DIR}}", json.dumps(skill_dst)[1:-1]):
             problems.append(f"plugin {p.name} does not match the OpenCode v{major} template — "
                             "re-run install-opencode.sh")
     node = shutil.which("node")

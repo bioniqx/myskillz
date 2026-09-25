@@ -1,9 +1,11 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -31,6 +33,13 @@ class TestOcHarnessRender(unittest.TestCase):
     def test_detect_returns_none_for_missing_binary(self):
         result = oc_harness.detect("/nonexistent/path/opencode-missing")
         self.assertEqual(result, 0)
+
+    def test_detect_returns_zero_on_timeout_instead_of_raising(self):
+        # subprocess.TimeoutExpired is not an OSError, so a hung binary must be
+        # caught explicitly rather than crashing detect().
+        with mock.patch("oc_harness.subprocess.run",
+                        side_effect=subprocess.TimeoutExpired(cmd="opencode", timeout=10)):
+            self.assertEqual(oc_harness.detect("opencode"), 0)
 
     def test_parse_frontmatter_extracts_fields_and_body(self):
         text = (

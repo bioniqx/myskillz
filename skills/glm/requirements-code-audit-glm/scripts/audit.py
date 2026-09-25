@@ -1009,18 +1009,18 @@ class Client(zai_client.Client):
     per-run counters that run, parse and doctor print."""
 
     def __init__(self, base, key, route=None, timeout=900):
-        zai_client.Client.__init__(self, base=base, key=key)  # shared-client constructor
-        self.base = base
-        self.route = route or route_of(base)
+        # route passed into __init__ (not set after) so self.url is computed from it
+        zai_client.Client.__init__(self, key=key, base=base, route=route or route_of(base))
         self.timeout = timeout
         self.calls = 0
         self.in_tok = 0
         self.out_tok = 0
         self.cache_read = 0
 
-    def call(self, model, effort, prefix, task, max_tokens, retries=3):
+    def call(self, model, effort, prefix, task, max_tokens, temperature=None, retries=3):
         # explicit base-class call: self.call(...) would recurse into this override
-        text = zai_client.Client.call(self, model, effort, prefix, task, max_tokens, retries=retries)
+        text = zai_client.Client.call(self, model, effort, prefix, task, max_tokens,
+                                       temperature=temperature, retries=retries)
         s = zai_client.Client.stats(self)  # shared-client's cumulative totals, not just this reply
         self.calls = s["calls"]
         self.in_tok = s["in_tok"]
@@ -1288,7 +1288,7 @@ def judge_one(c, cl, retr, prefix, it, tier, mt):
     model, effort = tcfg["judge"]
     r1 = retr.gather(it, tier)
     paths = set(s["path"] for s in r1["snippets"])
-    txt = cl.call(model, effort, prefix, judge_task(it, r1), mt)
+    txt = cl.call(model, effort, prefix, judge_task(it, r1), mt, temperature=0.0)
     row = extract_json(txt) or {}
     fix, errs, warns = lint_finding(row, it, retr.root, paths)
     tries = 0
@@ -1297,7 +1297,7 @@ def judge_one(c, cl, retr, prefix, it, tier, mt):
         task = (judge_task(it, r1) + u"\n\n" + REPAIR_HEAD +
                 u"\n".join(u"- " + e for e in errs) +
                 u"\nYour rejected answer was: " + clip(json.dumps(fix, ensure_ascii=False), 700))
-        txt = cl.call(model, effort, prefix, task, mt)
+        txt = cl.call(model, effort, prefix, task, mt, temperature=0.0)
         row = extract_json(txt) or {}
         fix, errs, warns = lint_finding(row, it, retr.root, paths)
     queries = list(r1["queries"])
@@ -1317,7 +1317,8 @@ def judge_one(c, cl, retr, prefix, it, tier, mt):
                       "layers": r1["layers"] + r2["layers"], "chars": r2["chars"]}
             txt = cl.call(model, effort, prefix, judge_task(it, merged) +
                           u"\n\nThis is the SECOND retrieval pass, run on independent "
-                          u"strategies after your first answer was %s. Decide now." % st, mt)
+                          u"strategies after your first answer was %s. Decide now." % st, mt,
+                          temperature=0.0)
             row2 = extract_json(txt) or {}
             fix2, errs2, _w = lint_finding(row2, it, retr.root, paths)
             if not errs2:
@@ -1352,14 +1353,14 @@ def verify_one(c, cl, retr, prefix, it, prelim, tier, mt):
     itv = dict(it)
     itv["_prelim"] = prelim.get("status")
     task = verify_task(it, prelim, regions, r2, tried)
-    txt = cl.call(model, effort, prefix, task, mt)
+    txt = cl.call(model, effort, prefix, task, mt, temperature=0.0)
     row = extract_json(txt) or {}
     fix, errs, warns = lint_finding(row, itv, retr.root, paths, kind="verdict")
     tries = 0
     while errs and tries < 2:
         tries += 1
         t2 = (task + u"\n\n" + REPAIR_HEAD + u"\n".join(u"- " + e for e in errs))
-        txt = cl.call(model, effort, prefix, t2, mt)
+        txt = cl.call(model, effort, prefix, t2, mt, temperature=0.0)
         row = extract_json(txt) or {}
         fix, errs, warns = lint_finding(row, itv, retr.root, paths, kind="verdict")
     fix["searched"] = (r2["queries"])[:40]

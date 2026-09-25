@@ -47,6 +47,30 @@ class ThrottleReTest(unittest.TestCase):
             self.assertIsNone(oc_harness.THROTTLE_RE.search(text), text)
 
 
+class ReadEventsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def run_events(self, lines):
+        class FakeProc:
+            stdout = lines
+        state = {"proc": FakeProc(), "out": os.path.join(self.tmp, "x.jsonl"),
+                 "last": 0, "last_event": "", "throttles": 0, "error": ""}
+        oc_harness._read_events(state)
+        return state
+
+    def test_null_error_field_is_not_flagged(self):
+        # {"error": null} must not be treated as an error event: only a truthy
+        # `error` value (or type == "error") should set state["error"].
+        state = self.run_events(['{"error": null}\n'])
+        self.assertEqual(state["error"], "")
+
+    def test_truthy_error_field_is_flagged(self):
+        state = self.run_events(['{"error": "boom"}\n'])
+        self.assertEqual(state["error"], '{"error": "boom"}')
+
+
 class BuildRunCmdTest(unittest.TestCase):
     def test_v1_command(self):
         cmd = oc_harness.build_run_cmd(lane("a", "look", dir="/tmp/repo"), 1)

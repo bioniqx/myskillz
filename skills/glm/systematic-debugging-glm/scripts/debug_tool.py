@@ -672,9 +672,10 @@ def find_key():
     return zai_client.find_key()
 
 
-def api_call(key, base, model, effort, system, user, max_tokens, anthropic):
-    route = "anthropic" if anthropic else "openai"
-    client = zai_client.Client(key, base=base, route=route)
+def api_call(key, base, model, effort, system, user, max_tokens, anthropic, client=None):
+    if client is None:
+        route = "anthropic" if anthropic else "openai"
+        client = zai_client.Client(key, base=base, route=route)
     try:
         return client.call(model, effort, system, user, max_tokens)
     except Exception as e:
@@ -746,10 +747,14 @@ def cmd_scan(a):
     print("S=%s\nscan: %d workers, %d parallel, model=%s effort=%s key=%s"
           % (SCRIPTS, len(tasks), j, model, effort, src), file=sys.stderr)
 
+    # one Client shared across the whole pmap -> one AIMD gate actually throttles
+    route = "anthropic" if anthropic else "openai"
+    client = zai_client.Client(key, base=base, route=route)
+
     def one(t):
         # byte-identical prefix across workers -> prompt cache hit from request 2
         user = shared + "\n---\nTASK: " + t["prompt"]
-        txt = api_call(key, base, model, effort, SYS_PROMPT, user, a.max_tokens, anthropic)
+        txt = api_call(key, base, model, effort, SYS_PROMPT, user, a.max_tokens, anthropic, client=client)
         return {"id": t["id"], "text": txt.strip()}
 
     res = pmap(one, tasks, j)

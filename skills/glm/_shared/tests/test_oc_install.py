@@ -163,6 +163,21 @@ class ProbeEffortTests(unittest.TestCase):
         Patch(self, run_lanes=self.fake_run_lanes(40, 400, status="FAIL"))
         self.assertEqual(oc_harness.probe_effort("opencode", self.home), "unknown")
 
+    def test_cleans_up_its_probe_tempdir(self):
+        Patch(self, run_lanes=self.fake_run_lanes(40, 400))
+        created = []
+        real_mkdtemp = tempfile.mkdtemp
+
+        def spy_mkdtemp(*a, **kw):
+            d = real_mkdtemp(*a, **kw)
+            created.append(d)
+            return d
+
+        with mock.patch("oc_harness.tempfile.mkdtemp", side_effect=spy_mkdtemp):
+            oc_harness.probe_effort("opencode", self.home)
+        self.assertTrue(created)
+        self.assertFalse(os.path.exists(created[0]))
+
 
 class MainTests(unittest.TestCase):
     def setUp(self):

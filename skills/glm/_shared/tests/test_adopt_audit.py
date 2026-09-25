@@ -189,6 +189,21 @@ class ApiLane(unittest.TestCase):
         self.assertEqual(body["messages"][-1]["content"], "the task")
         self.assertNotIn("budget_tokens", raw)
 
+    def test_init_passes_route_to_base_init_so_url_is_not_stale(self):
+        # base has no "/anthropic" in it, so an inferred route would say "openai";
+        # the explicit route argument must still win for both self.route and self.url.
+        with mock.patch.dict(os.environ, clean_env(NO_PROXY="127.0.0.1"), clear=True):
+            cl = audit.Client(self.base, "test-key-0123456789abcdef", "anthropic")
+        self.assertEqual(cl.route, "anthropic")
+        self.assertEqual(cl.url, self.base.rstrip("/") + "/v1/messages")
+
+    def test_call_forwards_temperature_to_the_wire(self):
+        with mock.patch.dict(os.environ, clean_env(NO_PROXY="127.0.0.1"), clear=True):
+            cl = audit.Client(self.base, "test-key-0123456789abcdef", audit.route_of(self.base))
+            cl.call(audit.FLASH, "high", "SYSTEM PREFIX", "the task", 64, temperature=0.0)
+        body = json.loads(FakeZai.seen[-1][2])
+        self.assertEqual(body["temperature"], 0.0)
+
     def test_doctor_ping_goes_through_zai_client(self):
         home = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, home, True)

@@ -21,7 +21,7 @@ def detect(binary: str = "opencode") -> int:
         result = subprocess.run(
             [binary, "--version"], capture_output=True, text=True, timeout=10
         )
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return 0
     text = (result.stdout or "") + (result.stderr or "")
     match = re.search(r"(\d+)\.\d+\.\d+", text)
@@ -226,7 +226,7 @@ def _read_events(state):
                 event = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(event, dict) and (event.get("type") == "error" or "error" in event):
+            if isinstance(event, dict) and (event.get("type") == "error" or event.get("error")):
                 state["error"] = line[:500]
 
 
@@ -288,6 +288,20 @@ def _absorb(state, width):
     return width
 
 
+def _write_result(out_dir, lane_id, status, exit_code, error, last_event="", throttles=0, width=0):
+    """Build one lane's result dict, write its <id>.done and return it. The <id>.jsonl is
+    created empty if the lane never got far enough to produce one (e.g. a spawn failure),
+    so `out` always names a real file."""
+    out_path = os.path.join(out_dir, lane_id + ".jsonl")
+    if not os.path.exists(out_path):
+        open(out_path, "w").close()
+    result = {"id": lane_id, "status": status, "exit": exit_code, "error": error,
+              "last_event": last_event, "throttles": throttles, "width": width, "out": out_path}
+    with open(os.path.join(out_dir, lane_id + ".done"), "w") as f:
+        json.dump(result, f, indent=2)
+    return result
+
+
 def _finish(state, status, out_dir):
     state["err_file"].close()
     code = state["proc"].returncode
@@ -296,12 +310,8 @@ def _finish(state, status, out_dir):
         status = "OK" if code == 0 else "FAIL"
     if status == "FAIL" and not error:
         error = _last_line(state["err_path"])
-    result = {"id": state["id"], "status": status, "exit": code, "error": error,
-              "last_event": state["last_event"], "throttles": state["throttles"],
-              "width": state["width"], "out": state["out"]}
-    with open(os.path.join(out_dir, state["id"] + ".done"), "w") as f:
-        json.dump(result, f, indent=2)
-    return result
+    return _write_result(out_dir, state["id"], status, code, error,
+                          state["last_event"], state["throttles"], state["width"])
 
 
 def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binary: str = "opencode", major: int = 0) -> list:
@@ -324,12 +334,8 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
                 state = _start_lane(pending.pop(0), out_dir, major, binary, width)
                 if "start_error" in state:
                     lane_id = state["id"]
-                    result = {"id": lane_id, "status": "FAIL", "exit": None,
-                              "error": state["start_error"], "last_event": "", "throttles": 0,
-                              "width": width, "out": os.path.join(out_dir, lane_id + ".jsonl")}
-                    with open(os.path.join(out_dir, lane_id + ".done"), "w") as f:
-                        json.dump(result, f, indent=2)
-                    results[lane_id] = result
+                    results[lane_id] = _write_result(out_dir, lane_id, "FAIL", None,
+                                                      state["start_error"], width=width)
                 else:
                     running.append(state)
             time.sleep(0.05)
@@ -426,7 +432,9 @@ def install(skill_dir: str, major: int, home: str = "") -> list:
             if not fname.endswith(suffix):
                 continue
             with open(os.path.join(plugins_src, fname)) as fh:
-                text = fh.read().replace("{{SKILL_DIR}}", skill_dst)
+                # skill_dst sits inside a JS string literal in the template, so it must be
+                # JS/JSON-escaped, not pasted in raw (a quote or backslash would break the JS).
+                text = fh.read().replace("{{SKILL_DIR}}", json.dumps(skill_dst)[1:-1])
             path = os.path.join(plugins_dst, fname[:-len(suffix)] + ".js")
             with open(path, "w") as fh:
                 fh.write(text)
@@ -502,11 +510,12 @@ def probe_effort(binary: str = "opencode", home: str = "") -> str:
                       "dir": out_dir, "brief": PROBE_BRIEF, "timeout": 300})
     try:
         rows = run_lanes(lanes, out_dir, width=2, binary=binary, major=major)
+        tokens = {r["id"]: reasoning_tokens(r["out"]) for r in rows if r.get("status") == "OK"}
     finally:
         for path in written:
             if os.path.isfile(path):
                 os.remove(path)
-    tokens = {r["id"]: reasoning_tokens(r["out"]) for r in rows if r.get("status") == "OK"}
+        shutil.rmtree(out_dir, ignore_errors=True)
     low, high = tokens.get("probe-low", 0), tokens.get("probe-max", 0)
     if not low or not high:
         return "unknown"

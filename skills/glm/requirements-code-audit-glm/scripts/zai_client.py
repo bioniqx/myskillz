@@ -17,9 +17,16 @@ import urllib.request
 
 DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
 EFFORTS = ("low", "high", "max")
-THROTTLE_CODES = ("1302", "1305")
+# Z.ai rate/concurrency/frequency-limit codes: transient, safe to retry.
+# https://docs.z.ai/api-reference/api-code
+THROTTLE_CODES = ("1302", "1305", "1313")
+# Z.ai business codes that can ride on a 429 but won't clear by retrying
+# (insufficient balance, quota exhausted, plan/access expired).
+TERMINAL_CODES = ("1113", "1308", "1309", "1310", "1311", "1314", "1315",
+                   "1316", "1317", "1318", "1319", "1320", "1321")
 BACKOFF_BASE = 1.0
 BACKOFF_CAP = 30.0
+THROTTLE_WINDOW = 2.0
 
 
 def find_base(explicit: str = "") -> str:
@@ -130,6 +137,7 @@ class Gate:
         self.live = 0
         self.clean = 0
         self.cond = threading.Condition()
+        self._last_throttle = float("-inf")
 
     def __enter__(self):
         with self.cond:
@@ -145,8 +153,13 @@ class Gate:
         return False
 
     def throttled(self) -> int:
+        """Halve width, but at most once per THROTTLE_WINDOW: one AIMD decrease
+        per round-trip, not once per 429 in a burst of concurrent requests."""
         with self.cond:
-            self.width = max(1, self.width // 2)
+            now = time.monotonic()
+            if now - self._last_throttle >= THROTTLE_WINDOW:
+                self.width = max(1, self.width // 2)
+                self._last_throttle = now
             self.clean = 0
             return self.width
 
@@ -174,7 +187,12 @@ class ApiError(Exception):
 
     @property
     def throttle(self):
-        return self.status == 429 or self.code in THROTTLE_CODES
+        if self.code in THROTTLE_CODES:
+            return True
+        if self.status != 429:
+            return False
+        # a plain 429 stays transient; a documented terminal business code fails fast
+        return self.code not in TERMINAL_CODES
 
 
 def _error_of(text):
@@ -257,9 +275,10 @@ class Client:
             with self._opener.open(req, timeout=self.timeout) as r:
                 text = r.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            text = e.read().decode("utf-8", "replace")
+            with e:
+                text = e.read().decode("utf-8", "replace")
+                ra = e.headers.get("Retry-After") if e.headers is not None else None
             code, msg = _error_of(text)
-            ra = e.headers.get("Retry-After") if e.headers is not None else None
             raise ApiError(e.code, code, msg or str(e.reason), ra)
         except (urllib.error.URLError, http.client.HTTPException, OSError) as e:
             raise ApiError(0, "", str(e))
@@ -275,6 +294,14 @@ class Client:
         return obj
 
     def _done(self, obj):
+        if self.route == "anthropic":
+            text = "".join(b.get("text") or "" for b in obj.get("content") or []
+                           if isinstance(b, dict) and b.get("type") == "text")
+        else:
+            try:
+                text = obj["choices"][0]["message"].get("content") or ""
+            except (KeyError, IndexError, TypeError, AttributeError):
+                raise ApiError(200, "", "response has no choices")
         u = obj.get("usage") or {}
         det = u.get("prompt_tokens_details") or {}
         with self._lock:
@@ -283,13 +310,7 @@ class Client:
             s["in_tok"] += int(u.get("prompt_tokens") or u.get("input_tokens") or 0)
             s["out_tok"] += int(u.get("completion_tokens") or u.get("output_tokens") or 0)
             s["cache_read"] += int(det.get("cached_tokens") or u.get("cache_read_input_tokens") or 0)
-        if self.route == "anthropic":
-            return "".join(b.get("text") or "" for b in obj.get("content") or []
-                           if isinstance(b, dict) and b.get("type") == "text")
-        try:
-            return obj["choices"][0]["message"].get("content") or ""
-        except (KeyError, IndexError, TypeError, AttributeError):
-            raise ApiError(200, "", "response has no choices")
+        return text
 
     def call(self, model: str, effort: str, system: str, user: str, max_tokens: int, temperature: float = None, retries: int = 4) -> str:
         if effort not in EFFORTS:
@@ -300,6 +321,7 @@ class Client:
             try:
                 with self.gate:
                     obj = self._post(payload)
+                text = self._done(obj)
             except ApiError as e:
                 if e.throttle:
                     self.gate.throttled()
@@ -312,7 +334,7 @@ class Client:
                 time.sleep(_delay(attempt, e.retry_after))
                 continue
             self.gate.ok()
-            return self._done(obj)
+            return text
 
     def stats(self) -> dict:
         with self._lock:
