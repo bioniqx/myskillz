@@ -218,6 +218,34 @@ class GuardOcTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(decision(out), ("allow", "dev-team: pre-approved — read-only git"))
 
+    def test_v2_path_key_routes_to_edit_checks(self):
+        # the real v2.0.16 edit/write schemas name the file `path`, not `filePath`
+        rc, out = self.oc("write", {"path": "src/a.py", "content": "x"})
+        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        rc, out = self.oc("edit", {"path": "docs/x.md", "oldString": "a", "newString": "b"})
+        self.assertEqual(decision(out)[0], "deny")
+
+    def test_programmer_shell_workdir_outside_worktree_denies(self):
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            rc, out = self.oc("shell", {"command": "git status", "workdir": str(outside)})
+            verdict, reason = decision(out)
+            self.assertEqual(verdict, "deny")
+            self.assertIn("outside your slice worktree", reason)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_programmer_shell_workdir_inside_worktree_allows(self):
+        (self.wt / "src").mkdir()
+        rc, out = self.oc("shell", {"command": "git status", "workdir": "src"})
+        self.assertEqual(decision(out)[0], "allow")
+
+    def test_code_mode_execute_denied_for_every_role(self):
+        for role in ("programmer", "code-reviewer"):
+            with self.subTest(role=role):
+                rc, out = self.oc("execute", {"code": "return 1"}, role=role)
+                self.assertEqual(decision(out)[0], "deny")
+
     def test_v2_edit_capable_tools_route_to_edit_checks(self):
         for tool, args in (
             ("edit", {"filePath": "src/a.py", "oldString": "a", "newString": "b"}),

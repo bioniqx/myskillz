@@ -19,9 +19,10 @@
                     test/lint commands are `allow`ed so a reviewer can gather evidence without a prompt.
   guard.py perm     PermissionRequest (settings.json only, optional): same allow-list as `bash`, in the
                     PermissionRequest output schema. Not needed when the PreToolUse hooks are installed.
-  guard.py oc       OpenCode plugin bridge: {"tool", "args", "cwd", "role"} on stdin. edit/write/patch map to
-                    tool_input.file_path, bash to tool_input.command. Role programmer -> edit/bash, any other
-                    role -> edit-ro/bash-ro with agent_type = role, no role -> silent allow.
+  guard.py oc       OpenCode plugin bridge: {"tool", "args", "cwd", "role"} on stdin. edit/write/multiedit/
+                    patch map to tool_input.file_path, bash to tool_input.command. Role programmer ->
+                    edit/bash, any other role -> edit-ro/bash-ro with agent_type = role, no role -> silent
+                    allow.
 
 Fail-open by design: any internal error allows the action (the integrator re-checks at merge time).
 Deny/allow = JSON on stdout (exit 0). Stop-block = exit 2 with the reason on stderr.
@@ -747,7 +748,16 @@ def guard_oc(inp):
     prog = role == "programmer"
     cwd = inp.get("cwd") or os.getcwd()
     base = {"cwd": cwd, "agent_type": role}
+    if tool == "execute":
+        deny("dev-team: OpenCode Code Mode (`execute`) is disabled in dev-team lanes so every tool call "
+             "can be checked on its own. Call the tools directly.")
     if tool in ("bash", "shell"):
+        workdir = args.get("workdir")
+        if workdir:
+            wd = workdir if os.path.isabs(workdir) else os.path.abspath(os.path.join(cwd, workdir))
+            if prog and find_slice_root(wd) != find_slice_root(cwd):
+                deny(f"`workdir` {workdir} is outside your slice worktree; run commands from the worktree.")
+            base["cwd"] = wd
         check = guard_bash if prog else guard_bash_ro
         out = oc_capture(check, dict(base, tool_input={"command": args.get("command") or ""}))
         if not out.strip():
@@ -755,10 +765,13 @@ def guard_oc(inp):
                  "explicitly pre-approved is denied instead of silently allowed.")
         sys.stdout.write(out)
         sys.exit(0)
-    if tool in ("edit", "write"):
-        paths = [args.get("filePath") or ""]
+    if tool in ("edit", "write", "multiedit"):
+        paths = [args.get("filePath") or args.get("path") or ""]  # v1 filePath, v2 path
     elif tool in ("patch", "apply_patch"):
         paths = oc_patch_paths(args.get("patchText"))
+        if prog and not paths:
+            deny(f"`{tool}` names no file (no `*** Add/Update/Delete File:` header), so it cannot be checked "
+                 "against your footprint. Rewrite it with a header naming each file it touches.")
     else:
         allow()
     check = guard_edit if prog else guard_edit_ro

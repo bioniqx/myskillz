@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,8 @@ REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", "..", ".."))
 PLUGIN_DIR = os.path.join(REPO_ROOT, "skills/glm/dev-team-glm/opencode/plugins")
 V1_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v1.js")
 V2_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v2.js")
+
+NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "node not installed")
 
 
 def _write_guard_stub(skill_dir, decision):
@@ -153,8 +156,8 @@ class TestDevteamPlugins(unittest.TestCase):
         # process cwd. Prove it by running this same test file as a
         # subprocess from an unrelated cwd (a tmp dir with no skills/ tree)
         # and confirming it still finds and loads the real plugin sources.
-        assert os.path.isfile(V1_PATH), V1_PATH
-        assert os.path.isfile(V2_PATH), V2_PATH
+        self.assertTrue(os.path.isfile(V1_PATH), V1_PATH)
+        self.assertTrue(os.path.isfile(V2_PATH), V2_PATH)
         with tempfile.TemporaryDirectory() as unrelated_cwd:
             result = subprocess.run(
                 [
@@ -176,19 +179,20 @@ class TestDevteamPlugins(unittest.TestCase):
                 text=True,
                 timeout=60,
             )
-            assert result.returncode == 0, result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_v2_shape_has_no_plugin_package(self):
         with open(V2_PATH) as f:
             source = f.read()
-        assert "@opencode/plugin" not in source
-        assert "Plugin.define" not in source
-        assert "tool.execute.before" not in source
-        assert "ctx.directory" not in source
-        assert "id: \"devteam-guard\"" in source
-        assert "setup:" in source
-        assert "api.tool.hook" in source
+        self.assertNotIn("@opencode/plugin", source)
+        self.assertNotIn("Plugin.define", source)
+        self.assertNotIn("tool.execute.before", source)
+        self.assertNotIn("ctx.directory", source)
+        self.assertIn("id: \"devteam-guard\"", source)
+        self.assertIn("setup:", source)
+        self.assertIn("api.tool.hook", source)
 
+    @NEEDS_NODE
     def test_v1_denies_and_throws(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -204,17 +208,19 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v1(
                 tmp_dir, skill_dir, "programmer", "bash", {"command": "rm -rf /"}
             )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "DENIED:blocked command"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "DENIED:blocked command")
 
+    @NEEDS_NODE
     def test_v1_allows_when_decision_is_allow(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
             _write_guard_stub(skill_dir, {})
             result = _run_v1(tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"})
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "ALLOWED"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED")
 
+    @NEEDS_NODE
     def test_v1_fails_open_without_role(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -229,9 +235,10 @@ class TestDevteamPlugins(unittest.TestCase):
             )
             os.remove(guard_path)
             result = _run_v1(tmp_dir, skill_dir, None, "bash", {"command": "ls"})
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "ALLOWED"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED")
 
+    @NEEDS_NODE
     def test_v1_records_argv_and_stdin(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -240,18 +247,19 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v1(
                 tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"}
             )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "ALLOWED"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED")
             with open(record_path) as f:
                 record = json.load(f)
-            assert record["argv"] == ["oc"]
-            assert record["stdin"] == {
+            self.assertEqual(record["argv"], ["oc"])
+            self.assertEqual(record["stdin"], {
                 "tool": "bash",
                 "args": {"command": "ls"},
                 "cwd": "/tmp/work",
                 "role": "programmer",
-            }
+            })
 
+    @NEEDS_NODE
     def test_v2_records_argv_and_stdin(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -264,19 +272,20 @@ class TestDevteamPlugins(unittest.TestCase):
                 "edit",
                 {"filePath": "a.py", "oldString": "x", "newString": "y"},
             )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "ALLOWED"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED")
             with open(record_path) as f:
                 record = json.load(f)
-            assert record["argv"] == ["oc"]
+            self.assertEqual(record["argv"], ["oc"])
             expected_cwd = os.path.realpath(os.path.join(tmp_dir, "work"))
-            assert record["stdin"] == {
+            self.assertEqual(record["stdin"], {
                 "tool": "edit",
                 "args": {"filePath": "a.py", "oldString": "x", "newString": "y"},
                 "cwd": expected_cwd,
                 "role": "code-reviewer",
-            }
+            })
 
+    @NEEDS_NODE
     def test_v1_no_role_allows_and_never_invokes_stub(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -292,10 +301,11 @@ class TestDevteamPlugins(unittest.TestCase):
                 record_path,
             )
             result = _run_v1(tmp_dir, skill_dir, None, "bash", {"command": "rm -rf /"})
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "ALLOWED"
-            assert not os.path.exists(record_path), "guard stub was invoked with no role set"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED")
+            self.assertFalse(os.path.exists(record_path), "guard stub was invoked with no role set")
 
+    @NEEDS_NODE
     def test_v2_no_role_allows_and_never_invokes_stub(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -313,10 +323,11 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v2(
                 tmp_dir, skill_dir, None, "bash", {"command": "rm -rf /"}
             )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "ALLOWED"
-            assert not os.path.exists(record_path), "guard stub was invoked with no role set"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED")
+            self.assertFalse(os.path.exists(record_path), "guard stub was invoked with no role set")
 
+    @NEEDS_NODE
     def test_v2_denies_and_throws(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
@@ -336,8 +347,8 @@ class TestDevteamPlugins(unittest.TestCase):
                 "edit",
                 {"filePath": "a.py", "oldString": "x", "newString": "y"},
             )
-            assert result.returncode == 0, result.stderr
-            assert result.stdout == "DENIED:blocked edit"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "DENIED:blocked edit")
 
 if __name__ == "__main__":
     unittest.main()

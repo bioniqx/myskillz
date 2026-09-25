@@ -1,19 +1,7 @@
-// Real opencode v2.0.16 plugin shape, verified against the installed binary
-// (/opt/homebrew/Cellar/opencode-v2/2.0.16/bin/opencode, read-only strings/grep):
-// PluginModule.load decodes every plugin's default export against
-// SB = r({default: P([r({id, effect}), r({id, setup})])}) and otherwise throws
-// "Plugin must export a default definition with an id and an effect or setup
-// function." A setup plugin receives an api object; api.tool.hook(name, fn)
-// forwards to the Tool service (o.tool.hook), which fires
-// e.trigger("tool", "execute.before", {tool, sessionID, agent, messageID, id,
-// input}) from its one internal call site before every tool call — the tool
-// name is always at event.tool and the raw call arguments at event.input. An
-// error thrown by the hook function propagates and blocks the call. The
-// dotted event name "tool" + "." + "execute.before" never appears together
-// as a single string in the binary, and the plugin api object built for
-// setup() has no "directory" field — v2 gives the plugin no per-call
-// directory context; lanes run --standalone with cwd set to the lane dir, so
-// process.cwd() is the lane's directory.
+// OpenCode v2 plugin: default export {id, setup(api)}; api.tool.hook("execute.before", fn) fires
+// before every tool call with an event carrying event.tool and event.input. Throwing inside the
+// hook denies the call. setup() gets no per-call directory from the api, so we use process.cwd()
+// (the lane's cwd) for the guard payload instead.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -34,10 +22,17 @@ export default {
         const result = spawnSync("python3", [guardScript, "oc"], {
           input: payload,
           encoding: "utf8",
+          timeout: 30000,
         });
-        const stdout = (result.stdout || "").trim();
-        if (stdout) decision = JSON.parse(stdout);
+        if (result.error || result.status !== 0) {
+          console.error("devteam-guard: guard.py oc " +
+            (result.error ? result.error.message : "exited " + result.status) + " — failing open");
+        } else {
+          const stdout = (result.stdout || "").trim();
+          if (stdout) decision = JSON.parse(stdout);
+        }
       } catch (err) {
+        console.error("devteam-guard: guard.py oc " + err.message + " — failing open");
         decision = null;
       }
       if (

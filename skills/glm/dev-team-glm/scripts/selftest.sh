@@ -1086,6 +1086,12 @@ check "opencode worktree created at wt/<lane> and claimed" '[ -d "$ROC/.claude/d
 check "lane-run writes .done through guard.py stop" '[ -f "$ROC/.claude/dev-team/slices/O1.done" ]'
 DENYOUT=$(printf '{"cwd":"%s","tool":"edit","role":"programmer","args":{"filePath":"%s/outside.js","oldString":"a","newString":"b"}}' "$ROC/.claude/dev-team/wt/O1" "$ROC/.claude/dev-team/wt/O1" | python3 "$G" oc)
 check "guard.py oc denies an out-of-footprint edit" '[[ "$DENYOUT" == *deny* ]]'
+MULTIOUT=$(printf '{"cwd":"%s","tool":"multiedit","role":"programmer","args":{"filePath":"%s/outside.js"}}' "$ROC/.claude/dev-team/wt/O1" "$ROC/.claude/dev-team/wt/O1" | python3 "$G" oc)
+check "guard.py oc denies an out-of-footprint multiedit" '[[ "$MULTIOUT" == *deny* ]]'
+PATCHOUT=$(printf '{"cwd":"%s","tool":"patch","role":"programmer","args":{"patchText":"not a real patch, no file headers"}}' "$ROC/.claude/dev-team/wt/O1" | python3 "$G" oc)
+check "guard.py oc denies an unparseable patch for the programmer role" '[[ "$PATCHOUT" == *deny* ]]'
+READOUT=$(printf '{"cwd":"%s","tool":"read","role":"programmer","args":{"filePath":"%s/outside.js"}}' "$ROC/.claude/dev-team/wt/O1" "$ROC/.claude/dev-team/wt/O1" | python3 "$G" oc)
+check "guard.py oc still silently allows a read tool" '[[ -z "$READOUT" ]]'
 
 echo "== OpenCode plugin shim round-trip through guard.py for both plugin files"
 PLUGDIR="$S/../opencode/plugins"
