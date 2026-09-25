@@ -148,6 +148,66 @@ class GuardOcTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertNotEqual(decision(out)[0], "deny")
 
+    def test_reviewer_write_review_allows_outside_any_worktree(self):
+        unclaimed = Path(tempfile.mkdtemp()).resolve()
+        try:
+            path = unclaimed / ".claude" / "dev-team" / "reviews" / "r.md"
+            r = subprocess.run([sys.executable, str(GUARD), "oc"],
+                               input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
+                                                  "cwd": str(unclaimed), "role": "code-reviewer"}),
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(decision(r.stdout), ("allow", "dev-team: this role's own report / memory file"))
+        finally:
+            shutil.rmtree(unclaimed, ignore_errors=True)
+
+    def test_leader_vs_spot_reviewer_outside_any_worktree(self):
+        unclaimed = Path(tempfile.mkdtemp()).resolve()
+        try:
+            path = unclaimed / ".claude" / "dev-team" / "plan.md"
+
+            def oc(role):
+                return subprocess.run([sys.executable, str(GUARD), "oc"],
+                                      input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
+                                                         "cwd": str(unclaimed), "role": role}),
+                                      capture_output=True, text=True)
+            r = oc("team-leader")
+            self.assertEqual(decision(r.stdout), ("allow", "dev-team: the team-leader's plan"))
+            r = oc("spot-reviewer")
+            self.assertEqual(decision(r.stdout)[0], "deny")
+        finally:
+            shutil.rmtree(unclaimed, ignore_errors=True)
+
+    def test_reviewer_write_source_denies_outside_any_worktree(self):
+        unclaimed = Path(tempfile.mkdtemp()).resolve()
+        try:
+            path = unclaimed / "src" / "a.py"
+            r = subprocess.run([sys.executable, str(GUARD), "oc"],
+                               input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
+                                                  "cwd": str(unclaimed), "role": "code-reviewer"}),
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0)
+            verdict, reason = decision(r.stdout)
+            self.assertEqual(verdict, "deny")
+            self.assertIn("This role is read-only", reason)
+        finally:
+            shutil.rmtree(unclaimed, ignore_errors=True)
+
+    def test_programmer_write_outside_any_worktree_still_denies_absolute(self):
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            path = outside / "docs" / "x.md"
+            r = subprocess.run([sys.executable, str(GUARD), "oc"],
+                               input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
+                                                  "cwd": str(outside), "role": "programmer"}),
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0)
+            verdict, reason = decision(r.stdout)
+            self.assertEqual(verdict, "deny")
+            self.assertIn("outside any slice worktree", reason)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
     def test_guard_oc_function_no_role(self):
         spec = importlib.util.spec_from_file_location("devteam_guard", GUARD)
         mod = importlib.util.module_from_spec(spec)
