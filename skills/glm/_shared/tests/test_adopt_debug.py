@@ -1,9 +1,11 @@
+import contextlib
 import importlib.util
 import io
 import unittest
 import urllib.error
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 DEBUG_TOOL = (Path(__file__).resolve().parents[2]
               / "systematic-debugging-glm" / "scripts" / "debug_tool.py")
@@ -19,21 +21,22 @@ def load_debug_tool():
 class TestFindKeyDelegatesToZaiClient(unittest.TestCase):
     def test_find_key_calls_zai_client(self):
         mod = load_debug_tool()
-        mod.zai_client.find_key = lambda: ("k123456789012345", "env:ZAI_API_KEY")
-        assert mod.find_key() == ("k123456789012345", "env:ZAI_API_KEY")
+        with patch.object(mod.zai_client, "find_key",
+                           lambda: ("k123456789012345", "env:ZAI_API_KEY")):
+            assert mod.find_key() == ("k123456789012345", "env:ZAI_API_KEY")
 
 
 class TestApiCallDelegatesToZaiClient(unittest.TestCase):
+    @contextlib.contextmanager
     def _no_network(self, mod):
-        mod.time.sleep = lambda *_a, **_k: None
-
         def deny(*_a, **_k):
             raise urllib.error.URLError("network disabled for this test")
-        mod.urllib.request.urlopen = deny
+        with patch.object(mod.time, "sleep", lambda *_a, **_k: None), \
+                patch.object(mod.urllib.request, "urlopen", deny):
+            yield
 
     def test_api_call_forwards_openai_route(self):
         mod = load_debug_tool()
-        self._no_network(mod)
         seen = {}
 
         class FakeClient:
@@ -44,15 +47,14 @@ class TestApiCallDelegatesToZaiClient(unittest.TestCase):
                 seen.update(model=model, effort=effort, system=system, user=user, max_tokens=max_tokens)
                 return "VERDICT: CONFIRMED"
 
-        mod.zai_client.Client = FakeClient
-        out = mod.api_call("k", "https://api.z.ai/api/coding/paas/v4", "glm-5.3", "high",
-                            "sys", "usr", 500, False)
+        with self._no_network(mod), patch.object(mod.zai_client, "Client", FakeClient):
+            out = mod.api_call("k", "https://api.z.ai/api/coding/paas/v4", "glm-5.3", "high",
+                                "sys", "usr", 500, False)
         assert out == "VERDICT: CONFIRMED"
         assert seen["route"] == "openai"
 
     def test_api_call_forwards_anthropic_route(self):
         mod = load_debug_tool()
-        self._no_network(mod)
         seen = {}
 
         class FakeClient:
@@ -62,9 +64,9 @@ class TestApiCallDelegatesToZaiClient(unittest.TestCase):
             def call(self, model, effort, system, user, max_tokens):
                 return "VERDICT: REFUTED"
 
-        mod.zai_client.Client = FakeClient
-        out = mod.api_call("k", "https://api.z.ai/api/anthropic", "glm-5.3", "max",
-                            "sys", "usr", 500, True)
+        with self._no_network(mod), patch.object(mod.zai_client, "Client", FakeClient):
+            out = mod.api_call("k", "https://api.z.ai/api/anthropic", "glm-5.3", "max",
+                                "sys", "usr", 500, True)
         assert out == "VERDICT: REFUTED"
         assert seen["route"] == "anthropic"
 
