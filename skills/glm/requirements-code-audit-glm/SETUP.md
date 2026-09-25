@@ -18,7 +18,7 @@ That copies the skill to the harness's skills directory and the matching agent f
 | Harness | Skill | Agents (fallback lane) |
 |---|---|---|
 | ZCode | `~/.zcode/skills/requirements-code-audit/` | `~/.zcode/agents/rca-*.md` from `agents/zcode/` |
-| OpenCode | `~/.config/opencode/skills/requirements-code-audit/` (also reads `~/.claude/skills/` and `~/.agents/skills/`) | `~/.config/opencode/agents/rca-*.md` from `agents/opencode/` |
+| OpenCode | `~/.config/opencode/skills/requirements-code-audit/` (also reads `~/.claude/skills/` and `~/.agents/skills/`) | `~/.config/opencode/agents/rca-*.md` from `opencode/agents/` |
 
 Invoke it in ZCode with `$requirements-code-audit <spec file>`; in OpenCode the agent loads it through its
 `skill` tool by name.

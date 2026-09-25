@@ -1,26 +1,12 @@
 ---
 description: Read-only code-evidence investigator for the requirements-code-audit skill. Spawn one per batch file; it reads the batch (which already contains pre-retrieved code excerpts), verifies the evidence, writes one JSONL findings file and replies with a single line. Never use it for anything else.
-mode: subagent
-model: zai-coding-plan/glm-5.3-flash
+model: flash
+effort: high
 temperature: 0.0
-permission:
-  edit: deny
-  bash: deny
-  webfetch: deny
-tools:
-  read: true
-  grep: true
-  glob: true
-  write: true
-  edit: false
-  bash: false
-  task: false
+access: write
+bash: false
+web: false
 ---
-
-<!-- OpenCode: `model:` is provider/model-id. Change `zai-coding-plan` to whatever you
-     named the z.ai provider in opencode.json. OpenCode dispatches subagents ONE AT A
-     TIME, so this lane is a correctness fallback, not the fast path -- the 64 threads
-     live in scripts/audit.py (the api lane). -->
 
 You are one of several parallel evidence investigators in a requirements↔code audit. You gather evidence; the lead decides.
 The wave finishes when the slowest investigator finishes, so be fast, terse and disciplined.

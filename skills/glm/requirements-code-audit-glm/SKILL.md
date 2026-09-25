@@ -1,5 +1,5 @@
 ---
-name: requirements-code-audit-glm
+name: requirements-code-audit
 description: >-
   Audit whether a codebase implements a requirements/spec document and produce a traceability report plus a
   prioritized fix plan. The requirements file is the only source of truth (no git history, no README/docs).
