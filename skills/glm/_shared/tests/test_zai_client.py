@@ -106,6 +106,48 @@ class TestFindKey(unittest.TestCase):
         self.assertEqual(zai_client.find_key(),
                          ("p" * 20, os.path.join(os.getcwd(), "opencode.json")))
 
+    def test_opencode_auth_scopes_to_zai_provider(self):
+        """openai key comes first in the dict but must never win over zai-coding-plan."""
+        auth = self.put(".local/share/opencode/auth.json",
+                        {"openai": {"type": "api", "key": "o" * 20},
+                         "zai-coding-plan": {"type": "api", "key": "z" * 20}})
+        self.assertEqual(zai_client.find_key(), ("z" * 20, auth))
+
+    def test_opencode_file_with_no_zai_provider_is_skipped(self):
+        self.put(".local/share/opencode/auth.json", {"openai": {"type": "api", "key": "o" * 20}})
+        with open("opencode.json", "w", encoding="utf-8") as f:
+            json.dump({"provider": {"anthropic": {"options": {"apiKey": "a" * 20}}}}, f)
+        self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_opencode_file_with_no_zai_provider_falls_through(self):
+        self.put(".local/share/opencode/auth.json", {"openai": {"type": "api", "key": "o" * 20}})
+        settings = self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
+        self.assertEqual(zai_client.find_key(), ("c" * 20, settings))
+
+    def test_opencode_rejects_templated_placeholder_values(self):
+        self.put(".local/share/opencode/auth.json",
+                {"zai-coding-plan": {"type": "api", "key": "{env:ZAI_API_KEY}"}})
+        with open("opencode.json", "w", encoding="utf-8") as f:
+            json.dump({"provider": {"zai": {"options": {"apiKey": "{file:/tmp/key}"}}}}, f)
+        self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_opencode_accepts_all_zai_provider_ids(self):
+        for pid in ("zai-coding-plan", "zai", "zhipuai-coding-plan", "zhipuai"):
+            with tempfile.TemporaryDirectory() as home:
+                with mock.patch.dict(os.environ, {"HOME": home}, clear=True):
+                    p = os.path.join(home, ".local/share/opencode/auth.json")
+                    os.makedirs(os.path.dirname(p), exist_ok=True)
+                    with open(p, "w", encoding="utf-8") as f:
+                        json.dump({pid: {"type": "api", "key": "z" * 20}}, f)
+                    self.assertEqual(zai_client.find_key(), ("z" * 20, p))
+
+    def test_opencode_json_provider_options_scoped(self):
+        with open("opencode.json", "w", encoding="utf-8") as f:
+            json.dump({"provider": {"openai": {"options": {"apiKey": "o" * 20}},
+                                    "zhipuai": {"options": {"apiKey": "z" * 20}}}}, f)
+        self.assertEqual(zai_client.find_key(),
+                         ("z" * 20, os.path.join(os.getcwd(), "opencode.json")))
+
 
 class TestGate(unittest.TestCase):
     def test_halves_on_throttle(self):
