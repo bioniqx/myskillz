@@ -1088,17 +1088,10 @@ PLUGDIR="$S/../opencode/plugins"
 check "v1 plugin file devteam-guard.v1.js exists" '[ -f "$PLUGDIR/devteam-guard.v1.js" ]'
 check "v2 plugin file devteam-guard.v2.js exists" '[ -f "$PLUGDIR/devteam-guard.v2.js" ]'
 check "v1 plugin exports DevteamGuard with the tool.execute.before hook" 'grep -q "DevteamGuard" "$PLUGDIR/devteam-guard.v1.js" && grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v1.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v1.js"'
-check "v2 plugin exports Plugin.define({ id: \"devteam-guard\", setup }) with the tool.execute.before hook" 'grep -q "devteam-guard" "$PLUGDIR/devteam-guard.v2.js" && grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v2.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v2.js"'
+check "v2 plugin exports async (ctx) => ({...}) with the tool.execute.before hook, no @opencode/plugin package" 'grep -q "tool.execute.before" "$PLUGDIR/devteam-guard.v2.js" && grep -q "guard.py" "$PLUGDIR/devteam-guard.v2.js" && grep -q "ctx.directory" "$PLUGDIR/devteam-guard.v2.js" && ! grep -q "@opencode/plugin" "$PLUGDIR/devteam-guard.v2.js" && ! grep -q "Plugin.define" "$PLUGDIR/devteam-guard.v2.js"'
 if command -v node >/dev/null 2>&1; then
   sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v1.js" > "$TMP/v1.mjs"
   sed "s|{{SKILL_DIR}}|$(dirname "$S")|g" "$PLUGDIR/devteam-guard.v2.js" > "$TMP/v2.mjs"
-  mkdir -p "$TMP/node_modules/@opencode/plugin"
-  cat > "$TMP/node_modules/@opencode/plugin/package.json" <<'JSON'
-{"name":"@opencode/plugin","version":"0.0.0","type":"module","main":"index.mjs"}
-JSON
-  cat > "$TMP/node_modules/@opencode/plugin/index.mjs" <<'JS'
-export const Plugin = { define: (def) => def };
-JS
   cat > "$TMP/v1check.js" <<'JS'
 const path = require("path");
 (async () => {
@@ -1121,7 +1114,7 @@ const path = require("path");
 (async () => {
   const mod = await import(process.argv[2]);
   const plugin = mod.default;
-  const hooks = await plugin.setup({ location: { directory: process.cwd() } });
+  const hooks = await plugin({ directory: process.cwd() });
   try {
     await hooks["tool.execute.before"]({ tool: "edit" }, { args: { filePath: path.join(process.cwd(), process.argv[3]), oldString: "a", newString: "b" } });
     console.log("ALLOWED");
@@ -1131,9 +1124,9 @@ const path = require("path");
 })();
 JS
   V2RES=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v2check.js" "$TMP/v2.mjs" outside.js 2>&1)
-  check "Plugin.define({ id: \"devteam-guard\", setup }) (v2 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V2RES" == *"outside your slice footprint"* ]]'
+  check "async (ctx) => ({...}) (v2 plugin) denies an out-of-footprint edit via guard.py oc" '[[ "$V2RES" == *"outside your slice footprint"* ]]'
   V2OK=$(cd "$ROC/.claude/dev-team/wt/O1" && DEVTEAM_ROLE=programmer node "$TMP/v2check.js" "$TMP/v2.mjs" src/o1.js 2>&1)
-  check "Plugin.define({ id: \"devteam-guard\", setup }) (v2 plugin) allows an in-footprint edit of src/o1.js via guard.py oc" '[[ "$V2OK" == *"ALLOWED"* ]]'
+  check "async (ctx) => ({...}) (v2 plugin) allows an in-footprint edit of src/o1.js via guard.py oc" '[[ "$V2OK" == *"ALLOWED"* ]]'
 else
   skip "node not on PATH: v1/v2 plugin round-trip (deny) checks skipped"
   skip "node not on PATH: v1/v2 plugin round-trip (allow) checks skipped"
