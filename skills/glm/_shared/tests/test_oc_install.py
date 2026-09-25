@@ -260,6 +260,58 @@ class MainTests(unittest.TestCase):
         self.assertEqual(rc, 2)
 
 
+class ConfigSnippetV2Tests(unittest.TestCase):
+    """Evidence (opencode v2.0.16 binary, `strings` on
+    /opt/homebrew/Cellar/opencode-v2/2.0.16/bin/opencode):
+
+    The static opencode.json / agent-frontmatter "permission" field is
+    defined as `permission:n(ef)` in BOTH the top-level `identifier:"Config"`
+    schema and the per-agent `identifier:"AgentConfig"` schema, where
+    `ef=fI.pipe(...).annotate({identifier:"PermissionConfig"})` and
+    `Pr=P([mo,uI]).annotate({identifier:"PermissionRuleConfig"})`,
+    `mo=K(["ask","allow","deny"]).annotate({identifier:"PermissionActionConfig"})`,
+    `uI=L(t,mo).annotate({identifier:"PermissionObjectConfig"})` — i.e. a
+    record mapping a pattern (e.g. a skill name) to "ask"/"allow"/"deny",
+    exactly the nested-map shape already emitted:
+    {"permission": {"skill": {"<name>": "deny"}}}.
+
+    The {action, resource, effect} rule-list shape does exist in the binary
+    (`wj=r({action:t,resource:t,effect:PB}).annotate({identifier:"Permission.Rule"})`,
+    `Np=x(wj).annotate({identifier:"Permission.Ruleset"})`) but it backs the
+    *runtime* permission ask/reply protocol
+    (`identifier:"Permission.Request"` carries sessionID/action/resources/
+    source/message — a live approval event), not the static config file.
+    So config_snippet(2) keeping the nested-map shape is correct; no shape
+    change was needed.
+    """
+
+    def test_config_snippet_v2_emits_nested_map_permission_shape(self):
+        snippet = oc_harness.config_snippet(2, ["systematic-debugging", "writing-plans"])
+        data = json.loads(snippet)
+        self.assertEqual(data["permission"]["skill"], {
+            "systematic-debugging": "deny",
+            "writing-plans": "deny",
+        })
+        self.assertNotIn("action", snippet)
+        self.assertNotIn("resource", snippet)
+        self.assertNotIn("effect", snippet)
+
+    def test_config_snippet_v2_omits_permission_when_no_deny_list(self):
+        self.assertNotIn("permission", json.loads(oc_harness.config_snippet(2, [])))
+
+    def test_config_snippet_v1_output_unchanged(self):
+        snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
+        data = json.loads(snippet)
+        self.assertEqual(data["permission"]["skill"], {
+            "systematic-debugging": "deny",
+            "writing-plans": "deny",
+        })
+        self.assertEqual(
+            oc_harness.config_snippet(1, ["x"]),
+            oc_harness.config_snippet(2, ["x"]),
+        )
+
+
 class InstallFromOwnDestinationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="oc-selfinstall-")
