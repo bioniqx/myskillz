@@ -138,6 +138,16 @@ def render_command(text: str, major: int, skill_dir: str) -> str:
 
 
 def config_snippet(major: int, deny: list) -> str:
+    # major is accepted (not just ignored) so the signature documents that the
+    # skill-denial shape below is version-checked, not a leftover v1 default.
+    # Verified against the installed opencode v2.0.16 binary: both the
+    # top-level config schema and the per-agent frontmatter schema declare
+    # `permission` as `PermissionConfig` = union(action, record<pattern,
+    # action>) in both major 1 and major 2 -- the nested-map shape
+    # {"skill": {"<name>": "deny"}} below, not the {action, resource, effect}
+    # rule-list (that shape is `Permission.Ruleset`, used only for the
+    # runtime permission ask/reply protocol, never for opencode.json).
+    del major
     config = {
         "$schema": "https://opencode.ai/config.json",
         "provider": {
