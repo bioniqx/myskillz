@@ -35,6 +35,10 @@ other file of this skill — there are none.** (Under the OpenCode harness, §8'
 | R9 | **Subagent returns ≤ 5 lines.** Never the doc body. | Long subagent returns |
 | R10 | **Failure budget: 1 retry per doc, bundled into the next wave.** Never a dedicated retry turn, never a third attempt. | Retry loops |
 
+On OpenCode v2, R2's Tasks are `subagent` tool calls with `agent: "doc-writer"`/`"doc-reviewer"`,
+`background: true`, no `model` override (the installed agent's `variant` already carries R7's
+effort) — fire each without waiting, one per doc, then end the turn (§8).
+
 **Turn ledger (target):**
 
 | Turn | Content (single message) |
@@ -279,6 +283,10 @@ Then:
 
 ## 6. FALLBACK — harness without subagents
 
+OpenCode v2's `subagent` tool takes `background: true` — that is real subagent capability
+(§8), not this fallback. This section is for OpenCode v1 (no `background` param, one lane at a
+time) and any harness with no subagent tool at all.
+
 Same pipeline, sequential, same inlined briefs. Keep: one batched bash per phase, diff-skip,
 self-verify while writing, review HIGH docs only with fresh scoped reads, docs to disk, ≤ 5-line
 progress notes. One doc at a time, clearing scope between docs to keep context small. No
@@ -325,13 +333,22 @@ doc-writer's flash. Writer lanes use `model: "flash"`, `effort: "low"`; reviewer
 
 Effort control differs by major: v1 renders agents with `mode: all` (needed because a `mode:
 subagent` agent is silently swapped for the default `build` agent by `opencode run --agent`) and
-forwards frontmatter `reasoningEffort` as `reasoning_effort` on the wire. v2 ignores
-agent-frontmatter effort entirely; `oc_harness.py` instead appends `#<effort>` to the `--model`
-flag when a lane dict carries an `effort` field, and that variant suffix is what reaches GLM. On v2 a
-lane with no `effort` field runs at GLM's default `max`; v1 always uses the agent's own `reasoningEffort`. Once the `run` command
+forwards frontmatter `reasoningEffort` as `reasoning_effort` on the wire. v2 *does* honor agent
+frontmatter `model:`+`variant:` — but only when a lane is dispatched through the `subagent` tool
+directly; `opencode run --agent` (what this section's `oc_harness.py` shells out to) always passes
+an explicit `--model`, which overrides the agent's own model/variant, so `oc_harness.py` instead
+appends `#<effort>` to that `--model` flag when a lane dict carries an `effort` field, and that
+variant suffix is what reaches GLM. On v2 a lane with no `effort` field runs at GLM's default
+`max`; v1 always uses the agent's own `reasoningEffort`. Once the `run` command
 exits, read each lane's 5-line return from
 `<out_dir>/<id>.jsonl` — never every doc body back — before reporting. Everything else in §§1-7
 (turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
+
+In an interactive v2 session you can skip `oc_harness.py` and dispatch each lane as a `subagent`
+tool call instead: `agent: "doc-writer"`/`"doc-reviewer"`, `background: true`, no `model` param —
+the installed agent's own `variant` supplies the effort. Fire each without waiting, then end the
+turn; this only works in an interactive session (a headless `opencode run` can exit before
+background children report), so keep the `oc_harness.py` path above for headless/CI runs.
 
 ---
 

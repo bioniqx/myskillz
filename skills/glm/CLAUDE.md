@@ -68,12 +68,15 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
 - **Thinking is always on.** `reasoning_effort` accepts only `low | high | max` (no `medium`) and defaults
   to `max`. Effort is the real latency dial, so every tier maps to one explicit effort. Claude Code forwards
   effort only when `*_SUPPORTED_CAPABILITIES` includes `effort`. On OpenCode, effort reaches GLM via
-  frontmatter `reasoningEffort` on v1 (agents are rendered `mode: all`) and via the `--model <id>#<effort>`
-  suffix that `oc_harness.py` adds on v2; v2 ignores frontmatter effort.
-- **GLM emits few parallel tool calls per turn, and OpenCode runs subagents serially.** Fan-out therefore
+  frontmatter `reasoningEffort` on v1 (agents are rendered `mode: all`) and on v2 via the agent's
+  `variant:` when the `subagent` tool dispatches it (a v2 agent with no variant runs at max). `opencode run
+  --model` overrides the agent's model and variant, so `oc_harness.py` adds a `#<effort>` suffix to lanes.
+- **GLM emits few parallel tool calls per turn, and OpenCode v1 runs subagents serially.** Fan-out therefore
   lives inside the Python tools: each one opens up to 64 threads and calls the Z.ai API directly (the "api
   lane"). A single model turn replaces many batched tool calls. Each tool has an **agent lane** fallback
-  that writes briefs for subagents when no API key is found (`--lane api|agent`).
+  that writes briefs for subagents when no API key is found (`--lane api|agent`). On OpenCode v2 the
+  `subagent` tool takes `background: true`, so agent-lane workers run concurrently even at one call per
+  turn (interactive sessions only; a headless `opencode run` can exit before they report).
 - **Prefix caching.** Every request in a fan-out wave shares a byte-identical system/prefix block. Keep it
   identical when editing prompts.
 - **Prompt style.** Instructions are written as numbered imperative rules (R0, R1, …) with no XML

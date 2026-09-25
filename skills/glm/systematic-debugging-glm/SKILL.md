@@ -80,7 +80,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents instead — dispatch them all in one message.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report.
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit

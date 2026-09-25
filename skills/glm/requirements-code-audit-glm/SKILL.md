@@ -40,7 +40,8 @@ running inside the script.
 
 1. **The parallel work is not in your turn.** `audit.py run` opens up to 64 threads, each one request straight
    at the GLM endpoint. Nothing depends on the harness dispatching anything, so it is equally fast in OpenCode
-   (which dispatches subagents one at a time) and ZCode.
+   v1 (which dispatches subagents one at a time), OpenCode v2 (whose `subagent` tool can dispatch with
+   `background: true` instead, but that path serves the agent-lane fallback, not this one) and ZCode.
 2. **Retrieval is deterministic, not agentic.** ripgrep plus a symbol/route index finds candidate code over six
    independent strategies; the model only judges what it is shown. GLM emits few parallel tool calls per turn,
    so a search loop would be the slow, weak part of the audit — this removes it, and records every query for
@@ -164,8 +165,12 @@ it maps to the same model as `sonnet`, at no gain.
 No API key → `brief` reports `lane agent` and the pipeline becomes `A plan` → dispatch the printed subagents in
 ONE message → `A status` (repeat as they report) → `A queue`, unchanged from there. The batch files carry the
 pre-retrieved excerpts, so the workers mostly judge rather than search. ZCode runs subagents launched together
-in parallel; OpenCode serialises them, which is exactly why the api lane exists. No Agent tool at all → do the
-batch files yourself, and give every MISSING two independent search strategies by hand.
+in parallel; OpenCode v1 serialises them, which is exactly why the api lane exists there. OpenCode v2's
+`subagent` tool takes `background: true` (a `background` param on your subagent tool is how you detect v2):
+dispatch each worker in turn without waiting, then end the turn — real parallelism even one call per turn, but
+interactive sessions only, since a headless `opencode run` can exit before background children report. No
+Agent tool at all → do the batch files yourself, and give every MISSING two independent search strategies by
+hand.
 
 Setup, environment variables and harness install: `SETUP.md`. Model routing, failure modes and evidence:
 `references/glm-tuning.md`. Schemas: `references/schemas.md`. Report layout: `references/report-format.md`.

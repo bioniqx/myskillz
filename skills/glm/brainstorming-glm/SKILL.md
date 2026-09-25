@@ -297,7 +297,7 @@ never stall.
 
 | Missing | Substitute |
 | --- | --- |
-| Agent / subagents | Lanes become direct calls; keep the 2-4 highest-value questions and the round count. |
+| Agent / subagents | OpenCode v1: lanes become direct calls; keep the 2-4 highest-value questions and the round count. OpenCode v2: dispatch each lane as a background `subagent` call (`agent: "explorer"`/`"researcher"`, `background: true`, no `model` override — effort comes from the agent's own `variant`), fired one after another without waiting. |
 | AskUserQuestion | Plain text, numbered, approval as question 1. |
 | ToolSearch | Tools are already live; skip it. |
 | Workflow | Run waves of lanes. |

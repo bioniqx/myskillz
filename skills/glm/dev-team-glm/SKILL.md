@@ -50,13 +50,26 @@ On OpenCode, when `DEVTEAM_HARNESS=opencode` or `OPENCODE` is set, the Conductor
 | Command | Purpose |
 | --- | --- |
 | `devteam start <plan.md>` | Initialize the run: `doctor --fix` installs agents, creates git worktrees at `.claude/dev-team/wt/<id>`, checks the plan, and prints ready lanes. Each lane process gets `env DEVTEAM_ROLE=<agent>` and `DEVTEAM_SLICE=<id>`. |
-| `devteam wait [--timeout 100]` | Block up to `--timeout` seconds (default 100, below OpenCode's 120s bash-tool limit) for a new lane result or completion marker in `.claude/dev-team/lanes/`. Print `NEXT: devteam next` when a marker arrives. |
-| `devteam next` | Read all lane JSON output and markers (`.done`/`.blocked`), merge results, queue fixes, dispatch ready lanes and any retries, print the endgame. Stop gate runs after each programmer lane: `lane-run` pipes `{"cwd": <worktree>, "last_assistant_message": <text>}` to `guard.py stop`; exit 2 means blocked, re-run once per block with gate stderr appended to brief, force-finish after 2 blocks. The governor reads lane files instead of Claude Code transcripts: a lane ending `FAIL`/`STALL`/`TIMEOUT` in `.claude/dev-team/lanes/<id>.done` prints `LANE DOWN <id> (<kind>): the lane process ended <error>` — a stuck slice retries cold (`fail <id>` then `retry <id>`; the worktree is discarded, only the branch `attempt/<id>-N` is kept for salvage); a stuck review/research lane just relaunches in the background (`lane-run <id> &`). |
+| `devteam wait [--timeout 100]` | Block up to `--timeout` seconds for a new lane result or completion marker in `.claude/dev-team/lanes/`. Print `NEXT: devteam next` when a marker arrives. v2 (your shell tool has a `background` param): run `devteam wait --timeout 3600` with `background: true` and end the turn — its completion notification is your wake-up; keep one wait running at a time. v1: run it in the foreground with the default 100 s (below the 120 s bash-tool limit). |
+| `devteam next` | Read all lane JSON output and markers (`.done`/`.blocked`), merge results, queue fixes, dispatch ready lanes and any retries, print the endgame. Stop gate runs after each programmer lane: `lane-run` pipes `{"cwd": <worktree>, "last_assistant_message": <text>}` to `guard.py stop`; exit 2 means blocked, re-run once per block with gate stderr appended to brief, force-finish after 2 blocks. The governor reads lane files instead of Claude Code transcripts: a lane ending `FAIL`/`STALL`/`TIMEOUT` in `.claude/dev-team/lanes/<id>.done` prints `LANE DOWN <id> (<kind>): the lane process ended <error>` — a stuck slice retries cold (`fail <id>` then `retry <id>`; the worktree is discarded, only the branch `attempt/<id>-N` is kept for salvage); a stuck review/research lane just relaunches in the background with the printed `lane-run <id> > <lane log> 2>&1 &`. |
 | `devteam retry <id> [--files ...]` | Cold retry: create a fresh worktree, switch to a stronger model (GLM-5.3), re-dispatch with optional file scope. |
 
 Lanes run `python3 <devteam.py> lane-run <id>` in their worktree; it claims the slice, runs through vendored `oc_harness.run_lanes`, and pipes stop-gate JSON. Markers go to `.claude/dev-team/slices/<id>.done|.blocked` (stop gate only). Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner only). Tools: `edit`/`write`/`patch` (file operations) and `bash` (shell commands) are checked by `guard.py oc` mode (programmer → existing checks; other roles → read-only with role in agent_type; no role → silent allow). OpenCode has no interactive fallback, so an unapproved bash command, or a programmer write outside its own slice worktree, is DENIED outright — never left pending on a prompt. Plugins (v1 and v2) forward calls to `python3 guard.py oc` on stdin and throw `Error(reason)` on deny; allow on any plugin-side failure.
 
 Dev-team agents must be launched only through the engine's process lane (`devteam next` / `lane-run`), which sets `DEVTEAM_ROLE` and `DEVTEAM_SLICE` per lane — an agent spawned via OpenCode's own task tool gets neither, so the `devteam-guard` plugin becomes a no-op for it and its rendered agent has edit/bash allowed; never dispatch dev-team roles that way.
+
+**Phases 2-4 on OpenCode.** The Claude Code tool names there map as follows:
+
+1. `=== DISPATCH` / `REVIEW` / `INVESTIGATE` print a `LANE … running` line: the engine already started
+   that lane. Launch nothing.
+2. Long commands (`CHECKPOINT … run in the BACKGROUND`, a printed lane relaunch): v2 → the shell tool
+   with `background: true` (no timeout; you are notified when it ends). v1 → wrap the printed command
+   as `( … ) > /dev/null 2>&1 &`; a bare `&` keeps the bash tool blocked until the job ends.
+3. `SendMessage` does not exist: a lane is a one-shot process. Answer a `BLOCKED` question, or apply a
+   `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `devteam retry <id> --note "<answer or exact fix>"`
+   (cold: fresh worktree, GLM-5.3). The engine stops the old lane itself, so there is no `TaskStop`.
+4. `LANE DOWN`: do exactly what the printed line says (`fail` + `retry` for a slice, the printed
+   background relaunch for a review or research lane).
 
 ## Route first (one line to the user, then act)
 
@@ -163,7 +176,7 @@ in one line what is traded, list every untested slice at the end with an offer t
 
 On **every wake-up** (completion notification, background Bash result, user answer): **`devteam next`**.
 Launch every Agent line and background command it printed, end the turn. (`next <id>` only for a lane
-whose marker never arrived.)
+whose marker never arrived.) On OpenCode, map the tool names below per "Phases 2-4 on OpenCode".
 
 Act on each block, in the same turn:
 

@@ -53,9 +53,12 @@ Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
    every harness.
 2. **agent** (fallback). The script writes one brief per writer and prints a
    DISPATCH table. On ZCode, foreground subagents run in parallel and this lane
-   is respectable. On OpenCode, the task tool dispatches subagents one at a time
-   unless `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` is set, so expect
-   roughly serial behavior without it.
+   is respectable. On OpenCode v1, the task tool dispatches subagents one at a
+   time unless `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` is set, so
+   expect roughly serial behavior without it. On OpenCode v2, the `subagent`
+   tool takes `background: true`: dispatch each DISPATCH row that way, one
+   after another with no wait, for real parallelism from one tool call per
+   turn.
 
 Force a lane with `build --lane api|agent`.
 
@@ -91,7 +94,9 @@ The `plan-task-writer` agent provides the fallback when an API key is not
 available; `oc_harness.py run` starts a subprocess for tool-using agent lanes.
 Subagents live in `~/.config/opencode/agents/`, rendered with `mode: all` on v1 (a `mode: subagent`
 agent is silently swapped for the default `build` agent by `opencode run --agent`) and `mode:
-subagent` on v2. Headless
+subagent` on v2. Rendering also writes `reasoningEffort:` into v1 agents and `variant: <effort>` into
+v2 agents, so the `subagent` tool honors an agent's own model and effort when dispatched without an
+explicit `model` override. Headless
 runs are `opencode run -m <provider>/<model> --auto "<prompt>"`.
 
 **ZCode.** Skills live in `~/.zcode/skills/<name>/SKILL.md` and are invoked with

@@ -9,7 +9,7 @@ The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` lin
 The generic skill buys speed by telling the model to put many tool calls in one message and to launch many subagents at once. On this pairing, both assumptions fail:
 
 - GLM-5.3 emits only a couple of tool calls per turn, so a "batch of 12 reads" quietly becomes six round-trips.
-- OpenCode dispatches subagent tasks one at a time, so a 64-way fan-out becomes 64 sequential runs. (ZCode does run foreground subagents in parallel.)
+- OpenCode v1 dispatches subagent tasks one at a time, so a 64-way fan-out becomes 64 sequential runs. OpenCode v2's `subagent` tool takes `background: true`, so dispatching workers that way (one call after another, without waiting) gets real parallelism even from a single turn — interactive sessions only, since a headless `opencode run` can exit before background children report. (ZCode does run foreground subagents in parallel.)
 
 So the parallelism moved **out of the model's turn and into the tools**. One call per phase; each call opens its own threads, up to 64.
 

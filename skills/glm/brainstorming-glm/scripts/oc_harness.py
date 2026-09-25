@@ -126,7 +126,10 @@ def render_agent(text: str, major: int) -> str:
         lines.append("  webfetch: {}".format(web_perm))
         if write_paths:
             lines.append("  task: deny")
-        # v2 ignores frontmatter effort; build_run_cmd sends it as the --model #variant suffix.
+        # v2 applies the agent's variant when the `subagent` tool dispatches it; with no variant GLM
+        # runs at max. `opencode run --model` overrides it, so build_run_cmd adds the #variant suffix.
+        if effort in EFFORTS:
+            lines.append("variant: {}".format(effort))
     lines.append("---")
     lines.append("")
     lines.append(body)
@@ -167,7 +170,7 @@ def config_snippet(major: int, deny: list) -> str:
 
 
 THROTTLE_RE = re.compile(
-    r'\\?"(?:code|status|statusCode|status_code)\\?"\s*:\s*\\?"?(?:429|1302|1305)(?!\d)'
+    r'\\?"(?:code|status|statusCode|status_code)\\?"\s*:\s*\\?"?(?:429|1302|1305|1313)(?!\d)'
     r"|\b429 Too Many Requests\b",
     re.I,
 )

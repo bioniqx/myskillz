@@ -49,6 +49,11 @@ six skill directories.
 - Retries handle 429 and 5xx with jittered backoff, and a shared failure budget
   aborts the whole fan-out fast when the endpoint is down instead of 64 slow
   retries.
+- OpenCode v2's `subagent` tool takes `background: true`, so the agent-lane
+  DISPATCH table can fan out with real parallelism from one tool call per
+  turn; `render_agent` now writes `variant: <effort>` into v2 agent
+  frontmatter (v1 keeps `reasoningEffort:`) so a background dispatch still
+  runs the agent at its intended model and effort.
 
 ## Quality kept, and slightly raised
 

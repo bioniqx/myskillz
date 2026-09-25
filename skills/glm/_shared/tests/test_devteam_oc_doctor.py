@@ -133,6 +133,8 @@ class GovernHarnessTest(_LaneCase):
             lines = dt.govern(self.root, self.st, 0)
         down = [ln for ln in lines if ln.startswith("LANE DOWN review-r1 (review)")]
         self.assertEqual(len(down), 1)
+        # the relaunch must redirect output, or OpenCode v1's bash tool blocks until the lane ends
+        self.assertIn("review-r1.log 2>&1 &`", down[0])
 
     def test_writer_lane_fail_suppressed_while_lane_run_alive(self):
         proc = subprocess.Popen(["sleep", "5"])

@@ -872,7 +872,11 @@ def govern(root, st, successes):
             lines.append(f"LANE DOWN {name} ({kind}): the lane process ended {text[:120]}"
                          + (f"\n  → `fail {name}` then `retry {name}` (kept for salvage on branch "
                             f"`attempt/{name}-{s.get('attempt') or 1}`)"
-                            if kind == "slice" else f"\n  → relaunch it in the background: `lane-run {name} &`"))
+                            if kind == "slice" else
+                            # a bare `&` keeps the tool's stdout pipe open, so OpenCode v1's bash tool
+                            # would block until the lane ends; redirecting lets it return at once
+                            f"\n  → relaunch it in the background: "
+                            f"`lane-run {name} > {q(lanes_dir(root) / (name + '.log'))} 2>&1 &`"))
             continue
         lines.append(f"LANE DOWN {name} ({kind}): the API failed after retries — {text[:120]}"
                      f"\n  → SendMessage that agent \"continue\" (warm: same context"

@@ -125,10 +125,17 @@ questions with approval as item 1.
 OpenCode process lanes: v1 renders agents with `mode: all` (a `mode:
 subagent` agent is silently swapped for the default `build` agent by
 `opencode run --agent`) and forwards frontmatter `reasoningEffort` as
-`reasoning_effort` on the wire. v2 ignores agent-frontmatter effort
-entirely; `oc_harness.py` instead appends `#<effort>` to the `--model` flag
-(`low|high|max`) when a lane dict in `lanes.json` carries an `effort`
+`reasoning_effort` on the wire. v2 *does* honor agent frontmatter
+`model:`+`variant:` when a lane is dispatched through the `subagent` tool
+directly — but `opencode run --agent` (what `lanes.json` drives here)
+always passes an explicit `--model`, which overrides the agent's own
+model/variant, so `oc_harness.py` instead appends `#<effort>` to that
+`--model` flag (`low|high|max`) when a lane dict carries an `effort`
 field, and that variant suffix is what reaches GLM. On v2 a lane with no
 `effort` field runs at GLM's default `max`; v1 always uses the agent's own
-`reasoningEffort`.
+`reasoningEffort`. In an interactive v2 session, dispatching `explorer`/
+`researcher` directly via the `subagent` tool with `background: true` and
+no `model` param gets the same effort from the agent's own `variant`
+instead (real parallelism per lane — see SKILL.md's harness fallback
+table).
 

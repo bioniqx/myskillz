@@ -130,8 +130,12 @@ to review every task instead of only the risky ones.
    back to printing a DISPATCH table: dispatch one subagent per row, ALL in a
    single message, each with the prompt `Read <brief path> and follow it
    exactly.`, then run the printed `wait`, `review` and `assemble` commands in
-   that order. Tell the user once that `<TOOL> doctor` shows how to enable the
-   fast lane.
+   that order. On OpenCode v2 (your subagent tool takes a `background`
+   param), dispatch each row instead with `background: true`, one after
+   another with no wait, then end the turn; when the last one reports, run
+   the printed `wait`, `review` and `assemble` commands as above. Interactive
+   sessions only: a headless run can exit before background children report.
+   Tell the user once that `<TOOL> doctor` shows how to enable the fast lane.
 
 # R5 - Handoff
 

@@ -115,9 +115,13 @@ class TestOcHarnessRender(unittest.TestCase):
         self.assertIn('description: "Test agent"', v2)
         self.assertNotIn("request:", v2)
         self.assertIn("mode: subagent", v2)
-        # v2 ignores frontmatter effort (it rides on the --model #variant suffix instead)
+        # v2 takes effort as the agent's variant; reasoningEffort/options are v1-only
+        self.assertIn("variant: max", v2)
+        self.assertNotIn("reasoningEffort", v2)
         self.assertNotIn("reasoning_effort", v2)
         self.assertNotIn("options:", v2)
+        self.assertNotIn("variant:", oc_harness.render_agent(text_v2.replace("effort: max", "effort: medium"), 2))
+        self.assertNotIn("variant:", v1)
         self.assertIn("temperature: 0.2", v2)
         self.assertNotIn("    temperature: 0.2", v2)
 

@@ -35,6 +35,7 @@ class ThrottleReTest(unittest.TestCase):
         for text in [
             '{"code":1302}',
             '{"code": "1305"}',
+            '{"code":1313}',
             '{"status": 429}',
             '{"statusCode":429}',
             '{"message":"{\\"error\\":{\\"code\\":\\"1302\\"}}"}',

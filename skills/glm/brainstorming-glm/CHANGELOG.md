@@ -13,6 +13,12 @@ the explicit `--model` flag, so `oc_harness.py` now appends it when a lane
 carries an `effort` field. `lanes.json` lane dicts may now carry an
 optional `effort: low|high|max` key for this purpose.
 
+- Correction (2026-09-25, live v2.0.16 probe): the "v2 never sends
+  agent-frontmatter effort" claim above only holds for `opencode run
+  --agent` lanes, whose explicit `--model` overrides the agent; dispatched
+  directly through the `subagent` tool (`background: true` param, real
+  per-lane parallelism), v2 *does* honor the agent's own `model:`+`variant:`.
+
 # 9.1-glm (from 9.0) — OpenCode layer
 
 Adds an OpenCode installation path alongside Claude Code, unchanged. New
