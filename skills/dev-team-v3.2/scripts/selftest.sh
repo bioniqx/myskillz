@@ -580,14 +580,22 @@ echo "== v3.1 the vacuous-test check matches assertion CALLS, not English words"
 vac() { python3 -c "
 import sys; sys.path.insert(0, '$S')
 import devteam, pathlib, tempfile
-d = pathlib.Path(tempfile.mkdtemp()); (d/'t.js').write_text(sys.argv[1])
-print(len(devteam.vacuous_test_check(d, ['t.js'], ['c1'])))" "$1"; }
+d = pathlib.Path(tempfile.mkdtemp()); f = sys.argv[2]; (d/f).write_text(sys.argv[1])
+print(len(devteam.vacuous_test_check(d, [f], ['c1'])))" "$1" "${2:-t.js}"; }
 check "a require() import line does not count as an assertion" '[[ "$(vac "const foo = require(\"../src/foo\");
 test(\"a\", () => { foo(1); });")" != "0" ]]'
 check "the English word should in a comment does not count" '[[ "$(vac "// this should do things
 test(\"a\", () => { foo(1); });")" != "0" ]]'
 check "a real assertion call does count" '[[ "$(vac "test(\"a\", () => { assert.equal(1,1); });")" == "0" ]]'
 check "expect(...) counts" '[[ "$(vac "test(\"a\", () => { expect(x).toBe(1); });")" == "0" ]]'
+check "unittest self.assertIn(...) counts" '[[ "$(vac "class T(unittest.TestCase):
+    def test_a(self):
+        self.assertIn(1, f())" test_x.py)" == "0" ]]'
+check "pytest.raises(...) counts" '[[ "$(vac "def test_a():
+    with pytest.raises(ValueError):
+        f()" test_x.py)" == "0" ]]'
+check "a Python test with no assertion is still flagged" '[[ "$(vac "def test_a():
+    f()" test_x.py)" != "0" ]]'
 
 echo "== v3.1 verdict parsing fails closed"
 RV="$(newrepo rv)"; cd "$RV"

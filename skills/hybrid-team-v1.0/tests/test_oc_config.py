@@ -154,6 +154,12 @@ class TestBuildConfig(unittest.TestCase):
         assert top["bash"]["curl*"] == "deny"
         assert "pytest tests/*" not in top["bash"]
 
+    def test_build_config_denies_execute_tool(self):
+        # opencode's `execute` tool runs JS with network access outside the bash deny-list.
+        config = oc_config.build_config("p", "/abs/devteam.py", {})
+        assert config["agent"][oc_config.AGENT_NAME]["permission"]["execute"] == "deny"
+        assert config["permission"]["execute"] == "deny"
+
 
 class TestConfigEnv(unittest.TestCase):
     def test_config_env_returns_json_serialized_config(self):

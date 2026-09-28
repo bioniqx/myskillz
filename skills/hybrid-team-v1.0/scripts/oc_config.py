@@ -68,6 +68,7 @@ def permission_block(engine: str, commands: dict) -> dict:
     return {
         "edit": "allow",
         "bash": bash,
+        "execute": "deny",
         "external_directory": "deny",
     }
 
@@ -86,6 +87,7 @@ def build_config(prompt_text: str, engine: str, commands: dict) -> dict:
         },
         "permission": {
             "bash": top_level_bash_deny,
+            "execute": "deny",
             "external_directory": "deny",
         },
     }

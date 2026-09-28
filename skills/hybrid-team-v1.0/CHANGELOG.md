@@ -2,6 +2,11 @@
 
 All notable changes to `hybrid-team` are documented in this file.
 
+## 1.0.1
+
+- opencode lanes deny the `execute` tool: it runs JS with network access that the bash
+  deny-list (`curl*`, `wget*`, ...) does not cover.
+
 ## 1.0.0
 
 Initial release - a fork of `dev-team-v3.2` (event-driven, contract-gated pipeline, mechanical
