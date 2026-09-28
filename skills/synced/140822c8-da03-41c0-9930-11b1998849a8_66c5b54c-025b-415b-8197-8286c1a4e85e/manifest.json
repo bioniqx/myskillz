@@ -1,5 +1,5 @@
 {
-  "lastUpdated": 1790150071833,
+  "lastUpdated": 1790475980314,
   "skills": [
     {
       "skillId": "docs",
@@ -62,9 +62,10 @@
       "skillId": "skill_01YLMUpmJuh5dMrMHXYuBwZo",
       "name": "doc-generator",
       "description": "Generate accurate, readable documentation (both technical and non-technical) for an existing codebase by reading its code and docs, proposing a doc list, writing the selected docs in parallel, and code-checking them. Use this skill whenever the user wants to document a project, write or update a README, API reference, architecture overview, setup/onboarding guide, user guide, test plan, handover documentation, or any project docs — even if they just say \"document this repo,\" \"write docs for my code,\" \"explain this codebase in markdown,\" or \"the docs are out of date.\" Trigger it for any request to produce Markdown documentation derived from source code.",
-      "source": "custom",
-      "updatedAt": "2026-07-02T08:24:48.782484Z",
-      "creatorType": "user"
+      "source": "plugin",
+      "updatedAt": "2026-07-02T08:24:48.782366Z",
+      "creatorType": "user",
+      "backingPluginId": "plugin_01SL9Jb4c4fn2Uw1uBPzhdPR"
     },
     {
       "skillId": "docx",
