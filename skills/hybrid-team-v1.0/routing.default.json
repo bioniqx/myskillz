@@ -1,0 +1,8 @@
+{"preset": "hybrid",
+ "tiers": {
+   "std":  {"model": "zai-coding-plan/glm-5.3",       "variant": "high", "max_parallel": 6,
+            "stall_s": 180, "timeout_s": {"trivial": 600, "small": 1200, "large": 2400}},
+   "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low",  "max_parallel": 6,
+            "stall_s": 120, "timeout_s": {"trivial": 300, "small": 600, "large": 1200}}},
+ "rows": {"code": "std", "refactor": "std", "test": "std", "chore": "std", "docs": "lite", "trivial": "lite"},
+ "escalate_to": "claude", "max_escalations": 1}
