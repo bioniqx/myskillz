@@ -16,8 +16,8 @@ the run is pausable/resumable, and the verification pass is codified.
 2. Load the script-writing reference first: run `/workflow-authoring` (Claude Code v2.1.248+), then ask for a workflow
    built from the brief below. Do not hand-write the API from memory.
 3. The workflow's agents write the same files the skill expects (`findings/batch-NN.jsonl`, `verify/batch-VNN.jsonl`)
-   — so when it returns, `audit.py status` sees full coverage and the rest (queue → plan → report → check → finish)
-   is identical.
+   — so when it returns, `audit.py status` sees full coverage, prints the adjudication queue itself, and the rest
+   (adjudicate → plan → report, which runs the check inline → finish) is identical.
 
 ## Brief for the workflow script
 
@@ -35,4 +35,5 @@ the run is pausable/resumable, and the verification pass is codified.
 - Agents must have only Read/Grep/Glob/Write; no shell; the same hard rules as the batch files (no docs, no git).
 - Name the saved workflow `req-audit-run`; it accepts `args.auditDir` (default `.audit`).
 
-Then: `audit.py status` → `audit.py queue` → adjudicate → `plan.jsonl` → `audit.py report` → `check` → `finish`.
+Then: `audit.py status` (prints the adjudication queue once waves are complete) → adjudicate → `plan.jsonl` →
+`audit.py report` (runs the check inline) → `finish`.

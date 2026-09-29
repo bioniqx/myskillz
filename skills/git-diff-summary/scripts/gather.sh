@@ -16,15 +16,15 @@ G="git -c core.quotepath=off -c diff.external= -c color.ui=never"
 
 $G rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo NOT_A_REPO; exit 0; }
 cd "$($G rev-parse --show-toplevel)" || exit 0
-T=$(mktemp -d "${TMPDIR:-/tmp}/gds.XXXXXX") || exit 1
+T=$(mktemp -d "${TMPDIR:-/tmp}/gds.XXXXXX") || { echo "GATHER_FAILED (mktemp)"; exit 0; }
 ( find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'gds.*' -mmin +180 -exec rm -rf {} + ) >/dev/null 2>&1 &   # GC old runs
 
-EXC=()
+EXC=(); PATS=""
 for p in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml bun.lockb bun.lock Cargo.lock \
          poetry.lock uv.lock Pipfile.lock Gemfile.lock composer.lock go.sum Podfile.lock pubspec.lock packages.lock.json \
          '*.min.js' '*.min.css' '*.map' '*.snap' '*.pb.go' '*_pb2.py' '*.g.dart' '*.freezed.dart' '*.generated.*' '*.meta' \
          'dist/**' 'build/**' 'out/**' 'vendor/**' 'node_modules/**' ${GDS_EXCLUDE:-}; do
-  EXC+=(":(exclude,glob)**/$p")
+  EXC+=(":(exclude,glob)**/$p"); PATS="$PATS $p"
 done
 
 # ---- remote & base branch -------------------------------------------------------------
@@ -75,11 +75,20 @@ gen(){ # $1=merge-base $2=outdir
   wait; : > "$2/done"
 }
 untracked(){ # synthetic patch for untracked (not ignored) text files; git diff <mb> misses them
+  # ONE ls-files call (NUL-safe) and ONE awk pass classify every path against the same noise globs
+  # as EXC: kept paths go to the loop below; noise is collapsed per dir, capped at 50, listed in NUMSTAT.
   : > "$T/u.patch"; : > "$T/u.numstat"; n=0
-  $G ls-files --others --exclude-standard 2>/dev/null | sort > "$T/u.all"
-  $G ls-files --others --exclude-standard -- . "${EXC[@]}" 2>/dev/null | sort > "$T/u.keep"
-  comm -23 "$T/u.all" "$T/u.keep" | head -n 50 | sed 's/^/-	-	/; s/$/ (new, untracked, noise: content skipped)/' >> "$T/u.numstat"
-  $G ls-files -z --others --exclude-standard -- . "${EXC[@]}" 2>/dev/null |
+  $G ls-files -z --others --exclude-standard -- . 2>/dev/null | tr '\0' '\001' | awk -v RS='\001' -v ORS='\001' -v pats="$PATS" -v out="$T/u.numstat" '
+    BEGIN { np = split(pats, g, " ")
+      for (i = 1; i <= np; i++) { d[i] = (g[i] ~ /\/\*\*$/); x = g[i]; if (d[i]) sub(/\/\*\*$/, "", x)
+        gsub(/[.+(){}|^$]/, "\\\\&", x); gsub(/\*\*/, "@@", x); gsub(/\*/, "[^/]*", x); gsub(/\?/, "[^/]", x); gsub(/@@/, ".*", x)
+        re[i] = "(^|/)" x (d[i] ? "/" : "$") } }
+    { k = ""; bs = 0   # outermost match wins (smallest start; a dir beats a file on a tie)
+      for (i = 1; i <= np; i++) if (match($0, re[i]) && (k == "" || RSTART < bs || (RSTART == bs && d[i]))) {
+        bs = RSTART; k = d[i] ? substr($0, 1, RSTART + RLENGTH - 1) : $0; if (bs <= 1 && d[i]) break }
+      if (k == "") { print; next }
+      if (!(k in s)) { s[k] = 1; if (++c <= 50) printf "-\t-\t%s (new, untracked, noise: content skipped)\n", k >> out } }
+    END { if (c > 50) printf "... +%d more untracked noise paths\n", c - 50 >> out; close(out) }' | tr '\001' '\0' | LC_ALL=C sort -z > "$T/u.keep.z"
   while IFS= read -r -d '' f; do
     n=$((n+1)); [ $n -gt 400 ] && { echo "... more untracked files omitted" >> "$T/u.numstat"; break; }
     [ -f "$f" ] || continue
@@ -90,7 +99,7 @@ untracked(){ # synthetic patch for untracked (not ignored) text files; git diff 
     printf '%s\t0\t%s (new, untracked)\n' "$l" "$f" >> "$T/u.numstat"
     { printf 'diff --git a/%s b/%s\nnew file (untracked)\n--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%s @@\n' "$f" "$f" "$f" "$l"
       sed 's/^/+/' "$f"; } >> "$T/u.patch"
-  done
+  done < "$T/u.keep.z"
 }
 untracked & UJOB=$!
 
@@ -101,9 +110,18 @@ BR=$($G branch --show-current 2>/dev/null); TICKET=$(printf '%s' "$BR" | grep -o
 
 [ "$FST" = run ] && wait "$FJOB"
 FRC=$(cat "$T/frc" 2>/dev/null || echo 1)
-REF=$(pick_ref)
-[ -z "$REF" ] && { echo "NO_BASE=$B (remote=${REMOTE:-none}). Ask user for the base branch."; exit 0; }
-MB=$($G merge-base "$REF" HEAD 2>/dev/null) || { echo "NO_MERGE_BASE ref=$REF"; exit 0; }
+if [ "$FST" = run ]; then
+  # a fetch actually ran: refs may have moved, so re-resolve and recompute the merge-base.
+  REF=$(pick_ref)
+  [ -z "$REF" ] && { echo "NO_BASE=$B (remote=${REMOTE:-none}). Ask user for the base branch."; exit 0; }
+  MB=$($G merge-base "$REF" HEAD 2>/dev/null) || { echo "NO_MERGE_BASE ref=$REF"; exit 0; }
+else
+  # no fetch ran: nothing could have moved since REF0/MB0 were computed -> reuse them (1 merge-base call total).
+  REF=$REF0
+  [ -z "$REF" ] && { echo "NO_BASE=$B (remote=${REMOTE:-none}). Ask user for the base branch."; exit 0; }
+  MB=$MB0
+  [ -z "$MB" ] && { echo "NO_MERGE_BASE ref=$REF"; exit 0; }
+fi
 if [ "$MB" = "$MB0" ]; then D="$T/a"; wait "${SPEC:-}" 2>/dev/null; else gen "$MB" "$T/b"; D="$T/b"; fi
 wait "$UJOB" 2>/dev/null
 

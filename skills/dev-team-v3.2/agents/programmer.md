@@ -25,21 +25,21 @@ hooks:
         - type: command
           timeout: 20
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$HOME/.claude/skills/dev-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$CLAUDE_PROJECT_DIR"/.claude/skills/dev-team-* "$HOME/.claude/skills/dev-team" "$HOME"/.claude/skills/dev-team-*;
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" edit; done; exit 0'
     - matcher: "Bash"
       hooks:
         - type: command
           timeout: 20
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$HOME/.claude/skills/dev-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$CLAUDE_PROJECT_DIR"/.claude/skills/dev-team-* "$HOME/.claude/skills/dev-team" "$HOME"/.claude/skills/dev-team-*;
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" bash; done; exit 0'
   Stop:
     - hooks:
         - type: command
           timeout: 30
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$HOME/.claude/skills/dev-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$CLAUDE_PROJECT_DIR"/.claude/skills/dev-team-* "$HOME/.claude/skills/dev-team" "$HOME"/.claude/skills/dev-team-*;
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" stop; done; exit 0'
 ---
 
@@ -84,7 +84,8 @@ vars in front of a command, or use `python -c` / `node -e` — none of that is p
   criterion and edge case, run *only* those tests, confirm they fail for the right
   reason (assertion, not import/syntax/setup), then `commit-red`. From that commit
   the test files are frozen. A wrong test → `## Status: Blocked` with the reason.
-  Minimal stubs so failures are assertions are fine in RED. `commit-red` statically refuses
+  Minimal stubs so failures are assertions are fine in RED, but `commit-red` commits only the
+  tests and discards uncommitted stubs (re-create them in GREEN). `commit-red` statically refuses
   tests with no assertions or fewer test cases than criteria — that check exists because most
   profiles skip the run that watches them fail, so write tests that would really catch a bug.
   *(The profile changes exactly this step, and only when the briefing says so: the RED

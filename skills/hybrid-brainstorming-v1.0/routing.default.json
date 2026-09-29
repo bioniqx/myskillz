@@ -1,1 +1,32 @@
-{"preset": "hybrid", "tiers": {"std": {"model": "zai-coding-plan/glm-5.3", "variant": "high", "max_parallel": 6, "stall_s": 90, "timeout_s": 300}, "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low", "max_parallel": 6, "stall_s": 60, "timeout_s": 180}}, "roles": {"locate": "lite", "explore": "std", "fact": "lite", "research": "claude", "draft": "claude"}, "max_roles": {"research": "std", "draft": "std"}, "slot_wait_s": 60, "throttle_cooldown_s": 120}
+{
+    "preset": "hybrid",
+    "tiers": {
+        "std": {
+            "model": "muse-spark-1.3-contributor-free",
+            "variant": "xhigh",
+            "max_parallel": 6,
+            "stall_s": 90,
+            "timeout_s": 300
+        },
+        "lite": {
+            "model": "muse-spark-1.3-contributor-free",
+            "variant": "xhigh",
+            "max_parallel": 6,
+            "stall_s": 60,
+            "timeout_s": 180
+        }
+    },
+    "roles": {
+        "locate": "lite",
+        "explore": "std",
+        "fact": "lite",
+        "research": "claude",
+        "draft": "claude"
+    },
+    "max_roles": {
+        "research": "std",
+        "draft": "std"
+    },
+    "slot_wait_s": 60,
+    "throttle_cooldown_s": 120
+}

@@ -103,7 +103,6 @@ const SESSION_DIR = process.env.BRAINSTORM_DIR || '/tmp/brainstorm';
 const CONTENT_DIR = path.join(SESSION_DIR, 'content');
 const STATE_DIR = path.join(SESSION_DIR, 'state');
 const SUPERPOWERS_VERSION = readSuperpowersVersion();
-const SUPERPOWERS_BRAND_IMAGE_URL = 'https://primeradiant.com/brand/superpowers-visual-brainstorming-logo.png';
 const TELEMETRY_DISABLE_ENV_VARS = [
   'SUPERPOWERS_DISABLE_TELEMETRY',
   'DISABLE_TELEMETRY',
@@ -206,22 +205,17 @@ const helperInjection = '<script>\n' + helperScript + '\n</script>';
 // ========== Helper Functions ==========
 
 function readSuperpowersVersion() {
-  const root = path.join(__dirname, '../../..');
-  const manifests = [
-    path.join(root, 'package.json'),
-    path.join(root, '.codex-plugin/plugin.json')
-  ];
-
-  for (const manifest of manifests) {
-    try {
-      const data = JSON.parse(fs.readFileSync(manifest, 'utf-8'));
-      if (data.version) return String(data.version);
-    } catch (e) {
-      // Packaged Codex plugins omit package.json; try the next manifest.
-    }
+  // Read the version from this skill's own CHANGELOG heading (e.g. "# 8.0 (from
+  // 7.0) — ..."). No network call, no external manifest lookup: if it can't be
+  // found, the brand shows no version rather than a placeholder like "unknown".
+  try {
+    const changelog = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf-8');
+    const match = changelog.match(/^#\s+([0-9]+(?:\.[0-9]+)*)/m);
+    if (match) return match[1];
+  } catch (e) {
+    // CHANGELOG.md missing or unreadable: omit the version.
   }
-
-  return 'unknown';
+  return null;
 }
 
 function isTruthyEnv(value) {
@@ -240,15 +234,11 @@ function escapeHtmlText(value) {
 }
 
 function brandMarkup() {
-  const version = escapeHtmlText(SUPERPOWERS_VERSION);
-  const text = SUPERPOWERS_TELEMETRY_DISABLED
-    ? 'Prime Radiant Superpowers v' + version
-    : 'Superpowers v' + version;
-  const logo = SUPERPOWERS_TELEMETRY_DISABLED
-    ? ''
-    : '<img class="brand-logo" src="' + SUPERPOWERS_BRAND_IMAGE_URL + '?v=' + encodeURIComponent(SUPERPOWERS_VERSION) + '" alt="Prime Radiant" referrerpolicy="no-referrer" decoding="async">';
+  // No external assets: no logo image, no remote host reference.
+  const label = SUPERPOWERS_TELEMETRY_DISABLED ? 'Prime Radiant Superpowers' : 'Superpowers';
+  const text = SUPERPOWERS_VERSION ? label + ' v' + SUPERPOWERS_VERSION : label;
 
-  return '<div class="brand"><a href="https://github.com/obra/superpowers">' + logo + '<span class="brand-copy">' + text + '</span></a></div>';
+  return '<div class="brand"><a href="https://github.com/obra/superpowers"><span class="brand-copy">' + escapeHtmlText(text) + '</span></a></div>';
 }
 
 function renderBranding(html) {
@@ -261,7 +251,9 @@ function isFullDocument(html) {
 }
 
 function wrapInFrame(content) {
-  return renderBranding(frameTemplate).replace('<!-- CONTENT -->', content);
+  // Function replacer: a literal string replacer interprets $&, $$, $' and $`
+  // in `content`, corrupting arbitrary screen content that happens to contain them.
+  return renderBranding(frameTemplate).replace('<!-- CONTENT -->', () => content);
 }
 
 function getNewestScreen() {
@@ -385,55 +377,74 @@ function isAllowedWebSocketOrigin(req) {
 // ========== HTTP Request Handler ==========
 
 function handleRequest(req, res) {
-  if (!isAuthorized(req)) {
-    res.writeHead(403, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
-    res.end(FORBIDDEN_PAGE);
-    return;
-  }
-  touchActivity(); // only authorized requests count as activity
-
-  // Mirror the key into a cookie so same-origin subresources (/files/*) can
-  // authenticate after bootstrap. HttpOnly keeps it away from page scripts; the
-  // WebSocket Origin check below is what blocks cross-origin localhost injection.
-  res.setHeader('Set-Cookie',
-    COOKIE_NAME + '=' + TOKEN + '; HttpOnly; SameSite=Strict; Path=/');
-
-  const pathname = pathnameOf(req.url);
-  const keyFromQuery = queryKey(req.url);
-  if (req.method === 'GET' && pathname === '/' && keyFromQuery && timingSafeEqualStr(keyFromQuery, TOKEN)) {
-    res.writeHead(200, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
-    res.end(bootstrapPage(keyFromQuery));
-  } else if (req.method === 'GET' && pathname === '/') {
-    const screenFile = getNewestScreen();
-    let html = screenFile
-      ? (raw => isFullDocument(raw) ? raw : wrapInFrame(raw))(fs.readFileSync(screenFile, 'utf-8'))
-      : waitingPage();
-
-    if (html.includes('</body>')) {
-      html = html.replace('</body>', helperInjection + '\n</body>');
-    } else {
-      html += helperInjection;
-    }
-
-    res.writeHead(200, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
-    res.end(html);
-  } else if (req.method === 'GET' && pathname.startsWith('/files/')) {
-    const fileName = path.basename(pathname.slice(7));
-    const filePath = path.join(CONTENT_DIR, fileName);
-    // Reject empty/dotfile names and anything that isn't a regular file —
-    // `/files/` would otherwise resolve to CONTENT_DIR and crash readFileSync (EISDIR).
-    if (!fileName || fileName.startsWith('.') || !isRegularFileInsideContentDir(filePath)) {
-      res.writeHead(404, securityHeaders());
-      res.end('Not found');
+  try {
+    if (!isAuthorized(req)) {
+      res.writeHead(403, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
+      res.end(FORBIDDEN_PAGE);
       return;
     }
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    res.writeHead(200, securityHeaders({ 'Content-Type': contentType }));
-    res.end(fs.readFileSync(filePath));
-  } else {
-    res.writeHead(404, securityHeaders());
-    res.end('Not found');
+    touchActivity(); // only authorized requests count as activity
+
+    // Mirror the key into a cookie so same-origin subresources (/files/*) can
+    // authenticate after bootstrap. HttpOnly keeps it away from page scripts; the
+    // WebSocket Origin check below is what blocks cross-origin localhost injection.
+    res.setHeader('Set-Cookie',
+      COOKIE_NAME + '=' + TOKEN + '; HttpOnly; SameSite=Strict; Path=/');
+
+    const pathname = pathnameOf(req.url);
+    const keyFromQuery = queryKey(req.url);
+    if (req.method === 'GET' && pathname === '/' && keyFromQuery && timingSafeEqualStr(keyFromQuery, TOKEN)) {
+      res.writeHead(200, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
+      res.end(bootstrapPage(keyFromQuery));
+    } else if (req.method === 'GET' && pathname === '/') {
+      const screenFile = getNewestScreen();
+      let html = screenFile
+        ? (raw => isFullDocument(raw) ? raw : wrapInFrame(raw))(fs.readFileSync(screenFile, 'utf-8'))
+        : waitingPage();
+
+      if (html.includes('</body>')) {
+        // Function replacer: avoids $-pattern interpretation of the injected script.
+        html = html.replace('</body>', () => helperInjection + '\n</body>');
+      } else {
+        html += helperInjection;
+      }
+
+      res.writeHead(200, securityHeaders({ 'Content-Type': 'text/html; charset=utf-8' }));
+      res.end(html);
+    } else if (req.method === 'GET' && pathname.startsWith('/files/')) {
+      let decodedName;
+      try {
+        decodedName = decodeURIComponent(pathname.slice(7));
+      } catch (e) {
+        res.writeHead(404, securityHeaders());
+        res.end('Not found');
+        return;
+      }
+      const fileName = path.basename(decodedName);
+      const filePath = path.join(CONTENT_DIR, fileName);
+      // Reject empty/dotfile names and anything that isn't a regular file —
+      // `/files/` would otherwise resolve to CONTENT_DIR and crash readFileSync (EISDIR).
+      if (!fileName || fileName.startsWith('.') || !isRegularFileInsideContentDir(filePath)) {
+        res.writeHead(404, securityHeaders());
+        res.end('Not found');
+        return;
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      res.writeHead(200, securityHeaders({ 'Content-Type': contentType }));
+      res.end(fs.readFileSync(filePath));
+    } else {
+      res.writeHead(404, securityHeaders());
+      res.end('Not found');
+    }
+  } catch (e) {
+    console.error('Request handler error:', e && e.stack || e);
+    try {
+      if (!res.headersSent) {
+        res.writeHead(500, securityHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+      }
+      res.end('Internal Server Error');
+    } catch (e2) { /* response already broken; nothing more to do */ }
   }
 }
 
@@ -441,7 +452,7 @@ function handleRequest(req, res) {
 
 const clients = new Set();
 
-function handleUpgrade(req, socket) {
+function handleUpgrade(req, socket, head) {
   if (!isAuthorized(req) || !isAllowedWebSocketOrigin(req)) { socket.destroy(); return; }
 
   const key = req.headers['sec-websocket-key'];
@@ -455,11 +466,13 @@ function handleUpgrade(req, socket) {
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
 
-  let buffer = Buffer.alloc(0);
+  // `head` carries any bytes the HTTP parser already read past the handshake
+  // (e.g. a WS frame sent in the same packet as the upgrade request). Seed the
+  // buffer with it so those bytes aren't silently dropped.
+  let buffer = head && head.length ? Buffer.from(head) : Buffer.alloc(0);
   clients.add(socket);
 
-  socket.on('data', (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
+  function processBuffer() {
     while (buffer.length > 0) {
       let result;
       try {
@@ -494,6 +507,13 @@ function handleUpgrade(req, socket) {
         }
       }
     }
+  }
+
+  if (buffer.length > 0) processBuffer();
+
+  socket.on('data', (chunk) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    processBuffer();
   });
 
   socket.on('close', () => clients.delete(socket));
@@ -508,11 +528,15 @@ function handleMessage(text) {
     console.error('Failed to parse WebSocket message:', e.message);
     return;
   }
-  touchActivity();
-  console.log(JSON.stringify({ source: 'user-event', ...event }));
-  if (event && event.choice) {
-    const eventsFile = path.join(STATE_DIR, 'events');
-    fs.appendFileSync(eventsFile, JSON.stringify(event) + '\n');
+  try {
+    touchActivity();
+    console.log(JSON.stringify({ source: 'user-event', ...event }));
+    if (event && event.choice) {
+      const eventsFile = path.join(STATE_DIR, 'events');
+      fs.appendFileSync(eventsFile, JSON.stringify(event) + '\n');
+    }
+  } catch (e) {
+    console.error('Message handler error:', e && e.stack || e);
   }
 }
 
@@ -596,12 +620,19 @@ function startServer() {
       const filePath = path.join(CONTENT_DIR, filename);
 
       if (!fs.existsSync(filePath)) return; // file was deleted
+      // Symlinked or non-regular files are never served (isRegularFileInsideContentDir
+      // gates '/' and '/files/' too), so ignore them here rather than treating them
+      // as a new or updated screen.
+      if (!isRegularFileInsideContentDir(filePath)) return;
       touchActivity();
 
       if (!knownFiles.has(filename)) {
         knownFiles.add(filename);
         const eventsFile = path.join(STATE_DIR, 'events');
-        if (fs.existsSync(eventsFile)) fs.unlinkSync(eventsFile);
+        const eventsPrevFile = path.join(STATE_DIR, 'events.prev');
+        // Rename rather than delete: a click can still be mid write/read when the
+        // next screen arrives, so keep the prior events reachable as events.prev.
+        if (fs.existsSync(eventsFile)) fs.renameSync(eventsFile, eventsPrevFile);
         console.log(JSON.stringify({ type: 'screen-added', file: filePath }));
         maybeOpenBrowser();
       } else {
@@ -630,6 +661,10 @@ function startServer() {
     }
     server.close(() => process.exit(0));
   }
+
+  process.on('SIGTERM', () => shutdown('signal'));
+  process.on('SIGINT', () => shutdown('signal'));
+  process.on('SIGHUP', () => shutdown('signal'));
 
   function ownerAlive() {
     if (!ownerPid) return true;
@@ -680,12 +715,15 @@ function startServer() {
     }
     const info = JSON.stringify({
       type: 'server-started', port: Number(PORT), host: HOST,
-      url_host: URL_HOST, url: companionUrl(),
+      url_host: URL_HOST, url: companionUrl(), session_dir: SESSION_DIR,
       screen_dir: CONTENT_DIR, state_dir: STATE_DIR, idle_timeout_ms: IDLE_TIMEOUT_MS
     });
-    console.log(info);
+    // Write server-info BEFORE logging server-started: a stdout pipe write is
+    // asynchronous, so a reader that reacts to the log line must already be able
+    // to find the file on disk.
     // server-info embeds the key — keep it owner-only.
     fs.writeFileSync(path.join(STATE_DIR, 'server-info'), info + '\n', { mode: 0o600 });
+    console.log(info);
   }
 
   server.on('error', (err) => {

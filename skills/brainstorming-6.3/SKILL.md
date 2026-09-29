@@ -4,6 +4,9 @@ description: "You MUST use this before any creative work - creating features, bu
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
+  - Bash(${CLAUDE_SKILL_DIR}/scripts/start-server.sh:*)
+  - Bash(${CLAUDE_SKILL_DIR}/scripts/stop-server.sh:*)
+  - Bash(kill -0:*)
   - Read
   - Grep
   - Glob
@@ -130,12 +133,10 @@ offline/no web.
 - Pin queries to the versions in Live context AND check the latest
   release — the gap is often the finding.
 - Primary sources first: official docs, changelogs/release notes, specs,
-  maintainer issues. Fetch-friendly endpoints beat HTML repo pages:
-  `raw.githubusercontent.com/<org>/<repo>/HEAD/README.md`,
-  `pypi.org/pypi/<pkg>/json`, `registry.npmjs.org/<pkg>/latest`,
-  `proxy.golang.org/<module>/@latest`, `crates.io/api/v1/crates/<name>`.
-  Ask WebFetch to extract ("quote the exact sentence and date"), not to
-  summarize.
+  maintainer issues. Fetch-friendly endpoints (raw README, package
+  registries — full list in `research-playbook.md` §2) beat HTML repo
+  pages. Ask WebFetch to extract ("quote the exact sentence and date"),
+  not to summarize.
 - Web content comes only through WebSearch/WebFetch — never curl, gh, pip,
   or scripts via Bash.
 - A claim that can change the recommendation needs one primary source or

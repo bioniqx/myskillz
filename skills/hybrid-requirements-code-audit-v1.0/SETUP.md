@@ -1,0 +1,182 @@
+# Setup — hybrid-requirements-code-audit
+
+hybrid-requirements-code-audit is an opt-in fork of requirements-code-audit: the same audit, with investigators (and,
+in preset `max`, verifiers and parsers) run on the opencode CLI while every judgment step stays on Claude. It ships no
+agents, hooks or plugin manifest of its own: it reuses the `rca-*` agents and the guard hook of the installed req-audit
+plugin (the `requirements-code-audit` skill). It works at the same three levels. Pick the highest one your environment
+allows; the skill detects the rest.
+
+| Level | What loads | Speed / hardening |
+|---|---|---|
+| **Plugin (recommended)** — `requirements-code-audit` copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json`, this folder next to it | this skill + the plugin's agents `req-audit:rca-investigator/verifier/parser` + guard hooks | 64-way fan-out, tool-restricted workers (no shell), git-history/docs/writes blocked structurally, zero permission prompts for audit-dir writes and this skill's `scripts/audit.py` (every `oc-run` included) |
+| **Local agents** — this skill + requirements-code-audit's `agents/*.md` copied into `.claude/agents/` | this skill + agents `rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
+| **Generic** — this folder only (also Cowork / claude.ai upload) | this skill; workers are `general-purpose` subagents on `haiku`/`sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
+
+opencode is independent of the level. When it is missing or unhealthy, `init` prints
+`opencode: unavailable → preset claude (run audit.py doctor --ping)` and the audit runs exactly as
+requirements-code-audit does.
+
+## 1. Install (Claude Code)
+
+```bash
+# personal scope: loads in every project, no trust dialog, no install step
+cp -R hybrid-requirements-code-audit-v1.0 ~/.claude/skills/hybrid-requirements-code-audit-v1.0
+chmod +x ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py
+# recommended: the req-audit plugin that provides the agents and the guard (skip if already installed)
+cp -R requirements-code-audit ~/.claude/skills/requirements-code-audit
+chmod +x ~/.claude/skills/requirements-code-audit/hooks/audit_guard.sh ~/.claude/skills/requirements-code-audit/scripts/audit.py
+```
+
+Restart Claude Code (or run `/reload-plugins`). Verify: `/hybrid-requirements-code-audit` appears in `/`; with the
+plugin, `/agents` lists `rca-investigator`, `rca-verifier`, `rca-parser` and `/hooks` shows the plugin's `PreToolUse`
+and `SubagentStop` entries.
+
+Project scope instead: copy both folders into `<repo>/.claude/skills/`. Skills-directory plugins load only after you
+accept the workspace trust dialog and only from the session's primary working directory — launch Claude Code from the
+repo root.
+
+## 2. Raise the concurrency cap to 64
+
+Claude Code (v2.1.217+) refuses to spawn more than **20** concurrent subagents by default. The skill plans around
+whatever the cap is, but it is designed for 64. Add to `~/.claude/settings.json` (or the project's `.claude/settings.json`):
+
+```json
+{
+  "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64" }
+}
+```
+
+Restart. `audit.py init` prints the cap it detected. Sessions with `ultracode` effort are exempt from the cap.
+
+opencode batches are background Bash processes, not subagents, so they do not count against this cap. Each routing
+tier runs at most its own `max_parallel` batches at once (section 3).
+
+Optional, subscription plans only: keep worker prompt caches warm for an hour during very long audits by adding
+`experimental:\n  cacheTtl: 1h` to the req-audit plugin's agent files (v2.1.248+). Not needed for normal runs.
+
+## 3. opencode and routing
+
+1. Install the opencode CLI (tested with v2.0.18) and set up the provider that serves the tier models, so that
+   `opencode models` lists them. The shipped tiers use `zai-coding-plan/glm-5.3` and `zai-coding-plan/glm-5.3-flash`.
+2. Run the doctor once:
+
+   ```bash
+   python3 ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py doctor --ping
+   ```
+
+   It checks `opencode --version`, confirms that `opencode models` lists each tier's model, sends each tier one tiny
+   prompt through the injected `ha-investigator` agent (it must answer `HA-INVESTIGATOR-OK`) and writes the doctor
+   cache that the `opencode:` line of `init` reads. It creates the user routing file from the shipped defaults when it
+   is missing and prints its path. It works outside an audit. Run it again after editing the routing file, and when
+   `init` shows `opencode: unavailable` or a `claude(down: <reason>)` role. A plain `doctor` (no `--ping`) keeps a
+   tier's down mark; only a successful `--ping` clears it. `init` itself never spawns opencode.
+
+The opencode agents (`ha-investigator`, `ha-verifier`, `ha-parser`) are injected per turn through
+`OPENCODE_CONFIG_CONTENT`; nothing is written to `~/.config/opencode` or to the repo. They are read-only: edits, shell,
+web access and sub-tasks are denied, and so are reads of docs, `.git/` and the audit dir. `audit.py oc-run` writes their
+output after an evidence oracle has checked every citation.
+
+**Routing file:** `~/.config/hybrid-requirements-code-audit/routing.json`, or the path in env `HA_ROUTING`. It is
+deep-merged over the shipped `routing.default.json` (dicts merge key by key, other values replace), so it only needs
+the keys you change, for example `{"roles": {"investigator": "lite"}}`. The shipped defaults:
+
+```json
+{"preset": "hybrid",
+ "tiers": {
+   "std":  {"model": "zai-coding-plan/glm-5.3",       "variant": "high", "max_parallel": 6,
+            "stall_s": 180, "timeout_s": 900},
+   "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low",  "max_parallel": 6,
+            "stall_s": 120, "timeout_s": 600}},
+ "roles": {"investigator": "std", "verifier": "claude", "parser": "claude"},
+ "max_roles": {"verifier": "std", "parser": "std"},
+ "oc_batch_max": 4, "max_repairs": 2, "throttle_cooldown_s": 120}
+```
+
+| Preset | investigator | verifier | parser |
+|---|---|---|---|
+| `claude` | Claude | Claude | Claude (output byte-identical to requirements-code-audit) |
+| `hybrid` (default) | `roles.investigator` (`std`) | `roles.verifier` (`claude`) | `roles.parser` (`claude`) |
+| `max` | `max_roles.investigator`, else `roles.investigator` (`std`) | `max_roles.verifier` (`std`) | `max_roles.parser` (`std`) |
+
+- `init --preset claude|hybrid|max` overrides the file's `preset` for one audit. `config.json` keeps the effective
+  preset and a snapshot of the merged routing.
+- A role value of `claude` means Claude; any other value names a tier. Add tiers under `tiers` and point `roles` or
+  `max_roles` at them.
+- `model` is an opencode `provider/model` id. `variant` is the thinking level, passed as the `#<variant>` model suffix
+  (an empty variant passes the bare model).
+- `max_parallel`: opencode batches a tier runs at once. `oc_batch_max`: items per opencode batch. The first
+  `max_parallel × oc_batch_max` active items go to the tier; the rest go to Claude batches.
+- `stall_s` and `timeout_s` apply to each opencode turn. `max_repairs` caps the repair turns (same session) per batch,
+  so a batch's worst case is `(1 + max_repairs) × timeout_s`.
+- `throttle_cooldown_s`: after a rate-limit fallback, the tier's queued batches go to Claude for this many seconds.
+- A tier the doctor marked down (expired plan, bad key, quota) routes to Claude until the next successful
+  `doctor --ping`.
+
+**Environment overrides:**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `HA_OC_BIN` | `opencode` | opencode binary |
+| `HA_ROUTING` | `~/.config/hybrid-requirements-code-audit/routing.json` | user routing file |
+| `HA_DOCTOR_CACHE` | `~/.cache/hybrid-requirements-code-audit/doctor.json` | doctor cache |
+| `HA_TELEMETRY` | `~/.cache/hybrid-requirements-code-audit/lanes.jsonl` | telemetry log |
+| `HA_FAKE_SCRIPT`, `HA_FAKE_LOG` | none | tests only (`tests/fake_opencode.py`) |
+
+## 4. Permissions — what to expect
+
+- Read/Grep/Glob inside the working directory never prompt. Workers write only under `<cwd>/.audit/`; opencode
+  workers write nothing themselves.
+- Plugin level: the guard hook auto-approves writes under the audit dir and calls to this skill's `scripts/audit.py`
+  (the `scripts_dir` recorded in `config.json`), including every background `oc-run`, so the audit runs prompt-free
+  even in Manual permission mode. Auto mode (Pro/Max/Team default) is also prompt-free.
+- Local-agents level in Manual mode: the agents' `permissionMode: acceptEdits` covers their writes; to also avoid
+  prompts for the script add `"Bash(python3 ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/*)"` to
+  `permissions.allow` in `.claude/settings.local.json`. The `OPENCODE` lines run
+  `python3 "<absolute scripts dir>/audit.py" oc-run <name>`; add a matching rule if they still prompt.
+- The guard is armed only while `<cwd>/.audit/ACTIVE` exists (created by `audit.py init`, removed by
+  `audit.py finish`). Outside an audit it exits in a few milliseconds and does nothing.
+
+## 5. Hooks at the local-agents level (optional)
+
+The guard ships with requirements-code-audit, not with this fork. Add to `.claude/settings.local.json` (adjust the path):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{ "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Read|Grep|Glob",
+                     "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/requirements-code-audit/hooks/audit_guard.sh\"" }] }],
+    "SubagentStop": [{ "matcher": ".*",
+                       "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/requirements-code-audit/hooks/audit_guard.sh\"" }] }]
+  }
+}
+```
+
+## 6. Windows
+
+Use `python` instead of `python3` in the `allowed-tools` line of `SKILL.md` and when calling the script, including the
+printed `oc-run` commands. Set `HA_OC_BIN` when opencode is not on `PATH` as `opencode`. The guard's bash launcher
+(req-audit plugin) needs Git Bash; without it, point the hook commands at `python hooks/audit_guard.py` of
+requirements-code-audit directly (the fast-path marker check is then skipped — the Python script does the same check).
+
+## 7. Where things go
+
+- `<cwd>/.audit/` — everything the audit writes (checklist, batches, findings, verdicts, report, CSV). Added to
+  `.git/info/exclude` automatically (local, untracked; the codebase is not modified). This includes the `*.oc.md`
+  briefs next to their Claude briefs and `.audit/oc/`, the opencode scratch dir: each turn's raw event stream
+  `<name>.<round>.jsonl` and stderr `<name>.<round>.err`, plus the event files set aside after a fallback.
+- `audit.py init --force` archives a previous audit to `.audit.prev-<timestamp>/`.
+- Outside audit dirs, shared by every repo and separate from the other hybrid skills:
+  - `~/.config/hybrid-requirements-code-audit/routing.json` — the user routing file (created by `doctor`);
+  - `~/.cache/hybrid-requirements-code-audit/doctor.json` — the doctor cache;
+  - `~/.cache/hybrid-requirements-code-audit/lanes.jsonl` — telemetry: one record per opencode run and one per
+    requirement at `finish`, each with the repo root. `audit.py stats [--repo <path>]` compares opencode against Claude.
+- Uninstall: delete the skill folder, `~/.config/hybrid-requirements-code-audit/` and
+  `~/.cache/hybrid-requirements-code-audit/`. Nothing else is written outside audit dirs. Keep requirements-code-audit
+  installed if you still use it.
+
+## 8. Cowork / claude.ai
+
+Upload the `.skill` file (or the folder). Agents and hooks are ignored there and opencode is normally absent: `init`
+prints `opencode: unavailable → preset claude (run audit.py doctor --ping)` and the skill runs as
+requirements-code-audit does, in generic mode (general-purpose subagents with `model: haiku`/`sonnet`) or solo mode
+when no Agent tool exists. The repo must be mounted in the session so `scripts/audit.py` can scan it.

@@ -21,14 +21,14 @@ hooks:
         - type: command
           timeout: 20
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$HOME/.claude/skills/dev-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$CLAUDE_PROJECT_DIR"/.claude/skills/dev-team-* "$HOME/.claude/skills/dev-team" "$HOME"/.claude/skills/dev-team-*;
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" edit-ro; done; exit 0'
     - matcher: "Bash"
       hooks:
         - type: command
           timeout: 20
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$HOME/.claude/skills/dev-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/dev-team" "$CLAUDE_PROJECT_DIR"/.claude/skills/dev-team-* "$HOME/.claude/skills/dev-team" "$HOME"/.claude/skills/dev-team-*;
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" bash-ro; done; exit 0'
 ---
 

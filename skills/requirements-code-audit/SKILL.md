@@ -143,10 +143,12 @@ verifier. Never skip it to save time — it is the quality mechanism that makes 
 
 ### Step 5 — Adjudicate, then plan (lead judgment)
 
-`A queue` lists disagreements, low-confidence verdicts, every CONFLICT and a deterministic 5% spot-check sample,
-each with the exact `path:lines` to read. Batch those Reads in one turn, decide, record with
-`A adjudicate --set ID STATUS --note "why"` / `--accept ID…`. Your judgment is authoritative; keep MISSING only when
-both passes found nothing and the searches were adequate.
+Once both waves finish, `A status` prints the adjudication queue itself (disagreements, low-confidence verdicts,
+every CONFLICT and a deterministic 5% spot-check sample), each with the exact `path:lines` to read — no separate
+`A queue` call needed (it still exists to re-list the queue on demand). Batch those Reads in one turn, decide, record
+with `A adjudicate --set ID STATUS --note "why"` / `--accept ID…` / `--accept-queue`; `adjudicate` prints the next
+concrete step itself. Your judgment is authoritative; keep MISSING only when both passes found nothing and the
+searches were adequate.
 Then write `.audit/plan.jsonl` — one entry per discrepancy (or group of related ones):
 
 ```json
@@ -161,10 +163,12 @@ MUSTs and SHOULD gaps with user-visible impact; **P2** remaining SHOULD/MAY. Ord
 ### Step 6 — Report, check, finish
 
 `A report` assembles `.audit/requirements-code-audit.md` (+ `traceability.csv`) **in the spec's language** (`--lang`,
-or `--headings file.json` for other languages), `A check` is the mechanical gate (every id decided, MISSING
-double-searched, cited files/lines exist, every discrepancy planned, priorities sane), `A finish` disarms the guard
-and prints the headline numbers. In chat: headline numbers + report path, not the whole report. Report structure and
-all schemas: `references/report-format.md`, `references/schemas.md`.
+or `--headings file.json` for other languages), then runs the mechanical quality gate inline (every id decided,
+MISSING double-searched, cited files/lines exist, every discrepancy planned, priorities sane) and prints its verdict
+and headline numbers — no separate `A check` call needed (it still exists to re-run just the gate). If it finds
+problems, fix them and run `A report` again; once clean it tells you to `A finish`, which disarms the guard and
+prints the closing headline. In chat: headline numbers + report path, not the whole report. Report structure and all
+schemas: `references/report-format.md`, `references/schemas.md`.
 
 ## Status taxonomy
 

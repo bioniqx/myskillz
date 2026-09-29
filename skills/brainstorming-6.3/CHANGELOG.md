@@ -1,3 +1,34 @@
+# 9.0 (from 8.0) — docs match the fixed scripts
+
+## W9–W10
+- W9 (scripts/*): crash/signal safety, literal-content injection fixes,
+  `session_dir` in the `server-started`/`server-info` JSON, decoded
+  `/files/<name>` names, no external assets, and other script-side fixes.
+- W10 (this slice, docs): visual-companion.md now saves `session_dir`
+  alongside `screen_dir`/`state_dir` and stops the server with it.
+- visual-companion.md's liveness check is now `kill -0` on the pid read
+  from `state_dir/server.pid` with a file-read tool first, matching
+  stop-server.sh's own check but with no `$(...)`/backtick command
+  substitution, so it matches an `allowed-tools` entry exactly.
+- The loop is exactly two tool rounds: round 1 = `kill -0 <pid>` + read
+  `events` + read-only lanes in parallel; round 2 = write the new screen
+  after round 1 returns. `server.pid` is read once after start/restart,
+  not on every iteration.
+- The loop reads `events` strictly before writing the next screen —
+  never in the same parallel batch as that write, since the write is
+  what triggers the server's rotation to `events.prev`. A missing
+  `events` means no clicks landed on the current screen; the guide no
+  longer tells the model to fall back to `events.prev` merely because
+  `events` is absent. Also documents the `/files/<name>` route for
+  referencing assets placed in `screen_dir` and the `selected` field a
+  `data-multiselect` group's click events carry.
+- SKILL.md's `allowed-tools` pre-approves `start-server.sh`/`stop-server.sh`
+  under `${CLAUDE_SKILL_DIR}` and the pinned `kill -0` liveness check, in
+  the exact form the docs tell the model to run, so accepting the visual
+  companion no longer prompts for permission.
+- The literal fetch-friendly-endpoint URL list now lives only in
+  research-playbook.md §2; SKILL.md keeps one summary sentence.
+
 # 8.0 (from 7.0) — research-first, lane tiers, verified harness limits
 
 ## Setup for 64-wide fan-outs (optional)

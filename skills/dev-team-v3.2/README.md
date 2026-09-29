@@ -49,6 +49,29 @@ phải thư mục cha): hook trong frontmatter agent của repo chỉ được n
 Muốn nhanh hơn nữa: gõ `/fast` (Opus fast mode, trừ usage credits) — Conductor và reviewer/leader
 trên opus nhanh tới 2.5×; các lane programmer đã chạy sonnet/sonnet.
 
+## Changelog — đợt tối ưu W1–W4 (9/2026)
+
+- **W1 — `devteam.py`**: `remove_worktree` không bao giờ xoá checkout tích hợp; mọi `git diff --name-only`
+  dùng `--no-renames` (đổi tên file không còn lách được footprint / frozen-test); `validate_plan` kiểm kiểu
+  (`id` str, `deps`/`files`/`criteria` là list str) và báo `DevteamError` gọn, cả ở `retry`; `init/start --force`
+  xoá sạch `reviews/`, `logs/`, `research/`; `start` không bị chính `doctor --fix` làm bẩn cây; slice research
+  không giữ footprint và nhận `files: []`; `red-done` giữ footprint bận; `next` báo `UNRESOLVED` khi kẹt và
+  chỉ lệnh phục hồi; `finish` cảnh báo cả merge chưa review; `print_ready` trừ slot dành cho review;
+  `path_matches` chỉ cắt tiền tố `./` (không còn `lstrip("./")`); header claim in đúng helper theo mode;
+  `hooks_resolve()` dò thêm `dev-team-*`. Tốc độ: `next` 62 lane 1.02 s → 0.29 s, `start` 0.70 s → 0.50 s.
+- **W2 — `guard.py`**: resolve đường dẫn edit bằng `realpath` (symlink `/tmp`, `/var` không còn làm từ chối
+  edit hợp lệ); không còn pre-approve các lệnh "chỉ đọc" thực ra ghi được (`git diff --output`, `sort -o`,
+  `sed w`, `rg --pre`, `git grep -O`); lane chỉ được chạy `claim`/`commit-*` của `devteam.py`, mọi subcommand
+  khác bị **deny** (trước đây chỉ im lặng); bớt từ chối nhầm (`git merge-base`, `stash list`, `worktree list`,
+  `2>/dev/null`, `>` trong chuỗi quote); check `committed` quyết định theo `HEAD != base`; `--no-renames`.
+- **W3 — `selftest.sh`**: chạy xanh trên macOS (bash 3.2, BSD sed): `sed -i` GNU → ghi file tạm rồi `mv`;
+  thư mục tạm dùng đường dẫn vật lý (`pwd -P`, tránh `/var` → `/private/var`); check "worktree clean" không
+  còn lỗi word-split bash 3.2; gỡ biến môi trường `CLAUDE_*`/`BASH_*` thừa hưởng từ shell Claude Code trước
+  các check của `doctor`; check "engine chỉ qua helper của slice" giờ mong đợi **deny** (W2-3).
+- **W4 — hook & prompt**: hook trong cả 5 agent dò lần lượt `.claude/skills/dev-team`, `dev-team-*` ở project
+  rồi ở `$HOME`, chạy `guard.py` đầu tiên tìm thấy, không có thì `exit 0`; `pin_hooks()`/`HOOK_LOOP_RE` vẫn
+  ghim lại thành đường dẫn tuyệt đối; `SKILL.md` bỏ đoạn liệt kê lặp ở "Speed ceiling".
+
 ## v3.2 thay đổi gì so với v3.1 (kiểm toán theo docs Claude Code 2.1.272, 9/2026)
 
 Ba lỗi thật của v3.1 đã vá, rồi tối ưu tiếp critical path. Mỗi cơ chế có regression check

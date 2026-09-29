@@ -2,7 +2,7 @@
 name: git-diff-summary
 description: Use when the user wants to understand or summarize what the current branch changed versus the main branch — describing what the new code does, drafting a commit or PR/MR message, or reviewing branch changes before committing. Triggers on requests like "so sánh với main", "tóm tắt thay đổi", "mô tả code đã làm gì", "viết commit message", "what did this branch do", "summarize my changes vs main".
 argument-hint: "[base-branch]"
-allowed-tools: Read Bash(bash *gather.sh*) Bash(git diff *) Bash(git log *) Bash(git show *)
+allowed-tools: Read Bash(bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh"*) Bash(git diff *) Bash(git log *) Bash(git show *)
 ---
 
 # git-diff-summary
@@ -12,7 +12,7 @@ Goal: diff **merge-base(fresh base) → working tree** (committed + staged + uns
 ## Context — already gathered (0 tool calls)
 
 ```!
-bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh" $ARGUMENTS
+bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh" "$ARGUMENTS"
 ```
 
 If the block above shows the raw command instead of output (harness without `!` injection), run it once with Bash: `bash <this skill dir>/scripts/gather.sh [base]`. If the user named a base branch that differs from `REF`, re-run with it. Never run git commands one by one.
@@ -23,6 +23,7 @@ What the script already did (don't redo): background `git fetch` of only the bas
 
 | Marker | Action |
 |---|---|
+| `GATHER_FAILED` | The script couldn't create its temp dir. Fall back to a manual `git diff` against the base branch. |
 | `NOT_A_REPO` / `EMPTY_DIFF` | Say so in one line. Stop. |
 | `NO_BASE` / `NO_MERGE_BASE` | Ask the user for the base branch. |
 | `WARN_STALE_BASE*` / `WARN_BASE_ARG_IGNORED` | First line of the answer = one-line warning. Continue. |

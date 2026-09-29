@@ -86,12 +86,29 @@ def write_json(p, obj):
 
 
 def read_jsonl(p):
-    """Tolerant JSONL reader: returns (rows, errors). Skips blank lines and // comments."""
-    rows, errors = [], []
+    """Tolerant JSONL reader: returns (rows, errors). Skips blank lines and // comments.
+
+    Falls back to a whole-file JSON parse (or a raw_decode stream of concatenated
+    values) when nothing parses line-by-line, so a pretty-printed / multi-line
+    JSON file is not silently read as zero rows. Strips a leading BOM.
+    """
+    rows, line_errors = [], []
     path = Path(p)
     if not path.exists():
-        return rows, errors
-    for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        return rows, line_errors
+    raw = path.read_text(encoding="utf-8-sig", errors="replace")
+    whole = raw.strip()
+    if not whole:
+        return rows, line_errors
+    try:
+        obj = json.loads(whole)
+        if isinstance(obj, dict):
+            return [obj], []
+        if isinstance(obj, list):
+            return [o for o in obj if isinstance(o, dict)], []
+    except json.JSONDecodeError:
+        pass
+    for n, line in enumerate(raw.splitlines(), 1):
         s = line.strip()
         if not s or s.startswith("//") or s.startswith("#"):
             continue
@@ -106,8 +123,32 @@ def read_jsonl(p):
             elif isinstance(obj, list):
                 rows.extend(o for o in obj if isinstance(o, dict))
         except json.JSONDecodeError as e:
-            errors.append("%s:%d: %s" % (path.name, n, e.msg))
-    return rows, errors
+            line_errors.append("%s:%d: %s" % (path.name, n, e.msg))
+    if rows and not line_errors:
+        return rows, []
+    text = whole
+    decoder = json.JSONDecoder()
+    idx, n_chars, stream_rows, stream_errors = 0, len(text), [], []
+    while idx < n_chars:
+        while idx < n_chars and text[idx] in " \t\r\n,":
+            idx += 1
+        if idx >= n_chars:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError as e:
+            stream_errors.append("%s: %s" % (path.name, e.msg))
+            break
+        if isinstance(obj, dict):
+            stream_rows.append(obj)
+        elif isinstance(obj, list):
+            stream_rows.extend(o for o in obj if isinstance(o, dict))
+        idx = end
+    if stream_rows and not stream_errors:
+        return stream_rows, []
+    if rows:
+        return rows, line_errors
+    return stream_rows, (stream_errors or line_errors)
 
 
 def write_text(p, text):
@@ -136,6 +177,12 @@ def is_under(path, root):
 def batch_key(name):
     m = re.search(r"(\d+)", name)
     return int(m.group(1)) if m else 0
+
+
+def base_batch(name):
+    """'batch-01-r7' -> 'batch-01' (a retry's SubagentStop event counts toward its base batch)."""
+    m = re.match(r"^(.*)-r\d+$", name)
+    return m.group(1) if m else name
 
 
 class Ctx(object):
@@ -387,6 +434,15 @@ def git_exclude(out_dir):
         gitdir = Path(m.group(1).strip())
         if not gitdir.is_absolute():
             gitdir = (cur / gitdir).resolve()
+        # a linked worktree's own gitdir is private; the shared info/exclude lives
+        # in the COMMON dir named by its `commondir` file (relative to gitdir).
+        commondir_file = gitdir / "commondir"
+        if commondir_file.exists():
+            common = commondir_file.read_text(encoding="utf-8").strip()
+            common_path = Path(common)
+            if not common_path.is_absolute():
+                common_path = (gitdir / common_path).resolve()
+            gitdir = common_path
     try:
         rel = "/" + str(d.relative_to(cur)).replace(os.sep, "/") + "/"
     except Exception:
@@ -604,6 +660,8 @@ def cmd_parse_plan(a):
     pdir = c.out / "parse"
     for old in pdir.glob("section-*.md"):
         old.unlink()
+    for old in pdir.glob("section-*.jsonl"):
+        old.unlink()
     lines_out = []
     for i, chunk in enumerate(chunks, 1):
         name = "section-%02d" % i
@@ -645,6 +703,8 @@ def cmd_parse_merge(a):
     pdir = c.out / "parse"
     files = sorted(pdir.glob("section-*.jsonl"), key=lambda p: batch_key(p.name))
     expected = (c.state.get("parse") or {}).get("sections", 0)
+    if expected:
+        files = [f for f in files if 1 <= batch_key(f.name) <= expected]
     if len(files) < expected:
         have = {batch_key(p.name) for p in files}
         missing = ["section-%02d" % i for i in range(1, expected + 1) if i not in have]
@@ -708,13 +768,13 @@ SPEED_RULES = """## Speed rules (you are one of many parallel workers; the wave 
 - Write the findings file BEFORE your final reply. If you are running out of turns, write what you have and mark the rest UNSEARCHED."""
 
 FINDINGS_SCHEMA = """## Output format: JSON Lines — one object per requirement, exactly these keys, no prose
-{"id":"REQ-001","status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE","confidence":"high|medium|low",
+{"id":"REQ-001","status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE|UNSEARCHED","confidence":"high|medium|low",
  "evidence":[{"path":"src/auth/login.py","lines":"41-58","note":"what this code does relative to the requirement"}],
  "excerpt":"≤ 2 lines, ONLY if the exact wording is load-bearing, else \\"\\"",
  "searched":["terms","globs","paths actually checked"],"notes":"deviations / partial coverage / caveats, ≤ 200 chars"}
 - status is a HYPOTHESIS; the lead decides. MATCHED = the cited code implements the exact wording; PARTIAL = implemented but a specified
   detail is missing/deviates; CONFLICT = code actively contradicts it; MISSING = nothing found after the search budget;
-  UNVERIFIABLE = cannot be settled by reading code (say why in notes).
+  UNVERIFIABLE = cannot be settled by reading code (say why in notes); UNSEARCHED = you ran out of turns before investigating it.
 - MISSING requires `searched` to include every search_hint plus at least two alternative strategies.
 - confidence=high only when evidence directly implements the requirement; use medium/low when inferring."""
 
@@ -768,6 +828,16 @@ def dispatch_header(c, role):
 
 # --------------------------------------------------------------------------- plan
 
+def clear_run_artifacts(c):
+    """Re-running `plan` starts a fresh wave: drop stale findings/verify/events
+    so a re-plan is idempotent instead of layering on top of a previous run."""
+    for d, pat in ((c.out / "findings", "*.jsonl"), (c.out / "verify", "*.jsonl"),
+                   (c.out / "verify", "*.md"), (c.out / "events", "*.json")):
+        if d.exists():
+            for old in d.glob(pat):
+                old.unlink()
+
+
 def cmd_plan(a):
     c = Ctx(a.cwd)
     rows, errors = c.checklist()
@@ -778,6 +848,7 @@ def cmd_plan(a):
     problems = validate_checklist(rows)
     if problems:
         die("checklist problems (fix, then re-run plan): " + "; ".join(problems[:20]))
+    clear_run_artifacts(c)
     write_text(c.out / "checklist.md", checklist_md(rows))
     cap = a.cap or c.cfg.get("cap", DEFAULT_CAP)
     c.cfg["cap"] = cap
@@ -839,6 +910,14 @@ def as_list(v):
     return [v]
 
 
+def plan_ids(p):
+    """A plan.jsonl entry's ids, normalised: `ids` may be a string (single id) or a list."""
+    ids = as_list(p.get("ids"))
+    if not ids and p.get("id"):
+        ids = [p.get("id")]
+    return ids
+
+
 def normalize_row(r):
     """Coerce worker output into the expected shapes (workers on the fast tier get creative with JSON)."""
     ev = []
@@ -857,16 +936,17 @@ def normalize_row(r):
 
 
 def load_finding_files(dirpath, pattern):
-    """Returns {file_name: (mtime, {id: row})}."""
-    result = {}
+    """Returns ({file_name: (mtime, {id: row})}, errors)."""
+    result, errors = {}, []
     for f in sorted(Path(dirpath).glob(pattern)):
-        rows, _ = read_jsonl(f)
+        rows, errs = read_jsonl(f)
+        errors.extend(errs)
         byid = {}
         for r in rows:
             if isinstance(r, dict) and r.get("id"):
                 byid[str(r["id"]).strip()] = normalize_row(r)
         result[f.name] = (f.stat().st_mtime, byid)
-    return result
+    return result, errors
 
 
 def norm_status(s, allowed=STATUSES):
@@ -879,16 +959,20 @@ def norm_status(s, allowed=STATUSES):
 
 
 def load_events(c):
-    """SubagentStop events written by the guard hook: {batch_name: {"ok": bool, "t": mtime, "msg": ...}}."""
-    ev = {}
+    """SubagentStop events written by the guard hook: [(batch_name, file_mtime, event_dict), ...]."""
+    out = []
     edir = c.out / "events"
     if not edir.exists():
-        return ev
+        return out
     for f in edir.glob("*.json"):
         d = read_json(f)
         if d and d.get("batch"):
-            ev[d["batch"]] = d
-    return ev
+            try:
+                mt = f.stat().st_mtime
+            except OSError:
+                continue
+            out.append((d["batch"], mt, d))
+    return out
 
 
 class Merged(object):
@@ -902,8 +986,17 @@ class Merged(object):
         self.coverage = {}     # batch -> (found_ids, total)
         self.batch_done = {}   # batch -> bool
         self.batch_time = {}   # batch -> completion mtime
-        self.events = load_events(c)
-        files = load_finding_files(c.out / "findings", "*.jsonl")
+        # events map to their BASE batch (a retry's event, e.g. batch-01-r7, counts toward batch-01);
+        # when several events (original + retries) map to the same base, the freshest file wins.
+        raw_events = load_events(c)
+        self.events = {}
+        self._event_mtime = {}
+        for name, mt, d in raw_events:
+            base = base_batch(name)
+            if base not in self.events or mt > self._event_mtime[base]:
+                self.events[base] = d
+                self._event_mtime[base] = mt
+        files, self.finding_errors = load_finding_files(c.out / "findings", "*.jsonl")
         # per batch: pick the file with the most coverage (earliest on ties)
         for name, meta in self.batches.items():
             ids = set(meta["ids"])
@@ -915,6 +1008,13 @@ class Merged(object):
                 for rid in ids & set(byid):
                     self.finding[rid] = byid[rid]
                     self.finding_src[rid] = fn
+                # then fill the ids it lacks from the batch's other files (retries, hedges), newest first
+                for _, _, ofn, obyid, omt in sorted(cands[1:], key=lambda x: x[4], reverse=True):
+                    for rid in (ids & set(obyid)) - set(self.finding):
+                        self.finding[rid] = obyid[rid]
+                        self.finding_src[rid] = ofn
+                        mt = max(mt, omt)
+                cov = len([i for i in ids if i in self.finding])
                 self.coverage[name] = (cov, len(ids))
                 self.batch_done[name] = cov == len(ids)
                 self.batch_time[name] = mt
@@ -933,7 +1033,7 @@ class Merged(object):
                 self.batch_done[meta_name] = True
         # verification
         self.verdict, self.verdict_src = {}, {}
-        vfiles = load_finding_files(c.out / "verify", "*.jsonl")
+        vfiles, self.verify_errors = load_finding_files(c.out / "verify", "*.jsonl")
         self.vbatches = c.state.get("verify", {})
         self.vdone = {}
         for name, meta in self.vbatches.items():
@@ -952,6 +1052,13 @@ class Merged(object):
                     if rid in self.items and rid not in self.verdict:
                         self.verdict[rid] = row
                         self.verdict_src[rid] = fn
+        # drop events older than the batch's current dispatch (a redispatch invalidates the
+        # previous SubagentStop event; only one that arrived after the fresh dispatch counts)
+        for base in list(self.events):
+            meta = self.batches.get(base) or self.vbatches.get(base)
+            dispatched = meta.get("dispatched") if meta else None
+            if dispatched and self._event_mtime[base] < dispatched:
+                del self.events[base]
         self.adj = {}
         for row in read_jsonl(c.out / "adjudications.jsonl")[0]:
             if row.get("id"):
@@ -1063,16 +1170,18 @@ class Merged(object):
                 reasons.append("worker says UNVERIFIABLE (not tagged by lead)")
             if reasons:
                 q.append((rid, "; ".join(reasons)))
-        # deterministic spot-check sample of unverified MATCHED-high items
-        pool = sorted(rid for rid in self.items if rid not in self.adj and not self.skip_tagged(rid)
-                      and self.final_status(rid) == "MATCHED" and rid not in self.verdict)
-        if pool:
-            k = max(3, math.ceil(0.05 * len(pool)))
-            rnd = random.Random(len(self.items) * 7919 + len(pool))
-            sample = sorted(rnd.sample(pool, min(k, len(pool))))
+        # deterministic spot-check sample of unverified MATCHED-high items: the population and the
+        # random draw are a fixed function of the item set (inv_status ignores adjudication), so
+        # adjudicating one sampled item only removes it below — it never reshuffles the rest.
+        universe = sorted(rid for rid in self.items if not self.skip_tagged(rid)
+                           and self.inv_status(rid) == "MATCHED" and rid not in self.verdict)
+        if universe:
+            k = max(3, math.ceil(0.05 * len(universe)))
+            rnd = random.Random(len(self.items) * 7919 + len(universe))
+            sample = sorted(rnd.sample(universe, min(k, len(universe))))
             queued = {r for r, _ in q}
             for rid in sample:
-                if rid not in queued:
+                if rid not in self.adj and rid not in queued:
                     q.append((rid, "spot-check sample (MATCHED, unverified)"))
         return q
 
@@ -1094,8 +1203,8 @@ VERIFY_SCHEMA = """## Output format: JSON Lines — one object per requirement, 
  "evidence":[{"path":"src/x.py","lines":"10-20","note":"…"}],"searched":["new terms/paths you tried"],"reason":"≤ 200 chars"}"""
 
 
-def write_verify_file(c, name, rids, m, repo_map):
-    outp = c.out / "verify" / (name + ".jsonl")
+def write_verify_file(c, name, rids, m, repo_map, outp=None):
+    outp = outp or (c.out / "verify" / (name + ".jsonl"))
     blocks = []
     for rid in rids:
         r = m.items[rid]
@@ -1164,7 +1273,15 @@ def cmd_status(a):
         for b in a.failed:
             if b not in c.state["failed"]:
                 c.state["failed"].append(b)
+            # a failed verifier batch's ids leave verify_assigned so they reappear for verification
+            vmeta = c.state.get("verify", {}).get(b)
+            if vmeta:
+                assigned = c.state.get("verify_assigned", {})
+                for rid in vmeta.get("ids", []):
+                    if assigned.get(rid) == b:
+                        del assigned[rid]
         c.save_state()
+    just_undispatched = set()
     if a.undispatch:
         names = a.undispatch
         if names == ["all"]:
@@ -1174,8 +1291,13 @@ def cmd_status(a):
                 c.state["batches"][b]["dispatched"] = None
             if b in c.state.get("verify", {}):
                 c.state["verify"][b]["dispatched"] = None
+        just_undispatched = set(names)
         c.save_state()
     m = Merged(c)
+    if m.finding_errors:
+        lines.append("findings JSON errors: " + "; ".join(m.finding_errors[:5]))
+    if m.verify_errors:
+        lines.append("verify JSON errors: " + "; ".join(m.verify_errors[:5]))
     cap = c.state.get("cap", c.cfg.get("cap", DEFAULT_CAP))
     solo = c.cfg.get("agents") == "solo"
     repo_map = (out / "repo_map.md").read_text(encoding="utf-8") if (out / "repo_map.md").exists() else ""
@@ -1196,34 +1318,52 @@ def cmd_status(a):
     # undispatched wave-1 / next-wave batches
     t = now()
     for b, meta in sorted(m.batches.items(), key=lambda kv: batch_key(kv[0])):
-        if meta.get("dispatched") or m.batch_done.get(b):
+        if m.batch_done.get(b) or b in m.failed:
             continue
-        if b in m.failed:
+        if solo:
+            # solo has no background agents: re-list every unfinished batch on every call
+            meta["dispatched"] = meta.get("dispatched") or t
+            dispatch_inv.append(dispatch_line(c, "investigator", b, out / "batches" / (b + ".md")))
             continue
-        if not solo and free <= 0:
+        if meta.get("dispatched"):
+            continue
+        if free <= 0:
             break
         meta["dispatched"] = t
-        if not solo:
-            free -= 1
+        free -= 1
         dispatch_inv.append(dispatch_line(c, "investigator", b, out / "batches" / (b + ".md")))
-    # re-dispatch failed batches (uncovered ids only)
+    # re-dispatch failed batches (uncovered ids only) — investigator or verifier
     if a.redispatch:
         for b in a.redispatch:
             meta = m.batches.get(b)
-            if not meta:
+            if meta:
+                missing = [i for i in meta["ids"] if i not in m.finding]
+                if not missing:
+                    continue
+                items = [m.items[i] for i in missing]
+                suffix = "r%d" % (int(t) % 1000)
+                name = b + "-" + suffix
+                # the retry writes to findings/<b>.r<k>.jsonl so Merged picks it up as a candidate for <b>
+                write_batch_file(c, name, items, repo_map, outp=out / "findings" / (b + "." + suffix + ".jsonl"))
+                meta["dispatched"] = t
+                if b in c.state.get("failed", []):
+                    c.state["failed"].remove(b)
+                dispatch_inv.append(dispatch_line(c, "investigator", name, out / "batches" / (name + ".md")))
                 continue
-            missing = [i for i in meta["ids"] if i not in m.finding]
+            vmeta = c.state.get("verify", {}).get(b)
+            if not vmeta:
+                continue
+            missing = [i for i in vmeta["ids"] if i not in m.verdict]
             if not missing:
                 continue
-            items = [m.items[i] for i in missing]
             suffix = "r%d" % (int(t) % 1000)
             name = b + "-" + suffix
-            # the retry writes to findings/<b>.r<k>.jsonl so Merged picks it up as a candidate for <b>
-            write_batch_file(c, name, items, repo_map, outp=out / "findings" / (b + "." + suffix + ".jsonl"))
-            meta["dispatched"] = t
+            # the retry writes to verify/<b>.r<k>.jsonl so Merged picks it up as a candidate for <b>
+            write_verify_file(c, name, missing, m, repo_map, outp=out / "verify" / (b + "." + suffix + ".jsonl"))
+            vmeta["dispatched"] = t
             if b in c.state.get("failed", []):
                 c.state["failed"].remove(b)
-            dispatch_inv.append(dispatch_line(c, "investigator", name, out / "batches" / (name + ".md")))
+            dispatch_ver.append(dispatch_line(c, "verifier", name, out / "verify" / (name + ".md")))
 
     # ---- hedging stragglers (speculative duplicate) once ≥50% of wave A is done
     durations = [m.batch_time[b] - m.batches[b]["dispatched"] for b in m.batches
@@ -1247,8 +1387,21 @@ def cmd_status(a):
 
     # ---- wave B packing
     pending = m.pending_verification()
-    vdone = sum(1 for b in m.vbatches if m.vdone.get(b))
+    vdone =sum(1 for b in m.vbatches if m.vdone.get(b))
     lines.append("Wave B (verify): %d/%d batches complete; running≈%d; pending items not yet assigned: %d" % (vdone, len(m.vbatches), rv, len(pending)))
+    new_v_names = set()
+    if not solo:
+        # re-list verifier batches left undispatched as slots free up; a batch this call's
+        # own `--undispatch` reset is skipped once so it stays undispatched for this call
+        for b in sorted(m.vbatches, key=batch_key):
+            if b in just_undispatched or m.vbatches[b].get("dispatched") or m.vdone.get(b) or b in m.failed:
+                continue
+            if free <= 0:
+                break
+            m.vbatches[b]["dispatched"] = t
+            free -= 1
+            new_v_names.add(b)
+            dispatch_ver.append(dispatch_line(c, "verifier", b, out / "verify" / (b + ".md")))
     if pending and (len(pending) >= VERIFY_TRIGGER or m.wave_a_done() or solo):
         pending.sort(key=lambda rid: (m.items[rid].get("category") or "", rid))
         if solo:
@@ -1271,9 +1424,17 @@ def cmd_status(a):
                     c.state.setdefault("verify_assigned", {})[rid] = name
                 if not solo:
                     free -= 1
+                new_v_names.add(name)
                 dispatch_ver.append(dispatch_line(c, "verifier", name, out / "verify" / (name + ".md")))
         elif not solo:
             lines.append("  (no free slots for verifiers yet — they are dispatched as investigators finish)")
+    if solo:
+        # solo mode never has agents "running" in the background — re-list every still-undispatched
+        # verifier batch on every status call, so the lead never loses track of pending work.
+        for b in sorted(m.vbatches, key=batch_key):
+            if b in new_v_names or m.vdone.get(b) or b in m.failed:
+                continue
+            dispatch_ver.append(dispatch_line(c, "verifier", b, out / "verify" / (b + ".md")))
     c.save_state()
 
     # ---- spot-check suggestions for idle lead time
@@ -1306,6 +1467,18 @@ def cmd_status(a):
     if spot:
         print("MEANWHILE (optional, while agents run) spot-check these MATCHED items yourself:")
         print("\n".join(spot))
+    waves_done = m.wave_a_done() and m.wave_b_done()
+    assigned = c.state.get("verify_assigned", {})   # includes ids packed into verifiers in this call
+    queue_undecided = [] if waves_done else [
+        (rid, why) for rid, why in m.queue_ids()
+        if rid not in m.adj and rid in m.finding and not why.startswith("spot-check sample")
+        and not (rid in assigned and rid not in m.verdict)]
+    if queue_undecided:
+        # some ids (e.g. CONFLICT) are already decidable without waiting for more waves —
+        # surface them now instead of making the lead wait for a `status` call that shows nothing new.
+        print("MEANWHILE — already queued for adjudication (%d), no need to wait for more waves on these:" % len(queue_undecided))
+        for rid, why in queue_undecided:
+            print("\n".join(queue_item_lines(m, rid, why)))
     # ---- NEXT
     if dispatch_inv or dispatch_ver or hedges:
         if solo:
@@ -1315,33 +1488,76 @@ def cmd_status(a):
         return
     if not m.wave_a_done() or not m.wave_b_done():
         stuck = [b for b in m.batches if b in m.events and not m.batch_done.get(b) and b not in m.failed]
+        stuck += [b for b in m.vbatches if b in m.events and not m.vdone.get(b) and b not in m.failed]
         if stuck:
             print("NOTE: agents finished without complete output: %s → `audit.py status --redispatch %s`" % (", ".join(stuck), " ".join(stuck)))
-        print("NEXT: wait for completion notifications (do not poll in a loop); on each one run `audit.py status`. "
-              "If an agent reported failure or partial output: `audit.py status --failed <batch>` (moves its items to verifiers) or `--redispatch <batch>`.")
+        if not solo and (ri or rv):
+            print("NEXT: wait for completion notifications (do not poll in a loop); on each one run `audit.py status`. "
+                  "If an agent reported failure or partial output: `audit.py status --failed <batch>` (moves its items to verifiers) or `--redispatch <batch>`.")
+        elif stuck:
+            print("NEXT: `audit.py status --redispatch %s`" % " ".join(stuck))
+        else:
+            print("NEXT: nothing is currently running; if a batch stalled silently, mark it with "
+                  "`audit.py status --failed <batch>` (moves its items to verifiers) or retry with `--redispatch <batch>`, then `audit.py status`.")
         return
-    q = m.queue_ids()
-    undecided = [rid for rid, _ in q if rid not in m.adj]
-    if undecided:
-        print("Waves complete. NEXT: `audit.py queue` → read the cited lines for the %d queued items → `audit.py adjudicate --set ID STATUS --note \"why\"` (or --accept ID)." % len(undecided))
-        return
-    disc = [rid for rid in m.items if m.final_status(rid) in DISCREPANT]
-    plan_rows, _ = read_jsonl(out / "plan.jsonl")
-    planned = {i for r in plan_rows for i in (r.get("ids") or [r.get("id")]) if i}
-    unplanned = [rid for rid in disc if rid not in planned]
-    if unplanned:
-        print("Adjudication complete. %d discrepancies need a remediation entry in %s (schema: references/schemas.md):" % (len(unplanned), out / "plan.jsonl"))
-        for rid in unplanned:
-            f = m.finding.get(rid) or {}
-            ev = "; ".join("%s:%s" % (e.get("path"), e.get("lines")) for e in (f.get("evidence") or [])[:2] if isinstance(e, dict))
-            print("  %s %s [%s/%s] %s%s" % (STATUS_ICON[m.final_status(rid)], rid, m.items[rid].get("strength"), m.items[rid].get("stakes", "normal"),
-                                          (m.items[rid].get("text") or "")[:100], (" — " + ev) if ev else ""))
-        print("NEXT: write plan.jsonl (P0 = any CONFLICT or unmet MUST on a core/high-stakes flow; P1 = other MUST gaps + user-visible SHOULD gaps; P2 = rest), then `audit.py report`.")
-        return
-    print("NEXT: `audit.py report` → `audit.py check` → `audit.py finish`.")
+    print("\n".join(next_after_waves(c, m)))
 
 
 # --------------------------------------------------------------------------- queue / adjudicate
+
+def queue_item_lines(m, rid, why):
+    r = m.items[rid]
+    f = m.finding.get(rid) or {}
+    v = m.verdict.get(rid) or {}
+    lines = ["%s [%s%s] — %s" % (rid, r.get("strength"), "/high-stakes" if r.get("stakes") == "high" else "", why),
+              "  requirement: %s" % r.get("text")]
+    if r.get("search_hints"):
+        lines.append("  hints: %s" % ", ".join(str(h) for h in r.get("search_hints")))
+    if f:
+        lines.append("  investigator: %s (%s) %s" % (norm_status(f.get("status")), f.get("confidence", "?"), (f.get("notes") or "")[:160]))
+        for e in (f.get("evidence") or [])[:3]:
+            if isinstance(e, dict):
+                lines.append("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
+        if f.get("searched"):
+            lines.append("    searched: %s" % ", ".join(str(s) for s in f.get("searched")[:15]))
+    if v:
+        lines.append("  verifier: %s (%s, agree=%s) %s" % (norm_status(v.get("verified_status") or v.get("status")), v.get("confidence", "?"), v.get("agree"), (v.get("reason") or "")[:160]))
+        for e in (v.get("evidence") or [])[:3]:
+            if isinstance(e, dict):
+                lines.append("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
+    lines.append("  current final: %s" % m.final_status(rid))
+    lines.append("")
+    return lines
+
+
+def next_after_waves(c, m):
+    """Lines describing what happens once wave A/B are complete: the adjudication
+    queue itself (not just a pointer to `audit.py queue`), or the next concrete
+    step once it is empty (write plan.jsonl, or go straight to `report`)."""
+    q = m.queue_ids()
+    undecided = [(rid, why) for rid, why in q if rid not in m.adj]
+    if undecided:
+        lines = ["Waves complete — ADJUDICATION QUEUE (%d):" % len(undecided),
+                  "  audit.py adjudicate --set REQ-xxx STATUS --note \"why\"   |   audit.py adjudicate --accept REQ-xxx [REQ-yyy ...]   |   --accept-queue"]
+        for rid, why in undecided:
+            lines.extend(queue_item_lines(m, rid, why))
+        lines.append("NEXT: read the cited lines above, decide, `audit.py adjudicate ...` for each; once the queue is empty, `audit.py status` again.")
+        return lines
+    disc = [rid for rid in m.items if m.final_status(rid) in DISCREPANT]
+    plan_rows, _ = read_jsonl(c.out / "plan.jsonl")
+    planned = {i for r in plan_rows for i in plan_ids(r) if i}
+    unplanned = [rid for rid in disc if rid not in planned]
+    if unplanned:
+        lines = ["Adjudication complete. %d discrepancies need a remediation entry in %s (schema: references/schemas.md):" % (len(unplanned), c.out / "plan.jsonl")]
+        for rid in unplanned:
+            f = m.finding.get(rid) or {}
+            ev = "; ".join("%s:%s" % (e.get("path"), e.get("lines")) for e in (f.get("evidence") or [])[:2] if isinstance(e, dict))
+            lines.append("  %s %s [%s/%s] %s%s" % (STATUS_ICON[m.final_status(rid)], rid, m.items[rid].get("strength"), m.items[rid].get("stakes", "normal"),
+                                                  (m.items[rid].get("text") or "")[:100], (" — " + ev) if ev else ""))
+        lines.append("NEXT: write plan.jsonl (P0 = any CONFLICT or unmet MUST on a core/high-stakes flow; P1 = other MUST gaps + user-visible SHOULD gaps; P2 = rest), then `audit.py report`.")
+        return lines
+    return ["NEXT: `audit.py report` (runs the check and prints its verdict)."]
+
 
 def cmd_queue(a):
     c = Ctx(a.cwd)
@@ -1354,27 +1570,7 @@ def cmd_queue(a):
     print("  audit.py adjudicate --set REQ-xxx STATUS --note \"why\"   |   audit.py adjudicate --accept REQ-xxx [REQ-yyy ...]")
     print("Your judgment is authoritative; keep MISSING only when both passes found nothing and you believe the searches were adequate.\n")
     for rid, why in q:
-        r = m.items[rid]
-        f = m.finding.get(rid) or {}
-        v = m.verdict.get(rid) or {}
-        print("%s [%s%s] — %s" % (rid, r.get("strength"), "/high-stakes" if r.get("stakes") == "high" else "", why))
-        print("  requirement: %s" % r.get("text"))
-        if r.get("search_hints"):
-            print("  hints: %s" % ", ".join(str(h) for h in r.get("search_hints")))
-        if f:
-            print("  investigator: %s (%s) %s" % (norm_status(f.get("status")), f.get("confidence", "?"), (f.get("notes") or "")[:160]))
-            for e in (f.get("evidence") or [])[:3]:
-                if isinstance(e, dict):
-                    print("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
-            if f.get("searched"):
-                print("    searched: %s" % ", ".join(str(s) for s in f.get("searched")[:15]))
-        if v:
-            print("  verifier: %s (%s, agree=%s) %s" % (norm_status(v.get("verified_status") or v.get("status")), v.get("confidence", "?"), v.get("agree"), (v.get("reason") or "")[:160]))
-            for e in (v.get("evidence") or [])[:3]:
-                if isinstance(e, dict):
-                    print("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
-        print("  current final: %s" % m.final_status(rid))
-        print()
+        print("\n".join(queue_item_lines(m, rid, why)))
 
 
 def cmd_adjudicate(a):
@@ -1392,19 +1588,31 @@ def cmd_adjudicate(a):
     for rid in (a.accept or []):
         if rid not in m.items:
             die("unknown id %s" % rid)
-        entries.append({"id": rid, "final_status": m.final_status(rid), "note": a.note or "", "by": "lead", "at": ts_iso()})
+        fs = m.final_status(rid)
+        if fs == "UNSEARCHED":
+            die("%s: cannot accept UNSEARCHED (no finding yet) — investigate it first, or use --set %s STATUS" % (rid, rid))
+        entries.append({"id": rid, "final_status": fs, "note": a.note or "", "by": "lead", "at": ts_iso()})
+    skipped_unsearched = []
     if a.accept_queue:
         for rid, why in m.queue_ids():
-            if rid not in m.adj:
-                entries.append({"id": rid, "final_status": m.final_status(rid), "note": a.note or "", "by": "lead", "at": ts_iso()})
-    if not entries:
+            if rid in m.adj:
+                continue
+            fs = m.final_status(rid)
+            if fs == "UNSEARCHED":
+                skipped_unsearched.append(rid)
+                continue
+            entries.append({"id": rid, "final_status": fs, "note": a.note or "", "by": "lead", "at": ts_iso()})
+    if not entries and not skipped_unsearched:
         die("nothing to record. Use --set ID STATUS [--note ...], --accept ID..., or --accept-queue")
-    with open(str(c.out / "adjudications.jsonl"), "a", encoding="utf-8") as f:
-        for e in entries:
-            f.write(json.dumps(e, ensure_ascii=False) + "\n")
-    print("recorded %d adjudication(s): %s" % (len(entries), ", ".join("%s=%s" % (e["id"], e["final_status"]) for e in entries)))
-    left = [rid for rid, _ in Merged(c).queue_ids() if rid not in Merged(c).adj]
-    print("queue remaining: %d. NEXT: %s" % (len(left), "`audit.py queue`" if left else "`audit.py status`"))
+    if entries:
+        with open(str(c.out / "adjudications.jsonl"), "a", encoding="utf-8") as f:
+            for e in entries:
+                f.write(json.dumps(e, ensure_ascii=False) + "\n")
+        print("recorded %d adjudication(s): %s" % (len(entries), ", ".join("%s=%s" % (e["id"], e["final_status"]) for e in entries)))
+    if skipped_unsearched:
+        print("skipped (UNSEARCHED, needs investigation before it can be accepted): %s" % ", ".join(skipped_unsearched))
+    m2 = Merged(c)  # rebuild ONCE to reflect the entries just written; never per queued id
+    print("\n".join(next_after_waves(c, m2)))
 
 
 # --------------------------------------------------------------------------- report
@@ -1511,7 +1719,7 @@ def cmd_report(a):
                 continue
             L.append("### %s\n" % pr)
             for i, p in enumerate(group, 1):
-                ids = p.get("ids") or ([p.get("id")] if p.get("id") else [])
+                ids = plan_ids(p)
                 L.append("%d. **%s** (%s) — %s %s" % (i, p.get("title", ", ".join(ids)), ", ".join(ids), H["effort"], p.get("effort", "?")))
                 for key, label in (("current", H["current"]), ("target", H["target"]), ("fix", H["fix"]), ("depends", H["depends"]), ("risk", H["risk"])):
                     if p.get(key):
@@ -1537,7 +1745,12 @@ def cmd_report(a):
         w.writerows(csv_rows)
     print("report: %s  (+ traceability.csv)" % report)
     print("HEADLINE: total %d | %s | alignment %d/%d" % (total, " | ".join("%s %d" % (H["status"][s], cnt[s]) for s in STATUSES if cnt[s]), cnt["MATCHED"], total))
-    print("NEXT: `audit.py check` then `audit.py finish`.")
+    probs, warns = run_check(c, m)
+    print_check_verdict(probs, warns)
+    if probs:
+        print("NEXT: fix the problems (adjudicate / verify / plan), then `audit.py report` again.")
+    else:
+        print("NEXT: `audit.py finish`")
 
 
 # --------------------------------------------------------------------------- check
@@ -1562,7 +1775,7 @@ def check_evidence(repo, ev):
     if not full.exists():
         return "cited file does not exist: %s" % ev["path"]
     lines = str(ev.get("lines") or "")
-    mm = re.match(r"^\s*(\d+)\s*(?:-\s*(\d+))?\s*$", lines)
+    mm = re.match(r"^\s*[Ll]?(\d+)\s*(?:[-–]\s*[Ll]?(\d+))?\s*$", lines)
     if not mm:
         return "evidence lines missing/unparseable for %s (%r)" % (ev["path"], lines)
     n = line_count(full)
@@ -1574,9 +1787,8 @@ def check_evidence(repo, ev):
     return None
 
 
-def cmd_check(a):
-    c = Ctx(a.cwd)
-    m = Merged(c)
+def run_check(c, m):
+    """The mechanical quality-gate logic, shared by `check` and inline by `report`."""
     probs, warns = [], []
     disc_ids = []
     for rid, r in m.items.items():
@@ -1593,14 +1805,17 @@ def cmd_check(a):
         if fs == "MISSING":
             if rid not in m.verdict and rid not in m.adj:
                 probs.append("%s: MISSING after one pass only — needs Wave B verification or an adjudication" % rid)
-            searched = [str(s).lower() for s in list(f.get("searched") or []) + list(v.get("searched") or [])]
-            if not searched:
-                probs.append("%s: MISSING without any `searched` terms" % rid)
-            else:
-                for h in (r.get("search_hints") or []):
-                    hl = str(h).lower()
-                    if not any(hl in s or s in hl for s in searched):
-                        warns.append("%s: search hint %r never appears in searched terms" % (rid, h))
+            # an adjudicated id is the lead's final call; the mechanical search-coverage
+            # rule below is a HEURISTIC to catch it BEFORE adjudication, not a re-litigation.
+            if rid not in m.adj:
+                searched = [str(s).lower() for s in list(f.get("searched") or []) + list(v.get("searched") or [])]
+                if not searched:
+                    probs.append("%s: MISSING without any `searched` terms" % rid)
+                else:
+                    for h in (r.get("search_hints") or []):
+                        hl = str(h).lower()
+                        if not any(hl in s or s in hl for s in searched):
+                            warns.append("%s: search hint %r never appears in searched terms" % (rid, h))
         if m.needs_verification(rid) and rid not in m.verdict and rid not in m.adj:
             if fs != "MATCHED":
                 probs.append("%s: non-MATCHED item was never verified or adjudicated" % rid)
@@ -1621,7 +1836,7 @@ def cmd_check(a):
     probs.extend("plan.jsonl: " + e for e in perr)
     planned = {}
     for p in plan_rows:
-        for i in (p.get("ids") or ([p.get("id")] if p.get("id") else [])):
+        for i in plan_ids(p):
             planned[i] = p
         if str(p.get("priority", "")).upper() not in ("P0", "P1", "P2"):
             probs.append("plan entry %s: priority must be P0/P1/P2" % (p.get("ids") or p.get("id")))
@@ -1642,11 +1857,22 @@ def cmd_check(a):
     rep = c.out / "requirements-code-audit.md"
     if not rep.exists():
         probs.append("report not built yet (`audit.py report`)")
+    return probs, warns
+
+
+def print_check_verdict(probs, warns):
     print("CHECK: %d problem(s), %d warning(s)" % (len(probs), len(warns)))
     for p in probs:
         print("  PROBLEM: " + p)
     for w in warns[:40]:
         print("  warn: " + w)
+
+
+def cmd_check(a):
+    c = Ctx(a.cwd)
+    m = Merged(c)
+    probs, warns = run_check(c, m)
+    print_check_verdict(probs, warns)
     if probs:
         print("Fix the problems (adjudicate / verify / plan), rebuild with `audit.py report`, re-run `audit.py check`.")
         sys.exit(1)

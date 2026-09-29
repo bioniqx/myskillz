@@ -16,11 +16,25 @@ fi
 STATE_DIR="${SESSION_DIR}/state"
 PID_FILE="${STATE_DIR}/server.pid"
 SERVER_ID_FILE="${STATE_DIR}/server-instance-id"
+STOPPED_FILE="${STATE_DIR}/server-stopped"
 
 mark_stopped() {
   local reason="$1"
   rm -f "${STATE_DIR}/server-info"
-  printf '{"reason":"%s","timestamp":%s}\n' "$reason" "$(date +%s)" > "${STATE_DIR}/server-stopped"
+  printf '{"reason":"%s","timestamp":%s}\n' "$reason" "$(date +%s)" > "$STOPPED_FILE"
+}
+
+# The recorded reason, if node already wrote one before exiting on its own
+# (e.g. idle-timeout, owner process exited). Empty if there is none.
+read_stopped_reason() {
+  [[ -f "$STOPPED_FILE" ]] || return 1
+  sed -n 's/.*"reason":"\([^"]*\)".*/\1/p' "$STOPPED_FILE" | head -1
+}
+
+cleanup_tmp_dir() {
+  if [[ "$SESSION_DIR" == /tmp/* ]]; then
+    rm -rf "$SESSION_DIR"
+  fi
 }
 
 read_expected_server_id() {
@@ -60,22 +74,50 @@ command_has_server_id() {
   esac
 }
 
-# Confirm a PID has this session's per-start instance id, not just a familiar
-# process name. Ambiguous or legacy metadata fails closed as stale_pid.
-is_brainstorm_server() {
-  kill -0 "$1" 2>/dev/null || return 1
+# Classifies a pid against this session's recorded instance id.
+# Returns (via $?):
+#   0 - alive and verified as this session's server
+#   1 - alive but NOT verified as ours (refuse to signal; treat as stale)
+#   2 - not alive (process already exited on its own)
+classify_pid() {
+  local pid="$1"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 2
+  fi
   local expected_id
   expected_id="$(read_expected_server_id)" || return 1
-  command_has_server_id "$1" "$expected_id" || return 1
+  command_has_server_id "$pid" "$expected_id" || return 1
   return 0
 }
 
 if [[ -f "$PID_FILE" ]]; then
   pid=$(cat "$PID_FILE")
 
-  # Refuse to signal a PID we can't prove is our server. A stale pid file may
-  # point at an unrelated process after a reboot/PID wraparound.
-  if ! is_brainstorm_server "$pid"; then
+  classify_pid "$pid"
+  code=$?
+
+  if [[ $code -eq 2 ]]; then
+    # The process already exited on its own. It likely wrote its own
+    # server-stopped with the real reason (idle timeout, owner exited, a
+    # crash) - never overwrite that with a generic stale_pid.
+    rm -f "$PID_FILE" "$SERVER_ID_FILE"
+    status="already_exited"
+    reason="$(read_stopped_reason)"
+    if [[ -n "$reason" ]]; then
+      status="$reason"
+    else
+      mark_stopped "$status"
+    fi
+    rm -f "${STATE_DIR}/server.log"
+    cleanup_tmp_dir
+    printf '{"status": "%s"}\n' "$status"
+    exit 0
+  fi
+
+  if [[ $code -eq 1 ]]; then
+    # Alive, but we cannot prove it is our server (e.g. a stale pid file
+    # pointing at a reused pid after a reboot/wraparound). Refuse to signal
+    # an unrelated process.
     rm -f "$PID_FILE" "$SERVER_ID_FILE"
     mark_stopped "stale_pid"
     echo '{"status": "stale_pid"}'
@@ -109,10 +151,7 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE" "$SERVER_ID_FILE" "${STATE_DIR}/server.log"
   mark_stopped "stop-server.sh"
 
-  # Only delete ephemeral /tmp directories
-  if [[ "$SESSION_DIR" == /tmp/* ]]; then
-    rm -rf "$SESSION_DIR"
-  fi
+  cleanup_tmp_dir
 
   echo '{"status": "stopped"}'
 else

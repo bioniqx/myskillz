@@ -32,7 +32,11 @@ TOTAL=$(printf '%s' "$FILES" | grep -c .)
 [ "$TOTAL" -eq 0 ] && { echo "no test files match '$PAT'"; exit 0; }
 [ "$J" -gt "$TOTAL" ] && J=$TOTAL
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/polluter.XXXXXX")
-cleanup() { for w in "$WORK"/w*; do [ -d "$w" ] && git worktree remove --force "$w" >/dev/null 2>&1; done
+cleanup() {   # kill any still-running probes first, then worktrees
+  if [ -f "$WORK/pids" ]; then
+    while IFS= read -r p; do [ -n "$p" ] && sd_kill_tree "$p"; done <"$WORK/pids"
+  fi
+  for w in "$WORK"/w*; do [ -d "$w" ] && git worktree remove --force "$w" >/dev/null 2>&1; done
   [ -n "$SD_ROOT" ] && git worktree prune >/dev/null 2>&1; rm -rf "$WORK"; }
 trap cleanup EXIT; trap 'exit 130' INT TERM
 echo "find-polluter: '$POLL' across $TOTAL test files, $J worker(s)" >&2
@@ -78,8 +82,10 @@ run_bucket() {
     fi
   done <"$WORK/bucket.$k"
 }
-k=1; pids=""; while [ $k -le $J ]; do run_bucket $k & pids="$pids $!"; k=$((k+1)); done
+k=1; pids=""; : >"$WORK/pids"
+while [ $k -le $J ]; do run_bucket $k & pids="$pids $!"; echo "$!" >>"$WORK/pids"; k=$((k+1)); done
 wait $pids
+: >"$WORK/pids"
 tested=$(cat "$WORK"/tested.* 2>/dev/null | grep -c .); nz=$(cat "$WORK"/nonzero.* 2>/dev/null | grep -c .)
 echo "test runs: $tested executed, $nz exited non-zero" >&2
 if [ "$nz" -gt 0 ] && [ "$nz" -eq "$tested" ]; then

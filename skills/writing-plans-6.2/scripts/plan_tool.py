@@ -12,7 +12,7 @@
   setup     [--scope user|project] [--apply]     raise subagent cap to 64, pre-approve tools, install writer agent
 Common: --allow WORD (repeatable) exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
-import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, time
+import argparse, ast, concurrent.futures, hashlib, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(HERE)
@@ -23,21 +23,25 @@ ID_RE = r"T\d{2,3}"
 CONTRACT_HEAD = re.compile(r"^####\s+(%s)\s*[:·—-]\s*(.+?)\s*$" % ID_RE)
 FIELD = re.compile(r"^-\s+(Depends|Parallel|Files|Produces|Consumes|Read|Spec|Tier):\s*(.*)$")
 TASK_HEAD = re.compile(r"^###\s+(%s)\s*:\s*(.+?)\s*$" % ID_RE)
+TASK_HEADING_ANYWHERE = re.compile(r"^\s*###\s*%s\s*:" % ID_RE)
 TICK = re.compile(r"`([^`\n]+)`")
 TASKS_MARK = "<!-- TASKS -->"
 WAVES_OPEN, WAVES_CLOSE = "<!-- WAVES -->", "<!-- /WAVES -->"
 TIER_MODEL = {"light": "haiku", "std": "sonnet", "deep": "opus"}
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 
-PLACEHOLDERS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b", r"implement(ed)? later",
+PLACEHOLDERS_CS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b"]
+PLACEHOLDERS = [r"implement(ed)? later",
     r"fill in (the )?details", r"add appropriate (error handling|validation)",
     r"handle (the )?edge cases", r"similar to (task\s*|T)\d+", r"same as (task\s*|T)\d+",
     r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
 PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
     r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
     r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b", r"\binvoke (the |a )?skill\b"]
-PH_RE = [re.compile(p, re.I) for p in PLACEHOLDERS]
+PH_RE = [re.compile(p) for p in PLACEHOLDERS_CS] + [re.compile(p, re.I) for p in PLACEHOLDERS]
 PO_RE = [re.compile(p, re.I) for p in PORTABILITY]
+INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+URL_RE = re.compile(r"https?://\S+")
 
 PROTOCOL = """## Execution Protocol (for any AI agent or human engineer)
 
@@ -209,10 +213,30 @@ def parse_contracts(text):
     return cs, errs
 
 
-def scan(text, allow, label, skip_contracts=False):
-    errs, inside, fence = [], False, False
+def fence_mask(lines):
+    """True for each line lexically inside (or opening/closing) a ``` / ~~~ fence,
+    length-threshold aware like code_blocks(); an unterminated fence marks every
+    following line as inside, so it is never scanned or heading-checked twice."""
+    mask, open_n = [], 0
+    for l in lines:
+        m = re.match(r"^\s*(`{3,}|~{3,})(.*)$", l)
+        if open_n:
+            mask.append(True)
+            if m and len(m.group(1)) >= open_n and not m.group(2).strip():
+                open_n = 0
+            continue
+        mask.append(bool(m))
+        if m:
+            open_n = len(m.group(1))
+    return mask
+
+
+def scan(text, allow, label, skip_contracts=False, fenced_placeholders=False):
+    errs, inside = [], False
     allow = {a.lower() for a in allow}
-    for n, l in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+    fmask = fence_mask(lines)
+    for n, l in enumerate(lines, 1):
         if skip_contracts:
             if re.match(r"^##\s+Contracts\b", l):
                 inside = True
@@ -220,9 +244,16 @@ def scan(text, allow, label, skip_contracts=False):
                 inside = False
         if inside:
             continue
-        for kind, pats in (("placeholder", PH_RE), ("portability", PO_RE)):
+        if fmask[n - 1]:
+            # fenced code: placeholders still count (opt-in), portability never does
+            if not fenced_placeholders:
+                continue
+            checks, clean = (("placeholder", PH_RE),), l
+        else:
+            checks, clean = (("placeholder", PH_RE), ("portability", PO_RE)), URL_RE.sub(" ", INLINE_CODE_RE.sub(" ", l))
+        for kind, pats in checks:
             for p in pats:
-                for m in p.finditer(l):
+                for m in p.finditer(clean):
                     if m.group(0).lower() not in allow:
                         errs.append("%s:%d %s %r: %s" % (label, n, kind, m.group(0), l.strip()[:100]))
     return errs
@@ -343,7 +374,8 @@ def spec_coverage(cs, spec_path):
         for a, b in c["spec"]:
             if a < 1 or b > len(lines) or a > b:
                 out.append("%s: Spec range L%d-%d outside spec (1-%d)" % (c["id"], a, b, len(lines)))
-    heads = [(i + 1, l.strip()) for i, l in enumerate(lines) if re.match(r"^#{1,6}\s", l)]
+    fmask = fence_mask(lines)
+    heads = [(i + 1, l.strip()) for i, l in enumerate(lines) if not fmask[i] and re.match(r"^#{1,6}\s", l)]
     for k, (ln, h) in enumerate(heads):
         end = (heads[k + 1][0] - 1) if k + 1 < len(heads) else len(lines)
         body = [x for x in range(ln + 1, end + 1) if lines[x - 1].strip()]
@@ -409,6 +441,9 @@ def render_task(c, body):
     return "\n".join(rows) + "\n\n" + body.strip() + "\n"
 
 
+BARE_FILENAMES = {"Makefile", "Dockerfile", "LICENSE"}
+
+
 def files_block(body):
     lines = body.splitlines()
     fi = next((i for i, l in enumerate(lines) if l.strip().startswith("**Files:**")), None)
@@ -422,7 +457,11 @@ def files_block(body):
             continue
         if not l.lstrip().startswith("- ") or l.lstrip().startswith("- ["):
             break
-        paths += [norm_path(x) for x in TICK.findall(l) if "/" in x or "." in x]  # skip `Symbol` mentions
+        toks = TICK.findall(l)
+        if toks:
+            first = toks[0]  # the path; a later `span` on the same line is just an annotation
+            if "/" in first or "." in first or first in BARE_FILENAMES:
+                paths.append(norm_path(first))
     return paths
 
 
@@ -473,7 +512,12 @@ def syntax_errors(blocks, label):
 
 def lint_body(c, body, allow, label, repo=None, earlier_files=()):
     errs, warns = [], []
-    if re.search(r"^#{1,3}\s", body, re.M):
+    body_lines = body.splitlines()
+    body_fmask = fence_mask(body_lines)
+    # A real '### Tnn:' task heading is still an error inside a fence (e.g. a writer
+    # pasting a fake next-task marker into an example); other headings stay fence-exempt.
+    if any((not body_fmask[i] and re.match(r"^#{1,3}\s", l)) or TASK_HEADING_ANYWHERE.match(l)
+           for i, l in enumerate(body_lines)):
         errs.append("%s: '#', '##' or '###' heading inside a task body breaks plan structure (use '####' or bold)" % label)
     paths = files_block(body)
     if paths is None:
@@ -534,13 +578,14 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
             m = re.match(r"^\s*git add\s+(.+)$", l)
             if not m:
                 continue
+            add_args = re.split(r"\s*(?:&&|;|\|)\s*", m.group(1), 1)[0]
             try:
-                toks = [t for t in shlex.split(m.group(1)) if not t.startswith("-")]
+                toks = [t for t in shlex.split(add_args) if not t.startswith("-")]
             except ValueError:
-                toks = m.group(1).split()
+                toks = add_args.split()
             bad = [t for t in toks if t in (".", "*", ":/") or "*" in t]
-            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", m.group(1)):
-                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, m.group(1).strip()))
+            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", add_args):
+                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, add_args.strip()))
                 continue
             for t in toks:
                 t = norm_path(t)
@@ -551,7 +596,7 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
                 else:
                     errs.append("%s: `git add` path `%s` is not in the contract Files" % (label, t))
     errs += syntax_errors(blocks, label)
-    errs += scan(body, allow, label)
+    errs += scan(body, allow, label, fenced_placeholders=True)
     return errs, warns
 
 
@@ -694,6 +739,12 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
         if spec_path and c["spec"]:
             ex = [numbered(spec_path, a, b) or "" for a, b in merge_ranges(c["spec"])]
             parts.append("## Spec excerpt for %s\n\n````text\n%s\n````" % (c["id"], "\n  ...\n".join(ex)))
+    paths = [f for c in cs_group for f in c["files"]]
+    inl, refs = inline_files(paths, repo)
+    if inl:
+        parts.append("## Existing files (inlined, with line numbers - the target files as written by the writer)\n\n" + "\n\n".join(inl))
+    if refs:
+        parts.append("## Read before writing (ONE message of parallel Reads, repo root `%s`)\n\n" % repo + "\n".join("- `%s`" % r for r in refs))
     return "\n\n".join(parts) + "\n"
 
 
@@ -709,9 +760,18 @@ def dispatch_lines(groups, work, kind):
 
 def agent_installed(repo):
     for base in (os.path.join(repo, ".claude", "agents"), os.path.join(os.path.expanduser("~"), ".claude", "agents")):
-        if os.path.isfile(os.path.join(base, "plan-task-writer.md")):
-            return base
+        p = os.path.join(base, "plan-task-writer.md")
+        if os.path.isfile(p):
+            return p
     return None
+
+
+def agent_is_stale(agent_path):
+    """True if the installed writer agent still has the __PLAN_TOOL__ placeholder (setup never ran/applied)."""
+    try:
+        return "__PLAN_TOOL__" in load(agent_path)
+    except OSError:
+        return False
 
 
 # ------------------------------------------------------------------ commands
@@ -730,6 +790,16 @@ def cmd_contracts(a):
     cap, from_env = cap_from_env()
     k = max(1, min(MAX_AGENTS, a.agents or cap))
     work = default_work(plan_path)
+    _, old_info = load_work(plan_path)
+    old_hashes = old_info.get("contract_hash", {}) if old_info else {}
+    new_hashes = {c["id"]: hashlib.sha256(c["text"].encode("utf-8")).hexdigest() for c in cs}
+    tasks_dir = os.path.join(work, "tasks")
+    for tid, h in new_hashes.items():
+        if tid in old_hashes and old_hashes[tid] != h:
+            for suffix in ("", ".ok", ".rev", ".warn", ".fail"):
+                p = os.path.join(tasks_dir, tid + ".md" + suffix)
+                if os.path.exists(p):
+                    os.remove(p)
     shutil.rmtree(os.path.join(work, "briefs"), ignore_errors=True)
     os.makedirs(os.path.join(work, "tasks"), exist_ok=True)
     cmap = {c["id"]: c for c in cs}
@@ -739,7 +809,8 @@ def cmd_contracts(a):
         save(os.path.join(work, "briefs", gid + ".md"), writer_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
     save(os.path.join(work, "work.json"), json.dumps({
         "plan": plan_path, "spec": spec, "repo": repo, "allow": a.allow, "agents": k,
-        "tasks": [c["id"] for c in cs], "groups": {gid: [c["id"] for c in g] for gid, g in groups}, "review": []}, indent=1))
+        "tasks": [c["id"] for c in cs], "groups": {gid: [c["id"] for c in g] for gid, g in groups}, "review": [],
+        "contract_hash": new_hashes}, indent=1))
     _, n, width = waves_block(cs)
     agent = "plan-task-writer" if agent_installed(repo) else "general-purpose"
     head = ["WORK %s" % work,
@@ -772,14 +843,28 @@ def lint_file(plan_path, task_path, allow_extra=()):
     return e, w, c
 
 
+def apply_marks(task_path, mark, errs, warns):
+    """Shared by lint-task and hook-lint: .fail on error, .warn on a clean-but-warned
+    lint, and a stale .warn/.fail is removed as soon as it no longer applies."""
+    fail_path, warn_path = task_path + ".fail", task_path + ".warn"
+    if errs:
+        with open(fail_path, "w") as f:
+            f.write("\n".join(errs))
+        return
+    if os.path.exists(fail_path):
+        os.remove(fail_path)
+    touch(task_path + "." + mark)
+    if warns:
+        with open(warn_path, "w") as f:
+            f.write("\n".join(warns))
+    elif os.path.exists(warn_path):
+        os.remove(warn_path)
+
+
 def cmd_lint_task(a):
     e, w, c = lint_file(os.path.abspath(a.plan), a.task, a.allow)
     rc = report(e, w, "OK %s" % (c["id"] if c else ""))
-    if rc == 0:
-        touch(a.task + "." + a.mark)
-        if w:
-            with open(a.task + ".warn", "w") as f:
-                f.write("\n".join(w))
+    apply_marks(a.task, a.mark, e, w)
     return rc
 
 
@@ -793,8 +878,8 @@ def cmd_hook_lint(a):
         work = os.path.dirname(os.path.dirname(path))
         info = json.loads(load(os.path.join(work, "work.json")))
         e, w, c = lint_file(info["plan"], path)
+        apply_marks(path, "ok", e, w)
         if not e:
-            touch(path + ".ok")
             msg = "plan-lint: OK %s%s" % (c["id"], "".join("\nWARN " + x for x in w))
         else:
             msg = "plan-lint: FAIL %d error(s) - fix with Edit (re-linted automatically):\n%s" % (len(e), "\n".join("ERR  " + x for x in e[:25]))
@@ -813,6 +898,22 @@ def done_state(path, mark):
     return "not-reviewed" if mark == "rev" else "unlinted-or-failing"
 
 
+def task_mtime(task_path):
+    """Latest mtime of the body and its .fail mark; 0.0 when neither exists."""
+    m = 0.0
+    for p in (task_path, task_path + ".fail"):
+        if os.path.exists(p):
+            m = max(m, os.stat(p).st_mtime)
+    return m
+
+
+def task_stuck(task_path, quiet, min_age=45):
+    """A pending task is 'stuck' once its body and .fail mark both exist and have not
+    changed for min_age seconds of wait time (quiet = seconds since wait observed the
+    last change; starts at wait start) - its agent is gone, not just slow."""
+    return os.path.exists(task_path) and os.path.exists(task_path + ".fail") and quiet >= min_age
+
+
 def cmd_wait(a):
     plan_path = os.path.abspath(a.plan)
     work, info = load_work(plan_path)
@@ -820,8 +921,15 @@ def cmd_wait(a):
         return report(["no work.json - run contracts first"], [], "")
     ids = info.get("review", []) if a.review else info.get("tasks", [])
     mark = "rev" if a.review else "ok"
+    try:
+        min_age = int(os.environ.get("PLAN_TOOL_WAIT_MIN_AGE", "45"))
+    except ValueError:
+        min_age = 45
     t0 = last = time.time()
     seen = -1
+    changed = {}  # task -> (last seen mtime, time the change was observed)
+    for t in ids:
+        changed[t] = (task_mtime(os.path.join(work, "tasks", t + ".md")), t0)
     while True:
         st = {t: done_state(os.path.join(work, "tasks", t + ".md"), mark) for t in ids}
         ndone = sum(1 for v in st.values() if v == "done")
@@ -830,6 +938,19 @@ def cmd_wait(a):
         if ndone == len(ids):
             print("DONE %d/%d %s in %.0fs" % (ndone, len(ids), "reviews" if a.review else "tasks", time.time() - t0))
             return 0
+        now = time.time()
+        elapsed = now - t0
+        pend_ids = [t for t, v in st.items() if v != "done"]
+        for t in pend_ids:
+            m = task_mtime(os.path.join(work, "tasks", t + ".md"))
+            if m != changed[t][0]:
+                changed[t] = (m, now)
+        if pend_ids and all(task_stuck(os.path.join(work, "tasks", t + ".md"), now - changed[t][1], min_age)
+                             for t in pend_ids):
+            print("PENDING %d/%d after %.0fs (all pending are failing and unchanged for >=%ds) -> %s"
+                  % (ndone, len(ids), elapsed, min_age, " ".join("%s:%s" % (t, st[t]) for t in pend_ids)))
+            print("If an agent for these IDs is still running, run wait again; otherwise re-dispatch only these IDs.")
+            return 1
         if time.time() - t0 > a.timeout or time.time() - last > a.idle:
             pend = ["%s:%s" % (t, v) for t, v in st.items() if v != "done"]
             print("PENDING %d/%d after %.0fs (%s) -> %s" % (ndone, len(ids), time.time() - t0,
@@ -933,14 +1054,18 @@ def full_check(plan_path, plan, cs, bodies, spec, allow):
     errs, warns = analyze(cs, spec, repo)
     if errs:
         return errs, warns
-    for c in cs:
+
+    def _lint_one(c):
         if c["id"] not in bodies:
-            errs.append("%s: task body missing" % c["id"])
-            continue
+            return ["%s: task body missing" % c["id"]], []
         earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
-        e, w = lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier)
-        errs += e
-        warns += w
+        return lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier)
+
+    # I/O-bound (each task's code blocks may spawn `node --check`/`bash -n`) -> threads help.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, max(1, len(cs)))) as ex:
+        for e, w in ex.map(_lint_one, cs):
+            errs += e
+            warns += w
     ids = {c["id"] for c in cs}
     errs += ["%s: task body has no contract" % t for t in sorted(set(bodies) - ids)]
     head = plan.split(TASKS_MARK, 1)[0]
@@ -1003,6 +1128,8 @@ def cmd_check(a):
 
 # ------------------------------------------------------------------ context (never fails)
 def sh(cmd, cwd=None, timeout=8):
+    if cmd and cmd[0] == "git" and "--no-optional-locks" not in cmd:
+        cmd = [cmd[0], "--no-optional-locks"] + list(cmd[1:])
     try:
         p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
         return p.stdout if p.returncode == 0 else ""
@@ -1023,11 +1150,15 @@ def cmd_context(a):
             cap, "" if env else " (default; CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS unset)", k,
             "" if k >= MAX_AGENTS else " | one-time boost to 64: %s setup --apply (then restart)" % qtool()))
         ag = agent_installed(repo)
-        out.append("writer agent: %s" % ("plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
-        args = a.rest or []
-        if "--thorough" in args:
+        if ag and agent_is_stale(ag):
+            out.append("writer agent: plan-task-writer at %s is STALE (still has __PLAN_TOOL__ placeholder) - re-run %s setup --apply" % (ag, qtool()))
+        else:
+            out.append("writer agent: %s" % ("plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
+        raw = " ".join(a.rest or [])
+        if "--thorough" in raw:
             out.append("mode: THOROUGH -> review every task (review --all)")
-        spec = next((x for x in args if not x.startswith("--") and os.path.isfile(x)), None)
+        rest_tokens = raw.replace("--thorough", " ").split()
+        spec = next((x for x in rest_tokens if not x.startswith("--") and os.path.isfile(x)), None)
         branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).strip()
         files = sh(["git", "ls-files"], repo).splitlines()
         if not files:
@@ -1049,7 +1180,8 @@ def cmd_context(a):
         if spec:
             sl = load(spec).splitlines()
             out.append("spec: %s (%d lines) - heading map (use for Spec: L ranges):" % (os.path.relpath(os.path.abspath(spec), repo), len(sl)))
-            heads = [(i + 1, l.strip()) for i, l in enumerate(sl) if re.match(r"^#{1,6}\s", l)]
+            sfmask = fence_mask(sl)
+            heads = [(i + 1, l.strip()) for i, l in enumerate(sl) if not sfmask[i] and re.match(r"^#{1,6}\s", l)]
             for j, (ln, h) in enumerate(heads[:80]):
                 end = heads[j + 1][0] - 1 if j + 1 < len(heads) else len(sl)
                 out.append("  L%d-%d %s" % (ln, end, h[:90]))
@@ -1095,8 +1227,8 @@ def cmd_context(a):
         out.append("top-level: " + ", ".join("%s(%d)" % (d, n) for d, n in sorted(dirs.items(), key=lambda x: -x[1])[:25]))
         skip = re.compile(r"(^|/)(node_modules|vendor|dist|build|\.venv|venv|__pycache__|target|\.next)/|\.(lock|min\.js|map|png|jpg|svg|ico|woff2?)$")
         shown = [f for f in files if not skip.search(f)]
-        out.append("files (%d of %d):" % (min(250, len(shown)), len(files)))
-        out.append("  " + "\n  ".join(shown[:250]))
+        out.append("files (%d of %d):" % (min(30, len(shown)), len(files)))
+        out.append("  " + "\n  ".join(shown[:30]))
     except Exception as ex:
         out.append("context partial: %s" % ex)
     print("\n".join(out))
@@ -1159,6 +1291,15 @@ def cmd_setup(a):
 
 # ------------------------------------------------------------------ main
 def main(argv=None):
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv and raw_argv[0] == "context":
+        # Bypass argparse's REMAINDER (mishandles a leading "--..." token after subparsers)
+        # so a single quoted $ARGUMENTS token, however it starts, always reaches cmd_context.
+        class _Ns(object):
+            pass
+        ns = _Ns()
+        ns.rest = raw_argv[1:]
+        return cmd_context(ns)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")
     sub.required = True

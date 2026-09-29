@@ -8,9 +8,9 @@ if [ ! -f "$root/.audit/ACTIVE" ]; then
 fi
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if command -v python3 >/dev/null 2>&1; then
-  exec python3 "$dir/audit_guard.py"
+  exec python3 -S "$dir/audit_guard.py"
 elif command -v python >/dev/null 2>&1; then
-  exec python "$dir/audit_guard.py"
+  exec python -S "$dir/audit_guard.py"
 fi
 # No Python: fail open (non-blocking) but say so once per call on stderr.
 echo "audit_guard: python not found; guard not enforced" >&2

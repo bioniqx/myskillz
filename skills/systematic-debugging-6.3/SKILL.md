@@ -75,7 +75,7 @@ Not deterministic → SWARM (`stress.sh`) before anything else. Fails only in CI
 
 | Problem | Command | Speed-up |
 |---|---|---|
-| Intermittent failure → rate + failing logs | `bash $S/stress.sh -n 200 -- <cmd>` (`-j` defaults to CPUs) | N runs in ≈ N/J wall time |
+| Intermittent failure → rate + failing logs | `bash $S/stress.sh -n 200 -- <cmd>` (`-j` defaults to min(64, CPUs)) | N runs in ≈ N/J wall time |
 | Regression, culprit unknown | `bash $S/bisect-parallel.sh -j 15 <good> <bad> -- <cmd>` | ⌈log₁₆ N⌉ rounds vs ⌈log₂ N⌉ |
 | A test leaves files/dirs behind | `bash $S/find-polluter.sh -j 16 <path> '<glob>'` | one isolated worktree per worker |
 | Several hypotheses / unknown location | subagents, 1 per hypothesis or area, in ONE message | independent contexts |

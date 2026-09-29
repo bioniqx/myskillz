@@ -1783,12 +1783,19 @@ def add_slice(st, spec):
     }
 
 
+def next_fix_id(st):
+    """Next free F<n> id; skips ids already taken (e.g. a fix added by hand with --id)."""
+    st["fix_counter"] += 1
+    while f"F{st['fix_counter']}" in st["slices"]:
+        st["fix_counter"] += 1
+    return f"F{st['fix_counter']}"
+
+
 def cmd_add_fix(a):
     root = find_root()
     st = load_state(root)
     if not a.id:
-        st["fix_counter"] += 1
-        a.id = f"F{st['fix_counter']}"
+        a.id = next_fix_id(st)
     add_slice(st, {"id": a.id, "title": a.title, "goal": a.goal or a.title, "deps": a.deps or [],
                    "files": a.files, "criteria": a.criteria, "risk": a.risk, "context": a.context or [],
                    "kind": getattr(a, "kind", "code"), "size": getattr(a, "size", "small"),
@@ -1849,8 +1856,7 @@ def add_fixes_from_text(st, text, source="", strict=False):
             continue
         sid = str(spec.get("id") or "")
         if not re.fullmatch(r"[A-Za-z0-9_-]+", sid) or sid in st["slices"]:
-            st["fix_counter"] += 1
-            spec["id"] = f"F{st['fix_counter']}"
+            spec["id"] = next_fix_id(st)
         if spec.get("risk") not in ("low", "high"):
             spec["risk"] = "low"
         spec["from_review"] = True   # a reviewer found this: it gets tests even in the spike profile

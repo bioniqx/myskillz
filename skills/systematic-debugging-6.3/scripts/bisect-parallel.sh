@@ -29,13 +29,16 @@ cd "$SD_ROOT" || exit 2
 GOOD=$(git rev-parse --verify -q "${POS[0]}^{commit}") || { echo "error: bad revision ${POS[0]}" >&2; exit 2; }
 BAD=$(git rev-parse --verify -q "${POS[1]}^{commit}")  || { echo "error: bad revision ${POS[1]}" >&2; exit 2; }
 git merge-base --is-ancestor "$GOOD" "$BAD" || echo "warn: <good> is not an ancestor of <bad>; using first-parent range anyway" >&2
-TO=$(sd_timeout_bin)
+TO=$(sd_timeout_bin); [ -n "$T" ] && [ -z "$TO" ] && echo "warn: no timeout/gtimeout found; -t ignored" >&2
 # L[0]=GOOD, L[1..N]=first-parent commits after GOOD up to BAD (L[N]=BAD)
 L=("$GOOD"); while IFS= read -r c; do L+=("$c"); done < <(git rev-list --reverse --first-parent "$GOOD..$BAD")
 N=$(( ${#L[@]} - 1 ))
 [ "$N" -lt 1 ] && { echo "error: no commits between good and bad" >&2; exit 2; }
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/pbisect.XXXXXX")
-cleanup() {   # worktrees always go (unless --keep); logs stay when KEEPLOGS=1
+cleanup() {   # kill any still-running probes first, then worktrees (unless --keep); logs stay when KEEPLOGS=1
+  if [ -f "$WORK/pids" ]; then
+    while IFS= read -r p; do [ -n "$p" ] && sd_kill_tree "$p"; done <"$WORK/pids"
+  fi
   if [ "$KEEP" != 1 ]; then
     for w in "$WORK"/w*; do [ -d "$w" ] && git worktree remove --force "$w" >/dev/null 2>&1; done
     git worktree prune >/dev/null 2>&1
@@ -44,11 +47,12 @@ cleanup() {   # worktrees always go (unless --keep); logs stay when KEEPLOGS=1
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
-status_of() { cat "$WORK/st.$1" 2>/dev/null; }   # good|bad|skip
+status_of() { local f="$WORK/st.$1" v=""; [ -f "$f" ] && read -r v <"$f"; printf '%s' "$v"; }   # good|bad|skip
 
 # test_batch idx...  — runs each index in its own worktree concurrently
 test_batch() {
   local k=0 idx w sha pids=""
+  : >"$WORK/pids"
   for idx in "$@"; do
     [ -n "$(status_of "$idx")" ] && continue
     k=$((k+1)); w="$WORK/w$k"; sha=${L[$idx]}
@@ -63,9 +67,10 @@ test_batch() {
       if [ $rc -eq 0 ]; then s=good; elif [ $rc -eq 125 ] || [ $rc -ge 128 ]; then s=skip; else s=bad; fi
       echo "$s" >"$WORK/st.$idx"; echo "$log" >"$WORK/lg.$idx"
     ) &
-    pids="$pids $!"
+    pids="$pids $!"; echo "$!" >>"$WORK/pids"
   done
   [ -n "$pids" ] && wait $pids
+  : >"$WORK/pids"
   return 0
 }
 

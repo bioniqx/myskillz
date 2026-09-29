@@ -45,3 +45,9 @@ Statistics in `stress.sh` cross-checked against SciPy (`fisher_exact`, Wilson in
 - Flaky-fix proof is statistical (Fisher exact / Wilson lower bound) instead of "it passed a few times".
 - Prod incidents: reversible mitigation allowed before root cause, never a guessed code fix.
 - Dev artifacts (pressure tests, creation log) moved out of the runtime path into `evals/`; Lace-specific example replaced by generic TS/Python helpers.
+
+## Fixes
+- `stress.sh`: INT/TERM now kill the `xargs -P` worker tree (TERM, then KILL after a grace period) before removing its temp dir — a killed run no longer orphans workers.
+- `bisect-parallel.sh` / `find-polluter.sh`: `cleanup()` kills any still-running probes before removing worktrees, so a SIGTERM mid-round no longer races worktree removal against a live process.
+- `bisect-parallel.sh`: `-t` without `timeout`/`gtimeout` on `PATH` now warns and ignores it, like `stress.sh`; `status_of()` reads the status file with the `read` builtin instead of forking `cat`.
+- Docs: `-j` defaults to `min(64, CPUs)` in `stress.sh` and `bisect-parallel.sh` (`bisect-parallel.sh`: that minus 1) and to `min(16, CPUs)` in `find-polluter.sh`, not plain CPU count.

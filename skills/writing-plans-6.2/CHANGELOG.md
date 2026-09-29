@@ -30,5 +30,16 @@
 Script: `contracts` 70 task < 0.25 s, `assemble` 70 task 0.3 s.
 
 ## Cài đặt
-1. Giải nén vào `~/.claude/skills/writing-plans/` (skill sync từ claude.ai sẽ không chạy lệnh `!`).
-2. Một lần: `python3 ~/.claude/skills/writing-plans/scripts/plan_tool.py setup` (xem trước) → `--apply` → khởi động lại Claude Code.
+1. Giải nén vào `~/.claude/skills/writing-plans-6.2/` (skill sync từ claude.ai sẽ không chạy lệnh `!`).
+2. Một lần: `python3 ~/.claude/skills/writing-plans-6.2/scripts/plan_tool.py setup` (xem trước) → `--apply` → khởi động lại Claude Code.
+
+## W8 — preload không bao giờ hủy skill, context bị giới hạn, hash hợp đồng, mark warn/fail, phát hiện agent cũ, assemble/wait nhanh hơn
+- Preload `!` giờ truyền `"$ARGUMENTS"` như MỘT token đã quote; `context` luôn thoát mã 0 kể cả với đối số rỗng, dấu ngoặc kép bên trong, đường dẫn không tồn tại, HEAD detached, repo chưa có commit, hoặc ngoài git repo — không còn nguy cơ hủy cả skill vì lỗi shell-split.
+- `context` dùng `git --no-optional-locks` cho mọi lệnh git (không đụng mtime của index) và giới hạn danh sách file hiển thị còn ≤30 (tổng đầu ra ≤~55 dòng) kể cả trên repo 300+ file.
+- `contracts` giờ băm (sha256) nội dung từng hợp đồng; nếu một hợp đồng đổi, script xóa đúng `TXX.md` + `TXX.md.ok` (và các mark khác) của task đó, giữ nguyên các task khác không đổi.
+- `lint-task` và `hook-lint` dùng chung một hàm đánh dấu: lint có warning ghi `.warn`, lint sạch xóa `.warn` cũ, lint lỗi ghi `.fail` (và `.fail` được xóa khi lint lại sạch).
+- `context` phát hiện agent `plan-task-writer` cài sẵn nhưng còn dính placeholder `__PLAN_TOOL__` (chưa chạy `setup --apply`) và luôn cảnh báo, kể cả khi cap subagent đã ở mức tối đa.
+- `wait` trả về `PENDING` sớm khi mọi task còn lại đều đang `.fail` và không đổi ≥45 giây, thay vì đợi hết `--idle`/`--timeout`.
+- `assemble` chạy `node --check` cho các code block song song giữa các task thay vì tuần tự.
+- Reviewer brief giờ inline sẵn nội dung file đích hiện có (giống writer brief), reviewer không cần đọc thêm.
+- SKILL.md: bỏ nhắc "ultracode", thêm lời khuyên `--allow` ngay ở Phase 1, hand-off trỏ về skill `dev-team` thay vì `superpowers:*` (không còn tồn tại), và mục "One-time speed setup" nêu rõ nó cũng xử lý agent cũ/placeholder.

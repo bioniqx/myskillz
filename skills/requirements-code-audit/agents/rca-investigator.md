@@ -4,7 +4,7 @@ description: Fast, read-only code-evidence investigator for the requirements-cod
 tools: Read, Grep, Glob, Write
 model: haiku
 effort: medium
-maxTurns: 40
+maxTurns: 80
 permissionMode: acceptEdits
 color: cyan
 ---

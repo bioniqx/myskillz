@@ -3,11 +3,15 @@
 # Usage: bash selftest.sh   (needs git >= 2.31, python3). Exit 0 = all checks passed.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# a Claude Code shell inherits settings the doctor checks read; start from a clean slate
+unset CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_SUBAGENT_MODEL_FORCE CLAUDE_PROJECT_DIR
+# physical (symlink-free) temp dir: macOS /var -> /private/var would break path-prefix matching
+mkt() { local d; d="$(mktemp -d)" && d="$(cd "$d" && pwd -P)" || { echo 'selftest: mktemp -d failed' >&2; kill "$$"; exit 1; }; printf '%s\n' "$d"; }
 # copy the skill to a path WITH SPACES to exercise quoting
-TMP="$(mktemp -d)/dev team"; mkdir -p "$TMP"; cp -r "$HERE/.." "$TMP/skill"
+TMP="$(mkt)/dev team"; mkdir -p "$TMP"; cp -r "$HERE/.." "$TMP/skill"
 S="$TMP/skill/scripts"; G="$S/guard.py"
 D() { python3 "$S/devteam.py" "$@"; }
-R="$(mktemp -d)/repo"; mkdir -p "$R"; cd "$R"
+R="$(mkt)/repo"; mkdir -p "$R"; cd "$R" || exit 1
 git init -q -b main; git config user.email t@t; git config user.name t; git config commit.gpgsign true
 mkdir -p src node_modules/pkg && echo "base" > src/a.js && echo x > node_modules/pkg/i.js
 printf 'node_modules/\n' > .gitignore
@@ -102,7 +106,7 @@ run_prog S3 w5 tests/combo.test.js src/combo.js
 ( cd "$R/.claude/worktrees/w5" && echo hack >> src/a.js && git -c commit.gpgsign=false commit -qam "outside" )
 OUT=$(D integrate S3 2>&1)
 check "S3 footprint violation rejected" '[[ "$OUT" == *"S3: REJECTED — files outside the footprint: src/a.js"* ]]'
-sed -i 's#"files":\["src/combo.js","tests/combo.test.js"\]#"files":["src/combo.js","src/a.js","tests/combo.test.js"]#' plan.md
+sed 's#"files":\["src/combo.js","tests/combo.test.js"\]#"files":["src/combo.js","src/a.js","tests/combo.test.js"]#' plan.md > plan.md.new && mv plan.md.new plan.md
 cp plan.md .claude/dev-team/plan.md
 OUT=$(D retry S3 2>&1)
 check "retry re-queued S3" '[[ "$OUT" == *"S3: re-queued"* ]]'
@@ -121,7 +125,7 @@ check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
 
 # ---------------------------------------------------------------- FAST MODE --
 echo "== fast mode: a second repo, --spike (level 4) + start + next"
-R2="$(mktemp -d)/repo2"; mkdir -p "$R2"; cd "$R2"
+R2="$(mkt)/repo2"; mkdir -p "$R2"; cd "$R2" || exit 1
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo base > src/a.js
 git add -A && git commit -qm init
@@ -177,7 +181,7 @@ check "endgame flags the untested slice for verification" '[[ "$OUT" == *"untest
 check "finish names exactly what the profile traded away" 'OUT2=$(D finish --force 2>&1); [[ "$OUT2" == *"TRADE-OFFS"* && "$OUT2" == *"never watched to fail"* && "$OUT2" == *"UNTESTED slices shipped with no tests at all: S1"* ]]' 
 
 echo "-- level 2 keeps tests but skips the RED verification run"
-R3="$(mktemp -d)/repo3"; mkdir -p "$R3"; cd "$R3"
+R3="$(mkt)/repo3"; mkdir -p "$R3"; cd "$R3" || exit 1
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src && echo b > src/a.js && git add -A && git commit -qm init
 cat > plan.md <<'EOF'
@@ -201,10 +205,10 @@ check "normal mode keeps incremental review batches" '! D ready | grep -q "REVIE
 
 # ------------------------------------------------- fast-mode hardening ------
 echo "== hardening: slot budget, frozen tests in a spike, fix slices, bare --fast"
-check "bare --fast means the turbo profile" 'R9="$(mktemp -d)/r9"; mkdir -p "$R9"; ( cd "$R9" && git init -q -b main && git config user.email t@t && git config user.name t && mkdir -p src && echo b > src/a.js && git add -A && git commit -qm i && printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"true\"},\"slices\":[{\"id\":\"S1\",\"title\":\"a\",\"deps\":[],\"files\":[\"src/b.js\"],\"risk\":\"low\",\"criteria\":[\"c\"],\"kind\":\"chore\",\"verify\":\"true\"}]}\n\140\140\140\n" > p.md && D init p.md --fast 2>&1 | grep -q "PROFILE turbo" )' 
+check "bare --fast means the turbo profile" 'R9="$(mkt)/r9"; mkdir -p "$R9"; ( cd "$R9" && git init -q -b main && git config user.email t@t && git config user.name t && mkdir -p src && echo b > src/a.js && git add -A && git commit -qm i && printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"true\"},\"slices\":[{\"id\":\"S1\",\"title\":\"a\",\"deps\":[],\"files\":[\"src/b.js\"],\"risk\":\"low\",\"criteria\":[\"c\"],\"kind\":\"chore\",\"verify\":\"true\"}]}\n\140\140\140\n" > p.md && D init p.md --fast 2>&1 | grep -q "PROFILE turbo" )' 
 
 echo "-- one next call must never launch more agents than the runtime allows"
-R8="$(mktemp -d)/r8"; mkdir -p "$R8"; cd "$R8"
+R8="$(mkt)/r8"; mkdir -p "$R8"; cd "$R8" || exit 1
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
 { printf '```json\n{"request":"r","commands":{"test":"true"},"review_batch":1,"slices":['
@@ -235,7 +239,7 @@ check "an open review batch cannot starve the programmers forever" '[ -n "$CAP_O
 unset CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS
 
 echo "-- a spike slice may skip tests, but may not weaken tests it wrote"
-R7="$(mktemp -d)/r7"; mkdir -p "$R7"; cd "$R7"
+R7="$(mkt)/r7"; mkdir -p "$R7"; cd "$R7" || exit 1
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
 printf '```json\n{"request":"r","commands":{"test":"true"},"slices":[{"id":"S1","title":"a","deps":[],"files":["src/b.js","tests/b.test.js"],"risk":"low","criteria":["c"]}]}\n```\n' > plan.md
@@ -261,7 +265,7 @@ check "add-fixes coerced the bogus risk to low" 'python3 -c "import json;s=json.
 check "a review fix slice is dispatched with tests (MODE: SLICE), not as a spike" '[[ "$(D dispatch F1 2>&1)" == *"DISPATCH F1 [CODE/SLICE]"* ]]'
 
 echo "-- the endgame waits for unresolved slices"
-R6="$(mktemp -d)/r6"; mkdir -p "$R6"; cd "$R6"
+R6="$(mkt)/r6"; mkdir -p "$R6"; cd "$R6" || exit 1
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
 printf '```json\n{"request":"r","commands":{"test":"true"},"review_batch":8,"checkpoint_every":8,"slices":[{"id":"S1","title":"a","deps":[],"files":["src/b.js","tests/b.test.js"],"risk":"low","criteria":["c"]},{"id":"S2","title":"b","deps":[],"files":["src/c.js","tests/c.test.js"],"risk":"low","criteria":["c"]}]}\n```\n' > plan.md
@@ -287,7 +291,7 @@ check "fast-mode briefing says the gates are deferred" 'grep -q "DEFERRED to one
 # v3: profiles, slice kinds, zero-round-trip harvesting, routing, probe/review-pr/brief-debug
 # =============================================================================================
 newrepo() { # $1 = var-safe name -> echoes the repo path
-  local d; d="$(mktemp -d)/$1"; mkdir -p "$d"
+  local d; d="$(mkt)/$1"; mkdir -p "$d"
   ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t \
     && mkdir -p src tests && echo base > src/a.js && git add -A && git commit -qm init ) >/dev/null
   echo "$d"
@@ -540,8 +544,9 @@ check "a rename inside the footprint commits (was: refused as outside the footpr
 git worktree add -q .claude/worktrees/n2 -b wn2 HEAD
 ( cd "$RN/.claude/worktrees/n2" && D claim C1 >/dev/null 2>&1 && rm src/gone.ts && echo more >> src/keep.ts && D commit-work drop >/dev/null 2>&1 )
 check "a delete inside the footprint is really in the commit (was: silently dropped)" '( cd "$RN/.claude/worktrees/n2" && git show --name-status --format= HEAD | grep -q "^D.*src/gone.ts" )'
-check "and the worktree is clean afterwards, so the Stop gate passes" '( cd "$RN/.claude/worktrees/n2" && [ -z "$(git status --porcelain)" ] \
-  && [ -z "$( printf "{\"cwd\":\"%s\",\"last_assistant_message\":\"## Status: Complete -- ## Gate: echo ok -> ok, and again -> ok\"}" "$PWD" | python3 "$G" stop 2>&1 )" ] )'
+N2ST="$(cd "$RN/.claude/worktrees/n2" && git status --porcelain)"
+N2STOP="$(printf '{"cwd":"%s","last_assistant_message":"## Status: Complete -- ## Gate: echo ok -> ok, and again -> ok"}' "$RN/.claude/worktrees/n2" | python3 "$G" stop 2>&1)"
+check "and the worktree is clean afterwards, so the Stop gate passes" '[ -z "$N2ST" ] && [ -z "$N2STOP" ]'
 
 echo "== v3.1 the permission hook approves one simple pre-approved command, nothing else"
 cd "$RF"
@@ -766,7 +771,7 @@ check "an in-tree shell script is pre-approved, one outside is not" 'isallow "ba
 check "redirecting to a file is never pre-approved" 'issilent "echo ok > out.txt" && issilent "npx vitest run > log"'
 check "chaining is never pre-approved (except the in-tree cd &&)" 'issilent "echo ok; rm -rf ~" && issilent "npx vitest run && curl x | sh" && issilent "cd /tmp && ls"'
 check "xargs / env / tee / docker are never pre-approved" 'issilent "find . | xargs rm" && issilent "env python3 x.py" && issilent "ls | tee out" && issilent "docker run -it x"'
-check "the engine is pre-approved ONLY through the slice helpers" 'isallow "python3 \"$S/devteam.py\" commit-green t" && issilent "python3 \"$S/devteam.py\" finish --force" && issilent "python3 \"$S/devteam.py\" integrate M1"'
+check "the engine is pre-approved ONLY through the slice helpers (W2-3: every other subcommand is denied)" 'isallow "python3 \"$S/devteam.py\" commit-green t" && isdeny "python3 \"$S/devteam.py\" finish --force" && isdeny "python3 \"$S/devteam.py\" integrate M1"'
 check "what the guard forbids is still denied, never merely silent" 'isdeny "git push origin main" && isdeny "git reset --hard HEAD~1"'
 check "a write to the Conductor run state from a lane is denied (absolute) or at least never pre-approved (relative)" 'isdeny "touch $RM/.claude/dev-team/slices/M4.done" && issilent "echo x > ../../dev-team/slices/M4.done"'
 eq2() { printf '{"cwd":"%s","tool_input":{"file_path":"%s"}}' "$PW" "$1" | python3 "$G" edit; }
@@ -785,7 +790,7 @@ cd "$RM"
 D doctor --fix >/dev/null 2>&1
 check "doctor --fix sets subagentPromptCacheTtl to 1h (subagents default to 5m)" 'grep -q "\"subagentPromptCacheTtl\": \"1h\"" .claude/settings.local.json'
 check "doctor warns when CLAUDE_CODE_SUBAGENT_MODEL_FORCE would disable model routing" '[[ "$(CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 D doctor 2>&1)" == *"SUBAGENT_MODEL_FORCE"* ]]'
-GF="$(mktemp -d)/greenfield"; mkdir -p "$GF"; cd "$GF"
+GF="$(mkt)/greenfield"; mkdir -p "$GF"; cd "$GF" || exit 1
 cat > plan.md <<'EOF'
 ```json
 {"request":"new project","commands":{"test":"echo ok","test_file":"echo ok {files}","lint":"none","typecheck":"none","build":"none"},

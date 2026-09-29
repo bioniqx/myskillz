@@ -61,7 +61,8 @@ nothing downgrades.
   questions + T1 lanes only for multi-hop questions (code slices of a big
   repo, research that must compare several sources) + `Read
   architectural.md`. Then follow `architectural.md`. The ONLY skill you
-  invoke next is writing-plans.
+  invoke next is hybrid-writing-plans, or writing-plans if it is not
+  installed.
 
 Turn budget (human replies before hand-off): Spike 1-2 · Bounded 1-2 ·
 Architectural 2-3. Count before sending; over budget → merge messages.
@@ -294,7 +295,8 @@ narrate the exploration; show the design and cite inline.
 claim-verifier / spec pre-draft lanes launched in that same turn and not
 awaited → approval → spec
 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` + inline self-review
-+ commit (one turn) → review gate → writing-plans.
++ commit (one turn) → review gate → hybrid-writing-plans (writing-plans if
+it is not installed).
 
 ## Red flags
 

@@ -15,7 +15,7 @@ Write implementation plans for an engineer with zero context and questionable ta
 ## Context (computed when the skill loaded)
 
 ```!
-python3 "${CLAUDE_SKILL_DIR}/scripts/plan_tool.py" context $ARGUMENTS
+python3 "${CLAUDE_SKILL_DIR}/scripts/plan_tool.py" context "$ARGUMENTS"
 ```
 
 If the block above shows a raw command instead of output, run `python3 <this skill dir>/scripts/plan_tool.py context <spec>` in the same message as your Phase 0 reads. `TOOL` below = the `tool:` line of the context (use it verbatim).
@@ -39,13 +39,13 @@ Independent subsystems -> one plan each; plans may be produced concurrently with
 
 ## Pipeline
 
-### Phase 0 - Load (ONE message)
+## Phase 0 - Load (ONE message)
 
 Read the spec fully and 2-5 pattern files picked from the context (a test, a similar module, build config) - all in one message of parallel Reads. Only when the repo is large and you cannot locate the affected code from the context: add up to 3 narrow `Explore` agents in that same message. Estimate the task count N.
 
 **N <= 3 -> Inline path. N >= 4 -> Fan-out (Phases 1-4).**
 
-### Phase 1 - Contracts (serial, ONE Write)
+## Phase 1 - Contracts (serial, ONE Write)
 
 Write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` containing only:
 
@@ -90,10 +90,11 @@ Contract rules (quality is locked here):
 - `Spec`: line ranges from the context heading map; writers get exactly these lines.
 - `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs -> haiku) or `deep` (algorithmic, security, concurrency -> opus). Default: sonnet.
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently.
+- Legitimate project vocabulary that the placeholder/portability scan would flag (e.g. a TODO app, a class named `Task`) needs `--allow WORD` on every `contracts`/`assemble`/`check` call - decide this now, not after `assemble` fails.
 
-Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if the context shows ultracode or a raised cap it could not read). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table and the next command.
+Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if you know the real cap is higher than what the script detected). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table and the next command.
 
-### Phase 2 - Fan-out writers (ONE message)
+## Phase 2 - Fan-out writers (ONE message)
 
 For every DISPATCH row, one Agent call - all in a single message:
 - `subagent_type`: as printed (`plan-task-writer` when installed; if the call says the type is unknown, use `general-purpose`)
@@ -107,11 +108,11 @@ Then, in your next message, run the printed `TOOL wait <plan>` with Bash `timeou
 - `DONE` -> Phase 3.
 - `PENDING` -> if those agents are still running, run `wait` again. If they returned `FAIL` or stopped: re-dispatch only those IDs in one message (same prompt), or fix a small issue yourself with Edit + `TOOL lint-task <plan> <task file>`.
 
-### Phase 3 - Risk-based review (ONE message)
+## Phase 3 - Risk-based review (ONE message)
 
 Run `TOOL review <plan>` (`--all` when invoked with `--thorough` or the user asks for maximum assurance). `NONE` -> skip to Phase 4. Otherwise dispatch its rows exactly like Phase 2 (`general-purpose`, `sonnet`), then run the printed `wait --review`. Reviewers fix their own task files in place. An "Unfixable (needs contract change)" line -> edit that contract, re-run `contracts`, re-dispatch only the affected writers, `wait`.
 
-### Phase 4 - Assemble (ONE command)
+## Phase 4 - Assemble (ONE command)
 
 `TOOL assemble <plan> --clean` - re-lints everything, then renders the canonical plan: execution note, Execution Protocol, File Structure (if you wrote none), Execution Waves, and each task's heading/`[P]`/Depends/Runs-after/Interfaces, then deletes the scratch dir. On `ERR` nothing is written: fix the named task file, re-run. Legitimate project vocabulary (e.g. a TODO app): add `--allow TODO`.
 
@@ -129,14 +130,14 @@ After `OK`, offer (waves/width from the script output):
 
 **2. Inline Execution here** - sequential, with checkpoints.
 
-**3. Hand off** - give the file to any coding agent or human with: *"Execute this plan following its Execution Protocol."*
+**3. Hand off** - the `dev-team` skill adopts this plan as authoritative and implements it end to end; or give the file to any coding agent or human with: *"Execute this plan following its Execution Protocol."*
 
 **Which approach?"**
 
-- Subagent-Driven -> REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
-- Inline -> REQUIRED SUB-SKILL: `superpowers:executing-plans`
-- Hand off -> nothing else; the plan carries everything.
+- Subagent-Driven -> dispatch each wave's `[P]` tasks yourself as subagents here, reviewing between waves.
+- Inline -> execute the plan yourself here, sequentially, with checkpoints.
+- Hand off -> nothing else; the plan carries everything (dev-team or any other agent/human).
 
-## One-time speed setup (tell the user when the context shows cap < 64)
+## One-time speed setup (tell the user when the context shows cap < 64, or flags a stale/placeholder writer agent)
 
 `TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn). Never run `--apply` without the user's consent. Optional: `/fast` speeds the serial contract phase on Opus.

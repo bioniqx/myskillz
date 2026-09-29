@@ -39,9 +39,13 @@ worker() {
   exit 0
 }
 export -f worker
+XPID=""
+trap 'sd_kill_tree "$XPID" 1; [ "$OWN_OUT" = 1 ] && [ "$KEEP" != 1 ] && rm -rf "$OUT"; exit 130' INT TERM
 start=$(sd_now)
 echo "stress: $N runs, $J parallel, logs in $OUT" >&2
-seq 1 "$N" | xargs -P "$J" -I{} bash -c 'worker "$@"' _ {}
+seq 1 "$N" | xargs -P "$J" -I{} bash -c 'worker "$@"' _ {} &
+XPID=$!
+wait "$XPID"
 el=$(( $(sd_now) - start ))
 ran=$(ls "$OUT" | grep -c '^rc\.'); fails=$(ls "$OUT" | grep -c '^FAIL\.')
 awk -v f="$fails" -v n="$ran" -v el="$el" -v base="$BASE" '

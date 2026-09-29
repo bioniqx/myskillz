@@ -111,4 +111,5 @@ sections, commit, ask again. Proceed only on approval.
 
 ## 5. Hand-off
 
-Invoke `writing-plans`. No other skill, no code, no scaffolding.
+Invoke `hybrid-writing-plans`, or `writing-plans` if it is not installed.
+No other skill, no code, no scaffolding.

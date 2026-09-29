@@ -47,6 +47,10 @@ Optional, subscription plans only: keep worker prompt caches warm for an hour du
 - Local-agents level in Manual mode: the agents' `permissionMode: acceptEdits` covers their writes; to also avoid
   prompts for the script add `"Bash(python3 ~/.claude/skills/requirements-code-audit/scripts/*)"` to
   `permissions.allow` in `.claude/settings.local.json`.
+- Plugin subagents ignore `permissionMode` entirely — Claude Code applies that field only to local/generic agents, so
+  a plugin worker's writes are governed by the ordinary permission rules, not by anything set in its agent file. Add
+  `"Edit(./.audit/**)"` to `permissions.allow` in `.claude/settings.local.json` so worker writes under `.audit/` never
+  prompt (the guard hook's auto-approve covers the common case, but this rule is what to add if prompts still appear).
 - The guard is armed only while `<cwd>/.audit/ACTIVE` exists (created by `audit.py init`, removed by `audit.py finish`).
   Outside an audit it exits in a few milliseconds and does nothing.
 

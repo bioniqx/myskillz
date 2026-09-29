@@ -336,12 +336,7 @@ outside the footprint (the engine pins values); leanest viable slices, reuse wha
 
 ## Speed ceiling
 
-Everything cuttable is cut: no preamble turn, inline planning, plan adoption, **one
-argument-less engine call per turn**, one-line dispatches, one dispatch per slice,
-contract-based DAG, background workers, critical-path scheduling by weight, model routing by
-size/kind, file briefings, native worktrees with linked deps, mechanical gates instead of prose,
-sharded overlapped review, warm resumes, 1-hour prompt cache, never-prompt permissions, cap-2
-loops. Remaining dials, in order: **`/fast`** for the Conductor and opus roles (user's credits);
+Remaining dials, in order: **`/fast`** for the Conductor and opus roles (user's credits);
 **profile `turbo` / `spike`** (ask the user, don't assume); raise `review_batch` /
 `checkpoint_every` in the plan for very large runs; `effort: low` on the programmer for
 boilerplate-heavy work; more `Explore` or `research` agents for planning. Past `spike` nothing
