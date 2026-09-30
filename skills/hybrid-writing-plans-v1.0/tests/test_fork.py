@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 HP = Path(__file__).resolve().parents[1]
-SRC = Path(__file__).resolve().parents[2] / "writing-plans-6.2"
+SRC = Path(__file__).resolve().parents[3] / "claude-skills" / "writing-plans-6.2"
 COPIED = ["task-writer-prompt.md", "plan-reviewer-prompt.md", "agents/plan-task-writer.md"]
 
 

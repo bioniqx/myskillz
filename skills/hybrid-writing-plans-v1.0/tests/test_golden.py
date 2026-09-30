@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
 TOOL = SKILL / "scripts" / "plan_tool.py"
 FAKE = HERE / "fake_opencode.py"
-WP62 = Path(__file__).resolve().parents[2] / "writing-plans-6.2"
+WP62 = Path(__file__).resolve().parents[3] / "claude-skills" / "writing-plans-6.2"
 TOOL62 = WP62 / "scripts" / "plan_tool.py"
 
 PLAN = "\n".join([
@@ -114,6 +114,8 @@ class GoldenTest(unittest.TestCase):
             "HP_OC_BIN": str(FAKE),
             "PYTHONDONTWRITEBYTECODE": "1",
         })
+        self.env.pop("HYBRID_OPENCODE_STD", None)
+        self.env.pop("HYBRID_OPENCODE_LITE", None)
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)

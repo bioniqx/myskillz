@@ -190,6 +190,15 @@ class TestClaudeLine(unittest.TestCase):
             'lanes/xyz789.claude.md and follow it exactly."'
         )
 
+    def test_claude_line_model_override_keeps_the_role_agent_type(self):
+        line = hb_prompts.claude_line(
+            "sw1",
+            "locate",
+            Path("/repo/.superpowers/brainstorm/lanes/sw1.claude.md"),
+            "sonnet",
+        )
+        assert "subagent_type: Explore, model: sonnet, " in line
+
 
 if __name__ == "__main__":
     unittest.main()

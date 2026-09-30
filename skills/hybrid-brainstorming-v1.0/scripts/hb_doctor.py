@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from oc_run import build_cmd, run_once
 from hb_router import route
 from hb_config import AGENT_NAME, SENTINEL, config_env
+from hybrid_shared import cache_fresh, cache_key, classify, first_error, model_spec
 
 MODELS_TIMEOUT_S = 60
 PING = "PING"
@@ -51,7 +53,15 @@ def write_doctor(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
-def status_line(routing: dict, doctor: dict) -> str:
+def _stale_tiers(routing: dict, doctor: dict, now: float) -> list:
+    tiers = routing.get("tiers", {}) if isinstance(routing, dict) else {}
+    entries = doctor.get("tiers") or {}
+    return [name for name in sorted(tiers)
+            if isinstance(tiers[name], dict) and tiers[name].get("model")  # a tier with no model is config, not stale
+            and (not isinstance(entries.get(name), dict) or not cache_fresh(entries[name], tiers[name], now))]
+
+
+def status_line(routing: dict, doctor: dict, now: float = 0.0) -> str:
     if not doctor or not doctor.get("version"):
         return "opencode: unavailable → preset claude (run bslane.py doctor)"
 
@@ -60,6 +70,12 @@ def status_line(routing: dict, doctor: dict) -> str:
     timestamp = doctor.get("t", "")
     date = timestamp[:10] if timestamp else ""
     websearch = "on" if doctor.get("websearch") else "off"
+
+    stale = _stale_tiers(routing, doctor, now or time.time()) if preset != "claude" else []
+    if stale:
+        return "opencode: v%s preset=%s stale tiers=%s (doctor %s) → run bslane.py doctor" % (
+            version, preset, ",".join(stale), date,
+        )
 
     role_bits = []
     for role_name in ROLES:
@@ -96,46 +112,68 @@ def _run_models_once(binary: str) -> tuple:
         proc = subprocess.run([binary, "models"], capture_output=True, text=True,
                                timeout=MODELS_TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        return (False, [], "timed out after %ss" % MODELS_TIMEOUT_S)
+        return (False, [], "timeout", "opencode models timed out after %ss" % MODELS_TIMEOUT_S)
     except OSError as exc:
-        return (False, [], "error: %s" % exc)
+        return (False, [], "spawn", _one_line("cannot run %s models: %s" % (binary, exc)))
     if proc.returncode != 0:
-        return (False, [], "exit %d: %s" % (proc.returncode, (proc.stderr or "").strip()))
+        stderr_tail = (proc.stderr or "").strip()[-500:]
+        kind = classify(proc.returncode, [], stderr_tail)
+        detail = first_error([], stderr_tail) or "exit %d" % proc.returncode
+        return (False, [], kind, _one_line(detail))
     models = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
     if not models:
-        return (False, [], "models: (empty)")
-    return (True, models, "models: %s" % ", ".join(models))
+        return (False, [], "config", "opencode models listed nothing")
+    return (True, models, "", "")
+
+
+def _one_line(text: str, limit: int = 200) -> str:
+    return " ".join(str(text).split())[:limit]
+
+
+def _tail(path: Path, limit: int = 500) -> str:
+    try:
+        return Path(path).read_text(errors="replace").strip()[-limit:]
+    except OSError:
+        return ""
 
 
 def _ping_tier(binary: str, name: str, tier: dict, workdir: Path) -> tuple:
-    model = tier.get("model", "") if isinstance(tier, dict) else ""
-    variant = tier.get("variant", "") if isinstance(tier, dict) else ""
-
     workdir = Path(workdir)
     out_path = workdir / ("doctor-ping-%s.out.jsonl" % name)
     err_path = workdir / ("doctor-ping-%s.err" % name)
 
-    cmd = build_cmd(binary, AGENT_NAME, model, variant, PING)
+    cmd = build_cmd(binary, AGENT_NAME, tier.get("model", ""), tier.get("variant", ""), PING)
     prompt_text = "Reply with exactly the token %s and nothing else." % SENTINEL
     env = dict(os.environ, **config_env("locate", prompt_text))
 
     result = run_once(cmd, workdir, env, out_path, err_path,
-                       stall_s=tier.get("stall_s", 60) if isinstance(tier, dict) else 60,
-                       timeout_s=tier.get("timeout_s", 180) if isinstance(tier, dict) else 180)
+                       stall_s=tier.get("stall_s", 60), timeout_s=tier.get("timeout_s", 180))
 
     text = (result.get("text") or "").strip()
-    ok = (not result.get("reason")) and _reply_has_sentinel(text)
-    note = text if ok else (result.get("note") or result.get("reason") or "no sentinel")
-    return (ok, note)
+    if not result.get("reason") and _reply_has_sentinel(text):
+        return (True, "", "ping ok")
+
+    errors = result.get("errors") or []
+    stderr_tail = _tail(err_path)
+    kind = classify(result.get("rc"), errors, stderr_tail,
+                     result.get("reason") or "", bool(result.get("finished")))
+    if kind in ("", "recovered"):  # ran cleanly but did not answer with the sentinel
+        kind = "format" if text else "empty"
+    detail = first_error(errors, stderr_tail) or result.get("note") or result.get("reason") or "no sentinel"
+    return (False, kind, _one_line(detail))
+
+
+def _websearch_tier(routing: dict):
+    tiers = routing.get("tiers") or {}
+    for role_map in ("roles", "max_roles"):
+        name = (routing.get(role_map) or {}).get("research")
+        if name in tiers:
+            return tiers[name]
+    return next(iter(tiers.values()), None)
 
 
 def _probe_websearch(binary: str, routing: dict, workdir: Path) -> bool:
-    tiers = routing.get("tiers", {}) if isinstance(routing, dict) else {}
-    roles = routing.get("roles", {}) if isinstance(routing, dict) else {}
-    tier_name = roles.get("research")
-    tier = tiers.get(tier_name) if tier_name else None
-    if not tier:
-        tier = next(iter(tiers.values()), None)
+    tier = _websearch_tier(routing)
     if not tier:
         return False
 
@@ -167,7 +205,11 @@ def _probe_websearch(binary: str, routing: dict, workdir: Path) -> bool:
     return False
 
 
-def run_doctor(binary: str, routing: dict, ping: bool, workdir: Path) -> dict:
+def run_doctor(binary: str, routing: dict, ping: bool, workdir: Path, prev: dict = None,
+               probe_web: bool = True) -> dict:
+    """Check opencode and every tier. Web search is probed only with ping and probe_web; otherwise the
+    previous cache's answer is kept while it was found for the same model, so a plain doctor never
+    flips a ping's `websearch=on` back to off."""
     workdir = Path(workdir)
     tiers = routing.get("tiers", {}) if isinstance(routing, dict) else {}
 
@@ -176,37 +218,47 @@ def run_doctor(binary: str, routing: dict, ping: bool, workdir: Path) -> dict:
         resolved = binary
 
     version, _version_note = _check_version(binary)
-    models_ok, models, models_note = _run_models_once(binary)
+    models_ok, models, models_kind, models_detail = _run_models_once(binary)
     if not models_ok:
-        models_ok, models, models_note = _run_models_once(binary)
+        models_ok, models, models_kind, models_detail = _run_models_once(binary)
 
     tier_results = {}
-    overall_ok = bool(resolved) and bool(version) and models_ok
     for name in sorted(tiers.keys()):
         tier = tiers[name]
-        model = tier.get("model", "") if isinstance(tier, dict) else ""
-        variant = tier.get("variant", "") if isinstance(tier, dict) else ""
-        model_listed = models_ok and model in models
-
-        if ping:
-            ok, note = _ping_tier(binary, name, tier, workdir)
+        if not tier.get("model"):
+            ok, kind = False, "config"
+            detail = "tier has no model in the skill routing file or the shared opencode config"
+        elif ping:
+            ok, kind, detail = _ping_tier(binary, name, tier, workdir)
+        elif not models_ok:
+            ok, kind, detail = False, models_kind, models_detail
+        elif tier.get("model", "") in models:
+            ok, kind, detail = True, "", "listed in opencode models"
         else:
-            ok = model_listed
-            note = models_note if model_listed else "model %s not found in `%s models`" % (model, binary)
+            ok, kind = False, "model"
+            detail = _one_line("model %s not found in `%s models`" % (model_spec(tier), binary))
+        tier_results[name] = {"ok": ok, "key": cache_key(tier), "checked_at": time.time(),
+                              "kind": kind, "detail": detail}
 
-        tier_results[name] = {"model": model, "variant": variant, "ok": ok, "note": note}
-        overall_ok = overall_ok and ok
+    web_key = cache_key(_websearch_tier(routing))
+    prev = prev if isinstance(prev, dict) else {}
+    if ping and probe_web:
+        websearch = _probe_websearch(binary, routing, workdir)
+    else:
+        websearch = bool(web_key) and bool(prev.get("websearch")) and prev.get("websearch_key") == web_key
 
-    websearch = _probe_websearch(binary, routing, workdir) if ping else False
+    opencode_ok = bool(resolved) and bool(version) and models_ok
+    any_tier_ok = any(entry["ok"] for entry in tier_results.values())
 
     data = {
         "t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "ok": overall_ok,
+        "ok": opencode_ok and (any_tier_ok or not tier_results),
         "version": version,
         "binary": resolved or binary,
         "tiers": tier_results,
         "websearch": websearch,
+        "websearch_key": web_key,
         "status_line": "",
     }
-    data["status_line"] = status_line(routing, data)
+    data["status_line"] = status_line(routing, data, time.time())
     return data

@@ -1,4 +1,4 @@
-"""hp_partition - tier-aware partitioning of contracts into Claude and opencode writer groups."""
+"""hp_partition - tier-aware partitioning of contracts into claude, opencode and held writer groups."""
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -24,19 +24,26 @@ def _group_max(routing: dict) -> int:
         return 3
 
 
-def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int) -> list:
+def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int, now: float = 0.0, breaker_dir: Path = None) -> list:
     """Return [(gid, backend, [contract, ...]), ...].
 
-    Claude groups come first (6.2 partition, order and naming), then opencode groups
-    O01, O02, ... ordered by first task ID across tiers. backend is "claude" or "oc:<tier>".
-    Per tier, tasks beyond max_parallel * oc_group_max move to Claude, heaviest first.
+    backend is "claude", "oc:<tier>" or "held". Order: claude groups first (6.2 partition,
+    order and naming), then opencode groups O01, O02, ... ordered by first task ID across
+    tiers, then one "held" group per task that preset opencode could not place. The caller
+    reports held groups and does not dispatch them.
+    Outside preset opencode, tasks beyond max_parallel * oc_group_max per tier move to claude,
+    heaviest first. In preset opencode they all stay on opencode.
     """
+    active = hp_router.effective_preset(routing, preset)
     claude: List[dict] = []
+    held: List[dict] = []
     by_tier: Dict[str, List[dict]] = {}
     for c in cs:
-        backend = hp_router.route(c.get("tier") or "std", routing, doctor, preset)
+        backend = hp_router.route(c.get("tier") or "std", routing, doctor, active, now, breaker_dir)
         if backend == "claude":
             claude.append(c)
+        elif backend == "held":
+            held.append(c)
         else:
             by_tier.setdefault(backend[3:], []).append(c)
     group_max = _group_max(routing)
@@ -44,7 +51,7 @@ def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int) -
     for tier, tasks in by_tier.items():
         mp = _max_parallel(routing, tier)
         capacity = mp * group_max
-        if len(tasks) > capacity:
+        if active != "opencode" and len(tasks) > capacity:
             ranked = sorted(tasks, key=lambda c: (-plan_tool.weight(c), plan_tool.num(c["id"])))
             moved = {c["id"] for c in ranked[:len(tasks) - capacity]}
             claude.extend(c for c in tasks if c["id"] in moved)
@@ -57,4 +64,6 @@ def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int) -
            for i, g in enumerate(parts)]
     oc_groups.sort(key=lambda x: plan_tool.num(x[1][0]["id"]))
     out += [("O%02d" % (i + 1), "oc:" + tier, g) for i, (tier, g) in enumerate(oc_groups)]
+    held.sort(key=lambda c: plan_tool.num(c["id"]))
+    out += [(c["id"], "held", [c]) for c in held]
     return out

@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import ha_briefs
 import ha_doctor
+import hybrid_shared
 import oc_run
 
 
@@ -35,19 +36,16 @@ class TestOcHeadWriteFileWording(unittest.TestCase):
         self.assertIn("marker block instead", brief)
 
 
-class TestClassifyErrorReusesOcRunRegexes(unittest.TestCase):
-    def test_uses_oc_run_regex_objects(self):
-        self.assertIs(ha_doctor.THROTTLE_RE, oc_run.THROTTLE_RE)
-        self.assertIs(ha_doctor.UNAVAILABLE_RE, oc_run.UNAVAILABLE_RE)
-        self.assertFalse(hasattr(ha_doctor, "_THROTTLE_RE"))
-        self.assertFalse(hasattr(ha_doctor, "_UNAVAILABLE_RE"))
-
+class TestClassifyViaHybridShared(unittest.TestCase):
     def test_too_many_requests_is_throttle(self):
-        self.assertEqual(ha_doctor.classify_error("429 Too Many Requests"), "throttle")
-        self.assertEqual(ha_doctor.classify_error("Too Many Requests"), "throttle")
+        self.assertEqual(hybrid_shared.classify(1, ["429 Too Many Requests"], ""), "throttle")
 
-    def test_expired_plan_is_unavailable(self):
-        self.assertEqual(ha_doctor.classify_error("Your plan has expired, please renew"), "unavailable")
+    def test_expired_plan_is_auth(self):
+        self.assertEqual(hybrid_shared.classify(1, ["plan expired, please renew"], ""), "auth")
 
-    def test_unrelated_is_empty(self):
-        self.assertEqual(ha_doctor.classify_error("connection reset"), "")
+    def test_clean_run_is_empty(self):
+        self.assertEqual(hybrid_shared.classify(0, [], ""), "")
+
+    def test_removed_classification_helpers_are_gone(self):
+        self.assertFalse(hasattr(ha_doctor, "classify_error"))
+        self.assertFalse(hasattr(oc_run, "UNAVAILABLE_RE"))

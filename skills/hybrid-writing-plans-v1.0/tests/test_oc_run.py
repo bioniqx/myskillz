@@ -93,20 +93,6 @@ class RegexTest(unittest.TestCase):
         self.assertTrue(oc_run.THROTTLE_RE.search("Rate-Limit reached"))
         self.assertFalse(oc_run.THROTTLE_RE.search("used 4290 tokens"))
 
-    def test_unavailable_re(self):
-        for text in (
-            "Your GLM Coding Plan package has expired and is temporarily unavailable",
-            "please renew your plan",
-            "401 Unauthorized",
-            "unauthorised request",
-            "Invalid API key",
-            "Insufficient balance",
-            "insufficient quota",
-        ):
-            self.assertTrue(oc_run.UNAVAILABLE_RE.search(text), text)
-        self.assertFalse(oc_run.UNAVAILABLE_RE.search("429 Too Many Requests"))
-        self.assertFalse(oc_run.UNAVAILABLE_RE.search("ProviderAuthError: bad key"))
-
     def test_saved_re(self):
         match = oc_run.SAVED_RE.search("[Output truncated: full output saved to /tmp/x/tool_1.txt]")
         self.assertIsNotNone(match)
@@ -136,6 +122,7 @@ class ParseEventsTest(unittest.TestCase):
             "usage": {"input": 0, "output": 0, "reasoning": 0, "cache_read": 0, "cache_write": 0, "cost": 0.0},
             "errors": [],
             "throttled": False,
+            "finished": False,
             "events": 0,
             "tools": [],
         })
@@ -173,6 +160,7 @@ class ParseEventsTest(unittest.TestCase):
         self.assertEqual(result["events"], 8)
         self.assertEqual(result["errors"], [])
         self.assertFalse(result["throttled"])
+        self.assertFalse(result["finished"])
         self.assertEqual(len(result["tools"]), 3)
         self.assertEqual(result["tools"][0], {
             "tool": "read", "status": "completed", "input": {"filePath": "/r/a.py"},
@@ -183,6 +171,18 @@ class ParseEventsTest(unittest.TestCase):
         self.assertEqual(result["tools"][2], {
             "tool": "grep", "status": "error", "input": {"pattern": "zzz"}, "output": "",
         })
+
+    def test_terminal_stop_step_finish_sets_finished(self):
+        stream = self.tmp / "finish.jsonl"
+        _write_lines(stream, [
+            {"type": "step_finish", "sessionID": "ses_f", "part": {"type": "step-finish", "reason": "tool-calls"}},
+        ])
+        self.assertFalse(oc_run.parse_events(stream)["finished"])
+        _write_lines(stream, [
+            {"type": "step_finish", "sessionID": "ses_f", "part": {"type": "step-finish", "reason": "tool-calls"}},
+            {"type": "step_finish", "sessionID": "ses_f", "part": {"type": "step-finish", "reason": "stop"}},
+        ])
+        self.assertTrue(oc_run.parse_events(stream)["finished"])
 
     def test_error_event_sets_errors_and_throttle(self):
         stream = self.tmp / "err.jsonl"
@@ -321,6 +321,7 @@ class FakeCliTest(unittest.TestCase):
         fake = _load_fake()
         self.assertEqual(fake.FAKE_SCRIPT_ENV, "HP_FAKE_SCRIPT")
         self.assertEqual(fake.FAKE_LOG_ENV, "HP_FAKE_LOG")
+        self.assertEqual(fake.FAKE_MODELS_ENV, "HP_FAKE_MODELS")
 
     def test_is_executable(self):
         self.assertTrue(os.access(str(FAKE), os.X_OK))
@@ -413,6 +414,43 @@ class FakeCliTest(unittest.TestCase):
         out.write_text(proc.stdout, encoding="utf-8")
         self.assertEqual(oc_run.parse_events(out)["errors"], ["ProviderAuthError: bad key"])
 
+    def _run_scenario(self, step):
+        script = self.tmp / "scenario.json"
+        script.write_text(json.dumps(step), encoding="utf-8")
+        self.env["HP_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
+        out = self.tmp / "scenario.jsonl"
+        out.write_text(proc.stdout, encoding="utf-8")
+        return proc.returncode, oc_run.parse_events(out)
+
+    def test_error_scenarios_exit_one_with_one_error_event(self):
+        cases = (("auth", "401 Unauthorized"), ("model_not_found", "not found"), ("throttle", "429"))
+        for name, needle in cases:
+            with self.subTest(scenario=name):
+                code, parsed = self._run_scenario({"scenario": name})
+                self.assertEqual(code, 1)
+                self.assertEqual(len(parsed["errors"]), 1)
+                self.assertIn(needle, parsed["errors"][0])
+                self.assertFalse(parsed["finished"])
+
+    def test_recovered_scenario_exits_one_after_a_terminal_stop(self):
+        code, parsed = self._run_scenario({"scenario": "recovered", "text": "custom reply"})
+        self.assertEqual(code, 1)
+        self.assertEqual(len(parsed["errors"]), 1)
+        self.assertTrue(parsed["finished"])
+        self.assertEqual(parsed["text"], "custom reply")
+
+    def test_empty_scenario_exits_zero_without_output(self):
+        code, parsed = self._run_scenario({"scenario": "empty"})
+        self.assertEqual(code, 0)
+        self.assertEqual((parsed["text"], parsed["events"], parsed["errors"]), ("", 0, []))
+
+    def test_models_can_list_nothing(self):
+        self.env["HP_FAKE_MODELS"] = "empty"
+        proc = self._call([str(FAKE), "models"])
+        self.assertEqual((proc.returncode, proc.stdout), (0, ""))
+
+
 
 class RunOnceTest(unittest.TestCase):
     def setUp(self):
@@ -450,7 +488,7 @@ class RunOnceTest(unittest.TestCase):
             "usage": {"input": 12, "output": 4},
             "text": "@@@ BEGIN T01\nbody\n@@@ END T01",
         })
-        for key in ("session", "text", "usage", "errors", "throttled", "events", "tools",
+        for key in ("session", "text", "usage", "errors", "throttled", "finished", "events", "tools",
                     "rc", "reason", "note", "pid", "duration"):
             self.assertIn(key, result)
         self.assertEqual(result["rc"], 0)
@@ -495,32 +533,56 @@ class RunOnceTest(unittest.TestCase):
         result = self._run({"text": "partial", "exit": 3, "stderr": "boom"})
         self.assertEqual(result["rc"], 3)
         self.assertEqual(result["reason"], "crash")
-        self.assertEqual(result["note"], "exit 3: boom")
+        self.assertIn("boom", result["note"])
 
-    def test_error_event_is_crash_with_note(self):
+    def test_error_event_is_auth_with_note(self):
         result = self._run({"error": {"type": "ProviderAuthError", "message": "bad key"}})
         self.assertEqual(result["rc"], 1)
+        self.assertEqual(result["reason"], "auth")
+        self.assertIn("bad key", result["note"])
+
+    def test_generic_error_event_is_still_crash(self):
+        result = self._run({"error": {"type": "UnknownError", "message": "boom"}})
+        self.assertEqual(result["rc"], 1)
         self.assertEqual(result["reason"], "crash")
-        self.assertEqual(result["note"], "ProviderAuthError: bad key")
+        self.assertIn("boom", result["note"])
 
     def test_throttle_on_failed_run(self):
         result = self._run({"error": {"type": "APIError", "message": "429 Too Many Requests"}})
         self.assertEqual(result["reason"], "throttle")
         self.assertTrue(result["throttled"])
-        self.assertEqual(result["note"], "APIError: 429 Too Many Requests")
+        self.assertIn("429", result["note"])
 
-    def test_unavailable_is_checked_before_throttle(self):
+    def test_auth_is_checked_before_throttle(self):
         message = "Your GLM Coding Plan package has expired and is temporarily unavailable"
         result = self._run({"error": {"type": "provider.rate-limit", "message": message}})
         self.assertEqual(result["rc"], 1)
         self.assertTrue(result["throttled"])
-        self.assertEqual(result["reason"], "unavailable")
-        self.assertEqual(result["note"], "provider.rate-limit: " + message)
+        self.assertEqual(result["reason"], "auth")
+        self.assertIn("expired", result["note"])
 
-    def test_unavailable_from_stderr_on_nonzero_exit(self):
+    def test_auth_from_stderr_on_nonzero_exit(self):
         result = self._run({"exit": 1, "stderr": "401 Unauthorized"})
-        self.assertEqual(result["reason"], "unavailable")
-        self.assertEqual(result["note"], "401 Unauthorized")
+        self.assertEqual(result["reason"], "auth")
+        self.assertIn("401", result["note"])
+
+    def test_quota_and_model_errors_have_their_own_kinds(self):
+        quota = self._run({"error": {"type": "APIError", "message": "Insufficient balance"}})
+        self.assertEqual(quota["reason"], "quota")
+        model = self._run({"error": {"type": "APIError", "message": "model zai-coding-plan/nope not found"}})
+        self.assertEqual(model["reason"], "model")
+
+    def test_exit_one_after_terminal_stop_is_recovered(self):
+        result = self._run({"scenario": "recovered"})
+        self.assertEqual(result["rc"], 1)
+        self.assertTrue(result["finished"])
+        self.assertEqual(result["reason"], "recovered")
+        self.assertEqual(result["text"], "recovered reply")
+
+    def test_empty_run_is_a_clean_exit(self):
+        result = self._run({"scenario": "empty"})
+        self.assertEqual((result["rc"], result["reason"], result["text"]), (0, "", ""))
+        self.assertFalse(result["finished"])
 
     def test_unavailable_text_on_successful_run_is_not_a_failure(self):
         result = self._run({"text": "ok", "stderr": "token renew scheduled"})

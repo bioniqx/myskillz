@@ -1,7 +1,7 @@
 # Setup — hybrid-requirements-code-audit
 
 hybrid-requirements-code-audit is an opt-in fork of requirements-code-audit: the same audit, with investigators (and,
-in preset `max`, verifiers and parsers) run on the opencode CLI while every judgment step stays on Claude. It ships no
+in mode `opencode`, verifiers and parsers) run on the opencode CLI while every judgment step stays on Claude. It ships no
 agents, hooks or plugin manifest of its own: it reuses the `rca-*` agents and the guard hook of the installed req-audit
 plugin (the `requirements-code-audit` skill). It works at the same three levels. Pick the highest one your environment
 allows; the skill detects the rest.
@@ -13,8 +13,8 @@ allows; the skill detects the rest.
 | **Generic** — this folder only (also Cowork / claude.ai upload) | this skill; workers are `general-purpose` subagents on `haiku`/`sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
 
 opencode is independent of the level. When it is missing or unhealthy, `init` prints
-`opencode: unavailable → preset claude (run audit.py doctor --ping)` and the audit runs exactly as
-requirements-code-audit does.
+`opencode: unavailable preset=hybrid (run audit.py doctor --ping)` and in mode hybrid the audit runs exactly as
+requirements-code-audit does (in mode opencode the units are held).
 
 ## 1. Install (Claude Code)
 
@@ -56,68 +56,54 @@ Optional, subscription plans only: keep worker prompt caches warm for an hour du
 
 ## 3. opencode and routing
 
-1. Install the opencode CLI (tested with v2.0.18) and set up the provider that serves the tier models, so that
-   `opencode models` lists them. The shipped tiers use `zai-coding-plan/glm-5.3` and `zai-coding-plan/glm-5.3-flash`.
-2. Run the doctor once:
+1. Install the opencode CLI (tested with v2.0.19) and set up the provider that serves the tier models, so that `opencode models` lists them.
+2. Set the shared models in two env vars that all four hybrid skills read: `HYBRID_OPENCODE_STD` (required, tier `std`) and `HYBRID_OPENCODE_LITE` (optional, tier `lite`, defaults to the `std` value). Each is `provider/model[#variant]`, where `#variant` is the optional thinking level. Put them in the `"env"` block of `~/.claude/settings.json`, then restart Claude Code:
 
-   ```bash
-   python3 ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py doctor --ping
+   ```json
+   {"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}
    ```
 
-   It checks `opencode --version`, confirms that `opencode models` lists each tier's model, sends each tier one tiny
-   prompt through the injected `ha-investigator` agent (it must answer `HA-INVESTIGATOR-OK`) and writes the doctor
-   cache that the `opencode:` line of `init` reads. It creates the user routing file from the shipped defaults when it
-   is missing and prints its path. It works outside an audit. Run it again after editing the routing file, and when
-   `init` shows `opencode: unavailable` or a `claude(down: <reason>)` role. A plain `doctor` (no `--ping`) keeps a
-   tier's down mark; only a successful `--ping` clears it. `init` itself never spawns opencode.
+   Exporting them in the shell also works. `max_parallel` is not shared: set it in the routing file (below).
+3. Run the doctor once with `python3 ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py doctor --ping`. It validates the shared env vars, checks `opencode --version`, confirms that `opencode models` lists each tier's model, sends each tier one tiny prompt through the injected `ha-investigator` agent (it must answer `HA-INVESTIGATOR-OK`) and writes the doctor cache that the `opencode:` line of `init` reads. Every unusable tier and every config problem prints as an `OC-ERROR` line; one tier's failure never disables the other. It never creates or edits a config file. It works outside an audit. Run it again after changing the env vars or the routing file, and when `init` shows `opencode: unavailable`, `claude(down: <kind>)` or `held(...)`. A cache entry is valid for the exact `model#variant` it checked and for a limited time. `init` itself never spawns opencode.
 
 The opencode agents (`ha-investigator`, `ha-verifier`, `ha-parser`) are injected per turn through
 `OPENCODE_CONFIG_CONTENT`; nothing is written to `~/.config/opencode` or to the repo. They are read-only: edits, shell,
 web access and sub-tasks are denied, and so are reads of docs, `.git/` and the audit dir. `audit.py oc-run` writes their
 output after an evidence oracle has checked every citation.
 
-**Routing file:** `~/.config/hybrid-requirements-code-audit/routing.json`, or the path in env `HA_ROUTING`. It is
-deep-merged over the shipped `routing.default.json` (dicts merge key by key, other values replace), so it only needs
-the keys you change, for example `{"roles": {"investigator": "lite"}}`. The shipped defaults:
+**Routing file:** optional. `<skill dir>/routing.json` (next to `routing.default.json`, e.g. `~/.claude/skills/hybrid-requirements-code-audit-v1.0/routing.json`), or the path in env `HA_ROUTING`, is deep-merged over the shipped `routing.default.json` (dicts merge key by key, other values replace), so it only needs the keys you change, for example `{"roles": {"investigator": "lite"}}`. The skill never creates it. Models and thinking levels normally come from the shared env vars; a `tiers.<tier>.model` set here overrides the shared model for that tier only, together with this file's own `variant` (never mixed with the shared variant). `audit.py doctor` marks each tier `(skill)` or `(shared)`. The shipped defaults:
 
-```json
-{"preset": "hybrid",
- "tiers": {
-   "std":  {"model": "zai-coding-plan/glm-5.3",       "variant": "high", "max_parallel": 6,
-            "stall_s": 180, "timeout_s": 900},
-   "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low",  "max_parallel": 6,
-            "stall_s": 120, "timeout_s": 600}},
- "roles": {"investigator": "std", "verifier": "claude", "parser": "claude"},
- "max_roles": {"verifier": "std", "parser": "std"},
- "oc_batch_max": 4, "max_repairs": 2, "throttle_cooldown_s": 120}
-```
+    {"preset": "hybrid",
+     "tiers": {
+       "std":  {"max_parallel": 6, "stall_s": 180, "timeout_s": 900},
+       "lite": {"max_parallel": 6, "stall_s": 120, "timeout_s": 600}},
+     "roles": {"investigator": "std", "verifier": "claude", "parser": "claude"},
+     "max_roles": {"verifier": "std", "parser": "std"},
+     "oc_batch_max": 4, "max_repairs": 2, "throttle_cooldown_s": 120}
 
-| Preset | investigator | verifier | parser |
+| Mode (`preset`) | investigator | verifier | parser |
 |---|---|---|---|
 | `claude` | Claude | Claude | Claude (output byte-identical to requirements-code-audit) |
 | `hybrid` (default) | `roles.investigator` (`std`) | `roles.verifier` (`claude`) | `roles.parser` (`claude`) |
-| `max` | `max_roles.investigator`, else `roles.investigator` (`std`) | `max_roles.verifier` (`std`) | `max_roles.parser` (`std`) |
+| `opencode` | `max_roles.investigator`, else `roles.investigator` (`std`) | `max_roles.verifier` (`std`) | `max_roles.parser` (`std`) |
 
-- `init --preset claude|hybrid|max` overrides the file's `preset` for one audit. `config.json` keeps the effective
-  preset and a snapshot of the merged routing.
-- A role value of `claude` means Claude; any other value names a tier. Add tiers under `tiers` and point `roles` or
-  `max_roles` at them.
-- `model` is an opencode `provider/model` id. `variant` is the thinking level, passed as the `#<variant>` model suffix
-  (an empty variant passes the bare model).
-- `max_parallel`: opencode batches a tier runs at once. `oc_batch_max`: items per opencode batch. The first
-  `max_parallel × oc_batch_max` active items go to the tier; the rest go to Claude batches.
-- `stall_s` and `timeout_s` apply to each opencode turn. `max_repairs` caps the repair turns (same session) per batch,
-  so a batch's worst case is `(1 + max_repairs) × timeout_s`.
-- `throttle_cooldown_s`: after a rate-limit fallback, the tier's queued batches go to Claude for this many seconds.
-- A tier the doctor marked down (expired plan, bad key, quota) routes to Claude until the next successful
-  `doctor --ping`.
+- `init --preset claude|hybrid|opencode` overrides the file's `preset` for one audit; SKILL.md asks for it once per audit. `max` is a deprecated alias of `opencode` and prints one `OC-WARN` line. `config.json` keeps the effective preset and a snapshot of the merged routing.
+- A role value of `claude` means Claude; any other value names a tier. `max_roles` is the role table of mode `opencode` (the key keeps its old name).
+- `max_parallel`: opencode batches a tier runs at once. `oc_batch_max`: items per opencode batch. In mode hybrid the first `max_parallel × oc_batch_max` active items go to the tier and the rest go to Claude batches; in mode opencode nothing overflows to Claude.
+- `stall_s` and `timeout_s` apply to each opencode turn. `max_repairs` caps the repair turns (same session) per batch, so a batch's worst case is `(1 + max_repairs) × timeout_s`.
+- `throttle_cooldown_s`: after a rate-limit failure, the tier's queued batches wait or go to Claude for this many seconds.
+- A tier that fails with `auth`, `quota`, `model` or `config` opens the run's circuit breaker (kept under `.audit/`): later units skip that tier without spawning opencode until the next audit.
+- A failed opencode run of kind `spawn`, `stall`, `throttle` or `crash` is retried up to 3 times (10 s, 30 s, 60 s apart; `HYBRID_OC_RETRY_DELAY_S` overrides the waits). In mode hybrid, once the retries are used up (or at once for `auth`, `quota`, `model`, `config`), the rest of the run switches to Claude Sonnet 5.5 (`model: sonnet`): one `OC-ERROR ... kind=switch` line, the record `.audit/oc-switched.json`, and no further opencode spawns or `OPENCODE` blocks until the next `init`. Mode opencode retries too but never switches; the unit is held as before.
+- In mode opencode a unit without a usable tier is held, never run on Claude by itself; SKILL.md "Held units" says how the user answers.
 
 **Environment overrides:**
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `HA_OC_BIN` | `opencode` | opencode binary |
-| `HA_ROUTING` | `~/.config/hybrid-requirements-code-audit/routing.json` | user routing file |
+| `HA_ROUTING` | `<skill dir>/routing.json` | user routing file |
+| `HYBRID_OPENCODE_STD` | none (required for modes `hybrid` and `opencode`) | shared model of tier `std`, `provider/model[#variant]` (all four hybrid skills) |
+| `HYBRID_OPENCODE_LITE` | the `HYBRID_OPENCODE_STD` value | shared model of tier `lite` |
 | `HA_DOCTOR_CACHE` | `~/.cache/hybrid-requirements-code-audit/doctor.json` | doctor cache |
 | `HA_TELEMETRY` | `~/.cache/hybrid-requirements-code-audit/lanes.jsonl` | telemetry log |
 | `HA_FAKE_SCRIPT`, `HA_FAKE_LOG` | none | tests only (`tests/fake_opencode.py`) |
@@ -166,17 +152,16 @@ requirements-code-audit directly (the fast-path marker check is then skipped —
   `<name>.<round>.jsonl` and stderr `<name>.<round>.err`, plus the event files set aside after a fallback.
 - `audit.py init --force` archives a previous audit to `.audit.prev-<timestamp>/`.
 - Outside audit dirs, shared by every repo and separate from the other hybrid skills:
-  - `~/.config/hybrid-requirements-code-audit/routing.json` — the user routing file (created by `doctor`);
   - `~/.cache/hybrid-requirements-code-audit/doctor.json` — the doctor cache;
   - `~/.cache/hybrid-requirements-code-audit/lanes.jsonl` — telemetry: one record per opencode run and one per
     requirement at `finish`, each with the repo root. `audit.py stats [--repo <path>]` compares opencode against Claude.
-- Uninstall: delete the skill folder, `~/.config/hybrid-requirements-code-audit/` and
+- Uninstall: delete the skill folder (this also removes its optional `routing.json`) and
   `~/.cache/hybrid-requirements-code-audit/`. Nothing else is written outside audit dirs. Keep requirements-code-audit
   installed if you still use it.
 
 ## 8. Cowork / claude.ai
 
 Upload the `.skill` file (or the folder). Agents and hooks are ignored there and opencode is normally absent: `init`
-prints `opencode: unavailable → preset claude (run audit.py doctor --ping)` and the skill runs as
+prints `opencode: unavailable preset=hybrid (run audit.py doctor --ping)` and the skill runs as
 requirements-code-audit does, in generic mode (general-purpose subagents with `model: haiku`/`sonnet`) or solo mode
 when no Agent tool exists. The repo must be mounted in the session so `scripts/audit.py` can scan it.

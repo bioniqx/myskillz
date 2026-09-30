@@ -8,6 +8,7 @@ Env HP_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config, session, attach, attach_text}, where session is the
 --session value, attach the -f path and attach_text that file's content ("" when
 absent or unreadable).
+Env HP_FAKE_MODELS=empty makes `models` list nothing.
 
 Step keys (all optional):
   session     session id to emit (default: the --session value, else ses_fake0001)
@@ -20,6 +21,9 @@ Step keys (all optional):
   text        final text event
   stderr      text written to stderr
   sleep       seconds to sleep before exiting
+  scenario    canned step merged under the other keys: auth, model_not_found, throttle,
+              recovered (exit 1 after a terminal stop), empty (exit 0, no output)
+  finish_reason  reason written on the step_finish event (default: none)
   error       {type, message}; an error event, then exit 1 unless `exit` is set
   exit        exit code (default 0)
 """
@@ -32,6 +36,7 @@ from pathlib import Path
 
 FAKE_SCRIPT_ENV = "HP_FAKE_SCRIPT"
 FAKE_LOG_ENV = "HP_FAKE_LOG"
+FAKE_MODELS_ENV = "HP_FAKE_MODELS"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
 
@@ -71,6 +76,29 @@ def _load_step(script_path):
     return data[min(n, len(data) - 1)]
 
 
+SCENARIOS = {
+    "auth": {"error": {"type": "ProviderAuthError", "message": "401 Unauthorized: invalid api key"}},
+    "model_not_found": {"error": {"type": "ProviderModelNotFoundError",
+                                  "message": "model zai-coding-plan/nope not found"}},
+    "throttle": {"error": {"type": "APIError", "message": "429 Too Many Requests"}},
+    "recovered": {
+        "events": [{"type": "error", "error": {"type": "APIError", "message": "upstream hiccup, retried"}}],
+        "usage": {"input": 5, "output": 2},
+        "finish_reason": "stop",
+        "text": "recovered reply",
+        "exit": 1,
+    },
+    "empty": {},
+}
+
+
+def _expand(step):
+    """Merge the canned scenario named by step["scenario"] under the step's own keys."""
+    merged = dict(SCENARIOS.get(str(step.get("scenario") or ""), {}))
+    merged.update({k: v for k, v in step.items() if k != "scenario"})
+    return merged
+
+
 def _log(argv):
     log_path = os.environ.get(FAKE_LOG_ENV, "")
     if not log_path:
@@ -103,13 +131,15 @@ def main(argv: list) -> int:
         print(FAKE_VERSION, flush=True)
         return 0
     if argv and argv[0] == "models":
+        if os.environ.get(FAKE_MODELS_ENV, "") == "empty":
+            return 0
         print("zai-coding-plan/glm-5.3", flush=True)
         print("zai-coding-plan/glm-5.3-flash", flush=True)
         return 0
     if not argv or argv[0] != "run":
         sys.stderr.write("fake opencode: unsupported command\n")
         return 2
-    step = _load_step(os.environ.get(FAKE_SCRIPT_ENV, ""))
+    step = _expand(_load_step(os.environ.get(FAKE_SCRIPT_ENV, "")))
     session = str(step.get("session") or _flag(argv, ("--session", "-s")) or DEFAULT_SESSION)
 
     for target, content in (step.get("save") or {}).items():
@@ -138,7 +168,7 @@ def main(argv: list) -> int:
         _emit(event, session)
     usage = step.get("usage")
     if usage is not None:
-        _emit({"type": "step_finish", "part": {
+        part = {
             "type": "step-finish",
             "tokens": {
                 "input": usage.get("input", 0),
@@ -147,7 +177,10 @@ def main(argv: list) -> int:
                 "cache": {"read": usage.get("cache_read", 0), "write": usage.get("cache_write", 0)},
             },
             "cost": usage.get("cost", 0),
-        }}, session)
+        }
+        if step.get("finish_reason"):
+            part["reason"] = step["finish_reason"]
+        _emit({"type": "step_finish", "part": part}, session)
     if "text" in step:
         _emit({"type": "text", "part": {"type": "text", "text": step["text"]}}, session)
     if step.get("stderr"):

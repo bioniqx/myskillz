@@ -1,6 +1,6 @@
 ---
 name: hybrid-requirements-code-audit
-description: "Opt-in fork of requirements-code-audit: use only when the user says 'hybrid', mentions 'opencode', asks to save tokens, cost or usage limits in a requirements/spec audit, or invokes /hybrid-requirements-code-audit. Audits whether a codebase implements a requirements document and produces the same traceability report and prioritized fix plan as requirements-code-audit, but runs the investigator wave (and, in preset max, verifiers and parsers) on the opencode CLI with a configurable model and thinking level per tier. Every opencode row must pass a deterministic evidence oracle before it counts; the checklist, adjudication, verification of risky items and the remediation plan stay on Claude."
+description: "Opt-in fork of requirements-code-audit: use only when the user says 'hybrid', mentions 'opencode', asks to save tokens, cost or usage limits in a requirements/spec audit, or invokes /hybrid-requirements-code-audit. Audits whether a codebase implements a requirements document and produces the same traceability report and prioritized fix plan as requirements-code-audit, but runs the investigator wave (and, in mode opencode, verifiers and parsers) on the opencode CLI, with models from $HYBRID_OPENCODE_STD and $HYBRID_OPENCODE_LITE. Asks for the run mode (hybrid, Claude only or opencode only) first and reports every opencode failure at once. Every opencode row must pass a deterministic evidence oracle before it counts; the checklist, adjudication, verification of risky items and the remediation plan stay on Claude."
 compatibility: Claude Code (full speed - parallel subagents, bundled agents, guard hooks) or Cowork/claude.ai (generic subagents or solo mode). Needs python3; no third-party packages.
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
@@ -40,8 +40,8 @@ the number of agents. So:
 
 - **Lead** (you, Claude): parses the spec, dispatches waves, adjudicates the queue, writes the plan. Never does legwork a worker can do.
 - **Investigators** (opencode agent `ha-investigator`, or Claude `rca-investigator` haiku): one batch file each, evidence gathering only.
-- **Verifiers** (`rca-verifier`, sonnet; opencode `ha-verifier` in preset `max`): adversarial second pass on every non-MATCHED, low-confidence or high-stakes item.
-- **Parsers** (`rca-parser`, sonnet; opencode `ha-parser` in preset `max`): only for large specs — parallel decomposition, lead keeps the faithfulness pass.
+- **Verifiers** (`rca-verifier`, sonnet; opencode `ha-verifier` in mode `opencode`): adversarial second pass on every non-MATCHED, low-confidence or high-stakes item.
+- **Parsers** (`rca-parser`, sonnet; opencode `ha-parser` in mode `opencode`): only for large specs — parallel decomposition, lead keeps the faithfulness pass.
 
 Pick `--agents` at init from the subagent types your Agent tool lists:
 `req-audit:rca-investigator` listed → `plugin` (hardened: hooks + tool-restricted agents) · `rca-investigator` listed → `local` ·
@@ -52,44 +52,39 @@ it requires `A init --preset claude`.
 
 ## Hybrid routing
 
-`init` prints one `opencode:` line directly after the `repo map` line:
+`init` prints one `opencode:` line directly after the `repo map` line, then any config problem as an `OC-ERROR` line. Example: `opencode: v2.0.19 preset=hybrid investigator=oc:std verifier=claude parser=claude (doctor 2026-09-29)`.
 
-```
-opencode: v2.0.18 preset=hybrid investigator=oc:std verifier=claude parser=claude (doctor 2026-09-28)
-```
+Each role shows `claude`, `oc:<tier>` (opencode on that routing tier) or the reason it is unusable: `claude(down: <kind>)` or `claude(stale)` in mode hybrid (Claude does it), `held(down: <kind>)` or `held(stale)` in mode opencode (the unit waits for you to decide). `opencode: unavailable preset=<preset> (run audit.py doctor --ping)` means there is no usable doctor entry: in mode hybrid every worker is Claude and the skill behaves exactly like requirements-code-audit, so tell the user once about the one-time setup below and continue; in mode opencode every offloadable unit is held.
 
-Each role shows `claude`, `oc:<tier>` (opencode on that routing tier) or `claude(down: <reason>)` (the tier is marked
-down, so Claude does it). `opencode: unavailable → preset claude (run audit.py doctor --ping)` means every worker is
-Claude and the skill behaves exactly like requirements-code-audit — tell the user once about the one-time setup below,
-then continue.
-
-| Work | `claude` | `hybrid` (default) | `max` |
+| Work | `claude` | `hybrid` (default) | `opencode` |
 |---|---|---|---|
 | Lead: init, checklist, faithfulness pass, adjudication, plan.jsonl, report | Claude | Claude | Claude |
-| Investigators | Claude haiku | oc:`std`, overflow → Claude haiku | oc:`std`, overflow → Claude haiku |
-| Verifiers (Wave B) | Claude sonnet | Claude sonnet | oc:`std`, overflow → Claude sonnet |
-| Parsers (large specs) | Claude sonnet | Claude sonnet | oc:`std`, overflow → Claude sonnet |
-| Hedges, fallbacks | — | Claude, same model as the role | same |
-| Workflow mode | Claude | requires preset `claude` | requires preset `claude` |
+| Investigators | Claude haiku | oc:`std`, overflow → Claude haiku | oc:`std`, no Claude overflow |
+| Verifiers (Wave B) | Claude sonnet | Claude sonnet | oc:`std`, no Claude fallback |
+| Parsers (large specs) | Claude sonnet | Claude sonnet | oc:`std`, no Claude fallback |
+| Hedges, fallbacks | — | Claude, same model as the role (sonnet once the run has switched) | none: the unit is held |
+| Workflow mode | Claude | requires mode `claude` | requires mode `claude` |
 
-The preset comes from the routing file (`$HA_ROUTING`, default `~/.config/hybrid-requirements-code-audit/routing.json`,
-deep-merged over the shipped `routing.default.json`); `A init --preset claude|hybrid|max` overrides it for one audit.
-Preset `claude` is identical to requirements-code-audit.
+Models and thinking levels come from two env vars used by all four hybrid skills: `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to STD), each `provider/model[#variant]`. Roles, batch sizes and timeouts come from `$HA_ROUTING` (default `<skill dir>/routing.json`) deep-merged over the shipped `routing.default.json`. `A init --preset claude|hybrid|opencode` sets the mode for one audit. Mode `claude` is identical to requirements-code-audit and never needs opencode or the doctor.
 
 Rules:
-- `plan`, `status` and `parse-plan` print the Claude `DISPATCH` block(s) and then an `OPENCODE` block whose rows end in
-  `→ python3 "…/audit.py" oc-run <name>`. Send **every** `DISPATCH` Agent call **and every** `OPENCODE` command as a
-  Bash call with `run_in_background: true` **in the same message**. Never run them sequentially.
-- Run `A status` on **every** completion notification, Agent or background Bash. An `OC <name> …` line from `oc-run` is
-  informational; act only on what `status` prints.
-- Routing, capacity split, batch files, opencode briefs and output files are the script's job. **Never hand-write** an
-  oc brief (`<name>.oc.md`) or an output file, never edit them, never run `opencode` yourself.
-- `FALLBACK <name> (<reason>) → Claude <role>: <k> uncovered ids` in `status` output is followed by the Claude dispatch
-  lines for those ids; launch them exactly as printed, once. `parse-merge` prints `FALLBACK section-NN (<reason>) → Claude parser`
-  followed by the parser dispatch line. Never retry an opencode batch.
-- A tier that is down, throttled or slow costs nothing extra: `plan` sends items beyond each tier's `max_parallel` to
-  Claude, failed runs come back as `FALLBACK`, and a slow opencode batch gets a Claude hedge in `STRAGGLERS`.
-- **Solo mode** (no Agent tool) runs as preset `claude`: no `OPENCODE` rows are planned, you do every batch yourself.
+- `plan`, `status` and `parse-plan` print the Claude `DISPATCH` block(s) and then an `OPENCODE` block whose rows end in `→ python3 "…/audit.py" oc-run <name>`. Send **every** `DISPATCH` Agent call **and every** `OPENCODE` command as a Bash call with `run_in_background: true` **in the same message**. Never run them sequentially.
+- Run `A status` on **every** completion notification, Agent or background Bash. An `oc-run` exits non-zero when its batch failed, so its notification is flagged; act on what `status` prints.
+- **Relay rule:** any `OC-ERROR` or `OC-WARN` line in tool output → your next message to the user starts with that line (deduplicate identical kind+tier), before any other work. `status` prints the lines nobody has shown yet before anything else. Never treat an `OC` line as informational.
+- Routing, capacity split, batch files, opencode briefs and output files are the script's job. **Never hand-write** an oc brief (`<name>.oc.md`) or an output file, never edit them, never run `opencode` yourself.
+- **Retries and the switch.** An opencode run that fails with `spawn`, `stall`, `throttle` or `crash` is retried up to 3 times (a fresh run, 10 s, 30 s and 60 s apart); each failed try prints `OC-WARN ... :: retry <n>/3 in <s>s: <detail>`. `timeout`, `context` and the warning kinds are not connection problems: no retry, behaviour unchanged. Mode hybrid: when the retries run out, or at once for `auth`, `quota`, `model` and `config`, the **rest of the run** moves to Claude Sonnet 5.5 (`model: sonnet`). One `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the rest of this run uses Claude sonnet` line is printed and logged; the failed batch gets its `FALLBACK` on `model=sonnet`; from then on `plan`, `status` and `parse-plan` send every unit that would have gone to opencode (investigators, and verifiers and parsers if routed there) to Claude with the `model=sonnet` printed in the `DISPATCH` header and print no `OPENCODE` block. Batches already running on opencode finish and are harvested normally; an `oc-run` that starts after the switch spawns nothing and comes back as `FALLBACK (switched)`. The switch lasts until the audit ends (a new `init` starts unswitched); relay the switch line like any other `OC` line. Mode opencode: the same retries happen, then the unit is held as before; nothing switches.
+- Mode hybrid: `FALLBACK <name> (<reason>) → Claude <role>: <k> uncovered ids` in `status` output is followed by the Claude dispatch lines for those ids; launch them exactly as printed, once. `parse-merge` prints `FALLBACK section-NN (<reason>) → Claude parser` followed by the parser dispatch line. Never retry an opencode batch yourself.
+- A tier that is throttled or slow costs nothing extra: `plan` sends items beyond each tier's `max_parallel` to Claude (mode hybrid), failed runs come back as `FALLBACK`, and a slow opencode batch gets a Claude hedge in `STRAGGLERS`. A tier that failed with `auth`, `quota`, `model` or `config` opens the run's circuit breaker: later units skip it without spawning opencode, and `status` prints one `kind=breaker` summary line when a wave ends.
+- **Solo mode** (no Agent tool) runs as mode `claude`: no `OPENCODE` rows are planned, you do every batch yourself.
+
+## Held units (mode opencode)
+
+In mode opencode a unit that cannot run on opencode (no usable tier, a failed batch or verifier after its connection retries, a missing config) is held: `plan`, `parse-plan` and `status` print an `OC-ERROR` line and a `NEXT:` line saying how many units are held. Never dispatch a held unit yourself and never start a Claude worker for it on your own. After relaying the lines, ask once per root cause with AskUserQuestion (identical failures go into one question): retry on opencode / run this role on Claude / switch the run to hybrid / abort.
+
+- Retry: fix the cause (for example `A doctor --ping` or the `HYBRID_OPENCODE_STD` variable), then `A status --retry all` (it re-reads the routing file and the env vars). Held parser sections: fix the cause, then `A parse-plan` again.
+- Run on Claude: `A status --to-claude investigator` or `A status --to-claude verifier` (`all` for both); held parser sections: `A parse-merge --to-claude`. Launch the printed `DISPATCH` lines.
+- Switch to hybrid: `A status --mode hybrid` (held parser sections: then `A parse-merge`).
+- Abort: `A abort` and tell the user what is left.
 
 ## Non-negotiable principles
 
@@ -112,10 +107,22 @@ override the user, who may amend scope explicitly ("also treat file X as part of
 
 ## Workflow
 
-### Step 0 — Init (one turn)
+### Step 0a — Run mode (the first tool call of the skill)
+
+Shared opencode config: !`python3 ${CLAUDE_SKILL_DIR}/scripts/hybrid_shared.py config --skill hybrid-requirements-code-audit`
+
+- Invocation args contain `mode=hybrid|claude|opencode` → use that mode and do not ask. A hand-off from another hybrid skill passes it the same way. `max` still works as an alias of `opencode` and prints one `OC-WARN` line.
+- An audit already exists in `.audit/` (a resumed run) → its `config.json` preset is the mode; never ask again.
+- Otherwise your first tool call is AskUserQuestion, "Run this audit in which mode?", with three options. Put the configured `std` and `lite` specs from the config line above into the descriptions, or "no config" when that line says `UNUSABLE` (a variable is not set or invalid):
+  - **Hybrid (Recommended)** — investigators on opencode, everything else on Claude; every opencode error is reported at once and a failed batch falls back to Claude.
+  - **Claude only** — opencode is never called; identical to requirements-code-audit.
+  - **opencode only** — investigators, verifiers and parsers go to opencode; a failed or unavailable unit is held, never silently run on Claude.
+- Persist the choice with `--preset <mode>` on `A init` (Step 0b). `config.json` freezes it; `plan`, `status` and `oc-run` never ask again.
+
+### Step 0b — Init (one turn)
 
 In ONE turn, in parallel: `Read` the requirements file(s) **and** run
-`A init --spec <file> [--spec <file2>] [--repo <root>] --agents <mode> [--lang vi|en] [--cap N] [--preset claude|hybrid|max]`.
+`A init --spec <file> [--spec <file2>] [--repo <root>] --agents <mode> [--lang vi|en] [--cap N] --preset <mode>`.
 No requirements input → stop and ask; pasted text → save it verbatim to a file first (`--spec-text`). Binary specs:
 `.docx` is extracted verbatim by the script; `.pdf/.xlsx/.pptx` → extract with the matching skill, save under
 `.audit/spec/`, add with `A spec --add`. Flag unclean extractions instead of guessing.
@@ -171,6 +178,7 @@ foreground environments — `-p`, SDK, Cowork — every worker returns at once a
 - **DISPATCH** and **OPENCODE** blocks (wave-2 batches, verifier batches packed to the free slots of each backend,
   `--redispatch` retries).
 - **FALLBACK** lines: a failed opencode batch, re-dispatched to Claude with the lines printed below it.
+- **OC-ERROR / OC-WARN** lines: relay them first (relay rule). In mode opencode a `NEXT:` line about held units means follow "Held units" above.
 - **STRAGGLERS**: a hedged Claude duplicate for any batch running far past the median; whichever file lands first is used.
 - **MEANWHILE**: optional spot-checks of MATCHED items — read the cited lines yourself while agents run; disagree with
   `A adjudicate --set REQ-007 STATUS --note "…"`.
@@ -224,16 +232,15 @@ A discrepancy is anything not ✅; ❓ items are listed separately by tag.
 - **Sequential creep**: agents, opencode runs or searches one at a time → stop and re-batch into one message.
 - **Retyping**: never copy agent or opencode output into chat or files; the scripts merge it.
 - **Hand-made opencode work**: never write an oc brief or output file, never run `opencode` directly, never retry a
-  failed opencode batch — launch the printed `FALLBACK` lines.
+  failed opencode batch yourself — launch the printed `FALLBACK` lines (mode hybrid) or follow "Held units" (mode opencode).
 - **Source-of-truth drift**: "just checking the README/git to understand intent" is exactly what is forbidden.
 - **Paraphrase distortion**: re-read restated requirements against the original wording.
 - **Over-flagging**: extra code is not a failure. **Scope creep**: deliverable = audit + plan, no code edits.
 - **Effort inheritance**: workers must not inherit a `max`/`xhigh` session effort (agent files pin it; in generic mode
   keep prompts short and budgets explicit).
 
-## One-time setup (tell the user when `init` shows `opencode: unavailable` or a `claude(down: …)` role)
+## One-time setup (tell the user when `init` shows `opencode: unavailable` or a `claude(down: …)` / `held(…)` role)
 
 This fork reuses the req-audit plugin's agents and guard; install and concurrency-cap details: `SETUP.md`.
-`A doctor --ping` checks the opencode binary and version, confirms each routing tier's model is listed, sends each tier
-one tiny ping and writes the doctor cache the `opencode:` line reads. Run it once after installing opencode or editing
-the routing file, and again when `init` shows `unavailable` or a `claude(down: …)` role. `init` itself never spawns opencode.
+The tier models come from `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to STD), each `provider/model[#variant]`. Set them in the `"env"` block of `~/.claude/settings.json`, for example `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restart Claude Code (exporting them in the shell works too).
+`A doctor --ping` validates the shared env vars, checks the opencode binary and version, confirms each tier's model is listed, sends each tier one tiny ping and writes the doctor cache the `opencode:` line reads. Every failure prints as an `OC-ERROR` line, one tier's failure never disables the other, and the doctor never creates or edits a config file. Run it once after installing opencode or editing the config, and again when `init` shows `unavailable`, `claude(down: …)` or `held(…)`. `init` itself never spawns opencode.

@@ -65,6 +65,8 @@ class GoldenTests(unittest.TestCase):
         home.mkdir()
         self.env = dict(os.environ)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
+        self.env.pop("HYBRID_OPENCODE_STD", None)
+        self.env.pop("HYBRID_OPENCODE_LITE", None)
         self.env.update({"HOME": str(home), "HA_ROUTING": str(self.tmp / "config" / "routing.json"),
                          "HA_DOCTOR_CACHE": str(self.tmp / "cache" / "doctor.json"),
                          "HA_TELEMETRY": str(self.tmp / "cache" / "lanes.jsonl"), "HA_OC_BIN": str(FAKE),

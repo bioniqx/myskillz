@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import oc_doctor
+import hybrid_shared
 
 FAKE = Path(__file__).resolve().parent / "fake_opencode.py"
 
@@ -151,6 +152,115 @@ class TestCheckOpencode(unittest.TestCase):
     def test_models_timeout_constant_is_60(self):
         self.assertEqual(oc_doctor.MODELS_TIMEOUT_S, 60)
 
+    def _check_with_run(self, fake_run, routing):
+        original_run = oc_doctor.subprocess.run
+        oc_doctor.subprocess.run = fake_run
+        try:
+            checks = oc_doctor.check_opencode("python3", routing)
+        finally:
+            oc_doctor.subprocess.run = original_run
+        return {c["name"]: c for c in checks}
+
+    def test_ok_checks_have_empty_kind_and_line(self):
+        routing = {
+            "tiers": {"std": {"model": "zai-coding-plan/glm-5.3", "variant": "high"}},
+            "rows": {"code": "std"},
+        }
+        checks = oc_doctor.check_opencode(str(FAKE), routing)
+        for check in checks:
+            self.assertEqual(check["kind"], "", check)
+            self.assertEqual(check["line"], "", check)
+            self.assertTrue(check["ok"], check)
+
+    def test_empty_models_listing_is_config_issue_with_oc_line(self):
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+        routing = {
+            "tiers": {"std": {"model": "zai-coding-plan/glm-5.3", "variant": "high"}},
+            "rows": {},
+        }
+        by_name = self._check_with_run(fake_run, routing)
+        models = by_name["opencode_models"]
+        self.assertEqual(models["kind"], "config")
+        self.assertFalse(models["ok"])
+        self.assertEqual(models["detail"], "opencode models listed nothing")
+        self.assertTrue(models["line"].startswith("OC-ERROR hybrid-team doctor "))
+        self.assertIn("kind=config :: opencode models listed nothing", models["line"])
+        # a failed listing gives every tier model check the listing's kind
+        std = by_name["model:std"]
+        self.assertEqual(std["kind"], "config")
+        self.assertFalse(std["ok"])
+
+    def test_failed_models_command_kind_comes_from_classify(self):
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, returncode=1, stdout="", stderr="boom")
+
+        by_name = self._check_with_run(fake_run, {"tiers": {}, "rows": {}})
+        models = by_name["opencode_models"]
+        expected = hybrid_shared.classify(1, [], "boom")
+        self.assertEqual(models["kind"], expected)
+        self.assertFalse(models["ok"])
+        self.assertIn("kind=%s" % expected, models["line"])
+        self.assertIn("boom", models["line"])
+
+    def test_models_timeout_kind_is_timeout(self):
+        def fake_run(cmd, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 0))
+
+        by_name = self._check_with_run(fake_run, {"tiers": {}, "rows": {}})
+        models = by_name["opencode_models"]
+        self.assertEqual(models["kind"], "timeout")
+        self.assertFalse(models["ok"])
+        self.assertIn("kind=timeout", models["line"])
+
+    def test_missing_binary_is_spawn_issue(self):
+        checks = oc_doctor.check_opencode("no-such-opencode-binary-xyz", {})
+        by_name = {c["name"]: c for c in checks}
+        binary = by_name["opencode_binary"]
+        self.assertEqual(binary["kind"], "spawn")
+        self.assertFalse(binary["ok"])
+        self.assertIn("kind=spawn", binary["line"])
+        self.assertIn("not found: no-such-opencode-binary-xyz", binary["line"])
+        self.assertEqual(by_name["opencode_models"]["kind"], "spawn")
+
+    def test_model_missing_from_listing_is_model_issue(self):
+        ghost = {"model": "no-such-model/on-earth", "variant": "low"}
+        routing = {
+            "tiers": {
+                "std": {"model": "zai-coding-plan/glm-5.3", "variant": "high"},
+                "ghost": ghost,
+            },
+            "rows": {},
+        }
+        checks = oc_doctor.check_opencode(str(FAKE), routing)
+        by_name = {c["name"]: c for c in checks}
+        self.assertEqual(by_name["model:std"]["kind"], "")
+        row = by_name["model:ghost"]
+        self.assertEqual(row["kind"], "model")
+        self.assertFalse(row["ok"])
+        self.assertIn("tier=ghost", row["line"])
+        self.assertIn("model=%s" % hybrid_shared.model_spec(ghost), row["line"])
+
+    def test_config_issues_have_config_kind(self):
+        routing = {"tiers": {"std": {"variant": "high"}}, "rows": {"code": "ghost"}}
+        checks = oc_doctor.check_opencode(str(FAKE), routing)
+        by_name = {c["name"]: c for c in checks}
+        self.assertEqual(by_name["tier:std"]["kind"], "config")
+        self.assertFalse(by_name["tier:std"]["ok"])
+        self.assertEqual(by_name["row:code"]["kind"], "config")
+        empty = {c["name"]: c for c in oc_doctor.check_opencode(str(FAKE), {})}
+        self.assertEqual(empty["tiers"]["kind"], "config")
+        self.assertIn("kind=config", empty["tiers"]["line"])
+
+    def test_tier_without_variant_is_ok(self):
+        routing = {"tiers": {"std": {"model": "zai-coding-plan/glm-5.3"}}, "rows": {}}
+        checks = oc_doctor.check_opencode(str(FAKE), routing)
+        by_name = {c["name"]: c for c in checks}
+        self.assertEqual(by_name["tier:std"]["kind"], "")
+        self.assertTrue(by_name["tier:std"]["ok"])
+        self.assertTrue(by_name["model:std"]["ok"])
+
 
 class TestPingTier(unittest.TestCase):
     def _patch(self, build_cmd=None, config_env=None, run_once=None):
@@ -285,6 +395,95 @@ class TestPingTier(unittest.TestCase):
 
         self.assertFalse(ok)
         self.assertEqual(detail["text"], "no sentinel here")
+
+
+class TestPingTierClassified(unittest.TestCase):
+    TIER = {"model": "zai-coding-plan/glm-5.3", "variant": "high"}
+
+    def setUp(self):
+        saved = (oc_doctor.build_cmd, oc_doctor.config_env, oc_doctor.run_once,
+                 oc_doctor.classify, oc_doctor.first_error)
+        self.addCleanup(self._restore, saved)
+        self.result = {}
+        self.err_text = ""
+        self.kind = "crash"
+        self.first = ""
+        self.classify_calls = []
+
+        def fake_run_once(cmd, cwd, env, out_path, err_path, stall_s, timeout_s):
+            if self.err_text:
+                Path(err_path).write_text(self.err_text)
+            return dict(self.result)
+
+        def fake_classify(rc, errors, stderr_tail, killed="", finished=False):
+            self.classify_calls.append((rc, errors, stderr_tail, killed, finished))
+            return self.kind
+
+        oc_doctor.build_cmd = lambda binary, model, variant, message, session="": [binary, "run"]
+        oc_doctor.config_env = lambda prompt_text, engine, commands: {}
+        oc_doctor.run_once = fake_run_once
+        oc_doctor.classify = fake_classify
+        oc_doctor.first_error = lambda errors, stderr_tail: self.first
+
+    @staticmethod
+    def _restore(saved):
+        (oc_doctor.build_cmd, oc_doctor.config_env, oc_doctor.run_once,
+         oc_doctor.classify, oc_doctor.first_error) = saved
+
+    def _ping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            return oc_doctor.ping_tier("opencode", self.TIER, "ping", "ht-programmer", Path(tmp))
+
+    def test_ok_ping_carries_cache_key_and_no_kind(self):
+        self.result = {"session": "s0", "text": oc_doctor.SENTINEL, "rc": 0, "reason": ""}
+        ok, detail = self._ping()
+        self.assertEqual(detail["key"], hybrid_shared.cache_key(self.TIER))
+        self.assertTrue(ok)
+        self.assertEqual(detail["kind"], "")
+        self.assertEqual(detail["level"], "")
+        self.assertEqual(detail["message"], "")
+        self.assertEqual(detail["log"], "")
+        self.assertEqual(self.classify_calls, [])
+
+    def test_failed_ping_is_classified_with_stderr_tail_and_log(self):
+        self.result = {"session": "s1", "text": "", "rc": 1, "reason": "",
+                       "errors": ["bad key"], "finished": False}
+        self.err_text = "line one\nauth failed\n"
+        self.kind = "auth"
+        self.first = "invalid api key"
+        ok, detail = self._ping()
+        self.assertFalse(ok)
+        self.assertEqual(detail["kind"], "auth")
+        self.assertEqual(detail["level"], "OC-ERROR")
+        self.assertEqual(detail["message"], "invalid api key")
+        self.assertTrue(detail["log"].endswith("doctor-ping.err"))
+        rc, errors, stderr_tail, killed, finished = self.classify_calls[0]
+        self.assertEqual((rc, errors, killed, finished), (1, ["bad key"], "", False))
+        self.assertIn("auth failed", stderr_tail)
+
+    def test_kill_reason_is_passed_to_classify_as_killed(self):
+        self.result = {"session": "s2", "text": "", "rc": None, "reason": "stall"}
+        self.kind = "stall"
+        ok, detail = self._ping()
+        self.assertFalse(ok)
+        self.assertEqual(self.classify_calls[0][3], "stall")
+        self.assertEqual(detail["kind"], "stall")
+        self.assertEqual(detail["error"], "stall")
+        self.assertIn("stall", detail["message"])
+
+    def test_wrong_reply_without_classified_failure_is_a_warning(self):
+        self.kind = ""
+        self.result = {"session": "s3", "text": "no sentinel here", "rc": 0, "reason": ""}
+        ok, detail = self._ping()
+        self.assertFalse(ok)
+        self.assertEqual(detail["kind"], "format")
+        self.assertEqual(detail["level"], "OC-WARN")
+        self.assertIn("no sentinel here", detail["message"])
+        self.result = {"session": "s4", "text": "", "rc": 0, "reason": ""}
+        ok, detail = self._ping()
+        self.assertFalse(ok)
+        self.assertEqual(detail["kind"], "empty")
+        self.assertEqual(detail["level"], "OC-WARN")
 
 
 class TestLaneStats(unittest.TestCase):

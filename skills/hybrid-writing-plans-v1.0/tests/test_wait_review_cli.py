@@ -1,14 +1,20 @@
+import contextlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import hp_telemetry  # noqa: E402
+import hybrid_shared  # noqa: E402
+import plan_tool  # noqa: E402
 
 TESTS = Path(__file__).resolve().parent
 TOOL = str(Path(__file__).resolve().parents[1] / "scripts" / "plan_tool.py")
@@ -58,7 +64,10 @@ class CliBase(unittest.TestCase):
         self.doctor = self.tmp / "doctor.json"
         self.env = dict(os.environ, HOME=str(self.home), HP_ROUTING=str(self.tmp / "routing.json"),
                         HP_DOCTOR_CACHE=str(self.doctor), HP_TELEMETRY=str(self.telemetry),
-                        HP_OC_BIN=FAKE, PYTHONDONTWRITEBYTECODE="1", PYTHONIOENCODING="utf-8")
+                        HP_OC_BIN=FAKE, HYBRID_OPENCODE_STD="zai-coding-plan/glm-5.3#high",
+                        HYBRID_OPENCODE_LITE="zai-coding-plan/glm-5.3-flash#low",
+                        XDG_DATA_HOME=str(self.tmp / "xdg"), PYTHONDONTWRITEBYTECODE="1",
+                        PYTHONIOENCODING="utf-8")
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
 
     def tearDown(self):
@@ -144,6 +153,108 @@ class WaitFallbackTest(CliBase):
         self.assertTrue((self.work / "oc" / "O01.fallback.sent").exists())
 
 
+OC_ERROR = "OC-ERROR hybrid-writing-plans O01 tier=std model=zai-coding-plan/glm-5.3 kind=auth :: 401 unauthorized"
+OC_WARN = "OC-WARN hybrid-writing-plans O01 tier=std model=zai-coding-plan/glm-5.3 kind=recovered :: exit 1 after a finished step"
+
+
+class WaitOcLinesTest(CliBase):
+    def wait_inprocess(self, fresh, *args):
+        calls = []
+
+        def fake_take_unreported(path):
+            calls.append(path)
+            return list(fresh) if len(calls) == 1 else []
+
+        out = io.StringIO()
+        with mock.patch.object(hybrid_shared, "take_unreported", side_effect=fake_take_unreported):
+            with contextlib.redirect_stdout(out):
+                rc = plan_tool.main(["wait", str(self.plan)] + list(args))
+        return rc, out.getvalue().splitlines(), calls
+
+    def test_unreported_lines_print_before_done(self):
+        self.write_work(backend={"O01": "claude", "T02": "claude"})
+        self.write_task("T01", mark="ok")
+        self.write_task("T02", mark="ok")
+        rc, lines, calls = self.wait_inprocess([OC_WARN], "--timeout", "10", "--idle", "10")
+        self.assertEqual(rc, 0, lines)
+        self.assertEqual(lines[0], OC_WARN)
+        self.assertTrue(lines[1].startswith("DONE 2/2 tasks"), lines)
+        self.assertEqual(calls[0], self.work / "oc" / "oc-errors.jsonl")
+
+    def test_new_oc_error_returns_at_once_with_exit_2(self):
+        self.write_work(backend={"O01": "claude", "T02": "claude"})
+        rc, lines, calls = self.wait_inprocess([OC_ERROR], "--timeout", "30", "--idle", "30")
+        self.assertEqual(rc, 2, lines)
+        self.assertEqual(lines[0], OC_ERROR)
+        self.assertIn("Relay the OC-ERROR lines above", lines[1])
+
+    def test_held_groups_end_the_wait_with_exit_3(self):
+        self.write_work(backend={"O01": "held", "T02": "claude"})
+        self.write_task("T02", mark="ok")
+        r = self.run_tool("wait", str(self.plan), "--timeout", "10", "--idle", "10")
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("HELD T01", r.stdout)
+
+    def test_include_held_waits_for_the_claude_writer(self):
+        self.write_work(backend={"O01": "held", "T02": "claude"})
+        self.write_task("T02", mark="ok")
+        r = self.run_tool("wait", str(self.plan), "--include-held", "--timeout", "2", "--idle", "1")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("PENDING", r.stdout)
+
+    def test_held_marker_from_a_failed_group_is_not_offered_for_dispatch(self):
+        self.write_work(preset="opencode")
+        (self.work / "oc" / "oc-write.pid").write_text(str(os.getpid()), encoding="utf-8")
+        marker = {"gid": "O01", "reason": "auth", "tasks": ["T01"], "held": True, "model": "sonnet",
+                  "brief": str(self.work / "briefs" / "O01F.md"), "errors": {}}
+        (self.work / "oc" / "O01.fallback").write_text(json.dumps(marker), encoding="utf-8")
+        r = self.run_tool("wait", str(self.plan), "--timeout", "10", "--idle", "10")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertTrue(any(l.startswith("HELD O01 (auth) T01") for l in r.stdout.splitlines()), r.stdout)
+        self.assertIn("Do not dispatch the HELD groups above.", r.stdout)
+        self.assertNotIn("Launch every FALLBACK", r.stdout)
+
+
+    def test_group_held_at_runtime_ends_a_second_wait_with_exit_3(self):
+        self.write_work(preset="opencode", backend={"O01": "oc:std", "T02": "claude"})
+        self.write_task("T02", mark="ok")
+        marker = {"gid": "O01", "reason": "auth", "tasks": ["T01"], "held": True, "model": "sonnet",
+                  "brief": str(self.work / "briefs" / "O01F.md"), "errors": {}}
+        (self.work / "oc" / "O01.fallback").write_text(json.dumps(marker), encoding="utf-8")
+        (self.work / "oc" / "O01.fallback.sent").write_text("1", encoding="utf-8")  # the HELD line was already shown
+        r = self.run_tool("wait", str(self.plan), "--timeout", "10", "--idle", "10")
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("HELD T01 not written", r.stdout)
+        r2 = self.run_tool("wait", str(self.plan), "--include-held", "--timeout", "2", "--idle", "1")
+        self.assertEqual(r2.returncode, 1, r2.stdout + r2.stderr)  # the user chose Claude: wait for it
+        self.assertIn("PENDING", r2.stdout)
+
+    def test_held_task_ids_reads_held_markers_but_not_plain_fallbacks(self):
+        info = self.write_work(backend={"O01": "oc:std", "T02": "claude"})
+        (self.work / "oc" / "O01.fallback").write_text(
+            json.dumps({"gid": "O01", "tasks": ["T01"], "held": True}), encoding="utf-8")
+        (self.work / "oc" / "O02.fallback").write_text(
+            json.dumps({"gid": "O02", "tasks": ["T02"]}), encoding="utf-8")
+        (self.work / "oc" / "O03.fallback").write_text("not json", encoding="utf-8")
+        self.assertEqual(plan_tool.held_task_ids(info, str(self.work)), {"T01"})
+        self.assertEqual(plan_tool.held_task_ids(info), set())
+
+
+class CleanWorkTest(CliBase):
+    def test_clean_keeps_the_error_log(self):
+        (self.work / "oc" / "oc-errors.jsonl").write_text('{"line": "x"}\n', encoding="utf-8")
+        (self.work / "oc" / "O01.1.err").write_text("boom\n", encoding="utf-8")
+        self.write_task("T01", mark="ok")
+        self.assertTrue(plan_tool.clean_work(str(self.work)))
+        self.assertEqual((self.work / "oc" / "oc-errors.jsonl").read_text(encoding="utf-8"), '{"line": "x"}\n')
+        self.assertEqual(sorted(p.name for p in self.work.rglob("*")), ["oc", "oc-errors.jsonl"])
+
+    def test_clean_removes_everything_without_an_error_log(self):
+        self.write_task("T01", mark="ok")
+        self.assertFalse(plan_tool.clean_work(str(self.work)))
+        self.assertFalse(self.work.exists())
+
+
 class ReviewOcTest(CliBase):
     def test_review_oc_all_picks_oc_tasks_and_stores_hash(self):
         self.write_work()
@@ -199,46 +310,121 @@ class WaitReviewTelemetryTest(CliBase):
         self.assertEqual(len(again), 2)
 
 
-UNAVAILABLE = "opencode: unavailable → preset claude (run plan_tool.py doctor --ping)"
+SHARED = {"tiers": {
+    "std": {"model": "zai-coding-plan/glm-5.3", "variant": "high"},
+    "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low"}}}
 
 
 class ContextLineTest(CliBase):
-    def write_doctor(self, std_down=None):
-        tiers = {
-            "std": {"model": "zai-coding-plan/glm-5.3", "variant": "high", "listed": True, "ping": "ok",
-                    "note": "", "down": std_down},
-            "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low", "listed": True, "ping": "ok",
-                     "note": "", "down": None},
-        }
-        self.doctor.write_text(json.dumps({"t": "2026-09-28T10:00:00Z", "ok": True, "version": "2.0.18",
+    def write_doctor(self, std_ok=True):
+        tiers = {}
+        for name, spec in SHARED["tiers"].items():
+            ok = std_ok or name != "std"
+            tiers[name] = {"ok": ok, "key": hybrid_shared.cache_key(spec), "checked_at": time.time(),
+                           "kind": "" if ok else "auth", "detail": "" if ok else "401 unauthorized"}
+        self.doctor.write_text(json.dumps({"t": "2026-09-29T10:00:00Z", "ok": True, "version": "2.0.19",
                                            "binary": FAKE, "tiers": tiers}), encoding="utf-8")
 
-    def opencode_line(self, *args):
+    def context_lines(self, *args):
         r = self.run_tool("context", *args)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         lines = r.stdout.splitlines()
         i = next(n for n, l in enumerate(lines) if l.startswith("writer agent:"))
-        return lines[i + 1]
+        return lines[i + 1:i + 4]
+
+    def opencode_line(self, *args):
+        return self.context_lines(*args)[0]
 
     def test_no_doctor_cache_prints_unavailable(self):
-        self.assertEqual(self.opencode_line(), UNAVAILABLE)
+        line = self.opencode_line()
+        self.assertTrue(line.startswith("opencode:"), line)
+        self.assertIn("unavailable", line)
 
     def test_hybrid_line_from_cache(self):
         self.write_doctor()
-        self.assertEqual(self.opencode_line(),
-                         "opencode: v2.0.18 preset=hybrid light=oc:lite std=oc:std deep=claude "
-                         "review_oc=all (doctor 2026-09-28)")
+        line = self.opencode_line()
+        for part in ("v2.0.19", "preset=hybrid", "light=oc:lite", "std=oc:std", "deep=claude"):
+            self.assertIn(part, line)
 
-    def test_preset_argument_is_passed(self):
+    def test_opencode_mode_argument_is_passed(self):
         self.write_doctor()
-        self.assertEqual(self.opencode_line("--preset", "max"),
-                         "opencode: v2.0.18 preset=max light=oc:lite std=oc:std deep=oc:std "
-                         "review_oc=risky (doctor 2026-09-28)")
+        line = self.opencode_line("mode=opencode")
+        self.assertIn("preset=opencode", line)
+        self.assertIn("deep=oc:std", line)
 
-    def test_down_tier_shows_reason(self):
-        self.write_doctor(std_down={"reason": "unavailable", "message": "model not found",
-                                    "at": "2026-09-28T10:05:00Z"})
-        self.assertIn("std=claude(down: unavailable)", self.opencode_line())
+    def test_max_preset_argument_maps_to_opencode(self):
+        self.write_doctor()
+        self.assertIn("preset=opencode", self.opencode_line("--preset", "max"))
+
+    def test_failed_tier_shows_claude(self):
+        self.write_doctor(std_ok=False)
+        self.assertIn("std=claude", self.opencode_line())
+
+    def test_config_line_shows_source_and_specs(self):
+        self.write_doctor()
+        line = self.context_lines()[1]
+        self.assertIn(hybrid_shared.SHARED_SOURCE, line)
+        self.assertIn("std=zai-coding-plan/glm-5.3#high, lite=zai-coding-plan/glm-5.3-flash#low", line)
+
+    def test_config_line_marks_each_tier_skill_or_shared(self):
+        self.write_doctor()
+        Path(self.env["HP_ROUTING"]).write_text(
+            json.dumps({"tiers": {"lite": {"model": "own/model"}}}), encoding="utf-8")
+        line = self.context_lines()[1]
+        self.assertIn("lite=own/model", line)
+        self.assertIn("model from: std (shared), lite (skill)", line)
+
+    def test_config_line_without_the_env_says_std_is_not_set(self):
+        self.env.pop("HYBRID_OPENCODE_STD")
+        self.env.pop("HYBRID_OPENCODE_LITE")
+        line = self.context_lines()[1]
+        self.assertIn(hybrid_shared.SHARED_SOURCE, line)
+        self.assertIn("HYBRID_OPENCODE_STD is not set", line)
+
+    def test_mode_line(self):
+        self.assertTrue(self.context_lines()[2].startswith("mode: unset"))
+        self.assertEqual(self.context_lines("mode=claude")[2], "mode: claude (from arguments)")
+        self.assertEqual(self.context_lines("--preset", "max")[2], "mode: opencode (from arguments)")
+        self.assertTrue(self.context_lines("mode=bogus")[2].startswith("mode: 'bogus' is not valid"))
+
+
+class PreloadCommandTest(CliBase):
+    """The `!` preload line of SKILL.md, run through a shell the way Claude Code inlines $ARGUMENTS."""
+
+    def preload(self, arguments):
+        text = (Path(TOOL).parents[1] / "SKILL.md").read_text(encoding="utf-8")
+        block = text.split("```!\n", 1)[1].split("\n```", 1)[0]
+        cmd = block.replace("${CLAUDE_SKILL_DIR}", str(Path(TOOL).parents[1])).replace("$ARGUMENTS", arguments)
+        return subprocess.run(["sh", "-c", cmd], env=self.env, cwd=str(self.root), stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, timeout=90, universal_newlines=True, encoding="utf-8")
+
+    def test_apostrophe_in_the_arguments_does_not_break_the_preload(self):
+        self.write_doctor()
+        r = self.preload("docs/plans/demo.md it's the users' plan --thorough mode=opencode")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(r.stderr, "")
+        self.assertIn("mode: opencode (from arguments)", r.stdout)
+        self.assertIn("preset=opencode", r.stdout)
+        self.assertIn("mode: THOROUGH", r.stdout)
+
+    def test_no_arguments_still_runs(self):
+        r = self.preload("")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("mode: unset", r.stdout)
+
+    def test_mode_inside_one_string_argument(self):
+        r = self.run_tool("context", "docs/plans/demo.md --thorough mode=claude")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("mode: claude (from arguments)", r.stdout)
+        self.assertIn("mode: THOROUGH", r.stdout)
+
+    def write_doctor(self):
+        specs = {"std": {"model": "zai-coding-plan/glm-5.3", "variant": "high"},
+                 "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low"}}
+        tiers = {n: {"ok": True, "key": hybrid_shared.cache_key(t), "checked_at": time.time(), "kind": "", "detail": ""}
+                 for n, t in specs.items()}
+        self.doctor.write_text(json.dumps({"t": "2026-09-29T10:00:00Z", "ok": True, "version": "2.0.19",
+                                           "binary": FAKE, "tiers": tiers}), encoding="utf-8")
 
 
 class SetupAgentTest(CliBase):

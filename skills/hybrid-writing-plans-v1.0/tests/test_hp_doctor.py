@@ -13,10 +13,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import hp_doctor
 from hp_config import AGENT_NAME, SENTINEL
+from hybrid_shared import cache_key
 
 MODELS_OUT = "zai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\n"
 UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 UNAVAILABLE_LINE = "opencode: unavailable → preset claude (run plan_tool.py doctor --ping)"
+NOW = 1800000000.0
+ENTRY_KEYS = {"ok", "key", "checked_at", "kind", "detail"}
 
 
 def _routing():
@@ -35,18 +38,18 @@ def _routing():
     }
 
 
+def _entry(name, ok=True, kind="", detail="listed", age=10.0):
+    return {"ok": ok, "key": cache_key(_routing()["tiers"][name]),
+            "checked_at": NOW - age, "kind": kind, "detail": detail}
+
+
 def _doctor():
     return {
         "t": "2026-09-28T12:00:00Z",
         "ok": True,
         "version": "2.0.18",
         "binary": "/usr/bin/opencode",
-        "tiers": {
-            "std": {"model": "zai-coding-plan/glm-5.3", "variant": "high",
-                    "listed": True, "ping": "ok", "note": SENTINEL, "down": None},
-            "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low",
-                     "listed": True, "ping": "ok", "note": SENTINEL, "down": None},
-        },
+        "tiers": {"std": _entry("std"), "lite": _entry("lite")},
     }
 
 
@@ -71,6 +74,8 @@ class EnvIsolatedTestCase(unittest.TestCase):
         os.environ["HP_ROUTING"] = str(tmp / "cfg" / "routing.json")
         os.environ["HP_DOCTOR_CACHE"] = str(tmp / "cache" / "doctor.json")
         os.environ["HP_TELEMETRY"] = str(tmp / "cache" / "lanes.jsonl")
+        os.environ.pop("HYBRID_OPENCODE_STD", None)
+        os.environ.pop("HYBRID_OPENCODE_LITE", None)
 
     def tearDown(self):
         os.environ.clear()
@@ -147,108 +152,109 @@ class TestLoadWriteDoctor(EnvIsolatedTestCase):
         self.assertEqual(sorted(p.name for p in path.parent.iterdir()), ["doctor.json"])
 
 
-class TestClassifyError(unittest.TestCase):
-    def test_unavailable_patterns(self):
-        for message in (
-            "APIError: Your coding plan has expired",
-            "Please renew your subscription",
-            "Model unavailable for this account",
-            "401 Unauthorized",
-            "request unauthorised",
-            "ProviderError: Invalid API key",
-            "Insufficient balance",
-            "insufficient quota for model",
-        ):
-            self.assertEqual(hp_doctor.classify_error(message), "unavailable", message)
-
-    def test_unavailable_wins_over_throttle(self):
-        self.assertEqual(hp_doctor.classify_error("429: plan expired"), "unavailable")
-
-    def test_throttle_patterns(self):
-        for message in ("APIError: 429 Too Many Requests", "rate limit exceeded",
-                        "Rate-limited, retry later", "ratelimit hit"):
-            self.assertEqual(hp_doctor.classify_error(message), "throttle", message)
-
-    def test_other_errors_are_unclassified(self):
-        self.assertEqual(hp_doctor.classify_error("boom: connection reset"), "")
-        self.assertEqual(hp_doctor.classify_error(""), "")
-
-
-class TestMarkDown(EnvIsolatedTestCase):
-    def test_mark_down_sets_entry_and_keeps_the_rest(self):
-        path = Path(self._tmp) / "cache" / "doctor.json"
-        hp_doctor.write_doctor(path, _doctor())
-        hp_doctor.mark_down(path, "std", "unavailable",
-                            "APIError: plan expired\nRenew at https://example.invalid")
-        loaded = hp_doctor.load_doctor(path)
-        down = loaded["tiers"]["std"]["down"]
-        self.assertEqual(down["reason"], "unavailable")
-        self.assertEqual(down["message"], "APIError: plan expired")
-        self.assertRegex(down["at"], UTC_RE)
-        self.assertIsNone(loaded["tiers"]["lite"]["down"])
-        self.assertTrue(loaded["tiers"]["std"]["listed"])
-        self.assertEqual(loaded["version"], "2.0.18")
-        self.assertTrue(loaded["ok"])
-
-    def test_mark_down_creates_missing_file_and_tier(self):
-        path = Path(self._tmp) / "fresh" / "doctor.json"
-        hp_doctor.mark_down(path, "lite", "unavailable", "insufficient balance")
-        loaded = hp_doctor.load_doctor(path)
-        self.assertEqual(loaded["tiers"]["lite"]["down"]["reason"], "unavailable")
-        self.assertEqual(loaded["tiers"]["lite"]["down"]["message"], "insufficient balance")
+class TestDownMarksAreGone(unittest.TestCase):
+    def test_persistent_down_marks_and_the_local_classifier_are_removed(self):
+        for name in ("mark_down", "classify_error", "_UNAVAILABLE_RE"):
+            self.assertFalse(hasattr(hp_doctor, name), name)
 
 
 class TestStatusLine(EnvIsolatedTestCase):
+    def _line(self, doctor, backends=None, preset="hybrid", now=NOW):
+        backends = backends or {"light": "oc:lite", "std": "oc:std", "deep": "claude"}
+        with mock.patch.object(hp_doctor, "route",
+                               side_effect=lambda tier, routing, doc, pre: backends[tier]), \
+             mock.patch.object(hp_doctor, "effective_preset", return_value=preset), \
+             mock.patch.object(hp_doctor, "review_policy", return_value="all"):
+            return hp_doctor.status_line(_routing(), doctor, preset, now)
+
+    def _all_claude(self):
+        return {"light": "claude", "std": "claude", "deep": "claude"}
+
     def test_unavailable_when_doctor_missing(self):
-        self.assertEqual(hp_doctor.status_line(_routing(), {}), UNAVAILABLE_LINE)
+        self.assertEqual(self._line({}), UNAVAILABLE_LINE)
 
     def test_unavailable_when_version_missing(self):
         doctor = _doctor()
         doctor["version"] = ""
-        self.assertEqual(hp_doctor.status_line(_routing(), doctor), UNAVAILABLE_LINE)
+        self.assertEqual(self._line(doctor), UNAVAILABLE_LINE)
 
     def test_unavailable_when_not_ok(self):
         doctor = _doctor()
         doctor["ok"] = False
-        self.assertEqual(hp_doctor.status_line(_routing(), doctor), UNAVAILABLE_LINE)
+        self.assertEqual(self._line(doctor), UNAVAILABLE_LINE)
+
+    def test_claude_preset_needs_no_doctor(self):
+        self.assertEqual(self._line({}, preset="claude"), "opencode: not used (preset claude)")
 
     def test_matches_spec_example(self):
         self.assertEqual(
-            hp_doctor.status_line(_routing(), _doctor()),
+            self._line(_doctor()),
             "opencode: v2.0.18 preset=hybrid light=oc:lite std=oc:std deep=claude "
             "review_oc=all (doctor 2026-09-28)",
         )
 
-    def test_down_tier_shows_reason(self):
+    def test_down_tier_shows_kind(self):
         doctor = _doctor()
-        doctor["tiers"]["std"]["down"] = {"reason": "unavailable", "message": "expired",
-                                          "at": "2026-09-28T12:05:00Z"}
+        doctor["tiers"]["std"] = _entry("std", ok=False, kind="auth", detail="expired")
+        backends = {"light": "oc:lite", "std": "claude", "deep": "claude"}
         self.assertEqual(
-            hp_doctor.status_line(_routing(), doctor),
-            "opencode: v2.0.18 preset=hybrid light=oc:lite std=claude(down: unavailable) "
+            self._line(doctor, backends),
+            "opencode: v2.0.18 preset=hybrid light=oc:lite std=claude(down: auth) "
             "deep=claude review_oc=all (doctor 2026-09-28)",
         )
 
-    def test_mark_down_then_status_line(self):
-        path = Path(self._tmp) / "cache" / "doctor.json"
-        hp_doctor.write_doctor(path, _doctor())
-        hp_doctor.mark_down(path, "lite", "unavailable", "Invalid API key")
-        line = hp_doctor.status_line(_routing(), hp_doctor.load_doctor(path))
-        self.assertIn(" light=claude(down: unavailable) ", line)
-        self.assertIn(" std=oc:std ", line)
-
-    def test_max_preset_override(self):
+    def test_stale_tier_says_stale(self):
+        doctor = _doctor()
+        doctor["tiers"]["std"] = _entry("std", age=100000.0)
+        backends = {"light": "oc:lite", "std": "claude", "deep": "claude"}
         self.assertEqual(
-            hp_doctor.status_line(_routing(), _doctor(), "max"),
-            "opencode: v2.0.18 preset=max light=oc:lite std=oc:std deep=oc:std "
-            "review_oc=risky (doctor 2026-09-28)",
+            self._line(doctor, backends),
+            "opencode: v2.0.18 preset=hybrid light=oc:lite std=claude(stale) "
+            "deep=claude review_oc=all (doctor 2026-09-28)",
         )
 
-    def test_claude_preset_routes_everything_to_claude(self):
+    def test_now_argument_drives_staleness(self):
+        line = self._line(_doctor(), self._all_claude(), now=NOW + 100000.0)
+        self.assertIn(" light=claude(stale) ", line)
+        self.assertIn(" std=claude(stale) ", line)
+        self.assertIn(" deep=claude ", line)
+
+    def test_default_now_is_the_clock(self):
+        with mock.patch.object(hp_doctor, "_clock", return_value=NOW + 100000.0):
+            line = self._line(_doctor(), self._all_claude(), now=0.0)
+        self.assertIn(" std=claude(stale) ", line)
+
+    def test_missing_tier_entry_is_stale(self):
         doctor = _doctor()
-        doctor["tiers"]["std"]["down"] = {"reason": "unavailable", "message": "expired",
-                                          "at": "2026-09-28T12:05:00Z"}
-        line = hp_doctor.status_line(_routing(), doctor, "claude")
+        del doctor["tiers"]["lite"]
+        line = self._line(doctor, self._all_claude())
+        self.assertIn(" light=claude(stale) ", line)
+        self.assertIn(" std=claude ", line)
+
+    def test_changed_model_is_stale(self):
+        doctor = _doctor()
+        doctor["tiers"]["std"]["key"] = "old-provider/old-model#high"
+        line = self._line(doctor, self._all_claude())
+        self.assertIn(" std=claude(stale) ", line)
+
+    def test_held_tier_shows_kind(self):
+        doctor = _doctor()
+        doctor["tiers"]["std"] = _entry("std", ok=False, kind="quota", detail="no credit")
+        backends = {"light": "oc:lite", "std": "held", "deep": "claude"}
+        line = self._line(doctor, backends, preset="opencode")
+        self.assertIn(" std=held(down: quota) ", line)
+
+    def test_opencode_preset_notes_follow_max_roles(self):
+        doctor = _doctor()
+        doctor["tiers"]["std"] = _entry("std", ok=False, kind="quota", detail="no credit")
+        backends = {"light": "oc:lite", "std": "held", "deep": "held"}
+        line = self._line(doctor, backends, preset="opencode")
+        self.assertIn(" deep=held(down: quota) ", line)
+
+    def test_claude_preset_line(self):
+        doctor = _doctor()
+        doctor["tiers"]["std"] = _entry("std", ok=False, kind="auth", detail="expired")
+        line = self._line(doctor, self._all_claude(), preset="claude")
         self.assertTrue(line.startswith(
             "opencode: v2.0.18 preset=claude light=claude std=claude deep=claude review_oc="))
         self.assertNotIn("down", line)
@@ -274,16 +280,20 @@ class TestRunDoctor(EnvIsolatedTestCase):
         return _run, calls
 
     def _no_run_once(self, *args, **kwargs):
-        raise AssertionError("run_once must not be called without ping")
+        raise AssertionError("run_once must not be called here")
 
-    def _doctor_run(self, ping=False, previous=None, run_once_fake=None, **fake_kwargs):
+    def _doctor_run(self, ping=False, previous=None, run_once_fake=None, kind="crash",
+                    routing=None, which="/usr/bin/opencode", **fake_kwargs):
         fake, calls = self._subprocess_fake(**fake_kwargs)
-        with mock.patch.object(hp_doctor.shutil, "which", return_value="/usr/bin/opencode"), \
+        self.classify = mock.Mock(return_value=kind)
+        with mock.patch.object(hp_doctor.shutil, "which", return_value=which), \
              mock.patch.object(hp_doctor.subprocess, "run", side_effect=fake), \
              mock.patch.object(hp_doctor, "config_env", return_value={}), \
+             mock.patch.object(hp_doctor, "classify", self.classify), \
+             mock.patch.object(hp_doctor, "_clock", return_value=NOW), \
              mock.patch.object(hp_doctor, "run_once",
                                side_effect=run_once_fake or self._no_run_once):
-            result = hp_doctor.run_doctor("opencode", _routing(), ping,
+            result = hp_doctor.run_doctor("opencode", routing or _routing(), ping,
                                           Path(self._tmp) / "work", previous or {})
         return result, calls
 
@@ -295,13 +305,13 @@ class TestRunDoctor(EnvIsolatedTestCase):
             return result
         return _run_once
 
-    def _down(self):
-        return {"reason": "unavailable", "message": "expired", "at": "2026-09-27T08:00:00Z"}
-
-    def _previous_with_std_down(self):
-        previous = _doctor()
-        previous["tiers"]["std"]["down"] = self._down()
-        return previous
+    def _ping_by_model(self, by_model):
+        def _run_once(cmd, cwd, env, out_path, err_path, stall_s, timeout_s):
+            for spec, result in by_model.items():
+                if spec in cmd:
+                    return result
+            raise AssertionError("unexpected ping cmd %r" % (cmd,))
+        return _run_once
 
     def test_plain_doctor_checks_version_and_models(self):
         result, calls = self._doctor_run()
@@ -311,15 +321,20 @@ class TestRunDoctor(EnvIsolatedTestCase):
         self.assertEqual(result["version"], "2.0.18")
         self.assertEqual(result["binary"], "/usr/bin/opencode")
         std = result["tiers"]["std"]
-        self.assertEqual(std["model"], "zai-coding-plan/glm-5.3")
-        self.assertEqual(std["variant"], "high")
-        self.assertTrue(std["listed"])
-        self.assertEqual(std["ping"], "unchecked")
-        self.assertIsNone(std["down"])
-        self.assertIsInstance(std["note"], str)
-        self.assertTrue(result["tiers"]["lite"]["listed"])
+        self.assertEqual(set(std), ENTRY_KEYS)
+        self.assertEqual(std, {"ok": True, "key": cache_key(_routing()["tiers"]["std"]),
+                               "checked_at": NOW, "kind": "", "detail": "listed"})
+        self.assertEqual(result["tiers"]["lite"]["key"], cache_key(_routing()["tiers"]["lite"]))
         self.assertIn(("--version", 10), calls)
         self.assertIn(("models", 60), calls)
+        self.classify.assert_not_called()
+
+    def test_key_changes_when_the_variant_changes(self):
+        routing = _routing()
+        routing["tiers"]["std"]["variant"] = "low"
+        result, _calls = self._doctor_run(routing=routing)
+        self.assertNotEqual(result["tiers"]["std"]["key"], cache_key(_routing()["tiers"]["std"]))
+        self.assertEqual(result["tiers"]["std"]["key"], cache_key(routing["tiers"]["std"]))
 
     def test_version_output_is_normalised(self):
         result, _calls = self._doctor_run(version_out="opencode v2.0.18 (abc123)\nupdate available\n")
@@ -328,38 +343,89 @@ class TestRunDoctor(EnvIsolatedTestCase):
     def test_models_are_retried_once(self):
         result, calls = self._doctor_run(models_failures=1)
         self.assertTrue(result["ok"])
-        self.assertTrue(result["tiers"]["std"]["listed"])
+        self.assertTrue(result["tiers"]["std"]["ok"])
         self.assertEqual([c for c in calls if c[0] == "models"], [("models", 60), ("models", 60)])
 
-    def test_models_failing_twice_is_not_ok(self):
+    def test_models_failing_twice_fails_every_tier_with_the_classified_kind(self):
         result, calls = self._doctor_run(models_failures=2)
         self.assertFalse(result["ok"])
-        self.assertFalse(result["tiers"]["std"]["listed"])
-        self.assertFalse(result["tiers"]["lite"]["listed"])
+        for name in ("std", "lite"):
+            entry = result["tiers"][name]
+            self.assertFalse(entry["ok"])
+            self.assertEqual(entry["kind"], "crash")
+            self.assertIn("boom", entry["detail"])
+        self.classify.assert_called_with(1, [], "boom")
         self.assertEqual(len([c for c in calls if c[0] == "models"]), 2)
 
-    def test_unlisted_model(self):
+    def test_empty_models_listing_is_a_config_error(self):
+        result, calls = self._doctor_run(models_out="")
+        self.assertFalse(result["ok"])
+        for name in ("std", "lite"):
+            entry = result["tiers"][name]
+            self.assertFalse(entry["ok"])
+            self.assertEqual(entry["kind"], "config")
+            self.assertEqual(entry["detail"], "opencode models listed nothing")
+        self.assertEqual(len([c for c in calls if c[0] == "models"]), 2)
+
+    def test_binary_not_found_is_a_spawn_error(self):
+        result, _calls = self._doctor_run(which=None)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["binary"], "opencode")
+        std = result["tiers"]["std"]
+        self.assertFalse(std["ok"])
+        self.assertEqual(std["kind"], "spawn")
+        self.assertIn("not found", std["detail"])
+
+    def test_unlisted_model_fails_only_that_tier(self):
         result, _calls = self._doctor_run(models_out="zai-coding-plan/glm-5.3\n")
         self.assertTrue(result["ok"])
-        self.assertTrue(result["tiers"]["std"]["listed"])
-        self.assertFalse(result["tiers"]["lite"]["listed"])
-        self.assertIn("zai-coding-plan/glm-5.3-flash", result["tiers"]["lite"]["note"])
+        self.assertTrue(result["tiers"]["std"]["ok"])
+        lite = result["tiers"]["lite"]
+        self.assertFalse(lite["ok"])
+        self.assertEqual(lite["kind"], "model")
+        self.assertIn("zai-coding-plan/glm-5.3-flash", lite["detail"])
 
-    def test_plain_doctor_keeps_previous_down(self):
-        result, _calls = self._doctor_run(previous=self._previous_with_std_down())
-        self.assertEqual(result["tiers"]["std"]["down"], self._down())
-        self.assertEqual(result["tiers"]["std"]["ping"], "unchecked")
-        self.assertIsNone(result["tiers"]["lite"]["down"])
+    def test_tier_without_a_model_is_a_config_error(self):
+        routing = _routing()
+        del routing["tiers"]["lite"]["model"]
+        result, _calls = self._doctor_run(routing=routing)
+        lite = result["tiers"]["lite"]
+        self.assertFalse(lite["ok"])
+        self.assertEqual(lite["kind"], "config")
+        self.assertEqual(lite["key"], "")
+        self.assertIn("no model", lite["detail"])
+        self.assertTrue(result["tiers"]["std"]["ok"])
 
-    def test_ping_ok_clears_down_and_uses_the_writer_agent(self):
+    def test_plain_doctor_keeps_a_fresh_ping_result(self):
+        previous = _doctor()
+        previous["tiers"]["std"] = _entry("std", detail="ping ok", age=100.0)
+        result, _calls = self._doctor_run(previous=previous)
+        self.assertEqual(result["tiers"]["std"], previous["tiers"]["std"])
+        self.assertEqual(result["tiers"]["lite"]["checked_at"], NOW)
+
+    def test_plain_doctor_drops_a_stale_ping_result(self):
+        previous = _doctor()
+        previous["tiers"]["std"] = _entry("std", detail="ping ok", age=100000.0)
+        result, _calls = self._doctor_run(previous=previous)
+        self.assertEqual(result["tiers"]["std"]["checked_at"], NOW)
+        self.assertEqual(result["tiers"]["std"]["detail"], "listed")
+
+    def test_plain_doctor_drops_a_ping_result_for_another_model(self):
+        previous = _doctor()
+        previous["tiers"]["std"] = _entry("std", detail="ping ok", age=100.0)
+        previous["tiers"]["std"]["key"] = "other-provider/other-model#high"
+        result, _calls = self._doctor_run(previous=previous)
+        self.assertEqual(result["tiers"]["std"]["checked_at"], NOW)
+        self.assertEqual(result["tiers"]["std"]["key"], cache_key(_routing()["tiers"]["std"]))
+
+    def test_ping_ok_uses_the_writer_agent(self):
         seen = []
         result, _calls = self._doctor_run(
-            ping=True, previous=self._previous_with_std_down(),
-            run_once_fake=self._ping_fake(_result(text=SENTINEL), seen))
-        std = result["tiers"]["std"]
-        self.assertEqual(std["ping"], "ok")
-        self.assertIsNone(std["down"])
-        self.assertEqual(result["tiers"]["lite"]["ping"], "ok")
+            ping=True, run_once_fake=self._ping_fake(_result(text=SENTINEL), seen))
+        for name in ("std", "lite"):
+            entry = result["tiers"][name]
+            self.assertEqual((entry["ok"], entry["kind"], entry["detail"]), (True, "", "ping ok"))
+            self.assertEqual(entry["checked_at"], NOW)
         self.assertEqual(len(seen), 2)
         std_call = [s for s in seen if "zai-coding-plan/glm-5.3#high" in s["cmd"]][0]
         self.assertIn("--agent", std_call["cmd"])
@@ -369,56 +435,109 @@ class TestRunDoctor(EnvIsolatedTestCase):
         self.assertEqual(std_call["cwd"], Path(self._tmp) / "work")
         self.assertTrue((Path(self._tmp) / "work").is_dir())
 
+    def test_ping_replaces_a_previous_failure(self):
+        previous = _doctor()
+        previous["tiers"]["std"] = _entry("std", ok=False, kind="auth", detail="expired", age=100.0)
+        result, _calls = self._doctor_run(
+            ping=True, previous=previous, run_once_fake=self._ping_fake(_result(text=SENTINEL)))
+        std = result["tiers"]["std"]
+        self.assertTrue(std["ok"])
+        self.assertEqual(std["kind"], "")
+        self.assertEqual(std["checked_at"], NOW)
+
     def test_ping_tolerates_punctuation_and_backticks(self):
         for text in ("`%s`." % SENTINEL, "Sure.\n%s!" % SENTINEL, "'%s'" % SENTINEL):
             result, _calls = self._doctor_run(
                 ping=True, run_once_fake=self._ping_fake(_result(text=text)))
-            self.assertEqual(result["tiers"]["std"]["ping"], "ok", text)
+            self.assertTrue(result["tiers"]["std"]["ok"], text)
 
     def test_ping_sentence_mentioning_sentinel_fails(self):
         result, _calls = self._doctor_run(
-            ping=True, run_once_fake=self._ping_fake(_result(text="I will not say %s" % SENTINEL)))
-        self.assertEqual(result["tiers"]["std"]["ping"], "failed")
-        self.assertIsNone(result["tiers"]["std"]["down"])
-        self.assertTrue(result["ok"])
-
-    def test_ping_unavailable_marks_down_with_first_line(self):
-        failed = _result(reason="unavailable", errors=[
-            "APIError: Your coding plan has expired\nRenew at https://example.invalid"])
-        result, _calls = self._doctor_run(ping=True, run_once_fake=self._ping_fake(failed))
+            ping=True, kind="",
+            run_once_fake=self._ping_fake(_result(text="I will not say %s" % SENTINEL)))
         std = result["tiers"]["std"]
-        self.assertEqual(std["ping"], "failed")
-        self.assertEqual(std["down"]["reason"], "unavailable")
-        self.assertEqual(std["down"]["message"], "APIError: Your coding plan has expired")
-        self.assertRegex(std["down"]["at"], UTC_RE)
-        self.assertEqual(std["note"], "APIError: Your coding plan has expired")
+        self.assertFalse(std["ok"])
+        self.assertEqual(std["kind"], "format")
+        self.assertEqual(std["detail"], "I will not say %s" % SENTINEL)
         self.assertTrue(result["ok"])
 
-    def test_ping_error_text_is_classified_even_on_crash(self):
-        failed = _result(reason="crash", errors=["ProviderError: Invalid API key"])
-        result, _calls = self._doctor_run(ping=True, run_once_fake=self._ping_fake(failed))
-        self.assertEqual(result["tiers"]["lite"]["down"]["reason"], "unavailable")
-        self.assertEqual(result["tiers"]["lite"]["down"]["message"], "ProviderError: Invalid API key")
+    def test_ping_with_no_reply_is_empty(self):
+        result, _calls = self._doctor_run(
+            ping=True, kind="", run_once_fake=self._ping_fake(_result(text="")))
+        std = result["tiers"]["std"]
+        self.assertFalse(std["ok"])
+        self.assertEqual(std["kind"], "empty")
+        self.assertEqual(std["detail"], "no sentinel in reply")
 
-    def test_ping_throttle_does_not_mark_down(self):
+    def test_ping_auth_failure_uses_the_classified_kind_and_first_error(self):
+        errors = ["APIError: Your coding plan has expired\nRenew at https://example.invalid"]
+        failed = _result(reason="unavailable", errors=errors)
+        result, _calls = self._doctor_run(
+            ping=True, kind="auth", run_once_fake=self._ping_fake(failed))
+        std = result["tiers"]["std"]
+        self.assertFalse(std["ok"])
+        self.assertEqual(std["kind"], "auth")
+        self.assertIn("APIError: Your coding plan has expired", std["detail"])
+        self.assertEqual(std["checked_at"], NOW)
+        self.assertTrue(result["ok"])
+        self.classify.assert_called_with(1, errors, "", "", False)
+
+    def test_ping_timeout_passes_killed_to_the_classifier(self):
+        failed = _result(reason="timeout")
+        result, _calls = self._doctor_run(
+            ping=True, kind="timeout", run_once_fake=self._ping_fake(failed))
+        std = result["tiers"]["std"]
+        self.assertFalse(std["ok"])
+        self.assertEqual(std["kind"], "timeout")
+        self.assertEqual(std["detail"], "timeout")
+        self.classify.assert_called_with(1, [], "", "timeout", False)
+
+    def test_ping_exit_one_after_a_finished_reply_is_ok(self):
+        recovered = dict(_result(text=SENTINEL, reason="crash"), finished=True)
+        result, _calls = self._doctor_run(ping=True, run_once_fake=self._ping_fake(recovered))
+        self.assertTrue(result["tiers"]["std"]["ok"])
+        crashed = _result(text=SENTINEL, reason="crash")
+        result, _calls = self._doctor_run(
+            ping=True, kind="crash", run_once_fake=self._ping_fake(crashed))
+        self.assertFalse(result["tiers"]["std"]["ok"])
+        self.assertEqual(result["tiers"]["std"]["kind"], "crash")
+
+    def test_ping_throttle_keeps_the_tier_usable(self):
         failed = _result(reason="throttle", errors=["APIError: 429 Too Many Requests"])
-        result, _calls = self._doctor_run(ping=True, run_once_fake=self._ping_fake(failed))
+        result, _calls = self._doctor_run(
+            ping=True, kind="throttle", run_once_fake=self._ping_fake(failed))
         std = result["tiers"]["std"]
-        self.assertEqual(std["ping"], "failed")
-        self.assertIsNone(std["down"])
-        self.assertEqual(std["note"], "APIError: 429 Too Many Requests")
+        self.assertTrue(std["ok"])
+        self.assertEqual(std["kind"], "throttle")
+        self.assertIn("429", std["detail"])
 
-    def test_ping_throttle_keeps_previous_down(self):
-        failed = _result(reason="throttle", errors=["APIError: rate limit exceeded"])
-        result, _calls = self._doctor_run(ping=True, previous=self._previous_with_std_down(),
-                                          run_once_fake=self._ping_fake(failed))
-        self.assertEqual(result["tiers"]["std"]["down"], self._down())
+    def test_one_failed_ping_does_not_disable_the_other_tier(self):
+        by_model = {
+            "zai-coding-plan/glm-5.3#high": _result(
+                reason="unavailable", errors=["APIError: plan expired"]),
+            "zai-coding-plan/glm-5.3-flash#low": _result(text=SENTINEL),
+        }
+        result, _calls = self._doctor_run(
+            ping=True, kind="auth", run_once_fake=self._ping_by_model(by_model))
+        self.assertFalse(result["tiers"]["std"]["ok"])
+        self.assertEqual(result["tiers"]["std"]["kind"], "auth")
+        self.assertTrue(result["tiers"]["lite"]["ok"])
+        self.assertTrue(result["ok"])
 
-    def test_status_line_from_run_doctor_result(self):
-        result, _calls = self._doctor_run()
-        line = hp_doctor.status_line(_routing(), result)
-        self.assertTrue(line.startswith(
-            "opencode: v2.0.18 preset=hybrid light=oc:lite std=oc:std deep=claude review_oc=all "))
+    def test_unlisted_model_is_not_pinged(self):
+        seen = []
+        result, _calls = self._doctor_run(
+            ping=True, models_out="zai-coding-plan/glm-5.3\n",
+            run_once_fake=self._ping_fake(_result(text=SENTINEL), seen))
+        self.assertEqual(len(seen), 1)
+        self.assertTrue(result["tiers"]["std"]["ok"])
+        self.assertEqual(result["tiers"]["lite"]["kind"], "model")
+
+    def test_ping_is_skipped_when_the_base_check_failed(self):
+        result, _calls = self._doctor_run(ping=True, models_failures=2)
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["tiers"]["std"]["ok"])
+        self.assertFalse(result["tiers"]["lite"]["ok"])
 
 
 if __name__ == "__main__":

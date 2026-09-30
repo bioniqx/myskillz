@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 import sys
 import tempfile
@@ -116,25 +115,9 @@ class SlotsTest(unittest.TestCase):
 class HarvestTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.tmp), True)
         self.out = self.tmp / "out"
         (self.out / "events").mkdir(parents=True)
-        self.cache = self.tmp / "doctor.json"
-        self.cache.write_text(json.dumps({
-            "t": "2026-09-28T00:00:00Z", "ok": True, "version": "2.0.18", "binary": "opencode",
-            "tiers": {"std": {"model": "zai-coding-plan/glm-5.3", "variant": "high", "listed": True,
-                              "ping": "ok", "note": "", "down": None}},
-        }), encoding="utf-8")
-        self.old_env = {k: os.environ.get(k) for k in ("HA_DOCTOR_CACHE", "HOME")}
-        os.environ["HA_DOCTOR_CACHE"] = str(self.cache)
-        os.environ["HOME"] = str(self.tmp)
-
-    def tearDown(self):
-        for k, v in self.old_env.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-        shutil.rmtree(str(self.tmp), ignore_errors=True)
 
     def _event(self, name, role, ok, reason, message=""):
         ev = {"batch": name, "ok": ok, "agent_type": "opencode:ha-%s" % role, "backend": "oc:std",
@@ -142,22 +125,21 @@ class HarvestTest(unittest.TestCase):
         (self.out / "events" / ("%s.json" % name)).write_text(json.dumps(ev), encoding="utf-8")
         return ev
 
-    def test_unavailable_marks_down_and_falls_back(self):
-        ev = self._event("batch-01", "investigator", False, "unavailable", "model not found")
+    def test_auth_falls_back_and_keeps_the_message(self):
+        ev = self._event("batch-01", "investigator", False, "auth", "401 Unauthorized")
         state = {"batches": {"batch-01": {"ids": ["R1", "R2"], "backend": "oc:std", "dispatched": 100.0}}}
         c = FakeCtx(self.out, state)
         m = FakeMerged(failed={"batch-01"}, events={"batch-01": ev}, finding={"R1": {"id": "R1"}})
         got = ha_dispatch.harvest_oc_events(c, m, 1000.0)
-        self.assertEqual(got, [{"name": "batch-01", "role": "investigator", "reason": "unavailable",
-                                "ids": ["R2"]}])
+        self.assertEqual(got, [{"name": "batch-01", "role": "investigator", "reason": "auth",
+                                "ids": ["R2"], "message": "401 Unauthorized"}])
         self.assertEqual(state["batches"]["batch-01"]["backend"], "claude")
-        self.assertEqual(state["fallbacks"], {"batch-01": "unavailable"})
+        self.assertEqual(state["fallbacks"], {"batch-01": "auth"})
+        self.assertNotIn("cooldown", state)
         self.assertNotIn("batch-01", m.events)
         self.assertNotIn("batch-01", m.failed)
         self.assertFalse((self.out / "events" / "batch-01.json").exists())
         self.assertTrue((self.out / "oc" / "batch-01.event.json").exists())
-        cache = json.loads(self.cache.read_text(encoding="utf-8"))
-        self.assertEqual(cache["tiers"]["std"]["down"]["reason"], "unavailable")
 
     def test_throttle_sets_cooldown_for_verifier(self):
         ev = self._event("batch-V01", "verifier", False, "throttle", "429")
@@ -167,11 +149,20 @@ class HarvestTest(unittest.TestCase):
         m = FakeMerged(failed={"batch-V01"}, events={"batch-V01": ev}, finding={"R1": {"id": "R1"}})
         got = ha_dispatch.harvest_oc_events(c, m, 1000.0)
         self.assertEqual(got, [{"name": "batch-V01", "role": "verifier", "reason": "throttle",
-                                "ids": ["R1", "R2"]}])
+                                "ids": ["R1", "R2"], "message": "429"}])
         self.assertEqual(state["cooldown"], {"std": 1120.0})
         self.assertEqual(state["verify"]["batch-V01"]["backend"], "claude")
-        cache = json.loads(self.cache.read_text(encoding="utf-8"))
-        self.assertIsNone(cache["tiers"]["std"]["down"])
+
+    def test_breaker_event_falls_back_without_a_cooldown(self):
+        ev = self._event("batch-02", "investigator", False, "breaker", "circuit breaker open for tier std")
+        state = {"batches": {"batch-02": {"ids": ["R3"], "backend": "oc:std", "dispatched": 100.0}}}
+        c = FakeCtx(self.out, state)
+        m = FakeMerged(events={"batch-02": ev})
+        got = ha_dispatch.harvest_oc_events(c, m, 1000.0)
+        self.assertEqual([(g["name"], g["reason"], g["ids"]) for g in got],
+                         [("batch-02", "breaker", ["R3"])])
+        self.assertNotIn("cooldown", state)
+        self.assertEqual(state["batches"]["batch-02"]["backend"], "claude")
 
     def test_section_returns_no_ids(self):
         ev = self._event("section-02", "parser", False, "format")
@@ -179,7 +170,8 @@ class HarvestTest(unittest.TestCase):
         c = FakeCtx(self.out, state)
         m = FakeMerged(events={"section-02": ev})
         got = ha_dispatch.harvest_oc_events(c, m, 1000.0)
-        self.assertEqual(got, [{"name": "section-02", "role": "parser", "reason": "format", "ids": []}])
+        self.assertEqual(got, [{"name": "section-02", "role": "parser", "reason": "format",
+                                "ids": [], "message": ""}])
         self.assertEqual(state["parse"]["backends"]["section-02"], "claude")
 
     def test_ok_claude_and_known_events_are_ignored(self):

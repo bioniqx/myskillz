@@ -1,7 +1,9 @@
 """Engine-level tests for routing state, the RED/GREEN code split, independent slot caps and
 escalation, driven through `devteam.py` subprocesses and the fake opencode CLI."""
 import argparse
+import contextlib
 import fcntl
+import io
 import json
 import os
 import re
@@ -29,6 +31,8 @@ DONE_TEXT = ("## Slice: D1\n## Status: Done\n## Gate:\n$ test -f docs/d1.md\n"
              "exit 0 - docs/d1.md is present\n## Notes:\nwrote the doc\n")
 DONE_STEP = {"write": {"docs/d1.md": "# D1\n"}, "commit": "docs(D1): add the doc", "text": DONE_TEXT}
 BLOCKED_STEP = {"text": "## Slice: D1\n## Status: Blocked\n## Notes:\nthe verify command needs network access\n"}
+MODELS_ENV = {"HYBRID_OPENCODE_STD": "zai-coding-plan/glm-5.3#high",
+              "HYBRID_OPENCODE_LITE": "zai-coding-plan/glm-5.3-flash#low"}
 
 
 def code_slice(sid):
@@ -83,7 +87,8 @@ class FlowBase(unittest.TestCase):
         self.routing = self.tmp / "routing.json"
         self.env = dict(os.environ, HOME=str(self.home), HT_OC_BIN=str(FAKE),
                         HT_FAKE_SCRIPT=str(self.script), HT_FAKE_LOG=str(self.tmp / "fake_log.jsonl"),
-                        HT_ROUTING=str(self.routing), PYTHONDONTWRITEBYTECODE="1")
+                        HT_ROUTING=str(self.routing), XDG_DATA_HOME=str(self.tmp / "xdg"),
+                        PYTHONDONTWRITEBYTECODE="1", HYBRID_OC_RETRY_DELAY_S="0", **MODELS_ENV)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.state_dir = self.repo / STATE
 
@@ -117,7 +122,7 @@ class InitRoutingStateTest(FlowBase):
         self.assertEqual(st["routing"]["tiers"]["std"]["max_parallel"], 2)
         self.assertEqual(st["routing"]["tiers"]["lite"]["model"], "zai-coding-plan/glm-5.3-flash")
         self.assertEqual(st["routing"]["rows"]["docs"], "std")
-        self.assertEqual(st["preset"], "max")
+        self.assertEqual(st["preset"], "opencode")
         self.assertIs(st["oc_ok"], True)
 
     def test_route_flag_overrides_routing_preset(self):
@@ -369,6 +374,21 @@ def run_lane_inproc(case, sid="D1", **patches):
         os.environ.update(old_env)
 
 
+@contextlib.contextmanager
+def inproc(case):
+    """Run engine calls in this process from `case.repo` with `case.env`."""
+    old_cwd, old_env = os.getcwd(), dict(os.environ)
+    os.chdir(str(case.repo))
+    os.environ.clear()
+    os.environ.update(case.env)
+    try:
+        yield
+    finally:
+        os.chdir(old_cwd)
+        os.environ.clear()
+        os.environ.update(old_env)
+
+
 class KillStaleLaneNeverKillsOwnPidTest(FlowBase):
     def write_rec(self, rec):
         lanes = self.state_dir / "lanes"
@@ -575,8 +595,10 @@ class EscalationTest(FlowBase):
         self.engine("lane", "D1")
         self.assertTrue((self.state_dir / "slices" / "D1.blocked").exists())
         r = self.engine("next", "--no-review")
+        self.assertTrue(r.stdout.startswith("OC-WARN hybrid-team D1 tier=lite"), r.stdout)
         self.assert_escalated_dispatch(r.stdout)
         r2 = self.engine("next", "--no-review")
+        self.assertNotIn("OC-WARN hybrid-team D1", r2.stdout)
         self.assertNotIn("ESCALATE D1", r2.stdout)
         self.assertNotIn("=== DISPATCH D1", r2.stdout)
         self.assertEqual(self.st()["slices"]["D1"]["attempt"], 2)
@@ -590,6 +612,9 @@ class EscalationTest(FlowBase):
         r = self.engine("integrate", "D1")
         self.assertIn("NOT READY", r.stdout)
         self.assert_escalated_dispatch(r.stdout)
+        self.assertIn("OC-WARN hybrid-team D1 tier=lite", r.stdout)
+        self.assertIn("kind=gate", r.stdout)
+        self.assertLess(r.stdout.index("OC-WARN hybrid-team D1"), r.stdout.index("ESCALATE D1"))
 
 
 class SlotCapTest(FlowBase):
@@ -700,6 +725,193 @@ class PresetClaudeParityTest(FlowBase):
         self.assertIn("=== DISPATCH C1 [CODE/SLICE]", mine)
         self.assertEqual(self.normalize(mine, self.repo).splitlines(),
                          self.normalize(theirs, other_repo).splitlines())
+
+
+class PresetConfigTest(FlowBase):
+    def test_route_max_becomes_opencode_with_a_config_warning(self):
+        r = self.init(plan_of(docs_slice("D1")), "--route", "max")
+        self.assertEqual(self.st()["preset"], "opencode")
+        self.assertIn("OC-WARN hybrid-team preset", r.stdout)
+        self.assertIn("kind=config", r.stdout)
+
+    def test_unknown_route_is_a_config_error_and_stops(self):
+        path = self.tmp / "plan.json"
+        path.write_text(json.dumps(plan_of(docs_slice("D1"))))
+        r = self.engine("init", str(path), "--route", "bogus", check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("OC-ERROR hybrid-team preset", r.stdout)
+        self.assertIn("kind=config", r.stdout)
+        self.assertFalse((self.state_dir / "state.json").exists())
+
+    def test_missing_shared_config_is_reported_and_hybrid_falls_back(self):
+        self.env.pop("HYBRID_OPENCODE_STD")
+        self.env.pop("HYBRID_OPENCODE_LITE")
+        r = self.init(plan_of(docs_slice("D1")))
+        self.assertIn("OC-ERROR hybrid-team config", r.stdout)
+        self.assertIn("kind=config", r.stdout)
+        self.assertIs(self.st()["oc_ok"], False)
+        self.assertIn("=== DISPATCH D1", self.engine("dispatch", "D1").stdout)
+
+
+class UnreportedLinesTest(FlowBase):
+    def log(self, unit):
+        line = devteam.hybrid_shared.oc_line("OC-ERROR", "hybrid-team", unit, "lite",
+                                             "zai-coding-plan/glm-5.3-flash#low", "auth", "invalid api key")
+        devteam.hybrid_shared.log_line(self.state_dir / "oc-errors.jsonl", line)
+        return line
+
+    def test_next_prints_unreported_lines_first_and_once(self):
+        self.init(plan_of(docs_slice("D1")))
+        line = self.log("D1")
+        r = self.engine("next", "--no-review")
+        self.assertEqual(r.stdout.splitlines()[0], line)
+        self.assertNotIn(line, self.engine("next", "--no-review").stdout)
+
+    def test_status_prints_unreported_lines_first(self):
+        self.init(plan_of(docs_slice("D1")))
+        line = self.log("D1")
+        self.assertEqual(self.engine("status").stdout.splitlines()[0], line)
+
+
+class StartDoctorTest(FlowBase):
+    def start(self, *flags):
+        path = self.tmp / "plan.json"
+        path.write_text(json.dumps(plan_of(docs_slice("D1"))))
+        seen = []
+        with inproc(self), mock.patch.object(devteam, "cmd_doctor", side_effect=seen.append), \
+                mock.patch("sys.stdout", io.StringIO()):
+            rc = devteam.main(["start", str(path)] + list(flags))
+        self.assertEqual(rc, 0)
+        return seen[0]
+
+    def test_start_pings_stale_tiers_in_preset_hybrid(self):
+        a = self.start()
+        self.assertEqual((a.fix, a.ping, a.oc), (True, "stale", True))
+
+    def test_start_never_touches_opencode_in_preset_claude(self):
+        a = self.start("--route", "claude")
+        self.assertEqual((a.fix, a.ping, a.oc), (True, False, False))
+        self.assertEqual(self.st()["preset"], "claude")
+
+
+class BreakerSummaryTest(FlowBase):
+    def test_endgame_reports_the_breaker_summary(self):
+        self.init(plan_of(docs_slice("D1")))
+        st = self.st()
+        st["slices"]["D1"].update(status="done", merged_sha=git(["rev-parse", "HEAD"], self.repo))
+        self.save_st(st)
+        line = devteam.hybrid_shared.oc_line("OC-ERROR", "hybrid-team", "breaker", "lite",
+                                             "zai-coding-plan/glm-5.3-flash#low", "breaker", "3 units skipped")
+        buf = io.StringIO()
+        with inproc(self), \
+                mock.patch.object(devteam.hybrid_shared, "breaker_summary", return_value=[line]) as summary, \
+                mock.patch("sys.stdout", buf):
+            rc = devteam.main(["next", "--no-review"])
+        self.assertEqual(rc, 0)
+        summary.assert_called_once_with(self.state_dir, "hybrid-team")
+        self.assertIn("DAG EXHAUSTED", buf.getvalue())
+        self.assertIn(line, buf.getvalue())
+
+    def test_slice_sent_to_claude_by_an_open_breaker_is_counted(self):
+        self.init(plan_of(docs_slice("D1")))
+        spec = "zai-coding-plan/glm-5.3-flash#low"
+        self.assertTrue(devteam.hybrid_shared.breaker_trip(self.state_dir, "lite", spec, "auth", "invalid api key"))
+        r = self.engine("dispatch", "D1")
+        self.assertIn("=== DISPATCH D1", r.stdout)
+        self.assertNotIn("=== LANE", r.stdout)
+        lines = devteam.hybrid_shared.breaker_summary(self.state_dir, "hybrid-team")
+        self.assertEqual(len(lines), 1)
+        self.assertIn("kind=breaker", lines[0])
+        self.assertIn("1 units skipped", lines[0])
+
+
+class OpencodeHoldTest(FlowBase):
+    def test_unusable_opencode_holds_the_slice_instead_of_falling_back(self):
+        self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.init(plan_of(docs_slice("D1")), "--route", "opencode")
+        r = self.engine("dispatch", "D1")
+        self.assertIn("OC-ERROR hybrid-team D1", r.stdout)
+        self.assertIn("HELD D1", r.stdout)
+        self.assertNotIn("=== LANE", r.stdout)
+        self.assertNotIn("=== DISPATCH D1", r.stdout)
+        self.assertEqual(self.st()["slices"]["D1"]["status"], "failed")
+        self.assertNotIn("OC-ERROR hybrid-team D1", self.engine("next", "--no-review").stdout)
+
+    def test_blocked_lane_is_held_then_retried_on_the_main_backend(self):
+        self.init(plan_of(docs_slice("D1")), "--route", "opencode")
+        self.assertIn("=== LANE D1 oc:lite", self.engine("dispatch", "D1").stdout)
+        self.script.write_text(json.dumps(BLOCKED_STEP))
+        self.engine("lane", "D1")
+        r = self.engine("next", "--no-review")
+        self.assertTrue(r.stdout.startswith("OC-WARN hybrid-team D1 tier=lite"), r.stdout)
+        self.assertIn("HELD D1 (gate)", r.stdout)
+        self.assertNotIn("ESCALATE", r.stdout)
+        self.assertNotIn("=== DISPATCH D1", r.stdout)
+        self.assertEqual(self.st()["slices"]["D1"]["status"], "failed")
+        self.engine("retry", "D1", "--claude")
+        self.assertIn("=== DISPATCH D1 [DOCS/WORK]", self.engine("dispatch", "D1").stdout)
+
+    def test_open_breaker_holds_and_counts_the_slice(self):
+        self.init(plan_of(docs_slice("D1")), "--route", "opencode")
+        spec = "zai-coding-plan/glm-5.3-flash#low"
+        self.assertTrue(devteam.hybrid_shared.breaker_trip(self.state_dir, "lite", spec, "auth", "invalid api key"))
+        r = self.engine("dispatch", "D1")
+        self.assertIn("HELD D1", r.stdout)
+        self.assertNotIn("=== DISPATCH D1", r.stdout)
+        lines = devteam.hybrid_shared.breaker_summary(self.state_dir, "hybrid-team")
+        self.assertEqual(len(lines), 1)
+        self.assertIn("1 units skipped", lines[0])
+
+
+class RunResetAndRetryHealthTest(FlowBase):
+    def write_oc_status(self, lite_ok):
+        entries = {name: {"ok": True if name == "std" else lite_ok, "key": devteam.hybrid_shared.cache_key(tier),
+                          "checked_at": time.time(), "kind": "", "detail": ""}
+                   for name, tier in devteam.hybrid_shared.load_shared(MODELS_ENV)[0].items()}
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        (self.state_dir / "oc_status.json").write_text(json.dumps({"available": True, "issues": [], "tiers": entries}))
+
+    def test_init_force_resets_a_tripped_breaker(self):
+        self.init(plan_of(docs_slice("D1")))
+        spec = "zai-coding-plan/glm-5.3-flash#low"
+        self.assertTrue(devteam.hybrid_shared.breaker_trip(self.state_dir, "lite", spec, "auth", "invalid api key"))
+        self.init(plan_of(docs_slice("D1")), "--force")
+        self.assertIn("=== LANE D1 oc:lite", self.engine("dispatch", "D1").stdout)
+        self.assertEqual(devteam.hybrid_shared.breaker_summary(self.state_dir, "hybrid-team"), [])
+
+    def test_retry_rereads_doctor_tier_health_in_preset_opencode(self):
+        self.write_oc_status(False)
+        self.init(plan_of(docs_slice("D1")), "--route", "opencode")
+        self.assertIn("HELD D1", self.engine("dispatch", "D1").stdout)
+        self.write_oc_status(True)
+        self.engine("retry", "D1")
+        r = self.engine("dispatch", "D1")
+        self.assertIn("=== LANE D1 oc:lite", r.stdout)
+        self.assertNotIn("HELD D1", r.stdout)
+
+    def test_retry_of_other_slice_keeps_tier_when_doctor_cache_went_stale(self):
+        self.write_oc_status(True)
+        self.init(plan_of(docs_slice("D1"), docs_slice("D2")))
+        self.engine("fail", "D2", "--why", "boom")
+        path = self.state_dir / "oc_status.json"
+        status = json.loads(path.read_text())
+        for entry in status["tiers"].values():
+            entry["checked_at"] = time.time() - devteam.hybrid_shared.DOCTOR_TTL_S - 60
+        path.write_text(json.dumps(status))
+        self.engine("retry", "D2")
+        r = self.engine("dispatch", "D1")
+        self.assertIn("=== LANE D1 oc:lite", r.stdout)
+        self.assertNotIn("=== DISPATCH D1", r.stdout)
+
+    def test_retry_claude_still_dispatches_to_claude(self):
+        self.write_oc_status(False)
+        self.init(plan_of(docs_slice("D1")), "--route", "opencode")
+        self.assertIn("HELD D1", self.engine("dispatch", "D1").stdout)
+        self.write_oc_status(True)
+        self.engine("retry", "D1", "--claude")
+        r = self.engine("dispatch", "D1")
+        self.assertIn("=== DISPATCH D1", r.stdout)
+        self.assertNotIn("=== LANE", r.stdout)
 
 
 if __name__ == "__main__":

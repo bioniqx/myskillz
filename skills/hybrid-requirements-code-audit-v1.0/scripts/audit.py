@@ -90,12 +90,29 @@ def write_json(p, obj):
 
 
 def read_jsonl(p):
-    """Tolerant JSONL reader: returns (rows, errors). Skips blank lines and // comments."""
-    rows, errors = [], []
+    """Tolerant JSONL reader: returns (rows, errors). Skips blank lines and // comments.
+
+    Falls back to a whole-file JSON parse (or a raw_decode stream of concatenated
+    values) when nothing parses line-by-line, so a pretty-printed / multi-line
+    JSON file is not silently read as zero rows. Strips a leading BOM.
+    """
+    rows, line_errors = [], []
     path = Path(p)
     if not path.exists():
-        return rows, errors
-    for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        return rows, line_errors
+    raw = path.read_text(encoding="utf-8-sig", errors="replace")
+    whole = raw.strip()
+    if not whole:
+        return rows, line_errors
+    try:
+        obj = json.loads(whole)
+        if isinstance(obj, dict):
+            return [obj], []
+        if isinstance(obj, list):
+            return [o for o in obj if isinstance(o, dict)], []
+    except json.JSONDecodeError:
+        pass
+    for n, line in enumerate(raw.splitlines(), 1):
         s = line.strip()
         if not s or s.startswith("//") or s.startswith("#"):
             continue
@@ -110,8 +127,32 @@ def read_jsonl(p):
             elif isinstance(obj, list):
                 rows.extend(o for o in obj if isinstance(o, dict))
         except json.JSONDecodeError as e:
-            errors.append("%s:%d: %s" % (path.name, n, e.msg))
-    return rows, errors
+            line_errors.append("%s:%d: %s" % (path.name, n, e.msg))
+    if rows and not line_errors:
+        return rows, []
+    text = whole
+    decoder = json.JSONDecoder()
+    idx, n_chars, stream_rows, stream_errors = 0, len(text), [], []
+    while idx < n_chars:
+        while idx < n_chars and text[idx] in " \t\r\n,":
+            idx += 1
+        if idx >= n_chars:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError as e:
+            stream_errors.append("%s: %s" % (path.name, e.msg))
+            break
+        if isinstance(obj, dict):
+            stream_rows.append(obj)
+        elif isinstance(obj, list):
+            stream_rows.extend(o for o in obj if isinstance(o, dict))
+        idx = end
+    if stream_rows and not stream_errors:
+        return stream_rows, []
+    if rows:
+        return rows, line_errors
+    return stream_rows, (stream_errors or line_errors)
 
 
 def write_text(p, text):
@@ -142,6 +183,12 @@ def batch_key(name):
     return int(m.group(1)) if m else 0
 
 
+def base_batch(name):
+    """'batch-01-r7' -> 'batch-01' (a retry's SubagentStop event counts toward its base batch)."""
+    m = re.match(r"^(.*)-r\d+$", name)
+    return m.group(1) if m else name
+
+
 def routing_context(c):
     """(routing, preset, doctor) for this audit: config.json values, falling back to the routing files."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -151,6 +198,172 @@ def routing_context(c):
                                                              ha_router.user_routing_path())
     preset = ha_router.effective_preset(routing, c.cfg.get("preset") or "")
     return routing, preset, ha_doctor.load_doctor(ha_doctor.doctor_cache_path())
+
+
+SKILL_NAME = "hybrid-requirements-code-audit"
+ERRORS_FILE = "oc-errors.jsonl"
+HOLD_REASON = "no usable opencode tier; preset opencode does not fall back to Claude on its own"
+HELD_NEXT = ("NEXT: %d unit(s) are held: preset opencode never runs them on Claude by itself. Follow SKILL.md "
+             "\"Held units\": ask the user once, then `audit.py status --retry all` (after fixing opencode), "
+             "`audit.py status --to-claude investigator|verifier` (parsers: `audit.py parse-merge --to-claude`) "
+             "or `audit.py status --mode hybrid`.")
+
+
+def use_scripts():
+    """Put scripts/ on sys.path so the ha_* modules and hybrid_shared import."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+
+
+def shared():
+    use_scripts()
+    import hybrid_shared
+    return hybrid_shared
+
+
+def fail_config(unit, detail):
+    """Print one OC-ERROR kind=config line and exit non-zero."""
+    print(shared().oc_line("OC-ERROR", SKILL_NAME, unit, "none", "none", "config", detail))
+    sys.exit(2)
+
+
+def note_oc(c, level, unit, kind, detail, tier="none", spec="none"):
+    """Append one OC line to the run's oc-errors.jsonl; flush_oc prints it."""
+    hs = shared()
+    hs.log_line(c.out / ERRORS_FILE, hs.oc_line(level, SKILL_NAME, unit, tier, spec, kind, detail))
+
+
+def flush_oc(c):
+    """Print the OC lines nobody has shown yet, oldest first."""
+    for line in shared().take_unreported(c.out / ERRORS_FILE):
+        print(line)
+
+
+def resolve_mode(raw, unit):
+    """The preset for a --preset/--mode value: "" when empty, OC-WARN for the max alias, OC-ERROR and exit when unknown."""
+    if not raw:
+        return ""
+    preset, note = shared().mode_to_preset(raw)
+    if not preset:
+        fail_config(unit, note)
+    if note:
+        print(shared().oc_line("OC-WARN", SKILL_NAME, unit, "none", "none", "config", note))
+    return preset
+
+
+def report_config(c, routing, preset):
+    """Log and print the shared-config problems and config warnings; preset claude never needs the config."""
+    if preset == "claude":
+        return
+    for problem in routing.get("config_problems") or []:
+        note_oc(c, "OC-ERROR", "config", "config", problem)
+    for warning in routing.get("config_warnings") or []:
+        note_oc(c, "OC-WARN", "config", "config", warning)
+    flush_oc(c)
+
+
+def held_units(c):
+    return c.state.get("held") or {}
+
+
+def mark_held(c, name, role, reason=HOLD_REASON):
+    c.state.setdefault("held", {})[name] = {"role": role, "reason": reason}
+
+
+def switched(c):
+    """True once a hybrid run moved to Claude sonnet after an opencode failure (ha_run writes the record)."""
+    return c.cfg.get("preset") == "hybrid" and bool(shared().run_switched(c.out))
+
+
+def allow_claude(c, roles):
+    """Record that the user let these roles run on Claude in a preset opencode run."""
+    have = c.state.setdefault("claude_roles", [])
+    have.extend(r for r in roles if r not in have)
+
+
+def route_for(c, role, routing, doctor, preset, t):
+    """ha_router.route with the run's breaker dir; a role the user moved to Claude always routes to claude."""
+    if role in c.state.get("claude_roles", []):
+        return "claude"
+    use_scripts()
+    import ha_router
+    return ha_router.route(role, routing, doctor, preset, c.state.get("cooldown", {}), t, c.out)
+
+
+def refresh_routing(c):
+    """Re-read the routing file and the shared env vars, so a fix made after `init` takes effect in this run."""
+    use_scripts()
+    import ha_router
+    c.cfg["routing"] = ha_router.load_routing(SKILL_DIR / "routing.default.json", ha_router.user_routing_path())
+    c.save_cfg()
+
+
+def release_held(c, roles=None, names=None):
+    """Drop held marks so the next routing pass may dispatch those units again; names="all" drops every mark."""
+    held = held_units(c)
+    for name in list(held):
+        if names == "all" or (names and name in names) or (roles and held[name].get("role") in roles):
+            del held[name]
+
+
+def hold_unit(c, m, fb):
+    """Preset opencode: a failed opencode unit waits for the user instead of falling back to Claude."""
+    name = fb["name"]
+    meta = m.batches.get(name) or m.vbatches.get(name) or {}
+    meta["backend"] = "held"
+    meta["dispatched"] = None
+    c.state.get("fallbacks", {}).pop(name, None)
+    backends = (c.state.get("parse") or {}).get("backends")
+    if isinstance(backends, dict) and name in backends:
+        backends[name] = "held"
+    mark_held(c, name, fb["role"], fb["reason"])
+
+
+def opencode_stranded(c):
+    """Names of held verifier batches and of opencode units whose ids are not all covered or whose last event failed."""
+    m = Merged(c)
+    done = dict(m.batch_done)
+    done.update(m.vdone)
+    units = dict(c.state.get("batches") or {})
+    units.update(c.state.get("verify") or {})
+    return sorted(n for n, meta in units.items()
+                  if (meta.get("backend") == "held" and n in c.state.get("verify", {}))
+                  or (str(meta.get("backend", "")).startswith("oc:")
+                      and (not done.get(n) or (m.events.get(n) or {}).get("ok") is False)))
+
+
+def apply_run_flags(c, a):
+    """The user's answer to held units: --mode, --to-claude and --retry."""
+    if a.mode:
+        preset = resolve_mode(a.mode, "status")
+        stranded = opencode_stranded(c) if preset == "claude" and c.cfg.get("preset") != "claude" else []
+        if stranded:
+            fail_config("status", "--mode claude would strand opencode units (%s): wait for them, or use --to-claude"
+                        % ", ".join(stranded))
+        c.cfg["preset"] = preset
+        c.save_cfg()
+        release_held(c, names="all")
+    if a.to_claude:
+        roles = ["investigator", "verifier"] if "all" in a.to_claude else list(a.to_claude)
+        allow_claude(c, roles)
+        release_held(c, roles=roles)
+    if a.retry:
+        refresh_routing(c)
+        release_held(c, names="all" if "all" in a.retry else a.retry)
+    if a.mode or a.to_claude or a.retry:
+        c.save_state()
+
+
+def breaker_lines(c):
+    """Log the breaker summary once per distinct content, so each phase reports it a single time."""
+    hs = shared()
+    lines = hs.breaker_summary(c.out, SKILL_NAME)
+    if lines == c.state.get("breaker_lines", []):
+        return
+    c.state["breaker_lines"] = lines
+    for line in lines:
+        hs.log_line(c.out / ERRORS_FILE, line)
 
 
 class Ctx(object):
@@ -188,6 +401,10 @@ class Ctx(object):
 
     def model(self, role):
         return self.cfg.get("models", MODELS).get(role, MODELS[role])
+
+    def dispatch_model(self, role):
+        """The model a Claude worker is dispatched with: sonnet for the rest of a switched hybrid run."""
+        return shared().FALLBACK_MODEL if switched(self) else self.model(role)
 
     def rel(self, p):
         try:
@@ -402,6 +619,15 @@ def git_exclude(out_dir):
         gitdir = Path(m.group(1).strip())
         if not gitdir.is_absolute():
             gitdir = (cur / gitdir).resolve()
+        # a linked worktree's own gitdir is private; the shared info/exclude lives
+        # in the COMMON dir named by its `commondir` file (relative to gitdir).
+        commondir_file = gitdir / "commondir"
+        if commondir_file.exists():
+            common = commondir_file.read_text(encoding="utf-8").strip()
+            common_path = Path(common)
+            if not common_path.is_absolute():
+                common_path = (gitdir / common_path).resolve()
+            gitdir = common_path
     try:
         rel = "/" + str(d.relative_to(cur)).replace(os.sep, "/") + "/"
     except Exception:
@@ -422,6 +648,7 @@ def git_exclude(out_dir):
 
 def cmd_init(a):
     cwd = Path(a.cwd or os.getcwd()).resolve()
+    requested = resolve_mode(a.preset, "init")
     cfg_dir = cwd / AUDIT_DIR
     cfg_path = cfg_dir / CONFIG
     old = read_json(cfg_path)
@@ -442,6 +669,10 @@ def cmd_init(a):
         die("repo root not found: %s" % repo)
     for sub in ("", "batches", "findings", "verify", "parse", "spec", "events"):
         (out / sub).mkdir(parents=True, exist_ok=True)
+    try:
+        (out / shared().SWITCH_FILE).unlink()
+    except OSError:
+        pass  # no earlier switch record
     cfg_dir.mkdir(parents=True, exist_ok=True)
 
     specs, notes = [], []
@@ -467,7 +698,10 @@ def cmd_init(a):
     import ha_doctor
     import ha_router
     routing = ha_router.load_routing(SKILL_DIR / "routing.default.json", ha_router.user_routing_path())
-    preset = "claude" if agents == "solo" else ha_router.effective_preset(routing, a.preset or "")
+    try:
+        preset = "claude" if agents == "solo" else ha_router.effective_preset(routing, requested)
+    except ValueError as exc:
+        fail_config("init", str(exc))
     cfg = {
         "active": True,
         "created": ts_iso(),
@@ -505,6 +739,7 @@ def cmd_init(a):
     print("  git       : %s" % ("excluded via " + excl if excl else "not a git checkout (nothing to exclude)"))
     print("  repo map  : %s (%d lines)" % (out / "repo_map.md", len(repo_map.splitlines())))
     print(ha_doctor.status_line(routing, ha_doctor.load_doctor(ha_doctor.doctor_cache_path()), preset))
+    report_config(Ctx(cwd), routing, preset)
     print()
     if words > PARSE_THRESHOLD_WORDS and agents != "solo":
         print("NEXT: large spec (%d words) → parallelise parsing: `audit.py parse-plan` then dispatch the parser agents it lists." % words)
@@ -647,16 +882,23 @@ def cmd_parse_plan(a):
     k = min(k, c.cfg.get("cap", DEFAULT_CAP))
     chunks = split_sections(text, k)
     pdir = c.out / "parse"
-    for old in pdir.glob("section-*.md"):
-        old.unlink()
+    for pat in ("section-*.md", "section-*.jsonl"):
+        for old in pdir.glob(pat):
+            old.unlink()
+    if "held" in ((c.state.get("parse") or {}).get("backends") or {}).values():
+        refresh_routing(c)
+        held_units(c).clear()
     routing, preset, doctor = routing_context(c)
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    use_scripts()
     import ha_briefs
     import ha_dispatch
-    import ha_router
     backend = "claude"
     if c.cfg.get("agents") != "solo":
-        backend = ha_router.route("parser", routing, doctor, preset, c.state.get("cooldown", {}), now())
+        backend = route_for(c, "parser", routing, doctor, preset, now())
+    if backend.startswith("oc:"):
+        at_once = max(1, int(routing["tiers"][backend[3:]].get("max_parallel", 1)))
+        if len(chunks) > at_once:
+            chunks = split_sections(text, at_once)
     lines_out, oc_rows, backends = [], [], {}
     for i, chunk in enumerate(chunks, 1):
         name = "section-%02d" % i
@@ -665,29 +907,49 @@ def cmd_parse_plan(a):
         backends[name] = backend
         if backend == "claude":
             lines_out.append("  %s → prompt: Parser %s: read %s and follow it exactly." % (name, name, pdir / (name + ".md")))
+        elif backend == "held":
+            mark_held(c, name, "parser")
         else:
             write_text(pdir / (name + ".oc.md"),
                        ha_briefs.to_oc_brief((pdir / (name + ".md")).read_text(encoding="utf-8"), name))
             oc_rows.append((name, backend, 0, ha_dispatch.oc_command(c, name)))
     c.state["parse"] = {"sections": len(chunks), "dispatched": now(), "backends": backends}
     c.save_state()
-    print("parse-plan: %d words → %d sections (parser=%s, model=%s)" % (words, len(chunks), c.agent_type("parser"), c.model("parser")))
+    if backend == "held":
+        note_oc(c, "OC-ERROR", "parser", "config", "%d sections held: %s" % (len(chunks), HOLD_REASON))
+        flush_oc(c)
+    print("parse-plan: %d words → %d sections (parser=%s, model=%s)" % (words, len(chunks), c.agent_type("parser"), c.dispatch_model("parser")))
     if lines_out:
-        print("DISPATCH NOW — one message, all calls together; subagent_type=%s, model=%s; never pass `name`, never fork:" % (c.agent_type("parser"), c.model("parser")))
+        print("DISPATCH NOW — one message, all calls together; subagent_type=%s, model=%s; never pass `name`, never fork:" % (c.agent_type("parser"), c.dispatch_model("parser")))
         print("\n".join(lines_out))
     if oc_rows:
         print("\n".join(ha_dispatch.oc_block(oc_rows, "sections")))
-    print("\nThen: `audit.py parse-merge` → review checklist.draft.jsonl against the original wording → `audit.py parse-merge --accept`.")
+    if backend == "held":
+        print("NEXT: %d sections are held: ask the user once (SKILL.md \"Held units\"), then `audit.py parse-merge --to-claude`"
+              " or fix opencode and run `audit.py parse-plan` again." % len(chunks))
+    else:
+        print("\nThen: `audit.py parse-merge` → review checklist.draft.jsonl against the original wording → `audit.py parse-merge --accept`.")
 
 
 def parse_fallbacks(c, pdir):
-    """Failed opencode sections: set the event aside, drop partial output, hand the section to a Claude parser."""
+    """Failed or held opencode sections go to Claude parsers, or (preset opencode) wait for the user."""
     parse = c.state.get("parse") or {}
     backends = parse.get("backends") or {}
-    events = load_events(c)
-    out = []
+    events = {name: d for name, _, d in load_events(c)}
+    claude_ok = "parser" in c.state.get("claude_roles", []) or c.cfg.get("preset") != "opencode"
+    out, changed = [], False
     for name in sorted(backends, key=batch_key):
         e = events.get(name)
+        if backends[name] == "held":
+            if not claude_ok:
+                continue
+            held_units(c).pop(name, None)
+            backends[name] = "claude"
+            c.state.setdefault("fallbacks", {})[name] = "held"
+            out.append("FALLBACK %s (held) → Claude parser" % name)
+            out.append(dispatch_line(c, "parser", name, pdir / (name + ".md")))
+            changed = True
+            continue
         if backends[name] == "claude" or not e or e.get("ok"):
             continue
         reason = e.get("reason") or "format"
@@ -699,11 +961,16 @@ def parse_fallbacks(c, pdir):
         partial = pdir / (name + ".jsonl")
         if partial.exists():
             partial.unlink()
-        backends[name] = "claude"
-        c.state.setdefault("fallbacks", {})[name] = reason
-        out.append("FALLBACK %s (%s) → Claude parser" % (name, reason))
-        out.append(dispatch_line(c, "parser", name, pdir / (name + ".md")))
-    if out:
+        changed = True
+        if claude_ok:
+            backends[name] = "claude"
+            c.state.setdefault("fallbacks", {})[name] = reason
+            out.append("FALLBACK %s (%s) → Claude parser" % (name, reason))
+            out.append(dispatch_line(c, "parser", name, pdir / (name + ".md")))
+        else:
+            backends[name] = "held"
+            mark_held(c, name, "parser", reason)
+    if changed:
         parse["backends"] = backends
         c.state["parse"] = parse
         c.save_state()
@@ -716,17 +983,27 @@ def norm_tokens(s):
 
 def cmd_parse_merge(a):
     c = Ctx(a.cwd)
+    flush_oc(c)
+    if a.to_claude:
+        allow_claude(c, ["parser"])
+        c.save_state()
     pdir = c.out / "parse"
     fallback = parse_fallbacks(c, pdir)
     if fallback:
         print("\n".join(fallback))
     files = sorted(pdir.glob("section-*.jsonl"), key=lambda p: batch_key(p.name))
     expected = (c.state.get("parse") or {}).get("sections", 0)
+    if expected:
+        files = [f for f in files if 1 <= batch_key(f.name) <= expected]
     if len(files) < expected:
         have = {batch_key(p.name) for p in files}
         missing = ["section-%02d" % i for i in range(1, expected + 1) if i not in have]
         print("Waiting: %d/%d parser outputs present. Missing: %s" % (len(files), expected, ", ".join(missing)))
         print("(re-dispatch a missing one with the same prompt if its agent failed)")
+        held = [n for n, b in ((c.state.get("parse") or {}).get("backends") or {}).items() if b == "held"]
+        if held:
+            print("NEXT: %d section(s) are held: ask the user once (SKILL.md \"Held units\"), then `audit.py parse-merge --to-claude`"
+                  " (or `audit.py status --mode hybrid`, then `audit.py parse-merge`)." % len(held))
         return
     rows, errors = [], []
     for f in files:
@@ -785,13 +1062,13 @@ SPEED_RULES = """## Speed rules (you are one of many parallel workers; the wave 
 - Write the findings file BEFORE your final reply. If you are running out of turns, write what you have and mark the rest UNSEARCHED."""
 
 FINDINGS_SCHEMA = """## Output format: JSON Lines — one object per requirement, exactly these keys, no prose
-{"id":"REQ-001","status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE","confidence":"high|medium|low",
+{"id":"REQ-001","status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE|UNSEARCHED","confidence":"high|medium|low",
  "evidence":[{"path":"src/auth/login.py","lines":"41-58","note":"what this code does relative to the requirement"}],
  "excerpt":"≤ 2 lines, ONLY if the exact wording is load-bearing, else \\"\\"",
  "searched":["terms","globs","paths actually checked"],"notes":"deviations / partial coverage / caveats, ≤ 200 chars"}
 - status is a HYPOTHESIS; the lead decides. MATCHED = the cited code implements the exact wording; PARTIAL = implemented but a specified
   detail is missing/deviates; CONFLICT = code actively contradicts it; MISSING = nothing found after the search budget;
-  UNVERIFIABLE = cannot be settled by reading code (say why in notes).
+  UNVERIFIABLE = cannot be settled by reading code (say why in notes); UNSEARCHED = you ran out of turns before investigating it.
 - MISSING requires `searched` to include every search_hint plus at least two alternative strategies.
 - confidence=high only when evidence directly implements the requirement; use medium/low when inferring."""
 
@@ -844,7 +1121,7 @@ def dispatch_header(c, role):
     if c.cfg.get("agents") == "solo":
         return "SOLO MODE — do these yourself, one batch file at a time (read it → search → write the findings file):"
     return ("DISPATCH NOW — one message, all Agent calls together; subagent_type=%s, model=%s; "
-            "never pass `name` (with agent teams on it becomes a teammate), never use fork:" % (c.agent_type(role), c.model(role)))
+            "never pass `name` (with agent teams on it becomes a teammate), never use fork:" % (c.agent_type(role), c.dispatch_model(role)))
 
 
 # --------------------------------------------------------------------------- plan
@@ -870,6 +1147,16 @@ def partition_items(active, cap, solo):
     return batches
 
 
+def clear_run_artifacts(c):
+    """Re-running `plan` starts a fresh wave: drop stale findings/verify/events
+    so a re-plan is idempotent instead of layering on top of a previous run."""
+    for d, pat in ((c.out / "findings", "*.jsonl"), (c.out / "verify", "*.jsonl"),
+                   (c.out / "verify", "*.md"), (c.out / "events", "*.json")):
+        if d.exists():
+            for old in d.glob(pat):
+                old.unlink()
+
+
 def cmd_plan(a):
     c = Ctx(a.cwd)
     rows, errors = c.checklist()
@@ -880,6 +1167,7 @@ def cmd_plan(a):
     problems = validate_checklist(rows)
     if problems:
         die("checklist problems (fix, then re-run plan): " + "; ".join(problems[:20]))
+    clear_run_artifacts(c)
     write_text(c.out / "checklist.md", checklist_md(rows))
     cap = a.cap or c.cfg.get("cap", DEFAULT_CAP)
     c.cfg["cap"] = cap
@@ -894,10 +1182,7 @@ def cmd_plan(a):
         return
     solo = a.solo or c.cfg.get("agents") == "solo"
     routing, preset, doctor = routing_context(c)
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import ha_router
-    if not solo and ha_router.route("investigator", routing, doctor, preset,
-                                    c.state.get("cooldown", {}), now()) != "claude":
+    if not solo and route_for(c, "investigator", routing, doctor, preset, now()) != "claude":
         plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor)
         return
     batches = partition_items(active, cap, solo)
@@ -917,8 +1202,9 @@ def cmd_plan(a):
             lines.append(dispatch_line(c, "investigator", name, c.out / "batches" / (name + ".md")))
     c.state.update({"plan_time": now(), "cap": cap, "batches": state_batches, "verify": {}, "verify_assigned": {},
                     "spotchecked": [], "hedges": {}, "failed": []})
-    if "fallbacks" in c.state:  # absent on a pure-claude audit; keep its state.json unchanged
-        c.state["fallbacks"] = {}
+    for key in ("fallbacks", "held"):  # absent on a pure-claude audit; keep its state.json unchanged
+        if key in c.state:
+            c.state[key] = {}
     c.save_state()
     waves = max(b["wave"] for b in state_batches.values())
     print("plan: %d requirements (%d skipped as static-limit/ambiguous) → %d investigator batches of ≤%d, %d wave(s), cap=%d" % (
@@ -931,17 +1217,17 @@ def cmd_plan(a):
 
 
 def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    use_scripts()
     import ha_briefs
     import ha_dispatch
     import ha_partition
     n = len(active)
-    groups = ha_partition.split_batches(active, routing, doctor, preset, cap, False)
+    t = now()
+    groups = ha_partition.split_batches(active, routing, doctor, preset, cap, False, t, c.out)
     repo_map = (c.out / "repo_map.md").read_text(encoding="utf-8") if (c.out / "repo_map.md").exists() else "(no repo map)"
     for old in (c.out / "batches").glob("batch-*.md"):
         old.unlink()
-    t = now()
-    state_batches, lines, oc_rows = {}, [], []
+    state_batches, lines, oc_rows, held = {}, [], [], {}
     k_claude = 0
     for i, (backend, items) in enumerate(groups, 1):
         name = "batch-%02d" % i
@@ -950,26 +1236,35 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
         if backend == "claude":
             k_claude += 1
             wave = (k_claude - 1) // cap + 1
+        elif backend == "held":
+            wave = 1
+            held[name] = {"role": "investigator", "reason": HOLD_REASON}
         else:
             wave = 1
             write_text(c.out / "batches" / (name + ".oc.md"),
                        ha_briefs.to_oc_brief(path.read_text(encoding="utf-8"), name))
             oc_rows.append((name, backend, len(items), ha_dispatch.oc_command(c, name)))
         state_batches[name] = {"ids": [r["id"] for r in items], "wave": wave,
-                               "dispatched": t if (wave == 1 and not a.no_mark) else None, "backend": backend}
+                               "dispatched": t if (wave == 1 and not a.no_mark and backend != "held") else None,
+                               "backend": backend}
         if wave == 1 and backend == "claude":
             lines.append(dispatch_line(c, "investigator", name, path))
     c.state.update({"plan_time": t, "cap": cap, "batches": state_batches, "verify": {}, "verify_assigned": {},
-                    "spotchecked": [], "hedges": {}, "failed": [], "fallbacks": {}})
+                    "spotchecked": [], "hedges": {}, "failed": [], "fallbacks": {}, "held": held})
     c.save_state()
     claude_sizes = [len(items) for backend, items in groups if backend == "claude"]
-    oc_items = sum(len(items) for backend, items in groups if backend != "claude")
+    oc_items = sum(len(items) for backend, items in groups if backend.startswith("oc:"))
+    held_items = sum(len(items) for backend, items in groups if backend == "held")
     waves = max(b["wave"] for b in state_batches.values())
     size = " of ≤%d" % max(claude_sizes) if claude_sizes else ""
     summary = "plan: %d requirements (%d skipped as static-limit/ambiguous) → %d investigator batches%s, %d wave(s), cap=%d" % (
         n, skipped, len(claude_sizes), size, waves, cap)
     if oc_rows:
         summary += " | %d opencode batches (%d items)" % (len(oc_rows), oc_items)
+    if held:
+        summary += " | %d held batches (%d items)" % (len(held), held_items)
+        note_oc(c, "OC-ERROR", "investigator", "config", "%d batches held: %s" % (len(held), HOLD_REASON))
+    flush_oc(c)
     print(summary)
     if waves > 1:
         print("      wave 2+ batches are dispatched by `audit.py status` as slots free up.")
@@ -978,6 +1273,8 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
         print("\n".join(lines))
     if oc_rows:
         print("\n".join(ha_dispatch.oc_block(oc_rows)))
+    elif held and not lines:
+        print(HELD_NEXT % len(held))
     else:
         print("\nAfter dispatching: run `audit.py status` whenever a completion notification arrives (or right away in foreground environments) and do what NEXT says.")
 
@@ -990,6 +1287,14 @@ def as_list(v):
     if isinstance(v, list):
         return v
     return [v]
+
+
+def plan_ids(p):
+    """A plan.jsonl entry's ids, normalised: `ids` may be a string (single id) or a list."""
+    ids = as_list(p.get("ids"))
+    if not ids and p.get("id"):
+        ids = [p.get("id")]
+    return ids
 
 
 def normalize_row(r):
@@ -1006,20 +1311,23 @@ def normalize_row(r):
     r["searched"] = [str(s) for s in as_list(r.get("searched"))]
     if isinstance(r.get("confidence"), str):
         r["confidence"] = r["confidence"].strip().lower()
+    elif r.get("confidence") is not None:
+        r["confidence"] = "low"  # a number or object is not a confidence; str-only code reads it later
     return r
 
 
 def load_finding_files(dirpath, pattern):
-    """Returns {file_name: (mtime, {id: row})}."""
-    result = {}
+    """Returns ({file_name: (mtime, {id: row})}, errors)."""
+    result, errors = {}, []
     for f in sorted(Path(dirpath).glob(pattern)):
-        rows, _ = read_jsonl(f)
+        rows, errs = read_jsonl(f)
+        errors.extend(errs)
         byid = {}
         for r in rows:
             if isinstance(r, dict) and r.get("id"):
                 byid[str(r["id"]).strip()] = normalize_row(r)
         result[f.name] = (f.stat().st_mtime, byid)
-    return result
+    return result, errors
 
 
 def norm_status(s, allowed=STATUSES):
@@ -1032,16 +1340,20 @@ def norm_status(s, allowed=STATUSES):
 
 
 def load_events(c):
-    """SubagentStop events written by the guard hook: {batch_name: {"ok": bool, "t": mtime, "msg": ...}}."""
-    ev = {}
+    """SubagentStop events written by the guard hook: [(batch_name, file_mtime, event_dict), ...]."""
+    out = []
     edir = c.out / "events"
     if not edir.exists():
-        return ev
+        return out
     for f in edir.glob("*.json"):
         d = read_json(f)
         if d and d.get("batch"):
-            ev[d["batch"]] = d
-    return ev
+            try:
+                mt = f.stat().st_mtime
+            except OSError:
+                continue
+            out.append((d["batch"], mt, d))
+    return out
 
 
 class Merged(object):
@@ -1055,8 +1367,17 @@ class Merged(object):
         self.coverage = {}     # batch -> (found_ids, total)
         self.batch_done = {}   # batch -> bool
         self.batch_time = {}   # batch -> completion mtime
-        self.events = load_events(c)
-        files = load_finding_files(c.out / "findings", "*.jsonl")
+        # events map to their BASE batch (a retry's event, e.g. batch-01-r7, counts toward batch-01);
+        # when several events (original + retries) map to the same base, the freshest file wins.
+        # opencode events keep their own name: harvest_oc_events moves events/<name>.json by that key.
+        self.events = {}
+        self._event_mtime = {}
+        for name, mt, d in load_events(c):
+            base = name if str(d.get("backend") or "").startswith("oc:") else base_batch(name)
+            if base not in self.events or mt > self._event_mtime[base]:
+                self.events[base] = d
+                self._event_mtime[base] = mt
+        files, self.finding_errors = load_finding_files(c.out / "findings", "*.jsonl")
         # per batch: pick the file with the most coverage (earliest on ties)
         for name, meta in self.batches.items():
             ids = set(meta["ids"])
@@ -1093,7 +1414,7 @@ class Merged(object):
                 self.batch_done[meta_name] = True
         # verification
         self.verdict, self.verdict_src = {}, {}
-        vfiles = load_finding_files(c.out / "verify", "*.jsonl")
+        vfiles, self.verify_errors = load_finding_files(c.out / "verify", "*.jsonl")
         self.vbatches = c.state.get("verify", {})
         self.vdone = {}
         for name, meta in self.vbatches.items():
@@ -1112,6 +1433,13 @@ class Merged(object):
                     if rid in self.items and rid not in self.verdict:
                         self.verdict[rid] = row
                         self.verdict_src[rid] = fn
+        # drop events older than the batch's current dispatch (a redispatch invalidates the
+        # previous SubagentStop event; only one that arrived after the fresh dispatch counts)
+        for base in list(self.events):
+            meta = self.batches.get(base) or self.vbatches.get(base)
+            dispatched = meta.get("dispatched") if meta else None
+            if dispatched and self._event_mtime[base] < dispatched:
+                del self.events[base]
         self.adj = {}
         for row in read_jsonl(c.out / "adjudications.jsonl")[0]:
             if row.get("id"):
@@ -1223,16 +1551,18 @@ class Merged(object):
                 reasons.append("worker says UNVERIFIABLE (not tagged by lead)")
             if reasons:
                 q.append((rid, "; ".join(reasons)))
-        # deterministic spot-check sample of unverified MATCHED-high items
-        pool = sorted(rid for rid in self.items if rid not in self.adj and not self.skip_tagged(rid)
-                      and self.final_status(rid) == "MATCHED" and rid not in self.verdict)
-        if pool:
-            k = max(3, math.ceil(0.05 * len(pool)))
-            rnd = random.Random(len(self.items) * 7919 + len(pool))
-            sample = sorted(rnd.sample(pool, min(k, len(pool))))
+        # deterministic spot-check sample of unverified MATCHED-high items: the population and the
+        # random draw are a fixed function of the item set (inv_status ignores adjudication), so
+        # adjudicating one sampled item only removes it below — it never reshuffles the rest.
+        universe = sorted(rid for rid in self.items if not self.skip_tagged(rid)
+                           and self.inv_status(rid) == "MATCHED" and rid not in self.verdict)
+        if universe:
+            k = max(3, math.ceil(0.05 * len(universe)))
+            rnd = random.Random(len(self.items) * 7919 + len(universe))
+            sample = sorted(rnd.sample(universe, min(k, len(universe))))
             queued = {r for r, _ in q}
             for rid in sample:
-                if rid not in queued:
+                if rid not in self.adj and rid not in queued:
                     q.append((rid, "spot-check sample (MATCHED, unverified)"))
         return q
 
@@ -1254,9 +1584,9 @@ VERIFY_SCHEMA = """## Output format: JSON Lines — one object per requirement, 
  "evidence":[{"path":"src/x.py","lines":"10-20","note":"…"}],"searched":["new terms/paths you tried"],"reason":"≤ 200 chars"}"""
 
 
-def verify_body(c, name, rids, m, repo_map):
+def verify_body(c, name, rids, m, repo_map, outp=None):
     """Verifier brief text for one verifier batch (`batch-VNN`) over the checklist ids `rids`."""
-    outp = c.out / "verify" / (name + ".jsonl")
+    outp = outp or (c.out / "verify" / (name + ".jsonl"))
     blocks = []
     for rid in rids:
         r = m.items[rid]
@@ -1298,33 +1628,44 @@ def verify_body(c, name, rids, m, repo_map):
            repo_map=repo_map.rstrip(), schema=VERIFY_SCHEMA, items="\n\n".join(blocks))
 
 
-def write_verify_file(c, name, rids, m, repo_map):
-    write_text(c.out / "verify" / (name + ".md"), verify_body(c, name, rids, m, repo_map))
+def write_verify_file(c, name, rids, m, repo_map, outp=None):
+    write_text(c.out / "verify" / (name + ".md"), verify_body(c, name, rids, m, repo_map, outp))
 
 
 # --------------------------------------------------------------------------- status
 
 def redispatch_batch(c, m, b, t, repo_map):
-    """Write a retry brief for the ids of batch `b` no findings file covers; return its dispatch line ("" if none)."""
+    """Write a retry brief for the ids of investigator or verifier batch `b` that no output file covers.
+
+    Returns (role, dispatch line), or ("", "") when `b` is unknown or fully covered.
+    """
     meta = m.batches.get(b)
-    if not meta:
-        return ""
-    missing = [i for i in meta["ids"] if i not in m.finding]
+    vmeta = None if meta else m.vbatches.get(b)
+    if not meta and not vmeta:
+        return "", ""
+    have = m.finding if meta else m.verdict
+    missing = [i for i in (meta or vmeta)["ids"] if i not in have]
     if not missing:
-        return ""
-    items = [m.items[i] for i in missing]
+        return "", ""
     suffix = "r%d" % (int(t) % 1000)
     name = b + "-" + suffix
-    # the retry writes to findings/<b>.r<k>.jsonl so Merged picks it up as a candidate for <b>
-    write_batch_file(c, name, items, repo_map, outp=c.out / "findings" / (b + "." + suffix + ".jsonl"))
-    meta["dispatched"] = t
     if b in c.state.get("failed", []):
         c.state["failed"].remove(b)
-    return dispatch_line(c, "investigator", name, c.out / "batches" / (name + ".md"))
+    # the retry writes to <findings|verify>/<b>.r<k>.jsonl so Merged picks it up as a candidate for <b>
+    if meta:
+        items = [m.items[i] for i in missing]
+        write_batch_file(c, name, items, repo_map, outp=c.out / "findings" / (b + "." + suffix + ".jsonl"))
+        meta["dispatched"] = t
+        return "investigator", dispatch_line(c, "investigator", name, c.out / "batches" / (name + ".md"))
+    write_verify_file(c, name, missing, m, repo_map, outp=c.out / "verify" / (b + "." + suffix + ".jsonl"))
+    vmeta["dispatched"] = t
+    return "verifier", dispatch_line(c, "verifier", name, c.out / "verify" / (name + ".md"))
 
 
 def cmd_status(a):
     c = Ctx(a.cwd)
+    apply_run_flags(c, a)
+    flush_oc(c)
     rows, errors = c.checklist()
     out = c.out
     lines = []
@@ -1351,7 +1692,15 @@ def cmd_status(a):
         for b in a.failed:
             if b not in c.state["failed"]:
                 c.state["failed"].append(b)
+            # a failed verifier batch's ids leave verify_assigned so they reappear for verification
+            vmeta = c.state.get("verify", {}).get(b)
+            if vmeta:
+                assigned = c.state.get("verify_assigned", {})
+                for rid in vmeta.get("ids", []):
+                    if assigned.get(rid) == b:
+                        del assigned[rid]
         c.save_state()
+    just_undispatched = set()
     if a.undispatch:
         names = a.undispatch
         if names == ["all"]:
@@ -1361,23 +1710,32 @@ def cmd_status(a):
                 c.state["batches"][b]["dispatched"] = None
             if b in c.state.get("verify", {}):
                 c.state["verify"][b]["dispatched"] = None
+        just_undispatched = set(names)
         c.save_state()
     m = Merged(c)
+    if m.finding_errors:
+        lines.append("findings JSON errors: " + "; ".join(m.finding_errors[:5]))
+    if m.verify_errors:
+        lines.append("verify JSON errors: " + "; ".join(m.verify_errors[:5]))
     cap = c.state.get("cap", c.cfg.get("cap", DEFAULT_CAP))
     solo = c.cfg.get("agents") == "solo"
     repo_map = (out / "repo_map.md").read_text(encoding="utf-8") if (out / "repo_map.md").exists() else ""
     t = now()
     dispatch_inv, dispatch_ver, hedges = [], [], []
-    hybrid = c.cfg.get("preset", "claude") != "claude" and not solo
+    preset = c.cfg.get("preset", "claude")
+    hybrid = preset != "claude" and not solo
     if hybrid:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        use_scripts()
         import ha_dispatch
-        # harvest_oc_events marks the tier down / sets the cooldown, moves the event file and records fallbacks
+        # harvest_oc_events trips the breaker / sets the cooldown, moves the event file and records fallbacks
         for fb in ha_dispatch.harvest_oc_events(c, m, t):
+            if preset == "opencode" and fb["role"] not in c.state.get("claude_roles", []):
+                hold_unit(c, m, fb)
+                continue
             lines.append("FALLBACK %s (%s) → Claude %s: %d uncovered ids" % (
                 fb["name"], fb["reason"], fb["role"], len(fb["ids"])))
             if fb["role"] == "investigator":
-                line = redispatch_batch(c, m, fb["name"], t, repo_map)
+                line = redispatch_batch(c, m, fb["name"], t, repo_map)[1]
                 if line:
                     dispatch_inv.append(line)
             elif fb["role"] == "verifier" and fb["name"] in m.vbatches:
@@ -1389,10 +1747,8 @@ def cmd_status(a):
     if hybrid:
         import ha_briefs
         import ha_doctor
-        import ha_router
         routing = c.cfg.get("routing") or {}
-        preset = c.cfg.get("preset", "claude")
-        doctor = ha_doctor.load_doctor(ha_doctor.doctor_cache_path())  # re-read: the harvest may have marked a tier down
+        doctor = ha_doctor.load_doctor(ha_doctor.doctor_cache_path())
         slots = ha_dispatch.free_slots(c, m)
         free = slots["claude"]
 
@@ -1407,14 +1763,25 @@ def cmd_status(a):
         lines.append("  partial files: " + ", ".join("%s %d/%d" % (b, cv[0], cv[1]) for b, cv in partial))
 
     # undispatched wave-1 / next-wave batches
+    newly_held = 0
     for b, meta in sorted(m.batches.items(), key=lambda kv: batch_key(kv[0])):
-        if meta.get("dispatched") or m.batch_done.get(b):
+        if m.batch_done.get(b) or b in m.failed or b in held_units(c):
             continue
-        if b in m.failed:
+        if solo:
+            # solo has no background agents: re-list every unfinished batch on every call
+            meta["dispatched"] = meta.get("dispatched") or t
+            dispatch_inv.append(dispatch_line(c, "investigator", b, out / "batches" / (b + ".md")))
+            continue
+        if meta.get("dispatched"):
             continue
         backend = "claude"
         if hybrid:
-            backend = ha_router.route("investigator", routing, doctor, preset, c.state.get("cooldown", {}), t)
+            backend = route_for(c, "investigator", routing, doctor, preset, t)
+        if backend == "held":
+            mark_held(c, b, "investigator")
+            meta["backend"] = "held"
+            newly_held += 1
+            continue
         if backend != "claude" and slots.get(backend, 0) > 0:
             oc_path = out / "batches" / (b + ".oc.md")
             if not oc_path.exists():
@@ -1425,19 +1792,49 @@ def cmd_status(a):
             meta["dispatched"] = t
             oc_rows.append((b, backend, len(meta["ids"]), ha_dispatch.oc_command(c, b)))
             continue
-        if not solo and free <= 0:
+        if backend != "claude" and preset == "opencode":
+            continue  # waits for a free opencode slot; preset opencode never overflows to Claude
+        if free <= 0:
             continue
         meta["backend"] = "claude"
         meta["dispatched"] = t
-        if not solo:
-            free -= 1
+        free -= 1
         dispatch_inv.append(dispatch_line(c, "investigator", b, out / "batches" / (b + ".md")))
-    # re-dispatch failed batches (uncovered ids only)
+    if newly_held:
+        note_oc(c, "OC-ERROR", "investigator", "config", "%d batches held: %s" % (newly_held, HOLD_REASON))
+    new_v_names = set()
+    if not solo:
+        # re-list verifier batches left undispatched as slots free up; a batch this call's
+        # own `--undispatch` reset is skipped once so it stays undispatched for this call
+        for v, meta in sorted(m.vbatches.items(), key=lambda kv: batch_key(kv[0])):
+            if (v in just_undispatched or meta.get("dispatched") or m.vdone.get(v) or v in m.failed
+                    or v in held_units(c)):
+                continue
+            backend = route_for(c, "verifier", routing, doctor, preset, t) if hybrid else "claude"
+            if backend == "held":
+                mark_held(c, v, "verifier")
+                meta["backend"] = "held"
+            elif backend != "claude" and slots.get(backend, 0) > 0:
+                oc_path = out / "verify" / (v + ".oc.md")
+                if not oc_path.exists():
+                    body = (out / "verify" / (v + ".md")).read_text(encoding="utf-8")
+                    write_text(oc_path, ha_briefs.to_oc_brief(body, v))
+                slots[backend] -= 1
+                meta["backend"] = backend
+                meta["dispatched"] = t
+                oc_rows.append((v, backend, len(meta["ids"]), ha_dispatch.oc_command(c, v)))
+            elif backend == "claude" and free > 0:
+                meta["backend"] = "claude"
+                meta["dispatched"] = t
+                free -= 1
+                new_v_names.add(v)
+                dispatch_ver.append(dispatch_line(c, "verifier", v, out / "verify" / (v + ".md")))
+    # re-dispatch failed batches (uncovered ids only) — investigator or verifier
     if a.redispatch:
         for b in a.redispatch:
-            line = redispatch_batch(c, m, b, t, repo_map)
+            role, line = redispatch_batch(c, m, b, t, repo_map)
             if line:
-                dispatch_inv.append(line)
+                (dispatch_inv if role == "investigator" else dispatch_ver).append(line)
 
     # ---- hedging stragglers (speculative duplicate) once ≥50% of wave A is done
     claude_b = {b: meta for b, meta in m.batches.items() if meta.get("backend", "claude") == "claude"}
@@ -1460,9 +1857,9 @@ def cmd_status(a):
                 r2 = out / "findings" / (b + ".r2.jsonl")
                 hedges.append("  %s (running %s, median %s) → HEDGE prompt: Investigator %s: read %s and follow it exactly, but write your findings to %s instead." % (
                     b, fmt_dur(elapsed), fmt_dur(median), b, out / "batches" / (b + ".md"), r2))
-    if hybrid:
+    if hybrid and preset != "opencode":
         for b, meta in sorted(m.batches.items(), key=lambda kv: batch_key(kv[0])):
-            if meta.get("backend", "claude") == "claude" or c.state.get("hedges", {}).get(b) or free <= 0:
+            if not str(meta.get("backend", "claude")).startswith("oc:") or c.state.get("hedges", {}).get(b) or free <= 0:
                 continue
             if ha_dispatch.should_hedge_oc(c, m, b, t):
                 c.state.setdefault("hedges", {})[b] = t
@@ -1477,15 +1874,18 @@ def cmd_status(a):
     lines.append("Wave B (verify): %d/%d batches complete; running≈%d; pending items not yet assigned: %d" % (vdone, len(m.vbatches), rv, len(pending)))
     vbackend = "claude"
     if hybrid:
-        vbackend = ha_router.route("verifier", routing, doctor, preset, c.state.get("cooldown", {}), t)
-    if vbackend != "claude" and pending and (len(pending) >= VERIFY_TRIGGER or m.wave_a_done()):
+        vbackend = route_for(c, "verifier", routing, doctor, preset, t)
+    if vbackend == "held" and pending and "verify-pending" not in held_units(c):
+        mark_held(c, "verify-pending", "verifier")
+        note_oc(c, "OC-ERROR", "verifier", "config", "%d items wait for a verifier: %s" % (len(pending), HOLD_REASON))
+    if vbackend.startswith("oc:") and pending and (len(pending) >= VERIFY_TRIGGER or m.wave_a_done()):
         pending.sort(key=lambda rid: (m.items[rid].get("category") or "", rid))
         queue, plan_v = list(pending), []
         while queue and slots.get(vbackend, 0) > 0:
             plan_v.append((vbackend, queue[:VERIFY_MAX_PER_AGENT]))
             queue = queue[VERIFY_MAX_PER_AGENT:]
             slots[vbackend] -= 1
-        while queue and free > 0:
+        while queue and free > 0 and preset != "opencode":
             plan_v.append(("claude", queue[:VERIFY_MAX_PER_AGENT]))
             queue = queue[VERIFY_MAX_PER_AGENT:]
             free -= 1
@@ -1496,6 +1896,7 @@ def cmd_status(a):
             c.state["verify"][name] = {"ids": chunk, "dispatched": t, "backend": backend}
             for rid in chunk:
                 c.state.setdefault("verify_assigned", {})[rid] = name
+            new_v_names.add(name)
             if backend == "claude":
                 dispatch_ver.append(dispatch_line(c, "verifier", name, out / "verify" / (name + ".md")))
             else:
@@ -1503,7 +1904,7 @@ def cmd_status(a):
                 oc_rows.append((name, backend, len(chunk), ha_dispatch.oc_command(c, name)))
         if not plan_v:
             lines.append("  (no free slots for verifiers yet — they are dispatched as investigators finish)")
-    elif pending and (len(pending) >= VERIFY_TRIGGER or m.wave_a_done() or solo):
+    elif vbackend == "claude" and pending and (len(pending) >= VERIFY_TRIGGER or m.wave_a_done() or solo):
         pending.sort(key=lambda rid: (m.items[rid].get("category") or "", rid))
         if solo:
             k = math.ceil(len(pending) / float(VERIFY_MAX_PER_AGENT * 2))
@@ -1525,9 +1926,17 @@ def cmd_status(a):
                     c.state.setdefault("verify_assigned", {})[rid] = name
                 if not solo:
                     free -= 1
+                new_v_names.add(name)
                 dispatch_ver.append(dispatch_line(c, "verifier", name, out / "verify" / (name + ".md")))
         elif not solo:
             lines.append("  (no free slots for verifiers yet — they are dispatched as investigators finish)")
+    if solo:
+        # solo mode never has agents "running" in the background — re-list every still-undispatched
+        # verifier batch on every status call, so the lead never loses track of pending work.
+        for b in sorted(m.vbatches, key=batch_key):
+            if b in new_v_names or m.vdone.get(b) or b in m.failed:
+                continue
+            dispatch_ver.append(dispatch_line(c, "verifier", b, out / "verify" / (b + ".md")))
     c.save_state()
 
     # ---- spot-check suggestions for idle lead time
@@ -1545,6 +1954,11 @@ def cmd_status(a):
         c.state["spotchecked"] = sorted(checked)
         c.save_state()
 
+    if m.wave_a_done():
+        breaker_lines(c)
+    c.save_state()
+    flush_oc(c)
+
     # ---- print
     print("STATUS %s — cap=%d free≈%d | %s" % (ts_iso(), cap, free, " | ".join("%s %d" % (STATUS_ICON[s], n) for s, n in m.counts().items() if n)))
     print("\n".join(lines))
@@ -1552,7 +1966,7 @@ def cmd_status(a):
         print(dispatch_header(c, "investigator"))
         print("\n".join(dispatch_inv))
     if hedges:
-        print("STRAGGLERS — dispatch a duplicate (hedge) for each; whichever finishes first is used (subagent_type=%s, model=%s):" % (c.agent_type("investigator"), c.model("investigator")))
+        print("STRAGGLERS — dispatch a duplicate (hedge) for each; whichever finishes first is used (subagent_type=%s, model=%s):" % (c.agent_type("investigator"), c.dispatch_model("investigator")))
         print("\n".join(hedges))
     if dispatch_ver:
         print(dispatch_header(c, "verifier"))
@@ -1562,6 +1976,18 @@ def cmd_status(a):
     if spot:
         print("MEANWHILE (optional, while agents run) spot-check these MATCHED items yourself:")
         print("\n".join(spot))
+    waves_done = m.wave_a_done() and m.wave_b_done()
+    assigned = c.state.get("verify_assigned", {})   # includes ids packed into verifiers in this call
+    queue_undecided = [] if waves_done else [
+        (rid, why) for rid, why in m.queue_ids()
+        if rid not in m.adj and rid in m.finding and not why.startswith("spot-check sample")
+        and not (rid in assigned and rid not in m.verdict)]
+    if queue_undecided:
+        # some ids (e.g. CONFLICT) are already decidable without waiting for more waves —
+        # surface them now instead of making the lead wait for a `status` call that shows nothing new.
+        print("MEANWHILE — already queued for adjudication (%d), no need to wait for more waves on these:" % len(queue_undecided))
+        for rid, why in queue_undecided:
+            print("\n".join(queue_item_lines(m, rid, why)))
     # ---- NEXT
     oc_note = ""
     if any(str(v.get("backend", "")).startswith("oc:") for v in list(m.batches.values()) + list(m.vbatches.values())):
@@ -1573,34 +1999,80 @@ def cmd_status(a):
             print("NEXT: dispatch everything above in ONE message, then run `audit.py status` again when the next completion notification%s arrives." % oc_note)
         return
     if not m.wave_a_done() or not m.wave_b_done():
+        if held_units(c):
+            print(HELD_NEXT % len(held_units(c)))
+            return
         stuck = [b for b in m.batches if b in m.events and not m.batch_done.get(b) and b not in m.failed]
+        stuck += [b for b in m.vbatches if b in m.events and not m.vdone.get(b) and b not in m.failed]
         if stuck:
             print("NOTE: agents finished without complete output: %s → `audit.py status --redispatch %s`" % (", ".join(stuck), " ".join(stuck)))
-        print(("NEXT: wait for completion notifications%s (do not poll in a loop); on each one run `audit.py status`. "
-               "If an agent reported failure or partial output: `audit.py status --failed <batch>` (moves its items to verifiers) or `--redispatch <batch>`.") % oc_note)
+        if not solo and (ri or rv):
+            print(("NEXT: wait for completion notifications%s (do not poll in a loop); on each one run `audit.py status`. "
+                   "If an agent reported failure or partial output: `audit.py status --failed <batch>` (moves its items to verifiers) or `--redispatch <batch>`.") % oc_note)
+        elif stuck:
+            print("NEXT: `audit.py status --redispatch %s`" % " ".join(stuck))
+        else:
+            print("NEXT: nothing is currently running; if a batch stalled silently, mark it with "
+                  "`audit.py status --failed <batch>` (moves its items to verifiers) or retry with `--redispatch <batch>`, then `audit.py status`.")
         return
-    q = m.queue_ids()
-    undecided = [rid for rid, _ in q if rid not in m.adj]
-    if undecided:
-        print("Waves complete. NEXT: `audit.py queue` → read the cited lines for the %d queued items → `audit.py adjudicate --set ID STATUS --note \"why\"` (or --accept ID)." % len(undecided))
-        return
-    disc = [rid for rid in m.items if m.final_status(rid) in DISCREPANT]
-    plan_rows, _ = read_jsonl(out / "plan.jsonl")
-    planned = {i for r in plan_rows for i in (r.get("ids") or [r.get("id")]) if i}
-    unplanned = [rid for rid in disc if rid not in planned]
-    if unplanned:
-        print("Adjudication complete. %d discrepancies need a remediation entry in %s (schema: references/schemas.md):" % (len(unplanned), out / "plan.jsonl"))
-        for rid in unplanned:
-            f = m.finding.get(rid) or {}
-            ev = "; ".join("%s:%s" % (e.get("path"), e.get("lines")) for e in (f.get("evidence") or [])[:2] if isinstance(e, dict))
-            print("  %s %s [%s/%s] %s%s" % (STATUS_ICON[m.final_status(rid)], rid, m.items[rid].get("strength"), m.items[rid].get("stakes", "normal"),
-                                          (m.items[rid].get("text") or "")[:100], (" — " + ev) if ev else ""))
-        print("NEXT: write plan.jsonl (P0 = any CONFLICT or unmet MUST on a core/high-stakes flow; P1 = other MUST gaps + user-visible SHOULD gaps; P2 = rest), then `audit.py report`.")
-        return
-    print("NEXT: `audit.py report` → `audit.py check` → `audit.py finish`.")
+    print("\n".join(next_after_waves(c, m)))
 
 
 # --------------------------------------------------------------------------- queue / adjudicate
+
+def queue_item_lines(m, rid, why):
+    r = m.items[rid]
+    f = m.finding.get(rid) or {}
+    v = m.verdict.get(rid) or {}
+    lines = ["%s [%s%s] — %s" % (rid, r.get("strength"), "/high-stakes" if r.get("stakes") == "high" else "", why),
+              "  requirement: %s" % r.get("text")]
+    if r.get("search_hints"):
+        lines.append("  hints: %s" % ", ".join(str(h) for h in r.get("search_hints")))
+    if f:
+        lines.append("  investigator: %s (%s) %s" % (norm_status(f.get("status")), f.get("confidence", "?"), (f.get("notes") or "")[:160]))
+        for e in (f.get("evidence") or [])[:3]:
+            if isinstance(e, dict):
+                lines.append("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
+        if f.get("searched"):
+            lines.append("    searched: %s" % ", ".join(str(s) for s in f.get("searched")[:15]))
+    if v:
+        lines.append("  verifier: %s (%s, agree=%s) %s" % (norm_status(v.get("verified_status") or v.get("status")), v.get("confidence", "?"), v.get("agree"), (v.get("reason") or "")[:160]))
+        for e in (v.get("evidence") or [])[:3]:
+            if isinstance(e, dict):
+                lines.append("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
+    lines.append("  current final: %s" % m.final_status(rid))
+    lines.append("")
+    return lines
+
+
+def next_after_waves(c, m):
+    """Lines describing what happens once wave A/B are complete: the adjudication
+    queue itself (not just a pointer to `audit.py queue`), or the next concrete
+    step once it is empty (write plan.jsonl, or go straight to `report`)."""
+    q = m.queue_ids()
+    undecided = [(rid, why) for rid, why in q if rid not in m.adj]
+    if undecided:
+        lines = ["Waves complete — ADJUDICATION QUEUE (%d):" % len(undecided),
+                  "  audit.py adjudicate --set REQ-xxx STATUS --note \"why\"   |   audit.py adjudicate --accept REQ-xxx [REQ-yyy ...]   |   --accept-queue"]
+        for rid, why in undecided:
+            lines.extend(queue_item_lines(m, rid, why))
+        lines.append("NEXT: read the cited lines above, decide, `audit.py adjudicate ...` for each; once the queue is empty, `audit.py status` again.")
+        return lines
+    disc = [rid for rid in m.items if m.final_status(rid) in DISCREPANT]
+    plan_rows, _ = read_jsonl(c.out / "plan.jsonl")
+    planned = {i for r in plan_rows for i in plan_ids(r) if i}
+    unplanned = [rid for rid in disc if rid not in planned]
+    if unplanned:
+        lines = ["Adjudication complete. %d discrepancies need a remediation entry in %s (schema: references/schemas.md):" % (len(unplanned), c.out / "plan.jsonl")]
+        for rid in unplanned:
+            f = m.finding.get(rid) or {}
+            ev = "; ".join("%s:%s" % (e.get("path"), e.get("lines")) for e in (f.get("evidence") or [])[:2] if isinstance(e, dict))
+            lines.append("  %s %s [%s/%s] %s%s" % (STATUS_ICON[m.final_status(rid)], rid, m.items[rid].get("strength"), m.items[rid].get("stakes", "normal"),
+                                                  (m.items[rid].get("text") or "")[:100], (" — " + ev) if ev else ""))
+        lines.append("NEXT: write plan.jsonl (P0 = any CONFLICT or unmet MUST on a core/high-stakes flow; P1 = other MUST gaps + user-visible SHOULD gaps; P2 = rest), then `audit.py report`.")
+        return lines
+    return ["NEXT: `audit.py report` (runs the check and prints its verdict)."]
+
 
 def cmd_queue(a):
     c = Ctx(a.cwd)
@@ -1613,27 +2085,7 @@ def cmd_queue(a):
     print("  audit.py adjudicate --set REQ-xxx STATUS --note \"why\"   |   audit.py adjudicate --accept REQ-xxx [REQ-yyy ...]")
     print("Your judgment is authoritative; keep MISSING only when both passes found nothing and you believe the searches were adequate.\n")
     for rid, why in q:
-        r = m.items[rid]
-        f = m.finding.get(rid) or {}
-        v = m.verdict.get(rid) or {}
-        print("%s [%s%s] — %s" % (rid, r.get("strength"), "/high-stakes" if r.get("stakes") == "high" else "", why))
-        print("  requirement: %s" % r.get("text"))
-        if r.get("search_hints"):
-            print("  hints: %s" % ", ".join(str(h) for h in r.get("search_hints")))
-        if f:
-            print("  investigator: %s (%s) %s" % (norm_status(f.get("status")), f.get("confidence", "?"), (f.get("notes") or "")[:160]))
-            for e in (f.get("evidence") or [])[:3]:
-                if isinstance(e, dict):
-                    print("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
-            if f.get("searched"):
-                print("    searched: %s" % ", ".join(str(s) for s in f.get("searched")[:15]))
-        if v:
-            print("  verifier: %s (%s, agree=%s) %s" % (norm_status(v.get("verified_status") or v.get("status")), v.get("confidence", "?"), v.get("agree"), (v.get("reason") or "")[:160]))
-            for e in (v.get("evidence") or [])[:3]:
-                if isinstance(e, dict):
-                    print("    %s:%s — %s" % (e.get("path"), e.get("lines"), e.get("note", "")))
-        print("  current final: %s" % m.final_status(rid))
-        print()
+        print("\n".join(queue_item_lines(m, rid, why)))
 
 
 def cmd_adjudicate(a):
@@ -1651,19 +2103,31 @@ def cmd_adjudicate(a):
     for rid in (a.accept or []):
         if rid not in m.items:
             die("unknown id %s" % rid)
-        entries.append({"id": rid, "final_status": m.final_status(rid), "note": a.note or "", "by": "lead", "at": ts_iso()})
+        fs = m.final_status(rid)
+        if fs == "UNSEARCHED":
+            die("%s: cannot accept UNSEARCHED (no finding yet) — investigate it first, or use --set %s STATUS" % (rid, rid))
+        entries.append({"id": rid, "final_status": fs, "note": a.note or "", "by": "lead", "at": ts_iso()})
+    skipped_unsearched = []
     if a.accept_queue:
         for rid, why in m.queue_ids():
-            if rid not in m.adj:
-                entries.append({"id": rid, "final_status": m.final_status(rid), "note": a.note or "", "by": "lead", "at": ts_iso()})
-    if not entries:
+            if rid in m.adj:
+                continue
+            fs = m.final_status(rid)
+            if fs == "UNSEARCHED":
+                skipped_unsearched.append(rid)
+                continue
+            entries.append({"id": rid, "final_status": fs, "note": a.note or "", "by": "lead", "at": ts_iso()})
+    if not entries and not skipped_unsearched:
         die("nothing to record. Use --set ID STATUS [--note ...], --accept ID..., or --accept-queue")
-    with open(str(c.out / "adjudications.jsonl"), "a", encoding="utf-8") as f:
-        for e in entries:
-            f.write(json.dumps(e, ensure_ascii=False) + "\n")
-    print("recorded %d adjudication(s): %s" % (len(entries), ", ".join("%s=%s" % (e["id"], e["final_status"]) for e in entries)))
-    left = [rid for rid, _ in Merged(c).queue_ids() if rid not in Merged(c).adj]
-    print("queue remaining: %d. NEXT: %s" % (len(left), "`audit.py queue`" if left else "`audit.py status`"))
+    if entries:
+        with open(str(c.out / "adjudications.jsonl"), "a", encoding="utf-8") as f:
+            for e in entries:
+                f.write(json.dumps(e, ensure_ascii=False) + "\n")
+        print("recorded %d adjudication(s): %s" % (len(entries), ", ".join("%s=%s" % (e["id"], e["final_status"]) for e in entries)))
+    if skipped_unsearched:
+        print("skipped (UNSEARCHED, needs investigation before it can be accepted): %s" % ", ".join(skipped_unsearched))
+    m2 = Merged(c)  # rebuild ONCE to reflect the entries just written; never per queued id
+    print("\n".join(next_after_waves(c, m2)))
 
 
 # --------------------------------------------------------------------------- report
@@ -1800,7 +2264,7 @@ def cmd_report(a):
                 continue
             L.append("### %s\n" % pr)
             for i, p in enumerate(group, 1):
-                ids = p.get("ids") or ([p.get("id")] if p.get("id") else [])
+                ids = plan_ids(p)
                 L.append("%d. **%s** (%s) — %s %s" % (i, p.get("title", ", ".join(ids)), ", ".join(ids), H["effort"], p.get("effort", "?")))
                 for key, label in (("current", H["current"]), ("target", H["target"]), ("fix", H["fix"]), ("depends", H["depends"]), ("risk", H["risk"])):
                     if p.get(key):
@@ -1826,7 +2290,12 @@ def cmd_report(a):
         w.writerows(csv_rows)
     print("report: %s  (+ traceability.csv)" % report)
     print("HEADLINE: total %d | %s | alignment %d/%d" % (total, " | ".join("%s %d" % (H["status"][s], cnt[s]) for s in STATUSES if cnt[s]), cnt["MATCHED"], total))
-    print("NEXT: `audit.py check` then `audit.py finish`.")
+    probs, warns = run_check(c, m)
+    print_check_verdict(probs, warns)
+    if probs:
+        print("NEXT: fix the problems (adjudicate / verify / plan), then `audit.py report` again.")
+    else:
+        print("NEXT: `audit.py finish`")
 
 
 # --------------------------------------------------------------------------- check
@@ -1842,6 +2311,9 @@ def line_count(path):
         return None
 
 
+LINES_RE = re.compile(r"^\s*[Ll]?(\d+)\s*(?:[-–]\s*[Ll]?(\d+))?\s*$")  # "41-58", "L41-L58", "41–58"
+
+
 def check_evidence(repo, ev):
     """Return a problem string or None."""
     if not isinstance(ev, dict) or not ev.get("path"):
@@ -1851,7 +2323,7 @@ def check_evidence(repo, ev):
     if not full.exists():
         return "cited file does not exist: %s" % ev["path"]
     lines = str(ev.get("lines") or "")
-    mm = re.match(r"^\s*(\d+)\s*(?:-\s*(\d+))?\s*$", lines)
+    mm = LINES_RE.match(lines)
     if not mm:
         return "evidence lines missing/unparseable for %s (%r)" % (ev["path"], lines)
     n = line_count(full)
@@ -1863,9 +2335,8 @@ def check_evidence(repo, ev):
     return None
 
 
-def cmd_check(a):
-    c = Ctx(a.cwd)
-    m = Merged(c)
+def run_check(c, m):
+    """The mechanical quality-gate logic, shared by `check` and inline by `report`."""
     probs, warns = [], []
     disc_ids = []
     for rid, r in m.items.items():
@@ -1882,14 +2353,17 @@ def cmd_check(a):
         if fs == "MISSING":
             if rid not in m.verdict and rid not in m.adj:
                 probs.append("%s: MISSING after one pass only — needs Wave B verification or an adjudication" % rid)
-            searched = [str(s).lower() for s in list(f.get("searched") or []) + list(v.get("searched") or [])]
-            if not searched:
-                probs.append("%s: MISSING without any `searched` terms" % rid)
-            else:
-                for h in (r.get("search_hints") or []):
-                    hl = str(h).lower()
-                    if not any(hl in s or s in hl for s in searched):
-                        warns.append("%s: search hint %r never appears in searched terms" % (rid, h))
+            # an adjudicated id is the lead's final call; the mechanical search-coverage
+            # rule below is a HEURISTIC to catch it BEFORE adjudication, not a re-litigation.
+            if rid not in m.adj:
+                searched = [str(s).lower() for s in list(f.get("searched") or []) + list(v.get("searched") or [])]
+                if not searched:
+                    probs.append("%s: MISSING without any `searched` terms" % rid)
+                else:
+                    for h in (r.get("search_hints") or []):
+                        hl = str(h).lower()
+                        if not any(hl in s or s in hl for s in searched):
+                            warns.append("%s: search hint %r never appears in searched terms" % (rid, h))
         if m.needs_verification(rid) and rid not in m.verdict and rid not in m.adj:
             if fs != "MATCHED":
                 probs.append("%s: non-MATCHED item was never verified or adjudicated" % rid)
@@ -1910,7 +2384,7 @@ def cmd_check(a):
     probs.extend("plan.jsonl: " + e for e in perr)
     planned = {}
     for p in plan_rows:
-        for i in (p.get("ids") or ([p.get("id")] if p.get("id") else [])):
+        for i in plan_ids(p):
             planned[i] = p
         if str(p.get("priority", "")).upper() not in ("P0", "P1", "P2"):
             probs.append("plan entry %s: priority must be P0/P1/P2" % (p.get("ids") or p.get("id")))
@@ -1931,11 +2405,22 @@ def cmd_check(a):
     rep = c.out / "requirements-code-audit.md"
     if not rep.exists():
         probs.append("report not built yet (`audit.py report`)")
+    return probs, warns
+
+
+def print_check_verdict(probs, warns):
     print("CHECK: %d problem(s), %d warning(s)" % (len(probs), len(warns)))
     for p in probs:
         print("  PROBLEM: " + p)
     for w in warns[:40]:
         print("  warn: " + w)
+
+
+def cmd_check(a):
+    c = Ctx(a.cwd)
+    m = Merged(c)
+    probs, warns = run_check(c, m)
+    print_check_verdict(probs, warns)
     if probs:
         print("Fix the problems (adjudicate / verify / plan), rebuild with `audit.py report`, re-run `audit.py check`.")
         sys.exit(1)
@@ -2007,23 +2492,19 @@ def cmd_finish(a):
 
 
 def cmd_oc_run(a):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    use_scripts()
     import ha_run
-    # run_named prints the single `OC ...` summary line itself and never raises.
-    ha_run.run_named(str(Path(a.cwd or os.getcwd()).resolve()), a.name)
+    # run_named prints every OC line and the single `OC ...` summary line itself and never raises.
+    result = ha_run.run_named(str(Path(a.cwd or os.getcwd()).resolve()), a.name)
+    return 0 if result.get("ok") else 3
 
 
 def cmd_doctor(a):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    use_scripts()
     import ha_doctor
     import ha_router
-    defaults = SKILL_DIR / "routing.default.json"
-    user = ha_router.user_routing_path()
-    if not user.exists():
-        user.parent.mkdir(parents=True, exist_ok=True)
-        user.write_text(defaults.read_text(encoding="utf-8"), encoding="utf-8")
-        print("created %s from the shipped defaults" % user)
-    routing = ha_router.load_routing(defaults, user)
+    hs = shared()
+    routing = ha_router.load_routing(SKILL_DIR / "routing.default.json", ha_router.user_routing_path())
     cache = ha_doctor.doctor_cache_path()
     binary = os.environ.get("HA_OC_BIN", "opencode")
     workdir = Path(a.cwd or os.getcwd()).resolve()
@@ -2031,15 +2512,29 @@ def cmd_doctor(a):
     ha_doctor.write_doctor(cache, data)
     print("doctor: opencode %s (%s) — %s" % ("v" + data["version"] if data.get("version") else "not found",
                                             binary, "ok" if data.get("ok") else "NOT ok"))
-    for name, t in sorted((data.get("tiers") or {}).items()):
-        model = t.get("model", "") + ("#" + t["variant"] if t.get("variant") else "")
-        down = t.get("down")
-        down_txt = " DOWN(%s: %s)" % (down.get("reason"), (down.get("message") or "").splitlines()[0] if down.get("message") else "") if down else ""
-        note = " — " + t["note"] if t.get("note") else ""
-        print("  tier %s: %s listed=%s ping=%s%s%s" % (name, model, t.get("listed"), t.get("ping"), down_txt, note))
+    tiers = routing.get("tiers") or {}
+    sources = routing.get("model_sources") or {}
+    failed = []
+    for name, entry in sorted((data.get("tiers") or {}).items()):
+        spec = hs.cache_key(tiers.get(name) or {})
+        text = "  tier %s: %s (%s) ok=%s" % (name, spec or "no model", sources.get(name, "none"), bool(entry.get("ok")))
+        if not entry.get("ok"):
+            text += " — %s: %s" % (entry.get("kind") or "unknown", entry.get("detail") or "")
+            failed.append((name, spec, entry))
+        print(text)
     print(ha_doctor.status_line(routing, data, ""))
     print("  cache   : %s" % cache)
-    print("  routing : %s" % user)
+    shared_tiers, _ = hs.load_shared()
+    specs = ", ".join("%s=%s" % (name, hs.model_spec(tier)) for name, tier in shared_tiers.items())
+    unset = not (os.environ.get(hs.STD_ENV) or "").strip()
+    print("  shared  : %s = %s" % (hs.SHARED_SOURCE, specs or ("not set" if unset else "invalid")))
+    for name, spec, entry in failed:
+        print(hs.oc_line("OC-ERROR", SKILL_NAME, "doctor", name, spec or "none", entry.get("kind") or "config",
+                         entry.get("detail") or "tier is not usable"))
+    for problem in routing.get("config_problems") or []:
+        print(hs.oc_line("OC-ERROR", SKILL_NAME, "config", "none", "none", "config", problem))
+    for warning in routing.get("config_warnings") or []:
+        print(hs.oc_line("OC-WARN", SKILL_NAME, "config", "none", "none", "config", warning))
 
 
 def cmd_stats(a):
@@ -2066,8 +2561,8 @@ def main(argv=None):
     p.add_argument("--agents", choices=["plugin", "local", "generic", "solo"], help="how workers are spawned (see SKILL.md Step 0)")
     p.add_argument("--cap", type=int, help="concurrent subagent cap (default: $CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS or 20)")
     p.add_argument("--force", action="store_true", help="archive an existing audit and start over")
-    p.add_argument("--preset", choices=["claude", "hybrid", "max"],
-                   help="backend preset (default: the routing file's preset)")
+    p.add_argument("--preset", help="run mode: claude|hybrid|opencode (max is a deprecated alias of opencode); "
+                                    "default: the routing file's preset")
     p.set_defaults(fn=cmd_init)
 
     p = sub.add_parser("spec", help="add/list requirement files")
@@ -2080,6 +2575,7 @@ def main(argv=None):
 
     p = sub.add_parser("parse-merge", help="merge parser outputs into checklist.draft.jsonl")
     p.add_argument("--accept", action="store_true", help="promote the draft to checklist.jsonl")
+    p.add_argument("--to-claude", action="store_true", help="let held opencode sections run on Claude parsers")
     p.set_defaults(fn=cmd_parse_merge)
 
     p = sub.add_parser("plan", help="checklist.jsonl -> batch files + dispatch list")
@@ -2092,6 +2588,11 @@ def main(argv=None):
     p.add_argument("--failed", nargs="*", help="batches whose agent failed/partially finished")
     p.add_argument("--redispatch", nargs="*", help="re-dispatch the uncovered items of these batches")
     p.add_argument("--undispatch", nargs="*", help="mark batches as not dispatched (e.g. after 'Concurrent subagent limit reached'); `all` resets every batch")
+    p.add_argument("--retry", nargs="+", metavar="UNIT",
+                   help="release held units (names, or `all`) for another opencode attempt")
+    p.add_argument("--to-claude", nargs="+", choices=["investigator", "verifier", "all"], dest="to_claude",
+                   help="let these roles run on Claude in preset opencode")
+    p.add_argument("--mode", help="switch the run to hybrid|claude|opencode (max is a deprecated alias for opencode)")
     p.set_defaults(fn=cmd_status)
 
     p = sub.add_parser("queue", help="print the adjudication queue")
@@ -2133,8 +2634,7 @@ def main(argv=None):
     if not a.cmd:
         ap.print_help()
         return 0
-    a.fn(a)
-    return 0
+    return a.fn(a) or 0
 
 
 if __name__ == "__main__":

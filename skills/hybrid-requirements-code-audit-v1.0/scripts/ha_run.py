@@ -4,8 +4,9 @@
 Runs one investigator batch (batch-NN), verifier batch (batch-VNN) or parser section (section-NN) on
 opencode. It sends round 1 with the attached opencode brief. When ids are missing or the JSON does not
 parse, it runs repair turns in the same session. It then applies the evidence oracle and writes the
-output file atomically. It also writes the event file, appends one telemetry record and prints one
-summary line. It never writes state.json or the doctor cache and never raises.
+output file atomically. It also writes the event file and appends one telemetry record. Each OC-ERROR or
+OC-WARN line is printed the moment it happens and appended to <audit>/oc-errors.jsonl, then one summary
+line is printed. It never writes state.json or the doctor cache and never raises.
 """
 import contextlib
 import datetime
@@ -26,6 +27,8 @@ import ha_briefs  # noqa: E402
 import ha_telemetry  # noqa: E402
 import ha_doctor  # noqa: E402
 import ha_oracle  # noqa: E402
+import hybrid_shared  # noqa: E402
+from ha_router import effective_preset, route  # noqa: E402
 
 TOKEN_KEYS = ("input", "output", "reasoning", "cache_read", "cache_write")
 ORACLE_KEYS = ("foreign", "dropped", "demoted", "invalid_status")
@@ -38,6 +41,9 @@ ROLE_PATTERNS = (("verifier", re.compile(r"^batch-V\d+$")),
                  ("investigator", re.compile(r"^batch-\d+$")),
                  ("parser", re.compile(r"^section-\d+$")))
 WRAPPER_LINES = ("[", "]", "],", "[,")
+SKILL = "hybrid-requirements-code-audit"
+ERRORS_FILE = "oc-errors.jsonl"
+QUIET_REASONS = ("cooldown", "breaker", "switched")
 _UMASK = os.umask(0)  # read once: umask is process-global
 os.umask(_UMASK)
 
@@ -142,20 +148,16 @@ def _unit(state: dict, name: str, role: str) -> tuple:
     return [str(i) for i in entry.get("ids") or []], str(entry.get("backend") or "")
 
 
-def _tier_of(cfg: dict, role: str, backend: str) -> str:
-    """The opencode tier of the unit: its stored oc:<tier> backend, else the routing of its role."""
+def _tier_of(ctx: dict, role: str, backend: str) -> str:
+    """The opencode tier of the unit: its stored oc:<tier> backend, else what the router picks for its role."""
     if backend.startswith("oc:"):
         return backend[3:]
     if backend == "claude":
         return ""
-    routing = cfg.get("routing") or {}
-    preset = str(cfg.get("preset") or routing.get("preset") or "hybrid")
-    if preset == "claude":
-        return ""
-    value = (routing.get("roles") or {}).get(role, "claude")
-    if preset == "max":
-        value = (routing.get("max_roles") or {}).get(role, value)
-    return "" if value == "claude" else str(value)
+    cfg = ctx["cfg"]
+    routed = route(role, cfg.get("routing") or {}, load_doctor(doctor_cache_path()),
+                   str(cfg.get("preset") or ""), ctx["state"].get("cooldown"), time.time(), ctx["out"])
+    return routed[3:] if routed.startswith("oc:") else ""
 
 
 def _audit_rel(out: Path, repo: Path) -> str:
@@ -172,12 +174,21 @@ def _brief_path(ctx: dict, st: dict) -> Path:
 
 def _new_state(ctx: dict, name: str, role: str) -> dict:
     ids, backend = _unit(ctx["state"], name, role) if role else ([], "")
-    tier = _tier_of(ctx["cfg"], role, backend) if role else ""
+    tier = _tier_of(ctx, role, backend) if role else ""
     tcfg = ((ctx["cfg"].get("routing") or {}).get("tiers") or {}).get(tier) or {}
     return {"name": name, "role": role, "tier": tier, "tcfg": dict(tcfg),
             "model": str(tcfg.get("model") or ""), "variant": str(tcfg.get("variant") or ""),
+            "spec": hybrid_shared.model_spec(tcfg) if tcfg else "", "log": "",
             "ids": ids, "rows": {}, "parser_rows": [], "parse_ok": False, "rounds": 0, "round1_valid": 0,
             "oracle": {k: 0 for k in ORACLE_KEYS}, "tokens": {k: 0 for k in TOKEN_KEYS}}
+
+
+def _hybrid(ctx: dict) -> bool:
+    """True when this audit runs in preset hybrid (the only preset whose run can switch to Claude)."""
+    try:
+        return effective_preset(ctx["cfg"].get("routing") or {}, str(ctx["cfg"].get("preset") or "")) == "hybrid"
+    except ValueError:
+        return False
 
 
 def _blocked(ctx: dict, st: dict) -> tuple:
@@ -187,22 +198,20 @@ def _blocked(ctx: dict, st: dict) -> tuple:
         return "spawn", "unknown batch name {}".format(name)
     if role != "parser" and not st["ids"]:
         return "spawn", "no checklist ids for {} in state.json".format(name)
+    if _hybrid(ctx) and hybrid_shared.run_switched(ctx["out"]):
+        return "switched", "the run switched to Claude {}; opencode is not used any more".format(
+            hybrid_shared.FALLBACK_MODEL)
     if not tier or not st["model"]:
         return "spawn", "no opencode tier routed for {}".format(name)
-    doctor = load_doctor(doctor_cache_path())
-    tiers = doctor.get("tiers") if isinstance(doctor, dict) else None
-    entry = tiers.get(tier) if isinstance(tiers, dict) else None
-    down = entry.get("down") if isinstance(entry, dict) else None
-    if down:
-        why = down.get("reason") if isinstance(down, dict) else down
-        return "down", "tier {} is marked down ({})".format(tier, why)
+    brief = _brief_path(ctx, st)
+    if not brief.is_file():
+        return "spawn", "missing opencode brief {}".format(brief)
+    if hybrid_shared.breaker_skip(ctx["out"], tier, st["spec"]):
+        return "breaker", "circuit breaker open for tier {} ({})".format(tier, st["spec"])
     until = float((ctx["state"].get("cooldown") or {}).get(tier) or 0)
     now = time.time()
     if now < until:
         return "cooldown", "tier {} cools down for {}s more".format(tier, int(until - now))
-    brief = _brief_path(ctx, st)
-    if not brief.is_file():
-        return "spawn", "missing opencode brief {}".format(brief)
     return "", ""
 
 
@@ -211,22 +220,28 @@ def _add_stats(st: dict, stats) -> None:
         st["oracle"][k] += int((stats or {}).get(k) or 0)
 
 
-def _absorb(st: dict, rows: list, errors: list, missing: list, repo: Path, rnd: int) -> None:
-    """Run the oracle on one round's rows and keep rows that fill ids still missing."""
+def _absorb(st: dict, rows: list, errors: list, missing: list, repo: Path, rnd: int, out: Path) -> list:
+    """Run the oracle on one round's rows and keep rows that fill ids still missing.
+
+    Returns the oracle's problem lines (checklist problems, rejected rows) for the next repair turn;
+    a parser section with problems does not pass.
+    """
     role = st["role"]
     if role == "parser":
         if errors:
-            return
-        kept, stats = apply_oracle(rows, [], repo, role)
+            return []
+        kept, stats = apply_oracle(rows, [], repo, role, audit_dir=out)
         _add_stats(st, stats)
+        if stats.get("problems"):
+            return list(stats["problems"])
         st["parser_rows"] = list(kept)
         st["parse_ok"] = True
         if rnd == 1:
             st["round1_valid"] = len(kept)
-        return
+        return []
     # rows for ids filled in an earlier round are discarded, so keep them out of the oracle stats
     fresh = [r for r in rows if str(r.get("id", "")).strip() not in st["rows"]]
-    kept, stats = apply_oracle(fresh, list(st["ids"]), repo, role)
+    kept, stats = apply_oracle(fresh, list(st["ids"]), repo, role, audit_dir=out)
     _add_stats(st, stats)
     for row in kept:
         rid = str(row.get("id"))
@@ -234,6 +249,36 @@ def _absorb(st: dict, rows: list, errors: list, missing: list, repo: Path, rnd: 
             st["rows"][rid] = row
     if rnd == 1:
         st["round1_valid"] = len(st["rows"])
+    return list(stats.get("problems") or [])
+
+
+def _log_of(st: dict) -> str:
+    """The unit's last stderr file when it exists, else ''."""
+    return st["log"] if st["log"] and Path(st["log"]).is_file() else ""
+
+
+def _emit(ctx, st: dict, level: str, kind: str, detail: str, log: str = "") -> None:
+    """Print one OC line at once and append it to <audit>/oc-errors.jsonl; a non-retryable ERROR trips the breaker."""
+    line = hybrid_shared.oc_line(level, SKILL, st["name"], st["tier"] or "none", st["spec"] or "none",
+                                 kind, detail, log)
+    print(line)
+    sys.stdout.flush()
+    if ctx is None:
+        return
+    try:
+        hybrid_shared.log_line(ctx["out"] / ERRORS_FILE, line)
+        if level == "ERROR" and kind in hybrid_shared.NON_RETRYABLE and st["tier"]:
+            hybrid_shared.breaker_trip(ctx["out"], st["tier"], st["spec"], kind, detail)
+    except OSError:
+        pass  # the line is already printed; a failed state write must not change the outcome
+
+
+def _report_failure(ctx, st, name: str, reason: str, note: str) -> None:
+    """Print the OC line of a failed unit; cooldown and breaker blocks stay quiet, their cause was reported already."""
+    if not reason or reason in QUIET_REASONS:
+        return
+    st = st or {"name": name, "tier": "", "spec": "", "log": ""}
+    _emit(ctx, st, "WARN" if reason == "format" else "ERROR", reason, note, _log_of(st))
 
 
 def _turns(ctx: dict, st: dict) -> tuple:
@@ -253,30 +298,49 @@ def _turns(ctx: dict, st: dict) -> tuple:
             message, attach = ROUND1_MESSAGE.format(name=name), str(_brief_path(ctx, st))
         else:
             message, attach = repair_message(name, list(missing), errors[:MAX_ERR_LINES]), ""
+        err_path = folder / "{}.{}.err".format(name, rnd)
         cmd = build_cmd(binary, AGENT_NAMES[role], st["model"], st["variant"], message, session, attach)
-        res = run_once(cmd, repo, env, folder / "{}.{}.jsonl".format(name, rnd),
-                       folder / "{}.{}.err".format(name, rnd),
-                       int(tcfg.get("stall_s", 180)), int(tcfg.get("timeout_s", 900)))
-        st["rounds"] = rnd
-        usage = res.get("usage") or {}
-        for k in TOKEN_KEYS:
-            st["tokens"][k] += int(usage.get(k) or 0)
+        retries = 0
+        while True:  # a connection failure repeats this exact turn; the failed run's session is never resumed
+            res = run_once(cmd, repo, env, folder / "{}.{}.jsonl".format(name, rnd), err_path,
+                           int(tcfg.get("stall_s", 180)), int(tcfg.get("timeout_s", 900)))
+            st["rounds"] = rnd
+            st["log"] = str(err_path)
+            usage = res.get("usage") or {}
+            for k in TOKEN_KEYS:
+                st["tokens"][k] += int(usage.get(k) or 0)
+            run_errors = [str(e) for e in (res.get("errors") or [])]
+            reason = str(res.get("reason") or "")
+            if not reason and (res.get("rc") != 0 or run_errors):
+                reason = "crash"
+            note = str(res.get("note") or "")
+            if reason in ("stall", "timeout") and note:
+                first = note  # the watchdog's own reason beats whatever the killed process printed last
+            else:
+                first = hybrid_shared.first_error(run_errors, str(res.get("stderr_tail") or ""))
+            detail = _one_line(first or note or "opencode exited with {}".format(res.get("rc")))
+            if not hybrid_shared.should_retry(reason, retries):
+                break
+            delay = hybrid_shared.retry_delay(retries)
+            retries += 1
+            _emit(ctx, st, "WARN", reason, "retry {}/{} in {}s: {}".format(retries, hybrid_shared.OC_RETRIES, delay, detail),
+                  _log_of(st))
+            time.sleep(delay)
         session = str(res.get("session") or session)
+        if reason == "recovered":
+            _emit(ctx, st, "WARN", "recovered", detail, _log_of(st))
+        elif not reason and not str(res.get("text") or "").strip():
+            _emit(ctx, st, "WARN", "empty", "opencode returned no text", _log_of(st))
         block = split_block(str(res.get("text") or ""), name)
         rows, errors = parse_block(block)
         if not rows and not errors:
             errors = ["no JSON rows between '@@@ BEGIN {0}' and '@@@ END {0}' in your reply".format(name)]
-        _absorb(st, rows, errors, list(missing), repo, rnd)
+        errors = errors + _absorb(st, rows, errors, list(missing), repo, rnd, out)
         missing = [i for i in ids if i not in st["rows"]]
         if (st["parse_ok"] if role == "parser" else not missing):
             return "", ""
-        run_errors = [str(e) for e in (res.get("errors") or [])]
-        reason = str(res.get("reason") or "")
-        if not reason and (res.get("rc") != 0 or run_errors):
-            reason = "crash"
-        if reason:
-            return reason, _one_line(res.get("note") or "; ".join(run_errors)
-                                     or "opencode exited with {}".format(res.get("rc")))
+        if reason and reason != "recovered":
+            return reason, detail
         if not session:
             break
     if role == "parser":
@@ -284,6 +348,23 @@ def _turns(ctx: dict, st: dict) -> tuple:
     else:
         note = "ids still missing after {} rounds: {}".format(st["rounds"], ", ".join(missing))
     return "format", _one_line(note)
+
+
+def _switch(ctx: dict, st: dict, reason: str, note: str) -> None:
+    """Preset hybrid: a final connection or non-retryable failure moves the rest of the run to Claude.
+
+    Prints and logs the kind=switch line once; every later status/plan routes to Claude sonnet.
+    """
+    if not hybrid_shared.switches_run(reason) or not _hybrid(ctx):
+        return
+    try:
+        if hybrid_shared.switch_to_claude(ctx["out"], st["name"], st["tier"], st["spec"], reason, note):
+            line = hybrid_shared.switch_line(SKILL, hybrid_shared.run_switched(ctx["out"]))
+            print(line)
+            sys.stdout.flush()
+            hybrid_shared.log_line(ctx["out"] / ERRORS_FILE, line)
+    except OSError:
+        pass  # the failed unit still falls back to Claude; only the run-wide switch is lost
 
 
 def _summary(name: str, tier: str, ok: bool, reason: str, written: int, total: int, rounds: int, secs: int) -> str:
@@ -294,6 +375,10 @@ def _summary(name: str, tier: str, ok: bool, reason: str, written: int, total: i
 def _finish(ctx: dict, st: dict, reason: str, note: str, started: float) -> dict:
     """Write the output file, the event file and the telemetry record; return the result dict."""
     name, role, tier = st["name"], st["role"], st["tier"]
+    dropped, demoted, invalid = st["oracle"]["dropped"], st["oracle"]["demoted"], st["oracle"]["invalid_status"]
+    if dropped or demoted or invalid:
+        _emit(ctx, st, "WARN", "oracle", "oracle dropped {} and demoted {} rows, rejected {} rows with an invalid status"
+              .format(dropped, demoted, invalid))
     if role == "parser":
         rows, ok, total = list(st["parser_rows"]), bool(st["parse_ok"]), 0
     else:
@@ -329,25 +414,44 @@ def _finish(ctx: dict, st: dict, reason: str, note: str, started: float) -> dict
             "line": _summary(name, tier, ok, reason, written, total, st["rounds"], int(round(secs)))}
 
 
+def _fail_event(ctx: dict, st: dict, reason: str, note: str) -> None:
+    """Best effort: a failed event so `status` harvests the unit instead of waiting for it forever."""
+    if not st["role"]:
+        return
+    event = {"batch": st["name"], "ok": False, "agent_type": "opencode:ha-" + st["role"],
+             "backend": "oc:" + st["tier"], "reason": reason, "message": note, "rounds": st["rounds"],
+             "written": 0, "total": len(st["ids"]), "t": time.time()}
+    try:
+        atomic_write(ctx["out"] / "events" / (st["name"] + ".json"), json.dumps(event, indent=1) + "\n")
+    except OSError:
+        pass  # the OC line is already printed and the process exits non-zero
+
+
 def run_named(cwd: str, name: str) -> dict:
-    """Run one opencode batch/section end to end; print exactly one summary line; never raise."""
+    """Run one opencode batch/section end to end; print each OC line as it happens, then one summary line; never raise."""
     started = time.time()
     role = role_of(name)
     ctx, st, result = None, None, None
-    reason, note = "", ""
+    reason, note, ran = "", "", False
     try:
         ctx = _context(cwd)
         st = _new_state(ctx, name, role)
         reason, note = _blocked(ctx, st)
         if not reason:
             reason, note = _turns(ctx, st)
+            ran = True
     except Exception as exc:
         reason, note = "crash", "{}: {}".format(type(exc).__name__, _one_line(exc))
+    _report_failure(ctx, st, name, reason, note)
+    if ran and reason:
+        _switch(ctx, st, reason, note)
     if ctx is not None and st is not None:
         try:
             result = _finish(ctx, st, reason, note, started)
         except Exception as exc:
             reason, note = "crash", "{}: {}".format(type(exc).__name__, _one_line(exc))
+            _report_failure(ctx, st, name, reason, note)
+            _fail_event(ctx, st, reason, note)
     if result is None:
         tier = st["tier"] if st else ""
         rounds = st["rounds"] if st else 0

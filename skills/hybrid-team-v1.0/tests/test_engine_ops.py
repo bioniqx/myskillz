@@ -35,6 +35,17 @@ ROUTING = {
     "max_escalations": 1,
 }
 
+MODELS_ENV = {"HYBRID_OPENCODE_STD": "zai-coding-plan/glm-5.3#high",
+              "HYBRID_OPENCODE_LITE": "zai-coding-plan/glm-5.3-flash#low"}
+
+
+def use_shared_env(case):
+    """Set the shared model env vars (whatever the caller's real environment holds). Call it FIRST in
+    setUp: the patch restores os.environ to the snapshot it takes here."""
+    patcher = mock.patch.dict(os.environ, MODELS_ENV)
+    patcher.start()
+    case.addCleanup(patcher.stop)
+
 
 class TestOcAvailable(unittest.TestCase):
     def setUp(self):
@@ -70,23 +81,46 @@ class TestOcAvailable(unittest.TestCase):
         self.assertFalse(data["available"])
         self.assertEqual(data["issues"], [{"name": "opencode_binary", "ok": False, "detail": "not found: opencode"}])
 
+    def test_tier_scoped_failure_fails_only_that_tier(self):
+        checks = [{"name": "opencode_binary", "ok": True, "detail": "/usr/bin/opencode"},
+                  {"name": "model:std", "ok": False, "kind": "model",
+                   "detail": "zai-coding-plan/glm-5.3 not listed"}]
+        with mock.patch.object(devteam, "check_opencode", return_value=checks):
+            result = devteam.oc_available(self.root, ROUTING)
+        self.assertTrue(result)
+        sd = self.root / ".claude" / "hybrid-team"
+        tiers = json.loads((sd / "oc_status.json").read_text())["tiers"]
+        self.assertEqual((tiers["std"]["ok"], tiers["std"]["kind"]), (False, "model"))
+        self.assertIn("not listed", tiers["std"]["detail"])
+        self.assertTrue(tiers["lite"]["ok"])
+        self.assertEqual(tiers["lite"]["key"], devteam.hybrid_shared.cache_key(ROUTING["tiers"]["lite"]))
+        self.assertIsInstance(tiers["lite"]["checked_at"], float)
+        self.assertEqual(devteam.usable_tiers(sd, ROUTING), {"std": False, "lite": True})
+
 
 class TestCmdDoctorOc(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        use_shared_env(self)
         self.root = Path(self.tmp.name) / "repo"
         self.root.mkdir()
         init_repo(self.root)
         self.home = Path(self.tmp.name) / "home"
         self.home.mkdir()
         self._old_home = os.environ.get("HOME")
+        self._old_ht_routing = os.environ.get("HT_ROUTING")
         os.environ["HOME"] = str(self.home)
+        os.environ["HT_ROUTING"] = str(self.home / "routing.json")
 
     def tearDown(self):
         if self._old_home is None:
             os.environ.pop("HOME", None)
         else:
             os.environ["HOME"] = self._old_home
+        if self._old_ht_routing is None:
+            os.environ.pop("HT_ROUTING", None)
+        else:
+            os.environ["HT_ROUTING"] = self._old_ht_routing
         self.tmp.cleanup()
 
     def test_doctor_reports_opencode_ok(self):
@@ -117,10 +151,65 @@ class TestCmdDoctorOc(unittest.TestCase):
             self.assertEqual(prompt_text, expected_prompt)
             self.assertEqual(workdir, expected_workdir)
 
+    def test_doctor_reports_each_failed_check_as_oc_error(self):
+        args = argparse.Namespace(root=str(self.root), ping=False, routing=None, fix=False)
+        checks = [{"name": "opencode_binary", "ok": False, "kind": "spawn", "detail": "not found: opencode"}]
+        with mock.patch.object(devteam, "check_opencode", return_value=checks), \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as buf:
+            devteam.cmd_doctor(args)
+        text = buf.getvalue()
+        self.assertIn("OC-ERROR hybrid-team doctor tier=- model=- kind=spawn", text)
+        self.assertIn("not found: opencode", text)
+
+    def test_failed_ping_marks_only_that_tier(self):
+        args = argparse.Namespace(root=str(self.root), ping=True, routing=None, fix=False)
+
+        def fake_ping(binary, tier, prompt_text, engine, workdir):
+            if tier.get("variant") == "high":
+                return (False, {"kind": "auth", "message": "401 unauthorized"})
+            return (True, {"kind": "", "message": ""})
+
+        with mock.patch.object(devteam, "check_opencode", return_value=[]), \
+                mock.patch.object(devteam, "ping_tier", side_effect=fake_ping), \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as buf:
+            devteam.cmd_doctor(args)
+        data = json.loads((self.root / ".claude" / "hybrid-team" / "oc_status.json").read_text())
+        self.assertEqual((data["tiers"]["std"]["ok"], data["tiers"]["std"]["kind"]), (False, "auth"))
+        self.assertTrue(data["tiers"]["lite"]["ok"])
+        self.assertTrue(data["available"])
+        self.assertIn("OC-ERROR hybrid-team doctor tier=std", buf.getvalue())
+        self.assertIn("kind=auth", buf.getvalue())
+
+    def test_stale_ping_pings_only_tiers_without_a_fresh_ok_entry(self):
+        calls = []
+
+        def fake_ping(binary, tier, prompt_text, engine, workdir):
+            calls.append(tier.get("variant"))
+            return (True, {"kind": "", "message": ""})
+
+        status_path = self.root / ".claude" / "hybrid-team" / "oc_status.json"
+
+        def doctor():
+            devteam.cmd_doctor(argparse.Namespace(root=str(self.root), ping="stale", routing=None, fix=False))
+
+        with mock.patch.object(devteam, "check_opencode", return_value=[]), \
+                mock.patch.object(devteam, "ping_tier", side_effect=fake_ping), \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            doctor()
+            self.assertEqual(sorted(calls), ["high", "low"])
+            doctor()
+            self.assertEqual(len(calls), 2)
+            data = json.loads(status_path.read_text())
+            data["tiers"]["std"]["checked_at"] = 0.0
+            status_path.write_text(json.dumps(data))
+            doctor()
+        self.assertEqual(calls[2:], ["high"])
+
 
 class TestDoctorRoutingFile(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        use_shared_env(self)
         self.root = Path(self.tmp.name) / "repo"
         self.root.mkdir()
         init_repo(self.root)
@@ -129,9 +218,8 @@ class TestDoctorRoutingFile(unittest.TestCase):
         self._old_home = os.environ.get("HOME")
         self._old_ht_routing = os.environ.get("HT_ROUTING")
         os.environ["HOME"] = str(self.home)
-        os.environ.pop("HT_ROUTING", None)
-        self.routing_path = self.home / ".config" / "hybrid-team" / "routing.json"
-        self.default_routing_path = Path(devteam.__file__).resolve().parents[1] / "routing.default.json"
+        self.routing_path = self.home / "routing.json"
+        os.environ["HT_ROUTING"] = str(self.routing_path)
 
     def tearDown(self):
         if self._old_home is None:
@@ -144,14 +232,12 @@ class TestDoctorRoutingFile(unittest.TestCase):
             os.environ["HT_ROUTING"] = self._old_ht_routing
         self.tmp.cleanup()
 
-    def test_fix_creates_routing_file_when_missing(self):
+    def test_fix_never_writes_the_user_routing_file(self):
         self.assertFalse(self.routing_path.exists())
         args = argparse.Namespace(root=str(self.root), ping=False, routing=None, fix=True)
         with mock.patch.object(devteam, "check_opencode", return_value=[]):
             devteam.cmd_doctor(args)
-        self.assertTrue(self.routing_path.exists())
-        self.assertEqual(json.loads(self.routing_path.read_text()),
-                         json.loads(self.default_routing_path.read_text()))
+        self.assertFalse(self.routing_path.exists())
 
     def test_fix_never_overwrites_existing_routing_file(self):
         self.routing_path.parent.mkdir(parents=True, exist_ok=True)

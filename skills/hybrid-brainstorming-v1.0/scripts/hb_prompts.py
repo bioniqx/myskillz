@@ -134,8 +134,10 @@ def draft_prompt(lens: str, task: str, context_text: str, for_opencode: bool) ->
     return text + "\n"
 
 
-def claude_line(lane_id: str, role: str, prompt_path: Path) -> str:
-    subagent_type, model = hb_router.claude_agent(role)
+def claude_line(lane_id: str, role: str, prompt_path: Path, model: str = "") -> str:
+    """The CLAUDE line for a lane; model overrides the role's default (the run switch forces sonnet)."""
+    subagent_type, role_model = hb_router.claude_agent(role)
+    model = model or role_model
     return (
         "CLAUDE %s — Agent → subagent_type: %s, model: %s, "
         'description: "%s", prompt: "Read %s and follow it exactly."'

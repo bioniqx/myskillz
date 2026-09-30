@@ -13,6 +13,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import hybrid_shared
+
 THROTTLE_RE = re.compile(r"\b429\b|Too Many Requests|rate.?limit", re.I)
 SAVED_RE = re.compile(r"full output saved to (/[^\]\s]+)\]")
 
@@ -92,7 +94,8 @@ def parse_events(path: Path) -> dict:
     """Parse an opencode --format json stream file.
 
     Returns {session, text, usage{input,output,reasoning,cache_read,cache_write,cost},
-    errors[list of "type: message"], throttled, events, tools[{tool,status,input,output}]}.
+    errors[list of "type: message"], throttled, events, tools[{tool,status,input,output}],
+    finished}. finished is true once a step_finish event carries reason "stop".
     A missing file yields the empty result; non-JSON lines are skipped but still
     scanned for throttling.
     """
@@ -104,6 +107,7 @@ def parse_events(path: Path) -> dict:
         "throttled": False,
         "events": 0,
         "tools": [],
+        "finished": False,
     }
     try:
         raw = Path(path).read_text(encoding="utf-8", errors="replace")
@@ -143,6 +147,8 @@ def parse_events(path: Path) -> dict:
             usage["cache_read"] += _num(cache.get("read"))
             usage["cache_write"] += _num(cache.get("write"))
             usage["cost"] += float(_num(part.get("cost")))
+            if part.get("reason") == "stop":
+                result["finished"] = True
         elif etype == "error":
             err = _dict(event.get("error"))
             kind = str(err.get("type") or "error")
@@ -194,9 +200,10 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
     `env` is the complete environment (callers pass dict(os.environ, **extra));
     PWD is forced to cwd. stdout goes to out_path (the JSON event stream), stderr
     to err_path. Returns the parse_events() keys plus rc (None on spawn error),
-    reason ("" on success, else one of spawn, stall, timeout, throttle, crash),
-    note, pid (0 on spawn error) and duration in seconds. throttle is reported
-    only when the run failed.
+    reason ("" on success, else spawn, stall, timeout or a hybrid_shared.classify
+    kind such as auth, quota, model, throttle, context, crash or recovered),
+    note, detail (the first error message, one line), pid (0 on spawn error) and
+    duration in seconds. throttle is reported only when the run failed.
     """
     cwd = Path(cwd)
     out_path = Path(out_path)
@@ -205,7 +212,7 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
     err_path.parent.mkdir(parents=True, exist_ok=True)
     full_env = dict(env)
     full_env["PWD"] = str(cwd)
-    result = {"rc": None, "reason": "", "note": "", "pid": 0, "duration": 0.0}
+    result = {"rc": None, "reason": "", "note": "", "detail": "", "pid": 0, "duration": 0.0}
     start = time.monotonic()
     killed = ""
     spawn_error = ""
@@ -251,22 +258,31 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
     if proc is None:
         result["reason"] = "spawn"
         result["note"] = spawn_error
+        result["detail"] = spawn_error
         return result
     err_tail = _tail(err_path)
     throttled = bool(result["throttled"]) or bool(THROTTLE_RE.search(err_tail))
     result["throttled"] = throttled
     errors = "; ".join(result["errors"])
     failed = bool(killed) or result["rc"] != 0 or bool(result["errors"])
+    if not failed:
+        return result
     if killed == "stall":
         result["reason"] = "stall"
         result["note"] = "stall: no event for %ss" % stall_s
+        result["detail"] = result["note"]
     elif killed == "timeout":
         result["reason"] = "timeout"
         result["note"] = "timeout: wall time over %ss" % timeout_s
-    elif failed and throttled:
-        result["reason"] = "throttle"
-        result["note"] = errors or err_tail or "throttle"
-    elif failed:
-        result["reason"] = "crash"
-        result["note"] = errors or "exit %s: %s" % (result["rc"], err_tail)
+        result["detail"] = result["note"]
+    else:
+        kind = hybrid_shared.classify(result["rc"], result["errors"], err_tail, killed, result["finished"])
+        if kind == "crash" and throttled:
+            kind = "throttle"
+        result["reason"] = kind or "crash"
+        if result["reason"] == "throttle":
+            result["note"] = errors or err_tail or "throttle"
+        else:
+            result["note"] = errors or "exit %s: %s" % (result["rc"], err_tail)
+        result["detail"] = hybrid_shared.first_error(result["errors"], err_tail)
     return result

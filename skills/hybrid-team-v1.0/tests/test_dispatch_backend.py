@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import shutil
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -82,6 +84,25 @@ class SliceBackendTest(TempHomeCase):
     def test_red_phase_of_split_code_slice_is_claude(self):
         s = {"id": "S1", "kind": "code", "size": "small", "backend": "oc:std"}
         self.assertEqual(devteam.slice_backend(make_state(), s, "red"), "claude")
+
+    def test_tier_the_doctor_did_not_clear_falls_back_to_claude_in_hybrid(self):
+        s = {"id": "S1", "kind": "refactor", "size": "small", "backend": "oc:std"}
+        st = make_state(oc_tiers={"std": False, "lite": True})
+        self.assertEqual(devteam.slice_backend(st, s, "tdd"), "claude")
+
+    def test_tier_the_doctor_did_not_clear_is_held_in_preset_opencode(self):
+        s = {"id": "S1", "kind": "refactor", "size": "small", "backend": "oc:std"}
+        st = make_state(preset="opencode", oc_tiers={"std": False, "lite": True})
+        self.assertEqual(devteam.slice_backend(st, s, "tdd"), "held")
+
+    def test_cleared_tier_keeps_its_lane(self):
+        s = {"id": "S1", "kind": "refactor", "size": "small", "backend": "oc:std"}
+        st = make_state(oc_tiers={"std": True, "lite": True})
+        self.assertEqual(devteam.slice_backend(st, s, "tdd"), "oc:std")
+
+    def test_legacy_max_state_reads_as_opencode(self):
+        self.assertEqual(devteam.st_preset(make_state(preset="max")), "opencode")
+        self.assertEqual(devteam.st_preset(make_state(preset="claude")), "claude")
 
 
 class OcSlotsTest(TempHomeCase):
@@ -201,6 +222,87 @@ class EscalateTest(TempHomeCase):
             stdout=subprocess.PIPE, universal_newlines=True, check=True,
         ).stdout
         self.assertEqual(branches.strip(), "")
+
+
+TIER = {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low"}
+
+
+class LaneOcTest(TempHomeCase):
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "repo"
+        self.errors = self.root / ".claude" / "hybrid-team" / "oc-errors.jsonl"
+
+    def test_prints_logs_and_trips_breaker_on_non_retryable_kind(self):
+        spec = devteam.hybrid_shared.model_spec(TIER)
+        with mock.patch.object(devteam.hybrid_shared, "breaker_trip") as trip, \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as buf:
+            line = devteam.lane_oc(self.root, "OC-ERROR", "S1", "lite", TIER, "auth",
+                                   "invalid api key", "/x/S1.err")
+        self.assertTrue(line.startswith(
+            "OC-ERROR hybrid-team S1 tier=lite model=%s kind=auth :: invalid api key" % spec), line)
+        self.assertIn("log=/x/S1.err", line)
+        self.assertEqual(buf.getvalue().strip(), line)
+        self.assertIn("invalid api key", self.errors.read_text())
+        trip.assert_called_once_with(self.root / ".claude" / "hybrid-team", "lite", spec, "auth",
+                                     "invalid api key")
+
+    def test_gate_warning_does_not_trip_breaker(self):
+        with mock.patch.object(devteam.hybrid_shared, "breaker_trip") as trip, \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            line = devteam.lane_oc(self.root, "OC-WARN", "S1", "lite", TIER, "gate", "nothing committed")
+        self.assertTrue(line.startswith("OC-WARN hybrid-team S1 tier=lite"), line)
+        self.assertIn("kind=gate", line)
+        trip.assert_not_called()
+
+
+class LaneLoopTest(TempHomeCase):
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "repo"
+        patcher = mock.patch.dict(os.environ, {"HYBRID_OC_RETRY_DELAY_S": "0"})   # a connection failure retries
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def loop(self, res):
+        texts = []
+
+        def gate(wt, text):
+            texts.append(text)
+            devteam.write_atomic(devteam.marker_file(self.root, "S1", "done"), "{}")
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with mock.patch.object(devteam, "run_lane_process", return_value=res), \
+                mock.patch.object(devteam, "run_stop_gate", side_effect=gate), \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            agg = devteam.lane_loop(self.root, "S1", self.root, TIER, "opencode", {}, "go", 60, 600)
+        return agg, texts
+
+    def test_exit_1_after_finished_step_is_recovered_when_gate_passes(self):
+        agg, texts = self.loop({"rc": 1, "finished": True, "reason": "crash", "note": "exit 1",
+                                "text": "## Status: Done", "session": "ses_1", "usage": {}})
+        self.assertEqual(agg["outcome"], "done")
+        self.assertTrue(agg["recovered"])
+        self.assertEqual(texts, ["## Status: Done"])
+
+    def test_exit_1_without_finished_step_stays_a_failure(self):
+        agg, texts = self.loop({"rc": 1, "finished": False, "reason": "crash", "note": "exit 1",
+                                "text": "partial", "session": "ses_1", "usage": {}})
+        self.assertEqual((agg["outcome"], agg["reason"]), ("blocked", "crash"))
+        self.assertEqual(texts, [])
+
+    def test_no_text_is_empty(self):
+        agg, texts = self.loop({"rc": 0, "finished": True, "reason": "", "note": "",
+                                "text": "  ", "session": "ses_1", "usage": {}})
+        self.assertEqual((agg["outcome"], agg["reason"]), ("blocked", "empty"))
+        self.assertEqual(texts, [])
+
+    def test_failure_kind_replaces_the_generic_crash_reason(self):
+        agg, texts = self.loop({"rc": 1, "finished": False, "reason": "crash", "kind": "auth",
+                                "note": "ProviderAuthError: invalid api key", "text": "",
+                                "session": "ses_1", "usage": {}})
+        self.assertEqual((agg["outcome"], agg["reason"]), ("blocked", "auth"))
+        self.assertEqual(texts, [])
 
 
 if __name__ == "__main__":

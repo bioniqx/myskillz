@@ -122,6 +122,19 @@ class ParseEventsTest(unittest.TestCase):
         self.assertTrue(res["throttled"])
         self.assertEqual(res["events"], 0)
 
+    def test_finished_flag_needs_stop_reason(self):
+        path = self.dir / "f.jsonl"
+        _write_lines(path, [
+            json.dumps({"type": "step_finish", "sessionID": "ses_F", "part": {"reason": "tool-calls"}}),
+        ])
+        self.assertFalse(oc_lane.parse_events(path)["finished"])
+        _write_lines(path, [
+            json.dumps({"type": "step_finish", "sessionID": "ses_F", "part": {"reason": "tool-calls"}}),
+            json.dumps({"type": "step_finish", "sessionID": "ses_F", "part": {"reason": "stop"}}),
+        ])
+        self.assertTrue(oc_lane.parse_events(path)["finished"])
+        self.assertFalse(oc_lane.parse_events(self.dir / "missing.jsonl")["finished"])
+
 
 import fake_opencode  # noqa: E402
 
@@ -232,6 +245,45 @@ class FakeCliTest(unittest.TestCase):
         proc = self._run(["--version"])
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(proc.stdout.strip(), "2.0.18")
+
+    def test_scenario_error_kinds(self):
+        cases = [
+            ("auth", "Unauthorized"),
+            ("model_not_found", "model not found"),
+            ("throttle", "Too Many Requests"),
+        ]
+        for name, needle in cases:
+            self._set_script({"scenario": name})
+            proc = self._run(["run", "m"])
+            self.assertEqual(proc.returncode, 1, name)
+            error = self._events(proc)[-1]
+            self.assertEqual(error["type"], "error", name)
+            self.assertIn(needle, error["error"]["message"], name)
+
+    def test_scenario_recovered_exits_one_after_stop(self):
+        self._set_script({"scenario": "recovered"})
+        proc = self._run(["run", "m"])
+        self.assertEqual(proc.returncode, 1)
+        events = self._events(proc)
+        self.assertEqual([e["type"] for e in events], ["step_finish", "text"])
+        self.assertEqual(events[0]["part"]["reason"], "stop")
+        self.assertEqual(events[1]["part"]["text"], "done")
+
+    def test_scenario_empty_stops_without_text(self):
+        self._set_script({"scenario": "empty"})
+        proc = self._run(["run", "m"])
+        self.assertEqual(proc.returncode, 0)
+        events = self._events(proc)
+        self.assertEqual([e["type"] for e in events], ["step_finish"])
+        self.assertEqual(events[0]["part"]["reason"], "stop")
+
+    def test_models_default_and_empty_listing(self):
+        proc = self._run(["models"])
+        self.assertEqual(proc.stdout.split(), ["zai-coding-plan/glm-5.3", "zai-coding-plan/glm-5.3-flash"])
+        self._set_script({"models": []})
+        proc = self._run(["models"])
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout.strip(), "")
 
 
 class RunOnceTest(unittest.TestCase):
@@ -351,6 +403,66 @@ class RunOnceTest(unittest.TestCase):
         self.assertIsNone(res["rc"])
         self.assertEqual(res["pid"], 0)
         self.assertIn("spawn", res["note"])
+
+    def test_clean_run_has_no_kind(self):
+        res = self._go({"finish": "stop", "text": "all green"})
+        self.assertEqual(res["rc"], 0)
+        self.assertEqual(res["reason"], "")
+        self.assertEqual(res["kind"], "")
+        self.assertEqual(res["detail"], "")
+        self.assertTrue(res["finished"])
+
+    def test_exit_zero_without_text_is_empty(self):
+        res = self._go({"scenario": "empty"})
+        self.assertEqual(res["rc"], 0)
+        self.assertEqual(res["reason"], "")
+        self.assertEqual(res["note"], "")
+        self.assertEqual(res["kind"], "empty")
+        self.assertEqual(res["text"], "")
+        self.assertIn("no text", res["detail"])
+
+    def test_exit_one_after_terminal_stop_is_recovered(self):
+        res = self._go({"scenario": "recovered"})
+        self.assertEqual(res["rc"], 1)
+        self.assertTrue(res["finished"])
+        self.assertEqual(res["reason"], "")
+        self.assertEqual(res["note"], "")
+        self.assertEqual(res["kind"], "recovered")
+        self.assertEqual(res["text"], "done")
+        self.assertTrue(res["detail"])
+
+    def test_exit_one_without_terminal_stop_is_crash(self):
+        res = self._go({"text": "partial", "exit": 1, "stderr": "segfault\n"})
+        self.assertFalse(res["finished"])
+        self.assertEqual(res["reason"], "crash")
+        self.assertEqual(res["kind"], "crash")
+        self.assertIn("segfault", res["detail"])
+
+    def test_auth_error_kind(self):
+        res = self._go({"scenario": "auth"})
+        self.assertEqual(res["rc"], 1)
+        self.assertEqual(res["reason"], "crash")
+        self.assertEqual(res["kind"], "auth")
+        self.assertIn("Unauthorized", res["detail"])
+
+    def test_model_not_found_kind(self):
+        res = self._go({"scenario": "model_not_found"})
+        self.assertEqual(res["reason"], "crash")
+        self.assertEqual(res["kind"], "model")
+        self.assertIn("model not found", res["detail"])
+
+    def test_throttle_kind(self):
+        res = self._go({"scenario": "throttle"})
+        self.assertEqual(res["reason"], "throttle")
+        self.assertEqual(res["kind"], "throttle")
+        self.assertTrue(res["throttled"])
+
+    def test_stall_timeout_and_spawn_kinds(self):
+        self.assertEqual(self._go({"sleep": 30}, stall_s=1, timeout_s=20)["kind"], "stall")
+        self.assertEqual(self._go({"ticks": 200, "tick_s": 0.2}, stall_s=5, timeout_s=1)["kind"], "timeout")
+        res = self._go({"text": "never"}, binary=str(self.dir / "no-such-opencode"))
+        self.assertEqual(res["kind"], "spawn")
+        self.assertIn("spawn", res["detail"])
 
 
 if __name__ == "__main__":

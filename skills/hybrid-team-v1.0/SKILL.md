@@ -64,6 +64,34 @@ session: **`/fast`** (Opus fast mode, usage credits) makes you and the opus revi
 to 2.5× faster in output; the Claude lanes already ride sonnet/sonnet, and offloaded lanes ride
 opencode independently of that.
 
+**Step 0 — Run mode (your first action, before anything below).**
+
+- If the invocation args contain `mode=hybrid|claude|opencode`, use that mode without asking. A
+  hand-off from another hybrid skill passes it this way.
+- Otherwise the first tool call is AskUserQuestion: "Run this skill in which mode?" with three options:
+  - **Hybrid (Recommended)** — judgment on Claude, low-judgment lanes on opencode, every opencode
+    error reported at once, automatic Claude fallback.
+  - **Claude only** — opencode is never called.
+  - **opencode only** — every lane the router can offload goes to opencode, with no silent Claude
+    fallback.
+- Put the configured `std` and `lite` specs (`provider/model` and variant) in the option descriptions,
+  each followed by its source. A tier whose `model` is set in this skill's own file
+  `<skill dir>/routing.json` (env `HT_ROUTING`) uses that file's model and variant and is
+  marked `(skill)`. Every other tier takes its model and variant from env `HYBRID_OPENCODE_STD`
+  (`std`) or `HYBRID_OPENCODE_LITE` (`lite`, defaults to STD) and is marked `(shared)`. Write
+  `no config` for a tier that has a model in neither place.
+- Pass the answer once, on the first engine call, as `--route hybrid`, `--route claude` or
+  `--route opencode`. The engine keeps it in the run state, so a resumed run (every later
+  `devteam next`) never asks again.
+- The answer only matters on the engine routes below; skip the question for a no-engine route (one
+  obvious edit, a code question, the Fast lane).
+
+**Relay rule (always on).** Any `OC-ERROR` or `OC-WARN` line in tool output — from `start`,
+`doctor`, `next` or a background lane's result — means your next message to the user starts with
+that line, verbatim, before any other work. Deduplicate identical `kind` + `tier` pairs: relay the
+first line and say how many more matched. Never treat these lines as informational and never skip
+one.
+
 ## Route first (one line to the user, then act)
 
 | The request is… | Route |
@@ -119,14 +147,25 @@ only for features: **every kind of software work runs on it**, by giving each sl
 | `refactor`, `test` backfill, `chore` (`size` != `large`) | oc:`std` |
 | `docs`, `size: trivial` chore/refactor | oc:`lite` |
 
-Presets (`--route` / plan `routing.preset`):
-- `claude` — nothing offloaded; behaviour identical to dev-team-v3.2.
-- `hybrid` (default) — table above.
-- `max` — `hybrid` + GREEN of `size: large` code slices on oc:`std`.
+Presets (`--route` / plan `routing.preset`; the Step 0 run mode picks one):
+- `claude` — Claude only: nothing offloaded, opencode never spawned, no doctor result needed;
+  behaviour identical to dev-team-v3.2.
+- `hybrid` (default) — table above; an opencode failure is reported at once, then the slice re-runs
+  on Claude. A connection failure is retried 3 times first, and one that survives the retries (or a
+  non-retryable one) moves the rest of the run to Claude Sonnet 5.5 (see Failures on an opencode lane).
+- `opencode` — every slice with an oracle goes to opencode, including `size: large` and
+  `risk: high` ones (GREEN/WORK), and there is no silent Claude fallback: a slice the router would
+  send to opencode whose tier is unusable (unavailable, stale doctor entry, breaker open) is held —
+  the engine prints an `OC-ERROR` line and `HELD <id>` for it and does not dispatch it. Everything
+  the router cannot offload (RED, reviews, verification, investigation, `research`, `perf`, the
+  leader, slices with no oracle) stays on Claude.
+- `max` — the old name of `opencode`; still accepted, mapped to `opencode` with an
+  `OC-WARN ... kind=config` line. Any other name prints `OC-ERROR ... kind=config` and the command
+  exits non-zero.
 
 Dispatch mode `fast` (spike profile) and mode `research` always route to Claude — no oracle-only
 slice runs there. A slice with no oracle (e.g. a `chore` with no `verify`) is forced to Claude by
-the router even under `hybrid`/`max`. A `test` slice routed to opencode still passes the "must
+the router even under `hybrid`/`opencode`. A `test` slice routed to opencode still passes the "must
 really add tests" and vacuous-test checks; a `chore`/`docs` slice still needs its `verify` output.
 Reviewer fix-slices are routed by the same table (their own `kind`/`size`/`risk`) — there is no
 separate rule for them. A plan slice may also set its own `"backend": "claude"` or
@@ -169,10 +208,24 @@ restart Claude Code once; until then the engine caps dispatches at the live limi
 Requires Claude Code ≥ 2.1.267 (agent `effort:` honoured), git ≥ 2.31, python3.
 
 Beyond what dev-team's `doctor --fix` does, hybrid-team's also: checks `opencode` is on `PATH`
-and authenticated (`oc_available(root: Path, routing: dict) -> bool`); if opencode is missing or
-auth is broken, it prints one NOTE and the run continues with every slice routed to Claude —
-nothing blocks. It also writes `~/.config/hybrid-team/routing.json` from the shipped
-`routing.default.json` if the user has none yet (override the path with env `HT_ROUTING`).
+and that `opencode models` lists the model each tier resolves to
+(`oc_available(root: Path, routing: dict) -> bool`). A bare `doctor` sends no test prompt;
+`doctor --ping` pings every tier, and `start` pings each tier without a fresh doctor result in
+presets `hybrid` and `opencode` (one single-token prompt per tier, never in `claude`), so a bad
+login, quota or model surfaces as `OC-ERROR ... kind=auth`, `quota` or `model` before any lane is
+dispatched. `doctor` prints every problem it finds (config problems, an empty
+model listing, an unusable tier) as `OC-ERROR`/`OC-WARN` lines instead of dropping them; shared-env
+problems count only when some tier takes its model from the shared env vars. In presets
+`claude` and `hybrid` the run continues with every slice on Claude; in preset `opencode` the
+affected slices are held. Preset `claude` needs none of this. `doctor --fix` no longer writes
+`<skill dir>/routing.json`: models and variants default to env `HYBRID_OPENCODE_STD` (required) and
+`HYBRID_OPENCODE_LITE` (optional, defaults to STD), each `provider/model[#variant]`, which all hybrid
+skills read. The user sets them in the `"env"` block of `~/.claude/settings.json`, e.g.
+`{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restarts
+Claude Code (exporting them in the shell also works). The per-skill file (env `HT_ROUTING`) holds
+timeouts, rows, slot caps (`max_parallel`) and the like plus an optional per-tier model override: a
+tier whose `model` is set there uses that file's `model` and `variant` (no variant if it sets none),
+every other tier uses the shared env models.
 
 ## Why this is fast (keep these properties intact)
 
@@ -250,7 +303,7 @@ Do all of this **in the first turn** — no analysis-only preamble:
      what does the legacy module actually do) → `research` slices in the plan, ready now, with
      the slices that depend on the answer listed after them. They run in parallel with
      everything else and queue their own follow-up work.
-3. `devteam start .claude/hybrid-team/plan.md` (add `--profile …` / `--route …` only if the user
+3. `devteam start .claude/hybrid-team/plan.md` (always add `--route` from Step 0; add `--profile …` only if the user
    asked) → doctor (including the opencode availability check), validate, and one dispatch line
    for **every** ready slice — `=== DISPATCH` or `=== LANE` — in one call. Already set up and
    mid-run? `devteam init …` + `devteam dispatch …` still work.
@@ -266,7 +319,8 @@ On **every wake-up** (completion notification, background Bash result, user answ
 programmer or opencode), records research reports, harvests reviewer verdicts (+ their fix
 slices), checkpoint exit codes and verification gaps, dispatches everything that just became
 ready, starts the review batch and the checkpoint when due, and prints the endgame when the DAG
-empties. Read what it printed, launch every block it printed, end the turn. (`next <id>` is only
+empties. Read what it printed (any `OC-ERROR`/`OC-WARN` lines come first: relay them per the relay
+rule), launch every block it printed, end the turn. (`next <id>` is only
 for a lane whose marker never arrived — e.g. the Stop hook could not write into the integration
 checkout.)
 
@@ -279,7 +333,9 @@ Act on **every** block the engine printed, in the same turn:
 
       === LANE <id> oc:<tier> — run in the BACKGROUND: python3 <skill>/scripts/devteam.py lane <id>
 
-  Process exit is the completion notification, exactly like a Claude dispatch finishing.
+  Process exit is the completion notification, exactly like a Claude dispatch finishing. A lane
+  that fails prints its `OC-ERROR` line as its result — relay it, then follow "Failures on an
+  opencode lane" below.
 - `=== REVIEW <rN> …` / `=== INVESTIGATE …` → the printed Agent line(s). Override shard count
   with `next --shards N`.
 - `CHECKPOINT … run in the BACKGROUND` → run the printed command with Bash
@@ -294,13 +350,14 @@ Off-path cases, and only these, need another command:
 - `BLOCKED <id>: <question>` → answer by `SendMessage` to that agent id from the plan/contracts
   (warm; it resumes in its worktree); if only the user can answer, ask **in this turn** and keep
   everything else running. An opencode lane has no live agent to `SendMessage` — a `BLOCKED`
-  opencode lane is resolved through escalation instead (see Failures on an opencode lane).
+  opencode lane follows "Failures on an opencode lane" instead (escalation in `hybrid`, held in
+  `opencode`).
 - `REJECTED` / `NOT READY` / `MERGE ERROR` → the slice **stays in flight with its worktree**:
   `SendMessage` that agent id the exact fix the engine printed (warm), then `next` again when
   it reports. `devteam retry <id>` (cold, fresh worktree; `--files …` to widen the footprint,
   or edit `plan.md` first) only when the agent can't be resumed — `TaskStop` a stuck one first.
   For an opencode lane, `REJECTED`/`NOT READY`/`MERGE ERROR` is handled exactly like a `.blocked`
-  lane: no live agent exists, so it escalates.
+  lane: no live agent exists, so it follows the same failure handling.
 - `NOT INTEGRATED — no claim recorded` but the report has a `## Worktree:` line →
   `devteam bind <id> <path>`, then `next` again (sandboxed filesystems).
 - `CONFLICT` → fix the footprints in `plan.md`, `devteam retry <id>`.
@@ -320,20 +377,57 @@ Progress = `devteam status` (no separate todo list).
 
 #### Failures on an opencode lane
 
+Every failure prints its line the moment it happens: the lane's background Bash prints an
+`OC-ERROR` (or `OC-WARN`) line as its result, and `devteam next` prints any line not yet reported at
+the top of its output. Relay it first (relay rule), then act by mode. A `.blocked` marker carries
+the path of the lane's stderr log.
+
 | Failure | Handling |
 |---|---|
-| Gate blocks twice | `.blocked{reason: gate}` → escalate |
-| Stall / timeout | kill process group → `.blocked{reason: stall\|timeout}` → escalate |
-| 429 / quota throttle | `.blocked{reason: throttle}` → escalate; halve that tier's live slot cap for the run |
-| opencode crash / non-zero exit / spawn error | `.blocked{reason: crash\|spawn}` → escalate; the error goes into the note |
-| `integrate` rejects (`REJECTED`/`NOT READY`/`MERGE ERROR`) | escalated exactly like a `.blocked` lane — no live agent exists to resume |
-| Escalation | engine re-dispatches the slice to Claude `ht-programmer` (fresh native worktree) with the failure notes and last gate stderr in the brief; max 1 escalation per slice, then the normal BLOCKED flow |
+| Gate blocks twice | `.blocked{reason: gate}` |
+| Stall / timeout | process group killed → `.blocked{reason: stall}` or `.blocked{reason: timeout}` |
+| 429 / quota throttle | `.blocked{reason: throttle}`; halve that tier's live slot cap for the run |
+| opencode crash / non-zero exit / spawn error | `.blocked{reason: crash}` or `.blocked{reason: spawn}`; the error goes into the note |
+| Not retryable: `auth`, `quota`, `model`, `config` | the tier's breaker opens for the rest of the run: later slices of that tier start no new lane (they go to Claude in `hybrid`, are held in `opencode`), and the endgame prints one `OC-ERROR ... kind=breaker` summary of the skipped units |
+| Exit code 1 after a clean finish whose gate passes | accepted and printed as `OC-WARN ... kind=recovered`; nothing to do |
+| `integrate` rejects (`REJECTED`/`NOT READY`/`MERGE ERROR`) | handled exactly like a `.blocked` lane — no live agent exists to resume |
 
-Escalation is transparent to you: `devteam next` prints the re-dispatch as an ordinary
-`=== DISPATCH` block, nothing to do differently — merge is unchanged and worker-agnostic:
-`integrate` re-derives everything from git (claim file, RED commit by subject, footprint diff,
-frozen-test diff, refactor-no-test-touch), so an opencode lane's branch, commits and
-`.done`/`.blocked` marker merge exactly like a Claude programmer's.
+**Retries first.** A connection failure (`spawn`, `stall`, `throttle`, `crash`) is retried inside the
+lane before it counts: up to 3 fresh runs (not a `--session` continuation), waiting 10 s, 30 s and
+60 s, and every failed try prints `OC-WARN ... kind=<kind> :: retry <n>/3 in <s>s: <detail>`. This
+applies in `hybrid` and `opencode` mode alike. `timeout`, `context` and the `OC-WARN` gate kinds
+(`gate`, `empty`, `format`, `recovered`) are not connection problems: no retry and no switch, only the
+handling below. When the retries run out, or at once for a non-retryable kind (`auth`, `quota`,
+`model`, `config`), what happens next depends on the run mode:
+
+- **hybrid** — after you relay the line, the engine re-dispatches the slice to Claude
+  `ht-programmer` (fresh native worktree, failure notes and last gate stderr in the brief) as an
+  ordinary `=== DISPATCH` block; max 1 escalation per slice, then the normal BLOCKED flow. Launch it
+  in the same turn: the run never pauses. A connection or non-retryable failure also **switches the
+  whole rest of the run to Claude Sonnet 5.5**: the lane records `oc-switched.json` in
+  `.claude/hybrid-team/` and prints one `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the
+  rest of this run uses Claude sonnet` line, which you relay once. The failed slice, and every later
+  slice the router would have sent to opencode, is dispatched as an ordinary `=== DISPATCH` block
+  whose Agent line carries `model: sonnet` (a code slice runs as one Claude SLICE instead of RED plus
+  an opencode GREEN); no `=== LANE` line appears, opencode is never spawned again and no per-unit OC
+  line is printed. Lanes already running on opencode finish and are harvested as usual. The switch
+  lasts for the run: `init` deletes it. The other failure kinds keep the per-slice fallback above.
+- **opencode** — relay the line; nothing goes to Claude on its own, and there is no switch (the
+  retries above still happen first). The engine marks the slice
+  `failed` (held), prints `HELD <id> (<kind>)` after the line and does not dispatch it. Ask once
+  per root cause with AskUserQuestion — identical failures (same `kind`, tier and model) are
+  batched into one question that lists every held slice — with four options: retry on opencode,
+  run this unit on Claude, switch the run to hybrid, abort. Then act: retry → `devteam retry <id>`;
+  on Claude → `devteam retry <id> --claude` (that slice stays off opencode from then on); switch →
+  `devteam retry <id> --claude` for every held slice, and tell the user once that the run's preset
+  is fixed at start, so a later slice that meets an unusable tier is held and asked about again
+  (a full switch means a new run with `--route hybrid`); abort → leave the held slices failed, stop
+  dispatching and report what has merged. Every other slice keeps running while the user answers.
+- **claude** — opencode is never spawned, so none of this occurs.
+
+Merge is unchanged and worker-agnostic: `integrate` re-derives everything from git (claim file, RED
+commit by subject, footprint diff, frozen-test diff, refactor-no-test-touch), so an opencode lane's
+branch, commits and `.done`/`.blocked` marker merge exactly like a Claude programmer's.
 
 ### Phase 3 — final review ∥ verification, one fix queue
 
@@ -372,7 +466,7 @@ the trade-offs `finish` named, remaining minor suggestions, anything the user mu
   needs (files, symbols, conventions, tests, risks). Read-only, fast.
 - **SendMessage** — `to: <agent id from the notification>`, message = the answer or the exact
   fix. The agent resumes with its context and its worktree. Not available for an opencode lane —
-  its failures resolve through escalation instead.
+  its failures follow "Failures on an opencode lane" instead.
 
 Emit all independent Agent calls in one message.
 
@@ -398,7 +492,7 @@ Assumptions safe/high-risk · Dispatch DAG) + one ```json block the engine execu
              "backend": "(optional: claude | oc:<tier> — pins the slice, bypassing routing)"}]}
 ```
 
-`routing.preset` picks the row table (`claude`, `hybrid`, `max` — see Backend routing above) for
+`routing.preset` picks the row table (`claude`, `hybrid`, `opencode` — see Backend routing above) for
 this run only; omit it to use the repo's configured default. Slicing rules: **vertical** (S1 =
 thinnest end-to-end path, each slice one increment); `deps` only for true runtime prerequisites —
 anything pinned as a contract is not a dependency; `files` = exact source **and test** paths,
@@ -440,7 +534,7 @@ weight, model/backend routing by size/kind, file briefings, native worktrees wit
 mechanical gates instead of prose, sharded overlapped review, warm resumes, 1-hour prompt cache,
 never-prompt permissions, cap-2 loops, low-judgment execution offloaded to a cheaper model.
 Remaining dials, in order: **`/fast`** for the Conductor and opus roles (user's credits);
-**profile `turbo` / `spike`** (ask the user, don't assume); **`--route max`** to widen what
+**profile `turbo` / `spike`** (ask the user, don't assume); **`--route opencode`** to widen what
 offloads to opencode; raise `review_batch` / `checkpoint_every` in the plan for very large runs;
 `effort: low` on the ht-programmer for boilerplate-heavy work; more `Explore` or `research`
 agents for planning. Past `spike` nothing is left but the two remaining rules — independent

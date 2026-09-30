@@ -8,8 +8,12 @@ Env HA_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config, session, attach, attach_text}, where session is the
 --session value, attach the -f path and attach_text that file's content ("" when
 absent or unreadable).
+Env HA_FAKE_MODELS is a comma separated list of model ids printed by `models`;
+the value "none" lists nothing. When unset, two default models are listed.
 
 Step keys (all optional):
+  scenario    name from SCENARIOS (auth, model_not_found, throttle, recovered, empty);
+              the other keys of the step override the scenario's keys
   session     session id to emit (default: the --session value, else ses_fake0001)
   save        {absolute path: text}; files written first (simulates saved tool output)
   grandchild  path; spawn a sleeping child in this process group, write its pid there
@@ -17,6 +21,7 @@ Step keys (all optional):
   raw         lines written verbatim to stdout
   events      event objects emitted as JSON lines (sessionID added when missing)
   usage       {input, output, reasoning, cache_read, cache_write, cost}; one step_finish
+  finish      reason string; the step_finish carries part.reason (usage is optional)
   text        final text event
   stderr      text written to stderr
   sleep       seconds to sleep before exiting
@@ -32,8 +37,18 @@ from pathlib import Path
 
 FAKE_SCRIPT_ENV = "HA_FAKE_SCRIPT"
 FAKE_LOG_ENV = "HA_FAKE_LOG"
+FAKE_MODELS_ENV = "HA_FAKE_MODELS"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
+DEFAULT_MODELS = ["zai-coding-plan/glm-5.3", "zai-coding-plan/glm-5.3-flash"]
+SCENARIOS = {
+    "auth": {"error": {"type": "ProviderAuthError", "message": "401 Unauthorized"}},
+    "model_not_found": {"error": {"type": "ProviderModelNotFoundError", "message": "model glm-9 not found"}},
+    "throttle": {"error": {"type": "APIError", "message": "429 Too Many Requests"}},
+    "recovered": {"text": "recovered answer", "finish": "stop",
+                  "error": {"type": "StepError", "message": "tool call failed, step recovered"}, "exit": 1},
+    "empty": {"finish": "stop"},
+}
 
 
 def _flag(argv, names):
@@ -71,6 +86,14 @@ def _load_step(script_path):
     return data[min(n, len(data) - 1)]
 
 
+def _expand(step):
+    """Merge a named scenario under the step's own keys."""
+    name = step.get("scenario")
+    merged = dict(SCENARIOS[name]) if name else {}
+    merged.update({k: v for k, v in step.items() if k != "scenario"})
+    return merged
+
+
 def _log(argv):
     log_path = os.environ.get(FAKE_LOG_ENV, "")
     if not log_path:
@@ -103,13 +126,15 @@ def main(argv: list) -> int:
         print(FAKE_VERSION, flush=True)
         return 0
     if argv and argv[0] == "models":
-        print("zai-coding-plan/glm-5.3", flush=True)
-        print("zai-coding-plan/glm-5.3-flash", flush=True)
+        raw = os.environ.get(FAKE_MODELS_ENV)
+        models = DEFAULT_MODELS if raw is None else ([] if raw == "none" else raw.split(","))
+        for model in models:
+            print(model, flush=True)
         return 0
     if not argv or argv[0] != "run":
         sys.stderr.write("fake opencode: unsupported command\n")
         return 2
-    step = _load_step(os.environ.get(FAKE_SCRIPT_ENV, ""))
+    step = _expand(_load_step(os.environ.get(FAKE_SCRIPT_ENV, "")))
     session = str(step.get("session") or _flag(argv, ("--session", "-s")) or DEFAULT_SESSION)
 
     for target, content in (step.get("save") or {}).items():
@@ -137,8 +162,10 @@ def main(argv: list) -> int:
     for event in step.get("events") or []:
         _emit(event, session)
     usage = step.get("usage")
-    if usage is not None:
-        _emit({"type": "step_finish", "part": {
+    finish = step.get("finish")
+    if usage is not None or finish is not None:
+        usage = usage or {}
+        part = {
             "type": "step-finish",
             "tokens": {
                 "input": usage.get("input", 0),
@@ -147,7 +174,10 @@ def main(argv: list) -> int:
                 "cache": {"read": usage.get("cache_read", 0), "write": usage.get("cache_write", 0)},
             },
             "cost": usage.get("cost", 0),
-        }}, session)
+        }
+        if finish is not None:
+            part["reason"] = str(finish)
+        _emit({"type": "step_finish", "part": part}, session)
     if "text" in step:
         _emit({"type": "text", "part": {"type": "text", "text": step["text"]}}, session)
     if step.get("stderr"):

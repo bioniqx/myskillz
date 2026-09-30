@@ -1,4 +1,4 @@
-"""Doctor checks, provider-error classification, down marking and the context status line."""
+"""Doctor checks, per-tier cache entries and the context status line."""
 import json
 import os
 import re
@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,36 +15,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from oc_run import build_cmd, run_once
 from hp_router import CONTRACT_TIERS, effective_preset, route, review_policy
 from hp_config import AGENT_NAME, SENTINEL, config_env
+from hybrid_shared import cache_fresh, cache_key, classify, first_error
 
 MODELS_TIMEOUT_S = 60
 VERSION_TIMEOUT_S = 10
 PING = "PING"
-UNAVAILABLE_LINE = "opencode: unavailable → preset claude (run plan_tool.py doctor --ping)"
+PING_OK = "ping ok"
+UNAVAILABLE_LINES = {
+    "hybrid": "opencode: unavailable → Claude writers (preset hybrid; run plan_tool.py doctor --ping)",
+    "opencode": "opencode: unavailable → tasks held (preset opencode; run plan_tool.py doctor --ping)",
+}
+CLAUDE_ONLY_LINE = "opencode: not used (preset claude)"
 _SENTINEL_STRIP_CHARS = "`'\".,!?;:()[]{}"
-_UNAVAILABLE_RE = re.compile(
-    r"expired|renew|unavailable|unauthori[sz]ed|invalid api key|insufficient (?:balance|quota)",
-    re.IGNORECASE,
-)
-_THROTTLE_RE = re.compile(r"\b429\b|rate[ _-]?limit", re.IGNORECASE)
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _clock() -> float:
+    return time.time()
+
+
 def first_line(text: str) -> str:
     for line in (text or "").splitlines():
         if line.strip():
             return line.strip()
-    return ""
-
-
-def classify_error(message: str) -> str:
-    text = message or ""
-    if _UNAVAILABLE_RE.search(text):
-        return "unavailable"
-    if _THROTTLE_RE.search(text):
-        return "throttle"
     return ""
 
 
@@ -81,54 +78,46 @@ def write_doctor(path: Path, data: dict) -> None:
         raise
 
 
-def mark_down(path: Path, tier: str, reason: str, message: str) -> None:
-    data = load_doctor(path)
-    tiers = data.get("tiers")
-    if not isinstance(tiers, dict):
-        tiers = {}
-        data["tiers"] = tiers
-    entry = tiers.get(tier)
-    if not isinstance(entry, dict):
-        entry = {}
-        tiers[tier] = entry
-    entry["down"] = {"reason": reason, "message": first_line(message), "at": _now()}
-    write_doctor(path, data)
-
-
 def _role_tier(tier: str, routing: dict, preset_eff: str) -> str:
     if preset_eff == "claude":
         return ""
     roles = routing.get("roles") if isinstance(routing.get("roles"), dict) else {}
     role = roles.get(tier, "claude")
-    if preset_eff == "max":
+    if preset_eff in ("opencode", "max"):
         max_roles = routing.get("max_roles") if isinstance(routing.get("max_roles"), dict) else {}
         role = max_roles.get(tier, role)
     return "" if role == "claude" else str(role)
 
 
-def _down_entry(doctor: dict, name: str):
-    if not name:
-        return None
-    tiers = doctor.get("tiers") if isinstance(doctor.get("tiers"), dict) else {}
-    entry = tiers.get(name)
-    if not isinstance(entry, dict):
-        return None
-    down = entry.get("down")
-    return down if isinstance(down, dict) else None
+def _tier_note(doctor: dict, routing: dict, name: str, now: float) -> str:
+    tiers = routing.get("tiers") if isinstance(routing.get("tiers"), dict) else {}
+    tier = tiers.get(name)
+    if not isinstance(tier, dict) or not tier.get("model"):
+        return "down: config"
+    entries = doctor.get("tiers") if isinstance(doctor.get("tiers"), dict) else {}
+    entry = entries.get(name)
+    if not isinstance(entry, dict) or not entry or not cache_fresh(entry, tier, now):
+        return "stale"
+    if not entry.get("ok"):
+        return "down: %s" % (entry.get("kind") or "unknown")
+    return ""
 
 
-def status_line(routing: dict, doctor: dict, preset: str = "") -> str:
-    if not isinstance(doctor, dict) or not doctor or not doctor.get("version") or not doctor.get("ok"):
-        return UNAVAILABLE_LINE
+def status_line(routing: dict, doctor: dict, preset: str = "", now: float = 0.0) -> str:
     routing = routing if isinstance(routing, dict) else {}
     preset_eff = effective_preset(routing, preset)
+    usable = isinstance(doctor, dict) and bool(doctor.get("version")) and bool(doctor.get("ok"))
+    if not usable:
+        return CLAUDE_ONLY_LINE if preset_eff == "claude" else UNAVAILABLE_LINES[preset_eff]
+    now = now or _clock()
     bits = []
     for tier in CONTRACT_TIERS:
         backend = route(tier, routing, doctor, preset)
-        if backend == "claude":
-            down = _down_entry(doctor, _role_tier(tier, routing, preset_eff))
-            if down is not None:
-                backend = "claude(down: %s)" % (down.get("reason") or "unknown")
+        if backend in ("claude", "held"):
+            name = _role_tier(tier, routing, preset_eff)
+            note = _tier_note(doctor, routing, name, now) if name else ""
+            if note:
+                backend = "%s(%s)" % (backend, note)
         bits.append("%s=%s" % (tier, backend))
     date = str(doctor.get("t") or "")[:10]
     return "opencode: v%s preset=%s %s review_oc=%s (doctor %s)" % (
@@ -161,22 +150,25 @@ def _check_version(binary: str) -> str:
 
 def _run_models_once(binary: str) -> tuple:
     try:
-        proc = subprocess.run([binary, "models"], capture_output=True, text=True,
+        # --standalone: a private server, so the listing cannot hang on a dead background service
+        proc = subprocess.run([binary, "models", "--standalone"], capture_output=True, text=True,
                               timeout=MODELS_TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        return (False, [], "`%s models` timed out after %ss" % (binary, MODELS_TIMEOUT_S))
+        return (False, [], "timeout", "`%s models` timed out after %ss" % (binary, MODELS_TIMEOUT_S))
     except OSError as exc:
-        return (False, [], "`%s models` error: %s" % (binary, exc))
+        return (False, [], "spawn", "`%s models` error: %s" % (binary, exc))
     if proc.returncode != 0:
-        return (False, [], "`%s models` exit %d: %s" % (
-            binary, proc.returncode, first_line(proc.stderr or "")))
+        stderr = proc.stderr or ""
+        kind = classify(proc.returncode, [], stderr) or "crash"
+        detail = "`%s models` exit %d: %s" % (binary, proc.returncode, first_error([], stderr))
+        return (False, [], kind, detail)
     models = [line.split()[0] for line in (proc.stdout or "").splitlines() if line.strip()]
     if not models:
-        return (False, [], "`%s models` listed nothing" % binary)
-    return (True, models, "")
+        return (False, [], "config", "opencode models listed nothing")
+    return (True, models, "", "")
 
 
-def _ping_tier(binary: str, name: str, tier: dict, workdir: Path) -> dict:
+def _ping_tier(binary: str, name: str, tier: dict, workdir: Path) -> tuple:
     model = str(tier.get("model", ""))
     variant = str(tier.get("variant", ""))
     workdir = Path(workdir)
@@ -190,17 +182,27 @@ def _ping_tier(binary: str, name: str, tier: dict, workdir: Path) -> dict:
                       int(tier.get("stall_s", 60)), int(tier.get("timeout_s", 180)))
     reason = result.get("reason") or ""
     text = result.get("text") or ""
-    if not reason and _reply_has_sentinel(text):
-        return {"ping": "ok", "note": SENTINEL, "down_reason": ""}
+    if _reply_has_sentinel(text) and (not reason or result.get("finished")):
+        return (True, "", PING_OK)
     errors = [str(e) for e in (result.get("errors") or [])]
-    run_note = str(result.get("note") or "")
-    message = (first_line(errors[0]) if errors else "") or first_line(run_note) \
-        or first_line(text) or reason or "no sentinel in reply"
-    if reason == "unavailable" or classify_error("\n".join(errors + [run_note])) == "unavailable":
-        down_reason = "unavailable"
-    else:
-        down_reason = ""
-    return {"ping": "failed", "note": message, "down_reason": down_reason}
+    try:  # classify on opencode's stderr, not on the runner's one-line note
+        stderr_tail = err_path.read_text(encoding="utf-8", errors="replace").strip()[-500:]
+    except OSError:
+        stderr_tail = ""
+    killed = reason if reason in ("stall", "timeout") else ""
+    kind = classify(result.get("rc"), errors, stderr_tail, killed, False)
+    detail = first_error(errors, stderr_tail) or first_line(text) or reason or "no sentinel in reply"
+    if kind == "throttle":
+        return (True, kind, detail)
+    return (False, kind or ("format" if text.strip() else "empty"), detail)
+
+
+def _tier_entry(tier: dict, now: float, ok: bool, kind: str, detail: str, ping: bool = False) -> dict:
+    key = cache_key(tier) if tier.get("model") else ""
+    entry = {"ok": ok, "key": key, "checked_at": now, "kind": kind, "detail": detail}
+    if ping:  # a real reply check: a plain `doctor` (no --ping) keeps it until it expires
+        entry["ping"] = True
+    return entry
 
 
 def run_doctor(binary: str, routing: dict, ping: bool, workdir: Path, previous: dict) -> dict:
@@ -209,54 +211,48 @@ def run_doctor(binary: str, routing: dict, ping: bool, workdir: Path, previous: 
     previous = previous if isinstance(previous, dict) else {}
     tiers = routing.get("tiers") if isinstance(routing.get("tiers"), dict) else {}
     prev_tiers = previous.get("tiers") if isinstance(previous.get("tiers"), dict) else {}
+    now = _clock()
 
     resolved = shutil.which(binary)
     if not resolved and Path(binary).is_file():
         resolved = binary
 
     version = _check_version(binary)
-    models_ok, models, models_note = _run_models_once(binary)
+    models_ok, models, models_kind, models_detail = _run_models_once(binary)
     if not models_ok:
-        models_ok, models, models_note = _run_models_once(binary)
+        models_ok, models, models_kind, models_detail = _run_models_once(binary)
     base_ok = bool(resolved) and bool(version) and models_ok
+
+    if not resolved:
+        base_fail = ("spawn", "opencode binary not found: %s" % binary)
+    elif not version:
+        base_fail = ("spawn", "`%s --version` failed" % binary)
+    elif not models_ok:
+        base_fail = (models_kind, models_detail)
+    else:
+        base_fail = None
 
     results = {}
     for name in sorted(tiers):
         tier = tiers[name] if isinstance(tiers[name], dict) else {}
         model = str(tier.get("model", ""))
-        variant = str(tier.get("variant", ""))
-        listed = models_ok and model in models
         prev_entry = prev_tiers.get(name) if isinstance(prev_tiers.get(name), dict) else {}
-        prev_down = prev_entry.get("down") if isinstance(prev_entry.get("down"), dict) else None
-
-        if not models_ok:
-            list_note = models_note
-        elif listed:
-            list_note = "listed"
-        else:
-            list_note = "model %s not found in `%s models`" % (model, binary)
-
-        if ping and base_ok:
-            probe = _ping_tier(binary, name, tier, workdir)
-            ping_state = probe["ping"]
-            note = probe["note"]
-            if ping_state == "ok":
-                down = None
-            elif probe["down_reason"]:
-                down = {"reason": probe["down_reason"], "message": note, "at": _now()}
-            else:
-                down = prev_down
+        if not model:
+            ok, kind, detail = False, "config", "tier %s has no model in the opencode config" % name
+        elif base_fail:
+            ok, kind, detail = False, base_fail[0], base_fail[1]
+        elif model not in models:
+            ok, kind, detail = False, "model", "model %s not found in `%s models`" % (model, binary)
         elif ping:
-            ping_state = "failed"
-            note = list_note if not models_ok else "opencode binary or version check failed"
-            down = prev_down
+            ok, kind, detail = _ping_tier(binary, name, tier, workdir)
+            results[name] = _tier_entry(tier, now, ok, kind, detail, ping=True)
+            continue
+        elif (prev_entry.get("ping") or prev_entry.get("detail") == PING_OK) and cache_fresh(prev_entry, tier, now):
+            results[name] = dict(prev_entry)  # a fresh ping result, good or failed, is not overwritten by "listed"
+            continue
         else:
-            ping_state = "unchecked"
-            note = list_note
-            down = prev_down
-
-        results[name] = {"model": model, "variant": variant, "listed": listed,
-                         "ping": ping_state, "note": note, "down": down}
+            ok, kind, detail = True, "", "listed"
+        results[name] = _tier_entry(tier, now, ok, kind, detail)
 
     return {
         "t": _now(),

@@ -1,6 +1,6 @@
 ---
 name: hybrid-brainstorming
-description: "Opt-in fork of brainstorming: use when the user says 'hybrid', mentions 'opencode', asks to save tokens/cost or usage limits, or invokes /hybrid-brainstorming. Turns intent into an approved design in the fewest human turns, same as brainstorming, but offloads low-judgment exploration lanes (code lookups, single-fact web checks, and in preset max research and approach drafts) to a local opencode CLI, gated by a mechanical grounding check with one Claude fallback. Every judgment step (classification, synthesis, design, spec, self-review, visual companion) stays on Claude."
+description: "Opt-in fork of brainstorming: use when the user says 'hybrid', mentions 'opencode', asks to save tokens/cost or usage limits, or invokes /hybrid-brainstorming. Turns intent into an approved design in the fewest human turns, same as brainstorming, but first asks for the run mode (hybrid, Claude only or opencode only) and offloads low-judgment exploration lanes (code lookups, single-fact web checks, and in mode opencode research and approach drafts) to a local opencode CLI, gated by a mechanical grounding check. Every opencode failure is reported at once; connection failures retry 3 times, then hybrid mode moves the rest of the run to Claude Sonnet 5.5 (other failures fall back to Claude once per lane). Every judgment step (classification, synthesis, design, spec, self-review, visual companion) stays on Claude."
 when_to_use: "Use instead of brainstorming for: 'build/add/implement X (hybrid)', 'design X with opencode', explicit requests to cut Claude usage or cost during exploration, or the literal command /hybrid-brainstorming. Same triggers as brainstorming otherwise once the user has opted into the hybrid routing."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
@@ -25,6 +25,52 @@ Trust this block instead of re-running `ls`, `find`, `git status`, or
 `cat` on manifests. Reference files live in `skill_dir`; read them by
 absolute path. (Harness without skill preprocessing shows a raw `!`
 command above → run that script inside your first round.)
+
+## Step 0: Run mode (first action, before everything else)
+
+Live context prints a `shared config:` line: the source label
+`$HYBRID_OPENCODE_STD/$HYBRID_OPENCODE_LITE` (the env vars that hold the
+shared opencode models; LITE defaults to STD), then the `std` and `lite`
+specs as `provider/model#variant`, each followed by its source, then
+`(valid)`. The source is `(skill)` when the tier's model comes from this
+skill's own `<skill dir>/routing.json`, or `(shared)` when it comes from
+those env vars. The line reads `no config (missing)` /
+`no config (invalid: ...)` when some tier has no model in either place. If
+it does, tell the user to set `HYBRID_OPENCODE_STD` (and optionally
+`HYBRID_OPENCODE_LITE`), each `provider/model[#variant]`, in the `env` block
+of `~/.claude/settings.json`, e.g.
+`{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`,
+then restart Claude Code (exporting them in the shell also works). With no
+preloaded context, run the script from Live context once, then ask.
+
+- Args contain `mode=hybrid|claude|opencode` → use that mode, do not ask.
+- Otherwise your first tool call is AskUserQuestion (load it with
+  ToolSearch first if it is still deferred): "Run this skill in which
+  mode?"
+  - **Hybrid (Recommended)** — judgment on Claude, low-judgment lanes on
+    opencode, every failure reported at once, Claude fallback.
+  - **Claude only** — opencode is never called.
+  - **opencode only** — every offloadable lane goes to opencode, no silent
+    Claude fallback.
+
+  Put the `std=… lite=…` specs from the shared config line, each with its
+  `(skill)` or `(shared)` source, into the hybrid and opencode option
+  descriptions; write "no config" there when the line says so.
+- The question does not count against the turn budget below.
+- The mode is also the preset: `hybrid`, `claude` or `opencode`. Pass
+  `--preset <mode>` on every `bslane.py` call for the rest of the run.
+- Modes `hybrid` and `opencode`: run `python3
+  "${CLAUDE_SKILL_DIR}/scripts/bslane.py" init` once (foreground) as soon as
+  the mode is known, before Round 1 dispatches any lane. It clears the
+  previous run's switch to Claude and circuit breakers (lane state is per
+  project, not per run), so every run starts on opencode.
+- Hand-offs carry the mode: invoke the next skill with args `mode=<mode>`.
+
+## Relay rule (every mode)
+
+Any `OC-ERROR` or `OC-WARN` line in tool output → your next message to the
+user starts with that line (deduplicate identical kind+tier), before any
+other work.
 
 <HARD-GATE>
 Do NOT invoke any implementation skill, write code, scaffold, or take any
@@ -61,8 +107,8 @@ nothing downgrades.
   questions + T1 lanes only for multi-hop questions (code slices of a big
   repo, research that must compare several sources) + `Read
   architectural.md`. Then follow `architectural.md`. The ONLY skill you
-  invoke next is hybrid-writing-plans, or writing-plans if it is not
-  installed.
+  invoke next is hybrid-writing-plans with args `mode=<mode>`, or
+  writing-plans (no args) if it is not installed.
 
 Turn budget (human replies before hand-off): Spike 1-2 · Bounded 1-2 ·
 Architectural 2-3. Count before sending; over budget → merge messages.
@@ -114,8 +160,9 @@ Architectural 2-3. Count before sending; over budget → merge messages.
    verification); the main model only for synthesis.
 6. **Overlap machine work with human wait.** Each message you send leaves
    useful lanes running (unasked questions → assumptions, claim
-   verification, spec pre-draft). Late results while you wait: fold them
-   in silently; message the user only if one invalidates something shown.
+   verification, spec pre-draft). Late results while you wait: fold them in
+   silently; message the user only if one invalidates something shown or
+   carries an `OC-ERROR` / `OC-WARN` line (Relay rule).
 7. **Load only what the path needs.** Spike/Bounded: this file only.
    Architectural: `architectural.md` (in round 1); `research-playbook.md`
    for >3 web lanes or conflicting evidence; `visual-companion.md` only if
@@ -123,42 +170,56 @@ Architectural 2-3. Count before sending; over budget → merge messages.
 
 ## Hybrid routing
 
-Live context's `opencode:` line reads `opencode: v<version> preset=<preset>
-locate=<b> explore=<b> fact=<b> research=<b> draft=<b> websearch=on|off
-(doctor <YYYY-MM-DD>)`, or `opencode: unavailable → preset claude (run
-bslane.py doctor)` when opencode isn't usable. Read it before round 1: for
-each role, `<b>` is `claude` (dispatch that role as a normal `Agent` lane,
-using the role → Claude lane mapping below) or `oc:<tier>` (dispatch it
-through `bslane.py` instead of an `Agent`).
+The run mode from Step 0 decides where each role runs:
 
-Role → Claude lane mapping (used for lanes routed straight to Claude, and
-for any oc lane that falls back): `locate` → `Explore`/`haiku`; `explore`
-→ `Explore`/`sonnet`; `fact` → `general-purpose`/`haiku`; `research` →
-`general-purpose`/`sonnet`; `draft` → `general-purpose`/`sonnet`.
+| Mode | `locate` `explore` `fact` | `research` `draft` |
+| --- | --- | --- |
+| `claude` | `Agent` lane | `Agent` lane |
+| `hybrid` | `bslane.py` | `Agent` lane |
+| `opencode` | `bslane.py` | `bslane.py` (`research` needs `websearch=on`) |
+
+Live context's `opencode:` line (`opencode: v<version> preset=<preset> ...
+websearch=on|off (doctor <YYYY-MM-DD>)`, or `opencode: unavailable → ...`)
+is context only. Mode `claude` never calls `bslane.py` and needs no doctor
+run. In the other two modes `bslane.py` itself reports, with an `OC-ERROR`
+line, any role it cannot serve on opencode.
+
+Role → Claude lane mapping (used for roles the mode keeps on Claude, and
+for any oc lane that falls back in mode `hybrid`, always with `model:
+sonnet` once a `kind=switch` line has been printed): `locate` →
+`Explore`/`haiku`; `explore` → `Explore`/`sonnet`; `fact` →
+`general-purpose`/`haiku`; `research` → `general-purpose`/`sonnet`; `draft`
+→ `general-purpose`/`sonnet`.
 
 Round 1, one message, dispatches everything: T0 reads/searches, `Agent`
-lanes for every role routed `claude`, and
+lanes for every role the mode keeps on Claude, and
 `Bash(run_in_background) python3 "${CLAUDE_SKILL_DIR}/scripts/bslane.py"
-code|web …` for every role routed `oc:<tier>` — all together, never split
-across rounds. `draft` never dispatches in round 1: it fires later, once
-the approach-deciding lanes are back — see `architectural.md` §2. Never
-launch more oc lanes for one tier at once than that tier's `max_parallel`
-(from the routing file); queue the rest and dispatch a replacement the
-moment a slot frees up (a lane's stdout line signals completion).
+code|web …` (with `--preset <mode>`) for every role the mode offloads — all
+together, never split across rounds. `draft` never dispatches in round 1:
+it fires later, once the approach-deciding lanes are back — see
+`architectural.md` §2. Never launch more oc lanes for one tier at once than
+that tier's `max_parallel` (the skill's own routing file if it sets one,
+else the shipped defaults); queue the rest and dispatch a replacement
+the moment a slot frees up (a lane's stdout line signals completion).
 
 Lane ids match `[A-Za-z0-9_-]{1,40}` and must be unique per lane you
-dispatch this session. A `bslane.py` call that exits non-zero, or fails
-with an argparse usage error, produced no lane — launch the role's Claude
-lane once (the mapping above) and don't retry the oc lane. Per-tier caps
-default to 6 parallel lanes; the active values live in the routing file at
-`$HB_ROUTING` (default `~/.config/hybrid-brainstorming/routing.json`),
-merged over the shipped defaults. Presets (`--preset claude|hybrid|max`
-overrides the routing file's preset for one call): `hybrid` (default)
-routes locate/explore/fact to opencode tiers and keeps research/draft on
-Claude; `max` also routes research/draft to opencode tiers, while `claude`
-routes every role to Claude.
+dispatch this session. The env vars `HYBRID_OPENCODE_STD` and
+`HYBRID_OPENCODE_LITE` (LITE defaults to STD; each `provider/model[#variant]`,
+set in the `env` block of `~/.claude/settings.json`) set the `std` and `lite`
+models and variants for every hybrid skill. A tier whose `model` is set in
+`$HB_ROUTING` (default `<skill dir>/routing.json`) uses
+that file's `model` and `variant` instead (no variant when that file sets
+none). Roles, timeouts and slot waits also live in `$HB_ROUTING`, merged
+over the shipped defaults. Per-tier caps default to 6 parallel lanes. `--preset claude|hybrid|opencode` (the mode) overrides the routing
+file's preset for one call: `hybrid` routes locate/explore/fact to opencode
+tiers and keeps research/draft on Claude; `opencode` also routes
+research/draft to opencode tiers; `claude` routes every role to Claude.
+`python3 "${CLAUDE_SKILL_DIR}/scripts/bslane.py" stats` summarizes the lane
+telemetry (`lanes.jsonl`); run it when the user asks how the lanes did.
 
-Each `bslane.py` call prints exactly one of three shapes on completion:
+Each `bslane.py` call prints zero or more `OC-ERROR` / `OC-WARN` lines
+first (relay them, see the Relay rule), then exactly one of four shapes on
+completion:
 - `LANE <id> <role> oc:<tier> OK — grounded <n>/<m> — <secs>s` (drafts:
   `ungrounded` instead of `grounded <n>/<m>`), then the grounded result,
   then any `UNVERIFIED:` lines. Merge the result exactly like a Claude
@@ -169,11 +230,44 @@ Each `bslane.py` call prints exactly one of three shapes on completion:
   `CLAUDE <id> — Agent → subagent_type: <type>, model: <model>,
   description: "<id>", prompt: "Read <path> and follow it exactly."` —
   launch exactly that one `Agent` lane, once, then merge its result when
-  it completes. Never retry the oc lane itself.
+  it completes. Never retry the oc lane itself. Mode `hybrid` only.
 - `CLAUDE <id> — Agent → subagent_type: <type>, model: <model>,
   description: "<id>", prompt: "Read <path> and follow it exactly."` on
   its own (the role is routed straight to Claude) — launch that one
   `Agent` lane the same way.
+- `HELD <id> (<reason>) — <note>` — mode `opencode` only: the lane was not
+  run and no Claude lane is offered (see the exit code 3 rules below).
+
+Connection failures (`spawn`, `stall`, `throttle`, `crash`) are retried
+inside `bslane.py`: up to 3 fresh opencode runs, waiting 10, 30 then 60 s.
+Every failed try prints `OC-WARN ... kind=<kind> :: retry <n>/3 in <s>s:
+<detail>` (relay it; the lane is only slower, launch nothing for it). In mode
+`hybrid`, when the retries run out, or at once for `auth`, `quota` and
+`model`, the whole rest of the run leaves opencode for Claude Sonnet 5.5:
+`bslane.py` prints one `OC-ERROR ... kind=switch :: opencode <kind>:
+<detail>; the rest of this run uses Claude sonnet`, then the failed lane's
+own `FALLBACK` + `CLAUDE ... model: sonnet`. From then on every `bslane.py`
+call for a role the mode offloads spawns nothing and prints only a bare
+`CLAUDE <id> ... model: sonnet` line with no OC line: keep dispatching those
+roles through `bslane.py` and launch exactly the `Agent` lane it names.
+Lanes already running on opencode finish and are merged as usual. `timeout`,
+`context` and the gate failures (`grounding`, `format`, `empty`) are not
+connection problems: no retry, no switch, one `FALLBACK` for that lane only.
+Mode `opencode` retries the same way but never switches: after the retries
+the lane is `HELD` (rules below).
+
+Exit code 3 means the lane failed on opencode. Any other non-zero exit, or
+an argparse usage error, means no lane was started. Either way the lane
+produced no result, so act by mode:
+- `hybrid`: relay the OC lines, then launch the `CLAUDE` line's `Agent` lane
+  once (no `CLAUDE` line → the role's Claude lane from the mapping above,
+  model `sonnet` if a `kind=switch` line has been printed). Never retry the
+  oc lane yourself.
+- `opencode`: relay the OC lines, launch no Claude lane and retry nothing
+  on your own. Ask once per root cause with AskUserQuestion: retry on
+  opencode / run this lane on Claude / switch the run to hybrid (then use
+  `--preset hybrid`) / abort. Put identical failures in one question and
+  keep the lanes that did not fail running.
 
 ## Research before recommending
 
@@ -295,8 +389,8 @@ narrate the exploration; show the design and cite inline.
 claim-verifier / spec pre-draft lanes launched in that same turn and not
 awaited → approval → spec
 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` + inline self-review
-+ commit (one turn) → review gate → hybrid-writing-plans (writing-plans if
-it is not installed).
++ commit (one turn) → review gate → hybrid-writing-plans with args
+`mode=<mode>` (writing-plans, no args, if it is not installed).
 
 ## Red flags
 

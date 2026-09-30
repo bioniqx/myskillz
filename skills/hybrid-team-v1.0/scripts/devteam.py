@@ -94,11 +94,12 @@ except ImportError:  # pragma: no cover
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import router  # noqa: E402
-from router import PRESETS, needs_split, phase_backend, user_routing_path  # noqa: E402
+from router import needs_split, phase_backend, user_routing_path  # noqa: E402
 import oc_config  # noqa: E402
 import oc_brief  # noqa: E402
 import oc_lane  # noqa: E402
 from oc_doctor import check_opencode, ping_tier, lane_stats  # noqa: E402
+import hybrid_shared  # noqa: E402
 
 STATE_DIRNAME = ".claude/hybrid-team"
 POINTER_FILE = "hybrid-team-root"  # lives inside the shared .git dir
@@ -143,6 +144,7 @@ KIND_MODE = {          # kind -> the ht-programmer mode a normal (non-high-risk)
     "docs": "work", "perf": "work", "research": "research",
 }
 KINDS = tuple(KIND_MODE)
+DOC_EXTS = (".md", ".txt", ".rst")
 SIZES = ("trivial", "small", "large")
 SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
 SIZE_MODEL = {"trivial": "sonnet"}      # per-invocation Agent `model:` override (small/large: default)
@@ -229,14 +231,27 @@ def in_linked_worktree(cwd=None):
     return git_dir(cwd).resolve() != common_dir(cwd).resolve()
 
 
+_FIND_ROOT_CACHE = {}
+
+
 def find_root(cwd=None):
-    """The integration checkout root: pointer in the shared .git dir, else toplevel."""
+    """The integration checkout root: pointer in the shared .git dir, else toplevel. Memoized per
+    `cwd` for the life of this process — every dispatched command calls this at least twice
+    (once by `main()` to pick the lock path, again inside its own `cmd_*`), and the pointer file
+    and cwd never change within one invocation. Keyed by the effective cwd, so an in-process caller
+    that changes directory (tests, `lane` helpers) never gets another checkout's root."""
+    key = str(cwd) if cwd is not None else os.getcwd()
+    if key in _FIND_ROOT_CACHE:
+        return _FIND_ROOT_CACHE[key]
     ptr = common_dir(cwd) / POINTER_FILE
     if ptr.exists():
         root = Path(ptr.read_text().strip())
         if (root / STATE_DIRNAME / "state.json").exists():
+            _FIND_ROOT_CACHE[key] = root
             return root
-    return toplevel(cwd)
+    root = toplevel(cwd)
+    _FIND_ROOT_CACHE[key] = root
+    return root
 
 
 def state_dir(root):
@@ -326,8 +341,12 @@ def is_test_path(rel, extra_globs=()):
 
 def path_matches(rel, entry):
     """Does repo-relative path `rel` fall under footprint entry `entry`?"""
-    rel = rel.replace("\\", "/").lstrip("./")
-    entry = entry.replace("\\", "/").lstrip("./")
+    rel = rel.replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    entry = entry.replace("\\", "/")
+    while entry.startswith("./"):
+        entry = entry[2:]
     if entry.endswith("/"):
         return rel.startswith(entry)
     if any(ch in entry for ch in "*?["):
@@ -335,7 +354,31 @@ def path_matches(rel, entry):
     return rel == entry or rel.startswith(entry + "/")
 
 
+def dirty_tracked(root):
+    """Tracked-file changes only (like `git status --porcelain --untracked-files=no`), via the
+    -z-based `porcelain()` helper: the plain `git()` wrapper's `.strip()` eats the leading status
+    byte of a SINGLE dirty line, so it must not be used where that byte is parsed."""
+    return [(xy, p) for xy, p in porcelain(root) if xy != "??"]
+
+
+def dirty_excluding(root, entries, excluded):
+    """`entries` ([(xy, path)], from `dirty_tracked`) with any path in `excluded` (e.g. what
+    `doctor --fix` just wrote) removed — so a `start` right after `doctor --fix` does not trip on
+    the tracked agent files doctor rewrote a moment ago. Returns the remaining entries."""
+    if not entries or not excluded:
+        return entries
+    excl = set()
+    for p in excluded:
+        try:
+            excl.add(str(Path(p).resolve().relative_to(root.resolve())).replace("\\", "/"))
+        except (OSError, ValueError):
+            continue
+    return [(xy, p) for xy, p in entries if p not in excl]
+
+
 def footprints_overlap(a, b):
+    if set(a) & set(b):   # exact-path fast path: a literal hit implies overlap without a fnmatch scan
+        return True
     for x in a:
         for y in b:
             if x == y or path_matches(x, y) or path_matches(y, x):
@@ -415,11 +458,37 @@ def extract_plan(path):
     raise DevteamError("no ```json block with a `slices` array found in the plan")
 
 
+def validate_slice_types(slices):
+    """Type-check id/deps/files/criteria on each slice dict, raising a clean DevteamError
+    (never a raw crash) on a malformed plan or plan refresh. Every downstream check assumes
+    id is a str and deps/files/criteria are lists of str."""
+    type_errs = []
+    for s in slices:
+        sid = s.get("id")
+        if not isinstance(sid, str):
+            type_errs.append(f"{sid!r}: id must be a string")
+        for key in ("deps", "files", "criteria"):
+            val = s.get(key)
+            if val is None:
+                continue
+            if not isinstance(val, list) or not all(isinstance(x, str) for x in val):
+                type_errs.append(f"{sid!r}: {key} must be a list of strings")
+    if type_errs:
+        raise DevteamError("invalid plan:\n  - " + "\n  - ".join(type_errs))
+
+
+def plan_fp(s):
+    """Footprint of a slice dict; research slices hold none (they only write their report)."""
+    return [] if s.get("kind", "code") == "research" else list(s.get("files") or [])
+
+
 def validate_plan(plan):
     errs = []
     slices = plan.get("slices") or []
     if not slices:
         errs.append("plan has no slices")
+    # type checks first: downstream checks assume the types above are already correct.
+    validate_slice_types(slices)
     ids = [s.get("id") for s in slices]
     if len(set(ids)) != len(ids):
         errs.append("duplicate slice ids")
@@ -427,7 +496,7 @@ def validate_plan(plan):
         sid = s.get("id", "?")
         if not re.fullmatch(r"[A-Za-z0-9_-]+", str(sid)):
             errs.append(f"{sid}: invalid id")
-        if not s.get("files"):
+        if not s.get("files") and s.get("kind", "code") != "research":
             errs.append(f"{sid}: empty files (footprint)")
         if s.get("risk", "low") not in ("low", "high"):
             errs.append(f"{sid}: risk must be low|high")
@@ -475,7 +544,7 @@ def validate_plan(plan):
             ordered.add((s["id"], d)); ordered.add((d, s["id"]))
     for i, a in enumerate(slices):
         for b in slices[i + 1:]:
-            if (a["id"], b["id"]) not in ordered and footprints_overlap(a["files"], b["files"]):
+            if (a["id"], b["id"]) not in ordered and footprints_overlap(plan_fp(a), plan_fp(b)):
                 warns.append(f"{a['id']}↔{b['id']} share a path — they will run one after the other (split the file to run them in parallel)")
     code_slices = [s for s in slices if s.get("kind", "code") == "code"]
     if code_slices:
@@ -565,6 +634,10 @@ def ready_slices(st):
     themselves (greedy in priority order), so the whole printed set can be dispatched at once."""
     done = {sid for sid, s in st["slices"].items() if s["status"] == "done"}
     inflight = [s for s in st["slices"].values() if s["status"] == "inflight"]
+    # a slice between RED and GREEN (red-done) still holds its footprint: nothing else may touch
+    # those files until its GREEN half is dispatched, even though no agent is running right now.
+    busy = [s for s in inflight + [s for s in st["slices"].values() if s["status"] == "red-done"]
+            if slice_kind(s) != "research"]
     cpl, dependents = crit_path_len(st)
     candidates = []
     for sid, s in st["slices"].items():
@@ -572,7 +645,8 @@ def ready_slices(st):
             continue
         if not all(d in done for d in s["deps"]):
             continue
-        if any(footprints_overlap(s["files"], f["files"]) for f in inflight):
+        if slice_kind(s) != "research" and \
+                any(footprints_overlap(s["files"], f["files"]) for f in busy if f["id"] != sid):
             continue
         candidates.append(sid)
     candidates.sort(key=lambda sid: (-cpl[sid], -len(dependents[sid]),
@@ -580,7 +654,9 @@ def ready_slices(st):
                                      0 if st["slices"][sid]["risk"] == "high" else 1, sid))
     ready = []
     for sid in candidates:
-        if not any(footprints_overlap(st["slices"][sid]["files"], st["slices"][x]["files"]) for x in ready):
+        if slice_kind(st["slices"][sid]) == "research" or \
+                not any(footprints_overlap(st["slices"][sid]["files"], st["slices"][x]["files"])
+                        for x in ready if slice_kind(st["slices"][x]) != "research"):
             ready.append(sid)
     return ready, inflight
 
@@ -630,8 +706,15 @@ def reserved_slots(st, extra=0):
     subagent takes a slot without checking the limit, so those shards stay reserved too."""
     open_shards = 0
     for r in (st.get("reviews") or {}).values():
-        if r.get("status") == "dispatched" or (r.get("status") == "done" and r.get("verdict") == "CHANGES_REQUIRED"):
+        if r.get("status") == "dispatched":
             open_shards += int(r.get("shards") or 1)
+        elif r.get("status") == "done" and r.get("verdict") == "CHANGES_REQUIRED":
+            # only the shards that actually asked for changes are resumed for a re-review.
+            verdicts = r.get("shard_verdicts")
+            if verdicts:
+                open_shards += sum(1 for v in verdicts if v != "APPROVED")
+            else:
+                open_shards += int(r.get("shards") or 1)
     return RESERVED_MIN + min(MAX_SHARDS, open_shards + max(0, int(extra or 0)))
 
 
@@ -741,6 +824,15 @@ def print_ready(st):
     blocked = [sid for sid, s in st["slices"].items() if s["status"] in ("pending", "red-done") and sid not in ready]
     if blocked:
         out("WAITING on deps/footprints: " + " ".join(blocked))
+    if not inflight and not ready and blocked:
+        # nothing running, nothing dispatchable, yet slices still wait: silence here would strand
+        # the run, so name exactly what a failed/conflicted dependency is blocking and how to fix it.
+        bad = {sid: s["status"] for sid, s in st["slices"].items() if s["status"] in ("failed", "conflict")}
+        for sid in blocked:
+            culprit = next((d for d in st["slices"][sid]["deps"] if d in bad), None)
+            if culprit:
+                out(f"  ! UNRESOLVED: {sid} is stuck on {culprit} ({bad[culprit]}) — "
+                    f"`retry {culprit}` to re-queue it (or `finish --force` to ship without {sid}).")
     return dispatch_now
 
 
@@ -814,13 +906,20 @@ def cmd_init(a):
     cur = git(["rev-parse", "--abbrev-ref", "HEAD"], root)
     if branch != cur:
         raise DevteamError(f"integration_branch is {branch} but HEAD is {cur} — check it out first")
-    if git(["status", "--porcelain", "--untracked-files=no"], root):
+    if dirty_excluding(root, dirty_tracked(root), getattr(a, "doctor_fixed", None)):
         raise DevteamError("integration checkout has uncommitted tracked changes — commit or stash before init")
     sd = state_dir(root)
     if (sd / "state.json").exists() and not a.force:
         raise DevteamError(f"{sd}/state.json exists — use `init --force` to start a new run (or `reset --yes`)")
+    if a.force:
+        for sub_ in ("reviews", "logs", "research"):
+            d = sd / sub_
+            if d.exists():
+                shutil.rmtree(d)
     for sub_ in ("slices", "briefs", "reviews", "logs", "research"):
         (sd / sub_).mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(str(sd / hybrid_shared.BREAKER_DIR), ignore_errors=True)   # the breaker is per run
+    (sd / hybrid_shared.SWITCH_FILE).unlink(missing_ok=True)                 # so is the switch to Claude
     ensure_excludes(root, extra=plan.get("dep_dirs") or [])
     (common_dir(root) / POINTER_FILE).write_text(str(root))
     slices = {}
@@ -829,7 +928,7 @@ def cmd_init(a):
             "id": s["id"], "title": s.get("title", s["id"]), "goal": s.get("goal", ""),
             "kind": s.get("kind", "code"), "size": s.get("size", "small"),
             "verify": s.get("verify", ""), "model": s.get("model", ""), "backend": s.get("backend"),
-            "deps": list(s.get("deps") or []), "files": list(s["files"]),
+            "deps": list(s.get("deps") or []), "files": plan_fp(s),
             "risk": s.get("risk", "low"), "criteria": list(s.get("criteria") or []),
             "edge_cases": list(s.get("edge_cases") or []), "context": list(s.get("context") or []),
             "isolation": ({"PORT": PORT_BASE + i, "DB_SUFFIX": f"_s{i}", "TMPDIR": "<worktree>/.slice/tmp"}
@@ -857,9 +956,16 @@ def cmd_init(a):
         "checkpoints": [], "reviews": {}, "reviewed_upto": 0, "fix_counter": 0,
     }
     routing = router.load_routing(SKILL_DIR / "routing.default.json", user_routing_path(), plan.get("routing") or {})
-    preset = getattr(a, "route", None) or routing.get("preset") or "hybrid"
+    preset = resolve_preset(root, getattr(a, "route", None), routing)
+    problems = (routing.get("config_problems") or []) if preset != "claude" else []
+    if preset != "claude":
+        for w in routing.get("config_warnings") or []:
+            report_oc(root, oc_text("OC-WARN", "config", "config", w))
+        for p in problems:
+            report_oc(root, oc_text("OC-ERROR", "config", "config", p))
     st.update({"routing": routing, "plan_routing": plan.get("routing") or {}, "preset": preset,
-               "oc_ok": preset != "claude" and oc_binary_ok(sd)})
+               "oc_ok": preset != "claude" and not problems and oc_binary_ok(sd),
+               "oc_tiers": usable_tiers(sd, routing)})
     warns = warns + validate_backend_tiers(plan, routing)
     save_state(root, st)
     write_atomic(sd / "plan.json", json.dumps(plan, indent=1))
@@ -1106,7 +1212,8 @@ def briefing_text(st, s, mode):
         lines += ["1. Read the context files and one representative test file; match conventions.",
                   "2. RED: write failing tests for EVERY criterion and edge case, least test code "
                   "(parameterize, share setup, one behaviour per test).",
-                  "   Minimal stubs are allowed only so tests fail on assertions, never on import/syntax/setup errors."]
+                  "   Minimal stubs are allowed only so tests fail on assertions, never on import/syntax/setup errors; "
+                  "commit-red discards them afterwards (RED holds test files only)."]
         lines += red_run
         lines += [f"3. Commit: `python3 {sp} commit-red \"{s['title']}\"` (stages footprint only, checks it, freezes tests).",
                   "4. Write NO implementation. Report with the format below (include the criterion → test mapping)."]
@@ -1169,7 +1276,7 @@ def briefing_text(st, s, mode):
     else:
         lines += ["1. Read the context files and one representative test file; match conventions.",
                   "2. RED: write failing tests for EVERY criterion and edge case with the least test code. "
-                  "Stubs only so failures are assertions."]
+                  "Stubs only so failures are assertions; commit-red discards them (RED = test files only)."]
         lines += red_run
         lines += [f"   Commit: `python3 {sp} commit-red \"{s['title']}\"`  — tests are frozen from here on.",
                   "3. GREEN: minimum code to pass, honoring contracts exactly; no routine refactor.",
@@ -1192,17 +1299,128 @@ def briefing_text(st, s, mode):
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_OC_MAX_PARALLEL = 6
+SKILL_NAME = "hybrid-team"
+BREAKER_KINDS = ("auth", "quota", "model", "config")   # non-retryable: trip the run's breaker
+WARN_KINDS = ("gate", "empty", "format", "recovered")  # opencode answered; a gate rejected or rescued it
+
+
+def oc_errors_path(root):
+    return state_dir(Path(root)) / "oc-errors.jsonl"
+
+
+def lane_oc(root, level, sid, tier_name, tier, kind, detail, log=""):
+    """Lane side: print one OC line at once (the background command's output is the wake-up), log it
+    for `next`, and trip the run's breaker on a non-retryable kind."""
+    spec = hybrid_shared.model_spec(tier)
+    line = hybrid_shared.oc_line(level, SKILL_NAME, sid, tier_name, spec, kind, detail, log)
+    print(line)
+    path = oc_errors_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    hybrid_shared.log_line(path, line)
+    if kind in BREAKER_KINDS:
+        hybrid_shared.breaker_trip(state_dir(Path(root)), tier_name, spec, kind, detail)
+    return line
+
+
+def lane_switch_line(root):
+    """Lane side: print and log the one `kind=switch` line once this lane's failure switched the run to Claude."""
+    line = hybrid_shared.switch_line(SKILL_NAME, hybrid_shared.run_switched(state_dir(Path(root))))
+    print(line)
+    hybrid_shared.log_line(oc_errors_path(root), line)
+
+
+def oc_text(level, unit, kind, text, tier_name="-", spec="-"):
+    """`text` as one OC line; a line a shared helper already built passes through unchanged."""
+    text = str(text)
+    if text.startswith("OC-"):
+        return text
+    return hybrid_shared.oc_line(level, SKILL_NAME, unit, tier_name, spec, kind, text)
+
+
+def report_oc(root, line):
+    """Engine side: log one OC line, then print every line not yet reported (this one included)."""
+    path = oc_errors_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    hybrid_shared.log_line(path, line)
+    out(*hybrid_shared.take_unreported(path))
+
+
+def print_unreported(root):
+    """`next` and `status` open with every OC line a lane logged since the last report."""
+    path = oc_errors_path(root)
+    if path.exists():
+        out(*hybrid_shared.take_unreported(path))
+
+
+def resolve_preset(root, route, routing):
+    """--route, else the routing preset, else hybrid. `max` becomes opencode with an OC-WARN; an
+    unknown name is an OC-ERROR and stops the command. It never quietly becomes claude."""
+    name = route or (routing or {}).get("preset") or "hybrid"
+    try:
+        preset, note = hybrid_shared.mode_to_preset(name)
+    except ValueError as e:
+        preset, note = "", str(e)
+    if preset not in ("claude", "hybrid", "opencode"):
+        report_oc(root, oc_text("OC-ERROR", "preset", "config",
+                                note or "unknown preset %r (use claude | hybrid | opencode)" % name))
+        raise DevteamError("unknown preset %r (use claude | hybrid | opencode)" % name)
+    if note:
+        report_oc(root, oc_text("OC-WARN", "preset", "config", note))
+    return preset
+
+
+def count_breaker_skip(st, s, mode):
+    """A slice the router would have sent to an opencode tier but a tripped breaker diverted (to Claude
+    in hybrid, to a hold in opencode) adds to the `kind=breaker` summary printed at the endgame."""
+    preset = st_preset(st)
+    if preset == "claude" or not st.get("root") or (st.get("escalations") or {}).get(s.get("id", ""), 0) > 0:
+        return
+    routing = dict(st.get("routing") or {})
+    routing["preset"] = preset
+    backend = phase_backend(s, mode, routing, bool(st.get("oc_ok")))     # no breaker_dir: where it would have gone
+    if backend.startswith("oc:"):
+        tier = backend[3:]
+        hybrid_shared.breaker_skip(state_dir(Path(st["root"])), tier, hybrid_shared.model_spec(routing["tiers"][tier]))
+
+
+def st_preset(st):
+    """The run's preset: claude | hybrid | opencode (a legacy `max` reads as opencode)."""
+    name = st.get("preset") or (st.get("routing") or {}).get("preset") or "hybrid"
+    return hybrid_shared.mode_to_preset(name)[0]
+
+
+def cached_tiers(sd):
+    """Tier entries of the doctor cache (`oc_status.json`), or None when no doctor wrote any."""
+    try:
+        tiers = json.loads((Path(sd) / "oc_status.json").read_text()).get("tiers")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return tiers if isinstance(tiers, dict) else None
+
+
+def fresh_ok(entry, tier, t):
+    return bool(isinstance(entry, dict) and entry.get("ok") and hybrid_shared.cache_fresh(entry, tier, t))
+
+
+def usable_tiers(sd, routing):
+    """Tier name -> usable at init: its doctor entry is fresh for the tier's current model and ok.
+    With no doctor cache at all every tier counts as usable (`oc_binary_ok` still gates the run)."""
+    tiers = (routing or {}).get("tiers") or {}
+    cached = cached_tiers(sd)
+    if cached is None:
+        return {name: True for name in tiers}
+    t = time.time()
+    return {name: fresh_ok(cached.get(name), tier, t) for name, tier in tiers.items()}
 
 
 def slice_backend(st: dict, s: dict, mode: str) -> str:
     """Backend for one dispatch of slice `s` in dispatch mode `mode`.
 
-    Returns "claude" or "oc:<tier>". Escalated slices stay on Claude; the
-    RED phase of a split code slice is always Claude.
+    Returns "claude", "oc:<tier>" or "held". Escalated slices stay on Claude; the RED phase of a
+    split code slice is always Claude. A tier the doctor did not clear falls back to Claude in
+    preset hybrid and is "held" in preset opencode (never dispatched, never moved to Claude).
     """
-    preset = st.get("preset") or (st.get("routing") or {}).get("preset") or "hybrid"
-    if preset not in PRESETS:
-        preset = "hybrid"
+    preset = st_preset(st)
     if preset == "claude":
         return "claude"
     sid = s.get("id", "")
@@ -1211,9 +1429,13 @@ def slice_backend(st: dict, s: dict, mode: str) -> str:
     routing = dict(st.get("routing") or {})
     routing["preset"] = preset
     oc_ok = bool(st.get("oc_ok"))
-    if mode == "red" and needs_split(s, routing, oc_ok):
+    breaker_dir = state_dir(Path(st["root"])) if st.get("root") else None
+    if mode == "red" and needs_split(s, routing, oc_ok, breaker_dir):
         return "claude"
-    return phase_backend(s, mode, routing, oc_ok)
+    backend = phase_backend(s, mode, routing, oc_ok, breaker_dir)
+    if backend.startswith("oc:") and not (st.get("oc_tiers") or {}).get(backend[3:], True):
+        return "held" if preset == "opencode" else "claude"
+    return backend
 
 
 def _oc_cap(st: dict, tier: str) -> int:
@@ -1327,9 +1549,33 @@ def escalate(root: Path, st: dict, sid: str, reason: str, note: str) -> str:
     return "ESCALATE {} {} -> claude ({}): {}".format(sid, backend, reason, note)
 
 
+def held_line(sid):
+    return oc_text("OC-ERROR", sid, "config", "no usable opencode tier for this slice in preset opencode "
+                   "(opencode unavailable, stale doctor entry or breaker open); run `doctor --ping`")
+
+
+def hold(root, st, sid, kind, line=""):
+    """Preset opencode has no automatic fallback: the slice is marked failed (held) until the user
+    picks `retry <id>` (opencode again) or `retry <id> --claude`. `line` is reported first when given."""
+    if line:
+        report_oc(root, line)
+    s = slice_state(st, sid)
+    s["status"] = "failed"
+    s["history"].append({"t": now(), "event": "held", "kind": kind})
+    st.setdefault("oc_running", {}).pop(sid, None)
+    clear_markers(root, sid)
+    save_state(root, st)
+    out(f"HELD {sid} ({kind}): preset opencode, no automatic fallback. Ask the user once per root cause: "
+        f"`retry {sid}` (opencode again) | `retry {sid} --claude` (this slice off opencode) | leave it failed (abort).")
+
+
 def escalate_redispatch(root, st, sid, reason, note):
-    """`escalate`, then on ESCALATE re-queue the slice cold and print its Claude Agent call right away.
-    True when the slice went to Claude; False means the normal BLOCKED flow applies."""
+    """`escalate`, then on ESCALATE re-queue the slice cold and print its Agent call right away.
+    Preset opencode holds the slice instead. True when the slice was handled; False means the
+    normal BLOCKED flow applies."""
+    if st_preset(st) == "opencode":
+        hold(root, st, sid, reason)
+        return True
     msg = escalate(root, st, sid, reason, note)
     print(msg)
     if not msg.startswith("ESCALATE"):
@@ -1361,7 +1607,12 @@ def dispatch_set(st, ready, free):
     todo, lanes = [], {}
     for sid in ready:
         s = st["slices"][sid]
-        backend = slice_backend(st, s, dispatch_mode(st, s))
+        mode = dispatch_mode(st, s)
+        backend = slice_backend(st, s, mode)
+        if backend == "held":
+            count_breaker_skip(st, s, mode)
+            hold(Path(st["root"]), st, sid, "config", held_line(sid))
+            continue
         if backend.startswith("oc:"):
             tier = backend[3:]
             lanes.setdefault(tier, oc_slots(st, tier))
@@ -1374,13 +1625,20 @@ def dispatch_set(st, ready, free):
     return todo
 
 
-def do_dispatch(root, st, ids, force=False):
+def do_dispatch(root, st, ids, force=False, ready=None, inflight=None):
     """Mark slices in flight, write briefings, return the Agent-call blocks. Shared by
-    `dispatch` and `next` so one wake-up needs one engine call."""
-    ready, inflight = ready_slices(st)
+    `dispatch` and `next` so one wake-up needs one engine call.
+    `ready`/`inflight` may be passed in already computed (same `st`, no dispatch since) to avoid
+    recomputing `ready_slices` a second time in the same turn."""
+    if ready is None or inflight is None:
+        ready, inflight = ready_slices(st)
     cap, free = slots(st, inflight)
     blocks, skipped = [], []
-    busy = [f["files"] for f in inflight]
+    # a red-done slice not in this batch still holds its footprint (between RED and GREEN).
+    busy = [f["files"] for f in inflight if slice_kind(f) != "research"] + \
+           [s2["files"] for s2 in st["slices"].values()
+            if s2["status"] == "red-done" and s2["id"] not in ids and slice_kind(s2) != "research"]
+    head = None
     for sid in ids:
         s = slice_state(st, sid)
         if s["status"] not in ("pending", "red-done"):
@@ -1389,12 +1647,17 @@ def do_dispatch(root, st, ids, force=False):
         if sid not in ready and not force:
             skipped.append(f"{sid} (not ready: deps/footprint — see `ready`)")
             continue
-        if any(footprints_overlap(s["files"], b) for b in busy):
+        if slice_kind(s) != "research" and any(footprints_overlap(s["files"], b) for b in busy):
             skipped.append(f"{sid} (footprint overlaps a slice in flight or dispatched just now — stays queued)")
             continue
         kind = slice_kind(s)
         mode = dispatch_mode(st, s)
         backend = slice_backend(st, s, mode)
+        if backend == "held":
+            count_breaker_skip(st, s, mode)
+            hold(root, st, sid, "config", held_line(sid))
+            skipped.append(f"{sid} (held: no usable opencode tier)")
+            continue
         tier = backend[3:] if backend.startswith("oc:") else ""
         if tier:
             if oc_slots(st, tier) <= 0 and not force:
@@ -1403,8 +1666,14 @@ def do_dispatch(root, st, ids, force=False):
         elif free <= 0 and not force:
             skipped.append(f"{sid} (no free slot — cap {cap}; it stays queued)")
             continue
-        busy.append(s["files"])
-        base = s["red_sha"] if mode == "green" else git(["rev-parse", "HEAD"], root)
+        if kind != "research":
+            busy.append(s["files"])
+        if mode == "green":
+            base = s["red_sha"]
+        else:
+            if head is None:
+                head = git(["rev-parse", "HEAD"], root)   # HEAD is stable across this whole loop
+            base = head
         s.update({"status": "inflight", "mode": mode, "attempt": s["attempt"] + 1, "base_sha": base,
                   "worktree": None, "branch": None, "dispatched": now(), "rejected": None,
                   "no_tests": mode in ("fast", "research") or kind in ("chore", "docs", "refactor", "perf")})
@@ -1418,6 +1687,8 @@ def do_dispatch(root, st, ids, force=False):
             brief_text += "\nEscalated from opencode ({}): {}".format(esc_note["reason"], esc_note["note"])
         write_atomic(state_dir(root) / "briefs" / f"{sid}.md", brief_text)
         st.setdefault("backends", {})[sid] = backend
+        if not tier:
+            count_breaker_skip(st, s, mode)
         if tier:
             blocks.append({"lane": True, "id": sid, "backend": backend})
             continue
@@ -1441,6 +1712,16 @@ def dispatch_model(s):
     return ""
 
 
+def stands_in_for_oc(st, s, mode):
+    """True for a Claude dispatch that replaces opencode work after a hybrid run switched to Claude: an
+    escalated lane, or a slice the router would have sent to an opencode tier."""
+    if st_preset(st) != "hybrid" or not st.get("root") or not hybrid_shared.run_switched(state_dir(Path(st["root"]))):
+        return False
+    routing = dict(st.get("routing") or {}, preset="hybrid")
+    return ((st.get("escalations") or {}).get(s["id"], 0) > 0
+            or phase_backend(s, mode, routing, bool(st.get("oc_ok"))).startswith("oc:"))
+
+
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
     tokens for 64 launches sit on the critical path, and the briefing file already holds everything.
@@ -1458,7 +1739,7 @@ def print_dispatch(st, blocks, skipped):
                 f"Agent → subagent_type: ht-investigator, description: \"{sid}\", prompt: \"Read {brief} and follow it exactly.\"",
                 "")
             continue
-        model = dispatch_model(s)
+        model = dispatch_model(s) or (hybrid_shared.FALLBACK_MODEL if stands_in_for_oc(st, s, mode) else "")
         out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}",
             f"Agent → subagent_type: ht-programmer, description: \"{sid}\"" + (f", model: {model}" if model else "")
             + f", prompt: \"python3 {sp} claim {sid}\"",
@@ -1496,8 +1777,10 @@ def do_integrate(root, st, ids, remove=True):
         except DevteamError as e:
             results.append(f"{sid}: ERROR — {e}")
         detail = results[-1]
-        if st.get("backends", {}).get(sid, "").startswith("oc:") and any(
-                k in detail for k in ("REJECTED", "NOT READY", "MERGE ERROR")):
+        if backend.startswith("oc:") and any(k in detail for k in ("REJECTED", "NOT READY", "MERGE ERROR")):
+            tier = ((st.get("routing") or {}).get("tiers") or {}).get(backend[3:]) or {}
+            report_oc(root, oc_text("OC-WARN", sid, "gate", detail, backend[3:],
+                                    hybrid_shared.model_spec(tier) if tier else "-"))
             escalate_redispatch(root, st, sid, "gate", detail)
         clear_markers(root, sid)   # consumed: a resumed agent's next Stop writes a fresh one
         save_state(root, st)
@@ -1549,28 +1832,35 @@ def integrate_one(root, st, sid, remove=True):
                       f"{sid}: NOT INTEGRATED — no claim recorded. Report has a `## Worktree:` line → `bind {sid} <path>` "
                       f"then integrate again; otherwise the ht-programmer never ran `claim {sid}` → `retry {sid}`.")
     wt, branch = claim["worktree"], claim["branch"]
-    if not git_ok(["rev-parse", "--verify", "--quiet", branch], root):
+    # combined verify+resolve: `rev-parse --verify --quiet <branch>` both checks existence and, on
+    # success, prints the tip sha — one subprocess instead of a separate verify then rev-parse.
+    r = sh(["git", "rev-parse", "--verify", "--quiet", branch], cwd=root, check=False)
+    if r.returncode != 0:
         return reject(s, "branch-missing", f"{sid}: NOT INTEGRATED — branch {branch} not found. `retry {sid}`.")
-    tip = git(["rev-parse", branch], root)
+    tip = r.stdout.strip()
     base = claim.get("base") or s["base_sha"]
     mode = s["mode"]
+    commit_helper = {"work": "commit-work", "fast": "commit-fast"}.get(mode, "commit-green")
     if Path(wt).exists() and git(["status", "--porcelain", "--untracked-files=no"], wt):
         return reject(s, "dirty", f"{sid}: NOT READY — uncommitted changes in {wt}. SendMessage the agent: "
-                                  f"'commit your work with commit-green, then report', then integrate again.")
+                                  f"'commit your work with {commit_helper}, then report', then integrate again.")
     # RED commit discovery. `.slice/red` is written by the agent's own worktree, so it is NOT an
     # input here — the integrator trusts only the branch's history and the sha it recorded itself.
-    red = None
-    for line in git(["log", "--format=%H%x1f%s", f"{base}..{tip}"], root).splitlines():
-        h, _, subj = line.partition("\x1f")
-        if subj.startswith(f"test({sid})"):
-            red = h
-    if not red and mode == "green" and s["red_sha"]:
-        red = s["red_sha"]
+    # mode "work" never uses `red` below, so skip the log call entirely for it.
+    red, red_from_log = None, False
+    if mode != "work":
+        for line in git(["log", "--format=%H%x1f%s", f"{base}..{tip}"], root).splitlines():
+            h, _, subj = line.partition("\x1f")
+            if subj.startswith(f"test({sid})"):
+                red = h
+        red_from_log = red is not None
+        if not red and mode == "green" and s["red_sha"]:
+            red = s["red_sha"]
     if mode == "work":   # test / refactor / chore / docs / perf: evidence-based, one commit, no RED split
         if tip == base:
             return reject(s, "no-commit", f"{sid}: REJECTED — nothing committed on {branch}. SendMessage the agent to "
                                           f"finish and run `commit-work`, then integrate again; or `retry {sid}`.")
-        touched = git(["diff", "--name-only", base, tip], root).splitlines()
+        touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
         outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
         if outside:
             return reject(s, "footprint-violation",
@@ -1595,10 +1885,11 @@ def integrate_one(root, st, sid, remove=True):
         return merge_slice(root, st, s, sid, wt, branch, tip, base, red=None, frozen=[],
                            touched=touched, remove=remove, label=slice_kind(s).upper())
     if mode == "fast":   # spike slice: tests are optional, not weakenable
+        frozen = []
         if red:
             # the agent chose to write tests anyway → they are frozen exactly like any RED commit
             frozen = frozen_files_of(red, root, st["test_globs"])
-            changed = git(["diff", "--name-only", red, tip, "--"] + frozen, root) if frozen else ""
+            changed = git(["diff", "--no-renames", "--name-only", red, tip, "--"] + frozen, root) if frozen else ""
             if changed:
                 return reject(s, "tests-modified",
                               f"{sid}: REJECTED — tests committed in {red[:9]} were modified afterwards: "
@@ -1609,7 +1900,7 @@ def integrate_one(root, st, sid, remove=True):
         if tip == base:
             return reject(s, "no-commit", f"{sid}: REJECTED — nothing committed on {branch}. SendMessage the agent to "
                                           f"implement and run `commit-fast`, then integrate again; or `retry {sid}`.")
-        touched = git(["diff", "--name-only", base, tip], root).splitlines()
+        touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
         outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
         if outside:
             return reject(s, "footprint-violation",
@@ -1617,9 +1908,10 @@ def integrate_one(root, st, sid, remove=True):
                           f"Widen it in plan.md and `retry {sid} --files …`, or SendMessage the agent to revert them "
                           f"(`git checkout {base[:9]} -- <file>`, commit-fast) and integrate again.", files=outside)
         return merge_slice(root, st, s, sid, wt, branch, tip, base, red=None,
-                           frozen=frozen_files_of(red, root, st["test_globs"]) if red else [],
-                           touched=touched, remove=remove)
-    if not red or not git_ok(["merge-base", "--is-ancestor", red, tip], root):
+                           frozen=frozen, touched=touched, remove=remove)
+    # a `red` found by the log walk above is, by construction, already in (base, tip] — i.e. an
+    # ancestor of tip — so the ancestry check is only needed for the s["red_sha"] fallback case.
+    if not red or (not red_from_log and not git_ok(["merge-base", "--is-ancestor", red, tip], root)):
         return reject(s, "no-red-commit",
                       f"{sid}: REJECTED — no RED commit `test({sid}): ...` on {branch} (tests must be committed before "
                       f"implementation). Worktree kept at {wt}: SendMessage the agent to add failing tests first "
@@ -1631,15 +1923,23 @@ def integrate_one(root, st, sid, remove=True):
                       f"this slice was written test-first. Worktree kept at {wt}: SendMessage the agent to "
                       f"write the failing tests for every criterion and commit them with `commit-red` "
                       f"(not a hand-rolled `git commit`), then integrate again.", red=red)
+    red_src = [f for f in git(["show", "--no-renames", "--name-only", "--format=", red], root).splitlines()
+               if f and not is_test_path(f, st["test_globs"])]
+    if red_src:
+        return reject(s, "red-touches-source",
+                      f"{sid}: REJECTED — the RED commit {red[:9]} modifies non-test files: {', '.join(red_src)}. "
+                      f"Tests must be committed before and without the implementation. Worktree kept at {wt}: "
+                      f"SendMessage the agent to redo RED with only test files (`commit-red` stages tests only), "
+                      f"then integrate again; or `retry {sid}`.", red=red, files=red_src)
     if frozen:
-        changed = git(["diff", "--name-only", red, tip, "--"] + frozen, root)
+        changed = git(["diff", "--no-renames", "--name-only", red, tip, "--"] + frozen, root)
         if changed:
             return reject(s, "tests-modified",
                           f"{sid}: REJECTED — frozen tests modified after the RED commit: {', '.join(changed.splitlines())}. "
                           f"Worktree kept at {wt}. SendMessage the agent to restore them (`git checkout {red[:9]} -- <file>`, "
                           f"commit-green) or, if the test is wrong, `retry {sid}` with a note.", files=changed.splitlines())
     # footprint check on everything the branch touched
-    touched = git(["diff", "--name-only", base, tip], root).splitlines()
+    touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
     outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
     if outside:
         return reject(s, "footprint-violation",
@@ -1666,7 +1966,7 @@ def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, r
            cwd=root, check=False)
     if r.returncode != 0:
         in_merge = (common_dir(root) / "MERGE_HEAD").exists() or (git_dir(root) / "MERGE_HEAD").exists()
-        conflicts = git(["diff", "--name-only", "--diff-filter=U"], root).splitlines() if in_merge else []
+        conflicts = git(["diff", "--no-renames", "--name-only", "--diff-filter=U"], root).splitlines() if in_merge else []
         if in_merge:
             sh(["git", "merge", "--abort"], cwd=root, check=False)
         if conflicts:
@@ -1694,15 +1994,40 @@ def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, r
     return f"{sid}: MERGED {merged[:9]} ({nfiles} files; RED {red[:9]} ok; {len(frozen)} frozen tests unchanged)"
 
 
-def remove_worktree(root, wt):
+def remove_worktree(root, wt, prune=True):
     if not wt:
         return
+    if os.path.realpath(str(wt)) == os.path.realpath(str(root)):
+        return  # never remove the integration checkout itself
     if Path(wt).exists():
-        sh(["git", "worktree", "unlock", wt], cwd=root, check=False)
-        r = sh(["git", "worktree", "remove", "--force", wt], cwd=root, check=False)
-        if r.returncode != 0 and Path(wt).exists():
+        # a second --force also removes a locked worktree; a clean remove needs no prune
+        r = sh(["git", "worktree", "remove", "--force", "--force", wt], cwd=root, check=False)
+        if r.returncode == 0:
+            return
+        if Path(wt).exists():
             shutil.rmtree(wt, ignore_errors=True)
-    sh(["git", "worktree", "prune"], cwd=root, check=False)
+    if prune:
+        sh(["git", "worktree", "prune"], cwd=root, check=False)
+
+
+def salvage_worktree(root, sid, wt, n):
+    """Commit a lane's uncommitted work as 'wip(<id>): salvage' on its branch (else save a patch).
+    Returns {"kind": "commit"|"patch", "msg": ...}, or None when the worktree is clean/absent."""
+    if not wt or not Path(wt).exists():
+        return None
+    ex = ["--", ".", ":(exclude).slice"]
+    if not sh(["git", "status", "--porcelain"] + ex, cwd=wt, check=False).stdout.strip():
+        return None
+    sh(["git", "add", "-A"] + ex, cwd=wt, check=False)
+    r = sh(["git"] + NO_SIGN + ["commit", "-q", "--no-verify", "-m", f"wip({sid}): salvage"], cwd=wt, check=False)
+    if r.returncode == 0:
+        return {"kind": "commit",
+                "msg": f"{sid}: uncommitted work salvaged as commit 'wip({sid}): salvage' on attempt/{sid}-{n}"}
+    d = state_dir(root) / "salvage"
+    d.mkdir(parents=True, exist_ok=True)
+    patch = d / f"{sid}-{n}.patch"
+    patch.write_text(sh(["git", "diff", "--cached", "--binary", "--no-renames", "HEAD"], cwd=wt, check=False).stdout)
+    return {"kind": "patch", "msg": f"{sid}: uncommitted work saved as patch {patch}"}
 
 
 def cmd_fail(a):
@@ -1724,16 +2049,24 @@ def cmd_retry(a):
     s = slice_state(st, a.id)
     if s["status"] not in ("failed", "conflict", "inflight"):
         raise DevteamError(f"{a.id} is {s['status']} — nothing to retry")
+    if getattr(a, "claude", False):
+        st.setdefault("escalations", {})[a.id] = 1     # slice_backend keeps an escalated slice off opencode
+    else:
+        prev = st.get("oc_tiers") or {}   # doctor may have cleared a tier since init; a stale cache never downgrades one
+        st["oc_tiers"] = {k: prev.get(k, True) or v for k, v in usable_tiers(state_dir(root), st.get("routing")).items()}
     if ((st.get("backends") or {}).get(a.id) or "").startswith("oc:"):
         supersede_lane(root, a.id)
     claim = read_claim(root, a.id)
     clear_markers(root, a.id)
     if claim:
+        res = salvage_worktree(root, a.id, claim["worktree"], s["attempt"])
+        if res:
+            out(res["msg"])
         remove_worktree(root, claim["worktree"])
         if claim.get("branch"):
             keep = f"attempt/{a.id}-{s['attempt']}"
-            sh(["git", "branch", "-M", claim["branch"], keep], cwd=root, check=False)
-            out(f"{a.id}: previous branch kept as {keep} (salvage or delete later)")
+            if sh(["git", "branch", "-M", claim["branch"], keep], cwd=root, check=False).returncode == 0:
+                out(f"{a.id}: previous branch kept as {keep} (inspect or delete later)")
         claim_file(root, a.id).unlink(missing_ok=True)
     if a.note:
         s["notes_for_retry"] = a.note
@@ -1748,6 +2081,7 @@ def cmd_retry(a):
             except DevteamError:
                 fresh = None
             if fresh:
+                validate_slice_types([fresh])
                 for k in ("files", "criteria", "edge_cases", "context", "deps"):
                     if fresh.get(k):
                         s[k] = list(fresh[k]) if k != "deps" else [d for d in fresh[k] if d in st["slices"]]
@@ -1827,10 +2161,15 @@ def add_fixes_from_text(st, text, source="", strict=False):
     seen = {(s.get("title", ""), tuple(s.get("files") or [])) for s in st["slices"].values()}
     added, refused = [], []
     for spec in specs:
-        if not isinstance(spec, dict) or not spec.get("files") or not spec.get("criteria"):
+        if not isinstance(spec, dict):
+            if strict:
+                raise DevteamError(f"fix spec must be an object, got {type(spec).__name__}")
+            refused.append("?: fix spec must be an object")
+            continue
+        if not spec.get("files") or not spec.get("criteria"):
             if strict:
                 raise DevteamError(f"fix {spec.get('id', '?')} needs non-empty files and criteria")
-            refused.append(f"{spec.get('id', '?') if isinstance(spec, dict) else '?'}: no files/criteria")
+            refused.append(f"{spec.get('id', '?')}: no files/criteria")
             continue
         # These specs come out of a file an agent wrote, so they are data, not configuration:
         # a wildcard footprint would disable every footprint check and serialize the whole run.
@@ -1848,8 +2187,10 @@ def add_fixes_from_text(st, text, source="", strict=False):
                 raise DevteamError(f"fix {spec.get('id', '?')} refused: {bad}")
             refused.append(f"{spec.get('id', '?')}: {bad}")
             continue
+        explicit_kind = spec.get("kind") in KINDS
         if spec.get("kind") in ("chore", "docs", "perf") and not spec.get("verify"):
             spec["kind"] = "code"      # no verify command = no mechanical proof; make it test-first
+            explicit_kind = False      # coerced: re-derive the kind from the footprint below
         key = (spec.get("title", ""), tuple(spec["files"]))
         if key in seen:
             refused.append(f"{spec.get('id', '?')}: already queued (same title + files)")
@@ -1861,6 +2202,21 @@ def add_fixes_from_text(st, text, source="", strict=False):
             spec["risk"] = "low"
         spec["from_review"] = True   # a reviewer found this: it gets tests even in the spike profile
         spec["kind"] = spec.get("kind") if spec.get("kind") in KINDS else "code"
+        if not explicit_kind:
+            files = spec["files"]
+            if all(f.lower().endswith(DOC_EXTS) or os.path.basename(f).upper().startswith("LICENSE") for f in files):
+                spec["kind"] = "docs"
+                spec["verify"] = spec.get("verify") or "ls -- " + " ".join(shlex.quote(f) for f in files)
+            elif not any(is_test_path(f) for f in files):
+                # RED could never commit without a test path: run it as a work-mode slice instead
+                spec["kind"] = "chore"
+                spec["verify"] = (spec.get("verify") or cmd_value(st.get("commands"), "test")
+                                  or "ls -- " + " ".join(shlex.quote(f) for f in files))
+                out(f"NOTE: fix {spec['id']} has no test path in its footprint ({', '.join(files)}); "
+                    "queued as kind chore (work mode) instead of a code slice whose RED cannot commit")
+        elif spec["kind"] == "code" and not any(is_test_path(f) for f in spec["files"]):
+            out(f"NOTE: fix {spec['id']} is an explicit code slice but its footprint has no test path "
+                f"({', '.join(spec['files'])}); RED cannot commit unless the footprint gains one")
         if source:
             spec["context"] = list(spec.get("context") or []) + [f"raised by {source}"]
         add_slice(st, spec)
@@ -1942,6 +2298,9 @@ def do_review_batch(root, st, force=False, shards=1):
     save_state(root, st)
     for k, scope in enumerate(scopes):
         name = rid if shards == 1 else f"{rid}-{k + 1}"
+        stale = state_dir(root) / "reviews" / f"{name}.report.md"
+        if stale.exists():          # a re-used id from a `--force` re-init must never be harvested
+            stale.unlink()
         lines = [f"# Review briefing {name}" + (f"   [{fast_tag(st)}]" if fast_tag(st) else ""), "",
                  "## Original request", st["request"], ""]
         if spot:
@@ -2052,6 +2411,8 @@ def cmd_checkpoint(a):
     st["checkpoint_pending"] = {"n": n, "sha": sha, "wt": str(wt), "merges_at": len(st["merges"]), "t": now()}
     save_state(root, st)
     log = state_dir(root) / "logs" / f"checkpoint-{n}.log"
+    if log.exists():        # a re-used checkpoint number from a `--force` re-init must never read as PASS
+        log.unlink()
     if pol(st, "gate") != "full":   # per-slice lint/type-check/build were scoped or deferred — run them here
         cmd = full_gate_cmd(st) or "echo 'no commands configured'"
     else:
@@ -2118,7 +2479,8 @@ def harvest_reviews(root, st):
         verdict = ("UNKNOWN" if all(v == "UNKNOWN" for v in verdicts)
                    else ("APPROVED" if all(v == "APPROVED" for v in verdicts) else "CHANGES_REQUIRED"))
         rounds = int(r.get("rounds") or 0) + 1
-        r.update({"status": "done", "verdict": verdict, "done": now(), "rounds": rounds, "sig": sig})
+        r.update({"status": "done", "verdict": verdict, "done": now(), "rounds": rounds, "sig": sig,
+                  "shard_verdicts": verdicts})
         lines.append(f"REVIEW {rid}: {verdict}" + (f" (re-review, round {rounds})" if rounds > 1 else "")
                      + (f" → queued {' '.join(added)}" if added else "")
                      + (" (no verdict line found in the report — read it yourself)" if verdict == "UNKNOWN" else ""))
@@ -2178,6 +2540,7 @@ def cmd_next(a):
     (branches, report files, checkpoint logs), everything newly possible is launched, and the turn
     ends. Every extra engine call is a round-trip on the critical path of every remaining slice."""
     root = find_root()
+    print_unreported(root)
     st = load_state(root)
     refresh_reviews(root, st)
     harvested = harvest_reviews(root, st) + harvest_checkpoint(root, st)
@@ -2215,7 +2578,7 @@ def cmd_next(a):
     cap, free = slots(st, inflight, extra=planned_shards)
     todo = dispatch_set(st, ready, free)
     if todo:
-        blocks, skipped = do_dispatch(root, st, todo)
+        blocks, skipped = do_dispatch(root, st, todo, ready=ready, inflight=inflight)
         print_dispatch(st, blocks, skipped)
     print_ready(st)
     out(progress_line(st))
@@ -2234,6 +2597,8 @@ def cmd_next(a):
     if exhausted:
         st = load_state(root)
         out("", "DAG EXHAUSTED — endgame:")
+        for line in hybrid_shared.breaker_summary(state_dir(root), SKILL_NAME):
+            report_oc(root, oc_text("OC-ERROR", "breaker", "breaker", line))
         if stuck:
             out(f"  ! UNRESOLVED: {' '.join(stuck)} — the final review and the full gate are on hold until these land."
                 f" `retry <id>` (or `finish --force` if you mean to ship without them).")
@@ -2268,14 +2633,22 @@ def ensure_repo():
 
 
 def cmd_start(a):
-    """doctor --fix + init + dispatch the whole ready set in ONE call — zero-to-64-agents in one turn."""
+    """doctor --fix + init + dispatch the whole ready set in ONE call — zero-to-64-agents in one turn.
+    Preset hybrid/opencode pings every tier without a fresh doctor entry first; preset claude never
+    touches opencode."""
     ensure_repo()
     root = toplevel()
-    cmd_doctor(argparse.Namespace(fix=True))
+    plan_routing = extract_plan(a.plan).get("routing") or {}
+    routing = router.load_routing(SKILL_DIR / "routing.default.json", user_routing_path(), plan_routing)
+    preset = resolve_preset(root, getattr(a, "route", None), routing)
+    oc = preset != "claude"
+    doctor_fixed = cmd_doctor(argparse.Namespace(fix=True, ping="stale" if oc else False, oc=oc,
+                                                 plan_routing=plan_routing)) or []
     out("")
     cmd_init(argparse.Namespace(plan=a.plan, force=a.force, allow_worktree=True,
-                                profile=getattr(a, "profile", None), route=getattr(a, "route", None),
-                                fast=getattr(a, "fast", None), spike=getattr(a, "spike", False)))
+                                profile=getattr(a, "profile", None), route=preset,
+                                fast=getattr(a, "fast", None), spike=getattr(a, "spike", False),
+                                doctor_fixed=doctor_fixed))
     st = load_state(root)
     ready, inflight = ready_slices(st)
     cap, free = slots(st, inflight)
@@ -2284,7 +2657,7 @@ def cmd_start(a):
         out("nothing to dispatch")
         return
     out("")
-    blocks, skipped = do_dispatch(root, st, todo)
+    blocks, skipped = do_dispatch(root, st, todo, ready=ready, inflight=inflight)
     print_dispatch(st, blocks, skipped)
     out(progress_line(st),
         "Launch every Agent call above in ONE message, then end the turn. "
@@ -2394,7 +2767,7 @@ def cmd_review_pr(a):
         diff_from, diff_to = git(["rev-parse", a_ref], root), git(["rev-parse", b_ref or "HEAD"], root)
     else:
         diff_from, diff_to = git(["rev-parse", f"{rng}^"], root), git(["rev-parse", rng], root)
-    files = [f for f in git(["diff", "--name-only", diff_from, diff_to], root).splitlines() if f]
+    files = [f for f in git(["diff", "--no-renames", "--name-only", diff_from, diff_to], root).splitlines() if f]
     if not files:
         raise DevteamError(f"no changed files in {rng}")
     sd = root / STATE_DIRNAME / "reviews"
@@ -2477,6 +2850,7 @@ def cmd_brief_debug(a):
 
 def cmd_status(a):
     root = find_root()
+    print_unreported(root)
     st = load_state(root)
     out(f"run: {st['integration_branch']} @ {st['start_sha'][:9]} → HEAD {git(['rev-parse', 'HEAD'], root)[:9]}"
         f"   [profile {profile(st)}: gate={pol(st, 'gate')} red_run={pol(st, 'red_run')} "
@@ -2539,7 +2913,13 @@ def cmd_finish(a):
     for sid in st["slices"]:
         c = read_claim(root, sid)
         if c and Path(c["worktree"]).exists():
-            remove_worktree(root, c["worktree"])
+            n = st["slices"][sid]["attempt"]
+            res = salvage_worktree(root, sid, c["worktree"], n)
+            if res:
+                out(res["msg"])
+                if res["kind"] == "commit":
+                    sh(["git", "branch", "-M", c["branch"], f"attempt/{sid}-{n}"], cwd=root, check=False)
+            remove_worktree(root, c["worktree"], prune=False)   # one prune after the loop
             leftovers.append(c["worktree"])
         if c and git_ok(["rev-parse", "--verify", "--quiet", c["branch"]], root) and st["slices"][sid]["status"] == "done":
             sh(["git", "branch", "-D", c["branch"]], cwd=root, check=False)
@@ -2547,6 +2927,9 @@ def cmd_finish(a):
     open_reviews = [f"{rid} ({r.get('status')}/{r.get('verdict') or 'no verdict'})"
                     for rid, r in (st.get("reviews") or {}).items()
                     if r.get("status") != "done" or r.get("verdict") != "APPROVED"]
+    unreviewed = st["merges"][st.get("reviewed_upto", 0):]
+    if unreviewed:
+        open_reviews.append(f"{len(unreviewed)} merged slice(s) never sent to review: {' '.join(unreviewed)}")
     if open_reviews and not a.force:
         raise DevteamError("reviews not closed: " + "; ".join(open_reviews) +
                            " — address their findings (`next` harvests each report, `add-fixes` for a "
@@ -2657,45 +3040,115 @@ def merged_settings(root):
     return m
 
 
+def check_tier(check):
+    """The tier a failed doctor check is about: `tier:<name>` and `model:<name>` name theirs; every
+    other check (binary, model listing, rows) concerns all tiers."""
+    head, _, name = str(check.get("name") or "").partition(":")
+    return name if head in ("tier", "model") else ""
+
+
 def oc_available(root: Path, routing: dict) -> bool:
-    state_dir = Path(root) / ".claude" / "hybrid-team"
-    state_dir.mkdir(parents=True, exist_ok=True)
-    status_path = state_dir / "oc_status.json"
+    """Run the opencode checks and write `oc_status.json`: the failed checks plus one doctor-cache
+    entry per tier, {ok, key, checked_at, kind, detail} with key = cache_key(tier). A failed
+    `tier:<name>` or `model:<name>` check fails that tier only; any other failed check fails every
+    tier. A tier that passes keeps its still-fresh entry (and so its last ping result). True when
+    a tier is usable."""
+    sd = Path(root) / STATE_DIRNAME
+    sd.mkdir(parents=True, exist_ok=True)
     binary = os.environ.get("HT_OC_BIN", "opencode")
     checks = check_opencode(binary, routing)
     issues = [c for c in checks if not c.get("ok", False)]
-    available = len(issues) == 0
-    status_path.write_text(json.dumps({"available": available, "issues": issues}))
+    shared = [c for c in issues if not check_tier(c)]
+    old = cached_tiers(sd) or {}
+    t = time.time()
+    tiers = {}
+    for name, tier in sorted(((routing or {}).get("tiers") or {}).items()):
+        bad = shared + [c for c in issues if check_tier(c) == name]
+        prev = old.get(name)
+        if not bad and isinstance(prev, dict) and hybrid_shared.cache_fresh(prev, tier, t):
+            tiers[name] = prev
+            continue
+        tiers[name] = {"ok": not bad, "key": hybrid_shared.cache_key(tier), "checked_at": t,
+                       "kind": (bad[0].get("kind") or "config") if bad else "",
+                       "detail": str(bad[0].get("detail") or "") if bad else "listed by opencode"}
+    available = (not shared and any(e.get("ok") for e in tiers.values())) if tiers else not issues
+    write_atomic(sd / "oc_status.json", json.dumps({"available": available, "issues": issues, "tiers": tiers}))
     return available
+
+
+def run_plan_routing(root):
+    """The `routing` block of the plan the current run was started with ({} outside a run)."""
+    try:
+        st = json.loads((state_dir(Path(root)) / "state.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    pr = st.get("plan_routing") if isinstance(st, dict) else None
+    return pr if isinstance(pr, dict) else {}
+
+
+def doctor_opencode(root, routing, ping, only=None):
+    """The opencode half of `doctor`: every failed check as an OC-ERROR line, then the pings.
+    `ping` is True (every tier), "stale" (only tiers without a fresh ok entry, as `start` does)
+    or False; `only` limits the pings to one tier (`retry`). A failed ping marks that tier only.
+    A tier whose last ping failed is always pinged again and its entry overwritten: a fresh failed
+    entry must never block the ping that would clear it. Only a failed binary/model-listing check
+    (every tier) or the tier's own static check skips the ping."""
+    sd = state_dir(root)
+    before = cached_tiers(sd) or {}
+    available = oc_available(root, routing)
+    print("opencode: OK" if available else "opencode: unavailable (see the OC-ERROR lines)")
+    status = json.loads((sd / "oc_status.json").read_text())
+    tiers_cfg = routing.get("tiers") or {}
+    for c in status.get("issues") or []:
+        tier_name = check_tier(c)
+        tier = tiers_cfg.get(tier_name) or {}
+        report_oc(root, oc_text("OC-ERROR", "doctor", c.get("kind") or "config",
+                                "%s: %s" % (c.get("name", "check"), c.get("detail", "")),
+                                tier_name or "-", hybrid_shared.model_spec(tier) if tier else "-"))
+    issues = status.get("issues") or []
+    if not ping or any(not check_tier(c) for c in issues):
+        return
+    static_bad = {check_tier(c) for c in issues}
+    binary = os.environ.get("HT_OC_BIN", "opencode")
+    prompt_path = SKILL_DIR / "agents" / "opencode" / "ht-programmer.prompt.md"
+    prompt_text = prompt_path.read_text() if prompt_path.exists() else ""
+    t = time.time()
+    for tier_name, tier in sorted(tiers_cfg.items()):
+        if tier_name in static_bad or (only and tier_name != only):
+            continue
+        if ping == "stale" and fresh_ok(before.get(tier_name), tier, t):
+            continue
+        res = ping_tier(binary, tier, prompt_text, "ht-programmer", sd)
+        ok, info = bool(res[0]), res[1]           # info: {"kind", "message", ...} from oc_doctor.ping_tier
+        if not isinstance(info, dict):
+            info = {"message": str(info)}
+        kind = "" if ok else (info.get("kind") or "crash")
+        detail = info.get("message") or ("ok" if ok else "ping failed")
+        status["tiers"][tier_name] = {"ok": ok, "key": hybrid_shared.cache_key(tier),
+                                      "checked_at": time.time(), "kind": kind, "detail": detail}
+        print("ping %s: %s %s" % (tier_name, "OK" if ok else "FAIL", detail))
+        if not ok:
+            report_oc(root, oc_text("OC-ERROR", "doctor", kind, detail, tier_name, hybrid_shared.model_spec(tier)))
+    status["available"] = any(e.get("ok") for e in status["tiers"].values())
+    write_atomic(sd / "oc_status.json", json.dumps(status))
 
 
 def cmd_doctor(a):
     root = Path(a.root) if getattr(a, "root", None) else toplevel()
     routing_path = Path(a.routing) if getattr(a, "routing", None) else user_routing_path()
     default_routing_path = SKILL_DIR / "routing.default.json"
+    plan_routing = getattr(a, "plan_routing", None)
+    if plan_routing is None:
+        plan_routing = run_plan_routing(root)
     if default_routing_path.exists():
-        routing = router.load_routing(default_routing_path, routing_path, {})
+        # the effective routing, plan block included: a plan-level model gets its own doctor entry
+        routing = router.load_routing(default_routing_path, routing_path, plan_routing)
     elif routing_path.exists():
         routing = json.loads(routing_path.read_text())
     else:
         routing = {"tiers": {}}
-    if getattr(a, "fix", False) and default_routing_path.exists() and not routing_path.exists():
-        routing_path.parent.mkdir(parents=True, exist_ok=True)
-        routing_path.write_text(default_routing_path.read_text())
-        print(f"wrote {routing_path} (defaults from {default_routing_path.name})")
-    binary = os.environ.get("HT_OC_BIN", "opencode")
-    available = oc_available(root, routing)
-    if available:
-        print("opencode: OK")
-    else:
-        print("opencode: NOTE unavailable, routing all slices to claude")
-    if getattr(a, "ping", False) and available:
-        prompt_path = SKILL_DIR / "agents" / "opencode" / "ht-programmer.prompt.md"
-        prompt_text = prompt_path.read_text() if prompt_path.exists() else ""
-        state_dir = root / ".claude" / "hybrid-team"
-        for tier_name, tier in sorted(routing.get("tiers", {}).items()):
-            ok, detail = ping_tier(binary, tier, prompt_text, "ht-programmer", state_dir)
-            print("ping %s: %s %s" % (tier_name, "OK" if ok else "FAIL", detail))
+    if getattr(a, "oc", True):          # preset claude: opencode is never spawned
+        doctor_opencode(root, routing, getattr(a, "ping", False))
     problems, notes, fixes = [], [], {}
     gv = git(["--version"]).split()[-1]
     notes.append(f"git {gv}, python {sys.version.split()[0]}, root {root}")
@@ -2773,12 +3226,13 @@ def cmd_doctor(a):
     out(*[f"- {n}" for n in notes])
     if not problems:
         out("DOCTOR: all good")
-        return
+        return []
     out("DOCTOR found:", *[f"  ✗ {p}" for p in problems])
     if not a.fix:
         out("run `doctor --fix` to apply the fixes below (writes .claude/settings.local.json, installs agents, updates git excludes):",
             json.dumps({k: v for k, v in fixes.items() if k not in ("agents", "excludes")}, indent=2))
-        return
+        return []
+    written = []
     local = settings_paths(root)["local"]
     cur = load_json(local)
     if local.exists():
@@ -2795,6 +3249,7 @@ def cmd_doctor(a):
     local.parent.mkdir(parents=True, exist_ok=True)
     local.write_text(json.dumps(cur, indent=2) + "\n")
     out(f"wrote {local}")
+    written.append(local)
     for name in fixes.get("agents", []):
         src = agents_src / f"{name}.md"
         dst = root / ".claude" / "agents" / f"{name}.md"
@@ -2804,16 +3259,20 @@ def cmd_doctor(a):
                 shutil.copy(dst, dst.with_suffix(".md.bak"))
             dst.write_text(pin_hooks(src.read_text(), guard))
             out(f"installed {dst} (hooks → {guard})")
+            written.append(dst)
         else:
             out(f"MISSING source agent file {src} — copy {name}.md into .claude/agents/ manually")
     if fixes.get("excludes"):
         ensure_excludes(root)
         out("updated git info/exclude")
     if fixes.get("worktreeinclude"):
-        (root / ".worktreeinclude").write_text("\n".join(fixes["worktreeinclude"]) + "\n")
-        out(f"wrote {root / '.worktreeinclude'} ({', '.join(fixes['worktreeinclude'])})")
+        wti_path = root / ".worktreeinclude"
+        wti_path.write_text("\n".join(fixes["worktreeinclude"]) + "\n")
+        out(f"wrote {wti_path} ({', '.join(fixes['worktreeinclude'])})")
+        written.append(wti_path)
     if "env" in fixes:
         out("RESTART Claude Code so the env limits take effect (settings env applies at startup).")
+    return written
 
 
 HOOK_LOOP_RE = re.compile(r"command: >-\s*\n\s*sh -c '[^\n]*\n[^\n]*guard\.py\" ([a-z-]+); done; exit 0'")
@@ -2834,10 +3293,15 @@ def hooks_resolve(agent_file, root):
         if not Path(m.group(1)).exists():
             return False
     if HOOK_LOOP_RE.search(text):
-        candidates = [root / ".claude" / "skills" / "hybrid-team" / "scripts" / "guard.py",
-                      Path.home() / ".claude" / "skills" / "hybrid-team" / "scripts" / "guard.py"]
-        return any(c.exists() for c in candidates)
+        return any(c.exists() for c in hooks_resolve_candidates(root))
     return True
+
+
+def hooks_resolve_candidates(root):
+    """The exact probe order every shipped hook command and `hooks_resolve()` use to find
+    guard.py: `hybrid-team`, then `hybrid-team-v1.0`, under the project root and then under `$HOME`."""
+    return [base / ".claude" / "skills" / name / "scripts" / "guard.py"
+            for base in (root, Path.home()) for name in ("hybrid-team", "hybrid-team-v1.0")]
 
 
 def cmd_allow(a):
@@ -2936,9 +3400,11 @@ def cmd_claim(a):
                 f"Put this line in your report so the Conductor can bind it: "
                 f"`## Worktree: {top} | {branch} | base {base}`")
     brief = (state_dir(root) / "briefs" / f"{a.id}.md").read_text()
+    helper_hint = {"work": 'commit-work "<title>"', "fast": 'commit-fast "<title>"'}.get(
+        s["mode"], 'commit-red "<title>" | commit-green "<title>"')
     out(f"CLAIMED {a.id} — worktree {top} on branch {branch} @ {head[:9]} (base {base[:9]}, mode {s['mode']})",
         f"Every Bash command already runs inside this worktree. Never touch {root}.",
-        f"Commit helpers: python3 {q(st['script'])} commit-red \"<title>\" | commit-green \"<title>\"",
+        f"Commit helpers: python3 {q(st['script'])} {helper_hint}",
         *( [warn] if warn else [] ),
         "", brief)
 
@@ -2992,10 +3458,11 @@ def expand_footprint(top, fp):
 
 
 def stage_footprint(top, fp):
+    top = Path(top)
     targets = expand_footprint(top, fp)
     if targets:
         git(["add", "-A", "--"] + targets, top)
-    staged = [f for f in git(["diff", "--cached", "--name-only"], top).splitlines() if f]
+    staged = [f for f in git(["diff", "--cached", "--name-only", "--no-renames"], top).splitlines() if f]
     outside = [f for f in staged if not any(path_matches(f, e) for e in fp)]
     if outside:
         git(["reset", "-q", "--"] + outside, top)
@@ -3040,6 +3507,15 @@ def cmd_commit_red(a):
         raise DevteamError("GREEN mode: tests are already committed and frozen; do not add tests")
     staged = stage_footprint(top, fp)
     tests = [f for f in staged if is_test_path(f, globs)]
+    support = [f for f in staged if f not in tests]
+    patch = None
+    if support:   # stubs never ride with RED: save a patch, unstage now, discard after the commit
+        salvage = state_dir(find_root()) / "salvage"
+        salvage.mkdir(parents=True, exist_ok=True)
+        patch = salvage / f"{sid}-red.patch"
+        patch.write_text(sh(["git", "diff", "--cached", "--binary", "--no-renames", "HEAD", "--"] + support,
+                            cwd=top, check=False).stdout)
+        git(["reset", "-q", "--"] + support, top)
     if not tests:
         raise DevteamError("no test files staged — RED must contain failing tests (test_*.py, *.test.ts, tests/…, or plan test_globs)")
     criteria = [ln for ln in (sd / "criteria").read_text().splitlines() if ln.strip()] if (sd / "criteria").exists() else []
@@ -3054,8 +3530,16 @@ def cmd_commit_red(a):
     sha = git(["rev-parse", "HEAD"], top)
     (sd / "red").write_text(sha)
     (sd / "red_files").write_text("\n".join(tests) + "\n")
+    if support:
+        tracked = set(git(["ls-files", "--"] + support, top, check=False).splitlines())
+        if tracked:
+            git(["checkout", "-q", "HEAD", "--"] + sorted(tracked), top)
+        for f in support:
+            if f not in tracked:
+                (Path(top) / f).unlink(missing_ok=True)
     out(f"RED committed {sha[:9]}: {len(tests)} test files frozen ({', '.join(tests)}); "
-        f"{len(staged) - len(tests)} stub/support files")
+        f"{len(support)} non-test stub files discarded (write the implementation in GREEN)"
+        + (f"; recoverable from {patch}" if patch else ""))
 
 
 def cmd_commit_fast(a):
@@ -3135,7 +3619,7 @@ def cmd_commit_green(a):
     git(NO_SIGN + ["commit", "-q", "--no-verify", "-m", f"feat({sid}): GREEN — {a.title}"], top)
     sha = git(["rev-parse", "HEAD"], top)
     if frozen:
-        changed = git(["diff", "--name-only", red, "HEAD", "--"] + frozen, top)
+        changed = git(["diff", "--no-renames", "--name-only", red, "HEAD", "--"] + frozen, top)
         if changed:
             out("WARNING: frozen tests differ from RED: " + changed.replace("\n", ", ") + " — the Conductor will reject this")
     out(f"GREEN committed {sha[:9]} ({len(staged)} files). Now run the gate if you haven't, then report.")
@@ -3418,26 +3902,43 @@ def _gate_outcome(root, sid, agg):
     return agg
 
 
-def lane_loop(root, sid, wt, tier, binary, env, message, stall_s, timeout_s):
+def lane_loop(root, sid, wt, tier, binary, env, message, stall_s, timeout_s, tier_name=""):
     """Run, gate, and on a gate block continue the SAME opencode session with the gate's stderr
-    as the message — at most MAX_CONTINUATIONS times, then `.blocked{reason: gate}`."""
+    as the message — at most MAX_CONTINUATIONS times, then `.blocked{reason: gate}`. A connection
+    failure (spawn/stall/throttle/crash) re-runs the original message fresh, up to OC_RETRIES times."""
     agg = {"outcome": "blocked", "reason": "", "note": "", "runs": 0, "usage": _zero_usage(), "session": ""}
     ld = lane_dir(root)
-    session = ""
+    session, brief, retries = "", message, 0
     while True:
         cmd = oc_lane.build_cmd(binary, tier.get("model") or "", tier.get("variant") or "", message,
                                 session=session)
         res = run_lane_process(root, sid, cmd, wt, env, ld / f"{sid}.jsonl", ld / f"{sid}.err",
                                stall_s, timeout_s)
         _add_usage(agg, res)
-        if res.get("reason"):
-            agg.update(reason=res["reason"], note=res.get("note") or "")
+        # opencode v2 exits 1 after recovered step errors; a finished step means the answer is usable
+        recovered = res.get("kind") == "recovered" or (res.get("rc") == 1 and bool(res.get("finished")))
+        if res.get("reason") and not recovered:
+            # run_once reports reason "crash" for auth, quota, model and context failures; `kind` names the real one
+            kind, note = res.get("kind") or res["reason"], res.get("note") or ""
+            if hybrid_shared.should_retry(kind, retries) and not hybrid_shared.run_switched(state_dir(Path(root))):
+                delay = hybrid_shared.retry_delay(retries)
+                retries += 1
+                lane_oc(root, "OC-WARN", sid, tier_name, tier, kind, "retry %d/%d in %ds: %s" % (
+                    retries, hybrid_shared.OC_RETRIES, delay, res.get("detail") or note or kind))
+                time.sleep(delay)
+                session, message = "", brief
+                continue
+            agg.update(reason=kind, note=note)
             return agg
+        if not (res.get("text") or "").strip():
+            agg.update(reason="empty", note="opencode finished with no text")
+            return agg
+        agg["recovered"] = bool(agg.get("recovered") or recovered)
         gate = run_stop_gate(wt, res.get("text") or "")
         if gate.returncode != 2:
             return _gate_outcome(root, sid, agg)
         stderr = gate.stderr.strip()
-        if agg["runs"] > MAX_CONTINUATIONS or not agg["session"]:
+        if agg["runs"] - retries > MAX_CONTINUATIONS or not agg["session"]:
             agg.update(reason="gate", note=stderr)
             return agg
         session, message = agg["session"], stderr
@@ -3449,11 +3950,12 @@ def _patch_marker(root, sid, kind, **extra):
     write_atomic(marker_file(root, sid, kind), json.dumps(data))
 
 
-def write_lane_marker(root, wt, sid, note, reason, backend):
-    """`.blocked` with the dev-team keys plus the machine-readable `reason` and `backend`."""
+def write_lane_marker(root, wt, sid, note, reason, backend, log=""):
+    """`.blocked` with the dev-team keys plus the machine-readable `reason`, `backend` and the
+    lane's stderr path (`log`, empty when opencode never started)."""
     branch = git(["rev-parse", "--abbrev-ref", "HEAD"], wt, check=False) if wt and Path(wt).exists() else ""
     data = {"t": int(time.time()), "worktree": str(wt or ""), "branch": branch,
-            "note": (note or "")[:600], "reason": reason, "backend": backend}
+            "note": (note or "")[:600], "reason": reason, "backend": backend, "log": log}
     done = marker_file(root, sid, "done")
     if done.exists():
         done.unlink()
@@ -3523,13 +4025,20 @@ def _run_lane(root, a):
         engine = str(st.get("script") or script_path())
         env = dict(os.environ, **oc_config.config_env(prompt_text, engine, st.get("commands") or {}))
         binary = os.environ.get("HT_OC_BIN") or "opencode"
-        agg = lane_loop(root, sid, wt, tier, binary, env, message, stall_s, timeout_s)
+        agg = lane_loop(root, sid, wt, tier, binary, env, message, stall_s, timeout_s, tier_name)
     done = agg["outcome"] == "done"
     reason = "" if done else (agg["reason"] or "crash")
+    # hybrid: a connection or non-retryable failure of a real opencode run moves the rest of the run to Claude.
+    # Created before the marker, so the `next` that harvests it already re-dispatches on Claude sonnet.
+    switched = (not done and agg["runs"] > 0 and st_preset(st) == "hybrid" and hybrid_shared.switches_run(reason)
+                and hybrid_shared.switch_to_claude(state_dir(root), sid, tier_name, hybrid_shared.model_spec(tier),
+                                                   reason, agg["note"] or reason))
+    err = lane_dir(root) / f"{sid}.err"
+    log = str(err) if err.exists() else ""
     if done:
         _patch_marker(root, sid, "done", backend=backend)
     else:
-        write_lane_marker(root, wt, sid, agg["note"], reason, backend)
+        write_lane_marker(root, wt, sid, agg["note"], reason, backend, log=log)
     try:                                 # the whole run is over and its marker written: end liveness
         (lane_dir(root) / f"{sid}.pid").unlink()
     except OSError:
@@ -3543,10 +4052,16 @@ def _run_lane(root, a):
                        "runs": agg["runs"]})
     label = f"{backend} {model}#{variant}, {agg['runs']} run(s), {duration}s, cost {round(u['cost'], 4)}"
     if done:
+        if agg.get("recovered"):
+            lane_oc(root, "OC-WARN", sid, tier_name, tier, "recovered",
+                    "opencode exited 1 after a finished step; the gate accepted the result", log)
         out(f"LANE {sid} DONE — {label}", f"Marker {marker_file(root, sid, 'done')}; `next` integrates it.")
     else:
-        out(f"LANE {sid} BLOCKED ({reason}) — {label}", f"  {(agg['note'] or '')[:300]}",
-            f"ESCALATE {sid}: opencode lane blocked ({reason}); `next` hands the slice to a Claude ht-programmer.")
+        level = "OC-WARN" if reason in WARN_KINDS else "OC-ERROR"
+        lane_oc(root, level, sid, tier_name, tier, reason, agg["note"] or reason, log)
+        if switched:
+            lane_switch_line(root)
+        out(f"LANE {sid} ended ({reason}) — {label}; `next` takes the slice from here.")
 
 
 # ----------------------------------------------------------------------------- main
@@ -3562,7 +4077,7 @@ def main(argv=None):
         parser.add_argument("--fast", type=int, nargs="?", default=None, const=2, choices=[0, 1, 2, 3, 4],
                             help="legacy alias: 0=strict, 1|2|3=turbo, 4=spike (bare --fast means turbo)")
         parser.add_argument("--spike", action="store_true", help="shorthand for --profile spike (low-risk slices ship untested)")
-        parser.add_argument("--route", choices=PRESETS, help="routing preset: claude | hybrid | max (default: routing.json)")
+        parser.add_argument("--route", help="routing preset: claude | hybrid | opencode (max = opencode; default: routing.json)")
         return parser
 
     pr = fast_flags(sp.add_parser("init")); pr.add_argument("plan"); pr.add_argument("--force", action="store_true"); pr.add_argument("--allow-worktree", action="store_true"); pr.set_defaults(fn=cmd_init)
@@ -3573,7 +4088,9 @@ def main(argv=None):
     pr = sp.add_parser("next"); pr.add_argument("ids", nargs="*"); pr.add_argument("--no-remove", action="store_true")
     pr.add_argument("--no-review", action="store_true"); pr.add_argument("--shards", type=int, default=0); pr.set_defaults(fn=cmd_next)
     pr = sp.add_parser("fail"); pr.add_argument("id"); pr.add_argument("--why"); pr.set_defaults(fn=cmd_fail)
-    pr = sp.add_parser("retry"); pr.add_argument("id"); pr.add_argument("--note"); pr.add_argument("--files", nargs="*"); pr.set_defaults(fn=cmd_retry)
+    pr = sp.add_parser("retry"); pr.add_argument("id"); pr.add_argument("--note"); pr.add_argument("--files", nargs="*")
+    pr.add_argument("--claude", action="store_true", help="re-queue this slice off opencode (preset opencode hold)")
+    pr.set_defaults(fn=cmd_retry)
     pr = sp.add_parser("add-fix"); pr.add_argument("--id"); pr.add_argument("--title", required=True); pr.add_argument("--goal")
     pr.add_argument("--files", nargs="+", required=True); pr.add_argument("--criteria", nargs="+", required=True)
     pr.add_argument("--deps", nargs="*"); pr.add_argument("--context", nargs="*"); pr.add_argument("--risk", default="low", choices=["low", "high"])

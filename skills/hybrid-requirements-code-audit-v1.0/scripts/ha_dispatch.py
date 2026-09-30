@@ -8,7 +8,6 @@ from typing import Dict, List, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import audit  # noqa: E402
-import ha_doctor  # noqa: E402
 
 
 def _routing(c) -> dict:
@@ -93,10 +92,7 @@ def harvest_oc_events(c, m, now: float) -> list:
         tier = backend[len("oc:"):]
         reason = str(ev.get("reason") or "crash")
         role = _role_of(name, ev)
-        if reason == "unavailable":
-            ha_doctor.mark_down(ha_doctor.doctor_cache_path(), tier, "unavailable",
-                                str(ev.get("message") or ""))
-        elif reason == "throttle":
+        if reason == "throttle":
             st.setdefault("cooldown", {})[tier] = now + float(routing.get("throttle_cooldown_s", 120))
         src = Path(c.out) / "events" / ("%s.json" % name)
         dst = Path(c.out) / "oc" / ("%s.event.json" % name)
@@ -120,7 +116,8 @@ def harvest_oc_events(c, m, now: float) -> list:
             ids = list(meta.get("ids", []))
         else:
             ids = [i for i in meta.get("ids", []) if i not in m.finding]
-        out.append({"name": name, "role": role, "reason": reason, "ids": ids})
+        out.append({"name": name, "role": role, "reason": reason, "ids": ids,
+                    "message": str(ev.get("message") or "")})
     return out
 
 

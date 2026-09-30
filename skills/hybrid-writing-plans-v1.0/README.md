@@ -20,65 +20,61 @@ token spend on task bodies without changing the planning contract.
 ## Install / requirements
 
 - Claude Code v2.1.217+ recommended (subagent cap setting), python3 3.8+.
-- `opencode` CLI v2.0.18 on `PATH`, authenticated for the providers in your routing config.
-  Without it, hybrid-writing-plans still works: with no doctor cache every task routes to Claude, and
-  the context shows `opencode: unavailable → preset claude (run plan_tool.py doctor --ping)`.
+- `opencode` CLI v2.0.19 on `PATH`, authenticated for the provider of the models in `HYBRID_OPENCODE_STD` / `HYBRID_OPENCODE_LITE`
+  (see Config). With mode `claude`, or without opencode,
+  hybrid-writing-plans behaves like writing-plans 6.2. In modes `hybrid` and `opencode` a missing or
+  unusable opencode is reported at once as an `OC-ERROR` line (`kind=config`), and the context shows
+  `opencode: unavailable ...` until `plan_tool.py doctor --ping` succeeds.
 - Drop this folder where Claude Code loads skills from, alongside (not instead of) `writing-plans-6.2`
   if you want both installed. The injected opencode agent is `hp-writer`. Both skills share the Claude
   writer agent `~/.claude/agents/plan-task-writer.md`: this skill's `setup` installs it only when it is
   missing and never overwrites it, so an existing copy may still run writing-plans-6.2's `hook-lint`.
   That is safe because the linter is identical and `assemble` re-lints every task with this skill's linter.
 
-## Presets
+## Run mode and presets
 
-Routing is chosen per task by its contract `Tier` (`light`, `std` = no `Tier` line, `deep`) and the preset
-(routing file `preset`, or `--preset claude|hybrid|max` passed to `contracts`). Phase 0, Contracts, the
-inline path and assemble always stay on Claude.
+Each run starts by asking which mode to use (hybrid, Claude only or opencode only), unless the arguments carry `mode=hybrid|claude|opencode`. The choice is passed to `contracts` as `--preset` and frozen in `work.json`; resumed runs (`wait`, `review`, `assemble`) never ask again, and hand-offs from hybrid-brainstorming pass `mode=` along. `max`, the old name of `opencode`, still works and prints one `OC-WARN` line; any other unknown preset prints `OC-ERROR ... kind=config` and exits non-zero.
 
-| Preset | `light` writer | `std` writer | `deep` writer | `review_oc` |
-|---|---|---|---|---|
-| `claude` | Claude haiku | Claude sonnet | Claude opus | - (6.2 review triggers only) |
-| `hybrid` (default) | oc:`lite` | oc:`std` | Claude opus | `all` (every oc task is reviewed) |
-| `max` | oc:`lite` | oc:`std` | oc:`std` | `risky` (6.2 review triggers only) |
+Routing is chosen per task by its contract `Tier` (`light`, `std` = no `Tier` line, `deep`) and the preset. Phase 0, Contracts, the inline path and assemble always stay on Claude.
+
+| Preset | `light` writer | `std` writer | `deep` writer | `review_oc` | On an opencode failure |
+|---|---|---|---|---|---|
+| `claude` | Claude haiku | Claude sonnet | Claude opus | - (6.2 review triggers only) | opencode is never spawned |
+| `hybrid` (default) | oc:`lite` | oc:`std` | Claude opus | `all` (every oc task is reviewed) | OC line at once, connection errors retried 3 times, then the rest of the run switches to Claude sonnet |
+| `opencode` | oc:`lite` | oc:`std` | oc:`std` | `risky` (6.2 review triggers only) | OC line at once, connection errors retried 3 times, then the unit is held and the user is asked |
 
 ## Backends
 
 | Backend | Runs | Where |
 |---|---|---|
 | Claude | contracts, review, assemble, Claude-routed and fallback writers | foreground `Agent` calls |
-| opencode | writers routed to `oc:<tier>` (preset `hybrid`/`max`) | background `plan_tool.py oc-write`, scratch in `<plan-dir>/.work/<plan>/oc/` |
+| opencode | writers routed to `oc:<tier>` (preset `hybrid`/`opencode`) | background `plan_tool.py oc-write`, scratch in `<plan-dir>/.work/<plan>/oc/` |
 
 ## Config
 
-- **Shipped defaults**: `hybrid-writing-plans-v1.0/routing.default.json`.
-- **User file**: `~/.config/hybrid-writing-plans/routing.json` - created by `doctor` from the
-  defaults if missing; edit it to change models, variants or slot counts. Override the path with
-  env `HP_ROUTING=<path>`.
-- **Per run**: `--preset claude|hybrid|max` overrides the file's `preset` for one `contracts` call.
+- **Shared models** (all four hybrid skills): env `HYBRID_OPENCODE_STD` (required, tier `std`) and `HYBRID_OPENCODE_LITE` (optional, tier `lite`, defaults to `HYBRID_OPENCODE_STD`), each `provider/model[#variant]`. A missing `HYBRID_OPENCODE_STD` or a value that is not `provider/model[#variant]` is reported as a config problem.
+- **Shipped defaults**: `routing.default.json` - timeouts, roles and review policy. It carries no model or variant.
+- **Per-skill user file** (optional): `<skill dir>/routing.json` (for example `~/.claude/skills/hybrid-writing-plans-v1.0/routing.json`), path override env `HP_ROUTING`. Besides timeouts, roles and review policy it may set `tiers.<tier>.model` (and `variant`) to override the shared model for that one tier; a malformed file is reported as a config problem, never skipped silently.
+- **Precedence** per tier (`std`, `lite`): when the per-skill file sets `tiers.<tier>.model`, that tier uses the per-skill `model` and `variant` (no variant when the file omits it; the shared variant is never mixed in); otherwise it uses the model and variant from the shared env var. `max_parallel` comes from the per-skill file, else the shipped default. Everything else: per-skill file over shipped defaults. The context config line and the doctor's tier lines mark each tier `(skill)` or `(shared)`.
+- **Per run**: `mode=` / `--preset` picks the preset for one `contracts` call.
+- `doctor` never copies the defaults into the user file; it only writes the doctor cache.
+
+Set the variables in the `"env"` block of `~/.claude/settings.json`, then restart Claude Code (exporting them in the shell also works):
 
 ```json
-{"preset": "hybrid",
- "tiers": {
-   "std":  {"model": "zai-coding-plan/glm-5.3",       "variant": "high", "max_parallel": 6,
-            "stall_s": 180, "timeout_s": 900},
-   "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low",  "max_parallel": 6,
-            "stall_s": 120, "timeout_s": 600}},
- "roles": {"light": "lite", "std": "std", "deep": "claude"},
- "max_roles": {"deep": "std"},
- "review_oc": {"hybrid": "all", "max": "risky"},
- "oc_group_max": 3, "max_repairs": 2, "throttle_cooldown_s": 120}
+{"env": {
+  "HYBRID_OPENCODE_STD":  "zai-coding-plan/glm-5.3#high",
+  "HYBRID_OPENCODE_LITE": "zai-coding-plan/glm-5.3-flash#low"}}
 ```
 
-`preset` selects the routing behaviour (`claude`, `hybrid`, `max` - see `SKILL.md`). `tiers` maps a tier
-name to an `opencode` model (`provider/model`), a `variant` (the thinking level), a `max_parallel` slot cap,
-a stall timeout and a wall-time timeout in seconds. Both apply to each opencode turn of a group, so a
-group's worst case is `(1 + max_repairs) × timeout_s`. `roles` maps task contract tiers to routing tiers in the
-active preset; `max_roles` overrides them for the `max` preset only. Users may add tiers and point roles at
-them. The timeouts are longer than hybrid-brainstorming's lanes because task bodies are larger, multi-step work.
+Each tier is an `opencode` model and thinking level (the part after `#`). The stall and wall-time timeouts (seconds) stay per skill: both apply to each opencode turn of a group, so a group's worst case is `(1 + max_repairs) × timeout_s`. `roles` in the shipped defaults maps task contract tiers to routing tiers; a second map there sends `deep` tasks to `std` in preset `opencode`. The timeouts are longer than hybrid-brainstorming's lanes because task bodies are larger, multi-step work.
 
 ## Environment variables
 
-- `HP_ROUTING=<path>` - routing config path, instead of `~/.config/hybrid-writing-plans/routing.json`.
+- `HYBRID_OPENCODE_STD=<provider/model[#variant]>` - shared model for tier `std` (required for the modes `hybrid` and `opencode`).
+- `HYBRID_OPENCODE_LITE=<provider/model[#variant]>` - shared model for tier `lite` (optional, defaults to `HYBRID_OPENCODE_STD`).
+- `HYBRID_OC_RETRY_DELAY_S=<seconds>` - replaces every retry delay (default 10, 30, 60); the tests set it to `0`.
+- `HP_ROUTING=<path>` - routing config path, instead of `<skill dir>/routing.json`.
 - `HP_OC_BIN=<path>` - path to the `opencode` executable (or a fake one, in tests) instead of
   resolving `opencode` on `PATH`.
 - `HP_DOCTOR_CACHE=<path>` - doctor cache path, instead of `~/.cache/hybrid-writing-plans/doctor.json`.
@@ -86,23 +82,17 @@ them. The timeouts are longer than hybrid-brainstorming's lanes because task bod
 
 ## Troubleshooting
 
-- `plan_tool.py doctor [--ping]` - reports whether the routing file parses and prints the context status
-  line. Only `--ping` actually checks auth (a sentinel reply); a plain `doctor` run records availability
-  without probing. Without opencode, every task routes to Claude automatically; nothing to fix before a run,
-  only before you want the cost savings back.
-- A task stuck with no progress - `stall` timeout will escalate it back to Claude after the threshold
-  for its tier elapses; you never need to intervene by hand.
-- Lint failures - if a task's output cannot pass the linter, it falls back to Claude once automatically.
-- Opencode unavailable - `doctor` detects it is missing and reports the issue. `plan_tool.py` continues with
-  Claude for all writers; nothing breaks, only cost savings are foregone.
+- Every opencode failure is printed at the moment it happens as `OC-ERROR <skill> <unit> tier=<tier> model=<spec> kind=<kind> :: <detail>` (or `OC-WARN` for a recovered or non-blocking event). Kinds: `spawn`, `timeout`, `stall`, `auth`, `quota`, `model`, `throttle`, `context`, `crash`, `config`, `breaker`, `switch` (errors) and `recovered`, `empty`, `format`, `grounding`, `lint`, `oracle`, `gate` (warnings; the `max` alias warning uses `config`). The lines are also kept in `<plan-dir>/.work/<plan>/oc/oc-errors.jsonl`, which `assemble --clean` keeps.
+- `plan_tool.py doctor [--ping]` - validates the shared models and the per-skill routing file, prints the config summary and one `OC-ERROR` line per config problem or failed tier, and writes the doctor cache. Only `--ping` actually checks auth (a sentinel reply). It exits 1 when opencode is missing, the config has problems or a tier failed.
+- Retries: when an opencode run fails on the connection (`spawn`, `stall`, `throttle`, `crash`), `oc-write` repeats it up to 3 times, 10, 30 and 60 seconds apart, as a fresh run (not a `--session` continuation). Each failed try prints one `OC-WARN ... kind=<kind> :: retry <n>/3 in <s>s: <detail>` line; lint-repair turns are separate and unchanged. `timeout`, `context` and the gate kinds (`grounding`, `lint`, `oracle`, `gate`, `empty`, `format`, `recovered`) are not connection problems: no retry, no switch.
+- Switch to Claude (mode `hybrid` only): when a group still fails after its retries, or fails with `auth`, `quota`, `model` or `config`, one `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the rest of this run uses Claude sonnet` line is printed and logged, and the rest of that run uses Claude Sonnet 5.5 (`model: sonnet`). The failed group and every group that had not started get a fallback marker with `model=sonnet` (reason `switched` for the ones that never started) and no opencode process is spawned for them; `wait` prints them as ordinary `FALLBACK` lines. Groups already running on opencode finish and are harvested normally. The switch is recorded in `<plan-dir>/.work/<plan>/oc/oc-switched.json`, so a new `contracts` run starts unswitched.
+- In mode `opencode` a failed `auth`, `quota`, `model` or `config` tier stops further attempts for the rest of the run, and a group that still fails after the retries is held; nothing switches, and you are asked what to do.
+- A task stuck with no progress - the `stall` timeout escalates it after the threshold for its tier; you never need to intervene by hand.
+- Lint failures - if a task's output cannot pass the linter, it falls back to Claude once automatically (mode `hybrid`).
 
 ## GLM Coding Plan note
 
-The shipped tiers use the `zai-coding-plan` provider. While that GLM Coding Plan is expired, opencode
-replies with an error such as "Your GLM Coding Plan package has expired and is temporarily unavailable";
-the run is classed `unavailable`, the tier is marked down in the doctor cache and its tasks fall back to
-Claude. `plan_tool.py doctor --ping` proves this path. Until the plan is renewed, point both tiers of your
-user routing file at a working model (for example `google/gemini-3.1-flash-lite`).
+The example tiers use the `zai-coding-plan` provider. While that GLM Coding Plan is expired, opencode replies with an error such as "Your GLM Coding Plan package has expired and is temporarily unavailable"; the run is reported at once as an `OC-ERROR` line (`kind=quota` or `kind=auth`), the tier stops being tried, and the rest of the run switches to Claude sonnet (mode `hybrid`) or the tasks are held (mode `opencode`). Until the plan is renewed, set `HYBRID_OPENCODE_STD` and `HYBRID_OPENCODE_LITE` to a working model (for example `google/gemini-3.1-flash-lite`), and remove any `model` in the per-skill file that overrides it.
 
 ## Differences from writing-plans-6.2
 
@@ -117,4 +107,5 @@ user routing file at a working model (for example `google/gemini-3.1-flash-lite`
 - Telemetry appended to `~/.cache/hybrid-writing-plans/lanes.jsonl` (`HP_TELEMETRY`): one group record per
   opencode group (task IDs, tier, model, variant, rounds, outcome, reason, duration, tokens) and one review
   record per reviewed task from `wait --review` (whether review fixed it), summarised by `plan_tool.py stats`.
+- Shared models from env vars for the four hybrid skills, a run-mode question at the start, preset `opencode` (alias `max`), and immediate `OC-ERROR` / `OC-WARN` reporting with a held state instead of a silent fallback in mode `opencode`.
 - Preset `claude` reproduces writing-plans-6.2's behaviour exactly.

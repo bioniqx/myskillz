@@ -37,6 +37,8 @@ CHECKLIST.append({"id": "REQ-008", "text": "Pages MUST load in under 200 ms.", "
 def child_env(tmp):
     env = dict(os.environ)
     env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
+    env.pop("HYBRID_OPENCODE_STD", None)
+    env.pop("HYBRID_OPENCODE_LITE", None)
     home = Path(tmp) / "home"
     home.mkdir(parents=True, exist_ok=True)
     env.update({

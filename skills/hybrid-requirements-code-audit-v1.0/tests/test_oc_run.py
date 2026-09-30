@@ -93,20 +93,6 @@ class RegexTest(unittest.TestCase):
         self.assertTrue(oc_run.THROTTLE_RE.search("Rate-Limit reached"))
         self.assertFalse(oc_run.THROTTLE_RE.search("used 4290 tokens"))
 
-    def test_unavailable_re(self):
-        for text in (
-            "Your GLM Coding Plan package has expired and is temporarily unavailable",
-            "please renew your plan",
-            "401 Unauthorized",
-            "unauthorised request",
-            "Invalid API key",
-            "Insufficient balance",
-            "insufficient quota",
-        ):
-            self.assertTrue(oc_run.UNAVAILABLE_RE.search(text), text)
-        self.assertFalse(oc_run.UNAVAILABLE_RE.search("429 Too Many Requests"))
-        self.assertFalse(oc_run.UNAVAILABLE_RE.search("ProviderAuthError: bad key"))
-
     def test_saved_re(self):
         match = oc_run.SAVED_RE.search("[Output truncated: full output saved to /tmp/x/tool_1.txt]")
         self.assertIsNotNone(match)
@@ -136,6 +122,7 @@ class ParseEventsTest(unittest.TestCase):
             "usage": {"input": 0, "output": 0, "reasoning": 0, "cache_read": 0, "cache_write": 0, "cost": 0.0},
             "errors": [],
             "throttled": False,
+            "finished": False,
             "events": 0,
             "tools": [],
         })
@@ -201,6 +188,21 @@ class ParseEventsTest(unittest.TestCase):
         result = oc_run.parse_events(stream)
         self.assertTrue(result["throttled"])
         self.assertEqual(result["events"], 0)
+
+    def test_step_finish_stop_sets_finished(self):
+        stream = self.tmp / "fin.jsonl"
+        _write_lines(stream, [
+            {"type": "step_finish", "sessionID": "ses_f",
+             "part": {"type": "step-finish", "reason": "tool-calls", "tokens": {}}},
+        ])
+        self.assertFalse(oc_run.parse_events(stream)["finished"])
+        _write_lines(stream, [
+            {"type": "step_finish", "sessionID": "ses_f",
+             "part": {"type": "step-finish", "reason": "tool-calls", "tokens": {}}},
+            {"type": "step_finish", "sessionID": "ses_f",
+             "part": {"type": "step-finish", "reason": "stop", "tokens": {}}},
+        ])
+        self.assertTrue(oc_run.parse_events(stream)["finished"])
 
     def test_missing_saved_file_keeps_marker(self):
         marker = "[Output truncated: full output saved to %s]" % (self.tmp / "gone.txt")
@@ -413,6 +415,27 @@ class FakeCliTest(unittest.TestCase):
         out.write_text(proc.stdout, encoding="utf-8")
         self.assertEqual(oc_run.parse_events(out)["errors"], ["ProviderAuthError: bad key"])
 
+    def test_models_env_lists_nothing_or_a_custom_list(self):
+        self.env["HA_FAKE_MODELS"] = "none"
+        proc = self._call([str(FAKE), "models"])
+        self.assertEqual((proc.returncode, proc.stdout), (0, ""))
+        self.env["HA_FAKE_MODELS"] = "p/a,p/b"
+        proc = self._call([str(FAKE), "models"])
+        self.assertEqual(proc.stdout.splitlines(), ["p/a", "p/b"])
+
+    def test_scenarios_expand_and_can_be_overridden(self):
+        script = self.tmp / "script.json"
+        script.write_text(json.dumps({"scenario": "recovered", "text": "mine"}), encoding="utf-8")
+        self.env["HA_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
+        self.assertEqual(proc.returncode, 1)
+        out = self.tmp / "out.jsonl"
+        out.write_text(proc.stdout, encoding="utf-8")
+        parsed = oc_run.parse_events(out)
+        self.assertEqual(parsed["text"], "mine")
+        self.assertTrue(parsed["finished"])
+        self.assertEqual(len(parsed["errors"]), 1)
+
 
 class RunOnceTest(unittest.TestCase):
     def setUp(self):
@@ -450,8 +473,8 @@ class RunOnceTest(unittest.TestCase):
             "usage": {"input": 12, "output": 4},
             "text": "@@@ BEGIN T01\nbody\n@@@ END T01",
         })
-        for key in ("session", "text", "usage", "errors", "throttled", "events", "tools",
-                    "rc", "reason", "note", "pid", "duration"):
+        for key in ("session", "text", "usage", "errors", "throttled", "finished", "events", "tools",
+                    "rc", "reason", "note", "pid", "duration", "stderr_tail"):
             self.assertIn(key, result)
         self.assertEqual(result["rc"], 0)
         self.assertEqual(result["reason"], "")
@@ -497,11 +520,17 @@ class RunOnceTest(unittest.TestCase):
         self.assertEqual(result["reason"], "crash")
         self.assertEqual(result["note"], "exit 3: boom")
 
-    def test_error_event_is_crash_with_note(self):
+    def test_error_event_is_auth_with_note(self):
         result = self._run({"error": {"type": "ProviderAuthError", "message": "bad key"}})
         self.assertEqual(result["rc"], 1)
-        self.assertEqual(result["reason"], "crash")
+        self.assertEqual(result["reason"], "auth")
         self.assertEqual(result["note"], "ProviderAuthError: bad key")
+
+    def test_generic_error_event_is_still_crash(self):
+        result = self._run({"error": {"type": "UnknownError", "message": "boom"}})
+        self.assertEqual(result["rc"], 1)
+        self.assertEqual(result["reason"], "crash")
+        self.assertEqual(result["note"], "UnknownError: boom")
 
     def test_throttle_on_failed_run(self):
         result = self._run({"error": {"type": "APIError", "message": "429 Too Many Requests"}})
@@ -509,18 +538,55 @@ class RunOnceTest(unittest.TestCase):
         self.assertTrue(result["throttled"])
         self.assertEqual(result["note"], "APIError: 429 Too Many Requests")
 
-    def test_unavailable_is_checked_before_throttle(self):
+    def test_stdout_throttle_line_on_failed_run_is_throttle(self):
+        result = self._run({"raw": ["provider says: rate limit exceeded"], "exit": 1})
+        self.assertEqual(result["rc"], 1)
+        self.assertTrue(result["throttled"])
+        self.assertEqual(result["reason"], "throttle")
+
+    def test_auth_is_checked_before_throttle(self):
         message = "Your GLM Coding Plan package has expired and is temporarily unavailable"
         result = self._run({"error": {"type": "provider.rate-limit", "message": message}})
         self.assertEqual(result["rc"], 1)
         self.assertTrue(result["throttled"])
-        self.assertEqual(result["reason"], "unavailable")
+        self.assertEqual(result["reason"], "auth")
         self.assertEqual(result["note"], "provider.rate-limit: " + message)
 
-    def test_unavailable_from_stderr_on_nonzero_exit(self):
+    def test_auth_from_stderr_on_nonzero_exit(self):
         result = self._run({"exit": 1, "stderr": "401 Unauthorized"})
-        self.assertEqual(result["reason"], "unavailable")
+        self.assertEqual(result["reason"], "auth")
         self.assertEqual(result["note"], "401 Unauthorized")
+
+    def test_scenario_auth(self):
+        result = self._run({"scenario": "auth"})
+        self.assertEqual((result["rc"], result["reason"]), (1, "auth"))
+        self.assertEqual(result["note"], "ProviderAuthError: 401 Unauthorized")
+
+    def test_scenario_model_not_found(self):
+        result = self._run({"scenario": "model_not_found"})
+        self.assertEqual(result["reason"], "model")
+        self.assertIn("glm-9 not found", result["note"])
+
+    def test_scenario_throttle(self):
+        result = self._run({"scenario": "throttle"})
+        self.assertEqual(result["reason"], "throttle")
+        self.assertTrue(result["throttled"])
+
+    def test_scenario_recovered_exit_one(self):
+        result = self._run({"scenario": "recovered"})
+        self.assertEqual(result["rc"], 1)
+        self.assertTrue(result["finished"])
+        self.assertEqual(result["reason"], "recovered")
+        self.assertEqual(result["text"], "recovered answer")
+
+    def test_scenario_empty_output(self):
+        result = self._run({"scenario": "empty"})
+        self.assertEqual((result["rc"], result["reason"], result["text"]), (0, "", ""))
+        self.assertTrue(result["finished"])
+
+    def test_stderr_tail_is_returned(self):
+        result = self._run({"exit": 2, "stderr": "boom tail"})
+        self.assertEqual(result["stderr_tail"], "boom tail")
 
     def test_unavailable_text_on_successful_run_is_not_a_failure(self):
         result = self._run({"text": "ok", "stderr": "token renew scheduled"})

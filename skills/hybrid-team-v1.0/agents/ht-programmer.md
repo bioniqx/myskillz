@@ -25,21 +25,21 @@ hooks:
         - type: command
           timeout: 20
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team" "$HOME/.claude/skills/hybrid-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team" "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team-v1.0" "$HOME/.claude/skills/hybrid-team" "$HOME/.claude/skills/hybrid-team-v1.0";
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" edit; done; exit 0'
     - matcher: "Bash"
       hooks:
         - type: command
           timeout: 20
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team" "$HOME/.claude/skills/hybrid-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team" "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team-v1.0" "$HOME/.claude/skills/hybrid-team" "$HOME/.claude/skills/hybrid-team-v1.0";
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" bash; done; exit 0'
   Stop:
     - hooks:
         - type: command
           timeout: 30
           command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team" "$HOME/.claude/skills/hybrid-team";
+            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team" "$CLAUDE_PROJECT_DIR/.claude/skills/hybrid-team-v1.0" "$HOME/.claude/skills/hybrid-team" "$HOME/.claude/skills/hybrid-team-v1.0";
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" stop; done; exit 0'
 ---
 

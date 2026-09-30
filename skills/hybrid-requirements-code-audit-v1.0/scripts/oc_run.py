@@ -18,8 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import hybrid_shared  # noqa: E402
+
 THROTTLE_RE = re.compile(r"\b429\b|Too Many Requests|rate.?limit", re.I)
-UNAVAILABLE_RE = re.compile(r"expired|renew|unavailable|unauthori[sz]ed|invalid api key|insufficient (balance|quota)", re.I)
 SAVED_RE = re.compile(r"full output saved to (/[^\]\s]+)\]")
 
 POLL_S = 0.1
@@ -108,7 +109,8 @@ def parse_events(path: Path) -> dict:
     """Parse an opencode --format json stream file.
 
     Returns {session, text, usage{input,output,reasoning,cache_read,cache_write,cost},
-    errors[list of "type: message"], throttled, events, tools[{tool,status,input,output}]}.
+    errors[list of "type: message"], throttled, finished, events, tools[{tool,status,input,output}]}.
+    finished is True once a step_finish event carries reason "stop".
     A missing file yields the empty result; non-JSON lines are skipped but still
     scanned for throttling.
     """
@@ -118,6 +120,7 @@ def parse_events(path: Path) -> dict:
         "usage": _empty_usage(),
         "errors": [],
         "throttled": False,
+        "finished": False,
         "events": 0,
         "tools": [],
     }
@@ -159,6 +162,8 @@ def parse_events(path: Path) -> dict:
             usage["cache_read"] += _num(cache.get("read"))
             usage["cache_write"] += _num(cache.get("write"))
             usage["cost"] += float(_num(part.get("cost")))
+            if part.get("reason") == "stop":
+                result["finished"] = True
         elif etype == "error":
             err = _dict(event.get("error"))
             kind = str(err.get("type") or "error")
@@ -210,10 +215,11 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
     `env` is the complete environment (callers pass dict(os.environ, **extra));
     PWD is forced to cwd. stdout goes to out_path (the JSON event stream), stderr
     to err_path. Returns the parse_events() keys plus rc (None on spawn error),
-    reason ("" on success, else one of spawn, stall, timeout, unavailable,
-    throttle, crash), note, pid (0 on spawn error) and duration in seconds.
-    unavailable and throttle are reported only when the run failed (non-zero
-    exit or an error event); unavailable is checked first.
+    reason ("" on success, else one of spawn, stall, timeout,
+    throttle, crash), note, pid (0 on spawn error), duration in seconds and
+    stderr_tail. For a failed run (non-zero exit or an error event) reason is the
+    kind returned by hybrid_shared.classify: auth, quota, model, throttle,
+    context, crash or recovered (exit 1 after a finished step).
     """
     cwd = Path(cwd)
     out_path = Path(out_path)
@@ -222,7 +228,7 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
     err_path.parent.mkdir(parents=True, exist_ok=True)
     full_env = dict(env)
     full_env["PWD"] = str(cwd)
-    result = {"rc": None, "reason": "", "note": "", "pid": 0, "duration": 0.0}
+    result = {"rc": None, "reason": "", "note": "", "pid": 0, "duration": 0.0, "stderr_tail": ""}
     start = time.monotonic()
     killed = ""
     spawn_error = ""
@@ -270,10 +276,9 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
         result["note"] = spawn_error
         return result
     err_tail = _tail(err_path)
-    throttled = bool(result["throttled"]) or bool(THROTTLE_RE.search(err_tail))
-    result["throttled"] = throttled
+    result["stderr_tail"] = err_tail
+    result["throttled"] = bool(result["throttled"]) or bool(THROTTLE_RE.search(err_tail))
     errors = "; ".join(result["errors"])
-    unavailable = bool(UNAVAILABLE_RE.search(errors)) or bool(UNAVAILABLE_RE.search(err_tail))
     failed = bool(killed) or result["rc"] != 0 or bool(result["errors"])
     if killed == "stall":
         result["reason"] = "stall"
@@ -281,13 +286,13 @@ def run_once(cmd: list, cwd: Path, env: dict, out_path: Path, err_path: Path, st
     elif killed == "timeout":
         result["reason"] = "timeout"
         result["note"] = "timeout: wall time over %ss" % timeout_s
-    elif failed and unavailable:
-        result["reason"] = "unavailable"
-        result["note"] = errors or err_tail or "unavailable"
-    elif failed and throttled:
-        result["reason"] = "throttle"
-        result["note"] = errors or err_tail or "throttle"
     elif failed:
-        result["reason"] = "crash"
-        result["note"] = errors or "exit %s: %s" % (result["rc"], err_tail)
+        kind = hybrid_shared.classify(result["rc"], result["errors"], err_tail, killed, result["finished"])
+        if kind == "crash" and result["throttled"]:
+            kind = "throttle"
+        result["reason"] = kind
+        if kind == "crash":
+            result["note"] = errors or "exit %s: %s" % (result["rc"], err_tail)
+        else:
+            result["note"] = errors or err_tail or kind
     return result

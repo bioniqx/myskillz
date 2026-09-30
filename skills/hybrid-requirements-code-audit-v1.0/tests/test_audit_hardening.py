@@ -83,7 +83,8 @@ class WriteJsonAtomicTest(unittest.TestCase):
 class MinorFixesCliTest(CliBase):
     def test_status_keeps_parse_merge_after_every_section_fell_back(self):
         self.write_json_file(self.cache, doctor_ok())
-        self.init("max")
+        self.write_json_file(self.routing, {"roles": {"parser": "std"}})
+        self.init("hybrid")
         r = self.cli("parse-plan", "--sections", "2")
         self.assertEqual(r.returncode, 0, r.stdout)
         backends = self.state()["parse"]["backends"]

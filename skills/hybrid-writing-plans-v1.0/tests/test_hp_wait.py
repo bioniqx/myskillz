@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import hp_wait  # noqa: E402
 import hp_write  # noqa: E402
+import hybrid_shared  # noqa: E402
 
 
 class WaitCase(unittest.TestCase):
@@ -121,6 +122,35 @@ class TestFallbackLines(WaitCase):
         self.assertEqual(hp_wait.pending_fallback_lines(self.work), [])
         self.assertFalse(os.path.exists(os.path.join(self.oc, "O03.fallback.sent")))
 
+    def test_held_marker_line_says_do_not_dispatch(self):
+        fb = {"gid": "O03", "reason": "auth", "tasks": ["T07", "T08"], "brief": "/w/briefs/O03F.md",
+              "model": "m1", "held": True}
+        line = hp_wait.fallback_line(fb)
+        self.assertTrue(line.startswith("HELD O03 (auth) T07,T08 "), line)
+        self.assertIn("do not dispatch", line)
+        self.assertIn("/w/briefs/O03F.md", line)
+
+    def test_pending_lines_put_unreported_oc_lines_first(self):
+        oc_line = "OC-ERROR hybrid-writing-plans O01 tier=std model=p/m kind=auth :: 401 Unauthorized"
+        hybrid_shared.log_line(hp_write.errors_log(self.work), oc_line)
+        fb = self.write_fb("O01", ["T01"], reason="auth")
+        self.assertEqual(hp_wait.pending_fallback_lines(self.work), [oc_line, hp_wait.fallback_line(fb)])
+        self.assertEqual(hp_wait.pending_fallback_lines(self.work), [])
+
+    def test_pending_lines_return_an_oc_line_without_any_marker(self):
+        oc_line = "OC-WARN hybrid-writing-plans O01 tier=std model=p/m kind=recovered :: upstream hiccup"
+        hybrid_shared.log_line(hp_write.errors_log(self.work), oc_line)
+        self.assertEqual(hp_wait.pending_fallback_lines(self.work), [oc_line])
+        self.assertEqual(hp_wait.pending_fallback_lines(self.work), [])
+
+    def test_only_new_oc_lines_are_reported_on_later_calls(self):
+        first = "OC-ERROR hybrid-writing-plans O01 tier=std model=p/m kind=timeout :: wall time over 900s"
+        second = "OC-ERROR hybrid-writing-plans O02 tier=std model=p/m kind=stall :: no event for 180s"
+        hybrid_shared.log_line(hp_write.errors_log(self.work), first)
+        self.assertEqual(hp_wait.pending_fallback_lines(self.work), [first])
+        hybrid_shared.log_line(hp_write.errors_log(self.work), second)
+        self.assertEqual(hp_wait.pending_fallback_lines(self.work), [second])
+
     def test_pending_lines_without_oc_dir(self):
         self.assertEqual(hp_wait.pending_fallback_lines(os.path.join(self.tmp, "nowhere")), [])
 
@@ -132,11 +162,18 @@ class TestRunnerDied(WaitCase):
                      "groups": {"O01": ["T01", "T02"], "T03": ["T03"]},
                      "backend": {"O01": "oc:std", "T03": "claude"}}
         self.calls = []
+        self.held_calls = []
         test = self
 
-        def fake_write_fallback(plan_path, gid, task_ids, reason, errors):
+        def fake_write_fallback(plan_path, gid, task_ids, reason, errors, held=False):
             test.calls.append((plan_path, gid, list(task_ids), reason, errors))
-            return test.write_fb(gid, list(task_ids), reason=reason)
+            test.held_calls.append(held)
+            fb = test.write_fb(gid, list(task_ids), reason=reason)
+            if held:
+                fb["held"] = True
+                with open(os.path.join(test.oc, gid + ".fallback"), "w", encoding="utf-8") as f:
+                    json.dump(fb, f)
+            return fb
 
         self.patch = mock.patch.object(hp_write, "write_fallback", side_effect=fake_write_fallback)
         self.patch.start()
@@ -164,12 +201,32 @@ class TestRunnerDied(WaitCase):
         self.assertEqual((plan_path, gid, ids, reason), (self.plan, "O01", ["T02"], "runner-died"))
         self.assertEqual(sorted(errors), ["T02"])
         self.assertEqual(len(lines), 1)
-        self.assertTrue(lines[0].startswith("FALLBACK O01 (runner-died) T02 → Agent "))
+        self.assertTrue(lines[0].startswith("FALLBACK O01 (runner-died) T02 "), lines[0])
         self.assertFalse(os.path.exists(os.path.join(self.oc, "O01.fallback.sent")))
-        self.assertEqual(hp_wait.pending_fallback_lines(self.work), lines)
+        pending = hp_wait.pending_fallback_lines(self.work)
+        self.assertEqual(pending[1:], lines)
+        self.assertIn(" kind=crash ", pending[0])
         self.assertTrue(os.path.exists(os.path.join(self.oc, "O01.fallback.sent")))
         self.assertEqual(hp_wait.runner_died(self.plan, self.work, self.info, 50.0), [])
         self.assertEqual(len(self.calls), 1)
+
+    def test_dead_runner_logs_an_oc_error_line(self):
+        self.dead_pid()
+        hp_wait.runner_died(self.plan, self.work, self.info, 42.0)
+        pending = hp_wait.pending_fallback_lines(self.work)
+        self.assertEqual(len(pending), 2)
+        self.assertEqual(pending[0].split()[:4], ["OC-ERROR", "hybrid-writing-plans", "O01", "tier=std"])
+        self.assertIn(" kind=crash :: opencode runner exited before finishing", pending[0])
+        self.assertTrue(pending[1].startswith("FALLBACK O01 (runner-died) T01,T02 "), pending[1])
+        self.assertEqual(self.held_calls, [False])
+
+    def test_dead_runner_under_opencode_preset_holds_the_group(self):
+        self.dead_pid()
+        self.info["preset"] = "opencode"
+        lines = hp_wait.runner_died(self.plan, self.work, self.info, 42.0)
+        self.assertEqual(self.held_calls, [True])
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith("HELD O01 (runner-died) T01,T02 "), lines[0])
 
     def test_pending_fallback_blocks_runner_died(self):
         self.dead_pid()

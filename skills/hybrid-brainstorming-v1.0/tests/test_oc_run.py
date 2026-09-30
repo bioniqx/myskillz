@@ -107,6 +107,7 @@ class ParseEventsTest(unittest.TestCase):
             "throttled": False,
             "events": 0,
             "tools": [],
+            "finished": False,
         })
 
     def test_full_stream(self):
@@ -170,6 +171,18 @@ class ParseEventsTest(unittest.TestCase):
         result = oc_run.parse_events(stream)
         self.assertTrue(result["throttled"])
         self.assertEqual(result["events"], 0)
+
+    def test_stop_finish_sets_finished(self):
+        stream = self.tmp / "finish.jsonl"
+        _write_lines(stream, [
+            {"type": "step_finish", "sessionID": "ses_f", "part": {"type": "step-finish", "reason": "tool-calls"}},
+        ])
+        self.assertFalse(oc_run.parse_events(stream)["finished"])
+        _write_lines(stream, [
+            {"type": "step_finish", "sessionID": "ses_f", "part": {"type": "step-finish", "reason": "tool-calls"}},
+            {"type": "step_finish", "sessionID": "ses_f", "part": {"type": "step-finish", "reason": "stop"}},
+        ])
+        self.assertTrue(oc_run.parse_events(stream)["finished"])
 
     def test_missing_saved_file_keeps_marker(self):
         marker = "[Output truncated: full output saved to %s]" % (self.tmp / "gone.txt")
@@ -287,6 +300,7 @@ class FakeCliTest(unittest.TestCase):
         fake = _load_fake()
         self.assertEqual(fake.FAKE_SCRIPT_ENV, "HB_FAKE_SCRIPT")
         self.assertEqual(fake.FAKE_LOG_ENV, "HB_FAKE_LOG")
+        self.assertEqual(fake.FAKE_MODELS_ENV, "HB_FAKE_MODELS")
 
     def test_is_executable(self):
         self.assertTrue(os.access(str(FAKE), os.X_OK))
@@ -349,6 +363,56 @@ class FakeCliTest(unittest.TestCase):
         out.write_text(proc.stdout, encoding="utf-8")
         self.assertEqual(oc_run.parse_events(out)["errors"], ["ProviderAuthError: bad key"])
 
+    def _run_step(self, step):
+        script = self.tmp / "script.json"
+        script.write_text(json.dumps(step), encoding="utf-8")
+        self.env["HB_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hb-lane", "p/m", "", "msg"))
+        out = self.tmp / "out.jsonl"
+        out.write_text(proc.stdout, encoding="utf-8")
+        return proc, oc_run.parse_events(out)
+
+    def test_scenario_auth_exits_one_with_an_auth_message(self):
+        proc, result = self._run_step({"scenario": "auth"})
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("invalid api key", result["errors"][0])
+
+    def test_scenario_model_not_found_exits_one(self):
+        proc, result = self._run_step({"scenario": "model_not_found"})
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("not found", result["errors"][0])
+
+    def test_scenario_throttle_exits_one_and_flags_throttle(self):
+        proc, result = self._run_step({"scenario": "throttle"})
+        self.assertEqual(proc.returncode, 1)
+        self.assertTrue(result["throttled"])
+
+    def test_scenario_recovered_exits_one_after_a_complete_answer(self):
+        proc, result = self._run_step({"scenario": "recovered"})
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(result["text"], "recovered answer")
+        self.assertEqual(result["errors"], [])
+        self.assertIn('"reason": "stop"', proc.stdout)
+
+    def test_scenario_empty_finishes_cleanly_without_text(self):
+        proc, result = self._run_step({"scenario": "empty"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(result["text"], "")
+        self.assertIn('"reason": "stop"', proc.stdout)
+
+    def test_step_keys_override_the_scenario(self):
+        proc, result = self._run_step({"scenario": "recovered", "text": "custom", "exit": 0})
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(result["text"], "custom")
+
+    def test_models_listing_and_empty_listing(self):
+        proc = self._call([str(FAKE), "models"])
+        self.assertEqual(proc.stdout.split(), ["zai-coding-plan/glm-5.3", "zai-coding-plan/glm-5.3-flash"])
+        self.env["HB_FAKE_MODELS"] = "none"
+        proc = self._call([str(FAKE), "models"])
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout.strip(), "")
+
 
 class RunOnceTest(unittest.TestCase):
     def setUp(self):
@@ -382,8 +446,8 @@ class RunOnceTest(unittest.TestCase):
             "usage": {"input": 12, "output": 4},
             "text": "FINDINGS\n- a.py:1 x",
         })
-        for key in ("session", "text", "usage", "errors", "throttled", "events", "tools",
-                    "rc", "reason", "note", "pid", "duration"):
+        for key in ("session", "text", "usage", "errors", "throttled", "events", "tools", "finished",
+                    "rc", "reason", "note", "detail", "pid", "duration"):
             self.assertIn(key, result)
         self.assertEqual(result["rc"], 0)
         self.assertEqual(result["reason"], "")
@@ -411,10 +475,11 @@ class RunOnceTest(unittest.TestCase):
         self.assertEqual(result["note"], "exit 3: boom")
 
     def test_error_event_is_crash_with_note(self):
-        result = self._run({"error": {"type": "ProviderAuthError", "message": "bad key"}})
+        result = self._run({"error": {"type": "UnknownError", "message": "kaboom"}})
         self.assertEqual(result["rc"], 1)
         self.assertEqual(result["reason"], "crash")
-        self.assertEqual(result["note"], "ProviderAuthError: bad key")
+        self.assertEqual(result["note"], "UnknownError: kaboom")
+        self.assertIn("kaboom", result["detail"])
 
     def test_throttle_on_failed_run(self):
         result = self._run({"error": {"type": "APIError", "message": "429 Too Many Requests"}})
@@ -427,6 +492,52 @@ class RunOnceTest(unittest.TestCase):
         self.assertEqual(result["rc"], 0)
         self.assertEqual(result["reason"], "")
         self.assertTrue(result["throttled"])
+
+    def test_auth_failure_is_classified(self):
+        result = self._run({"scenario": "auth"})
+        self.assertEqual(result["rc"], 1)
+        self.assertEqual(result["reason"], "auth")
+        self.assertIn("invalid api key", result["note"])
+        self.assertIn("invalid api key", result["detail"])
+
+    def test_model_not_found_is_classified(self):
+        result = self._run({"scenario": "model_not_found"})
+        self.assertEqual(result["reason"], "model")
+        self.assertIn("not found", result["detail"])
+
+    def test_scenario_throttle_is_classified(self):
+        result = self._run({"scenario": "throttle"})
+        self.assertEqual(result["reason"], "throttle")
+        self.assertTrue(result["throttled"])
+
+    def test_stdout_only_throttle_stays_a_throttle(self):
+        result = self._run({"raw": ["provider says: rate limit exceeded"], "exit": 1})
+        self.assertEqual(result["reason"], "throttle")
+
+    def test_exit_one_after_a_stop_finish_is_recovered(self):
+        result = self._run({"scenario": "recovered"})
+        self.assertEqual(result["rc"], 1)
+        self.assertTrue(result["finished"])
+        self.assertEqual(result["reason"], "recovered")
+        self.assertEqual(result["text"], "recovered answer")
+
+    def test_exit_one_without_a_stop_finish_is_a_crash(self):
+        result = self._run({"text": "partial", "exit": 1})
+        self.assertFalse(result["finished"])
+        self.assertEqual(result["reason"], "crash")
+
+    def test_empty_answer_is_not_a_run_failure(self):
+        result = self._run({"scenario": "empty"})
+        self.assertEqual(result["rc"], 0)
+        self.assertEqual(result["reason"], "")
+        self.assertEqual(result["detail"], "")
+        self.assertTrue(result["finished"])
+        self.assertEqual(result["text"], "")
+
+    def test_spawn_failure_carries_a_detail(self):
+        result = self._run({"text": "ok"}, binary=str(self.tmp / "missing-opencode"))
+        self.assertEqual(result["reason"], "spawn")
+        self.assertTrue(result["detail"].startswith("spawn failed:"))
 
     def test_spawn_error(self):
         result = self._run({"text": "ok"}, binary=str(self.tmp / "missing-opencode"))

@@ -2,20 +2,20 @@
 """plan_tool.py v8 - deterministic engine for writing-plans (stdlib only, Python 3.8+).
 
   context   [SPEC] [--thorough]                  repo/spec/parallelism snapshot (skill-load injection; never fails)
-  contracts PLAN [--spec S] [--agents K] [--preset P]  validate contracts, route groups, write briefs, print DISPATCH/OPENCODE
+  contracts PLAN [--spec S] [--agents K] [--preset claude|hybrid|opencode]  validate contracts, route groups, write briefs, print DISPATCH/OPENCODE
   oc-write  PLAN                                 run the opencode writer groups (background; always exit 0)
   doctor    [--ping]                             check opencode and tier models, write the doctor cache
   stats     [--repo PATH]                        opencode lane telemetry per tier
   lint-task PLAN TASKFILE [--mark ok|rev]        lint one task body; on success touch TASKFILE.<mark>
   hook-lint                                      PostToolUse hook: lint a written task file -> additionalContext
-  wait      PLAN [--review] [--timeout S] [--idle S]   block until every task (or review) file lints OK
+  wait      PLAN [--review] [--timeout S] [--idle S] [--include-held]   block until every task (or review) file lints OK
   review    PLAN [--all] [--size N] [--agents K] pick risky tasks, write reviewer briefs, print DISPATCH
   assemble  PLAN [--clean]                       full check, render canonical plan, splice task bodies
   check     PLAN [--spec S]                      same as assemble for a plan with inline tasks (<= 3 tasks)
   setup     [--scope user|project] [--apply]     raise subagent cap to 64, pre-approve tools, install writer agent
 Common: --allow WORD (repeatable) exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
-import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, time
+import argparse, ast, concurrent.futures, hashlib, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(HERE)
@@ -26,21 +26,25 @@ ID_RE = r"T\d{2,3}"
 CONTRACT_HEAD = re.compile(r"^####\s+(%s)\s*[:·—-]\s*(.+?)\s*$" % ID_RE)
 FIELD = re.compile(r"^-\s+(Depends|Parallel|Files|Produces|Consumes|Read|Spec|Tier):\s*(.*)$")
 TASK_HEAD = re.compile(r"^###\s+(%s)\s*:\s*(.+?)\s*$" % ID_RE)
+TASK_HEADING_ANYWHERE = re.compile(r"^\s*###\s*%s\s*:" % ID_RE)
 TICK = re.compile(r"`([^`\n]+)`")
 TASKS_MARK = "<!-- TASKS -->"
 WAVES_OPEN, WAVES_CLOSE = "<!-- WAVES -->", "<!-- /WAVES -->"
 TIER_MODEL = {"light": "haiku", "std": "sonnet", "deep": "opus"}
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 
-PLACEHOLDERS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b", r"implement(ed)? later",
+PLACEHOLDERS_CS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b"]
+PLACEHOLDERS = [r"implement(ed)? later",
     r"fill in (the )?details", r"add appropriate (error handling|validation)",
     r"handle (the )?edge cases", r"similar to (task\s*|T)\d+", r"same as (task\s*|T)\d+",
     r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
 PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
     r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
     r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b", r"\binvoke (the |a )?skill\b"]
-PH_RE = [re.compile(p, re.I) for p in PLACEHOLDERS]
+PH_RE = [re.compile(p) for p in PLACEHOLDERS_CS] + [re.compile(p, re.I) for p in PLACEHOLDERS]
 PO_RE = [re.compile(p, re.I) for p in PORTABILITY]
+INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+URL_RE = re.compile(r"https?://\S+")
 
 PROTOCOL = """## Execution Protocol (for any AI agent or human engineer)
 
@@ -212,10 +216,30 @@ def parse_contracts(text):
     return cs, errs
 
 
-def scan(text, allow, label, skip_contracts=False):
-    errs, inside, fence = [], False, False
+def fence_mask(lines):
+    """True for each line lexically inside (or opening/closing) a ``` / ~~~ fence,
+    length-threshold aware like code_blocks(); an unterminated fence marks every
+    following line as inside, so it is never scanned or heading-checked twice."""
+    mask, open_n = [], 0
+    for l in lines:
+        m = re.match(r"^\s*(`{3,}|~{3,})(.*)$", l)
+        if open_n:
+            mask.append(True)
+            if m and len(m.group(1)) >= open_n and not m.group(2).strip():
+                open_n = 0
+            continue
+        mask.append(bool(m))
+        if m:
+            open_n = len(m.group(1))
+    return mask
+
+
+def scan(text, allow, label, skip_contracts=False, fenced_placeholders=False):
+    errs, inside = [], False
     allow = {a.lower() for a in allow}
-    for n, l in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+    fmask = fence_mask(lines)
+    for n, l in enumerate(lines, 1):
         if skip_contracts:
             if re.match(r"^##\s+Contracts\b", l):
                 inside = True
@@ -223,9 +247,16 @@ def scan(text, allow, label, skip_contracts=False):
                 inside = False
         if inside:
             continue
-        for kind, pats in (("placeholder", PH_RE), ("portability", PO_RE)):
+        if fmask[n - 1]:
+            # fenced code: placeholders still count (opt-in), portability never does
+            if not fenced_placeholders:
+                continue
+            checks, clean = (("placeholder", PH_RE),), l
+        else:
+            checks, clean = (("placeholder", PH_RE), ("portability", PO_RE)), URL_RE.sub(" ", INLINE_CODE_RE.sub(" ", l))
+        for kind, pats in checks:
             for p in pats:
-                for m in p.finditer(l):
+                for m in p.finditer(clean):
                     if m.group(0).lower() not in allow:
                         errs.append("%s:%d %s %r: %s" % (label, n, kind, m.group(0), l.strip()[:100]))
     return errs
@@ -346,7 +377,8 @@ def spec_coverage(cs, spec_path):
         for a, b in c["spec"]:
             if a < 1 or b > len(lines) or a > b:
                 out.append("%s: Spec range L%d-%d outside spec (1-%d)" % (c["id"], a, b, len(lines)))
-    heads = [(i + 1, l.strip()) for i, l in enumerate(lines) if re.match(r"^#{1,6}\s", l)]
+    fmask = fence_mask(lines)
+    heads = [(i + 1, l.strip()) for i, l in enumerate(lines) if not fmask[i] and re.match(r"^#{1,6}\s", l)]
     for k, (ln, h) in enumerate(heads):
         end = (heads[k + 1][0] - 1) if k + 1 < len(heads) else len(lines)
         body = [x for x in range(ln + 1, end + 1) if lines[x - 1].strip()]
@@ -412,6 +444,9 @@ def render_task(c, body):
     return "\n".join(rows) + "\n\n" + body.strip() + "\n"
 
 
+BARE_FILENAMES = {"Makefile", "Dockerfile", "LICENSE"}
+
+
 def files_block(body):
     lines = body.splitlines()
     fi = next((i for i, l in enumerate(lines) if l.strip().startswith("**Files:**")), None)
@@ -425,7 +460,11 @@ def files_block(body):
             continue
         if not l.lstrip().startswith("- ") or l.lstrip().startswith("- ["):
             break
-        paths += [norm_path(x) for x in TICK.findall(l) if "/" in x or "." in x]  # skip `Symbol` mentions
+        toks = TICK.findall(l)
+        if toks:
+            first = toks[0]  # the path; a later `span` on the same line is just an annotation
+            if "/" in first or "." in first or first in BARE_FILENAMES:
+                paths.append(norm_path(first))
     return paths
 
 
@@ -476,7 +515,12 @@ def syntax_errors(blocks, label):
 
 def lint_body(c, body, allow, label, repo=None, earlier_files=()):
     errs, warns = [], []
-    if re.search(r"^#{1,3}\s", body, re.M):
+    body_lines = body.splitlines()
+    body_fmask = fence_mask(body_lines)
+    # A real '### Tnn:' task heading is still an error inside a fence (e.g. a writer
+    # pasting a fake next-task marker into an example); other headings stay fence-exempt.
+    if any((not body_fmask[i] and re.match(r"^#{1,3}\s", l)) or TASK_HEADING_ANYWHERE.match(l)
+           for i, l in enumerate(body_lines)):
         errs.append("%s: '#', '##' or '###' heading inside a task body breaks plan structure (use '####' or bold)" % label)
     paths = files_block(body)
     if paths is None:
@@ -537,13 +581,14 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
             m = re.match(r"^\s*git add\s+(.+)$", l)
             if not m:
                 continue
+            add_args = re.split(r"\s*(?:&&|;|\|)\s*", m.group(1), 1)[0]
             try:
-                toks = [t for t in shlex.split(m.group(1)) if not t.startswith("-")]
+                toks = [t for t in shlex.split(add_args) if not t.startswith("-")]
             except ValueError:
-                toks = m.group(1).split()
+                toks = add_args.split()
             bad = [t for t in toks if t in (".", "*", ":/") or "*" in t]
-            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", m.group(1)):
-                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, m.group(1).strip()))
+            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", add_args):
+                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, add_args.strip()))
                 continue
             for t in toks:
                 t = norm_path(t)
@@ -554,7 +599,7 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
                 else:
                     errs.append("%s: `git add` path `%s` is not in the contract Files" % (label, t))
     errs += syntax_errors(blocks, label)
-    errs += scan(body, allow, label)
+    errs += scan(body, allow, label, fenced_placeholders=True)
     return errs, warns
 
 
@@ -619,7 +664,9 @@ def partition(cs, k):
             acc += x
         return out + ([cur] if cur else [])
 
-    lo, hi = max(w), sum(w)
+    lo, hi = max(w), 0.0
+    for x in w:  # not sum(w): Python >= 3.12 sums floats with compensation, which can undershoot groups()'s running total
+        hi += x
     for _ in range(50):
         mid = (lo + hi) / 2
         if len(groups(mid)) <= k:
@@ -701,6 +748,12 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
         if spec_path and c["spec"]:
             ex = [numbered(spec_path, a, b) or "" for a, b in merge_ranges(c["spec"])]
             parts.append("## Spec excerpt for %s\n\n````text\n%s\n````" % (c["id"], "\n  ...\n".join(ex)))
+    paths = [f for c in cs_group for f in c["files"]]
+    inl, refs = inline_files(paths, repo)
+    if inl:
+        parts.append("## Existing files (inlined, with line numbers - the target files as written by the writer)\n\n" + "\n\n".join(inl))
+    if refs:
+        parts.append("## Read before writing (ONE message of parallel Reads, repo root `%s`)\n\n" % repo + "\n".join("- `%s`" % r for r in refs))
     return "\n\n".join(parts) + "\n"
 
 
@@ -716,8 +769,9 @@ def dispatch_lines(groups, work, kind):
 
 def agent_installed(repo):
     for base in (os.path.join(repo, ".claude", "agents"), os.path.join(os.path.expanduser("~"), ".claude", "agents")):
-        if os.path.isfile(os.path.join(base, "plan-task-writer.md")):
-            return base
+        p = os.path.join(base, "plan-task-writer.md")
+        if os.path.isfile(p):
+            return p
     return None
 
 
@@ -730,8 +784,157 @@ def oc_dispatch_lines(oc, work):
             for gid, backend, g in oc]
 
 
+SKILL_NAME = "hybrid-writing-plans"
+PRESETS = ("claude", "hybrid", "opencode")
+
+
+def use_here():
+    """Make the sibling hp_*/hybrid_shared modules importable (once, however often it is called)."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+
+
+def shared():
+    use_here()
+    import hybrid_shared
+    return hybrid_shared
+
+
+def emit_oc(level, unit, kind, text, tier="-", model="-"):
+    if text.startswith("OC-"):
+        print(text)
+    else:
+        print(shared().oc_line(level, SKILL_NAME, unit, tier, model, kind, text))
+
+
+def run_mode(args):
+    """The raw value of `mode=X`, `--preset X` or `--preset=X` in the arguments ('' when absent).
+
+    `args` is the argument list or one string (the preload passes a single quoted "$ARGUMENTS"
+    that may hold spaces, an apostrophe and `mode=...`); a string is split on whitespace only.
+    """
+    toks = (args if isinstance(args, str) else " ".join(args)).split()
+    mode = ""
+    for i, x in enumerate(toks):
+        if x.startswith("mode="):
+            mode = x.split("=", 1)[1]
+        elif x == "--preset" and i + 1 < len(toks):
+            mode = toks[i + 1]
+        elif x.startswith("--preset="):
+            mode = x.split("=", 1)[1]
+    return mode.strip("'\"")
+
+
+def preset_from_args(args):
+    """The canonical preset named in the arguments, or '' when absent or invalid."""
+    raw = run_mode(args)
+    if not raw:
+        return ""
+    try:
+        preset, _ = shared().mode_to_preset(raw)
+    except ValueError:
+        return ""
+    return preset if preset in PRESETS else ""
+
+
+def resolve_preset(raw):
+    """Canonical preset for a --preset value: '' when unset, None (after an OC-ERROR line) when unknown."""
+    if not raw:
+        return ""
+    try:
+        preset, note = shared().mode_to_preset(raw)
+    except ValueError as e:
+        preset, note = "", str(e)
+    if preset not in PRESETS:
+        emit_oc("OC-ERROR", "preset", "config", note or "unknown preset %r (use claude, hybrid or opencode)" % raw)
+        return None
+    if note:
+        emit_oc("OC-WARN", "preset", "config", note)
+    return preset
+
+
+def report_opencode_state(preset, routing, doctor, cs):
+    """Print every reason opencode cannot serve this run, at the moment contracts sees it."""
+    for w in routing.get("config_warnings") or []:
+        emit_oc("OC-WARN", "config", "config", w)
+    if preset == "claude":
+        return
+    problems = routing.get("config_problems") or []
+    for p in problems:
+        emit_oc("OC-ERROR", "config", "config", p)
+    tiers = routing.get("tiers") or {}
+    entries = doctor.get("tiers") or {}
+    roles = dict(routing.get("roles") or {})
+    if preset == "opencode":
+        roles.update(routing.get("max_roles") or {})
+    used = set(roles.get(c["tier"]) for c in cs) - {None, "claude"}
+    now = time.time()
+    for name in sorted(set(entries) | used):
+        entry = entries.get(name)
+        tier = tiers.get(name) or {}
+        spec = shared().model_spec(tier) or "-"
+        if tier.get("disabled") and name in used:
+            emit_oc("OC-ERROR", "doctor", "config", "tier %s is disabled in the routing file" % name, name, spec)
+            continue
+        fresh = isinstance(entry, dict) and shared().cache_fresh(entry, tier, now)  # same model#variant, within the TTL
+        if fresh and entry.get("ok") is False:
+            emit_oc("OC-ERROR", "doctor", entry.get("kind") or "config", entry.get("detail") or "tier check failed",
+                    name, spec)
+        elif name in used and not problems and not (fresh and entry.get("ok") is True):
+            emit_oc("OC-ERROR", "doctor", "config",
+                    "no fresh doctor entry for this model; run plan_tool.py doctor --ping", name, spec)
+
+
+def agent_is_stale(agent_path):
+    """True if the installed writer agent still has the __PLAN_TOOL__ placeholder (setup never ran/applied)."""
+    try:
+        return "__PLAN_TOOL__" in load(agent_path)
+    except OSError:
+        return False
+
+
+def written_ids(cs, work, allow, repo):
+    """Tasks whose body file exists and lints clean now (it survived a contracts re-run: contract unchanged)."""
+    out = set()
+    for c in cs:
+        path = os.path.join(work, "tasks", c["id"] + ".md")
+        if not os.path.isfile(path):
+            continue
+        earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
+        try:
+            errs, _ = lint_body(c, strip_generated(load(path)), allow, c["id"], repo, earlier)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not errs:
+            out.add(c["id"])
+    return out
+
+
+def keep_run_tiers(doctor, routing, old_info, now):
+    """A doctor entry that went stale in the middle of a run must not downgrade a tier the run already routes to
+    opencode. Returns a copy of `doctor` (never written back) whose entries for those tiers are re-stamped: the
+    entry was ok, and the model#variant is the one the run started with. A real failure (ok false) still counts."""
+    sh_ = shared()
+    old_tiers = ((old_info or {}).get("oc") or {}).get("tiers") or {}
+    used = {str(b)[3:] for b in ((old_info or {}).get("backend") or {}).values() if str(b).startswith("oc:")}
+    entries = dict(doctor.get("tiers") or {})
+    tiers = routing.get("tiers") or {}
+    changed = False
+    for name in used:
+        entry, tier = entries.get(name), tiers.get(name) or {}
+        key = sh_.cache_key(tier)
+        if (isinstance(entry, dict) and entry.get("ok") is True and key and entry.get("key") == key
+                and sh_.cache_key(old_tiers.get(name) or {}) == key and not sh_.cache_fresh(entry, tier, now)):
+            entries[name] = dict(entry, checked_at=now)
+            changed = True
+    return dict(doctor, tiers=entries) if changed else doctor
+
+
 # ------------------------------------------------------------------ commands
 def cmd_contracts(a):
+    preset_arg = resolve_preset(a.preset)
+    if preset_arg is None:
+        return 1
     plan_path = os.path.abspath(a.plan)
     plan = load(plan_path)
     cs, errs = parse_contracts(plan)
@@ -743,7 +946,7 @@ def cmd_contracts(a):
     errs += e2 + scan(plan.split(TASKS_MARK, 1)[0], a.allow, os.path.basename(plan_path), skip_contracts=True)
     if errs:
         return report(errs, warns, "")
-    sys.path.insert(0, HERE)
+    use_here()
     import hp_briefs
     import hp_doctor
     import hp_partition
@@ -752,27 +955,55 @@ def cmd_contracts(a):
     cap, from_env = cap_from_env()
     k = max(1, min(MAX_AGENTS, a.agents or cap))
     work = default_work(plan_path)
+    _, old_info = load_work(plan_path)
+    old_hashes = old_info.get("contract_hash", {}) if old_info else {}
+    new_hashes = {c["id"]: hashlib.sha256(c["text"].encode("utf-8")).hexdigest() for c in cs}
+    tasks_dir = os.path.join(work, "tasks")
+    for tid, h in new_hashes.items():
+        if tid in old_hashes and old_hashes[tid] != h:
+            for suffix in ("", ".ok", ".rev", ".warn", ".fail", ".oc"):
+                p = os.path.join(tasks_dir, tid + ".md" + suffix)
+                if os.path.exists(p):
+                    os.remove(p)
     shutil.rmtree(os.path.join(work, "briefs"), ignore_errors=True)
     shutil.rmtree(os.path.join(work, "oc"), ignore_errors=True)
-    os.makedirs(os.path.join(work, "tasks"), exist_ok=True)
-    for name in os.listdir(os.path.join(work, "tasks")):
-        if name.endswith(".md.oc"):
-            os.remove(os.path.join(work, "tasks", name))
+    os.makedirs(tasks_dir, exist_ok=True)
+    for name in os.listdir(tasks_dir):  # an .oc marker stays as long as the opencode-written body it describes
+        if name.endswith(".md.oc") and not os.path.exists(os.path.join(tasks_dir, name[:-3])):
+            os.remove(os.path.join(tasks_dir, name))
     cmap = {c["id"]: c for c in cs}
     routing = hp_router.load_routing(Path(SKILL_DIR) / "routing.default.json", hp_router.user_routing_path())
-    preset = hp_router.effective_preset(routing, a.preset or "")
-    doctor = hp_doctor.load_doctor(hp_doctor.doctor_cache_path())
+    try:  # the mode is frozen in work.json: a re-run without --preset keeps it
+        preset = hp_router.effective_preset(routing, preset_arg or str((old_info or {}).get("preset") or ""))
+    except ValueError as e:
+        emit_oc("OC-ERROR", "preset", "config", str(e))
+        return 1
+    doctor = keep_run_tiers(hp_doctor.load_doctor(hp_doctor.doctor_cache_path()), routing, old_info, time.time())
     routed = hp_partition.route_groups(cs, routing, doctor, preset, k)
+    report_opencode_state(preset, routing, doctor, cs)
     claude = [(gid, g) for gid, backend, g in routed if backend == "claude"]
-    oc = [(gid, backend, g) for gid, backend, g in routed if backend != "claude"]
-    for gid, g in claude:
+    oc = [(gid, backend, g) for gid, backend, g in routed if backend.startswith("oc:")]
+    held = [(gid, g) for gid, backend, g in routed if backend == "held"]
+    for gid, g in claude + held:
         save(os.path.join(work, "briefs", gid + ".md"), writer_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
+    # A re-run keeps every opencode task whose body survived (contract unchanged, lints clean, e.g. a reviewer fixed it):
+    # only groups with a pending or invalidated task get a brief, and the brief names just those tasks.
+    written = written_ids(cs, work, a.allow, repo)
+    oc_todo = []
     for gid, backend, g in oc:
-        save(os.path.join(work, "briefs", gid + ".oc.md"), hp_briefs.oc_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
+        for c in g:
+            body = os.path.join(tasks_dir, c["id"] + ".md")
+            if c["id"] in written and done_state(body, "ok") != "done":
+                touch(body + ".ok")
+        todo = [c for c in g if c["id"] not in written]
+        if todo:
+            oc_todo.append((gid, backend, todo))
+            save(os.path.join(work, "briefs", gid + ".oc.md"), hp_briefs.oc_brief(plan_path, plan, todo, cmap, work, spec, repo, a.allow))
     ordered = sorted(routed, key=lambda r: num(r[2][0]["id"]))
     save(os.path.join(work, "work.json"), json.dumps({
         "plan": plan_path, "spec": spec, "repo": repo, "allow": a.allow, "agents": k,
         "tasks": [c["id"] for c in cs], "groups": {gid: [c["id"] for c in g] for gid, backend, g in ordered}, "review": [],
+        "contract_hash": new_hashes,
         "preset": preset, "backend": {gid: backend for gid, backend, g in ordered},
         "oc": {"tiers": routing.get("tiers", {}), "max_repairs": routing.get("max_repairs", 2),
                "throttle_cooldown_s": routing.get("throttle_cooldown_s", 120),
@@ -785,14 +1016,26 @@ def cmd_contracts(a):
         extra += ["DISPATCH %d writers in ONE message | subagent_type=%s | model per row | description 'plan <ID>'" % (len(claude), agent),
                   "prompt (verbatim): Read <brief path> and follow it exactly.",
                   "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(claude, work, "write")
-    if oc:
+    if oc_todo:
         extra.append("OPENCODE %d groups (%s) | run in the BACKGROUND in the SAME message: %s oc-write %s" % (
-            len(oc), ", ".join(span_of(g) for _, _, g in oc), qtool(), shlex.quote(plan_path)))
-        extra += oc_dispatch_lines(oc, work)
-    extra.append("THEN run: %s wait %s" % (qtool(), shlex.quote(plan_path)))
+            len(oc_todo), ", ".join(span_of(g) for _, _, g in oc_todo), qtool(), shlex.quote(plan_path)))
+        extra += oc_dispatch_lines(oc_todo, work)
+    elif oc:
+        extra.append("OPENCODE none to run: every opencode task body is already written (kept from the earlier run)")
+    if held:
+        extra += ["HELD %d groups (%s) | preset opencode has no usable opencode tier for them: NOT dispatched, no fallback to Claude on its own" % (
+                      len(held), ", ".join(span_of(g) for _, g in held)),
+                  "Relay the OC-ERROR lines above, then ask the user what to do (SKILL.md, Failure policy). Claude writer briefs, only if the user picks Claude:",
+                  "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(held, work, "write")
+    if claude or oc:
+        extra.append("THEN run: %s wait %s" % (qtool(), shlex.quote(plan_path)))
+    else:
+        extra.append("NOTHING dispatched: every group is held")
     ok = "OK contracts: %d tasks | %d waves | max wave width %d | %d writers (cap %d)" % (len(cs), n, width, len(claude), k)
     if oc:
-        ok += " | %d opencode groups" % len(oc)
+        ok += " | %d opencode groups" % len(oc_todo)
+    if held:
+        ok += " | %d held" % len(held)
     return report([], warns, ok, extra)
 
 
@@ -817,14 +1060,28 @@ def lint_file(plan_path, task_path, allow_extra=()):
     return e, w, c
 
 
+def apply_marks(task_path, mark, errs, warns):
+    """Shared by lint-task and hook-lint: .fail on error, .warn on a clean-but-warned
+    lint, and a stale .warn/.fail is removed as soon as it no longer applies."""
+    fail_path, warn_path = task_path + ".fail", task_path + ".warn"
+    if errs:
+        with open(fail_path, "w") as f:
+            f.write("\n".join(errs))
+        return
+    if os.path.exists(fail_path):
+        os.remove(fail_path)
+    touch(task_path + "." + mark)
+    if warns:
+        with open(warn_path, "w") as f:
+            f.write("\n".join(warns))
+    elif os.path.exists(warn_path):
+        os.remove(warn_path)
+
+
 def cmd_lint_task(a):
     e, w, c = lint_file(os.path.abspath(a.plan), a.task, a.allow)
     rc = report(e, w, "OK %s" % (c["id"] if c else ""))
-    if rc == 0:
-        touch(a.task + "." + a.mark)
-        if w:
-            with open(a.task + ".warn", "w") as f:
-                f.write("\n".join(w))
+    apply_marks(a.task, a.mark, e, w)
     return rc
 
 
@@ -838,8 +1095,8 @@ def cmd_hook_lint(a):
         work = os.path.dirname(os.path.dirname(path))
         info = json.loads(load(os.path.join(work, "work.json")))
         e, w, c = lint_file(info["plan"], path)
+        apply_marks(path, "ok", e, w)
         if not e:
-            touch(path + ".ok")
             msg = "plan-lint: OK %s%s" % (c["id"], "".join("\nWARN " + x for x in w))
         else:
             msg = "plan-lint: FAIL %d error(s) - fix with Edit (re-linted automatically):\n%s" % (len(e), "\n".join("ERR  " + x for x in e[:25]))
@@ -862,7 +1119,7 @@ def log_review(plan_path, work, info):
     hashes = info.get("review_hash") or {}
     if not hashes or info.get("review_logged"):
         return
-    sys.path.insert(0, HERE)
+    use_here()
     import hp_telemetry
     t = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     repo = info.get("repo") or repo_root(plan_path)
@@ -879,6 +1136,59 @@ def log_review(plan_path, work, info):
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
 
 
+def held_task_ids(info, work=None):
+    """Tasks that are held: routed to `held` at contracts time, or (with `work`) from a group that
+    failed while running in preset opencode - its <gid>.fallback marker says held, sent or not."""
+    groups = info.get("groups") or {}
+    out = {t for gid, b in (info.get("backend") or {}).items() if b == "held" for t in groups.get(gid, [])}
+    folder = os.path.join(work, "oc") if work else ""
+    for name in sorted(os.listdir(folder)) if folder and os.path.isdir(folder) else []:
+        if name.endswith(".fallback"):
+            try:
+                marker = json.loads(load(os.path.join(folder, name)))
+            except (OSError, ValueError):
+                continue
+            if isinstance(marker, dict) and marker.get("held"):
+                out.update(str(t) for t in marker.get("tasks") or [])
+    return out
+
+
+def print_unreported(work):
+    """Print OC lines nobody has seen yet (oc/oc-errors.jsonl) and return them."""
+    use_here()
+    import hp_write
+    fresh = shared().take_unreported(hp_write.errors_log(work))
+    for line in fresh:
+        print(line)
+    return fresh
+
+
+def clean_work(work):
+    """Remove the scratch dir but keep oc/oc-errors.jsonl; return True when the log was kept."""
+    log = os.path.join(work, "oc", "oc-errors.jsonl")
+    kept = load(log) if os.path.isfile(log) else None
+    shutil.rmtree(work, ignore_errors=True)
+    if kept is not None:
+        save(log, kept)
+    return kept is not None
+
+
+def task_mtime(task_path):
+    """Latest mtime of the body and its .fail mark; 0.0 when neither exists."""
+    m = 0.0
+    for p in (task_path, task_path + ".fail"):
+        if os.path.exists(p):
+            m = max(m, os.stat(p).st_mtime)
+    return m
+
+
+def task_stuck(task_path, quiet, min_age=45):
+    """A pending task is 'stuck' once its body and .fail mark both exist and have not
+    changed for min_age seconds of wait time (quiet = seconds since wait observed the
+    last change; starts at wait start) - its agent is gone, not just slow."""
+    return os.path.exists(task_path) and os.path.exists(task_path + ".fail") and quiet >= min_age
+
+
 def cmd_wait(a):
     plan_path = os.path.abspath(a.plan)
     work, info = load_work(plan_path)
@@ -889,11 +1199,19 @@ def cmd_wait(a):
     oc_groups = [g for g, b in (info.get("backend") or {}).items() if str(b).startswith("oc:")]
     hp_wait = None
     if oc_groups and not a.review:
-        sys.path.insert(0, HERE)
+        use_here()
         import hp_wait
+    try:
+        min_age = int(os.environ.get("PLAN_TOOL_WAIT_MIN_AGE", "45"))
+    except ValueError:
+        min_age = 45
     t0 = last = time.time()
     seen = -1
+    changed = {}  # task -> (last seen mtime, time the change was observed)
+    for t in ids:
+        changed[t] = (task_mtime(os.path.join(work, "tasks", t + ".md")), t0)
     while True:
+        fresh = print_unreported(work)
         st = {t: done_state(os.path.join(work, "tasks", t + ".md"), mark) for t in ids}
         ndone = sum(1 for v in st.values() if v == "done")
         if ndone != seen:
@@ -903,6 +1221,7 @@ def cmd_wait(a):
             if a.review:
                 log_review(plan_path, work, info)
             return 0
+        alive = False
         if hp_wait is not None:
             alive = hp_wait.oc_alive(work)
             if alive:
@@ -914,8 +1233,35 @@ def cmd_wait(a):
             if lines:
                 for l in lines:
                     print(l)
-                print("Launch every FALLBACK Agent call above in ONE message, then run wait again.")
+                if any(l.startswith("FALLBACK ") for l in lines):
+                    print("Launch every FALLBACK Agent call above in ONE message, then run wait again.")
+                if any(l.startswith("HELD ") for l in lines):
+                    print("Do not dispatch the HELD groups above. Relay the OC-ERROR lines, then ask the user (SKILL.md, Failure policy).")
+                if not any(l.startswith(("FALLBACK ", "HELD ")) for l in lines):
+                    print("Relay the OC lines above, then run wait again.")
                 return 2
+        if any(l.startswith("OC-ERROR") for l in fresh):
+            print("Relay the OC-ERROR lines above to the user first, then run wait again.")
+            return 2
+        held = set() if (a.review or a.include_held) else held_task_ids(info, work)  # re-read: a group can be held while we wait
+        if held and not [t for t, v in st.items() if v != "done" and t not in held]:
+            pend = " ".join(sorted(t for t in held if st.get(t) != "done"))
+            print("HELD %s not written: preset opencode has no usable tier for them and never falls back on its own." % pend)
+            print("Ask the user (SKILL.md, Failure policy). To write them with Claude, dispatch their HELD briefs, then run wait --include-held.")
+            return 3
+        now = time.time()
+        elapsed = now - t0
+        pend_ids = [t for t, v in st.items() if v != "done"]
+        for t in pend_ids:
+            m = task_mtime(os.path.join(work, "tasks", t + ".md"))
+            if m != changed[t][0]:
+                changed[t] = (m, now)
+        if not alive and pend_ids and all(task_stuck(os.path.join(work, "tasks", t + ".md"), now - changed[t][1], min_age)
+                                          for t in pend_ids):
+            print("PENDING %d/%d after %.0fs (all pending are failing and unchanged for >=%ds) -> %s"
+                  % (ndone, len(ids), elapsed, min_age, " ".join("%s:%s" % (t, st[t]) for t in pend_ids)))
+            print("If an agent for these IDs is still running, run wait again; otherwise re-dispatch only these IDs.")
+            return 1
         if time.time() - t0 > a.timeout or time.time() - last > a.idle:
             pend = ["%s:%s" % (t, v) for t, v in st.items() if v != "done"]
             print("PENDING %d/%d after %.0fs (%s) -> %s" % (ndone, len(ids), time.time() - t0,
@@ -977,7 +1323,7 @@ def cmd_review(a):
     hashes = {}
     oc_picked = [c["id"] for c, _ in picked if c["id"] in oc_ids]
     if oc_picked:
-        sys.path.insert(0, HERE)
+        use_here()
         import hp_telemetry
         for tid in oc_picked:
             hashes[tid] = hp_telemetry.file_sha(os.path.join(work, "tasks", tid + ".md"))
@@ -1035,14 +1381,18 @@ def full_check(plan_path, plan, cs, bodies, spec, allow):
     errs, warns = analyze(cs, spec, repo)
     if errs:
         return errs, warns
-    for c in cs:
+
+    def _lint_one(c):
         if c["id"] not in bodies:
-            errs.append("%s: task body missing" % c["id"])
-            continue
+            return ["%s: task body missing" % c["id"]], []
         earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
-        e, w = lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier)
-        errs += e
-        warns += w
+        return lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier)
+
+    # I/O-bound (each task's code blocks may spawn `node --check`/`bash -n`) -> threads help.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, max(1, len(cs)))) as ex:
+        for e, w in ex.map(_lint_one, cs):
+            errs += e
+            warns += w
     ids = {c["id"] for c in cs}
     errs += ["%s: task body has no contract" % t for t in sorted(set(bodies) - ids)]
     head = plan.split(TASKS_MARK, 1)[0]
@@ -1067,13 +1417,15 @@ def cmd_assemble(a):
     head = re.sub(re.escape(WAVES_OPEN) + r".*?" + re.escape(WAVES_CLOSE) + r"\s*", "", head, flags=re.S)
     out, n, width = render_plan(head, cs, bodies)
     save(plan_path, out)
+    kept = False
     if a.clean:
-        shutil.rmtree(work, ignore_errors=True)
+        kept = clean_work(work)
         parent = os.path.dirname(work)
         if os.path.isdir(parent) and not os.listdir(parent):
             os.rmdir(parent)
+    removed = (" | workdir removed" + (" (oc/oc-errors.jsonl kept)" if kept else "")) if a.clean else ""
     return report([], warns, "OK assembled %d tasks -> %s | %d waves | max wave width %d%s"
-                  % (len(cs), plan_path, n, width, " | workdir removed" if a.clean else ""))
+                  % (len(cs), plan_path, n, width, removed))
 
 
 def cmd_check(a):
@@ -1104,23 +1456,19 @@ def cmd_check(a):
 
 
 def cmd_oc_write(a):
-    sys.path.insert(0, HERE)
+    use_here()
     import hp_write
     hp_write.oc_write(os.path.abspath(a.plan))
     return 0  # oc-write always exits 0; results live in the task and fallback files
 
 
 def cmd_doctor(a):
-    sys.path.insert(0, HERE)
+    use_here()
     import hp_doctor
     import hp_router
     from pathlib import Path
-    defaults = Path(SKILL_DIR) / "routing.default.json"
     user = hp_router.user_routing_path()
-    created = not user.exists()
-    if created:
-        save(str(user), load(str(defaults)))
-    routing = hp_router.load_routing(defaults, user)
+    routing = hp_router.load_routing(Path(SKILL_DIR) / "routing.default.json", user)
     cache = hp_doctor.doctor_cache_path()
     binary = os.environ.get("HP_OC_BIN", "opencode")
     scratch = tempfile.mkdtemp(prefix="hp-doctor-")
@@ -1129,28 +1477,36 @@ def cmd_doctor(a):
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     hp_doctor.write_doctor(cache, data)
-    print("routing: %s%s" % (user, " (created from defaults)" if created else ""))
+    tiers = routing.get("tiers") or {}
+    sources = routing.get("model_sources") or {}
+    problems = routing.get("config_problems") or []
+    print("routing: %s" % (user if os.path.exists(str(user)) else "none (shipped defaults)"))
+    print(shared().config_summary(tiers, problems))
+    for w in routing.get("config_warnings") or []:
+        emit_oc("OC-WARN", "config", "config", w)
+    for p in problems:
+        emit_oc("OC-ERROR", "config", "config", p)
     if data.get("ok"):
         print("opencode: v%s (%s)" % (data.get("version", "?"), data.get("binary") or binary))
     else:
         print("opencode: unavailable (%s)" % binary)
+    failed = 0
     for name, t in sorted((data.get("tiers") or {}).items()):
-        model = t.get("model", "") + ("#" + t["variant"] if t.get("variant") else "")
-        row = "tier %-6s %s listed=%s ping=%s" % (name, model, "yes" if t.get("listed") else "no", t.get("ping", "unchecked"))
-        down = t.get("down") or {}
-        if down:
-            msg = (down.get("message") or "").strip().splitlines()
-            row += " down=%s%s" % (down.get("reason", "?"), (" - " + msg[0][:160]) if msg else "")
-        if t.get("note"):
-            row += " (%s)" % t["note"]
-        print(row)
+        spec = tiers.get(name) or {}
+        model = spec.get("model", "") + ("#" + spec["variant"] if spec.get("variant") else "")
+        if t.get("ok"):
+            print("tier %-6s %s (%s) ok" % (name, model, sources.get(name, "shared")))
+        else:
+            failed += 1
+            emit_oc("OC-ERROR", "doctor", t.get("kind") or "config", t.get("detail") or "tier check failed",
+                    name, shared().model_spec(spec) or "-")
     print("doctor cache: %s" % cache)
-    print(hp_doctor.status_line(routing, data))
-    return 0 if data.get("ok") else 1
+    print(hp_doctor.status_line(routing, data, "", time.time()))
+    return 0 if data.get("ok") and not problems and not failed else 1
 
 
 def cmd_stats(a):
-    sys.path.insert(0, HERE)
+    use_here()
     import hp_telemetry
     records = hp_telemetry.load_records(hp_telemetry.telemetry_path())
     for line in hp_telemetry.stats_lines(records, os.path.abspath(a.repo) if a.repo else ""):
@@ -1160,6 +1516,8 @@ def cmd_stats(a):
 
 # ------------------------------------------------------------------ context (never fails)
 def sh(cmd, cwd=None, timeout=8):
+    if cmd and cmd[0] == "git" and "--no-optional-locks" not in cmd:
+        cmd = [cmd[0], "--no-optional-locks"] + list(cmd[1:])
     try:
         p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
         return p.stdout if p.returncode == 0 else ""
@@ -1167,26 +1525,45 @@ def sh(cmd, cwd=None, timeout=8):
         return ""
 
 
-OC_UNAVAILABLE = "opencode: unavailable → preset claude (run plan_tool.py doctor --ping)"
+OC_UNAVAILABLE = "opencode: unavailable (status unreadable; run plan_tool.py doctor --ping)"
 
 
 def opencode_line(args):
-    preset = ""
-    for i, x in enumerate(args):
-        if x == "--preset" and i + 1 < len(args):
-            preset = args[i + 1]
-        elif x.startswith("--preset="):
-            preset = x.split("=", 1)[1]
+    preset = preset_from_args(args)
     try:
-        sys.path.insert(0, HERE)
+        use_here()
         from pathlib import Path
         import hp_doctor
         import hp_router
         routing = hp_router.load_routing(Path(SKILL_DIR) / "routing.default.json", hp_router.user_routing_path())
         doctor = hp_doctor.load_doctor(hp_doctor.doctor_cache_path())
-        return hp_doctor.status_line(routing, doctor, preset)
+        return hp_doctor.status_line(routing, doctor, preset, time.time())
     except Exception:
         return OC_UNAVAILABLE
+
+
+def config_line():
+    try:
+        use_here()
+        from pathlib import Path
+        import hp_router
+        routing = hp_router.load_routing(Path(SKILL_DIR) / "routing.default.json", hp_router.user_routing_path())
+        line = shared().config_summary(routing.get("tiers") or {}, routing.get("config_problems") or [])
+        sources = routing.get("model_sources") or {}
+        marks = ["%s (%s)" % (n, sources[n]) for n in ("std", "lite") if sources.get(n) in ("skill", "shared")]
+        return line + (" | model from: " + ", ".join(marks) if marks else "")
+    except Exception:
+        return "shared config: $HYBRID_OPENCODE_STD/$HYBRID_OPENCODE_LITE (unreadable)"
+
+
+def mode_line(args):
+    preset = preset_from_args(args)
+    if preset:
+        return "mode: %s (from arguments)" % preset
+    raw = run_mode(args)
+    if raw:
+        return "mode: %r is not valid -> ask the user which mode to run (hybrid, claude or opencode)" % raw
+    return "mode: unset -> ask the user which mode to run (hybrid, claude or opencode)"
 
 
 def cmd_context(a):
@@ -1202,12 +1579,18 @@ def cmd_context(a):
             cap, "" if env else " (default; CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS unset)", k,
             "" if k >= MAX_AGENTS else " | one-time boost to 64: %s setup --apply (then restart)" % qtool()))
         ag = agent_installed(repo)
-        out.append("writer agent: %s" % ("plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
-        out.append(opencode_line(a.rest or []))
-        args = a.rest or []
-        if "--thorough" in args:
+        if ag and agent_is_stale(ag):
+            out.append("writer agent: plan-task-writer at %s is STALE (still has __PLAN_TOOL__ placeholder) - re-run %s setup --apply" % (ag, qtool()))
+        else:
+            out.append("writer agent: %s" % ("plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
+        raw = " ".join(a.rest or [])
+        out.append(opencode_line(raw))
+        out.append(config_line())
+        out.append(mode_line(raw))
+        if "--thorough" in raw:
             out.append("mode: THOROUGH -> review every task (review --all)")
-        spec = next((x for x in args if not x.startswith("--") and os.path.isfile(x)), None)
+        rest_tokens = raw.replace("--thorough", " ").split()
+        spec = next((x for x in rest_tokens if not x.startswith("--") and os.path.isfile(x)), None)
         branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).strip()
         files = sh(["git", "ls-files"], repo).splitlines()
         if not files:
@@ -1229,7 +1612,8 @@ def cmd_context(a):
         if spec:
             sl = load(spec).splitlines()
             out.append("spec: %s (%d lines) - heading map (use for Spec: L ranges):" % (os.path.relpath(os.path.abspath(spec), repo), len(sl)))
-            heads = [(i + 1, l.strip()) for i, l in enumerate(sl) if re.match(r"^#{1,6}\s", l)]
+            sfmask = fence_mask(sl)
+            heads = [(i + 1, l.strip()) for i, l in enumerate(sl) if not sfmask[i] and re.match(r"^#{1,6}\s", l)]
             for j, (ln, h) in enumerate(heads[:80]):
                 end = heads[j + 1][0] - 1 if j + 1 < len(heads) else len(sl)
                 out.append("  L%d-%d %s" % (ln, end, h[:90]))
@@ -1275,8 +1659,8 @@ def cmd_context(a):
         out.append("top-level: " + ", ".join("%s(%d)" % (d, n) for d, n in sorted(dirs.items(), key=lambda x: -x[1])[:25]))
         skip = re.compile(r"(^|/)(node_modules|vendor|dist|build|\.venv|venv|__pycache__|target|\.next)/|\.(lock|min\.js|map|png|jpg|svg|ico|woff2?)$")
         shown = [f for f in files if not skip.search(f)]
-        out.append("files (%d of %d):" % (min(250, len(shown)), len(files)))
-        out.append("  " + "\n  ".join(shown[:250]))
+        out.append("files (%d of %d):" % (min(30, len(shown)), len(files)))
+        out.append("  " + "\n  ".join(shown[:30]))
     except Exception as ex:
         out.append("context partial: %s" % ex)
     print("\n".join(out))
@@ -1341,6 +1725,15 @@ def cmd_setup(a):
 
 # ------------------------------------------------------------------ main
 def main(argv=None):
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv and raw_argv[0] == "context":
+        # Bypass argparse's REMAINDER (mishandles a leading "--..." token after subparsers)
+        # so a single quoted $ARGUMENTS token, however it starts, always reaches cmd_context.
+        class _Ns(object):
+            pass
+        ns = _Ns()
+        ns.rest = raw_argv[1:]
+        return cmd_context(ns)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")
     sub.required = True
@@ -1350,11 +1743,12 @@ def main(argv=None):
         return p
     p = sub.add_parser("context"); p.add_argument("rest", nargs=argparse.REMAINDER); p.set_defaults(fn=cmd_context)
     p = common(sub.add_parser("contracts")); p.add_argument("plan"); p.add_argument("--spec"); p.add_argument("--agents", type=int)
-    p.add_argument("--preset", choices=["claude", "hybrid", "max"], default=""); p.set_defaults(fn=cmd_contracts)
+    p.add_argument("--preset", default=""); p.set_defaults(fn=cmd_contracts)
     p = common(sub.add_parser("lint-task")); p.add_argument("plan"); p.add_argument("task"); p.add_argument("--mark", default="ok", choices=["ok", "rev"]); p.set_defaults(fn=cmd_lint_task)
     p = sub.add_parser("hook-lint"); p.set_defaults(fn=cmd_hook_lint)
     p = sub.add_parser("wait"); p.add_argument("plan"); p.add_argument("--review", action="store_true")
-    p.add_argument("--timeout", type=int, default=560); p.add_argument("--idle", type=int, default=240); p.set_defaults(fn=cmd_wait)
+    p.add_argument("--timeout", type=int, default=560); p.add_argument("--idle", type=int, default=240)
+    p.add_argument("--include-held", action="store_true"); p.set_defaults(fn=cmd_wait)
     p = sub.add_parser("review"); p.add_argument("plan"); p.add_argument("--all", action="store_true"); p.add_argument("--size", type=int)
     p.add_argument("--agents", type=int); p.set_defaults(fn=cmd_review)
     p = common(sub.add_parser("assemble")); p.add_argument("plan"); p.add_argument("--spec"); p.add_argument("--clean", action="store_true"); p.set_defaults(fn=cmd_assemble)

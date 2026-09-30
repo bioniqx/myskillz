@@ -1,4 +1,5 @@
 """Split the active checklist items between opencode and Claude investigator batches."""
+import math
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -6,7 +7,7 @@ from typing import List, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import audit  # noqa: E402
-from ha_router import route  # noqa: E402
+from ha_router import effective_preset, route  # noqa: E402
 
 
 def _order_key(item: dict) -> Tuple[str, str]:
@@ -24,15 +25,22 @@ def _near_equal(items: list, n_batches: int) -> List[list]:
     return out
 
 
-def split_batches(active: list, routing: dict, doctor: dict, preset: str, cap: int, solo: bool) -> list:
-    """Return [(backend, items)]: Claude batches first, then opencode batches."""
-    backend = route("investigator", routing, doctor, preset)
-    if backend == "claude":
-        return [("claude", b) for b in audit.partition_items(active, cap, solo)]
+def split_batches(active: list, routing: dict, doctor: dict, preset: str, cap: int, solo: bool, now: float = 0.0, breaker_dir: Path = None) -> list:
+    """Return [(backend, items)]: Claude batches first, then opencode batches.
+
+    Backend "held" means preset opencode found no usable tier: the caller
+    reports it and does not dispatch those batches.
+    """
+    backend = route("investigator", routing, doctor, preset, now=now, breaker_dir=breaker_dir)
+    if backend in ("claude", "held"):
+        return [(backend, b) for b in audit.partition_items(active, cap, solo)]
     tier = backend[len("oc:"):]
     max_parallel = max(1, int(routing["tiers"][tier].get("max_parallel", 1)))
     batch_max = max(1, int(routing.get("oc_batch_max", 4)))
     capacity = max_parallel * batch_max
+    opencode = effective_preset(routing, preset) == "opencode"
+    if opencode:
+        capacity = len(active)  # no Claude overflow: extra batches wait for a free opencode slot
     ordered = sorted(active, key=_order_key)
     oc_items = ordered[:capacity]
     rest = ordered[capacity:]
@@ -41,5 +49,7 @@ def split_batches(active: list, routing: dict, doctor: dict, preset: str, cap: i
         out.extend(("claude", b) for b in audit.partition_items(rest, cap, solo))
     if oc_items:
         n_batches = min(max_parallel, len(oc_items))
+        if opencode:
+            n_batches = max(n_batches, math.ceil(len(oc_items) / float(batch_max)))
         out.extend((backend, b) for b in _near_equal(oc_items, n_batches))
     return out

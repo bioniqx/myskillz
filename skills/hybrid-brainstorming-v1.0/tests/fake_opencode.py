@@ -5,14 +5,18 @@ Env HB_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
 (call N uses entry N, the last entry repeats; the count lives in <script>.calls).
 Env HB_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config}.
+Env HB_FAKE_MODELS set to "none" makes `models` list nothing.
 
 Step keys (all optional):
+  scenario  auth | model_not_found | throttle | recovered | empty; a ready-made step,
+            any other key in the same step overrides the scenario's value
   save    {absolute path: text}; files written first (simulates saved tool output)
   grandchild  path; spawn a sleeping child in this process group, write its pid there
   ticks   number of step_start events, tick_s seconds apart (default 0.1)
   raw     lines written verbatim to stdout
   events  event objects emitted as JSON lines (sessionID added when missing)
   usage   {input, output, reasoning, cache_read, cache_write, cost}; one step_finish
+  reason  finish reason written on the step_finish event (for example "stop")
   text    final text event
   stderr  text written to stderr
   sleep   seconds to sleep before exiting
@@ -28,8 +32,17 @@ from pathlib import Path
 
 FAKE_SCRIPT_ENV = "HB_FAKE_SCRIPT"
 FAKE_LOG_ENV = "HB_FAKE_LOG"
+FAKE_MODELS_ENV = "HB_FAKE_MODELS"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
+
+SCENARIOS = {
+    "auth": {"error": {"type": "ProviderAuthError", "message": "401 Unauthorized: invalid api key"}},
+    "model_not_found": {"error": {"type": "ProviderModelNotFoundError", "message": "model glm-9 not found"}},
+    "throttle": {"error": {"type": "APIError", "message": "429 Too Many Requests: rate limit exceeded"}},
+    "recovered": {"usage": {"input": 20, "output": 5}, "reason": "stop", "text": "recovered answer", "exit": 1},
+    "empty": {"usage": {"input": 20, "output": 1}, "reason": "stop"},
+}
 
 
 def _load_step(script_path):
@@ -48,6 +61,15 @@ def _load_step(script_path):
     if not data:
         return {"text": "done"}
     return data[min(n, len(data) - 1)]
+
+
+def _expand(step):
+    name = step.get("scenario")
+    if not name:
+        return step
+    merged = dict(SCENARIOS[name])
+    merged.update({k: v for k, v in step.items() if k != "scenario"})
+    return merged
 
 
 def _log(argv):
@@ -77,13 +99,14 @@ def main(argv: list) -> int:
         print(FAKE_VERSION, flush=True)
         return 0
     if argv and argv[0] == "models":
-        print("zai-coding-plan/glm-5.3", flush=True)
-        print("zai-coding-plan/glm-5.3-flash", flush=True)
+        if os.environ.get(FAKE_MODELS_ENV) != "none":
+            print("zai-coding-plan/glm-5.3", flush=True)
+            print("zai-coding-plan/glm-5.3-flash", flush=True)
         return 0
     if not argv or argv[0] != "run":
         sys.stderr.write("fake opencode: unsupported command\n")
         return 2
-    step = _load_step(os.environ.get(FAKE_SCRIPT_ENV, ""))
+    step = _expand(_load_step(os.environ.get(FAKE_SCRIPT_ENV, "")))
     session = str(step.get("session") or DEFAULT_SESSION)
 
     for target, content in (step.get("save") or {}).items():
@@ -111,8 +134,9 @@ def main(argv: list) -> int:
     for event in step.get("events") or []:
         _emit(event, session)
     usage = step.get("usage")
-    if usage is not None:
-        _emit({"type": "step_finish", "part": {
+    if usage is not None or step.get("reason"):
+        usage = usage or {}
+        part = {
             "type": "step-finish",
             "tokens": {
                 "input": usage.get("input", 0),
@@ -121,7 +145,10 @@ def main(argv: list) -> int:
                 "cache": {"read": usage.get("cache_read", 0), "write": usage.get("cache_write", 0)},
             },
             "cost": usage.get("cost", 0),
-        }}, session)
+        }
+        if step.get("reason"):
+            part["reason"] = step["reason"]
+        _emit({"type": "step_finish", "part": part}, session)
     if "text" in step:
         _emit({"type": "text", "part": {"type": "text", "text": step["text"]}}, session)
     if step.get("stderr"):

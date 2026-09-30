@@ -63,6 +63,20 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Canonicalise PROJECT_DIR to an absolute path right away, before anything
+# `cd`s elsewhere. A relative value (e.g. ".") is resolved against the
+# caller's cwd here; resolving it later (after this script has cd'd into
+# SCRIPT_DIR) would silently point the whole session at the wrong place.
+if [[ -n "$PROJECT_DIR" ]]; then
+  mkdir -p "$PROJECT_DIR" 2>/dev/null
+  RESOLVED_PROJECT_DIR="$(cd "$PROJECT_DIR" 2>/dev/null && pwd)"
+  if [[ -z "$RESOLVED_PROJECT_DIR" ]]; then
+    echo "{\"error\": \"--project-dir not found or not a directory: $PROJECT_DIR\"}"
+    exit 1
+  fi
+  PROJECT_DIR="$RESOLVED_PROJECT_DIR"
+fi
+
 if [[ -z "$URL_HOST" ]]; then
   if [[ "$BIND_HOST" == "127.0.0.1" || "$BIND_HOST" == "localhost" ]]; then
     URL_HOST="localhost"
@@ -110,6 +124,24 @@ fi
 # keep everything this script and the server create owner-only.
 umask 077
 
+# Stop any prior sessions for this same project dir. Each start used to try
+# to kill a pid file inside its OWN brand-new session dir, which never
+# existed, so old servers just piled up. Delegate to stop-server.sh, which
+# verifies each session's per-start instance id before signalling anything —
+# an unrelated process is never touched.
+if [[ -n "$PROJECT_DIR" ]]; then
+  BRAINSTORM_ROOT="${PROJECT_DIR}/.superpowers/brainstorm"
+  if [[ -d "$BRAINSTORM_ROOT" ]]; then
+    for prior in "$BRAINSTORM_ROOT"/*/; do
+      [[ -d "$prior" ]] || continue
+      prior="${prior%/}"
+      if [[ -f "${prior}/state/server.pid" ]]; then
+        "$SCRIPT_DIR/stop-server.sh" "$prior" >/dev/null 2>&1 || true
+      fi
+    done
+  fi
+fi
+
 # Generate unique session directory
 SESSION_ID="$$-$(date +%s)"
 
@@ -127,6 +159,7 @@ STATE_DIR="${SESSION_DIR}/state"
 PID_FILE="${STATE_DIR}/server.pid"
 LOG_FILE="${STATE_DIR}/server.log"
 SERVER_ID_FILE="${STATE_DIR}/server-instance-id"
+OWNER_PID_FILE="${STATE_DIR}/owner-pid"
 
 # Create fresh session directory with content and state peers
 mkdir -p "${SESSION_DIR}/content" "$STATE_DIR"
@@ -141,30 +174,60 @@ fi
 printf '%s\n' "$SERVER_ID" > "$SERVER_ID_FILE"
 chmod 600 "$SERVER_ID_FILE" 2>/dev/null || true
 
-# Kill any existing server
-if [[ -f "$PID_FILE" ]]; then
-  old_pid=$(cat "$PID_FILE")
-  kill "$old_pid" 2>/dev/null
-  rm -f "$PID_FILE"
-fi
-
 cd "$SCRIPT_DIR" || exit 1
 
-# Resolve the harness PID (grandparent of this script).
-# $PPID is the ephemeral shell the harness spawned to run us — it dies
-# when this script exits. The harness itself is $PPID's parent.
-OWNER_PID="$(ps -o ppid= -p "$PPID" 2>/dev/null | tr -d ' ')"
-if [[ -z "$OWNER_PID" || "$OWNER_PID" == "1" ]]; then
-  OWNER_PID="$PPID"
+# Resolve the real process that owns this server by walking up the parent
+# chain past shell/wrapper processes (sh, bash, zsh, dash, env, time,
+# timeout, nohup). A single-hop assumption breaks as soon as the caller adds
+# one more wrapper (e.g. `/usr/bin/time nohup sh -c '...'`), which used to
+# make the server watch an intermediate wrapper's pid instead of the real
+# owner and self-stop the moment that wrapper (not the owner) exited.
+resolve_owner_pid() {
+  local pid="$PPID"
+  local hops=0
+  while [[ $hops -lt 15 ]]; do
+    local comm
+    comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')"
+    comm="${comm##*/}"
+    # Strip a leading '-' some shells use for login shells (e.g. "-bash").
+    comm="${comm#-}"
+    case "$comm" in
+      sh|bash|zsh|dash|ksh|env|time|timeout|gtimeout|nohup)
+        local parent
+        parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+        if [[ -z "$parent" || "$parent" == "1" || "$parent" == "$pid" ]]; then
+          break
+        fi
+        pid="$parent"
+        ;;
+      *)
+        break
+        ;;
+    esac
+    hops=$((hops+1))
+  done
+  printf '%s\n' "$pid"
+}
+
+if is_windows_like_shell; then
+  # Windows/MSYS2: Node.js cannot see POSIX PIDs from the MSYS2 namespace.
+  # Passing a PID node cannot verify causes server to log owner-pid-invalid
+  # and self-terminate at the 60-second lifecycle check. Clear it so the
+  # watchdog is disabled and the idle timeout becomes the only shutdown trigger.
+  OWNER_PID=""
+else
+  OWNER_PID="$(resolve_owner_pid)"
 fi
 
-# Windows/MSYS2: Node.js cannot see POSIX PIDs from the MSYS2 namespace.
-# Passing a PID node cannot verify causes server to log owner-pid-invalid
-# and self-terminate at the 60-second lifecycle check. Clear it so the
-# watchdog is disabled and the idle timeout becomes the only shutdown trigger.
-if is_windows_like_shell; then
-  OWNER_PID=""
+if [[ -n "$OWNER_PID" ]]; then
+  printf '%s\n' "$OWNER_PID" > "$OWNER_PID_FILE"
+  chmod 600 "$OWNER_PID_FILE" 2>/dev/null || true
 fi
+
+# JSON-escape a chunk of arbitrary log text for embedding as a string value.
+json_escape_log() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS="\\n"} {print} END{if(NR==0) printf ""}' | sed 's/\\n$//'
+}
 
 # Foreground mode for environments that reap detached/background processes.
 if [[ "$FOREGROUND" == "true" ]]; then
@@ -184,12 +247,14 @@ echo "$SERVER_PID" > "$PID_FILE"
 
 # Wait for server-started message (check log file). 0.05s steps: the server
 # typically boots in 100-300ms, so fine polling shaves startup latency.
+# Bail out the instant the process dies instead of polling the full window,
+# so a dead-on-arrival node fails in ~1 step rather than up to 5s.
 for _ in {1..100}; do
   if grep -q "server-started" "$LOG_FILE" 2>/dev/null; then
     # Verify server is still alive after a short window (catches process reapers).
-    # 0.5s is enough: reapers that kill on detach do so within milliseconds.
+    # 4 x 0.05s is enough: reapers that kill on detach do so within milliseconds.
     alive="true"
-    for _ in {1..10}; do
+    for _ in {1..4}; do
       if ! kill -0 "$SERVER_PID" 2>/dev/null; then
         alive="false"
         break
@@ -202,6 +267,12 @@ for _ in {1..100}; do
     fi
     grep "server-started" "$LOG_FILE" | head -1
     exit 0
+  fi
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    tail_text="$(tail -n 3 "$LOG_FILE" 2>/dev/null)"
+    escaped="$(json_escape_log "$tail_text")"
+    echo "{\"error\": \"Server process exited before starting\", \"log_tail\": \"${escaped}\"}"
+    exit 1
   fi
   sleep 0.05
 done

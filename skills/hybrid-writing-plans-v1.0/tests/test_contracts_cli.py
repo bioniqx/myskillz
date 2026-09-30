@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,7 @@ FAKE = HERE / "fake_opencode.py"
 sys.path.insert(0, str(SCRIPTS))
 
 import hp_telemetry  # noqa: E402
+import hybrid_shared  # noqa: E402
 
 PLAN = "\n".join([
     "# Demo Implementation Plan",
@@ -90,6 +92,13 @@ def make_repo(root: Path) -> Path:
     return plan
 
 
+SHARED = {"tiers": {
+    "std": {"model": "zai-coding-plan/glm-5.3", "variant": "high"},
+    "lite": {"model": "zai-coding-plan/glm-5.3-flash", "variant": "low"}}}
+SHARED_VARS = {"HYBRID_OPENCODE_STD": "zai-coding-plan/glm-5.3#high",
+              "HYBRID_OPENCODE_LITE": "zai-coding-plan/glm-5.3-flash#low"}
+
+
 class CliBase(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="hp-cli-"))
@@ -106,8 +115,11 @@ class CliBase(unittest.TestCase):
             "HP_DOCTOR_CACHE": str(self.tmp / "doctor.json"),
             "HP_TELEMETRY": str(self.tmp / "lanes.jsonl"),
             "HP_OC_BIN": str(FAKE),
+            "XDG_DATA_HOME": str(self.tmp / "xdg"),
             "PYTHONDONTWRITEBYTECODE": "1",
         })
+        self.env.pop("HYBRID_OPENCODE_STD", None)
+        self.env.pop("HYBRID_OPENCODE_LITE", None)
         self.q = "python3 " + shlex.quote(str(TOOL))
 
     def tearDown(self):
@@ -118,11 +130,21 @@ class CliBase(unittest.TestCase):
                            env=self.env, capture_output=True, text=True, timeout=120)
         return p.returncode, p.stdout, p.stderr
 
-    def write_doctor(self):
-        tier = {"listed": True, "ping": "ok", "note": "", "down": None}
-        doctor = {"t": "2026-09-28T00:00:00Z", "ok": True, "version": "2.0.18", "binary": str(FAKE), "tiers": {
-            "std": dict(tier, model="zai-coding-plan/glm-5.3", variant="high"),
-            "lite": dict(tier, model="zai-coding-plan/glm-5.3-flash", variant="low")}}
+    def set_shared(self, env=None):
+        self.env.update(SHARED_VARS if env is None else env)
+
+    def write_doctor(self, bad_tiers=(), checked_at=None):
+        self.set_shared()
+        stamp = time.time() if checked_at is None else checked_at
+        tiers = {}
+        for name, spec in SHARED["tiers"].items():
+            entry = {"ok": True, "key": hybrid_shared.cache_key(spec), "checked_at": stamp,
+                     "kind": "", "detail": ""}
+            if name in bad_tiers:
+                entry.update({"ok": False, "kind": "auth", "detail": "401 unauthorized"})
+            tiers[name] = entry
+        doctor = {"t": "2026-09-29T00:00:00Z", "ok": True, "version": "2.0.19", "binary": str(FAKE),
+                  "tiers": tiers}
         Path(self.env["HP_DOCTOR_CACHE"]).write_text(json.dumps(doctor), encoding="utf-8")
 
     def work_json(self):
@@ -164,9 +186,9 @@ class ContractsRoutingTest(CliBase):
         self.assertEqual(info["oc"]["throttle_cooldown_s"], 120)
         self.assertEqual(info["oc"]["review_oc"], "all")
 
-    def test_max_preset_sends_every_task_to_opencode(self):
+    def test_opencode_preset_sends_every_task_to_opencode(self):
         self.write_doctor()
-        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "max")
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "opencode")
         self.assertEqual(rc, 0, out + err)
         lines = out.splitlines()
         ok = [l for l in lines if l.startswith("OK contracts:")][0]
@@ -174,20 +196,10 @@ class ContractsRoutingTest(CliBase):
         self.assertFalse([l for l in lines if l.startswith("DISPATCH")], out)
         self.assertNotIn("ID   MODEL   TASKS     BRIEF", lines)
         self.assertTrue(any(l.startswith("OPENCODE 4 groups (T01, T02, T03, T04) |") for l in lines), out)
+        self.assertFalse([l for l in lines if l.startswith("OC-")], out)
         info = self.work_json()
-        self.assertEqual(info["preset"], "max")
+        self.assertEqual(info["preset"], "opencode")
         self.assertEqual(info["backend"], {"O01": "oc:lite", "O02": "oc:std", "O03": "oc:std", "O04": "oc:std"})
-        self.assertEqual(info["oc"]["review_oc"], "risky")
-
-    def test_missing_doctor_cache_keeps_every_task_on_claude(self):
-        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
-        self.assertEqual(rc, 0, out + err)
-        self.assertNotIn("OPENCODE", out)
-        self.assertNotIn("opencode groups", out)
-        info = self.work_json()
-        self.assertEqual(set(info["backend"].values()), {"claude"})
-        self.assertEqual(sorted(f.name for f in (self.work / "briefs").iterdir()),
-                         ["T01.md", "T02.md", "T03.md", "T04.md"])
 
     def test_preset_claude_ignores_a_healthy_opencode(self):
         self.write_doctor()
@@ -197,6 +209,97 @@ class ContractsRoutingTest(CliBase):
         info = self.work_json()
         self.assertEqual(info["preset"], "claude")
         self.assertEqual(set(info["backend"].values()), {"claude"})
+
+
+class ContractsReportingTest(CliBase):
+    def oc_lines(self, out, level="OC-ERROR"):
+        return [l for l in out.splitlines() if l.startswith(level + " hybrid-writing-plans")]
+
+    def test_max_is_an_alias_for_opencode_with_a_warning(self):
+        self.write_doctor()
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "max")
+        self.assertEqual(rc, 0, out + err)
+        warns = self.oc_lines(out, "OC-WARN")
+        self.assertEqual(len(warns), 1, out)
+        self.assertIn("kind=config", warns[0])
+        self.assertEqual(self.work_json()["preset"], "opencode")
+
+    def test_unknown_preset_is_a_config_error(self):
+        self.write_doctor()
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "bogus")
+        self.assertNotEqual(rc, 0, out + err)
+        errors = self.oc_lines(out)
+        self.assertEqual(len(errors), 1, out)
+        self.assertIn("kind=config", errors[0])
+        self.assertFalse((self.work / "work.json").exists())
+
+    def test_missing_doctor_cache_falls_back_to_claude_and_reports(self):
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
+        self.assertEqual(rc, 0, out + err)
+        self.assertFalse([l for l in out.splitlines() if l.startswith("OPENCODE ")], out)
+        self.assertNotIn("opencode groups", out)
+        errors = self.oc_lines(out)
+        self.assertTrue(errors, out)
+        self.assertTrue(all("kind=config" in l for l in errors), errors)
+        info = self.work_json()
+        self.assertEqual(set(info["backend"].values()), {"claude"})
+        self.assertEqual(sorted(f.name for f in (self.work / "briefs").iterdir()),
+                         ["T01.md", "T02.md", "T03.md", "T04.md"])
+
+    def test_stale_doctor_entries_fall_back_to_claude_and_report(self):
+        self.write_doctor(checked_at=1.0)
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
+        self.assertEqual(rc, 0, out + err)
+        self.assertTrue(self.oc_lines(out), out)
+        self.assertEqual(set(self.work_json()["backend"].values()), {"claude"})
+
+    def test_failed_tier_is_reported_and_does_not_disable_the_other_tier(self):
+        self.write_doctor(bad_tiers=("std",))
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
+        self.assertEqual(rc, 0, out + err)
+        errors = self.oc_lines(out)
+        self.assertEqual(len(errors), 1, out)
+        for part in ("tier=std", "kind=auth", "401 unauthorized"):
+            self.assertIn(part, errors[0])
+        backends = set(self.work_json()["backend"].values())
+        self.assertIn("oc:lite", backends)
+        self.assertNotIn("oc:std", backends)
+
+    def test_preset_claude_is_silent_without_any_config(self):
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "claude")
+        self.assertEqual(rc, 0, out + err)
+        self.assertFalse([l for l in out.splitlines() if l.startswith("OC-")], out)
+        self.assertEqual(set(self.work_json()["backend"].values()), {"claude"})
+
+    def test_opencode_preset_holds_groups_when_no_tier_is_usable(self):
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "opencode")
+        self.assertEqual(rc, 0, out + err)
+        lines = out.splitlines()
+        self.assertTrue(self.oc_lines(out), out)
+        self.assertTrue([l for l in lines if l.startswith("HELD ")], out)
+        self.assertFalse([l for l in lines if l.startswith(("DISPATCH", "OPENCODE", "THEN run"))], out)
+        self.assertIn("NOTHING dispatched: every group is held", lines)
+        info = self.work_json()
+        self.assertEqual(info["preset"], "opencode")
+        self.assertEqual(set(info["backend"].values()), {"held"})
+        for gid in info["groups"]:
+            self.assertTrue((self.work / "briefs" / (gid + ".md")).is_file(), gid)
+
+    def test_model_in_the_user_file_is_used_for_that_tier(self):
+        self.write_doctor()
+        Path(self.env["HP_ROUTING"]).write_text(
+            json.dumps({"tiers": {"std": {"model": "own/model"}}}), encoding="utf-8")
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(self.oc_lines(out, "OC-WARN"), [], out)
+        errors = self.oc_lines(out)
+        self.assertEqual(len(errors), 1, out)
+        for part in ("tier=std", "model=own/model", "kind=config"):
+            self.assertIn(part, errors[0])
+        tiers = self.work_json()["oc"]["tiers"]
+        self.assertEqual(tiers["std"]["model"], "own/model")
+        self.assertNotIn("variant", tiers["std"])
+        self.assertEqual(tiers["lite"]["model"], "zai-coding-plan/glm-5.3-flash")
 
 
 class ContractsResetTest(CliBase):
@@ -220,6 +323,16 @@ class ContractsResetTest(CliBase):
         self.assertFalse((oc / "O09.fallback").exists())
         self.assertEqual(list(oc.iterdir()) if oc.exists() else [], [])
 
+    def test_contracts_starts_a_new_run_unswitched(self):
+        self.write_doctor()
+        oc, _ = self.seed_stale()
+        hybrid_shared.switch_to_claude(oc, "O01", "std", "m", "auth", "401")
+        self.assertTrue(hybrid_shared.run_switched(oc))
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "hybrid")
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(hybrid_shared.run_switched(oc), {})
+        self.assertFalse((oc / hybrid_shared.SWITCH_FILE).exists())
+
     def test_contracts_clears_stale_task_oc_markers(self):
         _, tasks = self.seed_stale()
         rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", "claude")
@@ -238,23 +351,42 @@ class OcWriteTest(CliBase):
 
 
 class DoctorTest(CliBase):
-    def test_doctor_with_missing_binary(self):
+    def missing_binary(self):
         missing = str(self.tmp / "no-such-opencode")
         self.env["HP_OC_BIN"] = missing
+        return missing
+
+    def test_doctor_with_missing_binary_creates_no_routing_file(self):
+        missing = self.missing_binary()
         routing = Path(self.env["HP_ROUTING"])
         rc, out, err = self.tool("doctor")
         self.assertEqual(rc, 1, out + err)
         lines = out.splitlines()
-        self.assertIn("routing: %s (created from defaults)" % routing, lines)
         self.assertIn("opencode: unavailable (%s)" % missing, lines)
         self.assertIn("doctor cache: %s" % self.env["HP_DOCTOR_CACHE"], lines)
-        defaults = json.loads((SKILL / "routing.default.json").read_text(encoding="utf-8"))
-        self.assertEqual(json.loads(routing.read_text(encoding="utf-8")), defaults)
+        self.assertFalse(routing.exists())
         cache = json.loads(Path(self.env["HP_DOCTOR_CACHE"]).read_text(encoding="utf-8"))
         self.assertFalse(cache.get("ok"))
         rc, out, err = self.tool("doctor")
         self.assertEqual(rc, 1, out + err)
-        self.assertIn("routing: %s" % routing, out.splitlines())
+        self.assertFalse(routing.exists())
+
+    def test_doctor_prints_the_shared_config_summary(self):
+        self.missing_binary()
+        self.set_shared()
+        rc, out, err = self.tool("doctor")
+        summary = [l for l in out.splitlines() if l.startswith("opencode config") and hybrid_shared.SHARED_SOURCE in l]
+        self.assertEqual(len(summary), 1, out)
+        self.assertIn("glm-5.3", summary[0])
+
+    def test_doctor_reports_an_invalid_shared_config(self):
+        self.missing_binary()
+        self.set_shared({"HYBRID_OPENCODE_STD": "no-provider-prefix"})
+        rc, out, err = self.tool("doctor")
+        self.assertEqual(rc, 1, out + err)
+        errors = [l for l in out.splitlines() if l.startswith("OC-ERROR hybrid-writing-plans")]
+        self.assertTrue(errors, out)
+        self.assertTrue(all("kind=config" in l for l in errors), errors)
 
 
 class StatsTest(CliBase):

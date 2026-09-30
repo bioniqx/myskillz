@@ -16,6 +16,8 @@ ENGINE = TESTS_DIR.parent / "scripts" / "devteam.py"
 FAKE = TESTS_DIR / "fake_opencode.py"
 STATE = ".claude/hybrid-team"
 USAGE = {"input": 100, "output": 20, "reasoning": 5, "cache_read": 7, "cache_write": 3, "cost": 0.25}
+MODELS_ENV = {"HYBRID_OPENCODE_STD": "zai-coding-plan/glm-5.3#high",
+              "HYBRID_OPENCODE_LITE": "zai-coding-plan/glm-5.3-flash#low"}
 
 DONE_TEXT = ("## Slice: S1\n## Status: Done\n## Gate:\n$ test -f docs/guide.md\n"
              "exit 0 - docs/guide.md is present\n## Notes:\nwrote the guide\n")
@@ -52,7 +54,8 @@ class LaneTestBase(unittest.TestCase):
         self.routing = self.tmp / "routing.json"
         self.env = dict(os.environ, HOME=str(self.home), HT_OC_BIN=str(FAKE),
                         HT_FAKE_SCRIPT=str(self.script), HT_FAKE_LOG=str(self.log),
-                        HT_ROUTING=str(self.routing), PYTHONDONTWRITEBYTECODE="1")
+                        HT_ROUTING=str(self.routing), XDG_DATA_HOME=str(self.tmp / "xdg"),
+                        PYTHONDONTWRITEBYTECODE="1", HYBRID_OC_RETRY_DELAY_S="0", **MODELS_ENV)
         git(["init", "-q"], self.repo)
         git(["config", "user.email", "t@example.invalid"], self.repo)
         git(["config", "user.name", "t"], self.repo)
@@ -92,7 +95,7 @@ class LaneTestBase(unittest.TestCase):
     def assert_blocked(self, reason):
         self.assertFalse((self.state / "slices" / "S1.done").exists())
         m = self.marker("blocked")
-        for key in ("t", "worktree", "branch", "note"):
+        for key in ("t", "worktree", "branch", "note", "log"):
             self.assertIn(key, m)
         self.assertEqual(m["reason"], reason)
         self.assertEqual(m["backend"], "oc:lite")
@@ -144,30 +147,38 @@ class LaneRunTest(LaneTestBase):
     def test_agent_reported_blocked_is_gate(self):
         self.set_script({"text": "## Slice: S1\n## Status: Blocked\n## Notes:\nthe verify command needs network access\n"})
         r = self.engine("lane", "S1")
-        self.assertIn("ESCALATE S1", r.stdout)
+        self.assertIn("OC-WARN hybrid-team S1 tier=lite model=zai-coding-plan/glm-5.3-flash#low kind=gate",
+                      r.stdout)
+        self.assertNotIn("ESCALATE", r.stdout)
         m = self.assert_blocked("gate")
         self.assertIn("network access", m["note"])
 
-    def test_error_event_is_crash(self):
+    def test_auth_error_event_is_auth(self):
         self.set_script({"error": {"type": "ProviderAuthError", "message": "invalid api key"}})
         r = self.engine("lane", "S1")
-        self.assertIn("ESCALATE S1", r.stdout)
-        m = self.assert_blocked("crash")
-        self.assertIn("ProviderAuthError", m["note"])
+        self.assertIn("OC-ERROR hybrid-team S1 tier=lite model=zai-coding-plan/glm-5.3-flash#low kind=auth",
+                      r.stdout)
+        self.assertNotIn("ESCALATE", r.stdout)
+        m = self.assert_blocked("auth")
+        self.assertIn("invalid api key", m["note"])
+        self.assertTrue(m["log"].endswith("S1.err"), m["log"])
+        self.assertIn("kind=auth", (self.state / "oc-errors.jsonl").read_text())
 
     def test_missing_binary_is_spawn(self):
         self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
         self.set_script(DONE_STEP)
         r = self.engine("lane", "S1")
-        self.assertIn("ESCALATE S1", r.stdout)
+        self.assertIn("OC-ERROR hybrid-team S1 tier=lite", r.stdout)
+        self.assertIn("kind=spawn", r.stdout)
         self.assert_blocked("spawn")
-        self.assertEqual(self.records()[-1]["runs"], 1)
+        self.assertEqual(self.records()[-1]["runs"], 4)   # the first try plus 3 retries
 
     def test_silent_process_is_stall(self):
         self.routing.write_text(json.dumps({"tiers": {"lite": {"stall_s": 1}}}))
         self.set_script({"sleep": 8, "text": DONE_TEXT})
         r = self.engine("lane", "S1")
-        self.assertIn("ESCALATE S1", r.stdout)
+        self.assertIn("OC-ERROR hybrid-team S1 tier=lite", r.stdout)
+        self.assertIn("kind=stall", r.stdout)
         self.assert_blocked("stall")
 
     def test_stale_lane_process_is_killed(self):
@@ -209,7 +220,9 @@ class LaneContinuationTest(LaneTestBase):
         self.set_script(LAZY_STEP)
         r = self.engine("lane", "S1")
         self.assertEqual(len(self.calls()), 3)
-        self.assertIn("ESCALATE S1", r.stdout)
+        self.assertIn("OC-WARN hybrid-team S1 tier=lite", r.stdout)
+        self.assertIn("kind=gate", r.stdout)
+        self.assertNotIn("ESCALATE", r.stdout)
         m = self.assert_blocked("gate")
         self.assertIn("nothing committed yet", m["note"])
         self.assertEqual(self.records()[-1]["runs"], 3)

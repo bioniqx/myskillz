@@ -1,9 +1,9 @@
 ---
 name: hybrid-writing-plans
-description: "Opt-in fork of writing-plans: use only when the user says 'hybrid', mentions 'opencode', asks to save tokens, cost or usage limits while planning, or invokes /hybrid-writing-plans. Produces the same portable TDD checkbox implementation plan as writing-plans - contracts locked once by Claude, task bodies fanned out to opencode writers (per-tier model and thinking level) and Claude writers from script-built briefs, every body verified by the same deterministic linter, with lint-repair turns in the same opencode session and one Claude fallback per failed task. Reviewers and every judgment step stay on Claude."
-argument-hint: "[spec-path] [--thorough] [--preset claude|hybrid|max]"
+description: "Opt-in fork of writing-plans: use only when the user says 'hybrid', mentions 'opencode', asks to save tokens, cost or usage limits while planning, or invokes /hybrid-writing-plans. Produces the same portable TDD checkbox implementation plan as writing-plans - contracts locked once by Claude, task bodies fanned out to opencode writers (per-tier model and thinking level) and Claude writers from script-built briefs, every body verified by the same deterministic linter, with lint-repair turns in the same opencode session and one Claude fallback per failed task. Connection failures are retried 3 times, then hybrid mode moves the rest of the run to Claude Sonnet 5.5. Reviewers and every judgment step stay on Claude."
+argument-hint: "[spec-path] [--thorough] [mode=hybrid|claude|opencode]"
 allowed-tools: Bash(python3 *)
-compatibility: Claude Code v2.1.217+ recommended (subagent cap setting); python3 3.8+; opencode CLI v2.0.18 for the hybrid presets
+compatibility: Claude Code v2.1.217+ recommended (subagent cap setting); python3 3.8+; opencode CLI v2.0.19 for the hybrid and opencode modes
 ---
 
 # Hybrid Writing Plans (v1.0 - opencode writers)
@@ -19,6 +19,18 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/plan_tool.py" context $ARGUMENTS
 ```
 
 If the block above shows a raw command instead of output, run `python3 <this skill dir>/scripts/plan_tool.py context <spec>` in the same message as your Phase 0 reads. `TOOL` below = the `tool:` line of the context (use it verbatim).
+
+## Step 0 - Run mode (before any other work)
+
+The context ends its opencode block with a `mode:` line (a separate `mode: THOROUGH` line further down is the review setting, not the run mode).
+
+- `mode: <hybrid|claude|opencode> (from arguments)` -> use that mode and do not ask. Hand-offs between the hybrid skills (brainstorming, writing-plans, team) pass it along as `mode=<mode>`.
+- `mode: unset ...` or `mode: '<x>' is not valid ...` -> your first tool call is AskUserQuestion, "Run this skill in which mode?", with three options. Put the configured `std` and `lite` specs from the config line (the line after `opencode:`) into the descriptions, each with its `(skill)` or `(shared)` mark from the end of that line, or "no config" when that line says the config is missing or invalid:
+  - **Hybrid (Recommended)** - judgment on Claude, task writers on opencode, every opencode error reported at once, automatic Claude fallback; after 3 failed retries of a connection error the rest of the run moves to Claude Sonnet.
+  - **Claude only** - opencode is never called; identical to writing-plans 6.2.
+  - **opencode only** - every task the routing table sends to opencode goes to opencode, with no silent Claude fallback.
+- Persist the choice by passing `--preset <mode>` to `contracts` (Phase 1). The script freezes it in `work.json`; `wait`, `review` and `assemble` never ask again.
+- The old name `max` still works as an alias of `opencode` and prints one OC-WARN line.
 
 ## Speed Doctrine
 
@@ -39,30 +51,44 @@ Independent subsystems -> one plan each; plans may be produced concurrently with
 
 ## Hybrid routing
 
-The context shows one `opencode:` line right after `writer agent:`:
+The context shows one `opencode:` line right after `writer agent:`, then the shared-config line and the `mode:` line. Example: `opencode: v2.0.19 preset=hybrid light=oc:lite std=oc:std deep=claude review_oc=all (doctor 2026-09-29)`.
 
-```
-opencode: v2.0.18 preset=hybrid light=oc:lite std=oc:std deep=claude review_oc=all (doctor 2026-09-28)
-```
+For each contract tier (`light`, `std` = no `Tier` line, `deep`) the value is `claude` (Claude writer, 6.2 model map), `oc:<tier>` (opencode writer on that routing tier) or `claude(<reason>)` (the routing tier is unusable). `opencode: unavailable ...` means there is no usable doctor entry: `contracts` prints an `OC-ERROR` line saying why, then in mode hybrid every writer is Claude and in mode opencode the tasks are held.
 
-For each contract tier (`light`, `std` = no `Tier` line, `deep`) the value is `claude` (Claude writer, 6.2 model map), `oc:<tier>` (opencode writer on that routing tier) or `claude(down: <reason>)` (the routing tier is marked down, so Claude writes it). `opencode: unavailable → preset claude (run plan_tool.py doctor --ping)` means every writer is Claude and the skill behaves exactly like writing-plans 6.2 - tell the user once about the one-time `doctor --ping` below, then continue.
-
-| Work | `claude` | `hybrid` (default) | `max` |
+| Work | `claude` | `hybrid` (default) | `opencode` |
 |---|---|---|---|
 | Phase 0, Contracts, inline path, assemble | Claude | Claude | Claude |
 | Writer, contract `Tier: light` | Claude haiku | oc:`lite` | oc:`lite` |
 | Writer, default tier | Claude sonnet | oc:`std` | oc:`std` |
 | Writer, contract `Tier: deep` | Claude opus | Claude opus | oc:`std` |
 | Reviewers | Claude sonnet, 6.2 triggers | Claude sonnet, 6.2 triggers + every oc task | Claude sonnet, 6.2 triggers |
-| Fallback writer | - | Claude, model per the tier map | same |
+| Fallback writer | - | Claude, model per the tier map (`sonnet` once the run has switched) | none: the unit is held (Failure policy) |
 
-The preset comes from the routing file (`$HP_ROUTING`, default `~/.config/hybrid-writing-plans/routing.json`, merged over the shipped `routing.default.json`). When the skill was invoked with `--preset claude|hybrid|max`, pass that same flag to `contracts`; the script routes once, at `contracts` time, and records the result in `work.json`. Preset `claude` is identical to writing-plans 6.2.
+Models come from two environment variables shared by all four hybrid skills: `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to `STD`), each `provider/model[#variant]`, for example `opencode/muse-spark-1.3-contributor-free#xhigh`. Set them in the `"env"` block of `~/.claude/settings.json`, for example `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restart Claude Code; exporting them in the shell works too. When the config line says `HYBRID_OPENCODE_STD is not set`, tell the user that. Timeouts, roles and review policy stay in `$HP_ROUTING` (default `<skill dir>/routing.json`, for example `~/.claude/skills/hybrid-writing-plans-v1.0/routing.json`), merged over the shipped `routing.default.json`. That per-skill file may also override a tier's model: a tier whose `tiers.<tier>.model` is set there uses that `model` and its `variant` (none when omitted), every other tier uses the shared models. `max_parallel` comes only from that file or the shipped defaults. The context config line and the doctor's tier lines mark each tier `(skill)` or `(shared)`. The mode comes from Step 0: `contracts --preset <mode>` routes once and records the result in `work.json`. Mode `claude` is identical to writing-plans 6.2 and never needs a doctor run.
 
 Rules:
 - Routing, partitioning and every brief are the script's job. Never hand-write an opencode brief, never edit a `<gid>.oc.md` or `<gid>F.md` brief, never run `opencode` yourself.
-- `oc-write` runs once per `contracts` run, always as a background Bash call, in the same message as the Claude `Agent` calls. It lints every body, sends lint repairs back to the same opencode session, and writes a fallback brief for anything it gives up on. It always exits 0; its `OC ...` lines are informational - act only on `wait`.
-- A `FALLBACK` line from `wait` is one Claude `Agent` call: launch it exactly as printed (subagent type, model, description, prompt), once. Never retry the opencode group.
-- A tier that is down, throttled or slow costs nothing extra: `contracts` already sent tasks that do not fit a tier's `max_parallel` to Claude, and failed groups come back as `FALLBACK`.
+- **Relay rule:** any `OC-ERROR` or `OC-WARN` line in tool output -> your next message to the user starts with that line (deduplicate identical kind+tier), before any other work.
+- `oc-write` runs once per `contracts` run, always as a background Bash call, in the same message as the Claude `Agent` calls. It lints every body, sends lint repairs back to the same opencode session, prints each OC line as its group finishes and writes a fallback brief for anything it gives up on. It always exits 0; `wait` is what reports the failures to you.
+- A `FALLBACK` line from `wait` is one Claude `Agent` call: launch it exactly as printed (subagent type, model, description, prompt), once. Never retry the opencode group in place.
+- `oc-write` retries a group whose opencode run failed on the connection (`spawn`, `stall`, `throttle`, `crash`) itself, up to 3 times, 10, 30 and 60 s apart, as a fresh run (never a `--session` continuation). Each failed try is one `OC-WARN ... kind=<kind> :: retry <n>/3 in <s>s: <detail>` line. Lint-repair turns are separate and unchanged. `timeout`, `context` and the gate kinds (`grounding`, `lint`, `oracle`, `gate`, `empty`, `format`, `recovered`) are not connection problems: no retry, no switch.
+- A tier that is unusable, throttled or slow costs nothing extra: `contracts` already sent tasks that do not fit a tier's `max_parallel` to Claude (mode hybrid), and failed groups come back as `FALLBACK`.
+
+Failure policy:
+
+| Mode | On OC-ERROR / OC-WARN |
+|---|---|
+| claude | opencode is never spawned; the doctor is not required. |
+| hybrid | Relay the line at once, then continue: the Claude writers take over as printed. After the retries, a connection error or a non-retryable one (`auth`, `quota`, `model`, `config`) switches the run (below). |
+| opencode | Relay the line at once. Never run the unit on Claude by yourself. The retries happen here too; after them nothing changes: the unit is held. |
+
+**Switch (mode hybrid only).** When a group still fails after its retries, or fails with `auth`, `quota`, `model` or `config`, `oc-write` records the switch in `<work>/oc/oc-switched.json` and prints and logs one `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the rest of this run uses Claude sonnet` line, once (relay it like any other). From then on the rest of that run uses Claude Sonnet 5.5 (`model: sonnet`): the failed group and every group that had not started come back as `FALLBACK <gid> (<reason>) ...` lines with `model=sonnet` and no opencode spawn, and `wait` prints them like any other fallback (launch them exactly as printed). Groups already running on opencode finish and are harvested normally. A new `contracts` run starts unswitched. In mode opencode there is no switch.
+
+In mode opencode a `HELD` block from `contracts`, or a `HELD` line from `wait` (a group that failed while running), is an offer, not an order. After relaying the lines, ask once per root cause with AskUserQuestion (identical failures go into one question): retry on opencode / run this unit on Claude / switch the run to hybrid / abort.
+- Retry: fix the cause (for example `TOOL doctor --ping`), re-run `contracts <plan> --preset opencode` and dispatch the rows it prints for tasks that are not written yet.
+- Run on Claude: for a `HELD` block from `contracts`, launch its brief rows exactly as printed; for a `HELD` line from `wait`, launch one Agent call with the model printed on that line, description `plan <gid>F` and prompt `Read <brief> and follow it exactly.` Then run `TOOL wait <plan> --include-held`.
+- Switch to hybrid: re-run `contracts <plan> --preset hybrid` and continue.
+- Abort: stop and tell the user what is left.
 
 ## Pipeline
 
@@ -118,7 +144,7 @@ Contract rules (quality is locked here):
 - `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs) or `deep` (algorithmic, security, concurrency). Default: `std`. The tier also picks the backend (see Hybrid routing), so tier honestly: a contract that needs deep judgment must say `Tier: deep`, which keeps it on Claude opus in `hybrid`.
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently. The tighter the contract, the better a cheap writer does.
 
-Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if the context shows ultracode or a raised cap it could not read; add `--preset <p>` when the skill was invoked with one). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table for the Claude groups (only when there are any), the `OPENCODE` block for the opencode groups (only when there are any) and the next command.
+Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if the context shows ultracode or a raised cap it could not read; always add `--preset <mode>` with the mode chosen in Step 0). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table for the Claude groups (only when there are any), the `OPENCODE` block for the opencode groups (only when there are any) and the next command.
 
 ### Phase 2 - Fan-out writers (ONE message)
 
@@ -132,9 +158,11 @@ In a single message:
 
 A call refused with "Concurrent subagent limit reached" means other subagents hold slots: don't retry it in a loop - dispatch those rows again after the next completion notification.
 
-Then, in your next message, run the printed `TOOL wait <plan>` with Bash `timeout: 600000`. It blocks until every task file lints OK or an opencode group has fallen back. Don't act on individual completion notifications (Agent or `oc-write`) while waiting.
+Then, in your next message, run the printed `TOOL wait <plan>` with Bash `timeout: 600000`. It blocks until every task file lints OK, an opencode group has fallen back or a new opencode error appears. It prints unreported `OC-ERROR` / `OC-WARN` lines before anything else: relay them per the relay rule. Launch nothing on individual completion notifications (Agent or `oc-write`) while waiting; if a notification carries OC lines, relay them first.
 - `DONE` -> Phase 3.
-- `FALLBACK <gid> (<reason>) <ids> → Agent subagent_type=<type> model=<model> description 'plan <gid>F' prompt: Read <brief> and follow it exactly.` -> launch every FALLBACK Agent call exactly as printed, all in ONE message, then run `wait` again. Each fallback is launched once; `wait` never prints a sent one again.
+- `FALLBACK <gid> (<reason>) <ids> → Agent subagent_type=<type> model=<model> description 'plan <gid>F' prompt: Read <brief> and follow it exactly.` -> mode hybrid: launch every FALLBACK Agent call exactly as printed, all in ONE message, then run `wait` again. Each fallback is launched once; `wait` never prints a sent one again. After a switch every FALLBACK line says `model=sonnet` (reason `switched` for groups that never started). Mode opencode never prints `FALLBACK`; it prints `HELD` instead.
+- Exit 2 with `Relay the OC-ERROR lines above` -> relay them, then run `wait` again.
+- `HELD <gid> (<reason>) <ids> ...` (exit 2, mode opencode) or `HELD <ids> not written ...` (exit 3, only held tasks are left) -> do not dispatch anything yourself: see Failure policy.
 - `PENDING` -> if those agents or `oc-write` are still running, run `wait` again. If Claude writers returned `FAIL` or stopped: re-dispatch only those IDs in one message (same prompt), or fix a small issue yourself with Edit + `TOOL lint-task <plan> <task file>`.
 
 ### Phase 3 - Risk-based review (ONE message)
@@ -171,4 +199,4 @@ After `OK`, offer (waves/width from the script output):
 
 `TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn) only when no copy exists - an existing one is never overwritten. Never run `--apply` without the user's consent.
 
-`TOOL doctor --ping` checks the opencode binary and version, confirms each routing tier's model is listed, sends each tier one tiny ping and writes the doctor cache the context line reads. Run it once after installing opencode or editing the routing file, and again when the context line shows `unavailable` or a `claude(down: ...)` tier. The context line itself never spawns opencode. `TOOL stats` summarises the per-tier telemetry (round-1 pass rate, fallbacks, review fix rate). Optional: `/fast` speeds the serial contract phase on Opus.
+`TOOL doctor --ping` checks the opencode binary and version, validates the shared models (`HYBRID_OPENCODE_STD` / `HYBRID_OPENCODE_LITE`) and the per-skill routing file, confirms each tier's model is listed, sends each tier one tiny ping and writes the doctor cache the context line reads. Failures print as `OC-ERROR` lines and one tier's failure never disables the other; it never creates or edits a config file. Run it once after installing opencode or changing the variables (restart Claude Code first), and again when the context line shows `unavailable` or a `claude(...)` tier; a cache entry past its time limit counts as unusable. The context line itself never spawns opencode. `TOOL stats` summarises the per-tier telemetry (round-1 pass rate, fallbacks, review fix rate). Optional: `/fast` speeds the serial contract phase on Opus.

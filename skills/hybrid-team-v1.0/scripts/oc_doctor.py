@@ -11,91 +11,127 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from oc_lane import build_cmd, run_once
 from oc_config import config_env, SENTINEL
+from hybrid_shared import cache_key, classify, first_error, model_spec, oc_line
 
 PING = "PING"
 MODELS_TIMEOUT_S = 60
+LINE_SOURCE = "hybrid-team"
+EMPTY_MODELS = "opencode models listed nothing"
+WARN_KINDS = ("recovered", "empty", "format", "grounding", "lint", "oracle", "gate")
+STDERR_TAIL_CHARS = 2000
+
+
+def _level(kind: str) -> str:
+    """OC line level for a failure kind."""
+    return "OC-WARN" if kind in WARN_KINDS else "OC-ERROR"
+
+
+def _spec(tier) -> str:
+    """Model spec for OC lines; '-' when the tier has no model."""
+    if isinstance(tier, dict) and tier.get("model"):
+        return model_spec(tier)
+    return "-"
+
+
+def _tail(path: Path) -> str:
+    """Last STDERR_TAIL_CHARS characters of a stderr file; empty when it is missing."""
+    try:
+        return Path(path).read_text(errors="replace")[-STDERR_TAIL_CHARS:]
+    except OSError:
+        return ""
+
+
+def _issue(name: str, ok: bool, detail: str, kind: str = "",
+           tier: str = "-", spec: str = "-") -> dict:
+    """One check result. A failing check also carries its kind and its OC line."""
+    if ok:
+        return {"name": name, "ok": True, "detail": detail, "kind": "", "line": ""}
+    line = oc_line(_level(kind), LINE_SOURCE, "doctor", tier, spec, kind, detail)
+    return {"name": name, "ok": False, "detail": detail, "kind": kind, "line": line}
 
 
 def _run_models_once(binary: str) -> tuple:
-    """One attempt at `<binary> models`. Returns (ok, models, detail)."""
+    """One attempt at `<binary> models --standalone` (a private server: without it the command can
+    hang waiting for the background service). Returns (ok, models, detail, kind)."""
     try:
-        proc = subprocess.run([binary, "models"], capture_output=True, text=True,
+        proc = subprocess.run([binary, "models", "--standalone"], capture_output=True, text=True,
                                timeout=MODELS_TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        return (False, [], "timed out after %ss" % MODELS_TIMEOUT_S)
+        return (False, [], "timed out after %ss" % MODELS_TIMEOUT_S, "timeout")
     except OSError as exc:
-        return (False, [], "error: %s" % exc)
+        return (False, [], "error: %s" % exc, "spawn")
+    stderr = (proc.stderr or "").strip()
     if proc.returncode != 0:
-        return (False, [], "exit %d: %s" % (proc.returncode, (proc.stderr or "").strip()))
+        kind = classify(proc.returncode, [], stderr)
+        return (False, [], "exit %d: %s" % (proc.returncode, stderr), kind)
     models = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
     if not models:
-        return (False, [], "models: (empty)")
-    return (True, models, "models: %s" % ", ".join(models))
+        return (False, [], EMPTY_MODELS, "config")
+    return (True, models, "models: %s" % ", ".join(models), "")
 
 
 def check_opencode(binary: str, routing: dict) -> list:
     """Static and live checks of the opencode binary and routing configuration.
 
-    Returns a list of {"name": str, "ok": bool, "detail": str} dicts.
+    Returns a list of {"name": str, "ok": bool, "detail": str, "kind": str,
+    "line": str} dicts. A failing check has a failure kind and a ready OC line;
+    a passing check has an empty kind and an empty line.
     """
     checks = []
 
     resolved = shutil.which(binary)
     if not resolved and Path(binary).is_file():
         resolved = binary
-    checks.append({
-        "name": "opencode_binary",
-        "ok": bool(resolved),
-        "detail": resolved if resolved else "not found: %s" % binary,
-    })
+    checks.append(_issue(
+        "opencode_binary",
+        bool(resolved),
+        resolved if resolved else "not found: %s" % binary,
+        "spawn",
+    ))
 
-    models_ok, models, models_detail = _run_models_once(binary)
+    models_ok, models, models_detail, models_kind = _run_models_once(binary)
     if not models_ok:
-        models_ok, models, models_detail = _run_models_once(binary)
-    checks.append({"name": "opencode_models", "ok": models_ok, "detail": models_detail})
+        models_ok, models, models_detail, models_kind = _run_models_once(binary)
+    checks.append(_issue("opencode_models", models_ok, models_detail, models_kind))
 
     tiers = routing.get("tiers", {}) if isinstance(routing, dict) else {}
     if not tiers:
-        checks.append({
-            "name": "tiers",
-            "ok": False,
-            "detail": "no tiers configured in routing",
-        })
+        checks.append(_issue("tiers", False, "no tiers configured in routing", "config"))
     else:
-        checks.append({
-            "name": "tiers",
-            "ok": True,
-            "detail": "tiers: %s" % ", ".join(sorted(tiers.keys())),
-        })
+        checks.append(_issue("tiers", True, "tiers: %s" % ", ".join(sorted(tiers.keys()))))
 
     for name in sorted(tiers.keys()):
         tier = tiers[name]
         model = tier.get("model") if isinstance(tier, dict) else None
         variant = tier.get("variant") if isinstance(tier, dict) else None
-        ok = bool(model) and bool(variant)
-        checks.append({
-            "name": "tier:%s" % name,
-            "ok": ok,
-            "detail": "model=%s variant=%s" % (model, variant),
-        })
+        spec = _spec(tier)
+        checks.append(_issue(
+            "tier:%s" % name,
+            bool(model),
+            "model=%s variant=%s" % (model, variant),
+            "config", name, spec,
+        ))
+        if not model:
+            continue   # the tier:<name> check above already reports it (kind=config)
 
         model_present = models_ok and model in models
-        checks.append({
-            "name": "model:%s" % name,
-            "ok": model_present,
-            "detail": "%s %s in `%s models`" % (
+        checks.append(_issue(
+            "model:%s" % name,
+            model_present,
+            "%s %s in `%s models`" % (
                 model, "found" if model_present else "not found", binary),
-        })
+            "model" if models_ok else models_kind, name, spec,
+        ))
 
     rows = routing.get("rows", {}) if isinstance(routing, dict) else {}
     for row_name in sorted(rows.keys()):
         tier_name = rows[row_name]
-        ok = tier_name in tiers
-        checks.append({
-            "name": "row:%s" % row_name,
-            "ok": ok,
-            "detail": "-> tier %s" % tier_name,
-        })
+        checks.append(_issue(
+            "row:%s" % row_name,
+            tier_name in tiers,
+            "-> tier %s" % tier_name,
+            "config",
+        ))
 
     return checks
 
@@ -104,8 +140,11 @@ def ping_tier(binary: str, tier: dict, prompt_text: str, engine: str, workdir: P
     """Send one tiny working ping to a tier and verify the sentinel comes back.
 
     The CLI message is always the constant PING; prompt_text is injected only
-    as the agent's own prompt, via config_env. Returns (ok: bool, detail: dict)
-    where detail has model, variant, text, sessionID and error.
+    as the lane prompt, via config_env. Returns (ok: bool, detail: dict) where
+    detail has model, variant, text, sessionID and error (the kill reason or
+    None), plus the classification of a failed ping: key (the doctor cache key
+    of the tier), kind ("" when ok), level ("OC-ERROR" or "OC-WARN", "" when
+    ok), message (one line) and log (the stderr file, "" when it is empty).
     """
     model = tier.get("model", "") if isinstance(tier, dict) else ""
     variant = tier.get("variant", "") if isinstance(tier, dict) else ""
@@ -120,7 +159,20 @@ def ping_tier(binary: str, tier: dict, prompt_text: str, engine: str, workdir: P
     result = run_once(cmd, workdir, env, out_path, err_path, stall_s=30, timeout_s=60)
 
     text = result.get("text") or ""
-    ok = (not result.get("reason")) and text.strip() == SENTINEL
+    reason = result.get("reason") or ""
+    ok = (not reason) and text.strip() == SENTINEL
+    stderr_tail = _tail(err_path)
+
+    kind = ""
+    message = ""
+    if not ok:
+        errors = result.get("errors") or []
+        kind = classify(result.get("rc"), errors, stderr_tail,
+                        killed=reason, finished=bool(result.get("finished")))
+        if not kind:
+            kind = "format" if text.strip() else "empty"
+        message = first_error(errors, stderr_tail) or "ping %s: got %r" % (
+            reason or "reply mismatch", text[:80])
 
     detail = {
         "model": model,
@@ -128,7 +180,12 @@ def ping_tier(binary: str, tier: dict, prompt_text: str, engine: str, workdir: P
         "ok": ok,
         "text": text,
         "sessionID": result.get("session", ""),
-        "error": result.get("reason") or None,
+        "error": reason or None,
+        "key": cache_key(tier),
+        "kind": kind,
+        "level": _level(kind) if kind else "",
+        "message": message,
+        "log": str(err_path) if stderr_tail else "",
     }
     return (ok, detail)
 

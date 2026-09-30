@@ -5,6 +5,9 @@ Env HT_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
 (call N uses entry N, the last entry repeats; the count lives in <script>.calls).
 Env HT_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config}.
+A step may set "scenario" (auth, model_not_found, throttle, recovered, empty) to start
+from a canned step, "finish" (a step_finish reason such as "stop") and, for the
+`models` command, "models" (a list of names, [] for an empty listing).
 """
 import json
 import os
@@ -17,6 +20,15 @@ FAKE_SCRIPT_ENV = "HT_FAKE_SCRIPT"
 FAKE_LOG_ENV = "HT_FAKE_LOG"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
+
+SCENARIOS = {
+    "auth": {"error": {"type": "APIError", "message": "401 Unauthorized: invalid api key"}},
+    "model_not_found": {
+        "error": {"type": "ProviderModelNotFoundError", "message": "model not found: zai-coding-plan/glm-9"}},
+    "throttle": {"error": {"type": "APIError", "message": "429 Too Many Requests"}},
+    "recovered": {"finish": "stop", "text": "done", "exit": 1},
+    "empty": {"finish": "stop"},
+}
 
 
 def _session_from(argv):
@@ -42,6 +54,25 @@ def _load_step(script_path):
     if not data:
         return {"text": "done"}
     return data[min(n, len(data) - 1)]
+
+
+def _with_scenario(step):
+    merged = dict(SCENARIOS.get(step.get("scenario", ""), {}))
+    merged.update(step)
+    return merged
+
+
+def _models_from(script_path):
+    """Return the scripted `models` listing, or None for the default two models."""
+    if not script_path:
+        return None
+    try:
+        data = json.loads(Path(script_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(data, dict) and isinstance(data.get("models"), list):
+        return [str(name) for name in data["models"]]
+    return None
 
 
 def _log(argv):
@@ -81,13 +112,16 @@ def main(argv: list) -> int:
         print(FAKE_VERSION, flush=True)
         return 0
     if argv and argv[0] == "models":
-        print("zai-coding-plan/glm-5.3", flush=True)
-        print("zai-coding-plan/glm-5.3-flash", flush=True)
+        listing = _models_from(os.environ.get(FAKE_SCRIPT_ENV, ""))
+        if listing is None:
+            listing = ["zai-coding-plan/glm-5.3", "zai-coding-plan/glm-5.3-flash"]
+        for name in listing:
+            print(name, flush=True)
         return 0
     if not argv or argv[0] != "run":
         sys.stderr.write("fake opencode: unsupported command\n")
         return 2
-    step = _load_step(os.environ.get(FAKE_SCRIPT_ENV, ""))
+    step = _with_scenario(_load_step(os.environ.get(FAKE_SCRIPT_ENV, "")))
     session = _session_from(argv) or step.get("session") or DEFAULT_SESSION
 
     for rel, content in (step.get("write") or {}).items():
@@ -107,8 +141,11 @@ def main(argv: list) -> int:
     for event in step.get("events") or []:
         _emit(event, session)
     usage = step.get("usage")
+    finish = step.get("finish")
+    if usage is None and finish:
+        usage = {}
     if usage is not None:
-        _emit({"type": "step_finish", "part": {
+        part = {
             "type": "step-finish",
             "tokens": {
                 "input": usage.get("input", 0),
@@ -117,7 +154,10 @@ def main(argv: list) -> int:
                 "cache": {"read": usage.get("cache_read", 0), "write": usage.get("cache_write", 0)},
             },
             "cost": usage.get("cost", 0),
-        }}, session)
+        }
+        if finish:
+            part["reason"] = str(finish)
+        _emit({"type": "step_finish", "part": part}, session)
     if "text" in step:
         _emit({"type": "text", "part": {"type": "text", "text": step["text"]}}, session)
     if step.get("stderr"):
