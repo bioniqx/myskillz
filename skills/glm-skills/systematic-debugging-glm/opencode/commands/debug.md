@@ -2,6 +2,8 @@
 description: Debug a failing test, error, or unexpected behavior using systematic root-cause analysis
 ---
 
-Load the systematic-debugging skill with the provided arguments:
+Set the path to the skill scripts directory, then load the systematic-debugging skill:
+
+S={{SKILL_DIR}}/scripts
 
 $ARGUMENTS

@@ -8,12 +8,40 @@ import textwrap
 import unittest
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", "..", ".."))
-PLUGIN_DIR = os.path.join(REPO_ROOT, "skills/glm/dev-team-glm/opencode/plugins")
+PLUGIN_DIR = os.path.abspath(
+    os.path.join(TESTS_DIR, "..", "..", "dev-team-glm", "opencode", "plugins")
+)
 V1_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v1.js")
 V2_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v2.js")
 
 NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "node not installed")
+
+GUARDED_TOOLS = [
+    "write",
+    "edit",
+    "patch",
+    "apply_patch",
+    "multiedit",
+    "shell",
+    "bash",
+    "execute",
+    "batch",
+]
+UNGUARDED_TOOLS = ["read", "glob", "grep", "todowrite", "webfetch", "skill", "question"]
+DEVTEAM_AGENTS = [
+    "programmer",
+    "programmer-lite",
+    "code-reviewer",
+    "spot-reviewer",
+    "investigator",
+    "team-leader",
+]
+DENY = {
+    "hookSpecificOutput": {
+        "permissionDecision": "deny",
+        "permissionDecisionReason": "guarded",
+    }
+}
 
 
 def _write_guard_stub(skill_dir, decision):
@@ -45,13 +73,31 @@ def _write_recording_stub(skill_dir, decision, record_path):
     return guard_path
 
 
+def _write_failing_stub(skill_dir):
+    scripts_dir = os.path.join(skill_dir, "scripts")
+    os.makedirs(scripts_dir, exist_ok=True)
+    guard_path = os.path.join(scripts_dir, "guard.py")
+    with open(guard_path, "w") as f:
+        f.write("import sys\n\nsys.stdin.read()\nsys.exit(1)\n")
+    return guard_path
+
+
 def _load_plugin_source(path, skill_dir):
     with open(path) as f:
         source = f.read()
     return source.replace("{{SKILL_DIR}}", skill_dir)
 
 
-def _run_v1(tmp_dir, skill_dir, role, tool, args):
+def _node_env(role):
+    env = dict(os.environ)
+    if role is None:
+        env.pop("DEVTEAM_ROLE", None)
+    else:
+        env["DEVTEAM_ROLE"] = role
+    return env
+
+
+def _run_v1(tmp_dir, skill_dir, role, tool, args, calls=1):
     source = _load_plugin_source(V1_PATH, skill_dir)
     plugin_path = os.path.join(tmp_dir, "plugin.mjs")
     with open(plugin_path, "w") as f:
@@ -61,35 +107,40 @@ def _run_v1(tmp_dir, skill_dir, role, tool, args):
         """\
         import { DevteamGuard } from "%s";
         const hooks = await DevteamGuard({ directory: "/tmp/work" });
-        try {
-          await hooks["tool.execute.before"](
-            { tool: "%s" },
-            { args: %s }
-          );
-          process.stdout.write("ALLOWED");
-        } catch (err) {
-          process.stdout.write("DENIED:" + err.message);
+        const out = [];
+        for (let i = 0; i < %d; i++) {
+          try {
+            await hooks["tool.execute.before"](
+              { tool: "%s", sessionID: "s", callID: "c" },
+              { args: %s }
+            );
+            out.push("ALLOWED");
+          } catch (err) {
+            out.push("DENIED:" + err.message);
+          }
         }
+        process.stdout.write(out.join("\\n"));
         """
-    ) % (plugin_path, tool, json.dumps(args))
+    ) % (plugin_path, calls, tool, json.dumps(args))
     with open(driver_path, "w") as f:
         f.write(driver)
-    env = dict(os.environ)
-    if role is None:
-        env.pop("DEVTEAM_ROLE", None)
-    else:
-        env["DEVTEAM_ROLE"] = role
     return subprocess.run(
-        ["node", driver_path], capture_output=True, text=True, env=env, timeout=30
+        ["node", driver_path],
+        capture_output=True,
+        text=True,
+        env=_node_env(role),
+        timeout=30,
     )
 
 
-def _run_v2(tmp_dir, skill_dir, role, tool, args):
-    # Drives the plugin the way the real v2.0.16 binary does: import its
-    # default export ({id, setup}), call setup(api) with a fake api whose
-    # tool.hook(name, fn) records the registered hook, then invoke that hook
-    # with the real event shape {tool, sessionID, agent, messageID, id,
-    # input}.
+def _run_v2(tmp_dir, skill_dir, role, tool, args, agent="a", calls=1, delayed_hook=False):
+    # Drives the plugin the way the real v2 binary does. It imports the
+    # default export ({id, setup}) and calls setup(api) with a fake api
+    # whose tool.hook(name, fn) records the registered hook. Then it invokes
+    # that hook with the real event shape {tool, sessionID, agent, messageID,
+    # id, input}. With delayed_hook the fake api registers the hook only
+    # after a timer and returns a promise, so a plugin that does not await
+    # the registration has no hook yet when setup() resolves.
     source = _load_plugin_source(V2_PATH, skill_dir)
     plugin_path = os.path.join(tmp_dir, "plugin.mjs")
     with open(plugin_path, "w") as f:
@@ -106,11 +157,21 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
         if (typeof plugin.setup !== "function") {
           throw new Error("plugin.setup must be a function");
         }
+        const delayed = %s;
         const hooks = {};
         const api = {
           tool: {
             hook: (name, fn) => {
-              hooks[name] = fn;
+              if (!delayed) {
+                hooks[name] = fn;
+                return undefined;
+              }
+              return new Promise((resolve) => {
+                setTimeout(() => {
+                  hooks[name] = fn;
+                  resolve();
+                }, 20);
+              });
             },
           },
         };
@@ -118,33 +179,39 @@ def _run_v2(tmp_dir, skill_dir, role, tool, args):
         if (typeof hooks["execute.before"] !== "function") {
           throw new Error("plugin did not register an execute.before hook");
         }
-        try {
-          await hooks["execute.before"]({
-            tool: "%s",
-            sessionID: "s",
-            agent: "a",
-            messageID: "m",
-            id: "c",
-            input: %s,
-          });
-          process.stdout.write("ALLOWED");
-        } catch (err) {
-          process.stdout.write("DENIED:" + err.message);
+        const out = [];
+        for (let i = 0; i < %d; i++) {
+          try {
+            await hooks["execute.before"]({
+              tool: "%s",
+              sessionID: "s",
+              agent: %s,
+              messageID: "m",
+              id: "c",
+              input: %s,
+            });
+            out.push("ALLOWED");
+          } catch (err) {
+            out.push("DENIED:" + err.message);
+          }
         }
+        process.stdout.write(out.join("\\n"));
         """
-    ) % (plugin_path, tool, json.dumps(args))
+    ) % (
+        plugin_path,
+        "true" if delayed_hook else "false",
+        calls,
+        tool,
+        json.dumps(agent),
+        json.dumps(args),
+    )
     with open(driver_path, "w") as f:
         f.write(driver)
-    env = dict(os.environ)
-    if role is None:
-        env.pop("DEVTEAM_ROLE", None)
-    else:
-        env["DEVTEAM_ROLE"] = role
     return subprocess.run(
         ["node", driver_path],
         capture_output=True,
         text=True,
-        env=env,
+        env=_node_env(role),
         timeout=30,
         cwd=work_dir,
     )
@@ -349,6 +416,167 @@ class TestDevteamPlugins(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "DENIED:blocked edit")
+
+    @NEEDS_NODE
+    def test_v1_skips_unguarded_tools(self):
+        for tool in UNGUARDED_TOOLS:
+            with self.subTest(tool=tool), tempfile.TemporaryDirectory() as tmp_dir:
+                skill_dir = os.path.join(tmp_dir, "skill")
+                record_path = os.path.join(tmp_dir, "record.json")
+                _write_recording_stub(skill_dir, DENY, record_path)
+                result = _run_v1(
+                    tmp_dir, skill_dir, "programmer", tool, {"filePath": "a.py"}
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "ALLOWED")
+                self.assertFalse(
+                    os.path.exists(record_path), "guard spawned for " + tool
+                )
+
+    @NEEDS_NODE
+    def test_v1_guards_every_write_and_shell_tool(self):
+        for tool in GUARDED_TOOLS:
+            with self.subTest(tool=tool), tempfile.TemporaryDirectory() as tmp_dir:
+                skill_dir = os.path.join(tmp_dir, "skill")
+                _write_guard_stub(skill_dir, DENY)
+                result = _run_v1(
+                    tmp_dir, skill_dir, "programmer", tool, {"command": "ls"}
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "DENIED:guarded")
+
+    @NEEDS_NODE
+    def test_v1_warns_fail_open_once(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            _write_failing_stub(skill_dir)
+            result = _run_v1(
+                tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"}, calls=2
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED\nALLOWED")
+            self.assertEqual(result.stderr.count("failing open"), 1, result.stderr)
+
+    def test_v1_source_uses_async_spawn(self):
+        with open(V1_PATH) as f:
+            source = f.read()
+        self.assertNotIn("spawnSync", source)
+        self.assertIn("spawn(", source)
+
+    @NEEDS_NODE
+    def test_v2_skips_unguarded_tools(self):
+        for tool in UNGUARDED_TOOLS:
+            with self.subTest(tool=tool), tempfile.TemporaryDirectory() as tmp_dir:
+                skill_dir = os.path.join(tmp_dir, "skill")
+                record_path = os.path.join(tmp_dir, "record.json")
+                _write_recording_stub(skill_dir, DENY, record_path)
+                result = _run_v2(
+                    tmp_dir, skill_dir, "code-reviewer", tool, {"path": "a.py"}
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "ALLOWED")
+                self.assertFalse(
+                    os.path.exists(record_path), "guard spawned for " + tool
+                )
+
+    @NEEDS_NODE
+    def test_v2_guards_every_write_and_shell_tool(self):
+        for tool in GUARDED_TOOLS:
+            with self.subTest(tool=tool), tempfile.TemporaryDirectory() as tmp_dir:
+                skill_dir = os.path.join(tmp_dir, "skill")
+                _write_guard_stub(skill_dir, DENY)
+                result = _run_v2(
+                    tmp_dir, skill_dir, "code-reviewer", tool, {"command": "ls"}
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "DENIED:guarded")
+
+    @NEEDS_NODE
+    def test_v2_uses_event_agent_as_role_when_env_unset(self):
+        for agent in DEVTEAM_AGENTS:
+            with self.subTest(agent=agent), tempfile.TemporaryDirectory() as tmp_dir:
+                skill_dir = os.path.join(tmp_dir, "skill")
+                record_path = os.path.join(tmp_dir, "record.json")
+                _write_recording_stub(skill_dir, {}, record_path)
+                result = _run_v2(
+                    tmp_dir, skill_dir, None, "shell", {"command": "ls"}, agent=agent
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "ALLOWED")
+                self.assertTrue(os.path.exists(record_path), "guard not spawned for " + agent)
+                with open(record_path) as f:
+                    record = json.load(f)
+                self.assertEqual(record["stdin"]["role"], agent)
+                self.assertEqual(record["stdin"]["tool"], "shell")
+                self.assertEqual(record["stdin"]["args"], {"command": "ls"})
+
+    @NEEDS_NODE
+    def test_v2_env_role_wins_over_event_agent(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            record_path = os.path.join(tmp_dir, "record.json")
+            _write_recording_stub(skill_dir, {}, record_path)
+            result = _run_v2(
+                tmp_dir,
+                skill_dir,
+                "code-reviewer",
+                "shell",
+                {"command": "ls"},
+                agent="programmer",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with open(record_path) as f:
+                record = json.load(f)
+            self.assertEqual(record["stdin"]["role"], "code-reviewer")
+
+    @NEEDS_NODE
+    def test_v2_ignores_non_devteam_agent(self):
+        for agent in ["general", "build", "a"]:
+            with self.subTest(agent=agent), tempfile.TemporaryDirectory() as tmp_dir:
+                skill_dir = os.path.join(tmp_dir, "skill")
+                record_path = os.path.join(tmp_dir, "record.json")
+                _write_recording_stub(skill_dir, DENY, record_path)
+                result = _run_v2(
+                    tmp_dir, skill_dir, None, "shell", {"command": "rm -rf /"}, agent=agent
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "ALLOWED")
+                self.assertFalse(os.path.exists(record_path), "guard spawned for " + agent)
+
+    @NEEDS_NODE
+    def test_v2_awaits_hook_registration(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            _write_guard_stub(skill_dir, DENY)
+            result = _run_v2(
+                tmp_dir,
+                skill_dir,
+                "code-reviewer",
+                "edit",
+                {"path": "a.py", "oldString": "x", "newString": "y"},
+                delayed_hook=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "DENIED:guarded")
+
+    @NEEDS_NODE
+    def test_v2_warns_fail_open_once(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            skill_dir = os.path.join(tmp_dir, "skill")
+            _write_failing_stub(skill_dir)
+            result = _run_v2(
+                tmp_dir, skill_dir, "code-reviewer", "edit", {"path": "a.py"}, calls=2
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "ALLOWED\nALLOWED")
+            self.assertEqual(result.stderr.count("failing open"), 1, result.stderr)
+
+    def test_v2_source_uses_async_spawn_and_awaits_hook(self):
+        with open(V2_PATH) as f:
+            source = f.read()
+        self.assertNotIn("spawnSync", source)
+        self.assertIn("spawn(", source)
+        self.assertIn("await api.tool.hook", source)
 
 if __name__ == "__main__":
     unittest.main()

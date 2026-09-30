@@ -130,10 +130,200 @@ class TestCmdSetupMentionsOcHarness(unittest.TestCase):
         mod = load_debug_tool()
         a = mod.argparse.Namespace(harness="opencode")
         buf = io.StringIO()
-        with redirect_stdout(buf):
-            rc = mod.cmd_setup(a)
+        with patch.object(mod.oc_harness, "major", lambda *_a, **_k: 2):
+            with redirect_stdout(buf):
+                rc = mod.cmd_setup(a)
         assert rc == 0
         assert "oc_harness.py run" in buf.getvalue()
+
+
+class TestCmdSetupUsesSharedSnippet(unittest.TestCase):
+    def test_setup_opencode_prints_shared_snippet_for_detected_major(self):
+        mod = load_debug_tool()
+        seen = {}
+
+        def fake_snippet(major, deny):
+            seen.update(major=major, deny=deny)
+            return "SHARED-SNIPPET"
+
+        a = mod.argparse.Namespace(harness="opencode", major=None)
+        buf = io.StringIO()
+        with patch.object(mod.oc_harness, "major", lambda *_a, **_k: 1), \
+                patch.object(mod.oc_harness, "config_snippet", fake_snippet):
+            with redirect_stdout(buf):
+                rc = mod.cmd_setup(a)
+        out = buf.getvalue()
+        assert rc == 0
+        assert out.startswith("SHARED-SNIPPET\n")
+        assert seen == {"major": 1, "deny": []}
+        assert '"zai":' not in out
+        assert "one at a time" not in out
+        assert "oc_harness.py run" in out
+
+    def test_major_flag_skips_detection(self):
+        mod = load_debug_tool()
+        seen = {}
+
+        def never(*_a, **_k):
+            raise AssertionError("--major was given, detection must not run")
+
+        def fake_snippet(major, deny):
+            seen["major"] = major
+            return "SHARED-SNIPPET"
+
+        buf = io.StringIO()
+        with patch.object(mod.oc_harness, "major", never), \
+                patch.object(mod.oc_harness, "config_snippet", fake_snippet):
+            with redirect_stdout(buf):
+                rc = mod.main(["setup", "--harness", "opencode", "--major", "2"])
+        assert rc == 0
+        assert seen["major"] == 2
+
+
+class TestQuestionKeywords(unittest.TestCase):
+    def test_stopwords_dropped_and_order_kept(self):
+        mod = load_debug_tool()
+        assert mod.question_keywords("why does the parser drop the trailing token") == [
+            "parser", "drop", "trailing", "token"]
+
+    def test_limit_and_case_insensitive_dedupe(self):
+        mod = load_debug_tool()
+        assert mod.question_keywords("Parser parser alpha beta gamma delta", limit=3) == [
+            "Parser", "alpha", "beta"]
+
+    def test_no_question_gives_no_keywords(self):
+        mod = load_debug_tool()
+        assert mod.question_keywords(None) == []
+
+
+class TestBuildTasksCodeWindows(unittest.TestCase):
+    def test_area_prompt_carries_code_around_the_match(self):
+        mod = load_debug_tool()
+        root = tempfile.mkdtemp(prefix="sdscan_test.")
+        self.addCleanup(mod.shutil.rmtree, root, True)
+        pkg = Path(root) / "pkg"
+        pkg.mkdir()
+        (pkg / "parse.py").write_text(
+            "def parse(text):\n"
+            "    tokens = text.split()\n"
+            "    return tokens[:-1]  # drops the trailing token\n")
+        a = mod.argparse.Namespace(tasks=None, area=["pkg"],
+                                   question="why does the parser drop the trailing token")
+        tasks = mod.build_tasks(a, root)
+        assert len(tasks) == 1
+        prompt = tasks[0]["prompt"]
+        assert "pkg/parse.py:3:" in prompt
+        assert "CODE:" in prompt
+        assert "return tokens[:-1]" in prompt.split("CODE:", 1)[1]
+
+
+class TestBuildTasksGrepsAreaOnce(unittest.TestCase):
+    def test_one_area_scoped_grep_per_area(self):
+        mod = load_debug_tool()
+        calls = []
+
+        def fake_grep_area(root, area, words, cap):
+            calls.append((area, list(words)))
+            return ""
+
+        def no_repo_wide_grep(*_a, **_k):
+            raise AssertionError("build_tasks must not run a repo-wide grep per keyword")
+
+        a = mod.argparse.Namespace(tasks=None, area=["src/a", "src/b"],
+                                   question="why does the parser drop the trailing token")
+        with patch.object(mod, "grep_area", fake_grep_area), \
+                patch.object(mod, "grep", no_repo_wide_grep), \
+                patch.object(mod, "sh", lambda *_a, **_k: (0, "x.py\n")):
+            tasks = mod.build_tasks(a, ".")
+        kw = ["parser", "drop", "trailing", "token"]
+        assert calls == [("src/a", kw), ("src/b", kw)]
+        assert [t["id"] for t in tasks] == ["src/a", "src/b"]
+
+
+class TestScanAgentLane(unittest.TestCase):
+    def _run(self, harness_name, tier="light", model=None, effort=None, seen_root=None):
+        mod = load_debug_tool()
+        root = tempfile.mkdtemp(prefix="sdlane_test.")
+        self.addCleanup(mod.shutil.rmtree, root, True)
+        tasks = Path(root) / "tasks.json"
+        tasks.write_text(json.dumps([{"id": "t1", "prompt": "p1"}, {"id": "t2", "prompt": "p2"}]))
+        a = mod.argparse.Namespace(
+            tasks=str(tasks), area=None, question=None, context_file=None, context="shared ctx",
+            tier=tier, model=model, effort=effort, base=None, max_tokens=100,
+            print_prompts=False, out=None, jobs=0, dir=root)
+        real_build = mod.build_tasks
+
+        def spy_build(a_, root_):
+            if seen_root is not None:
+                seen_root.append(root_)
+            return real_build(a_, root_)
+
+        buf = io.StringIO()
+        with patch.object(mod, "find_key", lambda: (None, "none")), \
+                patch.object(mod, "build_tasks", spy_build), \
+                patch.object(mod.oc_harness, "harness", lambda *_a, **_k: harness_name), \
+                patch.object(mod.oc_harness, "major", lambda *_a, **_k: 2):
+            with redirect_stdout(buf):
+                rc = mod.cmd_scan(a)
+        return mod, rc, buf.getvalue(), Path(root) / ".debug" / "scan"
+
+    def test_lanes_carry_tier_model_and_effort(self):
+        mod, rc, out, d = self._run("opencode", tier="light")
+        assert rc == 0
+        lanes = json.loads((d / "lanes.json").read_text())
+        assert [(l["model"], l["effort"]) for l in lanes] == [("glm-5.3-flash", "low")] * 2
+        mod, rc, out, d = self._run("opencode", tier="deep")
+        lanes = json.loads((d / "lanes.json").read_text())
+        assert [(l["model"], l["effort"]) for l in lanes] == [mod.TIERS["deep"]] * 2
+
+    def test_lanes_honor_model_and_effort_overrides(self):
+        mod, rc, out, d = self._run("opencode", tier="light", model="glm-5.3", effort="max")
+        lanes = json.loads((d / "lanes.json").read_text())
+        assert [(l["model"], l["effort"]) for l in lanes] == [("glm-5.3", "max")] * 2
+
+    def test_lanes_dir_is_the_scan_root(self):
+        seen = []
+        mod, rc, out, d = self._run("opencode", seen_root=seen)
+        lanes = json.loads((d / "lanes.json").read_text())
+        assert len(seen) == 1
+        assert [l["dir"] for l in lanes] == [seen[0]] * 2
+
+    def test_run_cmd_for_light_lane_uses_flash_low_variant_on_v2(self):
+        mod, rc, out, d = self._run("opencode", tier="light")
+        lane = json.loads((d / "lanes.json").read_text())[0]
+        argv = mod.oc_harness.build_run_cmd(lane, 2)
+        i = argv.index("--model")
+        assert argv[i + 1] == "zai-coding-plan/glm-5.3-flash#low"
+
+    def test_opencode_writes_lanes_for_debug_worker_under_project(self):
+        mod, rc, out, d = self._run("opencode")
+        assert rc == 0
+        assert (d / "t1.txt").is_file() and (d / "t2.txt").is_file()
+        lanes = json.loads((d / "lanes.json").read_text())
+        assert [l["id"] for l in lanes] == ["t1", "t2"]
+        assert [l["agent"] for l in lanes] == ["debug-worker", "debug-worker"]
+        assert lanes[0]["brief"] == str((d / "t1.txt").resolve())
+        assert "debug-worker" in out
+        nxt = [l for l in out.splitlines() if l.startswith("NEXT: python3 ")]
+        assert nxt and "oc_harness.py run" in nxt[-1]
+        assert str(d / "lanes.json") in nxt[-1] or str((d / "lanes.json").resolve()) in nxt[-1]
+
+    def test_prompts_carry_scripts_dir_in_a_byte_identical_prefix(self):
+        mod, rc, out, d = self._run("opencode")
+        t1 = (d / "t1.txt").read_text()
+        t2 = (d / "t2.txt").read_text()
+        assert t1.startswith(mod.SYS_PROMPT)
+        assert ("S=%s" % mod.SCRIPTS) in t1
+        assert t1.split("\n---\nTASK: ")[0] == t2.split("\n---\nTASK: ")[0]
+        assert t1.endswith("TASK: p1") and t2.endswith("TASK: p2")
+
+    def test_other_harness_names_the_agent_without_lanes_file(self):
+        mod, rc, out, d = self._run("claude")
+        assert rc == 0
+        assert (d / "t1.txt").is_file()
+        assert not (d / "lanes.json").exists()
+        assert "debug-worker" in out
+        assert "oc_harness.py run" not in out
 
 
 if __name__ == "__main__":

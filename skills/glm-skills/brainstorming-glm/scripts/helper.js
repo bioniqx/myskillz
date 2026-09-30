@@ -160,7 +160,8 @@
   // Expose API for explicit use
   window.brainstorm = {
     send: sendEvent,
-    choice: (value, metadata = {}) => sendEvent({ type: 'choice', value, ...metadata })
+    // server.cjs records only events that carry a `choice` key; send it too.
+    choice: (value, metadata = {}) => sendEvent({ type: 'choice', value, choice: value, ...metadata })
   };
 
   connect();

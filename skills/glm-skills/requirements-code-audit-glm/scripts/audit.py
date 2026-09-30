@@ -23,6 +23,7 @@ import codecs
 import io
 import json
 import os
+import posixpath
 import random
 import re
 import shutil
@@ -270,12 +271,13 @@ BIN_EXT = set("""
 # Prose documentation is excluded from evidence STRUCTURALLY -- the retriever
 # cannot return it, so no prompt rule has to be trusted for principle 3.
 DOC_EXT = set(".md .markdown .mdx .rst .adoc .asciidoc .txt .rtf .org .wiki".split())
+RUNTIME_TXT = re.compile(r"^(requirements|constraints)([-_.][\w.-]*)?\.txt$"
+                         r"|^(cmakelists|robots|llms)\.txt$", re.I)
 DOC_NAME = re.compile(
     r"^(readme|changelog|changes|history|contributing|code_of_conduct|license|licence"
-    r"|notice|authors|maintainers|roadmap|todo|architecture|adr[-_]?\d*|design|rfc"
-    r"|security|support|upgrading|migrating|faq|glossary)\b", re.I)
-DOC_DIRS = re.compile(r"(^|/)(docs?|documentation|wiki|adr|adrs|rfcs?|design|handbook|"
-                      r"\.github|site|website|book|blog|papers?)(/|$)", re.I)
+    r"|copying|notice|authors|maintainers|to[d]o)$", re.I)
+DOC_DIRS = re.compile(r"(^|/)(docs?|documentation|wiki|adrs?|rfcs?|handbook|"
+                      r"\.github)(/|$)", re.I)
 # ...but anything the program itself loads, validates against or executes is
 # implementation and stays fair game.
 RUNTIME_DATA = re.compile(
@@ -295,9 +297,10 @@ CODE_EXT = set("""
 def is_doc(rel):
     base = os.path.basename(rel)
     stem, ext = os.path.splitext(base)
-    if ext.lower() in DOC_EXT:
-        return True
-    if DOC_NAME.match(stem) and not RUNTIME_DATA.search(base):
+    ext = ext.lower()
+    if ext in DOC_EXT:
+        return not RUNTIME_TXT.match(base)
+    if not ext and DOC_NAME.match(stem):
         return True
     if DOC_DIRS.search("/" + rel.replace(os.sep, "/")) and not RUNTIME_DATA.search(base):
         return True
@@ -319,7 +322,8 @@ def walk_repo(root, max_files=60000):
             rel = os.path.relpath(full, root).replace(os.sep, "/")
             if is_doc(rel):
                 continue
-            if ext and ext not in CODE_EXT and not RUNTIME_DATA.search(fn):
+            if (ext and ext not in CODE_EXT and not RUNTIME_DATA.search(fn)
+                    and not RUNTIME_TXT.match(fn)):
                 if not (ext == "" or fn in ("Makefile", "Dockerfile", "Procfile")):
                     continue
             try:
@@ -601,11 +605,11 @@ class Retriever(object):
         for e in sorted(DOC_EXT):
             args += ["--glob", "!*" + e]
         if tests_only:
-            args += ["--glob", "*test*", "--glob", "*spec*", "--glob", "tests/**",
-                     "--glob", "__tests__/**"]
+            args += ["--glob", "*test*", "--glob", "*spec*", "--glob", "**/tests/**",
+                     "--glob", "**/__tests__/**"]
         if data_only:
-            args += ["--glob", "*.json", "--glob", "*.ya?ml", "--glob", "*.sql",
-                     "--glob", "*.toml", "--glob", "*.prisma", "--glob", "migrations/**",
+            args += ["--glob", "*.json", "--glob", "*.{yml,yaml}", "--glob", "*.sql",
+                     "--glob", "*.toml", "--glob", "*.prisma", "--glob", "**/migrations/**",
                      "--glob", "*.xml", "--glob", "*.env*", "--glob", "*.conf"]
         for p in patterns:
             args += ["-e", p]
@@ -1003,10 +1007,15 @@ def verify_task(it, prelim, regions, ret2, tried):
 
 # --------------------------------------------------------------------------- API client
 
+LENGTH_STOPS = ("length", "max_tokens")
+LENGTH_RETRY_CAP = 4096
+
+
 class Client(zai_client.Client):
     """Transport, retries, 429/1302/1305 backoff and the shared AIMD width live
     in the vendored zai_client. This adapter keeps audit's call() shape and the
-    per-run counters that run, parse and doctor print."""
+    per-run counters that run, parse and doctor print, and retries a reply that
+    stopped on the token cap (RA19)."""
 
     def __init__(self, base, key, route=None, timeout=900):
         # route passed into __init__ (not set after) so self.url is computed from it
@@ -1016,17 +1025,38 @@ class Client(zai_client.Client):
         self.in_tok = 0
         self.out_tok = 0
         self.cache_read = 0
+        self.truncated = 0
+        self._tl = threading.local()
 
-    def call(self, model, effort, prefix, task, max_tokens, temperature=None, retries=3):
-        # explicit base-class call: self.call(...) would recurse into this override
-        text = zai_client.Client.call(self, model, effort, prefix, task, max_tokens,
-                                       temperature=temperature, retries=retries)
-        s = zai_client.Client.stats(self)  # shared-client's cumulative totals, not just this reply
-        self.calls = s["calls"]
-        self.in_tok = s["in_tok"]
-        self.out_tok = s["out_tok"]
-        self.cache_read = s["cache_read"]
-        return text or ""
+    def _done(self, obj):
+        fr = ""
+        ch = obj.get("choices") if isinstance(obj, dict) else None
+        if isinstance(ch, list) and ch and isinstance(ch[0], dict):
+            fr = ch[0].get("finish_reason") or ""
+        elif isinstance(obj, dict):
+            fr = obj.get("stop_reason") or ""
+        self._tl.finish = str(fr)
+        return zai_client.Client._done(self, obj)
+
+    def call(self, model, effort, prefix, task, max_tokens, temperature=None, retries=3,
+             grow=True):
+        mt = max_tokens
+        while True:
+            self._tl.finish = ""
+            # explicit base-class call: self.call(...) would recurse into this override
+            text = zai_client.Client.call(self, model, effort, prefix, task, mt,
+                                           temperature=temperature, retries=retries)
+            s = zai_client.Client.stats(self)  # shared-client's cumulative totals, not just this reply
+            self.calls = s["calls"]
+            self.in_tok = s["in_tok"]
+            self.out_tok = s["out_tok"]
+            self.cache_read = s["cache_read"]
+            if grow and self._tl.finish in LENGTH_STOPS and mt < LENGTH_RETRY_CAP:
+                mt = min(LENGTH_RETRY_CAP, mt * 2)
+                with self._lock:
+                    self.truncated += 1
+                continue
+            return text or ""
 
 
 def extract_json(text):
@@ -1122,6 +1152,32 @@ def file_lines(root, rel):
         return None
 
 
+def norm_cite_path(raw, root):
+    """Normalise a cited evidence path to repo-relative form.
+
+    Strips a leading "./" only, so a dotfile such as .eslintrc.json keeps its
+    dot. An absolute path under root becomes relative. Returns (path, outside):
+    outside is True for a path that does not live under root."""
+    path = str(raw or "").strip().replace(os.sep, "/")
+    while path.startswith("./"):
+        path = path[2:]
+    if not path:
+        return path, False
+    if not os.path.isabs(path):
+        if ".." not in path.split("/"):
+            return path, False
+        path = posixpath.normpath(path)
+        return path, path == ".." or path.startswith("../")
+    try:
+        base = os.path.realpath(os.path.abspath(root))
+        rel = os.path.relpath(os.path.realpath(path), base).replace(os.sep, "/")
+    except ValueError:
+        return path, True
+    if rel == "." or rel == ".." or rel.startswith("../") or os.path.isabs(rel):
+        return path, True
+    return rel, False
+
+
 def lint_finding(row, item, root, retrieved_paths, kind="finding"):
     """Deterministic gate. Everything it rejects is handed straight back to the
     model as the repair prompt, so a bad answer costs one cheap retry, never a
@@ -1150,9 +1206,12 @@ def lint_finding(row, item, root, retrieved_paths, kind="finding"):
     for e in ev_in[:8]:
         if not isinstance(e, dict):
             continue
-        path = str(e.get("path") or e.get("file") or "").strip().lstrip("./")
-        path = path.replace(os.sep, "/")
+        path, outside = norm_cite_path(e.get("path") or e.get("file"), root)
         if not path:
+            continue
+        if outside:
+            errs.append("evidence path %s is outside the codebase; cite repo-relative "
+                        "paths shown in the excerpts" % path)
             continue
         if is_doc(path):
             errs.append("evidence path %s is prose documentation, which is never "
@@ -1225,8 +1284,10 @@ class Fan(object):
             self._live -= 1
 
     def run(self, jobs, label="wave", warm=True):
-        """jobs: [(key, fn)] where fn() -> result. Warms the shared prefix with
-        one request so requests 2..N hit the prompt cache."""
+        """jobs: [(key, fn)] where fn() -> result. warm is either a callable that
+        makes exactly one cheap request on the shared prefix (RA18), so every
+        job starts with the prefix cached, or True for the legacy warm-up that
+        runs the first job alone before the rest."""
         if not jobs:
             return {}
         res = {}
@@ -1250,7 +1311,14 @@ class Fan(object):
                         sys.stderr.flush()
 
         start = 0
-        if warm and total >= 6:
+        if callable(warm):
+            if total >= 6:
+                try:
+                    warm()
+                except Exception as e:
+                    if not self.quiet:
+                        sys.stderr.write("  %s warm-up failed: %s\n" % (label, clip(str(e), 120)))
+        elif warm and total >= 6:
             k, f = jobs[0]
             k2, v, e = wrapped(k, f)
             res[k2] = (v, e)
@@ -1271,6 +1339,16 @@ class Fan(object):
             sys.stderr.write("  %s done: %d in %s (peak concurrency %d)\n"
                              % (label, total, fmt_dur(now() - t0), self.peak))
         return res
+
+
+WARM_TASK = u"Reply with the JSON object {} and nothing else."
+
+
+def warm_call(cl, model_effort, prefix):
+    """RA18: one small request that puts the wave's shared prefix in the prompt
+    cache. Never grown on a length stop: only the cached prefix matters."""
+    model, effort = model_effort
+    return lambda: cl.call(model, effort, prefix, WARM_TASK, 64, temperature=0.0, grow=False)
 
 
 # --------------------------------------------------------------------------- api lane waves
@@ -1320,9 +1398,11 @@ def judge_one(c, cl, retr, prefix, it, tier, mt):
                           u"strategies after your first answer was %s. Decide now." % st, mt,
                           temperature=0.0)
             row2 = extract_json(txt) or {}
-            fix2, errs2, _w = lint_finding(row2, it, retr.root, paths)
+            fix2, errs2, warns2 = lint_finding(row2, it, retr.root, paths)
             if not errs2:
-                fix = fix2
+                # RA4: the accepted pass-2 answer replaces pass 1 outright; pass-1
+                # errors and warnings describe an answer that no longer exists.
+                fix, errs, warns = fix2, [], warns2
     fix["searched"] = queries[:60]
     fix["passes"] = passes
     fix["retrieval"] = {"engine": r1["engine"], "files": r1["considered"],
@@ -1365,7 +1445,13 @@ def verify_one(c, cl, retr, prefix, it, prelim, tier, mt):
         fix, errs, warns = lint_finding(row, itv, retr.root, paths, kind="verdict")
     fix["searched"] = (r2["queries"])[:40]
     if errs:
+        # RA5: a verdict the checker rejected is no verdict. Keep what it said
+        # for the queue, but never let its status or evidence reach the merge.
         fix["lint_error"] = errs[:4]
+        fix["rejected_status"] = fix.get("verified_status")
+        fix["verified_status"] = "UNSEARCHED"
+        fix["evidence"] = []
+        fix["agree"] = False
     return fix
 
 
@@ -1382,6 +1468,17 @@ def needs_verify(it, f):
         return True
     return False
 
+
+def verify_targets(order, by_id, findings, done, prev_ver):
+    """RA20: ids wave B must still verify, plus the verdicts a --resume keeps.
+    A verdict is kept only when its finding was settled before this run (so
+    the finding it judged is unchanged) and the checker accepted it."""
+    kept = dict((rid, prev_ver[rid]) for rid in order
+                if rid in done and rid in prev_ver and not prev_ver[rid].get("lint_error"))
+    vset = [rid for rid in order
+            if rid not in kept and needs_verify(by_id[rid], findings[rid])]
+    return vset, kept
+
 # --------------------------------------------------------------------------- merge
 
 class Merged(object):
@@ -1394,6 +1491,7 @@ class Merged(object):
         self.by_id = dict((r.get("id"), r) for r in self.items if r.get("id"))
         self.find = {}
         self.ver = {}
+        self.ver_rejected = {}
         self.adj = {}
         for r, _b in [read_jsonl(c.p("findings.jsonl"))]:
             for row in r:
@@ -1411,18 +1509,29 @@ class Merged(object):
                         self.find[rid] = row
         for r, _b in [read_jsonl(c.p("verdicts.jsonl"))]:
             for row in r:
-                if row.get("id"):
-                    self.ver[row["id"]] = row
+                self._add_verdict(row)
         for name in sorted(os.listdir(c.p("verify")) if os.path.isdir(c.p("verify")) else []):
             if name.endswith(".jsonl"):
                 rows, _b = read_jsonl(c.p("verify", name))
                 for row in rows:
-                    if row.get("id"):
-                        self.ver[row["id"]] = row
+                    self._add_verdict(row)
         rows, _b = read_jsonl(c.p("adjudications.jsonl"))
         for row in rows:
             if row.get("id"):
                 self.adj[row["id"]] = row
+
+    def _add_verdict(self, row):
+        """RA5: a verdict row carrying lint_error was rejected by the checker.
+        It is kept aside for the queue and the gate, never used as a verdict."""
+        rid = row.get("id")
+        if not rid:
+            return
+        if row.get("lint_error"):
+            self.ver_rejected[rid] = row
+            self.ver.pop(rid, None)
+        else:
+            self.ver[rid] = row
+            self.ver_rejected.pop(rid, None)
 
     def final(self, rid):
         it = self.by_id.get(rid) or {}
@@ -1528,12 +1637,7 @@ def cmd_brief(a):
     repo = os.path.abspath(a.repo or os.getcwd())
     out = os.path.abspath(a.out or os.environ.get("AUDIT_DIR") or ".audit")
     specs = list(a.spec or [])
-    if a.spec_text:
-        mk(os.path.join(out, "spec"))
-        p = os.path.join(out, "spec", "pasted-requirements.txt")
-        write_text(p, a.spec_text)
-        specs.append(p)
-    if not specs:
+    if not specs and not a.spec_text:
         die("no requirements input. Pass --spec <file> (or --spec-text \"...\").")
     for s in specs:
         if not os.path.exists(s):
@@ -1547,6 +1651,13 @@ def cmd_brief(a):
             sys.stderr.write("archived previous audit to %s\n" % prev)
         except Exception:
             pass
+    # the pasted spec is written only after the refusal and the archive, so it
+    # never clobbers a live audit and never gets moved into the .prev- copy
+    if a.spec_text:
+        mk(os.path.join(out, "spec"))
+        p = os.path.join(out, "spec", "pasted-requirements.txt")
+        write_text(p, a.spec_text)
+        specs.append(p)
     mk(out)
     mk(os.path.join(out, "spec"))
     kept = []
@@ -1873,7 +1984,7 @@ def cmd_run(a):
             return lambda: judge_one(c, cl, retr, jp, it, c.tier, mt)
         jobs.append((it["id"], mk()))
     fan = Fan(cl, c.threads)
-    res = fan.run(jobs, "judged")
+    res = fan.run(jobs, "judged", warm=warm_call(cl, c.tcfg["judge"], jp))
     findings = dict(done)
     for rid, (row, err) in res.items():
         if err is not None:
@@ -1886,11 +1997,16 @@ def cmd_run(a):
     write_jsonl(c.p("findings.jsonl"), [findings[i] for i in order])
 
     by_id = dict((it["id"], it) for it in items)
-    vset = [rid for rid in order if needs_verify(by_id[rid], findings[rid])]
+    prev_ver = {}
+    if a.resume:
+        vrows, _b = read_jsonl(c.p("verdicts.jsonl"))
+        prev_ver = dict((r["id"], r) for r in vrows if r.get("id"))
+    vset, kept = verify_targets(order, by_id, findings, done, prev_ver)
     print("")
-    print("WAVE B  %d of %d need an adversarial second pass  %s effort=%s"
-          % (len(vset), len(order), c.tcfg["verify"][0], c.tcfg["verify"][1]))
-    verdicts = {}
+    print("WAVE B  %d of %d need an adversarial second pass  %s effort=%s%s"
+          % (len(vset), len(order), c.tcfg["verify"][0], c.tcfg["verify"][1],
+             ("  (%d verdict(s) kept from the last run)" % len(kept)) if kept else ""))
+    verdicts = dict(kept)
     if vset and not a.no_verify:
         vjobs = []
         for rid in vset:
@@ -1898,16 +2014,19 @@ def cmd_run(a):
                 return lambda: verify_one(c, cl, retr, vp, by_id[rid], findings[rid],
                                           c.tier, mt)
             vjobs.append((rid, mkv()))
-        vres = Fan(cl, c.threads).run(vjobs, "verified")
+        vres = Fan(cl, c.threads).run(vjobs, "verified",
+                                      warm=warm_call(cl, c.tcfg["verify"], vp))
         for rid, (row, err) in vres.items():
             if err is None:
                 verdicts[rid] = row
             else:
                 print("WARN  verify %s failed: %s" % (rid, clip(str(err), 120)))
-        write_jsonl(c.p("verdicts.jsonl"), [verdicts[i] for i in order if i in verdicts])
     elif a.no_verify:
         print("  skipped by --no-verify. The report will say so; MISSING items stay "
               "single-pass and `check` will fail.")
+    if verdicts or (vset and not a.no_verify):
+        # kept + new verdicts together, so a --resume never drops settled ones
+        write_jsonl(c.p("verdicts.jsonl"), [verdicts[i] for i in order if i in verdicts])
 
     st = c.state()
     st["run"] = {"at": ts_iso(), "seconds": round(now() - t0, 1), "tier": c.tier,
@@ -1959,7 +2078,7 @@ def cmd_queue(a):
             why.append("low confidence")
         if str(it.get("stakes")) == "high" and st != "MATCHED":
             why.append("high stakes")
-        if f.get("lint_error") or v.get("lint_error"):
+        if f.get("lint_error") or rid in m.ver_rejected:
             why.append("checker rejected the model's answer")
         if not why:
             continue
@@ -2234,6 +2353,9 @@ def cmd_check(a):
             continue
         if _tagged_unverifiable(it):
             continue
+        if rid in m.ver_rejected and rid not in m.adj:
+            errs.append("%s: the checker rejected the verifier's answer, so it has no second "
+                        "pass -- adjudicate it or rerun: audit.py run --resume" % rid)
         if fs == "MISSING":
             v = m.ver.get(rid)
             adj = m.adj.get(rid)
@@ -2405,6 +2527,120 @@ def _batch_file(c, retr, name, items, kind="find"):
     return c.p("batches", name + ".md")
 
 
+def _plan_resume(c):
+    """Agent-lane resume: keep every batch whose ids all have a final pass-1
+    finding. Returns (kept batches, settled ids, first free batch number)."""
+    st = c.state()
+    old = st.get("batches") or {}
+    m = Merged(c)
+    settled = set(rid for rid, f in m.find.items()
+                  if str(f.get("status") or "").upper() in FINAL_STATUSES)
+    kept = {}
+    for name, b in old.items():
+        ids = b.get("ids") or []
+        if ids and all(i in settled for i in ids):
+            kept[name] = b
+    nums = [batch_key(n)[0] for n in old]
+    return kept, settled, (max(nums) + 1 if nums else 1)
+
+
+OC_MODEL = {FLASH: "flash", PRO: "pro"}  # oc_harness run lane model names
+
+
+def _oc():
+    try:
+        import oc_harness  # vendored next to this script by _shared/sync.sh
+    except ImportError:
+        return None
+    return oc_harness
+
+
+def _on_opencode():
+    oc = _oc()
+    return bool(oc) and oc.harness(os.path.abspath(__file__)) == "opencode"
+
+
+def _oc_major():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    m = _oc().major(skill_dir=root)
+    return m if m >= 2 else 1
+
+
+def _oc_script():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "oc_harness.py")
+
+
+def _dispatch(agent, prompt_path, description):
+    """One dispatch line for the agent lane. Never names a model alias."""
+    if _on_opencode():
+        return _oc().dispatch_line(agent, prompt_path, description, _oc_major(),
+                                   background=True)
+    return u"subagent_type=%s  prompt: read %s and follow it exactly" % (agent, prompt_path)
+
+
+def _oc_lane_wave(lanes_dir, name, batches, agent, model, effort, repo):
+    """Write lanes_dir/wave-<name>.json (one lane per batch); return the NEXT line."""
+    lanes_dir = os.path.abspath(lanes_dir)
+    mk(lanes_dir)
+    lanes = [{"id": b, "agent": agent, "model": OC_MODEL.get(model, model),
+              "effort": effort, "dir": os.path.abspath(repo), "brief": os.path.abspath(p)}
+             for b, p in batches]
+    path = os.path.join(lanes_dir, "wave-%s.json" % name)
+    write_text(path, json.dumps(lanes, indent=2, ensure_ascii=False) + u"\n")
+    return u"NEXT: python3 %s run %s --out %s" % (_oc_script(), path,
+                                                   os.path.join(lanes_dir, name))
+
+
+def _print_dispatch(c, wave, batches, agent, role, header):
+    """OpenCode v1: one oc_harness run command for the whole wave (parallel lanes).
+    Everywhere else: one dispatch line per batch."""
+    if _on_opencode() and _oc_major() == 1:
+        model, effort = c.tcfg[role][0], c.tcfg[role][1]
+        print(header + " -- OpenCode v1: one opencode process per lane, all in parallel:")
+        print(_oc_lane_wave(c.p("oc-lanes"), wave, batches, agent, model, effort,
+                            os.getcwd()))
+        return
+    print(header + " -- emit ALL of these in ONE message (they are independent):")
+    print("  ZCode: subagents launched together run in parallel.")
+    print("  OpenCode v2: background subagent calls run in parallel.")
+    for name, p in batches:
+        print("  " + _dispatch(agent, p, "rca " + name))
+
+
+def _oc_lanes():
+    """OpenCode lane width: OC_MAX_LANES, default 8, never below 1."""
+    try:
+        n = int(os.environ.get("OC_MAX_LANES") or 8)
+    except ValueError:
+        n = 8
+    return max(1, n)
+
+
+def _even_groups(items, n):
+    """Split items, in order, into n groups whose sizes differ by at most one."""
+    if not items:
+        return []
+    n = max(1, min(n, len(items)))
+    q, r = divmod(len(items), n)
+    out, i = [], 0
+    for k in range(n):
+        j = i + q + (1 if k < r else 0)
+        out.append(items[i:j])
+        i = j
+    return out
+
+
+def _agent_groups(items, cap, max_per, opencode):
+    """Agent-lane batches. OpenCode: at most _oc_lanes() batches, grouped evenly.
+    Elsewhere: fixed chunks of 1..max_per items so at most cap batches."""
+    if not items:
+        return []
+    if opencode:
+        return _even_groups(items, min(len(items), cap, _oc_lanes()))
+    size = 1 if len(items) <= cap else min(max_per, (len(items) + cap - 1) // cap)
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
 def cmd_plan(a):
     c = Ctx(a.out)
     items, bad = c.checklist()
@@ -2415,25 +2651,31 @@ def cmd_plan(a):
         print("\n".join("ERR  " + e for e in errs[:20]))
         die("fix the checklist or pass --force")
     live = [it for it in items if not _tagged_unverifiable(it)]
+    kept, first = {}, 1
+    if getattr(a, "resume", False):
+        kept, settled, first = _plan_resume(c)
+        live = [it for it in live if it["id"] not in settled]
+        print("resume: %d finished batch(es) kept, %d requirement(s) to re-batch"
+              % (len(kept), len(live)))
+        if not live:
+            st = c.state()
+            st["batches"] = dict(kept)
+            c.save_state(st)
+            print("NEXT: audit.py status")
+            return
     cap = int(a.cap or c.threads or 20)
-    size = 1 if len(live) <= cap else min(12, (len(live) + cap - 1) // cap)
+    ordered = sorted(live, key=lambda r: (r.get("category") or "", r["id"]))
+    groups = _agent_groups(ordered, cap, 12, _on_opencode())
+    size = max([len(g) for g in groups] or [0])
     retr = Retriever(c)
-    groups, cur = [], []
-    for it in sorted(live, key=lambda r: (r.get("category") or "", r["id"])):
-        cur.append(it)
-        if len(cur) >= size:
-            groups.append(cur)
-            cur = []
-    if cur:
-        groups.append(cur)
     mk(c.p("findings"))
     mk(c.p("verify"))
     st = c.state()
-    st["batches"] = {}
-    print("plan: %d requirements -> %d batch file(s) of %d, excerpts pre-retrieved"
+    st["batches"] = dict(kept)
+    print("plan:%d requirements -> %d batch file(s) of %d, excerpts pre-retrieved"
           % (len(live), len(groups), size))
     lines = []
-    for i, g in enumerate(groups, 1):
+    for i, g in enumerate(groups, first):
         name = "batch-%02d" % i
         p = _batch_file(c, retr, name, g, "find")
         st["batches"][name] = {"ids": [x["id"] for x in g], "wave": "A",
@@ -2441,13 +2683,7 @@ def cmd_plan(a):
         lines.append((name, p))
     c.save_state(st)
     print("")
-    print("DISPATCH -- emit ALL of these in ONE message (they are independent):")
-    print("  ZCode: subagents launched together run in parallel.")
-    print("  OpenCode: it dispatches them one at a time; that is an OpenCode limitation,")
-    print("  not a plan problem -- the api lane exists precisely to avoid it.")
-    for name, p in lines:
-        print("  subagent_type=rca-investigator model=%s  prompt: read %s and follow it exactly"
-              % (AGENT_ALIAS[c.tcfg["judge"][0]], p))
+    _print_dispatch(c, "A", lines, "rca-investigator", "judge", "DISPATCH")
     print("")
     print("NEXT after the workers report: audit.py status")
 
@@ -2464,24 +2700,20 @@ def cmd_status(a):
     print("coverage: %d/%d settled by pass 1" % (len(live) - len(missing_ids), len(live)))
     if missing_ids:
         print("still open: %s" % ", ".join(missing_ids[:20]))
+    redispatch = bool(getattr(a, "redispatch", False))
+    dispatched = set()
+    for b in (st.get("vbatches") or {}).values():
+        dispatched.update(b.get("ids") or [])
+    pending = sorted(i for i in dispatched if i not in m.ver)
     vset = [i for i in live if i in have and needs_verify(by_id[i], m.find[i])
-            and i not in m.ver]
+            and i not in m.ver and (redispatch or i not in dispatched)]
     retr = Retriever(c)
     if vset:
         cap = int(a.cap or c.threads or 20)
-        size = 1 if len(vset) <= cap else min(6, (len(vset) + cap - 1) // cap)
         idx = len([k for k in (st.get("vbatches") or {})])
-        groups, cur = [], []
-        for rid in vset:
-            cur.append(rid)
-            if len(cur) >= size:
-                groups.append(cur)
-                cur = []
-        if cur:
-            groups.append(cur)
+        groups = _agent_groups(list(vset), cap, 6, _on_opencode())
         st.setdefault("vbatches", {})
-        print("")
-        print("DISPATCH verifiers -- ONE message:")
+        vlines = []
         for j, g in enumerate(groups, idx + 1):
             name = "batch-V%02d" % j
             its = []
@@ -2500,11 +2732,20 @@ def cmd_status(a):
                          u"PARTIAL/CONFLICT -> read the whole enclosing function. "
                          u"MATCHED -> check the exact wording, limits, defaults, error paths.\n")
             st["vbatches"][name] = {"ids": g, "wave": "B", "dispatched": ts_iso()}
-            print("  subagent_type=rca-verifier model=%s  prompt: read %s and follow it exactly"
-                  % (AGENT_ALIAS[c.tcfg["verify"][0]], p))
+            vlines.append((name, p))
+        print("")
+        _print_dispatch(c, "V%02d" % (idx + 1), vlines, "rca-verifier", "verify",
+                        "DISPATCH verifiers")
         c.save_state(st)
         print("")
         print("NEXT after they report: audit.py status  (again), then audit.py queue")
+        return
+    if pending and not redispatch:
+        print("")
+        print("waiting on %d verifier result(s) already dispatched: %s"
+              % (len(pending), ", ".join(pending[:20])))
+        print("NEXT: when the verifiers report, run audit.py status again "
+              "(audit.py status --redispatch re-packs them if a worker was lost)")
         return
     cnt = m.counts()
     print("")
@@ -2581,8 +2822,11 @@ def cmd_setup(a):
         print("zai-coding-plan login also works, audit.py reads its auth.json):")
         print(SETUP_ENV_OPENCODE)
         print("\nOpenCode: agents run on zai-coding-plan/glm-5.3-flash (workers) and")
-        print("zai-coding-plan/glm-5.3 (judgment). The api lane holds the 64 threads; the")
-        print("agent-lane fallback runs through oc_harness.py run, one opencode process per lane.")
+        print("zai-coding-plan/glm-5.3 (judgment). The api lane holds the 64 threads.")
+        print("Agent-lane fallback: plan makes at most OC_MAX_LANES (default 8) batches.")
+        print("v1 runs them in parallel through oc_harness.py run (one opencode process")
+        print("per lane; plan/status print the exact NEXT command).")
+        print("v2 dispatches them as background subagent calls that run in parallel.")
         print("\nVerify with: python3 %s doctor --ping" % os.path.join(here, "audit.py"))
         return 0
     sk = os.path.join(home, ".zcode", "skills", "requirements-code-audit")
@@ -2658,10 +2902,14 @@ def main(argv=None):
     p = sub.add_parser("plan", help="agent lane: batch files with excerpts + dispatch list")
     p.add_argument("--cap", type=int, default=None)
     p.add_argument("--force", action="store_true")
+    p.add_argument("--resume", action="store_true",
+                   help="keep finished batches, re-batch only unsettled ids")
     p.set_defaults(fn=cmd_plan)
 
     p = sub.add_parser("status", help="agent lane: merge, pack verifiers, print NEXT")
     p.add_argument("--cap", type=int, default=None)
+    p.add_argument("--redispatch", action="store_true",
+                   help="re-pack verifiers that were dispatched but never reported")
     p.set_defaults(fn=cmd_status)
 
     p = sub.add_parser("queue", help="what needs your judgment, with lines to read")
@@ -2706,8 +2954,9 @@ def main(argv=None):
     if not getattr(a, "fn", None):
         ap.print_help()
         return 0
+    rc = 0
     try:
-        a.fn(a)
+        rc = a.fn(a)
     except KeyboardInterrupt:
         die("interrupted", 130)
     except BrokenPipeError:
@@ -2717,7 +2966,7 @@ def main(argv=None):
         except Exception:
             pass
         return 0
-    return 0
+    return int(rc or 0)
 
 
 if __name__ == "__main__":

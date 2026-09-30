@@ -6,7 +6,7 @@ description: >-
   correctness, edge cases, error handling, security, concurrency, performance,
   maintainability, scope creep and test coverage/leanness. Writes a structured report
   with ready-to-dispatch fix slices; never edits code, so re-review stays impartial.
-model: opus
+model: claude-sonnet-5-5
 effort: high
 background: true
 tools: Read, Grep, Glob, Bash, Write

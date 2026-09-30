@@ -24,12 +24,17 @@ defect to explain, not a habit.
 Run this as your FIRST tool call, with the spec path in place of `SPEC`:
 
 ```bash
-T="$(ls -d ~/.zcode/skills/writing-plans/scripts/plan_tool.py \
-  ~/.config/opencode/skills/writing-plans/scripts/plan_tool.py \
-  ~/.claude/skills/writing-plans/scripts/plan_tool.py \
-  ~/.agents/skills/writing-plans/scripts/plan_tool.py \
-  .opencode/skills/writing-plans/scripts/plan_tool.py \
-  .claude/skills/writing-plans/scripts/plan_tool.py 2>/dev/null | head -1)"
+for d in "${OPENCODE_CONFIG_DIR:-}/skills/writing-plans" \
+  .opencode/skills/writing-plans \
+  ~/.config/opencode/skills/writing-plans \
+  .agents/skills/writing-plans \
+  ~/.agents/skills/writing-plans \
+  .claude/skills/writing-plans \
+  ~/.claude/skills/writing-plans \
+  ~/.zcode/skills/writing-plans; do
+  [ -f "$d/scripts/plan_tool.py" ] && T="$d/scripts/plan_tool.py" && break
+done
+[ -z "$T" ] && echo "writing-plans skill not found in any standard location" >&2 && exit 1
 python3 "$T" brief SPEC
 ```
 

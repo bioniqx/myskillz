@@ -31,6 +31,113 @@ def detect(binary: str = "opencode") -> int:
     return int(match.group(1))
 
 
+OC_SKILL_DIRS = (os.path.join(".opencode", "skills"), os.path.join(".config", "opencode", "skills"))
+MAJOR_MARKER = ".oc-major"
+
+
+def _skill_dir_for(script_path):
+    """The skill folder of a script: its parent, or the parent's parent for a `scripts/` dir."""
+    folder = os.path.dirname(os.path.abspath(script_path))
+    return os.path.dirname(folder) if os.path.basename(folder) == "scripts" else folder
+
+
+def _has_part(path, rel):
+    return (os.sep + rel.strip(os.sep) + os.sep) in path
+
+
+def _within(path, root):
+    for base in (os.path.abspath(root), os.path.realpath(root)):
+        base = base.rstrip(os.sep)
+        if path == base or path.startswith(base + os.sep):
+            return True
+    return False
+
+
+def harness(script_path: str = "") -> str:
+    """Return 'opencode', 'claude', 'zcode' or 'unknown' for the harness running script_path.
+
+    v2.0.18 sets only OPENCODE_TERMINAL=1 in shell children, so the script location and the
+    install marker count as evidence too. script_path defaults to this module's own file."""
+    env = os.environ
+    if env.get("OPENCODE") or env.get("OPENCODE_TERMINAL") \
+            or env.get("DEVTEAM_HARNESS", "").strip().lower() == "opencode":
+        return "opencode"
+    script = os.path.abspath(script_path or __file__)
+    paths = [script, os.path.realpath(script)]
+    config_dir = env.get("OPENCODE_CONFIG_DIR", "")
+    for path in paths:
+        if any(_has_part(path, rel) for rel in OC_SKILL_DIRS):
+            return "opencode"
+        if config_dir and _within(path, config_dir):
+            return "opencode"
+    for folder in (os.path.dirname(script), _skill_dir_for(script)):
+        if os.path.isfile(os.path.join(folder, MAJOR_MARKER)):
+            return "opencode"
+    if env.get("CLAUDECODE") or any(k.startswith("CLAUDE_CODE") for k in env):
+        return "claude"
+    if any(k.startswith(("ZCODE", "Z_CODE")) for k in env):
+        return "zcode"
+    for path in paths:
+        if _has_part(path, ".zcode"):
+            return "zcode"
+        if _has_part(path, ".claude"):
+            return "claude"
+    return "unknown"
+
+
+_DETECT_CACHE = {}
+
+
+def _read_marker(skill_dir):
+    try:
+        with open(os.path.join(skill_dir, MAJOR_MARKER)) as fh:
+            value = int(fh.read().strip())
+    except (OSError, ValueError):
+        return 0
+    return value if value > 0 else 0
+
+
+def major(skill_dir: str = "", binary: str = "opencode") -> int:
+    """OpenCode major version: the skill's .oc-major marker first, then detect() cached per binary.
+
+    skill_dir defaults to the skill folder holding this module. 0 means unknown / not found."""
+    found = _read_marker(skill_dir or _skill_dir_for(__file__))
+    if found:
+        return found
+    if binary not in _DETECT_CACHE:
+        _DETECT_CACHE[binary] = detect(binary)
+    return _DETECT_CACHE[binary]
+
+
+FALLBACK_AGENT = "general"
+NON_OC_AGENTS = ("general-purpose", "Explore")
+
+
+def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str:
+    """The tool call a model copies to start one lane.
+
+    v1: task(subagent_type=..., description=..., prompt=...). v2: the renamed dispatch tool with
+    agent/description/prompt/background. Never emits a model alias: v2 rejects a model not written
+    provider/model. Unknown or Claude-only agent names fall back to the built-in `general`."""
+    name = (agent or "").strip()
+    if not name or name in NON_OC_AGENTS:
+        name = FALLBACK_AGENT
+    prompt = "Read %s and follow it exactly." % prompt_path
+    quoted = [json.dumps(value, ensure_ascii=False) for value in (name, description, prompt)]
+    if major >= 2:
+        return "subagent(agent=%s, description=%s, prompt=%s, background=%s)" % (
+            quoted[0], quoted[1], quoted[2], "true" if background else "false")
+    return "task(subagent_type=%s, description=%s, prompt=%s)" % (quoted[0], quoted[1], quoted[2])
+
+
+def _harness_line(script_path: str = "") -> str:
+    """`<harness> <major>` for the CLI; major stays 0 outside OpenCode so no binary is spawned."""
+    script = script_path or __file__
+    name = harness(script)
+    found = major(_skill_dir_for(script)) if name == "opencode" else 0
+    return "%s %d" % (name, found)
+
+
 def parse_frontmatter(text: str) -> tuple:
     lines = text.split("\n")
     if not lines or lines[0].strip() != "---":
@@ -66,7 +173,9 @@ def render_agent(text: str, major: int) -> str:
     fields, body = parse_frontmatter(text)
     description = fields.get("description", "")
     model_key = fields.get("model", "pro")
-    model_id = "{}/{}".format(PROVIDER, MODELS[model_key])
+    model_id = MODELS.get(model_key, model_key)
+    if "/" not in model_id:
+        model_id = "{}/{}".format(PROVIDER, model_id)
     effort = fields.get("effort", "high")
     steps = fields.get("steps")
     access = fields.get("access", "read")
@@ -126,6 +235,11 @@ def render_agent(text: str, major: int) -> str:
         lines.append("  webfetch: {}".format(web_perm))
         if write_paths:
             lines.append("  task: deny")
+        # v2 gates websearch separately from webfetch; an explicit value keeps a headless lane from
+        # opening the interactive provider form. `execute` is v2's code-mode tool, which would run
+        # code outside the `bash` permission, so it is always denied.
+        lines.append("  websearch: {}".format(web_perm))
+        lines.append("  execute: deny")
         # v2 applies the agent's variant when the `subagent` tool dispatches it; with no variant GLM
         # runs at max. `opencode run --model` overrides it, so build_run_cmd adds the #variant suffix.
         if effort in EFFORTS:
@@ -144,15 +258,26 @@ def render_command(text: str, major: int, skill_dir: str) -> str:
     return "\n".join(lines)
 
 
+WEBSEARCH_NOTE = (
+    "websearch: OpenCode v2 needs a websearch provider. Without one, a headless lane that calls",
+    "websearch opens an interactive form and times out. Option: keep the web-search-prime MCP",
+    "server below (it reads ZAI_API_KEY), or render agents with web: false.",
+    "variants: low/high/max set reasoningEffort, so `--model zai-coding-plan/glm-5.3#max` resolves.",
+)
+
+
 def config_snippet(major: int, deny: list) -> str:
     # Verified against the installed opencode v2.0.16 binary: `permission` is `PermissionConfig`, the same nested-map shape ({"skill": {"<name>": "deny"}}) in both major 1 and major 2.
+    # v2 `#max` fails with "Variant unavailable" unless the provider model defines `variants.max`.
+    # The result is JSONC (OpenCode parses opencode.json as JSONC): `//` note lines, then the object.
+    variants = {effort: {"reasoningEffort": effort} for effort in EFFORTS}
     config = {
         "$schema": "https://opencode.ai/config.json",
         "provider": {
             PROVIDER: {
                 "models": {
-                    MODELS["pro"]: {},
-                    MODELS["flash"]: {},
+                    MODELS["pro"]: {"variants": dict(variants)},
+                    MODELS["flash"]: {"variants": dict(variants)},
                 }
             }
         },
@@ -166,14 +291,51 @@ def config_snippet(major: int, deny: list) -> str:
     }
     if deny:
         config["permission"] = {"skill": {pattern: "deny" for pattern in deny}}
-    return json.dumps(config, indent=2)
+    notes = ["// " + line for line in WEBSEARCH_NOTE]
+    return "\n".join(notes) + "\n" + json.dumps(config, indent=2)
 
 
-THROTTLE_RE = re.compile(
-    r'\\?"(?:code|status|statusCode|status_code)\\?"\s*:\s*\\?"?(?:429|1302|1305|1313)(?!\d)'
-    r"|\b429 Too Many Requests\b",
-    re.I,
-)
+THROTTLE_CODES = ("1302", "1305")
+
+
+def _is_429(value) -> bool:
+    return value is not None and str(value).strip() == "429"
+
+
+def _zai_code(body) -> str:
+    """The Z.ai error code inside a v1 `responseBody` (a JSON string or an object), or ""."""
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except ValueError:
+            return ""
+    if not isinstance(body, dict):
+        return ""
+    err = body.get("error")
+    code = err.get("code") if isinstance(err, dict) else body.get("code")
+    return "" if code is None else str(code)
+
+
+def is_throttle_event(event: dict) -> bool:
+    """True only for an OpenCode error event that reports a rate limit.
+
+    v2: `{"type":"error","error":{"type":"provider.rate-limit","status":429}}` (or any status 429).
+    v1: `error.name == "APIError"` with `data.statusCode` 429, or a `data.responseBody` Z.ai code
+    1302/1305. Tool output, text and step events never count, whatever numbers they quote.
+    """
+    if not isinstance(event, dict) or event.get("type") != "error":
+        return False
+    err = event.get("error")
+    if not isinstance(err, dict):
+        return False
+    if err.get("type") == "provider.rate-limit" or _is_429(err.get("status")):
+        return True
+    data = err.get("data")
+    if err.get("name") != "APIError" or not isinstance(data, dict):
+        return False
+    return _is_429(data.get("statusCode")) or _zai_code(data.get("responseBody")) in THROTTLE_CODES
+
+
 RUN_FLAGS = ["--agent", "--model", "--format", "--auto", "--standalone"]
 
 
@@ -193,6 +355,9 @@ def check_run_flags(major: int, binary: str = "opencode") -> list:
 
 
 def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list:
+    """The `opencode run` argv for one lane. The brief is NOT in argv: _start_lane writes it to
+    the process's stdin and closes stdin. v2 wraps a whitespace argv message in literal quotes and
+    parses a leading `-` as a flag, and Linux argv hits E2BIG past 128 KiB."""
     model = lane.get("model") or "pro"
     if "/" not in model:
         model = PROVIDER + "/" + MODELS.get(model, model)
@@ -200,17 +365,13 @@ def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list:
     # frontmatter `reasoningEffort` and rejects the suffix.
     if major >= 2 and lane.get("effort") in EFFORTS:
         model += "#" + lane["effort"]
-    brief = lane["brief"]
-    if os.path.isfile(brief):
-        with open(brief) as f:
-            brief = f.read()
     if major < 2:
         # Absolute, so opencode's own --dir resolution can't re-resolve it a
         # second time against the subprocess cwd _start_lane already set to
         # this same directory (which would turn "docs" into "docs/docs").
         lane_dir = os.path.abspath(lane.get("dir") or ".")
         return [binary, "run", "--dir", lane_dir, "--agent", lane["agent"],
-                "-m", model, "--format", "json", "--auto", brief]
+                "-m", model, "--format", "json", "--auto"]
     # v2 has no --dir flag; the lane's working directory is instead passed as
     # the subprocess cwd (see _start_lane). --standalone runs a private
     # server in this process instead of talking to opencode's managed
@@ -218,7 +379,52 @@ def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list:
     # (DEVTEAM_ROLE/DEVTEAM_SLICE) instead of running inside a shared,
     # long-lived service process.
     return [binary, "run", "--standalone", "--agent", lane["agent"], "--model", model,
-            "--format", "json", "--auto", brief]
+            "--format", "json", "--auto"]
+
+
+def _lane_brief(lane):
+    """The lane's brief text: the file's content when `brief` names a file, else the string itself."""
+    brief = lane["brief"]
+    if os.path.isfile(brief):
+        with open(brief) as f:
+            return f.read()
+    return brief
+
+
+def _feed_stdin(proc, brief):
+    """Write the brief to the lane's stdin, then close it: v2 hangs while stdin stays open."""
+    try:
+        proc.stdin.write(brief)
+    except (OSError, ValueError):
+        pass
+    finally:
+        try:
+            proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+
+
+STALL_BY_ROLE = {"programmer": 900, "programmer-lite": 900, "team-leader": 900, "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600}
+
+
+def lane_stall(lane: dict, default: int = 180) -> int:
+    """Seconds without a JSON event before a lane counts as stalled.
+
+    v2 emits events only at step and part boundaries, so a long shell call or long thinking is
+    silent. Order: the lane's own positive `stall`, then STALL_BY_ROLE for its `role`, its env
+    `DEVTEAM_ROLE` or its `agent` name, then `default`.
+    """
+    value = lane.get("stall")
+    try:
+        if value is not None and int(value) > 0:
+            return int(value)
+    except (TypeError, ValueError):
+        pass
+    env = lane.get("env") or {}
+    for key in (lane.get("role"), env.get("DEVTEAM_ROLE"), lane.get("agent")):
+        if isinstance(key, str) and key in STALL_BY_ROLE:
+            return STALL_BY_ROLE[key]
+    return int(default)
 
 
 def _read_events(state):
@@ -231,13 +437,19 @@ def _read_events(state):
                 continue
             state["last"] = time.monotonic()
             state["last_event"] = line[:500]
-            if THROTTLE_RE.search(line):
-                state["throttles"] += 1
             try:
                 event = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(event, dict) and (event.get("type") == "error" or event.get("error")):
+            if not isinstance(event, dict):
+                continue
+            # Only error events feed the governor: tool output quoting "429" or "1302" never does.
+            if is_throttle_event(event):
+                state["throttles"] += 1
+            if event.get("type") == "aborted":
+                state["aborted"] = True
+                state["error"] = line[:500]
+            elif event.get("type") == "error" or event.get("error"):
                 state["error"] = line[:500]
 
 
@@ -250,7 +462,7 @@ def _last_line(path):
     return lines[-1][:500] if lines else ""
 
 
-def _start_lane(lane, out_dir, major, binary, width):
+def _start_lane(lane, out_dir, major, binary, width, stall=180):
     lane_id = str(lane["id"])
     err_path = os.path.join(out_dir, lane_id + ".err")
     err_file = open(err_path, "w")
@@ -261,21 +473,30 @@ def _start_lane(lane, out_dir, major, binary, width):
     # point the lane's file tools at the caller's directory.
     env["PWD"] = cwd
     try:
-        proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.DEVNULL,
+        brief = _lane_brief(lane)
+        proc = subprocess.Popen(build_run_cmd(lane, major, binary), stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=err_file, text=True, bufsize=1, env=env,
                                 start_new_session=True, cwd=cwd)
     except OSError as exc:
-        # A bad lane dir (or any other spawn failure) must not crash the
-        # whole wave; the caller turns this into a per-lane FAIL result.
+        # A bad lane dir, an unreadable brief file or any other spawn failure
+        # must not crash the whole wave; the caller turns this into a per-lane FAIL result.
         err_file.close()
         return {"id": lane_id, "start_error": str(exc)}
+    # start_new_session=True makes the lane its own process-group leader (pgid == pid); callers
+    # may os.killpg() the number in <out_dir>/<lane id>.pgid while the lane runs.
+    pgid_path = os.path.join(out_dir, lane_id + ".pgid")
+    with open(pgid_path, "w") as fh:
+        fh.write(str(proc.pid))
     now = time.monotonic()
     state = {"id": lane_id, "proc": proc, "err_path": err_path, "err_file": err_file,
              "out": os.path.join(out_dir, lane_id + ".jsonl"), "start": now, "last": now,
              "timeout": float(lane.get("timeout") or 0), "last_event": "", "error": "",
-             "throttles": 0, "seen": 0, "width": width}
+             "throttles": 0, "seen": 0, "width": width, "stall": lane_stall(lane, stall),
+             "pgid_path": pgid_path, "lane": lane}
     state["reader"] = threading.Thread(target=_read_events, args=(state,), daemon=True)
     state["reader"].start()
+    # A separate thread, so a brief larger than the pipe buffer can't block the scheduler.
+    threading.Thread(target=_feed_stdin, args=(proc, brief), daemon=True).start()
     return state
 
 
@@ -292,6 +513,41 @@ def _kill_group(proc):
         try:
             proc.kill()
         except OSError:
+            pass
+
+
+def _drop_pgid(state):
+    path = state.get("pgid_path")
+    if path:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def _raise_on_signal(signum, frame):
+    # Unwinds run_lanes, whose except-branch kills every running lane's process group.
+    raise SystemExit(128 + signum)
+
+
+def _install_signal_handlers():
+    """SIGTERM/SIGINT -> SystemExit in run_lanes; returns the previous handlers (main thread only)."""
+    if threading.current_thread() is not threading.main_thread():
+        return {}
+    old = {}
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        try:
+            old[signum] = signal.signal(signum, _raise_on_signal)
+        except (OSError, ValueError):
+            pass
+    return old
+
+
+def _restore_signal_handlers(old):
+    for signum, handler in old.items():
+        try:
+            signal.signal(signum, signal.SIG_DFL if handler is None else handler)
+        except (OSError, TypeError, ValueError):
             pass
 
 
@@ -317,15 +573,42 @@ def _write_result(out_dir, lane_id, status, exit_code, error, last_event="", thr
 
 
 def _finish(state, status, out_dir):
+    _drop_pgid(state)
     state["err_file"].close()
     code = state["proc"].returncode
     error = state["error"]
     if status is None:
-        status = "OK" if code == 0 else "FAIL"
+        # v2 `{"type":"aborted"}` fails the lane even when opencode exits 0.
+        status = "OK" if code == 0 and not state.get("aborted") else "FAIL"
     if status == "FAIL" and not error:
         error = _last_line(state["err_path"])
     return _write_result(out_dir, state["id"], status, code, error,
                           state["last_event"], state["throttles"], state["width"])
+
+
+STANDALONE_RACE = "Standalone server exited before reporting readiness"
+# v1 1.18 processes that start together on a fresh data dir all run the SQLite migrations; the
+# losers exit 1 with one of these on stderr (seen on opencode 1.18.33).
+V1_DB_RACES = ("database is locked", "Failed query:")
+# Retries per lane: a v1 retry can collide again with a sibling that is still migrating.
+RACE_RETRIES = {1: 3, 2: 1}
+# A re-queued lane waits this many seconds times its attempt number, so it does not collide again.
+RACE_RETRY_DELAY = 0.5
+
+
+def _standalone_race(state, major):
+    """Lanes started together on a fresh data dir race during init: v2 `run --standalone` losers
+    exit 1 with STANDALONE_RACE, v1 losers with a V1_DB_RACES message. Either way they emitted no
+    event and did no work, so they are safe to retry."""
+    if state["proc"].returncode == 0 or state["last_event"]:
+        return False
+    markers = (STANDALONE_RACE,) if major >= 2 else V1_DB_RACES
+    try:
+        with open(state["err_path"], errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return False
+    return any(m in text for m in markers)
 
 
 def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binary: str = "opencode", major: int = 0) -> list:
@@ -342,10 +625,17 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
     pending = list(lanes)
     running = []
     results = {}
+    retried = {}
+    not_before = {}
+    old_handlers = _install_signal_handlers()
     try:
         while pending or running:
-            while pending and len(running) < width:
-                state = _start_lane(pending.pop(0), out_dir, major, binary, width)
+            now = time.monotonic()
+            for item in [p for p in pending if not_before.get(str(p["id"]), 0) <= now]:
+                if len(running) >= width:
+                    break
+                pending.remove(item)
+                state = _start_lane(item, out_dir, major, binary, width, stall)
                 if "start_error" in state:
                     lane_id = state["id"]
                     results[lane_id] = _write_result(out_dir, lane_id, "FAIL", None,
@@ -358,9 +648,9 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
                 status = None
                 if state["proc"].poll() is None:
                     now = time.monotonic()
-                    if now - state["last"] > stall:
+                    if now - state["last"] > state["stall"]:
                         status = "STALL"
-                        state["error"] = "no event for %ss, last event: %s" % (stall, state["last_event"] or "none")
+                        state["error"] = "no event for %ss, last event: %s" % (state["stall"], state["last_event"] or "none")
                     elif state["timeout"] and now - state["start"] > state["timeout"]:
                         status = "TIMEOUT"
                         state["error"] = "timeout after %ss, last event: %s" % (state["timeout"], state["last_event"] or "none")
@@ -376,12 +666,82 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
                 state["reader"].join(5)
                 width = _absorb(state, width)
                 running.remove(state)
+                if (status is None and retried.get(state["id"], 0) < RACE_RETRIES.get(major, 1)
+                        and _standalone_race(state, major)):
+                    retried[state["id"]] = retried.get(state["id"], 0) + 1
+                    not_before[state["id"]] = time.monotonic() + RACE_RETRY_DELAY * retried[state["id"]]
+                    _drop_pgid(state)
+                    state["err_file"].close()
+                    pending.insert(0, state["lane"])
+                    continue
                 results[state["id"]] = _finish(state, status, out_dir)
     except BaseException:
+        # Exceptions, SIGTERM and SIGINT all land here: no lane outlives the caller.
         for state in running:
             _kill_group(state["proc"])
+            _drop_pgid(state)
         raise
+    finally:
+        _restore_signal_handlers(old_handlers)
     return [results[str(item["id"])] for item in lanes]
+
+
+def _event_text(event):
+    part = event.get("part")
+    if isinstance(part, dict) and isinstance(part.get("text"), str):
+        return part["text"]
+    text = event.get("text")
+    return text if isinstance(text, str) else ""
+
+
+def _final_text(path):
+    """Text of the last step that produced text. v2's final text step has no step_finish, so a
+    step is delimited by step_start only."""
+    last, current = [], []
+    try:
+        with open(path) as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return ""
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "step_start":
+            current = []
+        elif event.get("type") == "text":
+            text = _event_text(event)
+            if text:
+                current.append(text)
+                last = current
+    return "\n".join(last).strip()
+
+
+def lane_results(out_dir: str) -> list:
+    """One dict per lane in out_dir, sorted by id: id, status (RUNNING without a .done), error
+    and the lane's final assistant text, so callers never read the raw .jsonl."""
+    try:
+        names = os.listdir(out_dir)
+    except OSError:
+        return []
+    ids = sorted({n[:-5] for n in names if n.endswith(".done")}
+                 | {n[:-6] for n in names if n.endswith(".jsonl")})
+    rows = []
+    for lane_id in ids:
+        try:
+            with open(os.path.join(out_dir, lane_id + ".done")) as fh:
+                done = json.load(fh)
+        except (OSError, ValueError):
+            done = {}
+        if not isinstance(done, dict):
+            done = {}
+        rows.append({"id": lane_id, "status": done.get("status") or "RUNNING",
+                     "error": done.get("error") or "",
+                     "text": _final_text(os.path.join(out_dir, lane_id + ".jsonl"))})
+    return rows
 
 
 PROBE_AGENT = (
@@ -460,9 +820,10 @@ def install(skill_dir: str, major: int, home: str = "") -> list:
     return written
 
 
-def check(skill_dir: str) -> list:
+def check(skill_dir: str, home: str = "") -> list:
     name = skill_name(skill_dir)
-    marker = os.path.join(os.path.expanduser("~"), ".config", "opencode", "skills", name, ".oc-major")
+    root = os.path.join(home or os.path.expanduser("~"), ".config", "opencode")
+    marker = os.path.join(root, "skills", name, ".oc-major")
     if not os.path.isfile(marker):
         return ["MISSING: %s is not installed for OpenCode" % name]
     with open(marker) as fh:
@@ -546,14 +907,20 @@ def main(argv: list = None) -> int:
     p.add_argument("home", nargs="?", default="")
     p = sub.add_parser("check", help="verify installed skills against the local opencode")
     p.add_argument("skill_dirs", nargs="+")
+    p.add_argument("--home", default="", help="home dir holding .config/opencode (default ~)")
     p = sub.add_parser("snippet", help="print the opencode.json snippet")
     p.add_argument("major", nargs="?", type=int, default=0)
     p = sub.add_parser("run", help="run a lanes JSON file as parallel opencode processes")
     p.add_argument("lanes_json")
     p.add_argument("--out", default=".oc-lanes")
     p.add_argument("--width", type=int, default=int(os.environ.get("OC_MAX_LANES") or 8))
-    p.add_argument("--stall", type=int, default=180)
+    p.add_argument("--stall", type=int, default=180,
+                   help="stall seconds for lanes with no `stall` value and no role in STALL_BY_ROLE")
+    p = sub.add_parser("result", help="print each lane's final assistant text")
+    p.add_argument("out_dir")
     sub.add_parser("probe-effort", help="check whether OpenCode passes reasoning effort to GLM")
+    p = sub.add_parser("harness", help="print '<harness> <major>' for the running script")
+    p.add_argument("--script", default="", help="script whose location is checked (default: this file)")
     try:
         a = parser.parse_args(argv)
     except SystemExit as exc:
@@ -575,12 +942,15 @@ def main(argv: list = None) -> int:
     if a.cmd == "check":
         failed = False
         for skill_dir in a.skill_dirs:
-            for line in check(skill_dir):
+            for line in check(skill_dir, a.home):
                 print(line)
                 failed = failed or line.startswith(("FAIL", "MISSING"))
         return 1 if failed else 0
     if a.cmd == "snippet":
         print(config_snippet(a.major or detect() or 1, []))
+        return 0
+    if a.cmd == "harness":
+        print(_harness_line(a.script))
         return 0
     if a.cmd == "run":
         with open(a.lanes_json) as fh:
@@ -592,7 +962,23 @@ def main(argv: list = None) -> int:
         if bad:
             print("NEXT: rerun only lanes %s after fixing the errors above" % ", ".join(bad))
             return 1
-        print("NEXT: read %s/<id>.jsonl for each lane's output" % a.out)
+        print("NEXT: python3 %s result %s  (each lane's final answer)" % (os.path.abspath(__file__), a.out))
+        return 0
+    if a.cmd == "result":
+        rows = lane_results(a.out_dir)
+        if not rows:
+            print("no lanes in %s" % a.out_dir)
+            print("NEXT: pass the --out directory of a `run`")
+            return 1
+        for r in rows:
+            print(("LANE %s: %s %s" % (r["id"], r["status"], r["error"])).rstrip())
+            print(r["text"] or "(no assistant text)")
+            print("")
+        bad = [r["id"] for r in rows if r["status"] != "OK"]
+        if bad:
+            print("NEXT: rerun only lanes %s after fixing the errors above" % ", ".join(bad))
+        else:
+            print("NEXT: act on the lane answers above; open %s/<id>.jsonl only to debug a lane" % a.out_dir)
         return 0
     print("EFFORT %s" % probe_effort())
     return 0

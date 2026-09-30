@@ -1,5 +1,6 @@
 import argparse
 import io
+import json
 import os
 import shutil
 import sys
@@ -83,6 +84,162 @@ class SetupDocInstructions(unittest.TestCase):
             "SETUP.md should name the install command for OpenCode")
         self.assertNotIn("from `opencode/agents/`", text,
                           "SETUP.md should not tell users to hand-copy the neutral opencode/agents/*.md sources")
+
+
+class AgentLaneDispatchLine(unittest.TestCase):
+    def test_opencode_v2_uses_shared_dispatch_line(self):
+        with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
+             mock.patch.object(oc_harness, "major", return_value=2):
+            line = audit._dispatch("rca-investigator", "/a/batch-01.md", "rca batch-01")
+        want = oc_harness.dispatch_line("rca-investigator", "/a/batch-01.md", "rca batch-01", 2,
+                                        background=True)
+        self.assertEqual(line, want)
+        self.assertNotIn("haiku", line)
+        self.assertNotIn("sonnet", line)
+
+    def test_unknown_major_falls_back_to_v1_dialect(self):
+        with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
+             mock.patch.object(oc_harness, "major", return_value=0):
+            line = audit._dispatch("rca-verifier", "/a/b.md", "rca b")
+        want = oc_harness.dispatch_line("rca-verifier", "/a/b.md", "rca b", 1, background=True)
+        self.assertEqual(line, want)
+
+    def test_non_opencode_line_names_no_model_alias(self):
+        with mock.patch.object(oc_harness, "harness", return_value="zcode"):
+            line = audit._dispatch("rca-investigator", "/a/b.md", "rca b")
+        self.assertEqual(line, "subagent_type=rca-investigator  prompt: read /a/b.md and follow it exactly")
+
+    def test_source_no_longer_prints_model_alias_dispatch(self):
+        with open(os.path.join(SCRIPTS, "audit.py")) as fh:
+            src = fh.read()
+        self.assertNotIn("model=%s  prompt", src)
+
+
+class V1LaneDispatch(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        tmp = self.tmp
+
+        class FakeCtx(object):
+            tcfg = audit.TIERS["std"]
+
+            def p(self, *parts):
+                return os.path.join(tmp, *parts)
+
+        self.c = FakeCtx()
+        self.lanes_dir = os.path.join(tmp, "oc-lanes")
+        self.batches = [("batch-01", os.path.join(tmp, "batches", "batch-01.md")),
+                        ("batch-02", os.path.join(tmp, "batches", "batch-02.md"))]
+
+    def dispatch(self, major, agent, role, wave):
+        buf = io.StringIO()
+        with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
+             mock.patch.object(oc_harness, "major", return_value=major), \
+             redirect_stdout(buf):
+            audit._print_dispatch(self.c, wave, self.batches, agent, role, "DISPATCH")
+        return buf.getvalue()
+
+    def load(self, wave):
+        with open(os.path.join(self.lanes_dir, "wave-%s.json" % wave)) as fh:
+            return json.load(fh)
+
+    def test_v1_investigators_write_lanes_json_and_one_next_line(self):
+        out = self.dispatch(1, "rca-investigator", "judge", "A")
+        lanes = self.load("A")
+        self.assertEqual([lane["id"] for lane in lanes], ["batch-01", "batch-02"])
+        for lane, (_, p) in zip(lanes, self.batches):
+            self.assertEqual(lane["agent"], "rca-investigator")
+            self.assertEqual(lane["model"], "flash")
+            self.assertEqual(lane["effort"], "high")
+            self.assertEqual(lane["brief"], os.path.abspath(p))
+            self.assertEqual(lane["dir"], os.path.abspath(os.getcwd()))
+        nexts = [line for line in out.splitlines() if line.startswith("NEXT:")]
+        want = "NEXT: python3 %s run %s --out %s" % (
+            os.path.join(SCRIPTS, "oc_harness.py"),
+            os.path.join(self.lanes_dir, "wave-A.json"),
+            os.path.join(self.lanes_dir, "A"))
+        self.assertEqual(nexts, [want])
+        self.assertNotIn("task(", out)
+        self.assertNotIn("subagent_type=", out)
+
+    def test_v1_verifiers_use_verify_tier(self):
+        self.dispatch(1, "rca-verifier", "verify", "V01")
+        lanes = self.load("V01")
+        self.assertEqual(len(lanes), 2)
+        for lane in lanes:
+            self.assertEqual(lane["agent"], "rca-verifier")
+            self.assertEqual(lane["model"], "pro")
+            self.assertEqual(lane["effort"], "max")
+
+    def test_v2_prints_background_subagent_lines_and_writes_no_lanes(self):
+        out = self.dispatch(2, "rca-investigator", "judge", "A")
+        for name, p in self.batches:
+            want = oc_harness.dispatch_line("rca-investigator", p, "rca " + name, 2,
+                                            background=True)
+            self.assertIn("  " + want, out)
+        self.assertFalse(os.path.exists(self.lanes_dir))
+        self.assertNotIn("oc_harness.py run", out)
+
+
+class AgentLaneBatchSizing(unittest.TestCase):
+    def env(self, value=None):
+        patch = mock.patch.dict(os.environ, {}, clear=False)
+        patch.start()
+        self.addCleanup(patch.stop)
+        os.environ.pop("OC_MAX_LANES", None)
+        if value is not None:
+            os.environ["OC_MAX_LANES"] = value
+
+    def test_even_groups_balances_sizes_and_keeps_order(self):
+        groups = audit._even_groups(list(range(10)), 3)
+        self.assertEqual([len(g) for g in groups], [4, 3, 3])
+        self.assertEqual(sum(groups, []), list(range(10)))
+
+    def test_even_groups_of_nothing_is_empty(self):
+        self.assertEqual(audit._even_groups([], 8), [])
+
+    def test_opencode_caps_batch_count_at_default_lane_width(self):
+        self.env()
+        groups = audit._agent_groups(list(range(64)), 64, 12, True)
+        self.assertEqual([len(g) for g in groups], [8] * 8)
+
+    def test_opencode_honours_oc_max_lanes(self):
+        self.env("3")
+        groups = audit._agent_groups(list(range(10)), 64, 12, True)
+        self.assertEqual([len(g) for g in groups], [4, 3, 3])
+
+    def test_bad_oc_max_lanes_falls_back(self):
+        self.env("many")
+        self.assertEqual(audit._oc_lanes(), 8)
+        self.env("0")
+        self.assertEqual(audit._oc_lanes(), 1)
+
+    def test_opencode_fewer_items_than_lanes_gives_one_each(self):
+        self.env()
+        groups = audit._agent_groups(list(range(5)), 64, 12, True)
+        self.assertEqual([len(g) for g in groups], [1] * 5)
+
+    def test_non_opencode_keeps_fixed_chunking(self):
+        groups = audit._agent_groups(list(range(64)), 20, 12, False)
+        self.assertEqual([len(g) for g in groups], [4] * 16)
+        small = audit._agent_groups(list(range(7)), 20, 12, False)
+        self.assertEqual([len(g) for g in small], [1] * 7)
+
+    def test_empty_input_gives_no_batches(self):
+        self.assertEqual(audit._agent_groups([], 20, 12, True), [])
+        self.assertEqual(audit._agent_groups([], 20, 12, False), [])
+
+
+class SetupAgentLaneText(IsolatedHome):
+    def test_setup_describes_real_agent_lane_routing(self):
+        with mock.patch.object(oc_harness, "detect", return_value=2), \
+             mock.patch.object(oc_harness, "install", return_value=[]):
+            rc, out = self.run_setup()
+        self.assertEqual(rc or 0, 0)
+        self.assertIn("OC_MAX_LANES", out)
+        self.assertIn("v1 runs them in parallel through oc_harness.py run", out)
+        self.assertIn("v2 dispatches them as background subagent calls", out)
 
 
 if __name__ == "__main__":

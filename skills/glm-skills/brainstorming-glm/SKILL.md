@@ -22,7 +22,12 @@ present once → get approval. Lower rule number wins a conflict.
 
 Trust this block. Never re-run `ls`, `find`, `git status`, or `cat` on
 manifests. Reference files live in `skill_dir`; read by absolute path. A
-raw `!` line above instead of output → run that script in round 1.
+raw `!` line above instead of output (OpenCode ignores `!` preloads and
+leaves `${CLAUDE_SKILL_DIR}` empty): if a context block with a `harness:`
+line is already in the conversation (the `/brainstorm` command injects
+one), use it and skip the script. Otherwise run
+`sh <Base directory>/scripts/context.sh` as a round-1 call, with the
+"Base directory for this skill" path in place of `<Base directory>`.
 
 ## R0 — The gate
 
@@ -154,9 +159,8 @@ in silently; message the user only if one invalidates something shown.
 
 ## R9 — Load only what the path needs
 
-Spike/Bounded: this file only. Architectural: `architectural.md` in round
-
-1. `research-playbook.md` for >3 web lanes or conflicting evidence.
+Spike/Bounded: this file only. Architectural: `architectural.md` in round 1.
+`research-playbook.md` for >3 web lanes or conflicting evidence.
 `glm-tuning.md` only when configuring the runtime or hitting a
 GLM-specific failure. `visual-companion.md` only if accepted.
 
@@ -292,50 +296,85 @@ next question.
 
 ## Harness fallbacks
 
-Live context prints a `harness:` line. Missing capability → substitute,
-never stall.
+Live context prints a `harness:` line (and `oc_major:` on OpenCode).
+Missing capability → substitute, never stall.
 
 | Missing | Substitute |
 | --- | --- |
-| Agent / subagents | OpenCode v1: lanes become direct calls; keep the 2-4 highest-value questions and the round count. OpenCode v2: dispatch each lane as a background `subagent` call (`agent: "explorer"`/`"researcher"`, `background: true`, no `model` override — effort comes from the agent's own `variant`), fired one after another without waiting. |
-| AskUserQuestion | Plain text, numbered, approval as question 1. |
+| Agent / subagents | OpenCode: follow the OpenCode lane rule below. |
+| AskUserQuestion | v2 `question`; otherwise plain text, numbered, approval as question 1. |
 | ToolSearch | Tools are already live; skip it. |
 | Workflow | Run waves of lanes. |
-| `!` preprocessing (raw `!` above) | Run `scripts/context.sh` as your first round-1 call. |
-| TaskCreate | Track state in the message per R5. |
+| `!` preprocessing (raw `!` above) | Context block already present → use it. Else run `sh <Base directory>/scripts/context.sh` as your first round-1 call. |
+| TaskCreate | v1 `todowrite`; v2 track state in the message per R5. |
 
-On OpenCode, `CLAUDE_SKILL_DIR` is not set. Resolve the scripts directory
-first, then run the harness from it:
+**OpenCode lane rule** (one rule, picked by `oc_major`):
+
+1. v2 → dispatch each lane as a background `subagent` call: `agent:
+   "explorer"` (Code lane) or `"researcher"` (Web lane), a short
+   `description`, `prompt` = the filled R11 template, `background: true`,
+   no `model` override (effort comes from the agent's own `variant`).
+   Fire them one after another without waiting. Background `subagent`
+   unavailable → rule 2.
+2. v1 → run the lanes as processes with `oc_harness.py run` (below).
+3. `task` (v1) or a foreground `subagent` (v2) ONLY as the fallback when
+   rule 1 or 2 fails. Agent `explorer`, `researcher` or `general`,
+   never `general-purpose` or `Explore`: those do not exist on OpenCode.
+
+Running `oc_harness.py run`. `CLAUDE_SKILL_DIR` is not set on OpenCode.
+Put the "Base directory for this skill" path in `BASE` when the skill
+header shows it, then resolve the scripts directory in this order:
 
 ```bash
+BASE=""
 H=""
-for d in ~/.config/opencode/skills/brainstorming \
+for d in "$BASE" \
+  "${OPENCODE_CONFIG_DIR:+$OPENCODE_CONFIG_DIR/skills/brainstorming}" \
   .opencode/skills/brainstorming \
-  ~/.claude/skills/brainstorming \
-  .claude/skills/brainstorming; do
-  if [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
+  ~/.config/opencode/skills/brainstorming \
+  .agents/skills/brainstorming ~/.agents/skills/brainstorming \
+  .claude/skills/brainstorming ~/.claude/skills/brainstorming \
+  .zcode/skills/brainstorming; do
+  if [ -n "$d" ] && [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
 done
-[ -n "$H" ] || { echo "oc_harness.py not found — run install-opencode.sh"; exit 1; }
-OUT="$(mktemp -d)"
-python3 "$H/oc_harness.py" run <lanes.json> --out "$OUT"
+[ -n "$H" ] || { echo "brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
+mkdir -p .superpowers/drafts
+OUT="$(mktemp -d .superpowers/drafts/lanes.XXXXXX)"
+python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"
+python3 "$H/oc_harness.py" result "$OUT"
 ```
 
-`<lanes.json>` is a JSON array of lane objects you write before the
-call. Each lane needs `id` (unique string), `agent` (`explorer` or
-`researcher`, the neutral read-only/web agents installed under
-`opencode/agents/`), `model` (`flash` or `pro`), `effort` (`low` for these lanes; OpenCode v2
-sends it as the model variant), `dir` (working directory
-for that lane) and `brief` (the per-lane user message: task, root/stack,
-today's date, this lane's slice or angle, the siblings it must stay out
-of, and its one question — the same fields the Code/Web lane templates
-in R11 fill per lane). Results land under `$OUT` as `<id>.jsonl` (the
-lane's streamed FINDINGS/CLAIMS output — read this), `<id>.err` and
-`<id>.done` (status JSON); read `<id>.jsonl` for each lane once
-`oc_harness run` reports it `OK`.
-Tool-name map: `task` for a lane — and ONLY as the fallback when
-`oc_harness run` is unavailable — `todowrite` for TaskCreate, `webfetch`
-for WebFetch; AskUserQuestion becomes plain-text numbered questions with
-approval as item 1.
+Write `.superpowers/drafts/lanes.json` before the call (R0 allows writes
+under `.superpowers/drafts/`). It is a JSON array of lane objects. Each
+lane needs `id` (unique string), `agent` (`explorer` or `researcher`, the
+neutral read-only/web agents installed from `opencode/agents/`), `model`
+(`flash` or `pro`), `effort` (`low` for these lanes), `dir` (working
+directory for that lane) and `brief` (the per-lane user message: task,
+root/stack, today's date, this lane's slice or angle, the siblings it
+must stay out of, and its one question; the same fields the Code/Web
+lane templates in R11 fill per lane). The brief goes to each lane on
+stdin.
+
+The run takes minutes, longer than a shell call's default limit: v2 kills
+a foreground shell call after 120 s and orphans the web lanes. On v2 make
+the call through `shell` with `background: true` and a `timeout` that
+covers the slowest lane; on v1 give the `bash` tool a `timeout` that
+covers the slowest lane. Stopping the call stops every lane (the harness
+kills each lane's process group).
+
+Read results with `python3 oc_harness.py result OUT_DIR` (the last line
+of the block above): it prints each lane's final FINDINGS/CLAIMS text.
+Never open the raw `<id>.jsonl` stream. `<id>.done` holds the status
+JSON and `<id>.err` the lane error.
+
+Tool-name map, v1: `task` (lane fallback only), `todowrite` (TaskCreate),
+`webfetch` (WebFetch), `bash` (Bash). v1 has no web search tool: use
+`webfetch` on the R10.2 fetch-friendly endpoints. No AskUserQuestion:
+plain-text numbered questions with approval as item 1.
+
+Tool-name map, v2: `subagent` (lane), `shell` (Bash), `websearch`
+(WebSearch), `webfetch` (WebFetch), `question` (AskUserQuestion). No
+TaskCreate equivalent: carry state per R5.
 
 ## Visual companion
 

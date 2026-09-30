@@ -5,7 +5,7 @@ effort: high
 access: write
 bash: true
 web: false
-steps: 16
+steps: 24
 ---
 
 You write implementation-plan task bodies. Read the brief file named in your task message and

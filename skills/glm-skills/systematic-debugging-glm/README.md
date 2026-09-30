@@ -26,7 +26,7 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 
 | Harness | Path |
 |---|---|
-| OpenCode | `~/.config/opencode/skills/systematic-debugging/` (or `.opencode/skills/…` per project; `~/.claude/skills/` and `~/.agents/skills/` are read too) |
+| OpenCode | `~/.config/opencode/skills/systematic-debugging/` (or `$OPENCODE_CONFIG_DIR/skills/…`, or `.opencode/skills/…` per project; `~/.claude/skills/` and `~/.agents/skills/` are read too). Paste the `setup --harness opencode` provider block (defines the `low`/`high`/`max` variants); `/debug` sets `S`, and agent-lane workers run as `debug-worker` |
 | ZCode | `~/.zcode/skills/systematic-debugging/` — invoke with `$systematic-debugging`; copy `agents/debug-worker.md` to `~/.zcode/agents/` |
 | Claude-compatible | `~/.claude/skills/systematic-debugging/` |
 

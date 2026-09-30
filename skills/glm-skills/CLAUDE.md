@@ -95,7 +95,8 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   **governor** sizes concurrency by tier (`DEVTEAM_GLM_TIER`), halves it on 429/1302/1305 errors, and halves
   its ceiling during Z.ai peak hours. Agent definitions live in `agents/` and are installed by `doctor --fix`.
   `README.md` is in Vietnamese.
-  **dev-team on OpenCode:** When running on OpenCode (env `DEVTEAM_HARNESS=opencode` or `OPENCODE` set),
+  **dev-team on OpenCode:** When running on OpenCode (`is_opencode()`: `DEVTEAM_HARNESS` decides when set,
+  else `OPENCODE`, else `oc_harness.harness()`, since v2 never sets `OPENCODE`),
   `devteam.py` dispatches each lane to a separate `oc_harness.run_lanes()` call in its own git worktree
   under `.claude/dev-team/wt/<lane id>`. The programmer's brief is read from stdout of `devteam.py claim
   <lane id>`. Tool-call enforcement moves from the PreToolUse hook into plugins (`plugins/<base>.v1.js`
@@ -107,15 +108,16 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   final_text}` to `guard.py stop`, and re-runs the lane up to 2 times if blocked (appending stderr to the
   brief).
   **Plugin role mapping:** OpenCode agent names (programmer, code-reviewer, spot-reviewer, investigator,
-  team-leader) are set in env `DEVTEAM_ROLE` per lane. The plugins (`skills/glm/dev-team-glm/opencode/
-  plugins/`) define v1 and v2 shapes; at install time, `oc_harness.install()` copies the matching major
+  team-leader) are set in env `DEVTEAM_ROLE` per lane; when it is unset, the v2 plugin uses `event.agent` if
+  it names a dev-team role. The plugins (`dev-team-glm/opencode/plugins/`) define v1 and v2 shapes; at install time, `oc_harness.install()` copies the matching major
   version to `<home>/.config/opencode/plugins/`. v1 plugin exports a `DevteamGuard` hook; v2 exports
   `export default { id: 'devteam-guard', setup: async (api) => { api.tool.hook('execute.before', async
   (event) => {...}) } }` — the real shape the installed v2.0.16 binary validates and calls (verified from
   the binary: `PluginModule.load` requires a default export matching `{id, effect}` or `{id, setup}`, and
-  `api.tool.hook` forwards to the Tool service's `execute.before` trigger, whose event carries `tool` and
-  `input`). There is no `ctx.directory` in v2; the plugin uses `process.cwd()` instead. Both hooks run
-  before tool execution: on receipt of `edit`, `write`, `patch`/`apply_patch`, or `bash` tools, they call `python3
+  `api.tool.hook` forwards to the Tool service's `execute.before` trigger, whose event carries
+  `{tool, sessionID, agent, messageID, id, input}`). There is no `ctx.directory` in v2; the plugin uses
+  `process.cwd()` instead. Both hooks run before tool execution: on receipt of `write`, `edit`, `patch`,
+  `apply_patch`, `multiedit`, `shell`, `bash`, `execute` or `batch` tools, they call `python3
   guard.py oc` with JSON on stdin and throw `Error(reason)` if the decision is `deny`. Guard mode choice:
   programmer role gets `edit`/`bash` checks; any other role gets read-only (`edit-ro`/`bash-ro`) with
   `agent_type` set to the role; no role prints nothing (silent allow). Plugin failures allow calls (same
@@ -136,6 +138,50 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   also contains the visual-companion server (`server.cjs`, `start-server.sh`).
 - **doc-generator-glm**: a single self-contained SKILL.md with no scripts. The skill states that it must
   never read other files.
+
+### OpenCode version facts (v1.18.x and v2.0.x)
+
+Both lines are supported: v1 stable (latest release v1.18.33) and v2 beta (local 2.0.18). All facts were
+verified on 2026-09-28 by local probes against a fake provider unless marked otherwise.
+
+- **Tools.** v2.0.18 exposes `edit, glob, grep, question, read, shell, skill, subagent, webfetch,
+  websearch, write, execute`; it has no `bash`, `apply_patch`, `task` or `todowrite`. v2 shell input is
+  `{command, workdir, timeout, background}`, write is `{path, content}`, edit is
+  `{path, oldString, newString, replaceAll}`. v1.18.33 exposes `bash, edit, glob, grep, read, skill,
+  task, todowrite, webfetch, write`; v1 hook args are `command` (bash) and `filePath` plus `content`
+  (write). The v2 migration docs rename permissions: `bash` is now `shell`, `task` is now `subagent`, and
+  `write` and `patch` are now `edit`.
+- **Plugin hook.** v2 `execute.before` events carry `{tool, sessionID, agent, messageID, id, input}`. v1
+  `tool.execute.before` gets `(input{tool,sessionID,callID}, output{args})`. In both, throwing inside the
+  hook blocks the tool; in v2 the run still exits 0.
+- **Effort.** v2 sends effort only through `--model provider/model#effort` (the request carries
+  `"reasoning_effort":"high"` for `#high`). `#max` fails ("Variant unavailable", `provider.no-route`)
+  unless the provider config defines `variants.max`. `run --agent` ignores the agent's model and variant;
+  `subagent` dispatch honours `variant`. This contradicts the v2 agents docs, which say variants are not
+  yet sent with model requests. v1 takes effort from agent frontmatter `reasoningEffort` plus `--agent`;
+  a `#high` suffix exits 1 with UnknownError.
+- **`run` flags.** v2: `--standalone --server --continue --session --fork --model provider/model#variant
+  --agent --format default|json --file --title --thinking --auto`, no `--dir`. v1: `--dir --model --agent
+  --format --variant`, no `--standalone`.
+- **Brief.** Both read the brief verbatim from stdin when argv has no message. v2 wraps an argv message
+  containing whitespace in literal quotes, and an open stdin pipe hangs the run, so stdin must be closed.
+- **Events.** v2 JSON event types are `step_start, tool_use, step_finish, text, error`, emitted only at
+  step/part boundaries; the final text step has no `step_finish`.
+- **429.** v2 retries 12 times over about 86 s, then emits
+  `{"type":"error","error":{"type":"provider.rate-limit","status":429}}` and exits 1; the response body,
+  including Z.ai code 1302, is dropped. v1 retries 7 times over about 77 s, then emits an error with
+  `name: "APIError"` and `data.statusCode: 429`; `data.responseBody` carries the Z.ai code
+  (`1302`/`1305`).
+- **Skills.** v2 always scans `~/.claude/skills` and has no `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS`, so the
+  installer prints that hint only for v1. On a name clash the config-dir copy wins. v2 skill frontmatter
+  honours only `name`, `description` and `metadata`; `allowed-tools` and `!` preload blocks are ignored.
+  (Sandbox `opencode serve` probe.)
+- **Built-in agent.** The general agent is `general`; `general-purpose` and `Explore` do not exist.
+- **Env.** v2 sets only `OPENCODE_TERMINAL=1` in shell children and never sets `OPENCODE`, so harness
+  detection goes through `oc_harness.harness()` (env markers, then the script's install path and the
+  install marker), never `OPENCODE` alone.
+- **Read from the binary, confirmed by `test_oc_contract.py`:** the v2 shell tool's default timeout is
+  120000 ms.
 
 ## Conventions and gotchas
 

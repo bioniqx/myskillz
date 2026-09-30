@@ -8,7 +8,7 @@ description: >-
   WORK (evidence-gated slice — refactor, chore, docs, perf or test-backfill: one commit,
   proof pasted in the report), FAST (spike slice: implementation only, no tests).
   Fast model, minimal change, evidence-based terse reports.
-model: sonnet
+model: claude-sonnet-5-5
 effort: medium
 isolation: worktree
 background: true

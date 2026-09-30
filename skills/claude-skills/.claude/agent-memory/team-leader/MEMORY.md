@@ -1,0 +1,1 @@
+- [Skills verification commands](project_skills_verification.md) — git root, test/selftest commands, hook limits, preload seams

@@ -164,7 +164,9 @@ def guard_edit(inp):
     path = tool_path(inp)
     if not path:
         allow()
-    path = os.path.abspath(os.path.join(inp.get("cwd", ""), path)) if not os.path.isabs(path) else path
+    # find_slice_root() resolve()s the worktree, so resolve the path too: a symlinked cwd or a
+    # /var -> /private/var alias must not turn an in-footprint edit into `../…` and deny it
+    path = str(Path(path if os.path.isabs(path) else os.path.join(inp.get("cwd") or os.getcwd(), path)).resolve())
     wt = find_slice_root(os.path.dirname(path))
     own = find_slice_root(inp.get("cwd") or "")
     if wt is None:
@@ -327,10 +329,245 @@ def path_args(argv):
     return [a for a in argv[1:] if not a.startswith("-")]
 
 
+def _has(rest, *flags):
+    """True when any argument is one of `flags` (a `--flag=value` form counts as `--flag`)."""
+    return any(a.split("=", 1)[0] in flags for a in rest)
+
+
+SED_WRITE_EXEC = re.compile(  # sed w/W FILE, e CMD, s///w FILE, s///e (a false match only costs the pre-approval)
+    r"(?:^|[;{}\n/!,$0-9\s])\s*[wWe](?:\s|$|;|})"
+    r"|s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImM0-9]*[we]")
+
+
+def sed_scripts(argv):
+    """The sed program texts of one sed argv, or None when a program comes from a file (`-f`)."""
+    if "--sandbox" in argv:
+        return []                # GNU sed rejects w/W/e/r in sandbox mode
+    scripts, positional, i = [], [], 1
+    while i < len(argv):
+        a = argv[i]
+        i += 1
+        if a == "--":
+            positional += argv[i:]
+            break
+        if a.startswith("--"):
+            name, eq, val = a.partition("=")
+            if name == "--file":
+                return None
+            if name == "--expression":
+                if eq:
+                    scripts.append(val)
+                elif i < len(argv):
+                    scripts.append(argv[i])
+                    i += 1
+            elif name == "--line-length" and not eq:
+                i += 1
+            continue
+        if a.startswith("-") and len(a) > 1:
+            for j, ch in enumerate(a[1:], start=1):
+                if ch == "f":
+                    return None
+                if ch in ("e", "l"):
+                    tail = a[j + 1:]
+                    if ch == "e":
+                        if tail:
+                            scripts.append(tail)
+                        elif i < len(argv):
+                            scripts.append(argv[i])
+                    if not tail and i < len(argv):
+                        i += 1
+                    break
+            continue
+        positional.append(a)
+    if not scripts and positional:
+        scripts.append(positional[0])
+    return scripts
+
+
+SHELLS = ("sh", "bash", "zsh", "dash", "ksh", "fish")
+
+
+def command_strings(head, rest):
+    """The shell lines a runner (`exec -c '…'`, `-c=…`, `--call …`) or a shell (`sh -c '…'`) runs."""
+    out = []
+    for i, a in enumerate(rest):
+        if a == "--":
+            break
+        name, eq, val = a.partition("=")
+        if eq and name in ("-c", "--call"):
+            out.append(val)
+        elif (a in ("-c", "--call") or (head in SHELLS and re.fullmatch(r"-[A-Za-z]*c", a))) and i + 1 < len(rest):
+            out.append(rest[i + 1])
+    # `$'a\tb'` reaches us as `$a\tb`: decode the ANSI-C escapes the shell would expand
+    return [s[1:].encode("latin-1", "backslashreplace").decode("unicode_escape", "ignore")
+            if s.startswith("$") else s for s in out]
+
+
+def rewrites_files(head, rest):
+    """True when a formatter/fixer call rewrites files in place instead of only checking them."""
+    sub = next((a for a in rest if not a.startswith("-")), "")
+    if head in ("npm", "pnpm", "yarn", "bun", "npx", "bunx", "pnpx") + SHELLS:
+        # a command string is re-checked as the shell line it runs
+        for s in command_strings(head, rest):
+            if any(rewrites_files(os.path.basename(g[0]), g[1:]) for g in shell_segments(s)):
+                return True
+    if head in ("npm", "pnpm", "yarn", "bun"):
+        # option values (`--cwd .`, `-C .`, `--filter a`) and runner verbs (`exec`, `x`, `workspace a`)
+        # can sit before the bin, so any positional that starts a rewriting call counts
+        return any(rewrites_files(os.path.basename(a), rest[i + 1:])
+                   for i, a in enumerate(rest) if not a.startswith("-"))
+    runners = ("npx", "bunx", "pnpx")
+    if sub and (head in runners or (head in ("poetry", "uv", "bundle") and sub in ("run", "exec"))):
+        tail = rest[rest.index(sub) + (0 if head in runners else 1):]
+        inner = next((a for a in tail if not a.startswith("-")), "")
+        return bool(inner) and rewrites_files(os.path.basename(inner), tail[tail.index(inner) + 1:])
+    if head == "black":
+        return not _has(rest, "--check", "--diff")
+    if head == "isort":
+        return not _has(rest, "--check-only", "--check", "-c", "--diff")
+    if head == "ruff":
+        return _has(rest, "--fix", "--fix-only") or (sub == "format" and not _has(rest, "--check", "--diff"))
+    if head == "prettier":
+        return _has(rest, "--write", "-w")
+    if head == "gofmt":
+        return _has(rest, "-w")
+    if head == "go":
+        return sub in ("fmt", "fix", "generate") or (sub == "mod" and _has(rest, "tidy", "edit", "vendor"))
+    if head == "cargo":
+        return (sub == "fix" or (sub == "fmt" and not _has(rest, "--check"))
+                or (sub == "clippy" and _has(rest, "--fix")))
+    if head == "rustfmt":
+        return not _has(rest, "--check")
+    if head == "eslint":
+        return _has(rest, "--fix")
+    if head == "rubocop":
+        return _has(rest, "-a", "-A", "--autocorrect", "--autocorrect-all", "--auto-correct",
+                    "--auto-correct-all", "-x", "--fix-layout")
+    if head == "deno":
+        return sub == "fmt" and not _has(rest, "--check")
+    if head == "dotnet":
+        return sub == "format" and not _has(rest, "--verify-no-changes")
+    return False
+
+
+def write_exec_form(argv, readonly=False):
+    """Why one argv writes a file or runs another program although its command looks read-only
+    (`git diff --output`, `git grep -O`, `rg --pre`, `uniq IN OUT`, sed `w`/`e`,
+    `sort --compress-program`), or None."""
+    argv = strip_env_prefix(argv)
+    if not argv:
+        return None
+    head, rest = os.path.basename(argv[0]), argv[1:]
+    sub = rest[0] if rest else ""
+    if head == "git":
+        if sub in ("diff", "log", "show", "whatchanged") and _has(rest, "--output"):
+            return f"`git {sub} --output` writes a file"
+        if sub == "grep" and any(a.startswith("--op") or re.match(r"-[A-Za-z0-9]*O", a) for a in rest):
+            return "`git grep --open-files-in-pager` / `-O` runs a program"
+    if head == "rg" and _has(rest, "--pre"):
+        return "`rg --pre` runs a preprocessor program on every file"
+    if head == "sort" and any(a.startswith("--com") or a.startswith("--o") or re.match(r"-[A-Za-z]*o", a)
+                              for a in rest):
+        return "`sort --compress-program` / `-o` runs a program or writes a file"
+    if head == "uniq":
+        pos, i = [], 0
+        while i < len(rest):
+            a = rest[i]
+            i += 1
+            if a in ("-f", "-s", "-w", "--skip-fields", "--skip-chars", "--check-chars"):
+                i += 1
+            elif a == "-" or not a.startswith("-"):
+                pos.append(a)
+        if len(pos) >= 2 and pos[1] != "-":
+            return "`uniq INPUT OUTPUT` writes OUTPUT"
+    if head == "sed":
+        scripts = sed_scripts(argv)
+        if scripts is None:
+            return "`sed -f` runs a program file that cannot be checked here"
+        if any(SED_WRITE_EXEC.search(s) for s in scripts):
+            return "a sed `w`/`W`/`e` command or `s///w`/`s///e` flag writes a file or runs a command"
+    if readonly and rewrites_files(head, rest):
+        return (f"`{head}` rewrites files in place; a read-only role may run a formatter only in its "
+                "check mode (`--check` / `--diff`)")
+    return None
+
+
+def shell_segments(cmd):
+    """Each simple command of a shell line as an argv (split at ; & | && || and newlines, quotes respected)."""
+    segs = []
+    for line in cmd.split("\n"):
+        lex = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+        lex.whitespace_split = True
+        lex.commenters = ""
+        cur = []
+        try:
+            for tok in lex:
+                if tok and not tok.strip(";&|"):
+                    segs.append(cur)
+                    cur = []
+                else:
+                    cur.append(tok)
+        except ValueError:
+            pass
+        segs.append(cur)
+    return [s for s in segs if s]
+
+
+def ro_forbidden_form(cmd):
+    """The first write/exec form or rewriting formatter in any command of a shell line, or None."""
+    for argv in shell_segments(cmd):
+        why = write_exec_form(argv, readonly=True)
+        if why:
+            return why
+    return None
+
+
+def pm_positionals(argv):
+    """Indexes of a package manager's positionals before `--`, skipping the values of
+    `--filter` / `-C` / `--dir` / `--cwd`."""
+    out, i = [], 1
+    while i < len(argv) and argv[i] != "--":
+        if argv[i] in ("--filter", "-C", "--dir", "--cwd"):
+            i += 1
+        elif not argv[i].startswith("-"):
+            out.append(i)
+        i += 1
+    return out
+
+
+RUNNER_FLAGS = ("--prefix", "-p", "--package", "-y", "--yes", "-c", "--call", "--dir", "-C", "--cwd",
+                "--workspace", "-w", "--ws")
+
+
+def runner_flag(arg):
+    """True when `arg` is a runner-level flag (also `--flag=value` or an npm abbreviation like `--pref`)."""
+    name = arg.split("=", 1)[0]
+    return name in RUNNER_FLAGS or (name.startswith("--") and len(name) > 2
+                                    and any(f.startswith(name) for f in RUNNER_FLAGS))
+
+
+def location_escapes(argv):
+    """True when a package manager's `--prefix` / `-C` / `--dir` / `--cwd` (before `--`) names a path outside
+    the repo (absolute, `~`, a `..` segment) or one the shell expands (`$`, backticks)."""
+    args = argv[1:argv.index("--")] if "--" in argv else argv[1:]
+    for i, a in enumerate(args):
+        name, eq, val = a.partition("=")
+        if not (name == "-C" or (name.startswith("--") and len(name) > 2
+                                 and any(f.startswith(name) for f in ("--prefix", "--dir", "--cwd")))):
+            continue
+        if not eq:
+            val = args[i + 1] if i + 1 < len(args) else ""
+        if val.startswith(("/", "~")) or ".." in val.split("/") or "$" in val or "`" in val:
+            return True
+    return False
+
+
 def segment_allowed(argv, footprint, pinned, readonly=False, wt=None):
     """Why this single argv is pre-approved, or None."""
     if not argv:
         return None
+    if write_exec_form(argv, readonly=readonly):
+        return None          # writes a file or runs another program: never pre-approved, not even when pinned
     if prefix_match(argv, pinned):
         return "pinned command from the briefing"
     if prefix_match(argv, ALLOW_GIT_READ):
@@ -349,20 +586,45 @@ def segment_allowed(argv, footprint, pinned, readonly=False, wt=None):
         sub = next((a for a in argv[1:] if not a.startswith("-")), "")
         if any("://" in a for a in argv[1:]):
             return None          # nothing that names a URL is a local build/test step
+        verb = 0
+        if head in ("npm", "pnpm", "yarn", "bun"):
+            if location_escapes(argv):
+                return None      # `pnpm -C /tmp exec …`, `npm --prefix=../x test`: runs another project
+            pos = pm_positionals(argv)
+            sub = argv[pos[0]] if pos else ""
+            if pos and argv[pos[0]] in ("exec", "x"):
+                verb = pos[0]
+            elif any(argv[i] in ("exec", "x") for i in pos):
+                return None      # `npm --prefix /tmp exec …`: an option value hides the runner verb
         if head in ("npm", "pnpm", "yarn", "bun", "poetry", "uv", "cargo", "go", "bundle", "composer",
                     "mix", "dotnet", "flutter", "dart"):
             if not sub or sub in PKG_MANAGER_DENY_SUB:
                 return None      # a bare `npm`/`yarn` is `install`; installs race the shared node_modules
-        if head == "npx":
-            # npx fetches and runs anything not installed: approve only a bin that already exists locally
-            if not sub or any(a in ("-p", "--package", "-y", "--yes", "-c", "--call") for a in argv[1:]):
+        if head == "npx" or verb:
+            # a runner fetches and runs anything not installed: approve only a bin that already exists
+            # locally, and a toolchain bin only when the command it runs would be approved on its own.
+            # Only a bare `--` may precede the bin, so an option value is never taken for it.
+            tail = argv[verb + 1:] if verb else argv[1:]
+            dashdash = tail[:1] == ["--"]
+            if dashdash:
+                tail = tail[1:]
+            bin_ = tail[0] if tail else ""
+            # without a `--` before the bin, the runner still parses its own flags up to a bare `--`
+            after = [] if dashdash else tail[1:tail.index("--")] if "--" in tail else tail[1:]
+            if not re.fullmatch(r"[A-Za-z0-9@._+-]+", bin_) or bin_ in (".", "..") or bin_.startswith("-") \
+                    or any(runner_flag(a) for a in after):
                 return None
             base = Path(wt) if wt else Path.cwd()
-            if not (base / "node_modules" / ".bin" / sub).exists():
+            if not (base / "node_modules" / ".bin" / bin_).exists():
+                return None
+            if bin_ in TOOLCHAIN and not segment_allowed(tail, footprint, pinned, readonly=readonly, wt=wt):
                 return None
         if head == "deno" and (sub not in ("test", "lint", "fmt", "check", "task") or any(a.startswith("--allow") for a in argv[1:])):
             return None
         if head in ("python", "python3", "node", "ruby", "php", "bash", "sh", "elixir"):
+            if readonly and head in ("python", "python3") and len(argv) >= 3 and \
+                    (argv[1] == "devteam.py" or argv[1].endswith("/devteam.py")) and argv[2] in ("status", "probe"):
+                return "dev-team engine status/probe (read-only)"
             if any(a in INTERPRETER_EVAL_FLAGS for a in argv[1:]):
                 return None
             if any(a.endswith("devteam.py") or a.endswith("guard.py") for a in argv[1:]):
@@ -632,7 +894,8 @@ LEADER_WRITE_ALLOW = ("/.claude/dev-team/plan.md", "/.claude/dev-team/plan-", "/
 def guard_edit_ro(inp):
     path = tool_path(inp)
     if not path:
-        allow()
+        deny("This role is read-only, and this write names no file, so it cannot be checked against the "
+             "report / memory paths it may write. Report findings instead.")
     if not os.path.isabs(path):
         path = os.path.join(inp.get("cwd") or os.getcwd(), path)
     norm = os.path.abspath(path).replace("\\", "/")
@@ -709,15 +972,28 @@ def guard_bash_ro(inp):
         if re.search(pat, cmd):
             deny(f"Read-only role: `{raw[:80]}` looks like it modifies files/packages/git state. "
                  "Use Read/Grep/Glob, run tests/linters/diffs only, and report instead of changing anything.")
+    why = ro_forbidden_form(cmd)
+    if why:
+        deny(f"Read-only role: `{raw[:80]}` is blocked: {why}. Run checks in their read-only form "
+             "(`--check` / `--diff`, no output file, no helper program) and report instead of changing anything.")
     root = find_state_root(inp.get("cwd") or os.getcwd())
     allow(bash_allow_reason(raw, None, footprint=[], pinned=plan_commands(root), readonly=True))
 
 
-OC_PATCH_PATH = re.compile(r"^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$", re.M)
+OC_PATCH_PATH = re.compile(r"^\*\*\* (?:(?:Add|Update|Delete) File|Move to):\s*(.+)$")
 
 
 def oc_patch_paths(text):
-    return [p.strip() for p in OC_PATCH_PATH.findall(text or "") if p.strip()]
+    """Every file a patch names. Each line is stripped first: v2 trims lines before it applies a
+    patch, so an indented `*** Update File:` header is live and must be checked like any other."""
+    if not isinstance(text, str):
+        return []
+    out_ = []
+    for ln in text.splitlines():
+        m = OC_PATCH_PATH.match(ln.strip())
+        if m and m.group(1).strip():
+            out_.append(m.group(1).strip())
+    return out_
 
 
 def oc_capture(check, inp):
@@ -733,6 +1009,48 @@ def oc_capture(check, inp):
     return buf.getvalue()
 
 
+OC_LANE_DENY_TOOLS = {
+    "execute": "OpenCode Code Mode (`execute`) is disabled in dev-team lanes so every tool call "
+               "can be checked on its own. Call the tools directly.",
+    "batch": "`batch` is disabled in dev-team lanes so every tool call can be checked on its own. "
+             "Call the tools one at a time.",
+    "question": "`question` is disabled in dev-team lanes: a headless lane has nobody to answer it, so the "
+                "run would block. Decide from the brief, or end with `## Status: Blocked` and the question.",
+}
+
+
+def oc_args(raw):
+    """The tool args as a dict, or None when they cannot be read. v2 may hand them over as a JSON
+    string (`input.repair`); anything that is still not an object after decoding is unreadable."""
+    if raw is None or raw == "":
+        return {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return None
+    return raw if isinstance(raw, dict) else None
+
+
+def oc_pinned_hint(cwd, prog):
+    """The command forms this lane may run without a prompt, for the unapproved-shell deny message:
+    `.slice/allow` for a programmer, the plan's gate commands for a read-only role."""
+    try:
+        if prog:
+            wt = find_slice_root(cwd)
+            pinned = read_lines(wt / ".slice" / "allow") if wt else []
+            src = "`.slice/allow`"
+        else:
+            pinned = plan_commands(find_state_root(cwd))
+            src = "the plan's gate commands"
+    except Exception:
+        return ""
+    forms = [p.strip() for p in pinned if p.strip()][:12]
+    if not forms:
+        return f" No commands are pinned for this lane ({src} is empty)."
+    return f" Pinned forms from {src}: " + ", ".join(f"`{f}`" for f in forms) + "."
+
+
 def guard_oc(inp):
     """OpenCode plugin bridge: {"tool", "args", "cwd", "role"} -> the existing check for that role.
 
@@ -744,32 +1062,43 @@ def guard_oc(inp):
     if not role:
         allow()
     tool = (inp.get("tool") or "").lower()
-    args = inp.get("args") or {}
-    prog = role == "programmer"
+    args = oc_args(inp.get("args"))
+    if args is None:
+        deny(f"dev-team: the `{tool}` arguments could not be parsed as a JSON object, so the call cannot "
+             "be checked. Retry it with well-formed arguments.")
+    prog = role in ("programmer", "programmer-lite")
     cwd = inp.get("cwd") or os.getcwd()
     base = {"cwd": cwd, "agent_type": role}
-    if tool == "execute":
-        deny("dev-team: OpenCode Code Mode (`execute`) is disabled in dev-team lanes so every tool call "
-             "can be checked on its own. Call the tools directly.")
+    if tool in OC_LANE_DENY_TOOLS:
+        deny("dev-team: " + OC_LANE_DENY_TOOLS[tool])
     if tool in ("bash", "shell"):
         workdir = args.get("workdir")
+        command = args.get("command")
+        if not isinstance(command, str) or (workdir is not None and not isinstance(workdir, str)):
+            deny(f"dev-team: `{tool}` needs a string `command` (and a string `workdir` when one is given); "
+                 "these arguments cannot be checked.")
         if workdir:
             wd = workdir if os.path.isabs(workdir) else os.path.abspath(os.path.join(cwd, workdir))
             if prog and find_slice_root(wd) != find_slice_root(cwd):
                 deny(f"`workdir` {workdir} is outside your slice worktree; run commands from the worktree.")
             base["cwd"] = wd
         check = guard_bash if prog else guard_bash_ro
-        out = oc_capture(check, dict(base, tool_input={"command": args.get("command") or ""}))
+        out = oc_capture(check, dict(base, tool_input={"command": command}))
         if not out.strip():
             deny("dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
-                 "explicitly pre-approved is denied instead of silently allowed.")
+                 "explicitly pre-approved is denied instead of silently allowed."
+                 + oc_pinned_hint(base["cwd"], prog))
         sys.stdout.write(out)
         sys.exit(0)
     if tool in ("edit", "write", "multiedit"):
-        paths = [args.get("filePath") or args.get("path") or ""]  # v1 filePath, v2 path
+        p0 = args.get("filePath") or args.get("path") or ""  # v1 filePath, v2 path
+        if not isinstance(p0, str) or not p0.strip():
+            deny(f"`{tool}` names no file (no `filePath` / `path`), so it cannot be checked. "
+                 "Retry it naming the file it writes.")
+        paths = [p0]
     elif tool in ("patch", "apply_patch"):
         paths = oc_patch_paths(args.get("patchText"))
-        if prog and not paths:
+        if not paths:
             deny(f"`{tool}` names no file (no `*** Add/Update/Delete File:` header), so it cannot be checked "
                  "against your footprint. Rewrite it with a header naming each file it touches.")
     else:

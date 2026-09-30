@@ -2,7 +2,7 @@
 name: plan-task-writer
 description: Writes implementation-plan task bodies from a writing-plans brief file. Use only when given a writing-plans brief path.
 tools: Read, Write, Edit, Bash
-model: sonnet
+model: claude-sonnet-5-5
 effort: medium
 maxTurns: 16
 omitClaudeMd: true

@@ -98,6 +98,47 @@ class TestScriptsCompile(unittest.TestCase):
 
 
 class TestSkillMdHygiene(unittest.TestCase):
+    def test_doc_generator_no_unknown_agents(self):
+        """doc-generator SKILL.md names doc-writer/doc-reviewer for OpenCode/ZCode;
+        'general-purpose' and 'Explore' may appear only on lines that name Claude Code."""
+        skill_md = os.path.join(GLM_ROOT, "doc-generator-glm", "SKILL.md")
+        with open(skill_md, encoding="utf-8") as fh:
+            content = fh.read()
+        lines = content.split("\n")
+
+        self.assertIn("doc-writer", content)
+        self.assertIn("doc-reviewer", content)
+
+        for line_num, line in enumerate(lines, 1):
+            if line.strip().startswith("```") or line.strip().startswith("#"):
+                continue
+            for name in ("general-purpose", "Explore"):
+                if name in line and "Claude Code" not in line:
+                    self.fail("SKILL.md:%d names '%s' without Claude Code" % (line_num, name))
+
+        # Writer (§3 step 3) and reviewer (§4) dispatch lines name both harness choices.
+        type_lines = [l for l in lines if "subagent type" in l]
+        writer = [l for l in type_lines if "doc-writer" in l]
+        reviewer = [l for l in type_lines if "doc-reviewer" in l]
+        self.assertTrue(writer, "no writer 'subagent type' line")
+        self.assertTrue(reviewer, "no reviewer 'subagent type' line")
+        for l in writer + reviewer:
+            for needle in ("OpenCode", "ZCode", "Appendix A", "general-purpose", "Claude Code"):
+                self.assertIn(needle, l, "dispatch line lacks %r: %s" % (needle, l))
+
+        # Large-repo recon row: `general` on OpenCode, `Explore` only for Claude Code.
+        recon = [l for l in lines if "read-only shards" in l]
+        self.assertTrue(recon, "no large-repo recon row")
+        for l in recon:
+            self.assertIn("`general` on OpenCode", l)
+            if "Explore" in l:
+                self.assertIn("Claude Code", l)
+
+        # §8: <skill_dir> comes from the 'Base directory for this skill' line, not /docs.
+        self.assertIsNone(re.search(r"/docs[^\n]*inject", content, re.IGNORECASE),
+                          "SKILL.md claims /docs injects the skill path")
+        self.assertIn("Base directory for this skill", content)
+
     def test_skill_md_hygiene(self):
         for skill in ALL_SKILLS:
             expected_name = skill[:-4] if skill.endswith("-glm") else skill

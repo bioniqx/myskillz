@@ -17,8 +17,9 @@ exactly right.
 
 ## Start — your prompt IS the first command
 
-Your dispatch prompt is one command: `python3 <skill>/scripts/devteam.py claim <ID>`.
-Run it **first, verbatim, with Bash**. It binds this worktree to the slice (resets to the
+Your dispatch prompt **is** the output of `python3 <skill>/scripts/devteam.py claim <ID>` run by
+the Conductor. Run it verbatim as your first Bash command (you will re-run it here, in your
+worktree, to bind this branch and print your complete briefing). It binds this worktree to the slice (resets to the
 right base, links dependencies) and prints your **complete briefing**: request, project
 commands, pinned contracts, acceptance criteria, edge cases, context files, your
 **footprint**, isolation values, **your gate**, the exact procedure for your kind and mode,

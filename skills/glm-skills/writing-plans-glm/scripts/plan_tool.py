@@ -22,10 +22,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
+import oc_harness  # vendored by _shared/sync.sh
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 64
 DEFAULT_AGENT_CAP = 20
+WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
+DEFAULT_LANE_WIDTH = 8    # background lanes one OpenCode dispatch message starts
 
 # ---- GLM routing -------------------------------------------------------
 # tier -> (api model id, reasoning effort, agent-lane alias that z.ai maps to it)
@@ -44,6 +47,9 @@ CONTRACT_HEAD = re.compile(r"^####\s+(%s)\s*[:·—-]\s*(.+?)\s*$" % ID_RE)
 FIELD = re.compile(r"^-\s+(Depends|Parallel|Files|Produces|Consumes|Read|Spec|Tier):\s*(.*)$")
 TASK_HEAD = re.compile(r"^###\s+(%s)\s*:\s*(.+?)\s*$" % ID_RE)
 TICK = re.compile(r"`([^`\n]+)`")
+BARE_FILENAMES = {"Makefile", "makefile", "GNUmakefile", "Dockerfile", "Containerfile", "Gemfile",
+                  "Rakefile", "Procfile", "Justfile", "justfile", "Vagrantfile", "Brewfile",
+                  "Pipfile", "Jenkinsfile", "Caddyfile", "LICENSE", "README", "CHANGELOG"}
 TASKS_MARK = "<!-- TASKS -->"
 WAVES_OPEN, WAVES_CLOSE = "<!-- WAVES -->", "<!-- /WAVES -->"
 
@@ -228,6 +234,33 @@ def agent_cap():
         if v.isdigit() and int(v) > 0:
             return min(MAX_WORKERS, int(v)), e
     return DEFAULT_AGENT_CAP, ""
+
+
+def on_opencode():
+    """True when this script runs under OpenCode (v1 or v2); never raises."""
+    try:
+        return oc_harness.harness(TOOL) == "opencode"
+    except Exception:
+        return False
+
+
+def lane_width():
+    """Groups one OpenCode dispatch message may start (PLAN_LANE_WIDTH, default 8)."""
+    v = os.environ.get("PLAN_LANE_WIDTH", "").strip()
+    return min(MAX_WORKERS, int(v)) if v.isdigit() and int(v) > 0 else DEFAULT_LANE_WIDTH
+
+
+def writer_group_count(n_tasks, opencode, cap):
+    """Writer groups for n_tasks; every group holds at most WRITER_GROUP_MAX tasks.
+    OpenCode: ceil(n / 4), so up to 32 tasks fit the default lane width of 8 in one
+    message; the lane width caps each dispatch message and extra groups go into
+    further messages. Elsewhere: one task per writer up to cap, never more than 4 per writer."""
+    if n_tasks <= 0:
+        return 0
+    need = -(-n_tasks // WRITER_GROUP_MAX)
+    if opencode:
+        return need
+    return max(need, min(cap, n_tasks))
 
 
 # ------------------------------------------------------------------ http fan-out
@@ -563,7 +596,8 @@ def files_block(body):
             continue
         if not l.lstrip().startswith("- ") or l.lstrip().startswith("- ["):
             break
-        paths += [norm_path(x) for x in TICK.findall(l) if "/" in x or "." in x]  # skip `Symbol` mentions
+        paths += [norm_path(x) for x in TICK.findall(l)
+                  if "/" in x or "." in x or norm_path(x) in BARE_FILENAMES]  # skip `Symbol` mentions
     return paths
 
 
@@ -612,9 +646,40 @@ def syntax_errors(blocks, label):
     return errs
 
 
+GIT_ADD = re.compile(r"^\s*git add\s+(.+)$")
+
+
+def git_add_args(src):
+    """Argument strings of every `git add` command in a shell block, split on &&, || and ;."""
+    out = []
+    for line in src.splitlines():
+        for seg in re.split(r"&&|\|\||;", line):
+            m = GIT_ADD.match(seg)
+            if m and m.group(1).strip():
+                out.append(m.group(1).strip())
+    return out
+
+
+def heading_outside_fences(body):
+    """True when a '#', '##' or '###' heading sits outside every code fence."""
+    fence = 0
+    for l in body.splitlines():
+        m = re.match(r"^\s*(`{3,}|~{3,})(.*)$", l)
+        if m:
+            if not fence:
+                fence = len(m.group(1))
+                continue
+            if len(m.group(1)) >= fence and not m.group(2).strip():
+                fence = 0
+                continue
+        if not fence and re.match(r"^#{1,3}\s", l):
+            return True
+    return False
+
+
 def lint_body(c, body, allow, label, repo=None, earlier_files=()):
     errs, warns = [], []
-    if re.search(r"^#{1,3}\s", body, re.M):
+    if heading_outside_fences(body):
         errs.append("%s: '#', '##' or '###' heading inside a task body breaks plan structure (use '####' or bold)" % label)
     paths = files_block(body)
     if paths is None:
@@ -671,17 +736,14 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
         if not ok and not re.search(r"Expected:", l):
             errs.append("%s: 'Run:' at body L%d has no 'Expected:' before the next Run/Step" % (label, i + 1))
     for info, src, line in blocks:
-        for l in src.splitlines():
-            m = re.match(r"^\s*git add\s+(.+)$", l)
-            if not m:
-                continue
+        for args in git_add_args(src):
             try:
-                toks = [t for t in shlex.split(m.group(1)) if not t.startswith("-")]
+                toks = [t for t in shlex.split(args) if not t.startswith("-")]
             except ValueError:
-                toks = m.group(1).split()
+                toks = args.split()
             bad = [t for t in toks if t in (".", "*", ":/") or "*" in t]
-            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", m.group(1)):
-                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, m.group(1).strip()))
+            if bad or re.search(r"(^|\s)(-A|--all|-u)\b", args):
+                errs.append("%s: `git add %s` - stage explicit paths from Files only" % (label, args))
                 continue
             for t in toks:
                 t = norm_path(t)
@@ -777,6 +839,14 @@ def partition(cs, k):
                 half = j
                 break
         out[i:i + 1] = [g[:half], g[half:]]
+    return out
+
+
+def cap_groups(parts, size=WRITER_GROUP_MAX):
+    """Split any group longer than `size` into consecutive chunks of at most `size`."""
+    out = []
+    for g in parts:
+        out += [g[i:i + size] for i in range(0, len(g), size)]
     return out
 
 
@@ -946,23 +1016,54 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
     return "\n\n".join(parts) + "\n"
 
 
-def dispatch_lines(groups, work, kind):
+def row_agent(g, kind, installed, opencode, deep=True):
+    """Agent (OpenCode) or model alias (other harnesses) for one dispatch row."""
+    tier = max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
+    if not opencode:
+        return model_for("deep" if kind == "review" else tier, api=False)[0]
+    if not installed:
+        return "general"
+    if kind == "review":
+        return "plan-reviewer"
+    return "plan-task-writer-deep" if tier == "deep" and deep else "plan-task-writer"
+
+
+def group_span(g):
+    return g[0]["id"] if len(g) == 1 else "%s-%s" % (g[0]["id"], g[-1]["id"])
+
+
+def dispatch_lines(groups, work, kind, installed=True, opencode=False, deep=True):
     rows = []
+    sub = "review-briefs" if kind == "review" else "briefs"
+    fmt = "%-4s %-21s %-9s %s" if opencode else "%-4s %-7s %-9s %s"
     for gid, g in groups:
-        tier = max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
-        alias = model_for("deep" if kind == "review" else tier, api=False)[0]
-        span = g[0]["id"] if len(g) == 1 else "%s-%s" % (g[0]["id"], g[-1]["id"])
-        sub = "review-briefs" if kind == "review" else "briefs"
-        rows.append("%-4s %-7s %-9s %s" % (gid, alias, span, os.path.join(work, sub, gid + ".md")))
+        rows.append(fmt % (gid, row_agent(g, kind, installed, opencode, deep), group_span(g),
+                           os.path.join(work, sub, gid + ".md")))
     return rows
 
 
-def agent_installed(repo):
+def oc_dispatch(groups, work, kind, installed, width, deep=True):
+    """OpenCode dispatch calls, at most `width` per message, one agent per row, never a model alias."""
+    sub = "review-briefs" if kind == "review" else "briefs"
+    verb = "review" if kind == "review" else "plan"
+    major = oc_harness.major(SKILL_DIR)
+    rows = []
+    for b in range(0, len(groups), width):
+        batch = groups[b:b + width]
+        rows.append("MESSAGE %d (%d calls, ALL in ONE message):" % (b // width + 1, len(batch)))
+        for gid, g in batch:
+            rows.append("  " + oc_harness.dispatch_line(row_agent(g, kind, installed, True, deep),
+                                                        os.path.join(work, sub, gid + ".md"),
+                                                        "%s %s" % (verb, group_span(g)), major))
+    return rows
+
+
+def agent_installed(repo, name="plan-task-writer"):
     home = os.path.expanduser("~")
     for base in (os.path.join(repo, ".opencode", "agents"), os.path.join(home, ".config", "opencode", "agents"),
                  os.path.join(home, ".zcode", "agents"),
                  os.path.join(repo, ".claude", "agents"), os.path.join(home, ".claude", "agents")):
-        if os.path.isfile(os.path.join(base, "plan-task-writer.md")):
+        if os.path.isfile(os.path.join(base, name + ".md")):
             return base
     return None
 
@@ -986,6 +1087,14 @@ def task_path(work, tid):
 def lint_one(cs, c, body, allow, repo):
     earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
     return lint_body(c, strip_generated(body), allow, c["id"], repo, earlier)
+
+
+def resume_todo(cs, work, resume):
+    """Tasks the build still has to write. With resume, a task is skipped only when its
+    .ok mark is at least as new as its body (done_state), so an edited body is re-linted."""
+    if not resume:
+        return list(cs)
+    return [c for c in cs if done_state(task_path(work, c["id"]), "ok") != "done"]
 
 
 # ------------------------------------------------------------------ build (API lane)
@@ -1014,7 +1123,7 @@ def cmd_build(a):
     prefix = shared_prefix(plan, repo)
     budget = Budget(limit=max(4, workers // 4))
     allow = list(a.allow)
-    todo = [c for c in cs if not (a.resume and os.path.exists(task_path(work, c["id"]) + ".ok"))]
+    todo = resume_todo(cs, work, a.resume)
     print("LANE api | %s | %s | key %s | %d writers | %d/%d tasks"
           % (proto, base, src, min(workers, len(todo) or 1), len(todo), len(cs)))
     sys.stdout.flush()
@@ -1128,34 +1237,54 @@ def run_review(a, cfg, cs, plan, repo, work, spec, allow, budget, workers, prefi
 
 
 def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
+    opencode = on_opencode()
     cap, capenv = agent_cap()
-    k = max(1, min(MAX_WORKERS, a.workers or cap))
+    width = max(1, min(MAX_WORKERS, a.workers or lane_width()))
+    if opencode:
+        k = writer_group_count(len(cs), True, width)
+    else:
+        k = writer_group_count(len(cs), False, max(1, min(MAX_WORKERS, a.workers or cap)))
     shutil.rmtree(os.path.join(work, "briefs"), ignore_errors=True)
     cmap = {c["id"]: c for c in cs}
-    parts = partition(cs, k)
+    parts = cap_groups(partition(cs, k))
     groups = [((g[0]["id"] if len(parts) == len(cs) else "W%02d" % (i + 1)), g) for i, g in enumerate(parts)]
     for gid, g in groups:
         save(os.path.join(work, "briefs", gid + ".md"),
              writer_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
     info = json.loads(load(os.path.join(work, "work.json")))
     info["groups"] = {gid: [c["id"] for c in g] for gid, g in groups}
-    info["agents"] = k
+    info["agents"] = width if opencode else k
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
-    _, n, width = waves_block(cs)
-    agent = "plan-task-writer" if agent_installed(repo) else "general-purpose"
-    head = ["LANE agent (no API key found - script-side fan-out unavailable)" if not key
-            else "LANE agent (forced)",
-            "WORK %s" % work,
-            "DISPATCH %d writers, ALL in ONE message | subagent_type=%s | description 'plan <ID>'" % (len(groups), agent),
-            "prompt (verbatim): Read <brief path> and follow it exactly.",
-            "ID   MODEL   TASKS     BRIEF"]
+    _, n, wave_width = waves_block(cs)
+    installed = agent_installed(repo)
+    lane = ("LANE agent (no API key found - script-side fan-out unavailable)" if not key
+            else "LANE agent (forced)")
+    if opencode:
+        nmsg = -(-len(groups) // width)
+        head = [lane,
+                "WORK %s" % work,
+                "DISPATCH %d writers in %d message(s) of at most %d background calls | one agent per row"
+                % (len(groups), nmsg, width),
+                "Send each MESSAGE below verbatim; send the next MESSAGE after every writer of the previous one replied.",
+                "ID   AGENT                 TASKS     BRIEF"]
+        deep = bool(agent_installed(repo, "plan-task-writer-deep"))
+        rows = dispatch_lines(groups, work, "write", installed, True, deep) \
+            + oc_dispatch(groups, work, "write", installed, width, deep)
+    else:
+        agent = "plan-task-writer" if installed else "general-purpose"
+        head = [lane,
+                "WORK %s" % work,
+                "DISPATCH %d writers, ALL in ONE message | subagent_type=%s | description 'plan <ID>'" % (len(groups), agent),
+                "prompt (verbatim): Read <brief path> and follow it exactly.",
+                "ID   MODEL   TASKS     BRIEF"]
+        rows = dispatch_lines(groups, work, "write")
     tail = ["THEN: %s wait %s" % (qtool(), shlex.quote(plan_path)),
             "THEN: %s review %s" % (qtool(), shlex.quote(plan_path)),
             "THEN: %s assemble %s --clean" % (qtool(), shlex.quote(plan_path))]
-    if not capenv:
+    if not capenv and not opencode:
         tail.append("NOTE subagent cap assumed %d; `%s setup --apply` raises it where the harness supports it" % (cap, qtool()))
     return report([], warns, "OK contracts: %d tasks | %d waves | max wave width %d | %d writers"
-                  % (len(cs), n, width, len(groups)), head + dispatch_lines(groups, work, "write") + tail)
+                  % (len(cs), n, wave_width, len(groups)), head + rows + tail)
 
 
 
@@ -1300,10 +1429,21 @@ def cmd_review(a):
         save(os.path.join(work, "review-briefs", gid + ".md"), reviewer_brief(plan_path, plan, g, work, spec, info.get("repo") or repo_root(plan_path)))
     info["review"] = [c["id"] for c, _ in picked]
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
-    rows = ["REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked)),
-            "DISPATCH %d reviewers in ONE message | subagent_type=general-purpose | model sonnet | description 'review <ID>'" % len(groups),
-            "prompt (verbatim): Read <brief path> and follow it exactly.",
-            "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
+    summary = "REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked))
+    if on_opencode():
+        installed = agent_installed(info.get("repo") or repo_root(plan_path), "plan-reviewer")
+        width = max(1, min(MAX_WORKERS, a.agents or lane_width()))
+        rows = [summary,
+                "DISPATCH %d reviewers in %d message(s) of at most %d background calls | one agent per row"
+                % (len(groups), -(-len(groups) // width), width),
+                "ID   AGENT                 TASKS     BRIEF"] \
+            + dispatch_lines(groups, work, "review", installed, True) \
+            + oc_dispatch(groups, work, "review", installed, width)
+    else:
+        rows = [summary,
+                "DISPATCH %d reviewers in ONE message | subagent_type=general-purpose | model sonnet | description 'review <ID>'" % len(groups),
+                "prompt (verbatim): Read <brief path> and follow it exactly.",
+                "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
     for r in rows:
         print(r)
@@ -1464,6 +1604,8 @@ def pick_patterns(files, repo, spec_text, limit=4, exclude=()):
             s += 2.5 * (1.0 - rank[f] / max(1, len(recent)))
         hits = sum(1 for t in toks if t in base or t in f.lower())
         s += min(4.0, 1.2 * hits)
+        if s <= 1.5:
+            continue  # the size check below can only lower the score: skip the full read
         try:
             n = len(load(os.path.join(repo, f)).splitlines())
         except Exception:
@@ -1549,8 +1691,13 @@ def cmd_brief(a):
             p = os.path.join(repo, md)
             if os.path.isfile(p):
                 conv.append(md)
-                out.append("conventions %s (%d lines) - copy binding rules into Global Constraints:" % (md, len(load(p).splitlines())))
-                out.append("  " + "\n  ".join(load(p).splitlines()[:60]))
+                md_lines = load(p).splitlines()
+                if harness == "opencode" and md in ("AGENTS.md", "CLAUDE.md") and conv[0] == md:
+                    out.append("conventions %s (%d lines) - already in the agent context; copy binding rules into Global Constraints"
+                               % (md, len(md_lines)))
+                    continue
+                out.append("conventions %s (%d lines) - copy binding rules into Global Constraints:" % (md, len(md_lines)))
+                out.append("  " + "\n  ".join(md_lines[:60]))
         if not conv:
             out.append("conventions file: none")
         dirs = {}
@@ -1642,24 +1789,23 @@ task message and follow it exactly. Rules: no repository exploration, no extra
 file reads beyond those the brief names, minimal turns, and reply with one line
 per task (`T07 OK` or `T07 FAIL: <first error>`). Never echo the body.
 """
+WRITER_AGENTS = ("plan-task-writer", "plan-task-writer-deep", "plan-reviewer")
 
 
-def agent_file(harness):
+def agent_file(harness, name="plan-task-writer"):
     if harness == "opencode":
-        neutral = os.path.join(SKILL_DIR, "opencode", "agents", "plan-task-writer.md")
+        neutral = os.path.join(SKILL_DIR, "opencode", "agents", name + ".md")
         if os.path.exists(neutral):
-            if HERE not in sys.path:
-                sys.path.insert(0, HERE)
-            import oc_harness  # vendored next to this script by _shared/sync.sh
-            return oc_harness.render_agent(load(neutral), oc_harness.detect() or 1)
+            return oc_harness.render_agent(load(neutral), oc_harness.major(SKILL_DIR))
+        if name != "plan-task-writer":
+            return None
         fm = ("---\n"
               "description: Writes implementation-plan task bodies from a writing-plans brief file. "
               "Use only when given a writing-plans brief path.\n"
               "mode: subagent\n"
               "model: zai-coding-plan/glm-5.3-flash\n"
               "temperature: 0.3\n"
-              "top_p: 0.95\n"
-              "steps: 16\n"
+              "steps: 24\n"
               "permission:\n"
               "  read: allow\n"
               "  edit: allow\n"
@@ -1705,10 +1851,17 @@ def cmd_setup(a):
              "zcode": os.path.join(home, ".zcode", "agents", "plan-task-writer.md"),
              "claude": os.path.join(home, ".claude", "agents", "plan-task-writer.md")}
     agent_path = paths[harness]
-    text = agent_file(harness)
+    targets = [(agent_path, agent_file(harness))]
+    if harness == "opencode":
+        adir = os.path.dirname(agent_path)
+        for name in WRITER_AGENTS[1:]:
+            text = agent_file("opencode", name)
+            if text is not None:
+                targets.append((os.path.join(adir, name + ".md"), text))
     changes = []
-    if not os.path.exists(agent_path) or load(agent_path) != text:
-        changes.append("write subagent %s" % agent_path)
+    for path, text in targets:
+        if not os.path.exists(path) or load(path) != text:
+            changes.append("write subagent %s" % path)
     settings = os.path.join(home, ".claude", "settings.json")
     new = None
     if harness == "claude":
@@ -1744,7 +1897,8 @@ def cmd_setup(a):
             if os.path.exists(settings):
                 shutil.copy2(settings, settings + ".bak")
             save(settings, json.dumps(new, indent=2) + "\n")
-        save(agent_path, text)
+        for path, text in targets:
+            save(path, text)
         print("OK written")
     elif changes:
         print("Re-run with --apply to write them.")
@@ -1752,8 +1906,8 @@ def cmd_setup(a):
     print("Fastest lane (recommended) - script-side fan-out, no subagents:")
     print("  export ZAI_API_KEY=<GLM Coding Plan key>")
     print("  export ZAI_BASE_URL=%s" % DEFAULT_BASE)
-    if harness == "opencode":
-        print("Agent-lane fallback on OpenCode dispatches subagents one at a time;")
+    if harness == "opencode" and oc_harness.major(SKILL_DIR) < 2:
+        print("Agent-lane fallback on OpenCode v1 dispatches subagents one at a time;")
         print("  export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true   # lets them overlap")
     if harness == "zcode":
         print("ZCode runs foreground subagents in parallel; the agent lane works without extra flags.")

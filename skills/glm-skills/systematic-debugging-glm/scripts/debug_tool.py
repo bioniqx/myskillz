@@ -33,6 +33,8 @@ SKILL = SCRIPTS.parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 import zai_client
+import oc_harness
+WORKER_AGENT = "debug-worker"
 MAXJ = 64
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
@@ -51,11 +53,14 @@ def cpus():
 
 
 def clamp(j, default):
+    """Parse a -j value. 0, negative or unparseable means `default`."""
     try:
         j = int(j)
     except (TypeError, ValueError):
         j = default
-    return max(1, min(MAXJ, j))
+    if j <= 0:
+        j = default
+    return max(1, min(MAXJ, int(j)))
 
 
 def sh(cmd, cwd=None, timeout=None, env=None):
@@ -158,7 +163,7 @@ NULLISH_RE = re.compile(
     r"Maximum call stack|out of memory|ECONNREFUSED|ETIMEDOUT|deadlock", re.I)
 
 SWARM_RE = re.compile(
-    r"flak|intermittent|sometimes|randomly|race|timeout|timed out|hangs?\b|"
+    r"flak|intermittent|sometimes|randomly|\brace\b|\braces\b|\bracy\b|timeout|timed out|hangs?\b|"
     r"only in CI|passes locally|slow|performance|regress|worked before|"
     r"used to work|non-?deterministic", re.I)
 
@@ -319,7 +324,8 @@ def cmd_probe(a):
             else:
                 extra = max(0, clamp(a.flake_check, 1) - 1)
             if extra:
-                repro += [f.result() for f in [ex.submit(run_repro, i) for i in range(1, extra + 1)]]
+                # serial on purpose: parallel runs in one tree fake flakiness
+                repro += [run_repro(i) for i in range(1, extra + 1)]
 
     # ------------------------------------------------------------ triage
     rcs = [r["rc"] for r in repro]
@@ -416,7 +422,8 @@ def cmd_probe(a):
     if lane == "FAST":
         o.append("1. Write ROOT CAUSE: <X> causes <Y> because <Z>, citing a line printed above.")
         o.append("2. Apply the minimal fix at that line.")
-        o.append("3. One call: python3 %s/debug_tool.py run -- %s" % (SCRIPTS, a.cmd or "<build/test cmd>"))
+        o.append("3. One call: python3 %s/debug_tool.py run -- %s"
+                 % (SCRIPTS, shlex.quote(a.cmd) if a.cmd else "<build/test cmd>"))
     elif lane == "STANDARD":
         o.append("1. If a bad value crashed downstream, trace it to where it is CREATED (references/root-cause-tracing.md).")
         o.append("2. Write 2-4 hypotheses, each with a control command and a one-variable treatment.")
@@ -451,11 +458,13 @@ def cmd_run(a):
         rc, out = sh("set -o pipefail; " + c, cwd=root, timeout=a.timeout)
         return {"i": i, "cmd": c, "rc": rc, "sec": round(time.time() - t0, 1), "out": out}
 
+    t_start = time.time()
     res = pmap(one, list(enumerate(cmds)), j)
+    wall = time.time() - t_start
     bad = [r for r in res if r["rc"] != 0]
     print("S=%s" % SCRIPTS)
     print("RESULT: %d/%d exited non-zero (%d parallel, %.1fs wall)"
-          % (len(bad), len(res), j, max([r["sec"] for r in res] or [0])))
+          % (len(bad), len(res), j, wall))
     for r in res:
         print("\n== [%d] rc=%d %.1fs :: %s" % (r["i"], r["rc"], r["sec"], r["cmd"]))
         print(tail(r["out"], a.max_out if r["rc"] != 0 else min(a.max_out, 20)))
@@ -493,21 +502,74 @@ TEMPLATE = [
 ]
 
 
+DEFAULT_LINKS = ("node_modules", ".venv", "venv", "vendor/bundle")
+
+
+def default_links(root):
+    """Ignored dependency dirs that exist in root: linked into every worktree."""
+    out = []
+    for d in DEFAULT_LINKS:
+        if os.path.isdir(os.path.join(root, d)):
+            rc, _ = sh("git check-ignore -q %s" % shlex.quote(d), cwd=root, timeout=30)
+            if rc == 0:
+                out.append(d)
+    return out
+
+
+def copy_untracked(root, path):
+    """Copy untracked, non-ignored files: HEAD plus the WIP diff misses them."""
+    rc, out = sh("git ls-files --others --exclude-standard -z", cwd=root, timeout=120)
+    if rc != 0:
+        return 0
+    n = 0
+    for rel in out.split("\0"):
+        if not rel:
+            continue
+        src, dst = os.path.join(root, rel), os.path.join(path, rel)
+        if not (os.path.isfile(src) or os.path.islink(src)) or os.path.lexists(dst):
+            continue
+        os.makedirs(os.path.dirname(dst) or path, exist_ok=True)
+        try:
+            shutil.copy2(src, dst, follow_symlinks=False)
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
 def make_worktree(root, path, links, wip_patch):
     rc, out = sh("git worktree add --detach --force %s HEAD" % shlex.quote(path), cwd=root, timeout=300)
     if rc != 0:
         return "worktree add failed: " + tail(out, 5)
     if wip_patch and os.path.getsize(wip_patch) > 0:
         sh("git apply %s" % shlex.quote(wip_patch), cwd=path, timeout=120)
+    copy_untracked(root, path)
     for d in links or []:
         src, dst = os.path.join(root, d), os.path.join(path, d)
-        if os.path.exists(src) and not os.path.exists(dst):
+        if os.path.exists(src) and not os.path.lexists(dst):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             try:
                 os.symlink(src, dst)
             except OSError:
                 pass
     return None
+
+
+def apply_treatment_patch(wt, patch, wip_patch):
+    """Apply patch on top of the WIP. If it does not apply there but applies on
+    HEAD once the WIP is reversed, the patch already contains the WIP.
+    Returns (ok, note)."""
+    rc, out = sh("git apply %s" % shlex.quote(patch), cwd=wt, timeout=120)
+    if rc == 0:
+        return True, ""
+    if wip_patch and os.path.getsize(wip_patch) > 0:
+        rrc, _ = sh("git apply -R %s" % shlex.quote(wip_patch), cwd=wt, timeout=120)
+        if rrc == 0:
+            rc2, _ = sh("git apply %s" % shlex.quote(patch), cwd=wt, timeout=120)
+            if rc2 == 0:
+                return True, "patch already contains the WIP: applied on HEAD"
+            sh("git apply %s" % shlex.quote(wip_patch), cwd=wt, timeout=120)
+    return False, "patch did not apply: " + tail(out, 4)
 
 
 def cmd_experiment(a):
@@ -526,7 +588,15 @@ def cmd_experiment(a):
         if not h.get("cmd"):
             print("hypothesis %s has no 'cmd'." % h["id"], file=sys.stderr)
             return 2
-    work = tempfile.mkdtemp(prefix="sdexp.", dir=os.environ.get("TMPDIR", "/tmp"))
+        if h.get("patch_file"):
+            # resolve against the caller's cwd, never the arm's worktree
+            pf = os.path.abspath(os.path.expanduser(str(h["patch_file"])))
+            if not os.path.isfile(pf):
+                print("hypothesis %s: patch_file %s not found (relative paths resolve "
+                      "against %s)." % (h["id"], pf, os.getcwd()), file=sys.stderr)
+                return 2
+            h["patch_file"] = pf
+    work =tempfile.mkdtemp(prefix="sdexp.", dir=os.environ.get("TMPDIR", "/tmp"))
     wip = os.path.join(work, "wip.patch")
     with open(wip, "wb") as f:
         subprocess.run("git diff HEAD --binary", shell=True, cwd=root, stdout=f, executable=BASH)
@@ -534,6 +604,7 @@ def cmd_experiment(a):
     # Every arm gets its OWN worktree: no state (caches, .pyc, build dirs, DBs) leaks
     # between control and treatment, and both arms run at the same time.
     arms = [(h, side) for h in spec for side in ("control", "treatment")]
+    auto_links = default_links(root)
     j = clamp(a.jobs, min(MAXJ, max(2, len(arms))))
     cpu_budget = max(2, cpus())
     if j > cpu_budget * 2:
@@ -547,14 +618,16 @@ def cmd_experiment(a):
         hid = re.sub(r"\W+", "_", str(h["id"]))
         wt = os.path.join(work, "w_%s_%s" % (hid, side))
         r = {"id": h["id"], "side": side, "wt": wt, "fails": None, "out": "", "note": ""}
-        err = make_worktree(root, wt, h.get("link"), wip)
+        links = list(h.get("link") or [])
+        links += [d for d in auto_links if d not in links]
+        err = make_worktree(root, wt, links, wip)
         if err:
             r["note"] = err
             return r
         if side == "treatment" and h.get("patch_file"):
-            rc, out = sh("git apply %s" % shlex.quote(h["patch_file"]), cwd=wt, timeout=120)
-            if rc != 0:
-                r["note"] = "patch did not apply: " + tail(out, 4)
+            ok, note = apply_treatment_patch(wt, h["patch_file"], wip)
+            r["note"] = note
+            if not ok:
                 return r
         if side == "treatment" and h.get("setup"):
             sh(h["setup"], cwd=wt, timeout=h.get("timeout", a.timeout))
@@ -596,8 +669,13 @@ def cmd_experiment(a):
             continue
         r["control"] = "%d/%d failed" % (c["fails"], c["runs"])
         r["treatment"] = "%d/%d failed" % (t["fails"], t["runs"])
+        arm_note = t.get("note", "")
         expect = h.get("expect", "treatment_passes")
-        if c["fails"] == t["fails"]:
+        if expect == "treatment_passes" and c["fails"] == 0:
+            r["verdict"], r["note"] = "INCONCLUSIVE", (
+                "the control did not reproduce the failure in its worktree; the repro likely "
+                "needs a file the worktree lacks - list it under \"link\" or commit it")
+        elif c["fails"] == t["fails"]:
             r["verdict"], r["note"] = "REFUTED", "the variable changed nothing"
         elif expect == "treatment_passes" and t["fails"] < c["fails"]:
             r["verdict"] = "CONFIRMED"
@@ -608,7 +686,9 @@ def cmd_experiment(a):
         if max(c["runs"], t["runs"]) > 1 and abs(c["fails"] - t["fails"]) < 2:
             r["note"] = (r.get("note", "") + " (difference of 1 run over %d is not significant - "
                          "prove a flaky fix with stress.sh -b F/N, Fisher p < 0.05)" % max(c["runs"], t["runs"])).strip()
-        log = os.path.join(work, "log.%s.txt" % re.sub(r"\W+", "_", str(h["id"])))
+        if arm_note:
+            r["note"] = (r.get("note", "") + " (" + arm_note + ")").strip()
+        log =os.path.join(work, "log.%s.txt" % re.sub(r"\W+", "_", str(h["id"])))
         Path(log).write_text("== control: %s ==\n%s\n\n== treatment: %s ==\n%s\n"
                              % (c.get("cmd", ""), tail(c["out"], 150), t.get("cmd", ""), tail(t["out"], 150)))
         r["log"] = log
@@ -682,26 +762,88 @@ def api_call(key, base, model, effort, system, user, max_tokens, anthropic, clie
         return "VERDICT: INCONCLUSIVE\nEVIDENCE: %s" % e
 
 
+SCAN_STOPWORDS = frozenset(
+    "about after also because been before being cause caused causes could does doesn each "
+    "error errors every fail failing fails failure from have here into just like made make "
+    "makes more most only other over same should some such than that their them then there "
+    "they this under used using very were what when where which while will with would wrong "
+    "happen happens work works working".split())
+SCAN_KEYWORDS = 5
+SCAN_WINDOWS = 4
+SCAN_WINDOW_CTX = 8
+SCAN_CODE_CHARS = 6000
+
+
+def question_keywords(question, limit=SCAN_KEYWORDS):
+    """Content words of the question, stopwords dropped, first-seen order, deduped."""
+    out, seen = [], set()
+    for w in re.findall(r"[A-Za-z_][\w.]{3,}", question or ""):
+        lw = w.lower()
+        if lw in SCAN_STOPWORDS or lw in seen:
+            continue
+        seen.add(lw)
+        out.append(w)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def grep_area(root, area, words, cap):
+    """ONE case-insensitive literal grep for all words, scoped to the area."""
+    if not words:
+        return ""
+    pats = " ".join("-e %s" % shlex.quote(w) for w in words)
+    if root and Path(root, ".git").exists():
+        cmd = "git grep -I -n -i -F %s -- %s | head -%d" % (pats, shlex.quote(area), cap)
+    else:
+        cmd = ("grep -rIn -H -i -F %s %s --exclude-dir=node_modules --exclude-dir=.git "
+               "--exclude-dir=dist --exclude-dir=build --exclude-dir=venv "
+               "--exclude-dir=.venv --exclude-dir=target | head -%d"
+               % (pats, shlex.quote(area), cap))
+    rc, out = sh(cmd, cwd=root or ".", timeout=60)
+    return out.strip()
+
+
+def code_windows(root, hits, limit=SCAN_WINDOWS, ctx=SCAN_WINDOW_CTX, budget=SCAN_CODE_CHARS):
+    """Numbered code around the first grep hits; overlapping hits share one window."""
+    out, taken, used = [], [], 0
+    for line in hits.split("\n"):
+        m = re.match(r"([^:]+):(\d+):", line)
+        if not m:
+            continue
+        rel, ln = m.group(1), int(m.group(2))
+        if any(r == rel and abs(l - ln) <= ctx for r, l in taken):
+            continue
+        w = read_window(root, rel, ln, ctx)
+        if used + len(w) > budget:
+            break
+        taken.append((rel, ln))
+        out.append(w)
+        used += len(w)
+        if len(out) >= limit:
+            break
+    return "\n".join(out)
+
+
 def build_tasks(a, root):
     if a.tasks:
         t = json.loads(Path(a.tasks).read_text())
         return [{"id": x.get("id", "t%d" % i), "prompt": x["prompt"]} for i, x in enumerate(t)]
     if not a.area:
         return []
+    kw = question_keywords(a.question)
     out = []
-    for i, area in enumerate(a.area):
+    for area in a.area:
         rc, files = sh("git ls-files %s 2>/dev/null | head -60" % shlex.quote(area), cwd=root)
         if not files.strip():
             rc, files = sh("find %s -type f | head -60" % shlex.quote(area), cwd=root)
-        hits = ""
-        if a.question:
-            kw = [w for w in re.findall(r"[A-Za-z_][\w.]{3,}", a.question)][:3]
-            for k in kw:
-                hits += grep(root, k, True, 10) + "\n"
+        hits = grep_area(root, area, kw, 30) if kw else ""
+        code = code_windows(root, hits) if hits else ""
         out.append({"id": area, "prompt":
-                    "AREA: %s\nFILES:\n%s\nMATCHES:\n%s\nQUESTION: %s\n"
+                    "AREA: %s\nFILES:\n%s\nMATCHES:\n%s\nCODE:\n%s\nQUESTION: %s\n"
                     "Read only what you were given. Name file:line for anything you claim."
-                    % (area, head(files, 60), head(hits.strip(), 30), a.question or "what here could cause the failure?")})
+                    % (area, head(files, 60), head(hits, 30), code or "(no match)",
+                       a.question or "what here could cause the failure?")})
     return out
 
 
@@ -726,18 +868,41 @@ def cmd_scan(a):
         effort = a.effort
 
     if not key or a.print_prompts:
-        d = Path(a.out or tempfile.mkdtemp(prefix="sdscan."))
+        # inside the project: no external_directory prompts for the workers
+        d = Path(a.out) if a.out else Path(root) / ".debug" / "scan"
         d.mkdir(parents=True, exist_ok=True)
+        # byte-identical prefix across workers; S= fills the agent's <scripts> placeholder
+        prefix = SYS_PROMPT + "\n\nS=%s\n\n" % SCRIPTS + shared
+        briefs = []
         for t in tasks:
-            (d / ("%s.txt" % re.sub(r"\W+", "_", t["id"]))).write_text(
-                SYS_PROMPT + "\n\n" + shared + "\n---\nTASK: " + t["prompt"])
+            p = d / ("%s.txt" % re.sub(r"\W+", "_", t["id"]))
+            p.write_text(prefix + "\n---\nTASK: " + t["prompt"])
+            briefs.append((t["id"], str(p.resolve())))
         print("S=%s" % SCRIPTS)
         print("no API key found -- agent lane." if not key else "prompt files written.")
-        print("Dispatch these %d prompts as subagents IN ONE message (they are independent):" % len(tasks))
-        for t in tasks:
-            print("  %s/%s.txt" % (d, re.sub(r"\W+", "_", t["id"])))
+        if oc_harness.harness(str(Path(__file__).resolve())) == "opencode":
+            mj = oc_harness.major(str(SKILL))
+            lanes_file = d / "lanes.json"
+            lanes_file.write_text(json.dumps(
+                [{"id": tid, "agent": WORKER_AGENT, "brief": p, "model": model, "effort": effort,
+                  "dir": root} for tid, p in briefs], indent=2) + "\n")
+            print("lanes: %s (%d x %s)" % (lanes_file, len(briefs), WORKER_AGENT))
+            if mj >= 2:
+                print("Or dispatch them as background subagents IN ONE message:")
+                for tid, p in briefs:
+                    print("  " + oc_harness.dispatch_line(WORKER_AGENT, p, "scan " + tid, mj,
+                                                          background=True))
+            print("Each worker answers in the VERDICT shape written at the top of its file.")
+            print("NEXT: python3 %s/oc_harness.py run %s" % (SCRIPTS, shlex.quote(str(lanes_file))))
+            return 0
+        print("Dispatch these %d prompts as %s subagents IN ONE message (they are independent):"
+              % (len(briefs), WORKER_AGENT))
+        for tid, p in briefs:
+            print("  %s: %s" % (WORKER_AGENT, p))
         print("Model for each worker: the cheap/fast tier. Each must answer in the VERDICT shape "
               "written at the top of its file.")
+        print("NEXT: dispatch the %d %s subagents above in one message, then read their VERDICTs."
+              % (len(briefs), WORKER_AGENT))
         return 0
 
     base = a.base or os.environ.get("ZAI_BASE_URL") or "https://api.z.ai/api/coding/paas/v4"
@@ -825,26 +990,13 @@ def cmd_doctor(a):
 
 
 SETUP = {
-    "opencode": """# ~/.config/opencode/opencode.json  (merge these keys)
-{
-  "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "zai": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": { "baseURL": "https://api.z.ai/api/coding/paas/v4" },
-      "models": {
-        "glm-5.3":       { "name": "GLM-5.3",       "options": { "reasoning_effort": "max"  } },
-        "glm-5.3-flash": { "name": "GLM-5.3 Flash", "options": { "reasoning_effort": "high" } }
-      }
-    }
-  },
-  "model": "zai/glm-5.3",
-  "small_model": "zai/glm-5.3-flash"
-}
-# export ZAI_API_KEY=<GLM Coding Plan key>
-# Skill goes in ~/.config/opencode/skills/systematic-debugging/ (or .opencode/skills/ per project).
-# NOTE: subagents are dispatched one at a time here. Use debug_tool.py experiment/scan/run for width.
-# Agent-lane fallback on OpenCode uses oc_harness.py run instead of a serial DISPATCH table.""",
+    "opencode": (
+        "# export ZAI_API_KEY=<GLM Coding Plan key>\n"
+        "# Skill goes in ~/.config/opencode/skills/systematic-debugging/ (or .opencode/skills/ per project).\n"
+        "# Agent lane: without a key, `debug_tool.py scan` writes <root>/.debug/scan/lanes.json"
+        " for the debug-worker agent.\n"
+        "# Run every lane in parallel with: python3 <scripts>/oc_harness.py run"
+        " <root>/.debug/scan/lanes.json"),
     "zcode": """# ZCode
 # Settings -> Model Settings -> Z.ai account or API key; thinking effort is per-model in the UI.
 # Skill:  ~/.zcode/skills/systematic-debugging/SKILL.md
@@ -868,6 +1020,11 @@ SETUP = {
 
 
 def cmd_setup(a):
+    if a.harness == "opencode":
+        mj = getattr(a, "major", None) or oc_harness.major(str(SKILL))
+        print(oc_harness.config_snippet(mj, []))
+        print(SETUP["opencode"])
+        return 0
     print(SETUP[a.harness])
     return 0
 
@@ -937,6 +1094,8 @@ def main(argv=None):
 
     q = sp.add_parser("setup", help="print harness config")
     q.add_argument("--harness", choices=list(SETUP), required=True)
+    q.add_argument("--major", type=int, choices=[1, 2],
+                   help="OpenCode major version (default: detected)")
     q.set_defaults(fn=cmd_setup)
 
     a = p.parse_args(argv)

@@ -75,7 +75,11 @@ on Windows it auto-foregrounds, so pass `run_in_background: true` and
 read `server-info` next turn). Codex — auto-foregrounds via `CODEX_CI`,
 run normally. Gemini CLI — add `--foreground` and set
 `is_background: true`. Copilot CLI — `bash scripts/start-server.sh …
---foreground` via its background shell mechanism. Any harness that
+--foreground` via its background shell mechanism.
+OpenCode v2 — add `--foreground` and run it through `shell` with
+`background: true` (a foreground shell call is killed after 120 s, which
+takes the server with it); read `server-info` next turn. OpenCode v1 —
+run as above (the script backgrounds itself). Any harness that
 reaps detached processes → `--foreground` + its background mechanism.
 Unreachable URL in containers → `--host 0.0.0.0 --url-host localhost`.
 

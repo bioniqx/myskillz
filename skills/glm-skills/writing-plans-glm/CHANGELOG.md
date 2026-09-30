@@ -1,5 +1,7 @@
 # writing-plans v9 (GLM edition) - what changed from v8
 
+**Fixes:** (WP5) Bootstrap now respects `$OPENCODE_CONFIG_DIR`, checks locations in project-first order, and exits with a clear error on miss (no `python3 "" brief`).
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in OpenCode or ZCode.
 
 ## The structural change: parallelism moved out of the model's turn

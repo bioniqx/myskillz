@@ -15,7 +15,7 @@ metadata:
 ## R0. Bootstrap — put this in front of your FIRST command, once
 
 ```bash
-for d in "${CLAUDE_SKILL_DIR:-}" .opencode/skills/systematic-debugging ~/.config/opencode/skills/systematic-debugging .claude/skills/systematic-debugging ~/.claude/skills/systematic-debugging .agents/skills/systematic-debugging ~/.agents/skills/systematic-debugging ~/.zcode/skills/systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
+for d in "${CLAUDE_SKILL_DIR:-}" "$OPENCODE_CONFIG_DIR/skills/systematic-debugging" .opencode/skills/systematic-debugging ~/.config/opencode/skills/systematic-debugging .claude/skills/systematic-debugging ~/.claude/skills/systematic-debugging .agents/skills/systematic-debugging ~/.agents/skills/systematic-debugging ~/.zcode/skills/systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
 ```
 
 Every tool output starts with `S=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path** into every later command — `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags.
@@ -52,7 +52,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 ## R3. FAST lane — 2 rounds
 
 1. `probe` (already done). The frame window and grep hits it printed are your evidence.
-2. Write the `ROOT CAUSE` line quoting a printed line → make the minimal fix → `python3 $S/debug_tool.py run '<the failing command>' '<its test file>'` in the same call. A fix that only reveals the *next* compile error is progress, not a failed fix.
+2. Write the `ROOT CAUSE` line quoting a printed line → make the minimal fix → `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>` in the same call. A fix that only reveals the *next* compile error is progress, not a failed fix.
 
 ## R4. STANDARD lane — 3 rounds
 
@@ -73,6 +73,14 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
    Flaky bug → prove it with `bash $S/stress.sh -b <baseline F/N>` at the baseline's `-n`/`-j`; only Fisher p < 0.05 counts. Bad data crossed layers → `references/defense-in-depth.md`. Timing bug → condition waits, never sleeps → `references/flaky-and-timing.md`.
 
+#### Setup snippet for OpenCode
+
+```bash
+python3 $S/debug_tool.py setup --harness opencode
+```
+
+This prints a provider block defining `variants` `low`/`high`/`max` (`reasoningEffort`) for `glm-5.3` and `glm-5.3-flash` under `zai-coding-plan`. Paste it into your OpenCode provider config. Without this, `#max` fails with "Variant unavailable" (fixes SD12).
+
 ## R5. SWARM lane — 4 to 6 rounds
 
 Read `references/parallel-playbook.md` in the same call as the first command below.
@@ -80,7 +88,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `debug-worker` agent instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report.
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit

@@ -841,7 +841,7 @@ check "python -m pip/venv and node --import/--require are not pre-approved" 'iss
 check "a URL anywhere in a toolchain command is not pre-approved" 'issilent "go run https://x.test/a" && issilent "npm run x -- https://x.test"'
 check "chmod +x inside the footprint is pre-approved (the mode is not a path)" 'isallow "chmod +x src/m2.js" && issilent "chmod +x src/a.js"'
 echo "-- read-only roles after the round"
-check "a reviewer cannot write via sort -o / find -fprint0 / an in-repo script" '[ -z "$(rq "sort -o /tmp/ro /etc/hostname")" ] && [ -z "$(rq "find . -fprint0 /tmp/ro")" ] && [ -z "$(rq "python3 scripts/anything.py")" ] && [ -z "$(rq "node scripts/x.js")" ] && [ -z "$(rq "make deploy")" ]'
+check "a reviewer cannot write via sort -o / find -fprint0 / an in-repo script" '[[ "$(rq "sort -o /tmp/ro /etc/hostname")" != *\"allow\"* ]] && [[ "$(rq "find . -fprint0 /tmp/ro")" != *\"allow\"* ]] && [[ "$(rq "python3 scripts/anything.py")" != *\"allow\"* ]] && [[ "$(rq "node scripts/x.js")" != *\"allow\"* ]] && [[ "$(rq "make deploy")" != *\"allow\"* ]]'
 check "a reviewer may still run the runners for evidence" '[[ "$(rq "python3 -m pytest tests -q")" == *allow* && "$(rq "make test")" == *allow* && "$(rq "go test ./...")" == *allow* ]]'
 check "a half-written research report is not harvested; a finished one is" 'RH="$(newrepo rh32)"; cd "$RH"; printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"echo ok\"},\"slices\":[{\"id\":\"Q1\",\"title\":\"q\",\"kind\":\"research\",\"deps\":[],\"files\":[\"docs/q.md\"],\"risk\":\"low\",\"criteria\":[\"q?\"]}]}\n\140\140\140\n" > plan.md; D init plan.md >/dev/null 2>&1; D dispatch Q1 >/dev/null 2>&1; mkdir -p .claude/dev-team/research; printf "# draft\n" > .claude/dev-team/research/Q1.md; [[ "$(D next 2>&1)" != *"RESEARCH RECORDED"* ]] && printf "## Verdict: INCONCLUSIVE\n## Findings\n- x\n" > .claude/dev-team/research/Q1.md && [[ "$(D next 2>&1)" == *"Q1: RESEARCH RECORDED"* ]]'
 
@@ -1153,11 +1153,87 @@ fi
 cd "$ROC"
 NEXTOUT=$(D next 2>&1)
 check "opencode next integrates the finished lane" '[[ "$NEXTOUT" == *"O1: MERGED"* ]]'
-printf '{"type":"assistant","text":"working"}\n{"type":"system","subtype":"api_error","level":"error","error":{"status":429,"error":{"code":"1302","message":"rate limit"}},"timestamp":"2026-01-01T00:00:00.000Z"}\n' > "$ROC/.claude/dev-team/lanes/O1.jsonl"
+printf '{"type":"assistant","text":"working"}\n{"type":"error","error":{"name":"APIError","data":{"statusCode":429,"responseBody":"{\\"error\\":{\\"code\\":\\"1302\\"}}"}}}\n' >> "$ROC/.claude/dev-team/lanes/O1.jsonl"
 GOVOUT=$(DEVTEAM_GOVERNOR=on D next 2>&1)
 check "a 1302 throttle row shrinks the governor window (opencode lanes)" '[[ "$GOVOUT" == *"THROTTLED"* && "$GOVOUT" == *"window"*"→"* ]]'
 export PATH="$OLDPATH"
 unset DEVTEAM_HARNESS DEVTEAM_PY
+echo "== OpenCode hardening DG4/DG5: read-only roles cannot write or exec through allow-listed tools"
+roq() { printf '{"cwd":"%s","tool_input":{"command":%s}}' "$RA" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" | python3 "$G" bash-ro; }
+roallow() { [[ "$(roq "$1")" == *"\"allow\""* ]]; }
+ronotallow() { [[ "$(roq "$1")" != *"\"permissionDecision\": \"allow\""* ]]; }
+check "DG4: plain git diff / git log / sort stay pre-approved for a reviewer" 'roallow "git diff HEAD" && roallow "git log -1" && roallow "sort src/a.js"'
+check "DG4: git diff/log --output (a file write) is not pre-approved" 'ronotallow "git diff --output=/tmp/dg4 HEAD" && ronotallow "git log --output=notes.txt -1"'
+check "DG4: git grep --open-files-in-pager (exec) is not pre-approved" 'ronotallow "git grep --open-files-in-pager=sh base"'
+check "DG4: rg --pre (exec) is not pre-approved" 'ronotallow "rg --pre ./x.sh base src" && ronotallow "rg --pre=sh base src"'
+check "DG4: uniq with an output file is not pre-approved" 'ronotallow "uniq src/a.js out.txt"'
+check "DG4: sed w / e commands are not pre-approved" 'ronotallow "sed -n \"w out.txt\" src/a.js" && ronotallow "sed \"1e ls\" src/a.js"'
+check "DG4: sort --compress-program (exec) is not pre-approved" 'ronotallow "sort --compress-program=sh src/a.js"'
+mkdir -p "$RA/node_modules/.bin" && touch "$RA/node_modules/.bin/prettier"
+check "DG5: a reviewer still runs the test runners for evidence" 'roallow "go test ./..." && roallow "make test"'
+check "DG5: black / isort are not pre-approved for a reviewer" 'ronotallow "black src" && ronotallow "isort src"'
+check "DG5: ruff --fix / ruff format are not pre-approved" 'ronotallow "ruff check --fix src" && ronotallow "ruff format src"'
+check "DG5: prettier --write is not pre-approved" 'ronotallow "npx prettier --write src"'
+check "DG5: gofmt -w / go fmt / cargo fmt are not pre-approved" 'ronotallow "gofmt -w ." && ronotallow "go fmt ./..." && ronotallow "cargo fmt"'
+echo "== OpenCode hardening DE1: v2 is detected from OPENCODE_TERMINAL alone"
+export DEVTEAM_PY="$S/devteam.py"
+ocplan() { # $1 slice id, $2 checkpoint_every (default 99) -> plan.md with one code slice
+  local l; l=$(printf '%s' "$1" | tr 'A-Z' 'a-z')
+  printf '```json\n{"request":"oc","commands":{"test":"true"},"review_batch":99,"checkpoint_every":%s,"slices":[{"id":"%s","title":"t","deps":[],"files":["src/%s.js","tests/%s.test.js"],"risk":"low","criteria":["c"]}]}\n```\n' "${2:-99}" "$1" "$l" "$l" > plan.md
+}
+RD1="$(newrepo rde1)"; cd "$RD1"; ocplan N1
+D1OUT=$(env -u DEVTEAM_HARNESS -u OPENCODE -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT OPENCODE_TERMINAL=1 PATH="$OCBIN:$OLDPATH" python3 "$S/devteam.py" start plan.md 2>&1)
+check "DE1: OPENCODE_TERMINAL=1 with no OPENCODE selects the OpenCode path (no Agent line)" '[[ "$D1OUT" == *"DISPATCH N1"* && "$D1OUT" != *"Agent → subagent_type"* ]]'
+env -u DEVTEAM_HARNESS -u OPENCODE -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT OPENCODE_TERMINAL=1 PATH="$OCBIN:$OLDPATH" python3 "$S/devteam.py" wait --timeout 30 >/dev/null 2>&1
+check "DE1: the v2-detected dispatch really launched an OpenCode lane" '[ -f "$RD1/.claude/dev-team/lanes/N1.jsonl" ]'
+RD1C="$(newrepo rde1c)"; cd "$RD1C"; ocplan N1
+D1CL=$(env -u DEVTEAM_HARNESS -u OPENCODE -u OPENCODE_TERMINAL python3 "$S/devteam.py" start plan.md 2>&1)
+check "DE1: with no OpenCode variable the Claude path is kept (Agent line, no lane)" '[[ "$D1CL" == *"Agent → subagent_type: programmer"* ]] && [ ! -e "$RD1C/.claude/dev-team/lanes/N1.jsonl" ]'
+echo "== OpenCode hardening DE4: the checkpoint runs detached and wait/next harvest it"
+RD4="$(newrepo rde4)"; cd "$RD4"; ocplan O1 1
+OCD() { DEVTEAM_HARNESS=opencode PATH="$OCBIN:$OLDPATH" python3 "$S/devteam.py" "$@"; }
+OCD start plan.md >/dev/null 2>&1
+OCD wait --timeout 30 >/dev/null 2>&1
+D4OUT=$(OCD next 2>&1)
+check "DE4: next merged O1 and started the checkpoint without a background Bash call" '[[ "$D4OUT" == *"O1: MERGED"* && "$D4OUT" == *"CHECKPOINT"* && "$D4OUT" != *"run in the BACKGROUND"* ]]'
+check "DE4: next points the Conductor to wait" '[[ "$D4OUT" == *"NEXT:"*"wait"* ]]'
+OCD wait --timeout 60 >/dev/null 2>&1
+for i in 1 2 3 4 5 6 7 8 9 10; do grep -qs "EXIT=0" .claude/dev-team/logs/checkpoint-*.log && break; sleep 1; done
+check "DE4: the detached checkpoint ran to the end and recorded EXIT=0" 'grep -qs "EXIT=0" .claude/dev-team/logs/checkpoint-*.log'
+D4NEXT=$(OCD next 2>&1)
+check "DE4: next harvested the checkpoint from its log and nothing stays pending" '[[ "$D4NEXT" == *"PASS (exit 0)"* ]] && python3 -c "import json;s=json.load(open(\".claude/dev-team/state.json\"));assert not s.get(\"checkpoint_pending\")"'
+echo "== OpenCode hardening DE6: resume relaunches a blocked lane in its worktree"
+OCB6="$(mktemp -d)"; OCLOG6="$OCB6/calls.log"; export OCLOG6
+cat > "$OCB6/opencode" <<'SH'
+#!/usr/bin/env bash
+set -u
+if [ "${1:-}" = "--version" ]; then echo "1.18.32"; exit 0; fi
+IN=""; if [ ! -t 0 ]; then IN="$(cat)"; fi
+DIR=""; prev=""
+for a in "$@"; do [ "$prev" = "--dir" ] && DIR="$a"; prev="$a"; done
+printf 'CALL slice=%s role=%s dir=%s argv=%s stdin=%s\n' "${DEVTEAM_SLICE:-}" "${DEVTEAM_ROLE:-}" "$DIR" "$*" "$IN" >> "$OCLOG6"
+printf '%s\n' '{"type":"text","part":{"type":"text","text":"## Status: Blocked\n## Notes: need src/shared.js which is outside my footprint"}}'
+exit 0
+SH
+chmod +x "$OCB6/opencode"
+RD6="$(newrepo rde6)"; cd "$RD6"; ocplan B1
+OC6() { DEVTEAM_HARNESS=opencode PATH="$OCB6:$OLDPATH" python3 "$S/devteam.py" "$@"; }
+OC6 start plan.md >/dev/null 2>&1
+OC6 wait --timeout 30 >/dev/null 2>&1
+check "DE6: a Blocked lane leaves a .blocked marker" '[ -f "$RD6/.claude/dev-team/slices/B1.blocked" ]'
+D6OUT=$(OC6 next 2>&1)
+check "DE6: next surfaces the block and names resume, not SendMessage" '[[ "$D6OUT" == *"BLOCKED B1"* && "$D6OUT" == *"resume B1"* && "$D6OUT" != *"SendMessage"* ]]'
+B1WT="$RD6/.claude/dev-team/wt/B1"
+printf '3\n' > "$B1WT/.slice/stop_blocks"
+N6=$(grep -c "slice=B1" "$OCLOG6")
+R6OUT=$(OC6 resume B1 --note "use src/y.js instead" 2>&1)
+OC6 wait --timeout 30 >/dev/null 2>&1
+check "DE6: resume relaunched a fresh lane and printed a NEXT: line" '[ "$(grep -c "slice=B1" "$OCLOG6")" -gt "$N6" ] && [[ "$R6OUT" == *"NEXT:"* ]]'
+check "DE6: the relaunched lane runs in the same worktree" '[ -d "$B1WT/.slice" ] && grep "slice=B1" "$OCLOG6" | tail -1 | grep -q "dir=.*/.claude/dev-team/wt/B1 "'
+check "DE6: resume reset .slice/stop_blocks" '[ ! -s "$B1WT/.slice/stop_blocks" ] || [ "$(tr -d "[:space:]" < "$B1WT/.slice/stop_blocks")" = 0 ]'
+check "DE6: the --note text reaches the relaunched lane" 'grep -q "use src/y.js instead" "$OCLOG6" || grep -rqs "use src/y.js instead" "$RD6/.claude/dev-team/briefs" "$B1WT/.slice"'
+cd "$R"
+unset DEVTEAM_PY OCLOG6
 
 echo
 echo "passed=$pass failed=$fail"

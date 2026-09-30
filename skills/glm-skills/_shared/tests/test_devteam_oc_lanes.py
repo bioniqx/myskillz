@@ -1,6 +1,9 @@
+import contextlib
+import io
 import json
 import os
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -17,6 +20,7 @@ SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "dev-team-glm", "
 sys.path.insert(0, SCRIPTS)
 
 import devteam  # noqa: E402
+import oc_harness  # noqa: E402
 
 DEVTEAM = os.path.join(SCRIPTS, "devteam.py")
 
@@ -69,7 +73,7 @@ if os.environ.get("FAKE_OC_SLEEP"):
     time.sleep(float(os.environ["FAKE_OC_SLEEP"]))
     sys.exit(0)
 with open(os.environ["FAKE_OC_LOG"], "a") as f:
-    f.write(json.dumps({"brief": argv[-1], "dir": argv[argv.index("--dir") + 1],
+    f.write(json.dumps({"brief": sys.stdin.read(), "dir": argv[argv.index("--dir") + 1],
                         "agent": argv[argv.index("--agent") + 1], "model": argv[argv.index("-m") + 1],
                         "role": os.environ.get("DEVTEAM_ROLE"), "slice": os.environ.get("DEVTEAM_SLICE")}) + "\\n")
 print(json.dumps({"type": "text", "part": {"type": "text", "text": os.environ.get("FAKE_OC_REPLY", "")}}))
@@ -342,6 +346,232 @@ class OcEffortTest(unittest.TestCase):
         self.assertEqual(devteam.oc_effort(st, "team-leader"), "max")
         # the anthropic table's `medium` is not a GLM effort (v2 rejects the `#medium` variant)
         self.assertEqual(devteam.oc_effort({"provider": "anthropic"}, "programmer"), "high")
+
+
+def _killpg_quiet(pid):
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
+
+def _reaped_pid():
+    p = subprocess.Popen(["true"])
+    p.wait()
+    return p.pid
+
+
+class LaneLifecycleTest(RepoCase):
+    def lanes(self):
+        d = devteam.lanes_dir(Path(self.repo))
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def write_spec(self, lane_id, agent, writer):
+        spec = {"id": lane_id, "agent": agent, "model": "flash", "effort": "high",
+                "prompt": "do it", "writer": writer}
+        (self.lanes() / f"{lane_id}.lane.json").write_text(json.dumps(spec))
+        return spec
+
+    def run_lane(self, lane_id, results, during=None, env=None):
+        """Run cmd_lane_run in-process with oc_harness.run_lanes faked; return (lanes seen, gate calls).
+        `during()` is called from inside the faked run_lanes, i.e. while the lane is running."""
+        seen, gates = [], []
+        real_run = subprocess.run
+
+        def fake_run(cmd, *args, **kwargs):
+            if any("guard.py" in str(c) for c in cmd):
+                gates.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            return real_run(cmd, *args, **kwargs)
+
+        def fake_run_lanes(lanes, out_dir, **kwargs):
+            seen.append(dict(lanes[0]))
+            if during:
+                during()
+            return [results[min(len(seen), len(results)) - 1]]
+
+        old_cwd = os.getcwd()
+        os.chdir(self.repo)
+        try:
+            with mock.patch.dict(os.environ, env or self.env, clear=True), \
+                    mock.patch.object(devteam.subprocess, "run", side_effect=fake_run), \
+                    mock.patch.object(oc_harness, "run_lanes", side_effect=fake_run_lanes):
+                devteam.cmd_lane_run(SimpleNamespace(lane_id=lane_id))
+        finally:
+            os.chdir(old_cwd)
+        return seen, gates
+
+    def ok(self, lane_id):
+        return {"status": "OK", "exit": 0, "error": None, "out": str(self.lanes() / f"{lane_id}.jsonl")}
+
+    def test_terminate_kills_the_recorded_opencode_group(self):
+        d = self.lanes()
+        oc = subprocess.Popen([self.env["DEVTEAM_OC_BIN"], "run"], env=dict(self.env, FAKE_OC_SLEEP="30"),
+                              start_new_session=True)
+        self.addCleanup(_killpg_quiet, oc.pid)
+        (d / "rev-r1.pgid").write_text(str(oc.pid))
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            devteam.terminate_lane_process(d, "rev-r1")
+        self.assertEqual(oc.wait(timeout=10), -signal.SIGKILL)
+        self.assertFalse((d / "rev-r1.pgid").exists())
+
+    def test_terminate_leaves_a_reused_pgid_alone(self):
+        d = self.lanes()
+        unrelated = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(_killpg_quiet, unrelated.pid)
+        (d / "rev-r1.pgid").write_text(str(unrelated.pid))
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            devteam.terminate_lane_process(d, "rev-r1")
+        self.assertIsNone(unrelated.poll())
+        self.assertFalse((d / "rev-r1.pgid").exists())
+
+    def test_reviewer_lane_gets_the_reviewer_stall(self):
+        self.write_spec("review-r1", "code-reviewer", False)
+        seen, _ = self.run_lane("review-r1", [self.ok("review-r1")])
+        self.assertEqual(seen[0]["stall"], oc_harness.STALL_BY_ROLE["code-reviewer"])
+        self.assertEqual(seen[0]["stall"], 600)
+
+    def test_programmer_lane_gets_the_programmer_stall(self):
+        self.devteam("dispatch", "S1")
+        self.write_spec("S1", "programmer", True)
+        seen, _ = self.run_lane("S1", [self.ok("S1")])
+        self.assertEqual(seen[0]["stall"], 900)
+
+    def test_lane_error_line_formats_v2_and_v1_errors(self):
+        v2 = {"status": "ERROR", "error": {"type": "provider.rate-limit", "message": "429 Too Many Requests"}}
+        v1 = {"status": "FAIL", "error": {"name": "APIError", "data": {"message": "Rate limit", "statusCode": 429}}}
+        self.assertEqual(devteam.lane_error_line("L1", v2), "LANE L1: ERROR provider.rate-limit 429 Too Many Requests")
+        self.assertEqual(devteam.lane_error_line("L2", v1), "LANE L2: FAIL APIError Rate limit")
+        self.assertEqual(devteam.lane_error_line("L3", {"status": "STALL", "error": "no output for 900s"}),
+                         "LANE L3: STALL no output for 900s")
+
+    def test_writer_error_without_commit_blocks_without_reruns(self):
+        self.devteam("dispatch", "S1")
+        self.write_spec("S1", "programmer", True)
+        err = {"status": "ERROR", "exit": 1, "out": str(self.lanes() / "S1.jsonl"),
+               "error": {"type": "provider.rate-limit", "message": "429 Too Many Requests"}}
+        seen, gates = self.run_lane("S1", [err])
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(gates, [])
+        note = json.loads(self.state("slices", "S1.blocked").read_text())["note"]
+        self.assertIn("LANE S1: ERROR provider.rate-limit 429 Too Many Requests", note)
+        self.assertFalse(self.state("slices", "S1.done").exists())
+
+    def test_lane_run_clears_stale_results_before_running(self):
+        d = self.lanes()
+        self.write_spec("review-r1", "code-reviewer", False)
+        for ext, body in ((".done", '{"status": "FAIL"}'), (".end", "1"), (".pgid", "999999")):
+            (d / f"review-r1{ext}").write_text(body)
+        self.run_lane("review-r1", [self.ok("review-r1")])
+        for ext in (".done", ".end", ".pgid", ".pid"):
+            self.assertFalse((d / f"review-r1{ext}").exists(), ext)
+
+    def test_relaunch_hint_is_a_detached_python3_command(self):
+        root = Path(self.repo)
+        sig = {"throttle": [], "down": [("review", "review-r1", "ERROR: boom", "1", time.time())],
+               "spawn_fail": [], "spawned": {}}
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch.object(devteam, "is_opencode", return_value=True), \
+                mock.patch.object(devteam, "lane_signals", return_value=sig):
+            st = devteam.load_state(root)
+            st["reviews"] = {"r1": {"status": "dispatched"}}
+            text = "\n".join(devteam.govern(root, st, 0))
+        self.assertIn("LANE DOWN review-r1", text)
+        self.assertIn("nohup python3 ", text)
+        self.assertIn("lane-run review-r1 > ", text)
+
+    def test_signal_killed_lane_is_reported_down_once(self):
+        d = self.lanes()
+        self.write_spec("rev-r7", "code-reviewer", False)
+        (d / "rev-r7.pid").write_text(str(_reaped_pid()))
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            st = devteam.load_state(Path(self.repo))
+            first = devteam.lane_signals(Path(self.repo), st)["down"]
+            second = devteam.lane_signals(Path(self.repo), st)["down"]
+        self.assertEqual([(k, n) for k, n, *_ in first], [("review", "rev-r7")])
+        self.assertIn("killed by a signal", first[0][2])
+        self.assertEqual([n for _, n, *_ in second], [])
+        self.assertTrue((d / "rev-r7.end").exists())
+
+    def test_signal_killed_lane_drops_its_pid_and_kills_the_orphaned_opencode(self):
+        d = self.lanes()
+        self.write_spec("rev-r5", "code-reviewer", False)
+        (d / "rev-r5.pid").write_text(str(_reaped_pid()))
+        oc = subprocess.Popen([self.env["DEVTEAM_OC_BIN"], "run"], env=dict(self.env, FAKE_OC_SLEEP="30"),
+                              start_new_session=True)
+        self.addCleanup(_killpg_quiet, oc.pid)
+        (d / "rev-r5.pgid").write_text(str(oc.pid))
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            down = devteam.lane_signals(Path(self.repo), devteam.load_state(Path(self.repo)))["down"]
+        self.assertEqual([n for _, n, *_ in down], ["rev-r5"])
+        self.assertFalse((d / "rev-r5.pid").exists())
+        self.assertEqual(oc.wait(timeout=10), -signal.SIGKILL)
+
+    def test_relaunched_lane_run_over_a_dead_pid_records_its_own(self):
+        d = self.lanes()
+        self.write_spec("rev-r6", "code-reviewer", False)
+        (d / "rev-r6.pid").write_text(str(_reaped_pid()))
+        probe = {}
+
+        def during():
+            probe["dead"] = [lane_id for lane_id, _ in devteam.dead_lanes(d)]
+            probe["live"] = devteam.live_lanes(d)
+
+        self.run_lane("rev-r6", [self.ok("rev-r6")], during=during)
+        self.assertNotIn("rev-r6", probe["dead"])
+        self.assertIn("rev-r6", probe["live"])
+
+    def test_wait_does_not_report_a_relaunched_running_lane_as_dead(self):
+        d = self.lanes()
+        self.write_spec("rev-r2", "code-reviewer", False)
+        (d / "rev-r2.pid").write_text(str(_reaped_pid()))
+        buf = io.StringIO()
+
+        def during():
+            with contextlib.redirect_stdout(buf):
+                devteam.cmd_wait(SimpleNamespace(timeout=0))
+
+        self.run_lane("rev-r2", [self.ok("rev-r2")], during=during,
+                      env=dict(self.env, DEVTEAM_HARNESS="opencode"))
+        self.assertIn("NEXT: devteam next", buf.getvalue())
+        self.assertNotIn("died without a result", buf.getvalue())
+        self.assertNotIn("no lane is running", buf.getvalue())
+
+    def test_lane_with_a_result_is_not_dead(self):
+        d = self.lanes()
+        self.write_spec("rev-r8", "code-reviewer", False)
+        (d / "rev-r8.pid").write_text(str(_reaped_pid()))
+        (d / "rev-r8.done").write_text('{"status": "OK"}')
+        self.assertEqual(devteam.dead_lanes(d), [])
+
+    def test_wait_returns_at_once_when_no_lane_is_running(self):
+        start = time.monotonic()
+        out = self.devteam("wait", "--timeout", "30", DEVTEAM_HARNESS="opencode")
+        self.assertLess(time.monotonic() - start, 10)
+        self.assertIn("WAIT: no lane is running", out)
+        self.assertIn("NEXT: devteam next", out)
+
+    def test_wait_reports_a_dead_lane(self):
+        d = self.lanes()
+        self.write_spec("rev-r3", "code-reviewer", False)
+        (d / "rev-r3.pid").write_text(str(_reaped_pid()))
+        start = time.monotonic()
+        out = self.devteam("wait", "--timeout", "30", DEVTEAM_HARNESS="opencode")
+        self.assertLess(time.monotonic() - start, 10)
+        self.assertIn("rev-r3 died", out)
+        self.assertIn("NEXT: devteam next", out)
+
+    def test_wait_keeps_waiting_while_a_lane_is_alive(self):
+        d = self.lanes()
+        self.write_spec("rev-r4", "code-reviewer", False)
+        alive = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(_killpg_quiet, alive.pid)
+        (d / "rev-r4.pid").write_text(str(alive.pid))
+        start = time.monotonic()
+        out = self.devteam("wait", "--timeout", "2", DEVTEAM_HARNESS="opencode")
+        self.assertGreaterEqual(time.monotonic() - start, 2)
+        self.assertIn("WAIT: nothing finished in 2s", out)
 
 
 if __name__ == "__main__":

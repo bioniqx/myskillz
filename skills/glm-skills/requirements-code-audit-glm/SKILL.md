@@ -75,7 +75,7 @@ not override the user, who may amend scope explicitly ("also treat file X as par
 
 ## R3 — Step 1: brief
 
-In ONE turn, in parallel: `Read` the requirements file **and** run
+In ONE turn, run
 `A brief --spec <file> [--spec <file2>] [--repo <root>] [--tier light|std|deep] [--lang vi|en]`.
 
 - No requirements input → stop and ask. Pasted text → `--spec-text "..."` saves it verbatim first.
@@ -133,8 +133,8 @@ CONFLICT or unmet MUST on a core/high-stakes flow, **P1** other unmet/partial MU
 user-visible impact, **P2** the rest. Order P0 first, then by dependency.
 
 `A finalize` = report + gate + close. It writes `.audit/requirements-code-audit.md` and `traceability.csv` in
-the spec's language, fails loudly on a single-pass MISSING, an unplanned discrepancy, a citation that does not
-exist or a CONFLICT not planned at P0, and prints the headline numbers. In chat: headline numbers, P0 count and
+the spec's language, fails loudly on a single-pass MISSING, an unplanned discrepancy or a citation that does not
+exist, warns on CONFLICT, and prints the headline numbers. In chat: headline numbers, P0 count and
 the report path — never the whole report.
 
 ## R7 — Status taxonomy

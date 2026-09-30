@@ -1,3 +1,34 @@
+# 9.3-glm (from 9.2) — OpenCode v1/v2 hardening
+
+- `/brainstorm` command: when the `!` line arrives raw (`opencode run`
+  does not expand it), the model runs `context.sh` itself as its first call.
+- SKILL.md: one OpenCode lane rule. v2 dispatches background `subagent`
+  lanes (`explorer`/`researcher`), v1 runs `oc_harness.py run`, and
+  `task` is only the fallback. The fallback agent is `general`, never
+  `general-purpose` or `Explore`.
+- SKILL.md: `oc_harness.py run` is never a foreground call. On v2 it goes
+  through `shell` with `background: true` and a `timeout`, because v2
+  kills a foreground shell call after 120 s and orphans web lanes.
+- SKILL.md: results come from `oc_harness.py result <out>` instead of
+  the raw `<id>.jsonl`. `lanes.json` lives under `.superpowers/drafts/`,
+  and lane output goes to a fresh dir per run under `.superpowers/drafts/`
+  (`mktemp -d`), so a rerun never reads stale lane results.
+- SKILL.md: the scripts dir is resolved by one ordered loop (Base
+  directory, `$OPENCODE_CONFIG_DIR/skills`, `.opencode/skills`,
+  `~/.config/opencode/skills`, `.agents`, `~/.agents`, `.claude`,
+  `~/.claude`, `.zcode`) that exits with a clear message on a miss.
+- SKILL.md: per-version tool-name map (v2 has `subagent`, `shell`,
+  `question`, no `task`/`todowrite`). A raw `!` line is skipped when a
+  context block is present, else `sh <Base directory>/scripts/context.sh`
+  runs. R9 is one sentence again.
+- architectural.md: on OpenCode the main session writes the spec
+  pre-draft (lane agents are `edit: deny`), TaskStop is skipped, and the
+  hand-off passes the spec path to `writing-plans`.
+- visual-companion.md: OpenCode note (v2: `--foreground` plus
+  `background: true`).
+- researcher agent: falls back to web fetch when web search has no
+  provider, and never waits on an interactive prompt.
+
 # 9.2-glm (from 9.1) — OpenCode effort correction
 
 Corrects the 9.1 claim that OpenCode process lanes always run at `max`.

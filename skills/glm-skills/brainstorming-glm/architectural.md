@@ -105,6 +105,9 @@ Claims:
   `general-purpose` with the design pasted. It writes to
   `.superpowers/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
+  On OpenCode the lane agents (`explorer`, `researcher`) are `edit: deny`,
+  so no lane can write it: the main session writes the pre-draft itself
+  to the same path as the last call of the design turn.
 - **Runner-up approach** — one lane, only when the top two approaches are
   close. It fleshes out the runner-up's sections so "use B instead" costs
   one re-present, not a new exploration.
@@ -117,7 +120,8 @@ Drop to `reasoning_effort: low` here; this turn is formatting and
 targeted edits, not judgment.
 
 1. If a pre-draft lane is still running, stop it (TaskStop) and write the
-   spec yourself. Otherwise move the draft to
+   spec yourself. OpenCode has no TaskStop and no pre-draft lane: skip
+   straight to the move below. Otherwise move the draft to
    `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the
@@ -139,4 +143,6 @@ only, commit, ask again. Proceed only on approval.
 
 ## 5. Hand-off
 
-Invoke `writing-plans`. No other skill, no code, no scaffolding.
+Invoke `writing-plans` and pass the committed spec path
+(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+preferences chose) as its input. No other skill, no code, no scaffolding.

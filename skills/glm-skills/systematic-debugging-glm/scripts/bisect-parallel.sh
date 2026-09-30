@@ -4,7 +4,7 @@ usage() { cat <<'U'
 Usage: bisect-parallel.sh [-j JOBS] [--link DIR]... [-t SECONDS] [--no-verify] [--keep] <good> <bad> -- <command> [args...]
   -j           commits tested per round, 1..64 (default: min(64, CPUs) - 1). Rounds = ceil(log_(J+1) N)
   --link DIR   symlink repo-relative DIR (e.g. node_modules, .venv) into each worktree; repeatable
-  -t SECONDS   timeout for the whole probe command (timeout/gtimeout); a timeout counts as bad (exit 124)
+  -t SECONDS   timeout for the whole probe command (needs timeout/gtimeout, warns and is ignored without one); a timeout counts as bad (exit 124)
   --no-verify  skip testing <good> (must pass) and <bad> (must fail) in round 1; frees 2 of the J round-1 slots
   --keep       keep worktrees and logs
 Command runs from each worktree root, env BISECT_JOB=<n>. Exit codes as git bisect run:
@@ -29,7 +29,7 @@ cd "$SD_ROOT" || exit 2
 GOOD=$(git rev-parse --verify -q "${POS[0]}^{commit}") || { echo "error: bad revision ${POS[0]}" >&2; exit 2; }
 BAD=$(git rev-parse --verify -q "${POS[1]}^{commit}")  || { echo "error: bad revision ${POS[1]}" >&2; exit 2; }
 git merge-base --is-ancestor "$GOOD" "$BAD" || echo "warn: <good> is not an ancestor of <bad>; using first-parent range anyway" >&2
-TO=$(sd_timeout_bin)
+TO=$(sd_timeout_bin); [ -n "$T" ] && [ -z "$TO" ] && echo "warn: no timeout/gtimeout found; -t ignored" >&2
 # L[0]=GOOD, L[1..N]=first-parent commits after GOOD up to BAD (L[N]=BAD)
 L=("$GOOD"); while IFS= read -r c; do L+=("$c"); done < <(git rev-list --reverse --first-parent "$GOOD..$BAD")
 N=$(( ${#L[@]} - 1 ))

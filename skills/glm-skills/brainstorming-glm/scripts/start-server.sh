@@ -79,6 +79,16 @@ if [[ -n "$IDLE_TIMEOUT_MINUTES" ]]; then
   export BRAINSTORM_IDLE_TIMEOUT_MS=$(( IDLE_TIMEOUT_MINUTES * 60 * 1000 ))
 fi
 
+if [[ -n "$PROJECT_DIR" ]]; then
+  # Absolutize now: the script later does `cd "$SCRIPT_DIR"`, and a relative
+  # path would then resolve against the scripts folder (log redirect fails).
+  mkdir -p "$PROJECT_DIR" 2>/dev/null
+  if ! PROJECT_DIR="$(cd "$PROJECT_DIR" 2>/dev/null && pwd)"; then
+    echo "{\"error\": \"--project-dir is not a usable directory\"}"
+    exit 1
+  fi
+fi
+
 is_windows_like_shell() {
   case "${OSTYPE:-}" in
     msys*|cygwin*|mingw*) return 0 ;;

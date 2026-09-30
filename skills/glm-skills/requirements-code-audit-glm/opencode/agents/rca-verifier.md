@@ -3,8 +3,9 @@ description: Adversarial second-pass verifier for the requirements-code-audit sk
 model: pro
 effort: max
 temperature: 0.0
+steps: 25
 access: write
-write_paths: .audit/**
+write_paths: **/.audit/**
 bash: false
 web: false
 ---

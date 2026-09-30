@@ -642,6 +642,19 @@ function startServer() {
     else if (Date.now() - lastActivity > IDLE_TIMEOUT_MS) shutdown('idle timeout');
   }, LIFECYCLE_CHECK_MS);
   lifecycleCheck.unref();
+  // SIGTERM/SIGHUP (harness stop, start-server.sh restart, terminal close) must
+  // go through shutdown() so server-info is removed and server-stopped is
+  // written; otherwise a stale server-info reads as a live server.
+  let stopping = false;
+  function onSignal(signalName) {
+    if (stopping) return;
+    stopping = true;
+    // server.close() waits for keep-alive HTTP sockets; do not hang on them.
+    setTimeout(() => process.exit(0), 2000).unref();
+    shutdown(signalName);
+  }
+  process.on('SIGTERM', () => onSignal('SIGTERM'));
+  process.on('SIGHUP', () => onSignal('SIGHUP'));
 
   // Validate owner PID at startup. If it's already dead, the PID resolution
   // was wrong (common on WSL, Tailscale SSH, and cross-user scenarios).

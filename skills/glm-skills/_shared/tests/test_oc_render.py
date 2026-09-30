@@ -12,6 +12,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import oc_harness
 
 
+def _snippet_json(snippet):
+    """The snippet is JSONC: `//` note lines first, then one JSON object."""
+    return json.loads("\n".join(ln for ln in snippet.splitlines() if not ln.lstrip().startswith("//")))
+
+
 class TestOcHarnessRender(unittest.TestCase):
     def test_provider_and_models_constants(self):
         self.assertEqual(oc_harness.PROVIDER, "zai-coding-plan")
@@ -143,6 +148,32 @@ class TestOcHarnessRender(unittest.TestCase):
         v2_perm_lines = [ln for ln in v2.splitlines() if ln == "permission:" or ln.startswith("  edit") or ln.startswith("  bash") or ln.startswith("  webfetch")]
         self.assertEqual(v1_perm_lines, v2_perm_lines)
 
+    def test_render_agent_v2_denies_execute_and_sets_websearch(self):
+        text = (
+            "---\n"
+            "description: Web agent\n"
+            "model: flash\n"
+            "effort: high\n"
+            "access: read\n"
+            "bash: false\n"
+            "web: true\n"
+            "---\n"
+            "Agent prompt body.\n"
+        )
+        v2 = oc_harness.render_agent(text, 2)
+        perm = v2.split("permission:\n", 1)[1].split("\n---", 1)[0]
+        self.assertIn("  execute: deny", perm)
+        self.assertIn("  websearch: allow", perm)
+        self.assertIn("  webfetch: allow", perm)
+        self.assertIn("hidden: true", v2)
+        v2_no_web = oc_harness.render_agent(text.replace("web: true", "web: false"), 2)
+        self.assertIn("  websearch: deny", v2_no_web)
+        self.assertIn("  execute: deny", v2_no_web)
+        v1 = oc_harness.render_agent(text, 1)
+        self.assertNotIn("execute:", v1)
+        self.assertNotIn("websearch:", v1)
+        self.assertIn("hidden: true", v1)
+
     def test_render_command_replaces_skill_dir_and_keeps_arguments(self):
         text = (
             "---\n"
@@ -230,25 +261,53 @@ class TestOcHarnessRender(unittest.TestCase):
             with open(os.path.join(base, fname)) as fh:
                 text = fh.read()
             fields, _ = oc_harness.parse_frontmatter(text)
-            self.assertEqual(fields.get("write_paths"), ".audit/**")
+            self.assertEqual(fields.get("write_paths"), "**/.audit/**")
             v1 = oc_harness.render_agent(text, 1)
             self.assertNotIn("edit: allow", v1)
-            self.assertIn('".audit/**": allow', v1)
+            self.assertIn('"**/.audit/**": allow', v1)
             self.assertIn("task: deny", v1)
             v2 = oc_harness.render_agent(text, 2)
-            self.assertIn('    ".audit/**": allow', v2)
+            self.assertIn('    "**/.audit/**": allow', v2)
             self.assertIn('    "*": deny', v2)
             self.assertIn("  task: deny", v2)
             self.assertNotIn("edit: allow", v2)
 
     def test_config_snippet_contains_provider_and_deny_list(self):
         snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
-        data = json.loads(snippet)
+        data = _snippet_json(snippet)
         self.assertIn("zai-coding-plan", data["provider"])
         self.assertEqual(data["permission"]["skill"]["systematic-debugging"], "deny")
         self.assertEqual(data["permission"]["skill"]["writing-plans"], "deny")
         self.assertIn("web-search-prime", data["mcp"])
-        self.assertNotIn("permission", json.loads(oc_harness.config_snippet(1, [])))
+        self.assertNotIn("permission", _snippet_json(oc_harness.config_snippet(1, [])))
+
+    def test_config_snippet_defines_effort_variants_for_both_models(self):
+        expected = {
+            "low": {"reasoningEffort": "low"},
+            "high": {"reasoningEffort": "high"},
+            "max": {"reasoningEffort": "max"},
+        }
+        for major in (1, 2):
+            data = _snippet_json(oc_harness.config_snippet(major, []))
+            models = data["provider"]["zai-coding-plan"]["models"]
+            self.assertEqual(sorted(models), ["glm-5.3", "glm-5.3-flash"])
+            for model_id in ("glm-5.3", "glm-5.3-flash"):
+                self.assertEqual(models[model_id]["variants"], expected)
+
+    def test_config_snippet_carries_websearch_note_and_mcp_option(self):
+        for major in (1, 2):
+            snippet = oc_harness.config_snippet(major, ["writing-plans"])
+            notes = [ln for ln in snippet.splitlines() if ln.startswith("//")]
+            self.assertTrue(notes)
+            self.assertTrue(snippet.startswith("//"))
+            joined = "\n".join(notes)
+            self.assertIn("websearch", joined)
+            self.assertIn("web-search-prime", joined)
+            data = _snippet_json(snippet)
+            server = data["mcp"]["web-search-prime"]
+            self.assertEqual(server["type"], "remote")
+            self.assertEqual(server["url"], "https://api.z.ai/api/mcp/web_search_prime/mcp")
+            self.assertEqual(server["headers"], {"Authorization": "Bearer {env:ZAI_API_KEY}"})
 
 
 if __name__ == "__main__":

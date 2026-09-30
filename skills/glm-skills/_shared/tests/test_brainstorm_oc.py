@@ -1,7 +1,10 @@
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -29,7 +32,10 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
         self.text = read(SKILL_MD)
 
     def test_gives_exact_run_command(self):
-        self.assertRegex(self.text, r'oc_harness\.py"? run <lanes\.json>')
+        self.assertIn(
+            'python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"',
+            self.text,
+        )
 
     def test_resolver_checks_for_oc_harness_script(self):
         self.assertIn("scripts/oc_harness.py", self.text)
@@ -39,8 +45,8 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
             self.assertIn("`%s`" % field, self.text)
 
     def _opencode_lane_section(self):
-        start = self.text.find("On OpenCode, `CLAUDE_SKILL_DIR`")
-        self.assertNotEqual(start, -1, "OpenCode lane section not found")
+        start = self.text.find("Running `oc_harness.py run`")
+        self.assertNotEqual(start, -1, "OpenCode run section not found")
         end = self.text.find("## Visual companion", start)
         self.assertNotEqual(end, -1, "OpenCode lane section end marker not found")
         return self.text[start:end]
@@ -53,6 +59,8 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
 
     def test_states_where_and_how_lane_output_is_read(self):
         section = self._opencode_lane_section()
+        self.assertIn('python3 "$H/oc_harness.py" result "$OUT"', section)
+        self.assertIn("python3 oc_harness.py result OUT_DIR", section)
         self.assertIn(".jsonl", section)
         self.assertIn("--out", section)
 
@@ -63,9 +71,23 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
 
     def test_run_command_uses_temp_out_dir(self):
         section = self._opencode_lane_section()
-        self.assertIn("mktemp -d", section)
+        self.assertNotIn('OUT=".superpowers/drafts/lanes"', section)
+        self.assertIn('OUT="$(mktemp -d .superpowers/drafts/lanes.XXXXXX)"', section)
+        self.assertIn("mkdir -p .superpowers/drafts", section)
         self.assertIn('--out "$OUT"', section)
-        self.assertIn("Results land under `$OUT`", section)
+
+    def test_run_section_uses_lanes_json_and_result(self):
+        section = self._opencode_lane_section()
+        self.assertIn(
+            'python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"',
+            section,
+        )
+        self.assertIn('python3 "$H/oc_harness.py" result "$OUT"', section)
+
+    def test_changelog_states_fresh_lane_dir_per_run(self):
+        changelog = read(os.path.join(os.path.dirname(SKILL_MD), "CHANGELOG.md"))
+        entry = changelog.split("# 9.2-glm", 1)[0]
+        self.assertIn("fresh dir per run under `.superpowers/drafts/`", entry)
 
     def test_states_task_tool_is_only_fallback(self):
         idx = self.text.find("`task`")
@@ -149,6 +171,193 @@ class TestBrainstormOcRenderedDescriptions(unittest.TestCase):
         value = json.loads(match.group(1))
         self.assertRegex(value, r"^[A-Za-z]")
         self.assertFalse(value.startswith('\\"'))
+
+
+class TestBrainstormCommandFallback(unittest.TestCase):
+    def test_keeps_preload_and_runs_context_sh_when_raw(self):
+        text = read(BRAINSTORM_MD)
+        preload = "!`sh {{SKILL_DIR}}/scripts/context.sh`"
+        self.assertIn(preload, text)
+        rest = text.split(preload, 1)[1]
+        self.assertIn("raw `!` line", rest)
+        self.assertIn("run `sh {{SKILL_DIR}}/scripts/context.sh`", rest)
+
+
+CONTEXT_SH = os.path.join(SKILL_DIR, "scripts", "context.sh")
+
+FAKE_CLI = (
+    "import sys\n"
+    "with open(__file__ + '.args', 'w') as f:\n"
+    "    f.write(' '.join(sys.argv[1:]))\n"
+    "sys.stdout.write(%r)\n"
+    "sys.exit(%d)\n"
+)
+
+
+def make_skill(root, cli_output=None, cli_exit=0, oc_major=None):
+    scripts = os.path.join(root, "scripts")
+    os.makedirs(scripts)
+    shutil.copy(CONTEXT_SH, os.path.join(scripts, "context.sh"))
+    if cli_output is not None:
+        with open(os.path.join(scripts, "oc_harness.py"), "w") as f:
+            f.write(FAKE_CLI % (cli_output, cli_exit))
+    if oc_major is not None:
+        with open(os.path.join(root, ".oc-major"), "w") as f:
+            f.write(oc_major)
+    return root
+
+
+def run_context(skill_root, home, extra_env=None):
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home}
+    env.update(extra_env or {})
+    return subprocess.run(
+        ["sh", os.path.join(skill_root, "scripts", "context.sh")],
+        cwd=home,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+class ContextCase(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = os.path.join(self.tmp, "home")
+        os.makedirs(self.home)
+
+    def plain_root(self):
+        return os.path.join(self.tmp, "plain", "brainstorming")
+
+    def line_starting(self, out, prefix):
+        for line in out.splitlines():
+            if line.startswith(prefix):
+                return line
+        self.fail("no %r line in:\n%s" % (prefix, out))
+
+
+class TestBrainstormContextHarness(ContextCase):
+    def test_cli_result_sets_harness_and_major(self):
+        root = make_skill(self.plain_root(), cli_output="opencode 2\n")
+        proc = run_context(root, self.home)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "),
+            "harness: opencode oc_major=2",
+        )
+
+    def test_cli_receives_harness_subcommand_and_script(self):
+        root = make_skill(self.plain_root(), cli_output="opencode 2\n")
+        run_context(root, self.home)
+        with open(os.path.join(root, "scripts", "oc_harness.py.args")) as f:
+            args = f.read()
+        self.assertTrue(args.startswith("harness --script "), args)
+        self.assertTrue(args.endswith("/scripts/context.sh"), args)
+
+    def test_opencode_terminal_env_without_cli(self):
+        root = make_skill(self.plain_root())
+        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "),
+            "harness: opencode oc_major=unknown",
+        )
+
+    def test_oc_major_file_without_cli(self):
+        root = make_skill(self.plain_root(), oc_major="1\n")
+        proc = run_context(root, self.home)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "),
+            "harness: opencode oc_major=1",
+        )
+
+    def test_install_location_without_cli(self):
+        root = make_skill(
+            os.path.join(self.home, ".config", "opencode", "skills", "brainstorming")
+        )
+        proc = run_context(root, self.home)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "),
+            "harness: opencode oc_major=unknown",
+        )
+
+    def test_failing_cli_falls_back_to_sh_mirror(self):
+        root = make_skill(self.plain_root(), cli_output="", cli_exit=1)
+        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "),
+            "harness: opencode oc_major=unknown",
+        )
+
+    def test_cli_unknown_without_signals_stays_unknown(self):
+        root = make_skill(self.plain_root(), cli_output="unknown 0\n")
+        proc = run_context(root, self.home)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "), "harness: unknown"
+        )
+
+    def test_cli_claude_answer_keeps_sh_chain_result(self):
+        root = make_skill(self.plain_root(), cli_output="claude 0\n")
+        proc = run_context(root, self.home, {"GITHUB_COPILOT_CLI": "1"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "), "harness: copilot-cli"
+        )
+
+    def test_cli_claude_answer_without_signals_stays_unknown(self):
+        root = make_skill(self.plain_root(), cli_output="claude 0\n")
+        proc = run_context(root, self.home)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "), "harness: unknown"
+        )
+
+    def test_context_sh_syntax_is_clean(self):
+        proc = subprocess.run(
+            ["sh", "-n", CONTEXT_SH], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stderr, "")
+
+    def test_claude_code_env_wins_over_cli(self):
+        root = make_skill(self.plain_root(), cli_output="opencode 2\n")
+        proc = run_context(root, self.home, {"CLAUDECODE": "1"})
+        self.assertEqual(
+            self.line_starting(proc.stdout, "harness: "), "harness: claude-code"
+        )
+
+
+class TestBrainstormContextCaps(ContextCase):
+    def test_opencode_caps_default_width_is_8(self):
+        root = make_skill(self.plain_root())
+        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
+        caps = self.line_starting(proc.stdout, "caps: ")
+        self.assertIn("lanes=8", caps)
+        self.assertIn("--width", caps)
+        self.assertNotIn("subagents=", caps)
+
+    def test_opencode_caps_honours_oc_max_lanes(self):
+        root = make_skill(self.plain_root())
+        proc = run_context(
+            root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": "4"}
+        )
+        self.assertIn("lanes=4", self.line_starting(proc.stdout, "caps: "))
+
+    def test_opencode_caps_prints_oc_major(self):
+        root = make_skill(self.plain_root(), oc_major="2\n")
+        proc = run_context(root, self.home)
+        self.assertIn("oc_major=2", self.line_starting(proc.stdout, "caps: "))
+
+    def test_claude_caps_unchanged(self):
+        root = make_skill(self.plain_root())
+        proc = run_context(root, self.home, {"CLAUDECODE": "1"})
+        self.assertIn("subagents=20", self.line_starting(proc.stdout, "caps: "))
+
+    def test_opencode_output_is_bounded_and_exits_zero(self):
+        root = make_skill(self.plain_root(), oc_major="2\n")
+        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertLessEqual(len(proc.stdout.splitlines()), 55)
 
 
 if __name__ == "__main__":

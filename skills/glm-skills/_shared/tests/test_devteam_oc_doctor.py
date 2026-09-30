@@ -33,7 +33,7 @@ def load_devteam():
 dt = load_devteam()
 
 THROTTLE_EVENT = json.dumps({"type": "error", "error": {"name": "APIError", "data": {
-    "message": json.dumps({"error": {"code": "1302", "message": "High concurrency"}})}}})
+    "statusCode": 429, "responseBody": json.dumps({"error": {"code": "1302"}})}}})
 TEXT_EVENT = json.dumps({"type": "text", "part": {"type": "text", "text": "the docs mention 429 and rate limits"}})
 EMPTY_SIG = {"throttle": [], "down": [], "spawn_fail": [], "spawned": {}}
 

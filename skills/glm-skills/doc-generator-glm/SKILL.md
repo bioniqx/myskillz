@@ -60,7 +60,7 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 | User named specific docs | Use exactly those. Confirm in one clause inside Turn 2 |
 | User said nothing specific | Auto-select the ★ set (§3.1). State it in one line, do not wait for approval |
 | > 10 docs selected | Waves of 10, longest/HIGH first |
-| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 9 `Explore` shards, one per package — same message |
+| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 9 read-only shards, one per package — same message. Shards run as `general` on OpenCode; `Explore` is for the Claude Code harness only |
 | No git repo | Recon script auto-falls back to a mtime hash; everything else identical |
 | Requirements/spec docs found | Read-only sources. **Never** write into them. Rename any colliding output |
 | Subagents unavailable in this harness | §6 sequential fallback |
@@ -159,7 +159,7 @@ D=<output dir>; mkdir -p "$D" .zcode/doc-gen; { echo "# Documentation"; echo; ec
 ```
    (If the project overview itself lands at `$D/README.md`, name the index `README_INDEX.md` as
    above and link it from the overview; never overwrite a doc a writer owns.)
-3. **≤ 10 writer Tasks**, subagent type `general-purpose`, one per non-cached doc, **each using this exact template**:
+3. **≤ 10 writer Tasks**, subagent type `doc-writer` on OpenCode (and on ZCode with Appendix A installed), `general-purpose` on Claude Code and other harnesses, one per non-cached doc, **each using this exact template**:
 
 ```
 ROLE: Technical writer. Effort: low — follow the checklist, do not deliberate, no plan step.
@@ -216,7 +216,7 @@ risk=<one clause: what you were least sure about, or "none">
 ## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, ≤ 10 Tasks)
 
 Skip this turn entirely if every doc is LOW or `[cached]`. Reviewer ≠ the writer, fresh context,
-subagent type `general-purpose`.
+subagent type `doc-reviewer` on OpenCode (and on ZCode with Appendix A installed), `general-purpose` on Claude Code and other harnesses.
 
 ```
 ROLE: Technical fact-checker with edit rights. Effort: low-to-medium. No report-then-fix —
@@ -307,9 +307,9 @@ subagent.
 
 ## 8. OPENCODE LANE (harness = opencode)
 
-`sh skills/glm/_shared/sync.sh` copies `_shared/oc_harness.py` into this skill's `scripts/`
+`sh _shared/sync.sh` copies `_shared/oc_harness.py` into this skill's `scripts/`
 directory, printing `synced <path>` for the copy — never edit the copy, only
-`skills/glm/_shared/oc_harness.py`. This skill has no tool-free text-only fan-out, so it does not
+`_shared/oc_harness.py`. This skill has no tool-free text-only fan-out, so it does not
 get a `zai_client.py` copy. Once installed, `opencode/agents/doc-writer.md`,
 `opencode/agents/doc-reviewer.md` and `opencode/commands/docs.md` are rendered into this OpenCode
 major's dialect and the `/docs` command is available.
@@ -323,7 +323,15 @@ then run:
 python3 <skill_dir>/scripts/oc_harness.py run <lanes.json> --out <out_dir> --width 10
 ```
 
-`<skill_dir>` is the path `/docs` injects for this skill. This runs the whole wave concurrently
+`<skill_dir>` is the absolute path on the `Base directory for this skill: <path>` line OpenCode
+prints when the skill loads. If that line is missing, resolve it with this loop and use the
+printed literal path:
+
+```bash
+for d in "${CLAUDE_SKILL_DIR:-}" .opencode/skills/doc-generator ~/.config/opencode/skills/doc-generator .claude/skills/doc-generator ~/.claude/skills/doc-generator .agents/skills/doc-generator ~/.agents/skills/doc-generator ~/.zcode/skills/doc-generator; do [ -f "$d/scripts/oc_harness.py" ] && S=$(cd "$d" && pwd) && break; done; echo "S=$S"
+```
+
+This runs the whole wave concurrently
 and writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
 
 Set `model` on every lane — `oc_harness.MODELS` maps `"flash"` to `glm-5.3-flash` and `"pro"` to
@@ -392,4 +400,4 @@ For this skill: **main thread `high`** (routing and batching decisions), **subag
 (they execute a checklist), `max` only for a `broadly-wrong` rewrite. Z.ai's own recommended
 sampling for these models is `temperature: 1`, `top_p: 0.95`, with streaming and `tool_stream`
 enabled — tool streaming is what lets a 10-Task wave start moving immediately. GLM-5.3-Flash is
-the right model for recon shards and any mechanical pass; keep writers and reviewers on GLM-5.3.
+the right model for recon shards and any mechanical pass; writers use GLM-5.3-Flash; keep reviewers on GLM-5.3.

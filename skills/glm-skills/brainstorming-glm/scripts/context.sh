@@ -11,15 +11,34 @@ echo "skill_dir: $skill_dir"
 
 # --- runtime: harness, model slots, caps -----------------------------------
 harness=unknown
+oc_major=unknown
+oc_line=
+if [ -f "$skill_dir/scripts/oc_harness.py" ] && command -v python3 >/dev/null 2>&1; then
+  oc_line=$(python3 "$skill_dir/scripts/oc_harness.py" harness --script "$skill_dir/scripts/context.sh" 2>/dev/null | head -n 1)
+fi
 if [ -n "$CLAUDECODE" ] || [ -n "$CLAUDE_CODE_ENTRYPOINT" ] || [ -n "$CLAUDE_SKILL_DIR" ]; then
   harness=claude-code
-elif [ -n "$OPENCODE" ] || [ -n "$OPENCODE_BIN" ]; then harness=opencode
+elif [ -n "$OPENCODE_TERMINAL" ] || [ -n "$OPENCODE" ] || [ -n "$OPENCODE_BIN" ] || [ -f "$skill_dir/.oc-major" ]; then harness=opencode
+elif case "$skill_dir" in */opencode/*|*/.opencode/*) true ;; *) false ;; esac; then harness=opencode
 elif [ -n "$CODEX_CI" ] || [ -n "$CODEX_HOME" ]; then harness=codex
 elif [ -n "$CLINE_VERSION" ] || [ -n "$ROO_CODE" ]; then harness=cline
 elif [ -n "$GEMINI_CLI" ]; then harness=gemini-cli
 elif [ -n "$GITHUB_COPILOT_CLI" ]; then harness=copilot-cli
 fi
-echo "harness: $harness"
+set -- $oc_line
+if [ "$harness" != claude-code ] && [ "${1:-}" = opencode ]; then
+  harness=$1
+  [ -n "${2:-}" ] && oc_major=$2
+fi
+if [ "$harness" = opencode ] && [ "$oc_major" = unknown ] && [ -f "$skill_dir/.oc-major" ]; then
+  oc_major=$(head -n 1 "$skill_dir/.oc-major" 2>/dev/null | tr -cd '0-9')
+  [ -n "$oc_major" ] || oc_major=unknown
+fi
+if [ "$harness" = opencode ]; then
+  echo "harness: opencode oc_major=$oc_major"
+else
+  echo "harness: $harness"
+fi
 
 route=anthropic
 case "${ANTHROPIC_BASE_URL:-}" in
@@ -35,7 +54,11 @@ case "$fast$mid$big" in
   *glm*|*GLM*) echo "glm: yes — lanes default to model=\"haiku\" (Flash); at most 2 lanes on \"sonnet\"; see glm-tuning.md" ;;
   *) [ "$route" = glm ] && echo "glm: route is GLM but model slots are unmapped — set ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3-flash (glm-tuning.md §2)" ;;
 esac
-echo "caps: subagents=${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-20} workflow=${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-16} compact_window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-default}"
+if [ "$harness" = opencode ]; then
+  echo "caps: lanes=${OC_MAX_LANES:-8} (set OC_MAX_LANES or pass oc_harness run --width N; default 8) oc_major=$oc_major"
+else
+  echo "caps: subagents=${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-20} workflow=${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-16} compact_window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-default}"
+fi
 
 # --- repo ------------------------------------------------------------------
 in_home=no

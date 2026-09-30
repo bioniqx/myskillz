@@ -7,8 +7,8 @@ import subprocess
 class TestVendored(unittest.TestCase):
     def test_sync_copies_and_verifies_identity(self):
         """Test that sync.sh copies files and they are byte-identical to sources."""
-        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
-        shared_dir = os.path.join(repo_root, 'skills/glm/_shared')
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+        shared_dir = os.path.join(repo_root, 'glm-skills/_shared')
 
         zai_client_src = os.path.join(shared_dir, 'zai_client.py')
         oc_harness_src = os.path.join(shared_dir, 'oc_harness.py')
@@ -19,7 +19,7 @@ class TestVendored(unittest.TestCase):
         }
 
         sync_script = os.path.join(shared_dir, 'sync.sh')
-        result = subprocess.run(['sh', sync_script], cwd=repo_root, capture_output=True, text=True)
+        result = subprocess.run(['sh', sync_script, os.path.join(repo_root, 'glm-skills')], cwd=repo_root, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, f"sync.sh failed: {result.stderr}")
 
         for filename, skill_list in skills.items():
@@ -33,7 +33,7 @@ class TestVendored(unittest.TestCase):
             src_hash = hashlib.sha256(src_bytes).hexdigest()
 
             for skill in skill_list:
-                dest = os.path.join(repo_root, f'skills/glm/{skill}/scripts/{filename}')
+                dest = os.path.join(repo_root, f'glm-skills/{skill}/scripts/{filename}')
                 with open(dest, 'rb') as f:
                     dest_bytes = f.read()
                 dest_hash = hashlib.sha256(dest_bytes).hexdigest()

@@ -5,7 +5,7 @@ Usage: stress.sh [-n RUNS] [-j JOBS] [-t SECONDS] [-o DIR] [-k] [-x] [-b F/N] --
   -n  total runs (default 100)
   -j  parallel runs, 1..64 (default: min(64, CPUs)); raise above CPUs to add load
   -t  per-run timeout in seconds (needs timeout/gtimeout; default none)
-  -o  output dir (default: mktemp)
+  -o  output dir (default: mktemp); must not already hold results of an earlier run (exit 2)
   -k  keep logs of passing runs too (for diffing pass vs fail)
   -x  stop launching new runs after the first failure
   -b  baseline F/N (failures/runs before a fix): prints one-sided Fisher exact p (fixed if p < 0.05)
@@ -23,6 +23,10 @@ while [ $# -gt 0 ]; do case "$1" in
 [ $# -eq 0 ] && { usage >&2; exit 2; }
 case "$N" in ''|*[!0-9]*|0) echo "error: -n must be a positive integer" >&2; exit 2;; esac
 case "$BASE" in ''|*[0-9]/*[0-9]) ;; *) echo "error: -b expects F/N, e.g. 14/200" >&2; exit 2;; esac
+if [ -n "$OUT" ] && [ -d "$OUT" ] && ls -A "$OUT" 2>/dev/null | grep -q -e '^rc\.' -e '^FAIL\.' -e '^run\.'; then
+  echo "error: -o $OUT already holds stress results (rc.*/FAIL.*/run.*); they would be counted. Use an empty dir or remove them first" >&2
+  exit 2
+fi
 [ -z "$OUT" ] && { OUT=$(mktemp -d "${TMPDIR:-/tmp}/stress.XXXXXX"); OWN_OUT=1; }; mkdir -p "$OUT"
 TO=$(sd_timeout_bin); [ -n "$T" ] && [ -z "$TO" ] && echo "warn: no timeout/gtimeout found; -t ignored" >&2
 # Serialize command safely for the worker.

@@ -3,8 +3,9 @@ description: Read-only code-evidence investigator for the requirements-code-audi
 model: flash
 effort: high
 temperature: 0.0
+steps: 30
 access: write
-write_paths: .audit/**
+write_paths: **/.audit/**
 bash: false
 web: false
 ---

@@ -57,6 +57,18 @@ class GuardOcTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
 
+    def test_programmer_lite_edit_inside_footprint_allows(self):
+        rc, out = self.oc("edit", {"filePath": "src/a.py", "oldString": "a", "newString": "b"},
+                          role="programmer-lite")
+        self.assertEqual(rc, 0)
+        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+
+    def test_programmer_lite_bash_push_denies_as_programmer(self):
+        rc, out = self.oc("bash", {"command": "git push origin main"}, role="programmer-lite")
+        verdict, reason = decision(out)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("integration/history commands are the Conductor's", reason)
+
     def test_programmer_write_outside_footprint_denies(self):
         rc, out = self.oc("write", {"filePath": str(self.wt / "docs" / "x.md"), "content": "x"})
         self.assertEqual(rc, 0)
@@ -281,6 +293,130 @@ class GuardOcTest(unittest.TestCase):
             mod.guard_oc({"tool": "bash", "args": {"command": "git push"}, "cwd": str(self.wt), "role": ""})
         self.assertIn(cm.exception.code, (0, None))
         self.assertEqual(buf.getvalue(), "")
+
+    def test_args_json_string_is_parsed(self):
+        # v2 `input.repair` can hand the args over as a JSON string instead of an object
+        rc, out = self.oc("write", json.dumps({"filePath": "docs/x.md", "content": "x"}))
+        self.assertEqual(rc, 0)
+        verdict, reason = decision(out)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("`docs/x.md` is outside your slice footprint", reason)
+        rc, out = self.oc("shell", json.dumps({"command": "git push origin main"}))
+        self.assertEqual(decision(out)[0], "deny")
+        rc, out = self.oc("edit", json.dumps({"filePath": "src/a.py", "oldString": "a", "newString": "b"}))
+        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+
+    def test_unparseable_args_deny_in_lane_mode(self):
+        for args in ("{not json", "[1, 2]", ["src/a.py"], 7):
+            with self.subTest(args=args):
+                rc, out = self.oc("write", args)
+                self.assertEqual(rc, 0)
+                verdict, reason = decision(out)
+                self.assertEqual(verdict, "deny")
+                self.assertIn("could not be parsed", reason)
+
+    def test_unparseable_args_without_role_stay_silent(self):
+        rc, out = self.oc("write", "{not json", role="")
+        self.assertEqual((rc, out), (0, ""))
+
+    def test_non_string_shell_fields_deny(self):
+        for args in ({"command": 5}, {"command": "git status", "workdir": 5}):
+            with self.subTest(args=args):
+                rc, out = self.oc("shell", args)
+                self.assertEqual(rc, 0)
+                verdict, reason = decision(out)
+                self.assertEqual(verdict, "deny")
+                self.assertIn("needs a string `command`", reason)
+
+    def test_batch_and_question_denied_in_lane_mode(self):
+        for tool in ("batch", "question"):
+            for role in ("programmer", "code-reviewer"):
+                with self.subTest(tool=tool, role=role):
+                    rc, out = self.oc(tool, {}, role=role)
+                    self.assertEqual(rc, 0)
+                    verdict, reason = decision(out)
+                    self.assertEqual(verdict, "deny")
+                    self.assertIn(f"`{tool}` is disabled in dev-team lanes", reason)
+
+    def test_indented_patch_header_is_checked(self):
+        # v2 trims patch lines before applying them, so an indented header is live
+        patch = ("*** Begin Patch\n*** Update File: src/a.py\n@@\n-x\n+y\n"
+                 "  *** Add File: docs/b.md\n+hi\n*** End Patch\n")
+        rc, out = self.oc("apply_patch", {"patchText": patch})
+        self.assertEqual(rc, 0)
+        verdict, reason = decision(out)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("docs/b.md", reason)
+
+    def test_indented_patch_header_denied_for_read_only_role(self):
+        patch = "*** Begin Patch\n    *** Update File: src/a.py\n@@\n-x\n+y\n*** End Patch\n"
+        rc, out = self.oc("patch", {"patchText": patch}, role="code-reviewer")
+        self.assertEqual(rc, 0)
+        verdict, reason = decision(out)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("This role is read-only", reason)
+
+    def test_headerless_patch_denied_for_every_role(self):
+        for role in ("programmer", "code-reviewer"):
+            with self.subTest(role=role):
+                rc, out = self.oc("patch", {"patchText": "@@\n-x\n+y\n"}, role=role)
+                self.assertEqual(rc, 0)
+                verdict, reason = decision(out)
+                self.assertEqual(verdict, "deny")
+                self.assertIn("names no file", reason)
+
+    def test_edit_without_path_denied_for_every_role(self):
+        for tool, args in (("write", {"content": "x"}),
+                           ("edit", {"oldString": "a", "newString": "b"}),
+                           ("write", {"filePath": "", "content": "x"})):
+            for role in ("programmer", "code-reviewer"):
+                with self.subTest(tool=tool, args=args, role=role):
+                    rc, out = self.oc(tool, args, role=role)
+                    self.assertEqual(rc, 0)
+                    verdict, reason = decision(out)
+                    self.assertEqual(verdict, "deny")
+                    self.assertIn("names no file", reason)
+
+    def test_edit_ro_mode_without_path_denies(self):
+        r = subprocess.run([sys.executable, str(GUARD), "edit-ro"],
+                           input=json.dumps({"tool_input": {}, "cwd": str(self.wt),
+                                             "agent_type": "code-reviewer"}),
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0)
+        verdict, reason = decision(r.stdout)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("names no file", reason)
+
+    def test_symlinked_cwd_edit_inside_footprint_allows(self):
+        linkdir = Path(tempfile.mkdtemp())
+        try:
+            link = linkdir / "wt"
+            link.symlink_to(self.wt)
+            for fp in ("src/a.py", str(link / "src" / "a.py")):
+                with self.subTest(filePath=fp):
+                    rc, out = run_oc({"tool": "edit",
+                                      "args": {"filePath": fp, "oldString": "a", "newString": "b"},
+                                      "cwd": str(link), "role": "programmer"})
+                    self.assertEqual(rc, 0)
+                    self.assertEqual(decision(out),
+                                     ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        finally:
+            shutil.rmtree(linkdir, ignore_errors=True)
+
+    def test_unapproved_shell_deny_lists_pinned_forms(self):
+        (self.wt / ".slice" / "allow").write_text("python3 -m pytest -q\nmake lint\n")
+        rc, out = self.oc("shell", {"command": "curl example.com"})
+        self.assertEqual(rc, 0)
+        verdict, reason = decision(out)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("Pinned forms from `.slice/allow`: `python3 -m pytest -q`, `make lint`.", reason)
+
+    def test_unapproved_shell_deny_says_when_nothing_is_pinned(self):
+        rc, out = self.oc("shell", {"command": "curl example.com"})
+        self.assertEqual(rc, 0)
+        verdict, reason = decision(out)
+        self.assertEqual(verdict, "deny")
+        self.assertIn("No commands are pinned for this lane (`.slice/allow` is empty).", reason)
 
 
 if __name__ == "__main__":

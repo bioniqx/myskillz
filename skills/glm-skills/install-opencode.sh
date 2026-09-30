@@ -52,4 +52,30 @@ fi
 python3 "$HARNESS" install "$DEV_TEAM_PATH" "$MAJOR" "$HOME_DIR"
 
 python3 "$HARNESS" snippet "$MAJOR"
-echo "# Also export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 so OpenCode skips the Claude-tuned originals in ~/.claude/skills"
+if [ "$MAJOR" = "1" ]; then
+    echo "# Also export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 so OpenCode skips the Claude-tuned originals in ~/.claude/skills"
+fi
+
+CLAUDE_SKILLS="$HOME_DIR/.claude/skills"
+CONFIG_SKILLS="$HOME_DIR/.config/opencode/skills"
+
+for folder in $SKILLS dev-team-glm; do
+    name="${folder%-glm}"
+    for path in "$CLAUDE_SKILLS/$name" "$CLAUDE_SKILLS/$folder"; do
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            echo "WARN: clash: $path carries the same skill name as the installed $name; OpenCode scans ~/.claude/skills too, and $CONFIG_SKILLS/$name is used (the config-dir copy wins). Leave it in place if Claude Code uses it."
+        fi
+    done
+done
+
+STALE=""
+for path in "$CONFIG_SKILLS"/*-glm; do
+    if [ -e "$path" ] || [ -L "$path" ]; then
+        base="${path##*/}"
+        echo "WARN: stale: $path is an old *-glm install; OpenCode loads it next to $CONFIG_SKILLS/${base%-glm}"
+        STALE="$STALE \"$path\""
+    fi
+done
+if [ -n "$STALE" ]; then
+    echo "To remove the stale installs, run: rm -rf$STALE"
+fi

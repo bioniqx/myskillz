@@ -7,9 +7,9 @@ automatically when no key is found.
 
 ```bash
 # ZCode
-python3 requirements-code-audit/scripts/audit.py setup --harness zcode
+python3 requirements-code-audit-glm/scripts/audit.py setup --harness zcode
 # OpenCode
-python3 requirements-code-audit/scripts/audit.py setup --harness opencode
+python3 requirements-code-audit-glm/scripts/audit.py setup --harness opencode
 ```
 
 That copies the skill to the harness's skills directory and the matching agent files to its agents directory
@@ -24,8 +24,8 @@ For ZCode, by hand instead:
 OpenCode's `~/.config/opencode/agents/rca-*.md` are rendered from the neutral sources in `opencode/agents/`
 (model id, `mode: all` on v1 so `opencode run --agent` actually uses the agent instead of falling back to
 `build`, `mode: subagent` on v2, permissions) — never copy those sources by hand, since the raw files omit the
-fields OpenCode requires. Use `python3 requirements-code-audit/scripts/audit.py setup --harness opencode` or,
-directly, `python3 requirements-code-audit/scripts/oc_harness.py install requirements-code-audit <major>`.
+fields OpenCode requires. Use `python3 requirements-code-audit-glm/scripts/audit.py setup --harness opencode` or,
+directly, `python3 requirements-code-audit-glm/scripts/oc_harness.py install requirements-code-audit-glm <major>`.
 
 Invoke it in ZCode with `$requirements-code-audit <spec file>`; in OpenCode the agent loads it through its
 `skill` tool by name.
