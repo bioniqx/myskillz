@@ -1,5 +1,5 @@
 ---
-name: ht-spot-reviewer
+name: hybrid-team-spot-reviewer
 description: >-
   Fast correctness-and-security-only reviewer for the hybrid-team workflow, used by the turbo and
   spike profiles where the final review sits directly on the critical path. Read-only review of

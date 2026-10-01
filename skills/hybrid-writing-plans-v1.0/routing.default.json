@@ -1,0 +1,14 @@
+{
+  "preset": "hybrid",
+  "tiers": {
+    "std": {"max_parallel": 6, "stall_s": 180, "timeout_s": 900},
+    "lite": {"max_parallel": 6, "stall_s": 120, "timeout_s": 600}
+  },
+  "roles": {"light": "lite", "std": "std", "deep": "claude"},
+  "max_roles": {"deep": "std"},
+  "review_oc": {"hybrid": "risky", "opencode": "risky"},
+  "oc_group_max": 3,
+  "oc_overflow": "queue",
+  "max_repairs": 2,
+  "throttle_cooldown_s": 120
+}

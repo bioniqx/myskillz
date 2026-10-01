@@ -1,7 +1,7 @@
 ---
-name: ht-investigator
+name: hybrid-team-investigator
 description: >-
-  Read-only ht-investigator for the hybrid-team workflow. Runs one angle of a parallel root-cause
+  Read-only hybrid-team-investigator for the hybrid-team workflow. Runs one angle of a parallel root-cause
   hunt (debugging, regression archaeology, performance mystery), or one RESEARCH slice
   (feasibility study, dependency/upgrade assessment, security or architecture survey).
   Produces an evidence-backed report file with ready-to-dispatch fix slices; never edits code,

@@ -3,7 +3,8 @@
   "env": {
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "15",
     "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "64",
-    "HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"
+    "HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh",
+    "HYBRID_OPENCODE_LITE": "opencode/muse-spark-1.3-contributor-free#high"
   },
   "permissions": {
     "allow": [

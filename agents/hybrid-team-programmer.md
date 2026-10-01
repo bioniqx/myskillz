@@ -1,5 +1,5 @@
 ---
-name: ht-programmer
+name: hybrid-team-programmer
 description: >-
   Implementation engineer for the hybrid-team workflow. Each dispatch is stateless and
   bound to ONE slice inside its own isolated git worktree. Modes: SLICE (RED tests
