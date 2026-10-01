@@ -23,6 +23,7 @@ def _script_env(std=None, lite=None):
     env = dict(os.environ)
     env.pop(hs.STD_ENV, None)
     env.pop(hs.LITE_ENV, None)
+    env.pop(hs.MAX_PARALLEL_ENV, None)
     if std is not None:
         env[hs.STD_ENV] = std
     if lite is not None:
@@ -107,6 +108,28 @@ class TestSharedConfig(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(tiers["std"], {"model": "openrouter/vendor/model-1", "variant": "high"})
 
+    def test_max_parallel_env(self):
+        for text, want in (("4", 4), (" 8 ", 8), ("1", 1), ("64", 64)):
+            self.assertEqual(hs.max_parallel_from_env({hs.MAX_PARALLEL_ENV: text}), (want, ""), text)
+        self.assertEqual(hs.max_parallel_from_env({}), (None, ""))
+        self.assertEqual(hs.max_parallel_from_env({hs.MAX_PARALLEL_ENV: "  "}), (None, ""))
+        for bad in ("0", "65", "-1", "2.5", "four", "4 4"):
+            value, problem = hs.max_parallel_from_env({hs.MAX_PARALLEL_ENV: bad})
+            self.assertIsNone(value, bad)
+            self.assertEqual(problem, "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 64, got %r" % bad)
+
+    def test_invalid_max_parallel_empties_tiers_and_names_the_variable(self):
+        problem = "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 64, got 'many'"
+        tiers, problems = hs.load_shared({hs.STD_ENV: BOTH, hs.MAX_PARALLEL_ENV: "many"})
+        self.assertEqual((tiers, problems), ({}, [problem]))
+        tiers, problems = hs.load_shared({hs.MAX_PARALLEL_ENV: "many"})
+        self.assertEqual(problems, ["HYBRID_OPENCODE_STD is not set", problem])
+
+    def test_valid_max_parallel_leaves_tiers_alone(self):
+        tiers, problems = hs.load_shared({hs.STD_ENV: BOTH, hs.MAX_PARALLEL_ENV: "4"})
+        self.assertEqual(problems, [])
+        self.assertEqual(tiers["std"], {"model": "prov/big", "variant": "high"})
+
     def test_invalid_std_names_the_variable_and_empties_tiers(self):
         tiers, problems = hs.load_shared({hs.STD_ENV: "no-provider", hs.LITE_ENV: "prov/ok"})
         self.assertEqual(tiers, {})
@@ -148,6 +171,36 @@ class TestSharedConfig(unittest.TestCase):
 
 
 class TestPrecedence(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(hs.MAX_PARALLEL_ENV, None)
+
+    def test_env_max_parallel_applies_to_every_tier(self):
+        routing = {"tiers": {"std": {"max_parallel": 4}, "lite": {"max_parallel": 4}}}
+        result = hs.resolve_tiers(routing, {}, {}, {hs.MAX_PARALLEL_ENV: "3"})
+        self.assertEqual([result["tiers"][t]["max_parallel"] for t in ("std", "lite")], [3, 3])
+        self.assertEqual(routing["tiers"]["std"]["max_parallel"], 4)
+
+    def test_skill_file_max_parallel_beats_env(self):
+        merged = {"tiers": {"std": {"max_parallel": 2}, "lite": {"max_parallel": 4}}}
+        user = {"tiers": {"std": {"max_parallel": 2}}}
+        result = hs.resolve_tiers(merged, {}, user, {hs.MAX_PARALLEL_ENV: "3"})
+        self.assertEqual(result["tiers"]["std"]["max_parallel"], 2)
+        self.assertEqual(result["tiers"]["lite"]["max_parallel"], 3)
+
+    def test_unset_or_invalid_env_keeps_the_routing_value(self):
+        routing = {"tiers": {"std": {"max_parallel": 4}}}
+        for env in ({}, {hs.MAX_PARALLEL_ENV: "0"}, {hs.MAX_PARALLEL_ENV: "65"}, {hs.MAX_PARALLEL_ENV: "two"}):
+            result = hs.resolve_tiers(routing, {}, {}, env)
+            self.assertEqual(result["tiers"]["std"]["max_parallel"], 4, env)
+
+    def test_process_env_is_read_when_no_env_is_passed(self):
+        os.environ[hs.MAX_PARALLEL_ENV] = "2"
+        result = hs.resolve_tiers({"tiers": {"std": {"max_parallel": 4}}}, {}, {})
+        self.assertEqual(result["tiers"]["std"]["max_parallel"], 2)
+
     def test_skill_model_wins_and_never_takes_shared_variant(self):
         routing = {"preset": "hybrid", "tiers": {"std": {"model": "own/m", "max_parallel": 2, "timeout_s": 900}}}
         user = {"tiers": {"std": {"model": "own/m"}}}

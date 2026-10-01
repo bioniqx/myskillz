@@ -1,1 +1,0 @@
-{"preset": "hybrid", "tiers": {"std": {"max_parallel": 6, "stall_s": 90, "timeout_s": 300}, "lite": {"max_parallel": 6, "stall_s": 60, "timeout_s": 180}}, "roles": {"locate": "lite", "explore": "std", "fact": "lite", "research": "std", "draft": "claude"}, "max_roles": {"research": "std", "draft": "std"}, "slot_wait_s": 60, "throttle_cooldown_s": 120}

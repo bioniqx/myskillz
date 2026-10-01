@@ -1,8 +1,0 @@
-{"preset": "hybrid",
- "tiers": {
-   "std":  {"max_parallel": 6,
-            "stall_s": 180, "timeout_s": {"trivial": 600, "small": 1200, "large": 2400}},
-   "lite": {"max_parallel": 6,
-            "stall_s": 120, "timeout_s": {"trivial": 300, "small": 600, "large": 1200}}},
- "rows": {"code": "std", "refactor": "std", "test": "std", "chore": "std", "docs": "lite", "trivial": "lite"},
- "max_escalations": 1}

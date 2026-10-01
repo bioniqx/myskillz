@@ -18,6 +18,8 @@ from pathlib import Path
 MODES = ("hybrid", "claude", "opencode")
 STD_ENV = "HYBRID_OPENCODE_STD"
 LITE_ENV = "HYBRID_OPENCODE_LITE"
+MAX_PARALLEL_ENV = "HYBRID_OPENCODE_MAX_PARALLEL"
+MAX_PARALLEL_LIMIT = 64
 SHARED_SOURCE = "$%s/$%s" % (STD_ENV, LITE_ENV)
 DOCTOR_TTL_S = 600
 NON_RETRYABLE = ("auth", "quota", "model", "config")
@@ -48,17 +50,35 @@ def _parse_spec(text: str) -> dict:
     return tier
 
 
+def max_parallel_from_env(env: dict = None) -> tuple:
+    """Read the opencode slot cap from $HYBRID_OPENCODE_MAX_PARALLEL; never raises.
+
+    Returns (value, problem): value is an int from 1 to 64, or None when the variable is
+    unset or invalid; problem is "" unless it is set to something invalid.
+    """
+    env = os.environ if env is None else env
+    text = (env.get(MAX_PARALLEL_ENV) or "").strip()
+    if not text:
+        return None, ""
+    if re.fullmatch(r"[0-9]+", text) and 1 <= int(text) <= MAX_PARALLEL_LIMIT:
+        return int(text), ""
+    return None, "%s must be an integer from 1 to %d, got %r" % (MAX_PARALLEL_ENV, MAX_PARALLEL_LIMIT, text)
+
+
 def load_shared(env: dict = None) -> tuple:
     """Read the shared models from $HYBRID_OPENCODE_STD / $HYBRID_OPENCODE_LITE; never raises.
 
     Returns (tiers, problems): tiers maps "std"/"lite" to {model, variant?}. LITE
     defaults to STD. tiers is {} whenever problems is non-empty, so an invalid
-    value behaves exactly like a missing one.
+    value behaves exactly like a missing one. An invalid $HYBRID_OPENCODE_MAX_PARALLEL
+    is a problem too, so a typo fails loud instead of silently keeping the shipped cap.
     """
     env = os.environ if env is None else env
+    _, cap_problem = max_parallel_from_env(env)
+    cap_problems = [cap_problem] if cap_problem else []
     std = (env.get(STD_ENV) or "").strip()
     if not std:
-        return {}, ["%s is not set" % STD_ENV]
+        return {}, ["%s is not set" % STD_ENV] + cap_problems
     specs = {"std": (STD_ENV, std), "lite": (LITE_ENV, (env.get(LITE_ENV) or "").strip() or std)}
     tiers, problems = {}, []
     for name in TIERS:
@@ -67,17 +87,21 @@ def load_shared(env: dict = None) -> tuple:
         if not MODEL_RE.fullmatch(tier["model"]) or not VARIANT_RE.fullmatch(tier.get("variant", "x")):
             problems.append("%s must be provider/model[#variant], got %r" % (var, text))
         tiers[name] = tier
+    problems.extend(cap_problems)
     return ({} if problems else tiers), problems
 
 
-def resolve_tiers(routing: dict, shared_tiers: dict, user_routing: dict) -> dict:
+def resolve_tiers(routing: dict, shared_tiers: dict, user_routing: dict, env: dict = None) -> dict:
     """Return a copy of routing with each tier's model resolved: per-skill file first, shared file second.
 
     A tier whose per-skill user file sets `model` keeps that model and only that file's
     variant; otherwise model and variant come from the shared tier. result["model_sources"]
-    maps each tier to "skill", "shared" or "none".
+    maps each tier to "skill", "shared" or "none". `max_parallel` follows the same order:
+    the per-skill file's tier value wins, else $HYBRID_OPENCODE_MAX_PARALLEL when it is set
+    and valid, else the value already in routing (the shipped default).
     """
     result = copy.deepcopy(routing)
+    cap, _ = max_parallel_from_env(env)
     target = result.setdefault("tiers", {})
     user_tiers = user_routing.get("tiers") if isinstance(user_routing, dict) else None
     user_tiers = user_tiers if isinstance(user_tiers, dict) else {}
@@ -90,6 +114,8 @@ def resolve_tiers(routing: dict, shared_tiers: dict, user_routing: dict) -> dict
         shared_tier = shared_tiers.get(name) or {}
         dest.pop("model", None)
         dest.pop("variant", None)
+        if cap is not None and "max_parallel" not in user_tier:
+            dest["max_parallel"] = cap
         if user_tier.get("model"):
             source, pick = "skill", user_tier
         elif shared_tier.get("model"):
