@@ -22,9 +22,9 @@ class HelperTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_lanes_dir_is_created_under_superpowers(self):
+    def test_lanes_dir_is_created_under_hybrid_superpowers(self):
         d = bslane.lanes_dir(self.root)
-        self.assertEqual(d, self.root / ".superpowers" / "brainstorm" / "lanes")
+        self.assertEqual(d, self.root / ".hybrid-superpowers" / "brainstorm" / "lanes")
         self.assertTrue(d.is_dir())
 
     def test_acquire_slot_caps_parallel_lanes(self):
@@ -55,7 +55,7 @@ class HelperTests(unittest.TestCase):
                                               "cache_write": 0}))
         bslane.record(self.root, dict(base, id="c", outcome="fallback", reason="busy", grounded=0, total=0,
                                       duration_s=0.0, tokens=zero))
-        path = self.root / ".superpowers" / "brainstorm" / "lanes.jsonl"
+        path = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes.jsonl"
         self.assertEqual(len(path.read_text(encoding="utf-8").splitlines()), 3)
         stats = bslane.lane_stats(path)
         self.assertEqual(len(stats), 1)
@@ -77,7 +77,7 @@ BSLANE = Path(__file__).resolve().parents[1] / "scripts" / "bslane.py"
 
 FAKE_OPENCODE = r'''#!/usr/bin/env python3
 import json, os, sys, time
-log = os.environ.get("HB_FAKE_LOG")
+log = os.environ.get("HYBRID_BRAINSTORMING_FAKE_LOG")
 if log:
     with open(log, "a") as fh:
         fh.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "pwd": os.environ.get("PWD", ""),
@@ -86,13 +86,13 @@ if "--version" in sys.argv[1:]:
     print("2.0.18")
     sys.exit(0)
 if sys.argv[1:2] == ["models"]:
-    if os.environ.get("HB_FAKE_MODELS") != "none":
+    if os.environ.get("HYBRID_BRAINSTORMING_FAKE_MODELS") != "none":
         print("zai-coding-plan/glm-5.3")
         print("zai-coding-plan/glm-5.3-flash")
     sys.exit(0)
 if len(sys.argv) < 2 or sys.argv[1] != "run":
     sys.exit(0)
-path = os.environ.get("HB_FAKE_SCRIPT")
+path = os.environ.get("HYBRID_BRAINSTORMING_FAKE_SCRIPT")
 script = json.load(open(path)) if path and os.path.exists(path) else {}
 if isinstance(script, list):
     n = int(open(path + ".calls").read() or 0) if os.path.exists(path + ".calls") else 0
@@ -121,7 +121,7 @@ DEFAULT_ROUTING = {
         "std": {"max_parallel": 6, "stall_s": 90, "timeout_s": 300},
         "lite": {"max_parallel": 6, "stall_s": 60, "timeout_s": 180},
     },
-    "roles": {"locate": "lite", "explore": "std", "fact": "lite", "research": "claude", "draft": "claude"},
+    "roles": {"locate": "lite", "explore": "std", "fact": "lite", "research": "std", "draft": "claude"},
     "max_roles": {"research": "std", "draft": "std"},
     "slot_wait_s": 60,
     "throttle_cooldown_s": 120,
@@ -167,7 +167,7 @@ class HeldStatsTests(unittest.TestCase):
             base = {"role": "locate", "tier": "lite", "grounded": 0, "total": 0, "duration_s": 0.0, "tokens": zero}
             bslane.record(root, dict(base, id="h1", outcome="held", reason="auth"))
             bslane.record(root, dict(base, id="h2", outcome="ok", reason=""))
-            stats = bslane.lane_stats(root / ".superpowers" / "brainstorm" / "lanes.jsonl")
+            stats = bslane.lane_stats(root / ".hybrid-superpowers" / "brainstorm" / "lanes.jsonl")
             self.assertEqual((stats[0]["lanes"], stats[0]["fallbacks"]), (2, 1))
             self.assertEqual(stats[0]["reasons"], {"auth": 1})
 
@@ -191,8 +191,8 @@ class LaneCliTests(unittest.TestCase):
         self.routing_path = base / "routing.json"
         self.shared_env = dict(SHARED_MODELS)
         self.doctor_path = base / "doctor.json"
-        self.lanes = self.root / ".superpowers" / "brainstorm" / "lanes"
-        self.telemetry = self.root / ".superpowers" / "brainstorm" / "lanes.jsonl"
+        self.lanes = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes"
+        self.telemetry = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes.jsonl"
         self.write_config()
 
     def tearDown(self):
@@ -204,7 +204,7 @@ class LaneCliTests(unittest.TestCase):
         if routing_lite:
             routing["tiers"]["lite"].update(routing_lite)
         self.routing_path.write_text(json.dumps(routing), encoding="utf-8")
-        rc, out = self.run_cli("doctor", env_extra={"HB_FAKE_LOG": ""})
+        rc, out = self.run_cli("doctor", env_extra={"HYBRID_BRAINSTORMING_FAKE_LOG": ""})
         self.assertEqual(rc, 0, out)
         data = json.loads(self.doctor_path.read_text(encoding="utf-8"))
         data["websearch"] = True
@@ -215,9 +215,9 @@ class LaneCliTests(unittest.TestCase):
             self.script.write_text(json.dumps(script), encoding="utf-8")
             Path(str(self.script) + ".calls").unlink(missing_ok=True)
         env = dict(os.environ, HOME=str(self.home), XDG_DATA_HOME=str(self.home / "xdg"), HYBRID_OC_RETRY_DELAY_S="0",
-                   HB_ROUTING=str(self.routing_path),
-                   HB_DOCTOR_CACHE=str(self.doctor_path), HB_OC_BIN=str(oc_bin or self.fake),
-                   HB_FAKE_SCRIPT=str(self.script), HB_FAKE_LOG=str(self.log), PYTHONDONTWRITEBYTECODE="1")
+                   HYBRID_BRAINSTORMING_ROUTING=str(self.routing_path),
+                   HYBRID_BRAINSTORMING_DOCTOR_CACHE=str(self.doctor_path), HYBRID_BRAINSTORMING_OC_BIN=str(oc_bin or self.fake),
+                   HYBRID_BRAINSTORMING_FAKE_SCRIPT=str(self.script), HYBRID_BRAINSTORMING_FAKE_LOG=str(self.log), PYTHONDONTWRITEBYTECODE="1")
         env.pop("HYBRID_OPENCODE_STD", None)
         env.pop("HYBRID_OPENCODE_LITE", None)
         env.update(self.shared_env)
@@ -311,7 +311,7 @@ class LaneCliTests(unittest.TestCase):
         self.assertRegex(out.strip().splitlines()[0], r"^LANE w1 fact oc:lite OK — grounded \d+/\d+ — \d+s$")
 
     def make_context(self):
-        ctx = self.root / ".superpowers" / "drafts" / "ctx.md"
+        ctx = self.root / ".hybrid-superpowers" / "drafts" / "ctx.md"
         ctx.parent.mkdir(parents=True, exist_ok=True)
         ctx.write_text("Constraints: stdlib only.\nFinding: app.py:2 handler.\n", encoding="utf-8")
         return ctx
@@ -458,6 +458,16 @@ class LaneCliTests(unittest.TestCase):
                                "--backend", "claude")
         self.assertEqual((rc, out.strip()), (0, self.claude_text("pc2", "research")))
 
+    def test_hybrid_research_with_websearch_off_falls_back_to_claude_with_an_oc_error(self):
+        data = json.loads(self.doctor_path.read_text(encoding="utf-8"))
+        data["websearch"] = False
+        self.doctor_path.write_text(json.dumps(data), encoding="utf-8")
+        rc, out = self.run_cli("web", "--id", "rs1", "--role", "research", "--task", "x", "--angle", "y",
+                               "--preset", "hybrid")
+        oc_lines = self.assertFallback(rc, out, "rs1", "config", role="research")
+        self.assertRegex(oc_lines[0], r"^OC-ERROR hybrid-brainstorming rs1 tier=std .*kind=config :: web search is off")
+        self.assertEqual(self.run_calls(), [])
+
     def test_opencode_preset_routes_a_role_pinned_to_claude_to_claude(self):
         routing = json.loads(self.routing_path.read_text(encoding="utf-8"))
         routing["roles"]["fact"] = "claude"  # no max_roles entry for fact
@@ -506,8 +516,8 @@ class LaneCliTests(unittest.TestCase):
         self.write_config(routing_lite={"max_parallel": 1}, slot_wait_s=20)
         lanes = bslane.lanes_dir(self.root)
         held = bslane.acquire_slot(lanes, "lite", 1, 0)
-        env = dict(os.environ, HOME=str(self.home), XDG_DATA_HOME=str(self.home / "xdg"), HB_ROUTING=str(self.routing_path),
-                   HB_DOCTOR_CACHE=str(self.doctor_path), HB_OC_BIN=str(self.fake), HB_FAKE_LOG=str(self.log),
+        env = dict(os.environ, HOME=str(self.home), XDG_DATA_HOME=str(self.home / "xdg"), HYBRID_BRAINSTORMING_ROUTING=str(self.routing_path),
+                   HYBRID_BRAINSTORMING_DOCTOR_CACHE=str(self.doctor_path), HYBRID_BRAINSTORMING_OC_BIN=str(self.fake), HYBRID_BRAINSTORMING_FAKE_LOG=str(self.log),
                    HYBRID_OC_RETRY_DELAY_S="0", PYTHONDONTWRITEBYTECODE="1")
         env.pop("HYBRID_OPENCODE_STD", None)
         env.pop("HYBRID_OPENCODE_LITE", None)
@@ -526,8 +536,8 @@ class LaneCliTests(unittest.TestCase):
         self.write_config(routing_lite={"max_parallel": 1}, slot_wait_s=20)
         lanes = bslane.lanes_dir(self.root)
         held = bslane.acquire_slot(lanes, "lite", 1, 0)
-        env = dict(os.environ, HOME=str(self.home), XDG_DATA_HOME=str(self.home / "xdg"), HB_ROUTING=str(self.routing_path),
-                   HB_DOCTOR_CACHE=str(self.doctor_path), HB_OC_BIN=str(self.fake), HB_FAKE_LOG=str(self.log),
+        env = dict(os.environ, HOME=str(self.home), XDG_DATA_HOME=str(self.home / "xdg"), HYBRID_BRAINSTORMING_ROUTING=str(self.routing_path),
+                   HYBRID_BRAINSTORMING_DOCTOR_CACHE=str(self.doctor_path), HYBRID_BRAINSTORMING_OC_BIN=str(self.fake), HYBRID_BRAINSTORMING_FAKE_LOG=str(self.log),
                    HYBRID_OC_RETRY_DELAY_S="0", PYTHONDONTWRITEBYTECODE="1")
         env.pop("HYBRID_OPENCODE_STD", None)
         env.pop("HYBRID_OPENCODE_LITE", None)
@@ -880,7 +890,7 @@ class LaneCliTests(unittest.TestCase):
 
     def test_doctor_does_not_create_the_user_routing_file(self):
         user_routing = self.base / "config" / "hybrid-brainstorming" / "routing.json"
-        rc, out = self.run_cli("doctor", env_extra={"HB_ROUTING": str(user_routing)})
+        rc, out = self.run_cli("doctor", env_extra={"HYBRID_BRAINSTORMING_ROUTING": str(user_routing)})
         self.assertEqual(rc, 0)
         self.assertFalse(user_routing.exists())
         self.assertFalse(user_routing.parent.exists())
@@ -892,14 +902,14 @@ class LaneCliTests(unittest.TestCase):
         user_routing.parent.mkdir(parents=True)
         original = b'{"preset": "claude", "custom": true}'
         user_routing.write_bytes(original)
-        rc, out = self.run_cli("doctor", env_extra={"HB_ROUTING": str(user_routing)})
+        rc, out = self.run_cli("doctor", env_extra={"HYBRID_BRAINSTORMING_ROUTING": str(user_routing)})
         self.assertEqual(rc, 0)
         self.assertEqual(user_routing.read_bytes(), original)
         self.assertFalse(any("created" in line.lower() and str(user_routing) in line
                              for line in out.splitlines()), out)
 
     def test_doctor_prints_a_failed_tier_as_an_oc_error(self):
-        rc, out = self.run_cli("doctor", env_extra={"HB_FAKE_MODELS": "none"})
+        rc, out = self.run_cli("doctor", env_extra={"HYBRID_BRAINSTORMING_FAKE_MODELS": "none"})
         self.assertEqual(rc, 0)
         errors = [line for line in out.splitlines() if line.startswith("OC-ERROR hybrid-brainstorming doctor")]
         self.assertTrue(errors, out)

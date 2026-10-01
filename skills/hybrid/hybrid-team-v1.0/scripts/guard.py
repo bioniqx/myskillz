@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """hybrid-team hook guards (Claude Code hooks; JSON on stdin).
 
-  guard.py edit     PreToolUse Edit|Write|NotebookEdit  (ht-programmer): footprint + frozen tests; a kind:refactor
+  guard.py edit     PreToolUse Edit|Write|NotebookEdit  (hybrid-team-programmer): footprint + frozen tests; a kind:refactor
                     slice may not touch ANY test file. A write that passes every check is returned as an
-                    explicit `allow`, so it never prompts (the ht-programmer runs in `dontAsk` mode).
-  guard.py bash     PreToolUse Bash                     (ht-programmer): deny history rewriting / integration git /
+                    explicit `allow`, so it never prompts (the hybrid-team-programmer runs in `dontAsk` mode).
+  guard.py bash     PreToolUse Bash                     (hybrid-team-programmer): deny history rewriting / integration git /
                     writes to `.slice/`; then `allow` the commands the briefing pinned (`.slice/allow`),
                     read-only git, the project toolchain, footprint-scoped file ops and simple pipelines
                     of those. Anything else is left to the normal flow (denied in dontAsk, classified in
                     auto mode) — a background agent must never wait on a prompt nobody will answer.
-  guard.py stop     Stop → SubagentStop                 (ht-programmer): RED committed, GREEN after RED, tree clean,
+  guard.py stop     Stop → SubagentStop                 (hybrid-team-programmer): RED committed, GREEN after RED, tree clean,
                     real evidence under `## Gate:` for evidence-gated kinds. When the gate passes it writes a
                     `<root>/.claude/hybrid-team/slices/<id>.done` marker (or `.blocked`), which is how `devteam
                     next` finds finished programmers without the Conductor relaying ids.
-  guard.py edit-ro  PreToolUse Edit|Write|NotebookEdit  (reviewer/leader/ht-investigator): writes only under
-                    reviews/, research/, agent memory — and plan.md for the ht-team-leader.
-  guard.py bash-ro  PreToolUse Bash                     (reviewer/leader/ht-investigator): read-only shell; the plan's
+  guard.py edit-ro  PreToolUse Edit|Write|NotebookEdit  (reviewer/leader/hybrid-team-investigator): writes only under
+                    reviews/, research/, agent memory — and plan.md for the hybrid-team-leader.
+  guard.py bash-ro  PreToolUse Bash                     (reviewer/leader/hybrid-team-investigator): read-only shell; the plan's
                     test/lint commands are `allow`ed so a reviewer can gather evidence without a prompt.
   guard.py perm     PermissionRequest (settings.json only, optional): same allow-list as `bash`, in the
                     PermissionRequest output schema. Not needed when the PreToolUse hooks are installed.
@@ -155,7 +155,7 @@ def tool_path(inp):
     return ti.get("file_path") or ti.get("notebook_path") or ti.get("path") or ""
 
 
-# ----------------------------------------------------------------------------- ht-programmer guards
+# ----------------------------------------------------------------------------- hybrid-team-programmer guards
 
 def guard_edit(inp):
     path = tool_path(inp)
@@ -905,7 +905,7 @@ def block(blocks_file, blocks, problems):
 
 # Reports and memory only. `.claude/hybrid-team/` as a whole is NOT writable by a read-only role:
 # state.json, briefs/ and slices/ are what the scheduler and the integrator trust. plan.md is the
-# ht-team-leader's deliverable (PLANNING / PLAN ADOPTION), so that one role may write it.
+# hybrid-team-leader's deliverable (PLANNING / PLAN ADOPTION), so that one role may write it.
 RO_WRITE_ALLOW = ("/.claude/hybrid-team/reviews/", "/.claude/hybrid-team/research/",
                   "/.claude/agent-memory/", "/.claude/agent-memory-local/")
 LEADER_WRITE_ALLOW = ("/.claude/hybrid-team/plan.md", "/.claude/hybrid-team/plan-", "/.claude/hybrid-team/plan_")
@@ -921,12 +921,12 @@ def guard_edit_ro(inp):
     if any(seg in norm for seg in RO_WRITE_ALLOW):
         allow("hybrid-team: this role's own report / memory file")
     agent = (inp.get("agent_type") or "").lower()
-    if any(seg in norm for seg in LEADER_WRITE_ALLOW) and agent == "ht-team-leader":
-        allow("hybrid-team: the ht-team-leader's plan")
+    if any(seg in norm for seg in LEADER_WRITE_ALLOW) and agent == "hybrid-team-leader":
+        allow("hybrid-team: the hybrid-team-leader's plan")
     deny(f"This role is read-only, and may write only its own report under .claude/hybrid-team/reviews/ "
-         f"or .claude/hybrid-team/research/ (plus its memory dir; the ht-team-leader also writes plan.md). "
+         f"or .claude/hybrid-team/research/ (plus its memory dir; the hybrid-team-leader also writes plan.md). "
          f"`{os.path.basename(path)}` is neither — the run state and other agents' briefings are off limits. "
-         "Report findings; a ht-programmer applies fixes.")
+         "Report findings; a hybrid-team-programmer applies fixes.")
 
 
 BASH_RO_DENY = [

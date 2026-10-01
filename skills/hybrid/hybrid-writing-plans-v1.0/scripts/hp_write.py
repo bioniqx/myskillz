@@ -126,7 +126,7 @@ def write_fallback(plan_path: str, gid: str, task_ids: list, reason: str, errors
         "tasks": list(task_ids),
         "brief": os.path.abspath(brief),
         "model": hybrid_shared.FALLBACK_MODEL if switched else plan_tool.TIER_MODEL[tier],
-        "subagent_type": "plan-task-writer" if plan_tool.agent_installed(repo) else "general-purpose",
+        "subagent_type": "hybrid-plan-task-writer" if plan_tool.agent_installed(repo) else "general-purpose",
         "errors": {str(t): [str(x) for x in (v or [])][:MAX_ERR_LINES] for t, v in (errors or {}).items()},
         "t": _now_iso(),
     }
@@ -145,7 +145,7 @@ def new_shared(info: dict) -> dict:
         size = int((cfg or {}).get("max_parallel", 1) or 1)
         sems[name] = threading.BoundedSemaphore(max(1, size))
     return {"lock": threading.Lock(), "sems": sems, "cooldown": {}, "tripped": {},
-            "binary": os.environ.get("HP_OC_BIN", "opencode")}
+            "binary": os.environ.get("HYBRID_WRITING_PLANS_OC_BIN", "opencode")}
 
 
 def _semaphore(shared: dict, tier: str, size) -> threading.BoundedSemaphore:
@@ -254,7 +254,7 @@ def run_group(plan_path: str, gid: str, task_ids: list, tier_name: str, shared: 
         # The brief travels only as the -f attachment; the injected agent prompt stays the fixed system rules.
         env = dict(os.environ, **config_env(""))
         env["PWD"] = repo
-        binary = str(shared.get("binary") or os.environ.get("HP_OC_BIN", "opencode"))
+        binary = str(shared.get("binary") or os.environ.get("HYBRID_WRITING_PLANS_OC_BIN", "opencode"))
         session, errors, failed, missing = "", {}, [], []
         for rnd in range(1, max_repairs + 2):
             if rnd == 1:
@@ -362,6 +362,7 @@ def run_group(plan_path: str, gid: str, task_ids: list, tier_name: str, shared: 
         reason, errs_out = stop_early(reason)
     else:
         with _semaphore(shared, tier_name, tcfg.get("max_parallel", 1)):
+            started = time.time()  # a queued group's clock starts when it gets a slot
             reason = blocked()
             if reason:
                 reason, errs_out = stop_early(reason)

@@ -75,7 +75,41 @@ class SplitBatchesTest(unittest.TestCase):
         want = [("claude", b) for b in audit.partition_items(active, 4, False)]
         self.assertEqual(got, want)
 
+    def test_hybrid_queues_every_item_on_opencode_by_default(self):
+        active = make_items(60)
+        got = split(active, self.routing, self.doctor, "hybrid")
+        self.assertEqual({b for b, _ in got}, {"oc:std"})
+        self.assertEqual(len(got), 15)
+        self.assertEqual([len(items) for _, items in got], [4] * 15)
+        self.assertEqual(ids_of(got), ["R-%03d" % i for i in range(1, 61)])
+
+    def test_hybrid_queue_matches_opencode_preset(self):
+        active = make_items(30)
+        self.assertEqual(split(active, self.routing, self.doctor, "hybrid"),
+                         split(active, self.routing, self.doctor, "opencode"))
+
+    def test_oc_overflow_claude_restores_the_capacity_split(self):
+        self.routing["oc_overflow"] = "claude"
+        active = make_items(60)
+        got = split(active, self.routing, self.doctor, "hybrid")
+        self.assertEqual(len([1 for b, _ in got if b == "oc:std"]), 6)
+        self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 24)
+        self.assertEqual(sum(len(items) for b, items in got if b == "claude"), 36)
+
+    def test_oc_overflow_is_ignored_in_opencode_preset(self):
+        self.routing["oc_overflow"] = "claude"
+        got = split(make_items(30), self.routing, self.doctor, "opencode")
+        self.assertEqual({b for b, _ in got}, {"oc:std"})
+        self.assertEqual(sum(len(items) for _, items in got), 30)
+
+    def test_unusable_tier_still_routes_everything_to_claude_with_queue(self):
+        active = make_items(30)
+        self.routing["oc_overflow"] = "queue"
+        got = split(active, self.routing, {}, "hybrid")
+        self.assertEqual({b for b, _ in got}, {"claude"})
+
     def test_capacity_split_claude_first_then_opencode(self):
+        self.routing["oc_overflow"] = "claude"
         active = make_items(30)
         got = split(active, self.routing, self.doctor, "hybrid")
         claude = [(b, items) for b, items in got if b == "claude"]
@@ -90,6 +124,7 @@ class SplitBatchesTest(unittest.TestCase):
         self.assertEqual(sorted(ids_of(got)), sorted(it["id"] for it in active))
 
     def test_small_checklist_goes_entirely_to_opencode(self):
+        self.routing["oc_overflow"] = "claude"
         active = make_items(10)
         got = split(active, self.routing, self.doctor, "hybrid")
         self.assertEqual([b for b, _ in got], ["oc:std"] * 6)

@@ -25,7 +25,7 @@ _DEFAULT_PRESET = "hybrid"
 
 
 def user_routing_path() -> Path:
-    override = os.environ.get("HA_ROUTING")
+    override = os.environ.get("HYBRID_AUDIT_ROUTING")
     if override:
         return Path(override)
     return Path(__file__).resolve().parent.parent / "routing.json"
@@ -56,6 +56,8 @@ def _read_user_file(user_path: Path, problems: list):
 
 NUMBER_KEYS = ("oc_batch_max", "max_repairs", "throttle_cooldown_s")
 TIER_NUMBER_KEYS = ("max_parallel", "stall_s", "timeout_s")
+OC_OVERFLOW = ("queue", "claude")
+_DEFAULT_OC_OVERFLOW = "queue"
 
 
 def _drop_bad_numbers(entry: dict, keys: tuple, where: str, user_path, problems: list) -> None:
@@ -69,6 +71,11 @@ def _drop_bad_numbers(entry: dict, keys: tuple, where: str, user_path, problems:
 
 def _drop_bad_tiers(user_routing: dict, user_path, problems: list) -> None:
     _drop_bad_numbers(user_routing, NUMBER_KEYS, "", user_path, problems)
+    if "oc_overflow" in user_routing and user_routing["oc_overflow"] not in OC_OVERFLOW:
+        problems.append("%s: oc_overflow must be one of %s, got %r (using %r)"
+                        % (user_path, ", ".join(repr(v) for v in OC_OVERFLOW), user_routing["oc_overflow"],
+                           _DEFAULT_OC_OVERFLOW))
+        del user_routing["oc_overflow"]
     tiers = user_routing.get("tiers")
     if tiers is None:
         return
@@ -126,6 +133,17 @@ def effective_preset(routing: dict, preset: str = "") -> str:
     if active not in PRESETS:
         raise ValueError("unknown preset: %r" % (requested,))
     return active
+
+
+def oc_queues_overflow(routing: dict, preset: str = "") -> bool:
+    """True when investigator batches beyond a tier's capacity wait for a free opencode slot.
+
+    Mode opencode always queues; mode hybrid queues unless routing sets oc_overflow "claude",
+    which sends the items beyond max_parallel * oc_batch_max to Claude at plan time.
+    """
+    if effective_preset(routing, preset) == "opencode":
+        return True
+    return routing.get("oc_overflow", _DEFAULT_OC_OVERFLOW) != "claude"
 
 
 def role_tier(role: str, routing: dict, preset: str = "") -> str:

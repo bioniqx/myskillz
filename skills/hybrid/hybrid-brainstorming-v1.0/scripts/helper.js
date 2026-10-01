@@ -24,7 +24,7 @@
 
   function sessionKey() {
     try {
-      return window.sessionStorage && window.sessionStorage.getItem('brainstorm-session-key');
+      return window.sessionStorage && window.sessionStorage.getItem('hybrid-brainstorming-session-key');
     } catch (e) {}
     return null;
   }

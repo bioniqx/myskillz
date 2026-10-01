@@ -11,8 +11,8 @@ echo "date: $(date +%F)   cwd: $(pwd)"
 echo "skill_dir: $skill_dir"
 echo "caps: subagents=${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-20} workflow=${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-16}"
 
-oc_bin="${HB_OC_BIN:-opencode}"
-doctor_cache="${HB_DOCTOR_CACHE:-$HOME/.cache/hybrid-brainstorming/doctor.json}"
+oc_bin="${HYBRID_BRAINSTORMING_OC_BIN:-opencode}"
+doctor_cache="${HYBRID_BRAINSTORMING_DOCTOR_CACHE:-$HOME/.cache/hybrid-brainstorming/doctor.json}"
 
 status_line=""
 if command -v "$oc_bin" >/dev/null 2>&1 && [ -f "$doctor_cache" ]; then
@@ -47,7 +47,7 @@ if [ -n "$std_env" ]; then
   lite_env=$(trim "${HYBRID_OPENCODE_LITE:-}")
   [ -n "$lite_env" ] || lite_env="$std_env"
 fi
-skill_cfg="${HB_ROUTING:-${skill_dir:-$HOME/.claude/skills/hybrid-brainstorming-v1.0}/routing.json}"
+skill_cfg="${HYBRID_BRAINSTORMING_ROUTING:-${skill_dir:-$HOME/.claude/skills/hybrid-brainstorming-v1.0}/routing.json}"
 skill_flat=""
 skill_json_bad=""
 if [ -f "$skill_cfg" ]; then

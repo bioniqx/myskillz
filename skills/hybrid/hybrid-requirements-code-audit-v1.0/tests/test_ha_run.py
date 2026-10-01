@@ -106,12 +106,12 @@ class RunBase(unittest.TestCase):
         self.calls = []
         self.records = []
         self.stdout = io.StringIO()
-        env = {"HOME": str(self.tmp / "home"), "HA_ROUTING": str(self.tmp / "routing.json"),
-               "HA_DOCTOR_CACHE": str(self.tmp / "doctor.json"), "HA_TELEMETRY": str(self.tmp / "lanes.jsonl"),
+        env = {"HOME": str(self.tmp / "home"), "HYBRID_AUDIT_ROUTING": str(self.tmp / "routing.json"),
+               "HYBRID_AUDIT_DOCTOR_CACHE": str(self.tmp / "doctor.json"), "HYBRID_AUDIT_TELEMETRY": str(self.tmp / "lanes.jsonl"),
                "HYBRID_OPENCODE_STD": SPEC, "HYBRID_OPENCODE_LITE": SPEC,
                "XDG_DATA_HOME": str(self.tmp / "data"),
                "HYBRID_OC_RETRY_DELAY_S": "0",
-               "HA_OC_BIN": str(self.tmp / "no-such-opencode")}
+               "HYBRID_AUDIT_OC_BIN": str(self.tmp / "no-such-opencode")}
         patches = [
             mock.patch.dict(os.environ, env),
             mock.patch.object(ha_run, "_context", self.fake_context),
@@ -178,7 +178,7 @@ class RunNamedTest(RunBase):
         self.assertEqual(len(self.calls), 1)
         call = self.calls[0]
         cmd = call["cmd"]
-        self.assertIn("ha-investigator", cmd)
+        self.assertIn("hybrid-audit-investigator", cmd)
         self.assertEqual(cmd[cmd.index("-f") + 1], str(self.out / "batches" / "batch-01.oc.md"))
         self.assertNotIn("--session", cmd)
         self.assertEqual(call["cwd"], self.repo)
@@ -194,7 +194,7 @@ class RunNamedTest(RunBase):
         self.assertEqual(ev["batch"], "batch-01")
         self.assertIs(ev["ok"], True)
         self.assertIsNone(ev["reason"])
-        self.assertEqual(ev["agent_type"], "opencode:ha-investigator")
+        self.assertEqual(ev["agent_type"], "opencode:hybrid-audit-investigator")
         self.assertEqual(ev["backend"], "oc:std")
         self.assertEqual((ev["rounds"], ev["written"], ev["total"]), (1, 2, 2))
         self.assertIsInstance(ev["t"], float)
@@ -382,18 +382,18 @@ class RunNamedTest(RunBase):
         res = ha_run.run_named(str(self.repo), "batch-V01")
         self.assertTrue(res["ok"])
         cmd = self.calls[0]["cmd"]
-        self.assertIn("ha-verifier", cmd)
+        self.assertIn("hybrid-audit-verifier", cmd)
         self.assertEqual(cmd[cmd.index("-f") + 1], str(self.out / "verify" / "batch-V01.oc.md"))
         rows = self.read_rows(self.out / "verify" / "batch-V01.jsonl")
         self.assertEqual([(r["id"], r["backend"]) for r in rows], [("R1", "oc:std")])
-        self.assertEqual(self.event("batch-V01")["agent_type"], "opencode:ha-verifier")
+        self.assertEqual(self.event("batch-V01")["agent_type"], "opencode:hybrid-audit-verifier")
 
     def test_parser_section(self):
         items = [{"id": "R1", "text": "Users can log in"}, {"id": "R2", "text": "Users can log out"}]
         self.script = [_result(_block("section-01", items))]
         res = ha_run.run_named(str(self.repo), "section-01")
         self.assertTrue(res["ok"])
-        self.assertIn("ha-parser", self.calls[0]["cmd"])
+        self.assertIn("hybrid-audit-parser", self.calls[0]["cmd"])
         rows = self.read_rows(self.out / "parse" / "section-01.jsonl")
         self.assertEqual([r["id"] for r in rows], ["R1", "R2"])
         ev = self.event("section-01")

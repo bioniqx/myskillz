@@ -94,7 +94,8 @@ class GoldenTest(unittest.TestCase):
         self.repo = self.tmp / "repo"
         self.plan = make_repo(self.repo)
         self.spec = self.repo / "docs" / "spec.md"
-        self.work = self.plan.parent / ".work" / self.plan.stem
+        self.work = self.plan.parent / ".hybrid-work" / self.plan.stem
+        self.work62 = self.plan.parent / ".work" / self.plan.stem
         (self.tmp / "home").mkdir()
         routing = json.loads((SKILL / "routing.default.json").read_text(encoding="utf-8"))
         routing["preset"] = "claude"
@@ -108,10 +109,10 @@ class GoldenTest(unittest.TestCase):
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.update({
             "HOME": str(self.tmp / "home"),
-            "HP_ROUTING": str(self.tmp / "routing.json"),
-            "HP_DOCTOR_CACHE": str(self.tmp / "doctor.json"),
-            "HP_TELEMETRY": str(self.tmp / "lanes.jsonl"),
-            "HP_OC_BIN": str(FAKE),
+            "HYBRID_WRITING_PLANS_ROUTING": str(self.tmp / "routing.json"),
+            "HYBRID_WRITING_PLANS_DOCTOR_CACHE": str(self.tmp / "doctor.json"),
+            "HYBRID_WRITING_PLANS_TELEMETRY": str(self.tmp / "lanes.jsonl"),
+            "HYBRID_WRITING_PLANS_OC_BIN": str(FAKE),
             "PYTHONDONTWRITEBYTECODE": "1",
         })
         self.env.pop("HYBRID_OPENCODE_STD", None)
@@ -125,19 +126,20 @@ class GoldenTest(unittest.TestCase):
                            env=self.env, capture_output=True, text=True, timeout=120)
         return p.returncode, p.stdout
 
-    def snapshot(self):
-        briefs = self.work / "briefs"
+    def snapshot(self, work):
+        briefs = work / "briefs"
         return {f.name: f.read_text(encoding="utf-8") for f in sorted(briefs.iterdir())} if briefs.is_dir() else {}
 
     def compare(self, *args):
         rc62, out62 = self.run_tool(TOOL62, "contracts", self.plan, *args)
-        briefs62 = self.snapshot()
-        shutil.rmtree(self.work)
+        briefs62 = self.snapshot(self.work62)
+        shutil.rmtree(self.work62)
         rc, out = self.run_tool(TOOL, "contracts", self.plan, *args)
-        briefs = self.snapshot()
+        briefs = self.snapshot(self.work)
 
         def swap(s):
-            return s.replace(str(TOOL62), str(TOOL))
+            # the fork differs from 6.2 only by its tool path and its own work dir name
+            return s.replace(str(TOOL62), str(TOOL)).replace("/.work/", "/.hybrid-work/")
 
         self.assertEqual(rc62, 0, out62)
         self.assertEqual(rc, rc62, out)

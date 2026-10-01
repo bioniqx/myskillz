@@ -52,16 +52,16 @@ frame template (header, theme CSS, connection status, interactivity).
 # persists mockups and enables same-port restart.
 <skill_dir>/scripts/start-server.sh --project-dir /path/to/project --open
 # → {"type":"server-started","port":52341,"url":"http://localhost:52341/?key=…",
-#    "session_dir":".../.superpowers/brainstorm/<id>",
-#    "screen_dir":".../.superpowers/brainstorm/<id>/content",
-#    "state_dir":".../.superpowers/brainstorm/<id>/state"}
+#    "session_dir":".../.hybrid-superpowers/brainstorm/<id>",
+#    "screen_dir":".../.hybrid-superpowers/brainstorm/<id>/content",
+#    "state_dir":".../.hybrid-superpowers/brainstorm/<id>/state"}
 ```
 
 Save `session_dir`, `screen_dir`, and `state_dir`. The URL carries a
 session key (`?key=…`); always share the **complete** URL as a fallback
 for headless/remote setups, never a bare host:port. If you didn't
 capture stdout, read `$STATE_DIR/server-info`. Remind the user to
-gitignore `.superpowers/` if it isn't already.
+gitignore `.hybrid-superpowers/` if it isn't already.
 
 Platform notes: Claude Code — run as above (script backgrounds itself;
 on Windows it auto-foregrounds, so pass `run_in_background: true` and

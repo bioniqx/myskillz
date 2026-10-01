@@ -54,7 +54,7 @@ def _audit_part(part: str) -> bool:
 def check_citation(repo: Path, ev: dict, audit_dir: Path = None) -> str:
     """Return "" for a good citation, else the single reason it fails.
 
-    audit_dir (the run's output folder) and any `.audit`/`.audit.prev-*` folder are audit output, not code.
+    audit_dir (the run's output folder) and any `.hybrid-audit`/`.hybrid-audit.prev-*` folder are audit output, not code.
     """
     if not isinstance(ev, dict):
         ev = {}

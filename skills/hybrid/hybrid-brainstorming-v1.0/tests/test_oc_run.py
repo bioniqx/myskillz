@@ -55,14 +55,14 @@ def _pid_gone(pid, wait_s=5.0):
 
 class BuildCmdTest(unittest.TestCase):
     def test_variant_rides_on_model(self):
-        cmd = oc_run.build_cmd("opencode", "hb-lane", "zai-coding-plan/glm-5.3", "high", "hello world")
+        cmd = oc_run.build_cmd("opencode", "hybrid-brainstorm-lane", "zai-coding-plan/glm-5.3", "high", "hello world")
         self.assertEqual(cmd, [
-            "opencode", "run", "--standalone", "--agent", "hb-lane",
+            "opencode", "run", "--standalone", "--agent", "hybrid-brainstorm-lane",
             "--model", "zai-coding-plan/glm-5.3#high", "--format", "json", "--auto", "hello world",
         ])
 
     def test_empty_variant_and_no_forbidden_flags(self):
-        cmd = oc_run.build_cmd("/bin/oc", "hb-lane", "p/m", "", "q")
+        cmd = oc_run.build_cmd("/bin/oc", "hybrid-brainstorm-lane", "p/m", "", "q")
         self.assertEqual(cmd[0], "/bin/oc")
         self.assertIn("p/m", cmd)
         for flag in ("--dir", "--variant", "-s", "--session"):
@@ -284,8 +284,8 @@ class FakeCliTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.log = self.tmp / "log.jsonl"
-        self.env = dict(os.environ, HOME=str(self.tmp / "home"), HB_FAKE_LOG=str(self.log))
-        self.env.pop("HB_FAKE_SCRIPT", None)
+        self.env = dict(os.environ, HOME=str(self.tmp / "home"), HYBRID_BRAINSTORMING_FAKE_LOG=str(self.log))
+        self.env.pop("HYBRID_BRAINSTORMING_FAKE_SCRIPT", None)
         self.env.pop("OPENCODE_CONFIG_CONTENT", None)
 
     def tearDown(self):
@@ -299,9 +299,9 @@ class FakeCliTest(unittest.TestCase):
 
     def test_constants(self):
         fake = _load_fake()
-        self.assertEqual(fake.FAKE_SCRIPT_ENV, "HB_FAKE_SCRIPT")
-        self.assertEqual(fake.FAKE_LOG_ENV, "HB_FAKE_LOG")
-        self.assertEqual(fake.FAKE_MODELS_ENV, "HB_FAKE_MODELS")
+        self.assertEqual(fake.FAKE_SCRIPT_ENV, "HYBRID_BRAINSTORMING_FAKE_SCRIPT")
+        self.assertEqual(fake.FAKE_LOG_ENV, "HYBRID_BRAINSTORMING_FAKE_LOG")
+        self.assertEqual(fake.FAKE_MODELS_ENV, "HYBRID_BRAINSTORMING_FAKE_MODELS")
 
     def test_is_executable(self):
         self.assertTrue(os.access(str(FAKE), os.X_OK))
@@ -318,8 +318,8 @@ class FakeCliTest(unittest.TestCase):
     def test_script_list_replays_in_order_and_logs(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps([{"text": "one"}, {"text": "two", "usage": {"input": 3}}]), encoding="utf-8")
-        self.env["HB_FAKE_SCRIPT"] = str(script)
-        cmd = oc_run.build_cmd(str(FAKE), "hb-lane", "p/m", "low", "msg")
+        self.env["HYBRID_BRAINSTORMING_FAKE_SCRIPT"] = str(script)
+        cmd = oc_run.build_cmd(str(FAKE), "hybrid-brainstorm-lane", "p/m", "low", "msg")
         out = self.tmp / "out.jsonl"
         texts = []
         for _ in range(3):
@@ -344,8 +344,8 @@ class FakeCliTest(unittest.TestCase):
                 "status": "completed", "input": {"url": "https://x.test"}, "output": marker}}}],
             "text": "ANSWER\n- ok",
         }), encoding="utf-8")
-        self.env["HB_FAKE_SCRIPT"] = str(script)
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hb-lane", "p/m", "", "msg"))
+        self.env["HYBRID_BRAINSTORMING_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-brainstorm-lane", "p/m", "", "msg"))
         out = self.tmp / "out.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
         with mock.patch.dict(os.environ, {"HOME": self.env["HOME"]}):
@@ -358,8 +358,8 @@ class FakeCliTest(unittest.TestCase):
     def test_error_step_exits_one(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps({"error": {"type": "ProviderAuthError", "message": "bad key"}}), encoding="utf-8")
-        self.env["HB_FAKE_SCRIPT"] = str(script)
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hb-lane", "p/m", "", "msg"))
+        self.env["HYBRID_BRAINSTORMING_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-brainstorm-lane", "p/m", "", "msg"))
         self.assertEqual(proc.returncode, 1)
         out = self.tmp / "out.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
@@ -368,8 +368,8 @@ class FakeCliTest(unittest.TestCase):
     def _run_step(self, step):
         script = self.tmp / "script.json"
         script.write_text(json.dumps(step), encoding="utf-8")
-        self.env["HB_FAKE_SCRIPT"] = str(script)
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hb-lane", "p/m", "", "msg"))
+        self.env["HYBRID_BRAINSTORMING_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-brainstorm-lane", "p/m", "", "msg"))
         out = self.tmp / "out.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
         return proc, oc_run.parse_events(out)
@@ -410,7 +410,7 @@ class FakeCliTest(unittest.TestCase):
     def test_models_listing_and_empty_listing(self):
         proc = self._call([str(FAKE), "models"])
         self.assertEqual(proc.stdout.split(), ["zai-coding-plan/glm-5.3", "zai-coding-plan/glm-5.3-flash"])
-        self.env["HB_FAKE_MODELS"] = "none"
+        self.env["HYBRID_BRAINSTORMING_FAKE_MODELS"] = "none"
         proc = self._call([str(FAKE), "models"])
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(proc.stdout.strip(), "")
@@ -421,14 +421,14 @@ class RunOnceTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.root = self.tmp / "repo"
         self.root.mkdir()
-        self.lanes = self.root / ".superpowers" / "brainstorm" / "lanes"
+        self.lanes = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes"
         self.script = self.tmp / "script.json"
         self.log = self.tmp / "log.jsonl"
         self.env = dict(
             os.environ,
             HOME=str(self.tmp / "home"),
-            HB_FAKE_SCRIPT=str(self.script),
-            HB_FAKE_LOG=str(self.log),
+            HYBRID_BRAINSTORMING_FAKE_SCRIPT=str(self.script),
+            HYBRID_BRAINSTORMING_FAKE_LOG=str(self.log),
         )
         self.env.pop("OPENCODE_CONFIG_CONTENT", None)
 
@@ -437,7 +437,7 @@ class RunOnceTest(unittest.TestCase):
 
     def _run(self, step, stall_s=30, timeout_s=60, binary=None):
         self.script.write_text(json.dumps(step), encoding="utf-8")
-        cmd = oc_run.build_cmd(binary or str(FAKE), "hb-lane", "zai-coding-plan/glm-5.3-flash", "low", "Q?")
+        cmd = oc_run.build_cmd(binary or str(FAKE), "hybrid-brainstorm-lane", "zai-coding-plan/glm-5.3-flash", "low", "Q?")
         return oc_run.run_once(
             cmd, self.root, self.env, self.lanes / "L1.jsonl", self.lanes / "L1.err", stall_s, timeout_s,
         )

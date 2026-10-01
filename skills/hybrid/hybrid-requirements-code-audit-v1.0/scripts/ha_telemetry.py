@@ -18,8 +18,8 @@ def _now_iso() -> str:
 
 
 def telemetry_path() -> Path:
-    """HA_TELEMETRY when set, else ~/.cache/hybrid-requirements-code-audit/lanes.jsonl."""
-    return Path(os.environ.get("HA_TELEMETRY") or DEFAULT_TELEMETRY).expanduser()
+    """HYBRID_AUDIT_TELEMETRY when set, else ~/.cache/hybrid-requirements-code-audit/lanes.jsonl."""
+    return Path(os.environ.get("HYBRID_AUDIT_TELEMETRY") or DEFAULT_TELEMETRY).expanduser()
 
 
 def record(rec: dict) -> None:

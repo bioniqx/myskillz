@@ -212,13 +212,13 @@ class EscalateTest(TempHomeCase):
         (self.root / "a.txt").write_text("a\n", encoding="utf-8")
         subprocess.run(git + ["add", "a.txt"], cwd=str(self.root), check=True)
         subprocess.run(git + ["commit", "-q", "-m", "init"], cwd=str(self.root), check=True)
-        wt = self.root / ".claude" / "worktrees" / "oc-S1"
-        subprocess.run(git + ["worktree", "add", "-q", "-b", "oc-S1", str(wt)], cwd=str(self.root), check=True)
+        wt = self.root / ".claude" / "worktrees" / "hybrid-oc-S1"
+        subprocess.run(git + ["worktree", "add", "-q", "-b", "hybrid-oc-S1", str(wt)], cwd=str(self.root), check=True)
         st = make_state(oc_running={"S1": "std"})
         devteam.escalate(self.root, st, "S1", "stall", "no events for 300s")
         self.assertFalse(wt.exists())
         branches = subprocess.run(
-            ["git", "branch", "--list", "oc-S1"], cwd=str(self.root),
+            ["git", "branch", "--list", "hybrid-oc-S1"], cwd=str(self.root),
             stdout=subprocess.PIPE, universal_newlines=True, check=True,
         ).stdout
         self.assertEqual(branches.strip(), "")

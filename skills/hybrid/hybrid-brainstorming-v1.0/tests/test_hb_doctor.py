@@ -12,6 +12,30 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import hb_doctor
+
+
+def _pipe_run_captured(cmd, timeout):
+    # These tests mock subprocess.run and hand back stdout directly; the real run_captured reads
+    # stdout from a temp file (opencode truncates pipes), which a mock cannot fill.
+    import subprocess as _sp
+    return _sp.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+_SEAM = []
+
+
+def setUpModule():
+    import hybrid_shared
+    for owner in (hybrid_shared, hb_doctor):
+        if hasattr(owner, "run_captured"):
+            patcher = mock.patch.object(owner, "run_captured", _pipe_run_captured)
+            patcher.start()
+            _SEAM.append(patcher)
+
+
+def tearDownModule():
+    while _SEAM:
+        _SEAM.pop().stop()
 import hybrid_shared
 from hb_config import SENTINEL
 
@@ -57,8 +81,8 @@ class EnvIsolatedTestCase(unittest.TestCase):
         self._saved_environ = dict(os.environ)
         self._tmp = tempfile.mkdtemp()
         os.environ["HOME"] = self._tmp
-        os.environ.pop("HB_DOCTOR_CACHE", None)
-        os.environ.pop("HB_ROUTING", None)
+        os.environ.pop("HYBRID_BRAINSTORMING_DOCTOR_CACHE", None)
+        os.environ.pop("HYBRID_BRAINSTORMING_ROUTING", None)
 
     def tearDown(self):
         os.environ.clear()
@@ -75,7 +99,7 @@ class TestDoctorCachePath(EnvIsolatedTestCase):
 
     def test_env_override(self):
         override = Path(self._tmp) / "custom" / "doctor.json"
-        os.environ["HB_DOCTOR_CACHE"] = str(override)
+        os.environ["HYBRID_BRAINSTORMING_DOCTOR_CACHE"] = str(override)
         path = hb_doctor.doctor_cache_path()
         self.assertEqual(path, override)
 

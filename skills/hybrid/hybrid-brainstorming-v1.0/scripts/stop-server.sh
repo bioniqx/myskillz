@@ -3,7 +3,7 @@
 # Usage: stop-server.sh <session_dir>
 #
 # Kills the server process. Only deletes session directory if it's
-# under /tmp (ephemeral). Persistent directories (.superpowers/) are
+# under /tmp (ephemeral). Persistent directories (.hybrid-superpowers/) are
 # kept so mockups can be reviewed later.
 
 SESSION_DIR="$1"
@@ -57,7 +57,7 @@ command_line_for_pid() {
 command_has_server_id() {
   local pid="$1"
   local expected="$2"
-  local expected_arg="--brainstorm-server-id=$expected"
+  local expected_arg="--hybrid-brainstorming-server-id=$expected"
   if [[ -r "/proc/$pid/cmdline" ]]; then
     local arg
     while IFS= read -r -d '' arg || [[ -n "$arg" ]]; do

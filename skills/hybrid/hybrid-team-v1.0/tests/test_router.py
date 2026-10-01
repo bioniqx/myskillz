@@ -35,9 +35,9 @@ class RouterTestCase(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmp.name)
         self._old_env = {key: os.environ.get(key)
-                         for key in ("HOME", "HT_ROUTING", "HYBRID_OPENCODE_STD", "HYBRID_OPENCODE_LITE")}
+                         for key in ("HOME", "HYBRID_TEAM_ROUTING", "HYBRID_OPENCODE_STD", "HYBRID_OPENCODE_LITE")}
         os.environ["HOME"] = str(self.tmp_path)
-        os.environ.pop("HT_ROUTING", None)
+        os.environ.pop("HYBRID_TEAM_ROUTING", None)
         os.environ.pop("HYBRID_OPENCODE_STD", None)
         os.environ.pop("HYBRID_OPENCODE_LITE", None)
         self.breaker_dir = self.tmp_path / "breaker"
@@ -72,7 +72,7 @@ class TestUserRoutingPath(RouterTestCase):
 
     def test_env_override(self):
         override = self.tmp_path / "custom" / "routing.json"
-        os.environ["HT_ROUTING"] = str(override)
+        os.environ["HYBRID_TEAM_ROUTING"] = str(override)
         self.assertEqual(router.user_routing_path(), override)
 
 
@@ -322,9 +322,13 @@ class TestRoute(RouterTestCase):
         s = {"kind": "refactor", "size": "small"}
         self.assertEqual(router.route(s, self.routing(), True), "oc:std")
 
-    def test_large_code_hybrid_forces_claude(self):
+    def test_large_code_hybrid_routes_to_std(self):
         s = {"kind": "code", "size": "large"}
         self.assertEqual(router.route(s, self.routing(preset="opencode"), True), "oc:std")
+        self.assertEqual(router.route(s, self.routing(preset="hybrid"), True), "oc:std")
+
+    def test_large_high_risk_code_hybrid_stays_claude(self):
+        s = {"kind": "code", "size": "large", "risk": "high"}
         self.assertEqual(router.route(s, self.routing(preset="hybrid"), True), "claude")
 
     def test_preset_claude_forces_claude(self):
@@ -375,7 +379,7 @@ class TestRouteOpencodePreset(RouterTestCase):
     def test_large_refactor_routes_to_std(self):
         s = {"kind": "refactor", "size": "large"}
         self.assertEqual(router.route(s, self.oc(), True), "oc:std")
-        self.assertEqual(router.route(s, self.routing(preset="hybrid"), True), "claude")
+        self.assertEqual(router.route(s, self.routing(preset="hybrid"), True), "oc:std")
 
     def test_docs_routes_to_lite(self):
         s = {"kind": "docs", "size": "small", "verify": "make check"}
@@ -498,9 +502,9 @@ class TestPhaseBackend(RouterTestCase):
         s = {"kind": "code", "size": "trivial"}
         self.assertEqual(router.phase_backend(s, "green", self.routing(), True), "oc:std")
 
-    def test_green_phase_large_code_hybrid_stays_claude(self):
+    def test_green_phase_large_code_hybrid_routes_to_std(self):
         s = {"kind": "code", "size": "large"}
-        self.assertEqual(router.phase_backend(s, "green", self.routing(), True), "claude")
+        self.assertEqual(router.phase_backend(s, "green", self.routing(), True), "oc:std")
 
     def test_green_phase_large_code_opencode_routes_to_std(self):
         s = {"kind": "code", "size": "large"}
@@ -525,9 +529,9 @@ class TestNeedsSplit(RouterTestCase):
         s = {"kind": "code", "size": "trivial"}
         self.assertFalse(router.needs_split(s, self.routing(), False))
 
-    def test_code_large_hybrid_does_not_split(self):
+    def test_code_large_hybrid_splits(self):
         s = {"kind": "code", "size": "large"}
-        self.assertFalse(router.needs_split(s, self.routing(), True))
+        self.assertTrue(router.needs_split(s, self.routing(), True))
 
     def test_code_large_opencode_splits(self):
         s = {"kind": "code", "size": "large"}

@@ -1,6 +1,6 @@
 # Data schemas (all JSON Lines: one object per line, UTF-8)
 
-Everything lives under the audit dir (default `<cwd>/.audit/`). `audit.py` reads and writes these; the lead writes
+Everything lives under the audit dir (default `<cwd>/.hybrid-audit/`). `audit.py` reads and writes these; the lead writes
 only `checklist.jsonl`, `adjudications.jsonl` (usually via `audit.py adjudicate`) and `plan.jsonl`. Batches and
 sections routed to opencode are written by `audit.py oc-run` (output file, event file and `oc/` scratch), never by hand.
 
@@ -38,7 +38,7 @@ retries never write the key; a row without it counts as `claude`. This row key, 
 it). Before writing, the oracle drops rows whose `id` is not in the batch and rejects a row with an invalid `status`
 (its id stays uncovered: a repair turn asks for it again, then it counts as a failure). It normalizes `confidence` to
 `low|medium|high` (anything else becomes `low`) and removes each citation that lies outside the repo, under `.git/`
-(any case), under `.audit/`, in a doc path (the same rule as the guard's `is_doc_path`: `src/history.py` or
+(any case), under `.hybrid-audit/`, in a doc path (the same rule as the guard's `is_doc_path`: `src/history.py` or
 `LicenseService.java` keep their evidence), or names a missing file or line range (`L1-2` and en-dash ranges are
 valid), appending `oracle: dropped <path>:<lines> — <reason>` to `notes`. A row that lost a citation, or is `MATCHED`
 with none left, gets `confidence: low`.
@@ -120,7 +120,7 @@ The `ACTIVE` marker next to it arms the hook; `audit.py finish` removes it.
 
 Added by hybrid-requirements-code-audit: `preset` (the effective preset: `init --preset`, else the routing file's
 `preset`) and `routing` (the user routing file deep-merged over `routing.default.json`: `tiers`, `roles`, `max_roles`,
-`oc_batch_max`, `max_repairs`, `throttle_cooldown_s`), both recorded at `init`. Preset values are `claude`, `hybrid` and
+`oc_batch_max`, `oc_overflow`, `max_repairs`, `throttle_cooldown_s`), both recorded at `init`. Preset values are `claude`, `hybrid` and
 `opencode` (`max` is only an accepted alias of `opencode`).
 
 ## Run records in the audit folder
@@ -137,7 +137,7 @@ The req-audit guard hook writes one per Claude worker on `SubagentStop` (`batch`
 `msg`). `audit.py oc-run` writes one per opencode batch, verifier batch or section:
 
 ```json
-{"batch":"batch-07","ok":false,"agent_type":"opencode:ha-investigator","backend":"oc:std","reason":"format",
+{"batch":"batch-07","ok":false,"agent_type":"opencode:hybrid-audit-investigator","backend":"oc:std","reason":"format",
  "message":"ids still missing after 3 rounds","rounds":3,"written":3,"total":4,"t":1790000000.0}
 ```
 

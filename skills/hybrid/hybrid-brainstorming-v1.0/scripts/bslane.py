@@ -65,7 +65,7 @@ status_line = _pick("status_line")
 
 
 def lanes_dir(root: Path) -> Path:
-    d = Path(root) / ".superpowers" / "brainstorm" / "lanes"
+    d = Path(root) / ".hybrid-superpowers" / "brainstorm" / "lanes"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -236,7 +236,7 @@ def _ensure_doctor(routing: dict, lanes: Path, tier: str, preset: str) -> tuple:
         workdir = lanes / "doctor"
         workdir.mkdir(parents=True, exist_ok=True)
         try:
-            data = run_doctor(os.environ.get("HB_OC_BIN", "opencode"), routing, True, workdir, doctor,
+            data = run_doctor(os.environ.get("HYBRID_BRAINSTORMING_OC_BIN", "opencode"), routing, True, workdir, doctor,
                               preset == "opencode")
             write_doctor(doctor_cache_path(), data)
         except Exception as exc:
@@ -475,7 +475,7 @@ def run_lane(kind: str, a, root: Path) -> str:
     prompt = render(True)
     retries = 0
     try:
-        cmd = build_cmd(os.environ.get("HB_OC_BIN", "opencode"), AGENT_NAME, rec["model"], rec["variant"], prompt)
+        cmd = build_cmd(os.environ.get("HYBRID_BRAINSTORMING_OC_BIN", "opencode"), AGENT_NAME, rec["model"], rec["variant"], prompt)
         env = dict(os.environ, **config_env(role, prompt))
         env["PWD"] = str(root)
         while True:  # connection failures retry as fresh runs; the slot stays held (a throttled provider gets less load)
@@ -573,7 +573,7 @@ def _doctor_text(ping: bool, root: Path) -> str:
         routing = load_routing(DEFAULTS_PATH, user_routing_path())
         doctor_workdir = lanes / "doctor"
         doctor_workdir.mkdir(parents=True, exist_ok=True)
-        data = run_doctor(os.environ.get("HB_OC_BIN", "opencode"), routing, ping, doctor_workdir,
+        data = run_doctor(os.environ.get("HYBRID_BRAINSTORMING_OC_BIN", "opencode"), routing, ping, doctor_workdir,
                           load_doctor(doctor_cache_path()))
         write_doctor(doctor_cache_path(), data)
     except Exception as exc:
@@ -602,7 +602,7 @@ def _doctor_text(ping: bool, root: Path) -> str:
 
 
 def _stats_text(root: Path) -> str:
-    base = Path(root) / ".superpowers" / "brainstorm"
+    base = Path(root) / ".hybrid-superpowers" / "brainstorm"
     path = base / "lanes.jsonl"
     alerts = hybrid_shared.breaker_summary(base / "lanes", TOOL_NAME)  # one OC-ERROR per tripped root cause
     for line in alerts:
@@ -683,7 +683,7 @@ def main(argv: list) -> int:
         except Exception as exc:
             detail = "{}: {}".format(type(exc).__name__, _one_line(exc))
             line = hybrid_shared.oc_line("ERROR", TOOL_NAME, args.id, "", "", "crash", detail)
-            lanes = root / ".superpowers" / "brainstorm" / "lanes"
+            lanes = root / ".hybrid-superpowers" / "brainstorm" / "lanes"
             hybrid_shared.log_line(lanes / OC_LOG_NAME, line)
             preset = getattr(args, "resolved_preset", "") or (
                 hybrid_shared.mode_to_preset(args.preset)[0] if args.preset else "")

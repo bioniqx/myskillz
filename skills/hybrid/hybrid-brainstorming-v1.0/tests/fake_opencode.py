@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Fake `opencode` CLI for hybrid-brainstorming tests. Never calls a model or the network.
 
-Env HB_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
+Env HYBRID_BRAINSTORMING_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
 (call N uses entry N, the last entry repeats; the count lives in <script>.calls).
-Env HB_FAKE_LOG names a file that receives one JSON line per call:
+Env HYBRID_BRAINSTORMING_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config}.
-Env HB_FAKE_MODELS set to "none" makes `models` list nothing.
+Env HYBRID_BRAINSTORMING_FAKE_MODELS set to "none" makes `models` list nothing.
 
 Step keys (all optional):
   scenario  auth | model_not_found | throttle | recovered | empty; a ready-made step,
@@ -30,9 +30,9 @@ import sys
 import time
 from pathlib import Path
 
-FAKE_SCRIPT_ENV = "HB_FAKE_SCRIPT"
-FAKE_LOG_ENV = "HB_FAKE_LOG"
-FAKE_MODELS_ENV = "HB_FAKE_MODELS"
+FAKE_SCRIPT_ENV = "HYBRID_BRAINSTORMING_FAKE_SCRIPT"
+FAKE_LOG_ENV = "HYBRID_BRAINSTORMING_FAKE_LOG"
+FAKE_MODELS_ENV = "HYBRID_BRAINSTORMING_FAKE_MODELS"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
 

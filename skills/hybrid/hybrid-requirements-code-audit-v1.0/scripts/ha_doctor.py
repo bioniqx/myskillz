@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hybrid_shared import cache_fresh, cache_key, classify, first_error, run_models
+from hybrid_shared import cache_fresh, cache_key, classify, first_error, run_models, run_captured
 from oc_run import build_cmd, run_once
 from ha_router import ROLES, effective_preset, role_tier
 from ha_config import AGENT_NAMES, SENTINEL, config_env
@@ -39,7 +39,7 @@ def first_line(text: str) -> str:
 
 
 def doctor_cache_path() -> Path:
-    env_path = os.environ.get("HA_DOCTOR_CACHE")
+    env_path = os.environ.get("HYBRID_AUDIT_DOCTOR_CACHE")
     if env_path:
         return Path(env_path)
     return Path.home() / ".cache" / "hybrid-requirements-code-audit" / "doctor.json"
@@ -122,8 +122,7 @@ def _reply_has_sentinel(text: str) -> bool:
 
 def _check_version(binary: str) -> str:
     try:
-        proc = subprocess.run([binary, "--version"], capture_output=True, text=True,
-                              timeout=VERSION_TIMEOUT_S)
+        proc = run_captured([binary, "--version"], VERSION_TIMEOUT_S)
     except (subprocess.TimeoutExpired, OSError):
         return ""
     if proc.returncode != 0:

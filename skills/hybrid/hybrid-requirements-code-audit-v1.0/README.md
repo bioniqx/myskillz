@@ -1,8 +1,8 @@
 # hybrid-requirements-code-audit
 
 An opt-in fork of `requirements-code-audit` that keeps every judgment step on Claude and offloads the
-evidence legwork (investigators; in mode `opencode` also verifiers and parsers) to the local `opencode` CLI.
-The `.audit/` layout, schemas, report and traceability CSV are the same as the original. Read `SKILL.md`
+evidence legwork (investigators and spec parsers; in mode `opencode` also verifiers) to the local `opencode` CLI.
+The `.hybrid-audit/` layout, schemas, report and traceability CSV are the same as the original. Read `SKILL.md`
 for how `audit.py` drives an audit; this file covers installation, configuration and troubleshooting.
 
 ## Why
@@ -37,7 +37,7 @@ SKILL.md asks for the mode once per audit (or takes `mode=hybrid|claude|opencode
 | Mode (`preset`) | Investigators | Verifiers | Parsers | On an opencode failure |
 |---|---|---|---|---|
 | `claude` | Claude haiku | Claude sonnet | Claude sonnet (identical to requirements-code-audit) | opencode is never called |
-| `hybrid` (default) | `oc:std` (overflow → Claude haiku) | Claude sonnet | Claude sonnet | connection failures are retried 3 times; then the line is shown at once, the batch falls back to Claude and the rest of the run switches to Claude sonnet |
+| `hybrid` (default) | `oc:std` (overflow queues for a free slot; `oc_overflow: "claude"` → Claude haiku) | Claude sonnet | `oc:std` (section fallback → Claude sonnet) | connection failures are retried 3 times; then the line is shown at once, the batch falls back to Claude and the rest of the run switches to Claude sonnet |
 | `opencode` | `oc:std`, no Claude overflow | `oc:std` | `oc:std` | connection failures are retried 3 times; then the line is shown at once and the unit is held: retry / run on Claude / switch to hybrid / abort |
 
 The lead's work (init, checklist, faithfulness pass, adjudication, `plan.jsonl`, report, check, finish) is Claude in every mode. `max` is a deprecated alias of `opencode`; workflow mode requires mode `claude`. Every MISSING, PARTIAL or CONFLICT verdict an opencode verifier gives goes to Claude adjudication (it is listed in the queue and `check` flags it until adjudicated), in every mode. Tier health is frozen when the audit starts: `init` pings once when the doctor cache is missing or stale for the tiers its mode uses (or prints an `OC-ERROR`), and later commands never downgrade a tier because the cache aged; `status --retry` re-pings and closes the breaker of a tier that answers.
@@ -56,12 +56,13 @@ fallbacks always go to Claude with the role's model (`sonnet` once the run has s
 
 - **Shared models**: two env vars for all four hybrid skills, each `provider/model[#variant]` (`#variant` is the optional thinking level): `HYBRID_OPENCODE_STD` (required, tier `std`) and `HYBRID_OPENCODE_LITE` (optional, tier `lite`, defaults to the `std` value). Set them in the `"env"` block of `~/.claude/settings.json`, for example `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restart Claude Code; exporting them in the shell also works. An unset or invalid variable is reported as `OC-ERROR ... kind=config` and makes modes `hybrid` and `opencode` unusable; mode `claude` never reads them. `max_parallel` is not shared: it comes from the routing file.
 - **Shipped defaults**: `hybrid-requirements-code-audit-v1.0/routing.default.json` (roles, batch sizes, timeouts; no model).
-- **User file** (optional): `<skill dir>/routing.json` (next to `routing.default.json`, e.g. `~/.claude/skills/hybrid-requirements-code-audit-v1.0/routing.json`), deep-merged over the defaults (env `HA_ROUTING`). The skill never creates it. A `tiers.<tier>.model` in it overrides the shared model for that tier (with this file's own `variant`); tiers without one use the shared env vars.
+- **User file** (optional): `<skill dir>/routing.json` (next to `routing.default.json`, e.g. `~/.claude/skills/hybrid-requirements-code-audit-v1.0/routing.json`), deep-merged over the defaults (env `HYBRID_AUDIT_ROUTING`). The skill never creates it. A `tiers.<tier>.model` in it overrides the shared model for that tier (with this file's own `variant`); tiers without one use the shared env vars.
 - **Per audit**: `init --preset claude|hybrid|opencode` overrides the file's `preset`.
 
 Keys of the routing file:
 
-- `max_parallel` - opencode processes per tier; in mode hybrid items beyond that capacity stay on Claude at `plan` time.
+- `max_parallel` - opencode processes per tier; batches beyond that wait for a free slot (`status` dispatches them as slots free up).
+- `oc_overflow` - `"queue"` (default) or `"claude"`. In mode hybrid, `"queue"` keeps every investigator item on opencode (60 items = 15 batches, 6 at a time); `"claude"` restores the old split: items beyond `max_parallel × oc_batch_max` go to Claude haiku at `plan` time. Mode opencode always queues. A value other than these two is a config problem and the default is used.
 - `oc_batch_max` - items per opencode batch. `max_repairs` - repair turns per batch (same opencode session).
 - `stall_s` / `timeout_s` - stall and wall-time limits per turn, so a batch's worst case is `(1 + max_repairs) × timeout_s`.
 - `throttle_cooldown_s` - how long a throttled tier waits or stays on Claude.
@@ -71,12 +72,21 @@ Keys of the routing file:
 
 - `HYBRID_OPENCODE_STD=<provider/model[#variant]>` - shared model of tier `std` (required for modes `hybrid` and `opencode`).
 - `HYBRID_OPENCODE_LITE=<provider/model[#variant]>` - shared model of tier `lite` (default: the `HYBRID_OPENCODE_STD` value).
-- `HA_OC_BIN=<path>` - the `opencode` executable (default `opencode`).
+- `HYBRID_AUDIT_OC_BIN=<path>` - the `opencode` executable (default `opencode`).
 - `HYBRID_OC_RETRY_DELAY_S=<seconds>` - replaces the 10/30/60 s waits between retries (tests use `0`).
-- `HA_ROUTING=<path>` - user routing file (default `<skill dir>/routing.json`).
-- `HA_DOCTOR_CACHE=<path>` - doctor cache (default `~/.cache/hybrid-requirements-code-audit/doctor.json`).
-- `HA_TELEMETRY=<path>` - telemetry log (default `~/.cache/hybrid-requirements-code-audit/lanes.jsonl`).
-- `HA_FAKE_SCRIPT`, `HA_FAKE_LOG` - for the test fake only.
+- `HYBRID_AUDIT_ROUTING=<path>` - user routing file (default `<skill dir>/routing.json`).
+- `HYBRID_AUDIT_DOCTOR_CACHE=<path>` - doctor cache (default `~/.cache/hybrid-requirements-code-audit/doctor.json`).
+- `HYBRID_AUDIT_TELEMETRY=<path>` - telemetry log (default `~/.cache/hybrid-requirements-code-audit/lanes.jsonl`).
+- `HYBRID_AUDIT_FAKE_SCRIPT`, `HYBRID_AUDIT_FAKE_LOG` - for the test fake only.
+
+## Names
+
+Every name in a shared namespace is prefixed `hybrid`, so this skill installs beside `requirements-code-audit`:
+- opencode agents: `hybrid-audit-investigator`, `hybrid-audit-verifier`, `hybrid-audit-parser`.
+- Env vars: `HYBRID_AUDIT_ROUTING`, `HYBRID_AUDIT_DOCTOR_CACHE`, `HYBRID_AUDIT_OC_BIN`, `HYBRID_AUDIT_TELEMETRY` (plus `HYBRID_AUDIT_FAKE_*` for tests).
+- Project state dir: `<cwd>/.hybrid-audit/` (archives `.hybrid-audit.prev-<timestamp>/`); the original uses `.audit/`.
+- Saved workflow: `hybrid-audit-run`.
+- Claude workers `rca-*` and the `req-audit:` prefix come from the original skill, when installed; otherwise generic mode is used.
 
 ## Troubleshooting
 

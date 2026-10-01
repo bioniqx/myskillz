@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from oc_run import build_cmd, run_once
 from hp_router import CONTRACT_TIERS, effective_preset, route, review_policy
 from hp_config import AGENT_NAME, SENTINEL, config_env
-from hybrid_shared import cache_fresh, cache_key, classify, first_error, run_models
+from hybrid_shared import cache_fresh, cache_key, classify, first_error, run_models, run_captured
 
 MODELS_TIMEOUT_S = 60
 VERSION_TIMEOUT_S = 10
@@ -45,7 +45,7 @@ def first_line(text: str) -> str:
 
 
 def doctor_cache_path() -> Path:
-    env_path = os.environ.get("HP_DOCTOR_CACHE")
+    env_path = os.environ.get("HYBRID_WRITING_PLANS_DOCTOR_CACHE")
     if env_path:
         return Path(env_path)
     return Path.home() / ".cache" / "hybrid-writing-plans" / "doctor.json"
@@ -136,8 +136,7 @@ def _reply_has_sentinel(text: str) -> bool:
 
 def _check_version(binary: str) -> str:
     try:
-        proc = subprocess.run([binary, "--version"], capture_output=True, text=True,
-                              timeout=VERSION_TIMEOUT_S)
+        proc = run_captured([binary, "--version"], VERSION_TIMEOUT_S)
     except (subprocess.TimeoutExpired, OSError):
         return ""
     if proc.returncode != 0:

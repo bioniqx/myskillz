@@ -17,11 +17,11 @@ AGENTS_DIR = REPO / "agents"
 SKILL_MD = REPO / "SKILL.md"
 
 AGENT_HOOK_MODES = {
-    "ht-team-leader.md": ["edit-ro", "bash-ro"],
-    "ht-programmer.md": ["edit", "bash", "stop"],
-    "ht-code-reviewer.md": ["edit-ro", "bash-ro"],
-    "ht-spot-reviewer.md": ["edit-ro", "bash-ro"],
-    "ht-investigator.md": ["edit-ro", "bash-ro"],
+    "hybrid-team-leader.md": ["edit-ro", "bash-ro"],
+    "hybrid-team-programmer.md": ["edit", "bash", "stop"],
+    "hybrid-team-code-reviewer.md": ["edit-ro", "bash-ro"],
+    "hybrid-team-spot-reviewer.md": ["edit-ro", "bash-ro"],
+    "hybrid-team-investigator.md": ["edit-ro", "bash-ro"],
 }
 
 STUB_GUARD = (
@@ -112,7 +112,7 @@ class TestAgentHookGlobs(unittest.TestCase):
                         )
 
     def test_no_match_exits_silently(self):
-        mode, inner = self.hooks["ht-programmer.md"][0]
+        mode, inner = self.hooks["hybrid-team-programmer.md"][0]
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp).resolve() / "empty-home"
             home.mkdir()
@@ -123,7 +123,7 @@ class TestAgentHookGlobs(unittest.TestCase):
                 self.assertEqual(res.stdout, "", f"{shell}: {res.stdout!r}")
 
     def test_claude_project_dir_unset(self):
-        mode, inner = self.hooks["ht-team-leader.md"][0]
+        mode, inner = self.hooks["hybrid-team-leader.md"][0]
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp).resolve() / "home"
             home.mkdir()
@@ -136,7 +136,7 @@ class TestAgentHookGlobs(unittest.TestCase):
             self.assertEqual(res.stdout.strip(), f"hybrid-team-v1.0 {mode}")
 
     def test_two_installs_first_match_wins(self):
-        mode, inner = self.hooks["ht-investigator.md"][0]
+        mode, inner = self.hooks["hybrid-team-investigator.md"][0]
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp).resolve() / "home"
             home.mkdir()

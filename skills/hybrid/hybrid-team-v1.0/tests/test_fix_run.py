@@ -89,8 +89,8 @@ class DoctorPingTest(Base):
         self.assertEqual([(c["name"], c["kind"]) for c in bad], [("tier:std", "config")])
 
     def test_models_listing_never_uses_standalone(self):
-        with mock.patch.dict(os.environ, {"HT_FAKE_LOG": str(self.tmp / "fake_log.jsonl")}):
-            os.environ.pop("HT_FAKE_SCRIPT", None)
+        with mock.patch.dict(os.environ, {"HYBRID_TEAM_FAKE_LOG": str(self.tmp / "fake_log.jsonl")}):
+            os.environ.pop("HYBRID_TEAM_FAKE_SCRIPT", None)
             oc_doctor.check_opencode(str(FAKE), {"tiers": {}, "rows": {}})
         # `models --standalone` always lists nothing on opencode v2.0.20
         self.assertEqual(self.fake_calls("models")[0], ["models"])
@@ -150,12 +150,12 @@ class RetryRepingTest(Base):
         self.assertIn("HELD D1", self.engine("dispatch", "D1").stdout)
 
     def test_retry_refreshes_oc_ok_frozen_false_at_init(self):
-        self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_TEAM_OC_BIN"] = str(self.tmp / "no-such-opencode")
         r = self.init(plan_of(docs_slice("D1")), "--route", "opencode")
         self.assertIn("kind=spawn :: opencode binary not found", r.stdout)
         self.assertIs(self.st()["oc_ok"], False)
         self.assertIn("HELD D1", self.engine("dispatch", "D1").stdout)
-        self.env["HT_OC_BIN"] = str(FAKE)
+        self.env["HYBRID_TEAM_OC_BIN"] = str(FAKE)
         self.step(PING_OK)
         self.engine("retry", "D1")
         self.assertIs(self.st()["oc_ok"], True)
@@ -176,7 +176,7 @@ class NoSilentClaudeTest(Base):
         self.assertNotIn("OC-WARN", r2.stdout)
 
     def test_missing_binary_is_reported_at_init_in_hybrid(self):
-        self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_TEAM_OC_BIN"] = str(self.tmp / "no-such-opencode")
         r = self.init(plan_of(docs_slice("D1")))
         self.assertIn("OC-ERROR hybrid-team init", r.stdout)
         self.assertIn("kind=spawn", r.stdout)
@@ -350,8 +350,8 @@ class ResyncTest(Base):
         self.engine("lane", "D1", check=False)
         r = self.engine("finish", "--force")
         self.assertIn("wip(D1): salvage", r.stdout)
-        self.assertIn("attempt/D1-1", git(["branch", "--list", "attempt/*"], self.repo))
-        self.assertFalse((self.repo / ".claude" / "worktrees" / "oc-D1").exists())
+        self.assertIn("hybrid-attempt/D1-1", git(["branch", "--list", "hybrid-attempt/*"], self.repo))
+        self.assertFalse((self.repo / ".claude" / "worktrees" / "hybrid-oc-D1").exists())
 
     def test_plan_tier_overlay_never_writes_into_the_user_routing(self):
         self.set_routing({"tiers": {"std": {"model": "acme/big", "variant": "high", "max_parallel": 2}}})
@@ -362,7 +362,7 @@ class ResyncTest(Base):
             seen["user"] = real(path, problems)
             return seen["user"]
 
-        with mock.patch.dict(os.environ, dict(MODELS_ENV, HT_ROUTING=str(self.routing))), \
+        with mock.patch.dict(os.environ, dict(MODELS_ENV, HYBRID_TEAM_ROUTING=str(self.routing))), \
                 mock.patch.object(router, "_read_user_routing", side_effect=spy):
             routing = router.load_routing(SCRIPTS.parent / "routing.default.json", self.routing,
                                           {"tiers": {"std": {"model": "plan/model"}}})

@@ -12,8 +12,8 @@ class TestHPConfig(unittest.TestCase):
     """Test hp_config module."""
 
     def test_agent_name(self):
-        """AGENT_NAME is hp-writer."""
-        self.assertEqual(hp_config.AGENT_NAME, "hp-writer")
+        """AGENT_NAME is hybrid-plan-writer."""
+        self.assertEqual(hp_config.AGENT_NAME, "hybrid-plan-writer")
 
     def test_sentinel(self):
         """SENTINEL is HP-WRITER-OK."""

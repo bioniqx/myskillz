@@ -25,8 +25,9 @@ EXPECTED_DEFAULTS = {
     },
     "roles": {"light": "lite", "std": "std", "deep": "claude"},
     "max_roles": {"deep": "std"},
-    "review_oc": {"hybrid": "all", "opencode": "risky"},
+    "review_oc": {"hybrid": "risky", "opencode": "risky"},
     "oc_group_max": 3,
+    "oc_overflow": "queue",
     "max_repairs": 2,
     "throttle_cooldown_s": 120,
 }
@@ -50,9 +51,9 @@ class _TempEnvCase(unittest.TestCase):
         os.environ["XDG_DATA_HOME"] = str(self.tmp / "data")
         os.environ.pop("HYBRID_OPENCODE_STD", None)
         os.environ.pop("HYBRID_OPENCODE_LITE", None)
-        os.environ["HP_ROUTING"] = str(self.tmp / "routing.json")
-        os.environ["HP_DOCTOR_CACHE"] = str(self.tmp / "doctor.json")
-        os.environ["HP_TELEMETRY"] = str(self.tmp / "lanes.jsonl")
+        os.environ["HYBRID_WRITING_PLANS_ROUTING"] = str(self.tmp / "routing.json")
+        os.environ["HYBRID_WRITING_PLANS_DOCTOR_CACHE"] = str(self.tmp / "doctor.json")
+        os.environ["HYBRID_WRITING_PLANS_TELEMETRY"] = str(self.tmp / "lanes.jsonl")
 
     def tearDown(self):
         os.environ.clear()
@@ -81,11 +82,11 @@ class RoutingConfigTest(_TempEnvCase):
         self.assertEqual(hp_router.user_routing_path(), self.tmp / "routing.json")
 
     def test_user_routing_path_default(self):
-        del os.environ["HP_ROUTING"]
+        del os.environ["HYBRID_WRITING_PLANS_ROUTING"]
         self.assertEqual(hp_router.user_routing_path(), DEFAULTS.parent / "routing.json")
 
     def test_user_routing_path_default_ignores_home(self):
-        del os.environ["HP_ROUTING"]
+        del os.environ["HYBRID_WRITING_PLANS_ROUTING"]
         os.environ["HOME"] = str(self.tmp / "other-home")
         path = hp_router.user_routing_path()
         self.assertEqual(path, DEFAULTS.parent / "routing.json")
@@ -256,7 +257,9 @@ class RoutingConfigTest(_TempEnvCase):
         self.set_shared(SHARED)
         for user_data, key in (({"roles": ["std"]}, "roles"), ({"max_roles": "x"}, "max_roles"),
                                ({"review_oc": [1]}, "review_oc"), ({"roles": {"std": ["x"]}}, "roles.std"),
-                               ({"preset": "bogus"}, "preset"), ({"preset": 5}, "preset")):
+                               ({"preset": "bogus"}, "preset"), ({"preset": 5}, "preset"),
+                               ({"oc_overflow": "bogus"}, "oc_overflow"), ({"oc_overflow": 1}, "oc_overflow"),
+                               ({"oc_overflow": ["queue"]}, "oc_overflow")):
             with self.subTest(user=user_data):
                 user = self.write_user(user_data)
                 routing = hp_router.load_routing(DEFAULTS, user)
@@ -264,8 +267,17 @@ class RoutingConfigTest(_TempEnvCase):
                                 routing["config_problems"])
                 self.assertEqual(hp_router.effective_preset(routing), "hybrid")
                 self.assertEqual(routing["roles"]["std"], "std")
+                self.assertEqual(hp_router.oc_overflow(routing), "queue")
                 self.assertIn(hp_router.route("std", routing, {}, "hybrid"), ("claude",))
                 hp_router.review_policy(routing, "opencode")
+
+    def test_oc_overflow_defaults_to_queue_and_accepts_claude(self):
+        self.set_shared(SHARED)
+        self.assertEqual(hp_router.oc_overflow(hp_router.load_routing(DEFAULTS, None)), "queue")
+        routing = hp_router.load_routing(DEFAULTS, self.write_user({"oc_overflow": "claude"}))
+        self.assertEqual(hp_router.oc_overflow(routing), "claude")
+        self.assertEqual(routing["config_problems"], [])
+        self.assertEqual(hp_router.oc_overflow({"oc_overflow": 7}), "queue")
 
     def test_disabled_tier_is_unavailable_whatever_the_doctor_says(self):
         self.set_shared(SHARED)
@@ -453,14 +465,14 @@ class RouterTest(_TempEnvCase):
         self.assertEqual(hp_router.route("std", self.routing, doctor), "oc:std")
 
     def test_review_policy(self):
-        self.assertEqual(hp_router.review_policy(self.routing), "all")
-        self.assertEqual(hp_router.review_policy(self.routing, "hybrid"), "all")
+        self.assertEqual(hp_router.review_policy(self.routing), "risky")
+        self.assertEqual(hp_router.review_policy(self.routing, "hybrid"), "risky")
         self.assertEqual(hp_router.review_policy(self.routing, "opencode"), "risky")
         self.assertEqual(hp_router.review_policy(self.routing, "claude"), "risky")
-        custom = dict(self.routing, review_oc={"hybrid": "risky", "max": "all"})
-        self.assertEqual(hp_router.review_policy(custom), "risky")
+        custom = dict(self.routing, review_oc={"hybrid": "all", "max": "all"})
+        self.assertEqual(hp_router.review_policy(custom), "all")
         self.assertEqual(hp_router.review_policy(custom, "opencode"), "all")
         broken = dict(self.routing, review_oc={"hybrid": "sometimes"})
-        self.assertEqual(hp_router.review_policy(broken), "all")
+        self.assertEqual(hp_router.review_policy(broken), "risky")
         self.assertEqual(hp_router.review_policy(broken, "opencode"), "risky")
-        self.assertEqual(hp_router.review_policy({}), "all")
+        self.assertEqual(hp_router.review_policy({}), "risky")

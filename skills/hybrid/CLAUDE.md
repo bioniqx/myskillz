@@ -7,16 +7,22 @@ another skill into one.
 
 | Hybrid fork | Original (`../claude-skills/`) | Offloaded to opencode | Oracle (machine check) |
 |---|---|---|---|
-| `hybrid-brainstorming-v1.0` | `brainstorming-6.3` | exploration lanes: locate, explore and fact; plus research and draft in mode opencode | `hb_ground.py` grounding check |
-| `hybrid-writing-plans-v1.0` | `writing-plans-6.2` | plan task bodies, tiers light and std; plus deep in mode opencode | the plan linter (`plan_tool.lint_file`) |
-| `hybrid-requirements-code-audit-v1.0` | `requirements-code-audit` | investigator batches; plus verifiers and parsers in mode opencode | `ha_oracle.py` evidence oracle + id coverage |
-| `hybrid-team-v1.0` | `dev-team-v3.2` | GREEN/WORK of slices that have an oracle | `guard.py stop` gate + merge-time re-check |
+| `hybrid-brainstorming-v1.0` | `brainstorming-6.3` | exploration lanes: locate, explore, fact and research; plus draft in mode opencode | `hb_ground.py` grounding check |
+| `hybrid-writing-plans-v1.0` | `writing-plans-6.2` | plan task bodies, tiers light and std (Claude reviews only risky ones); plus deep in mode opencode | the plan linter (`plan_tool.lint_file`) |
+| `hybrid-requirements-code-audit-v1.0` | `requirements-code-audit` | investigator and parser batches; plus verifiers in mode opencode | `ha_oracle.py` evidence oracle + id coverage |
+| `hybrid-team-v1.0` | `dev-team-v3.2` | GREEN/WORK of slices that have an oracle, any size; plus `risk: high` in mode opencode | `guard.py stop` gate + merge-time re-check |
 
 ## 1. Invariants (never break these)
 
 1. **Judgment stays on Claude.** Planning, classification, synthesis, contracts, review, adjudication,
    verification, RED tests and final reports are Claude's in every mode. opencode only *executes*.
    "Offloading changes who executes a unit, never who decides it is right."
+   - **80/20 target.** In mode hybrid, Claude keeps only the ~20% of units with the most judgment,
+     value and impact: design decisions and synthesis, contracts, deep/`risk: high` work, RED tests,
+     risk-based review, adversarial verification, adjudication and final reports. Every other unit that
+     has an oracle goes to opencode by default (~80%), whatever its size or volume. A routing default
+     that keeps an oracle-backed execution unit on Claude needs a stated reason (no oracle, the unit
+     decides the design, or it is the independent check on opencode output).
 2. **No oracle, no offload.** Only a unit whose output a deterministic check can accept or reject may go
    to opencode. If you cannot name the check, the unit stays on Claude.
 3. **Every opencode output passes the oracle before it counts.**
@@ -50,12 +56,25 @@ another skill into one.
      test/lint/typecheck commands, the commit helpers, read-only git and a few read-only inspection
      commands. Default-allow with a deny list is never enough: opencode allows anything unmatched.
    - Every agent denies reads of secrets (`*.env`, keys, `.ssh`), even when reads are otherwise open.
+     Verified on v2.0.20: `read` of `settings.env` → `Permission denied: read`. Limit: opencode's `grep`
+     permission matches the search *pattern*, not the file, so `grep` can still print lines of a secret file
+     that is not gitignored (the grep tool is ripgrep and skips gitignored files, so a gitignored `.env` stayed
+     hidden in the same probe). Keep secrets gitignored; only an OS sandbox closes this fully.
    - Residual risk: test commands execute model-written code with the user's rights. Permissions cannot
      stop that; only an OS sandbox can.
 9. **Tests are hermetic.** A fake `opencode` binary replays scripted event streams. The real user
    environment has `HYBRID_OPENCODE_STD` set, so every test sets or removes the `HYBRID_OPENCODE_*` vars
    explicitly and points every path (routing, doctor cache, telemetry, `HOME`, `XDG_DATA_HOME`) at temp
    dirs.
+
+10. **Every shared name carries the `hybrid` prefix**, so a hybrid skill installs beside its Claude-only original
+    without a collision: skill names (`hybrid-<original>`), Claude agents (`hybrid-team-*`, `hybrid-plan-task-writer`),
+    opencode agents (`hybrid-team-programmer`, `hybrid-plan-writer`, `hybrid-brainstorm-lane`, `hybrid-audit-*`), env
+    vars (`HYBRID_TEAM_*`, `HYBRID_WRITING_PLANS_*`, `HYBRID_BRAINSTORMING_*`, `HYBRID_AUDIT_*`), project state dirs
+    (`.claude/hybrid-team`, `.hybrid-work`, `.hybrid-audit`, `.hybrid-superpowers`), and git worktree/branch names
+    (`hybrid-oc-<id>`, `hybrid-checkpoint-<n>`, `hybrid-attempt/*`). Script file names inside a skill folder are
+    namespaced by the folder and stay as they are. `docs/superpowers/specs|plans/` stays shared on purpose: it is the
+    hand-off format between pipeline stages. `install.sh` (next to this file) installs skills and agents.
 
 ## 2. Modes and failure policy
 
@@ -209,8 +228,13 @@ Choose the sibling that matches the shape of the work:
   - Throttle text can appear in stdout, stderr or JSON fields.
 - **Watchdog:** spawn with `start_new_session=True`. A stall is no growth in the stdout file for
   `stall_s`. On timeout or stall, SIGTERM the process group, wait a grace period, then SIGKILL.
-- **Doctor:** `opencode models` returning rc 0 with an empty list means the providers are not
-  authenticated. Report it as `OC-ERROR kind=config`.
+- **Read opencode output through a file, never a pipe (verified on v2.0.20).** The CLI exits before it
+  flushes a pipe: `opencode models` over a pipe returned 0–3072 of 3467 bytes (empty, or cut mid-line), so a
+  doctor saw "listed nothing" or "model not found" and routed everything to Claude. `hybrid_shared.run_captured`
+  (temp-file stdout, stdin closed) and `run_models` (re-runs an empty answer) are the only way to call it; the
+  runners already stream `run` events to a file. Never pass `--standalone` to `models`: it always lists nothing.
+- **Doctor:** `opencode models` returning rc 0 with an empty list even after the retries means the providers
+  are not authenticated. Report it as `OC-ERROR kind=config`.
 - **Free tier trap (verified on v2.0.20):** the free `opencode/*-free` models answer 403
   `provider.auth` "free tier can only be used from within OpenCode" whenever the agent's `bash`
   permission is `"deny"` or `{"*":"deny"}`. A read-only agent uses `{"*":"deny","ls":"allow"}`.
@@ -307,6 +331,11 @@ Choose the sibling that matches the shape of the work:
 
 ## 9. Lessons already paid for
 
+- **Capacity overflow queues on opencode; it never spills to Claude.** A slot cap (`max_parallel` ×
+  batch size) that sends the excess to Claude in mode hybrid quietly moves most of a large run to Claude
+  (audit: 60 items → 60% on Claude). Extra batches wait for a free opencode slot, as in mode opencode;
+  `oc_overflow: "claude"` in the skill's `routing.json` restores the old split. A batch still waiting for
+  a slot is never a straggler and never gets a Claude hedge.
 - **A switch or a retry must never strand work.**
   - Decide "unit finished" from coverage and harvested events, not from an output file existing, because
     a partial file can exist for a failed unit.

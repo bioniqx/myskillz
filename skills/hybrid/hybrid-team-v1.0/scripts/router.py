@@ -21,12 +21,14 @@ PRESETS = ("claude", "hybrid", "opencode")
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 
+# perf stays on Claude: the gate only counts lines of the pasted bench output (no numeric before/after
+# check), so there is no deterministic oracle, and finding the optimization is diagnosis.
 _NON_OFFLOADABLE_KINDS = ("research", "perf", "investigator", "brief-debug")
 _NON_OFFLOADABLE_MODES = ("fast", "research")
 
 
 def user_routing_path() -> Path:
-    override = os.environ.get("HT_ROUTING")
+    override = os.environ.get("HYBRID_TEAM_ROUTING")
     if override:
         return Path(override)
     return SKILL_DIR / "routing.json"
@@ -179,8 +181,6 @@ def route(s: dict, routing: dict, oc_ok: bool, breaker_dir: Path = None) -> str:
 
     if preset == "hybrid":
         if s.get("risk") == "high":
-            return "claude"
-        if s.get("size") == "large":
             return "claude"
 
     row_key = _row_key(s)

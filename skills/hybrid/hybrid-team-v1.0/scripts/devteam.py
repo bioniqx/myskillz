@@ -8,7 +8,7 @@ Conductor commands (run in the integration checkout):
                                   Not a git repo yet (greenfield)? `start` runs `git init` + an empty
                                   first commit so the pipeline can begin.
   next [ids...] [--shards N]      THE ONLY per-wake-up call, normally with NO ids: it finds every
-                                  finished ht-programmer by the `.done`/`.blocked` marker its Stop gate wrote
+                                  finished hybrid-team-programmer by the `.done`/`.blocked` marker its Stop gate wrote
                                   (and every research slice whose report landed), integrates them, harvests
                                   reviewer verdicts + their fix slices, checkpoint exit codes and
                                   verification gaps, dispatches everything newly ready, opens the review
@@ -17,7 +17,7 @@ Conductor commands (run in the integration checkout):
                                   arrived. No review-done / add-fixes / checkpoint --result round-trips.
   probe                           auto-detect the project's build/test/lint/typecheck commands
   review-pr [<range>] [--shards N]  review-only route: fan reviewers over a diff with no plan
-  brief-debug "<symptom>" [-n N]  parallel root-cause investigation (ht-investigator agents)
+  brief-debug "<symptom>" [-n N]  parallel root-cause investigation (hybrid-team-investigator agents)
   doctor [--fix]            check/install prerequisites (settings, agents, excludes)
   plan-template             print the plan JSON schema/template
   init <plan.md|plan.json>  load the plan (DAG), validate, print initial ready set
@@ -32,7 +32,7 @@ Conductor commands (run in the integration checkout):
   review-batch [--force] [--shards N]   next incremental review batch → briefing + Agent block
                             (--shards defaults to auto: ~12 files per reviewer, max 8)
   review-done <rN> --verdict APPROVED|CHANGES_REQUIRED
-  verify-brief              write verification briefing for ht-team-leader (high-risk plans)
+  verify-brief              write verification briefing for hybrid-team-leader (high-risk plans)
   checkpoint [--result pass|fail] [--note ...]
   status                    compact progress table
   finish                    final cleanup + summary
@@ -139,7 +139,7 @@ DEFAULT_PROFILE = "balanced"
 FAST_TO_PROFILE = {0: "strict", 1: "turbo", 2: "turbo", 3: "turbo", 4: "spike"}
 
 # --- slice kinds: how hybrid-team covers every software-development task --------------------------
-KIND_MODE = {          # kind -> the ht-programmer mode a normal (non-high-risk) dispatch gets
+KIND_MODE = {          # kind -> the hybrid-team-programmer mode a normal (non-high-risk) dispatch gets
     "code": "slice", "test": "work", "refactor": "work", "chore": "work",
     "docs": "work", "perf": "work", "research": "research",
 }
@@ -179,7 +179,7 @@ class DevteamError(Exception):
 
 # ----------------------------------------------------------------------------- helpers
 
-AGENT_NAMES = ("ht-programmer", "ht-code-reviewer", "ht-spot-reviewer", "ht-investigator", "ht-team-leader")
+AGENT_NAMES = ("hybrid-team-programmer", "hybrid-team-code-reviewer", "hybrid-team-spot-reviewer", "hybrid-team-investigator", "hybrid-team-leader")
 
 def sh(args, cwd=None, check=True, env=None):
     r = subprocess.run(args, cwd=cwd, text=True, capture_output=True, env=env)
@@ -418,7 +418,7 @@ PLAN_TEMPLATE = {
         "bench": "(optional) command for kind:perf slices",
     },
     "contracts": ["C1 <name>: <signature/schema/route> — established in S1, consumed by S2,S3"],
-    "notes": "Conventions, gotchas, representative test file, anything every ht-programmer must know.",
+    "notes": "Conventions, gotchas, representative test file, anything every hybrid-team-programmer must know.",
     "test_globs": ["(optional) extra globs that identify test files"],
     "dep_dirs": ["(optional) extra dependency dirs to symlink into worktrees"],
     "review_batch": DEFAULT_REVIEW_BATCH,
@@ -699,7 +699,7 @@ def slice_weight(s):
 
 
 def reserved_slots(st, extra=0):
-    """Slots held back for non-ht-programmer agents. A sharded review really does occupy N slots,
+    """Slots held back for non-hybrid-team-programmer agents. A sharded review really does occupy N slots,
     so reserve what is actually running — bounded, so a review nobody closed can never
     starve the programmers — plus `extra` for shards this very call is about to launch.
     A review that came back CHANGES_REQUIRED will be resumed for a re-review, and a resumed
@@ -751,7 +751,7 @@ def report_finished(path):
 
 
 def finished_lanes(root, st):
-    """Slices whose ht-programmer's Stop gate wrote a `.done` marker, plus research slices whose report
+    """Slices whose hybrid-team-programmer's Stop gate wrote a `.done` marker, plus research slices whose report
     exists: the set `next` integrates when the Conductor passes no ids. `.blocked` markers are
     returned separately so the Conductor sees the exact question in the same turn."""
     done, blocked = [], []
@@ -816,7 +816,7 @@ def print_ready(st):
     dispatch_now = ready[:free]
     queued = ready[free:]
     if dispatch_now:
-        out("READY: " + " ".join(dispatch_now) + f"   (dispatch now — {free} free of {cap} ht-programmer slots, {len(inflight)} in flight)")
+        out("READY: " + " ".join(dispatch_now) + f"   (dispatch now — {free} free of {cap} hybrid-team-programmer slots, {len(inflight)} in flight)")
     else:
         out(f"READY: none   ({len(inflight)} in flight, {free} free of {cap} slots)")
     if queued:
@@ -966,7 +966,7 @@ def cmd_init(a):
     binary_ok = oc_binary_ok(sd)
     if preset != "claude" and not binary_ok:
         report_oc(root, oc_text("OC-ERROR", "init", "spawn", "opencode binary not found (%s): %s" % (
-            os.environ.get("HT_OC_BIN") or "opencode",
+            os.environ.get("HYBRID_TEAM_OC_BIN") or "opencode",
             "offloadable slices are held" if preset == "opencode" else "every slice runs on Claude this run")))
     st.update({"routing": routing, "plan_routing": plan.get("routing") or {}, "preset": preset,
                "oc_ok": preset != "claude" and not problems and binary_ok,
@@ -999,7 +999,7 @@ def cmd_init(a):
         kinds[slice_kind(s)] = kinds.get(slice_kind(s), 0) + 1
     if set(kinds) - {"code"}:
         out("  KINDS: " + ", ".join(f"{k}×{v}" for k, v in sorted(kinds.items())))
-    out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; ht-programmer slots {cap} "
+    out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; hybrid-team-programmer slots {cap} "
         f"(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={os.environ.get('CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS', 'unset→20')}, "
         f"hard cap {HARD_CAP}, {reserved_slots(st)} reserved for reviewers/leader)")
     high = [sid for sid, s in slices.items() if s["risk"] == "high"]
@@ -1033,7 +1033,7 @@ def ensure_excludes(root, extra=()):
 
 
 def isolation_prefix(iso):
-    """Exact env prefix a ht-programmer must use (relative TMPDIR: Bash already runs at the worktree root)."""
+    """Exact env prefix a hybrid-team-programmer must use (relative TMPDIR: Bash already runs at the worktree root)."""
     return f"PORT={iso['PORT']} DB_SUFFIX={iso['DB_SUFFIX']} TMPDIR=.slice/tmp " if iso else ""
 
 
@@ -1085,7 +1085,7 @@ GATE_KEYS = ("lint", "typecheck", "build")
 
 
 def gate_plan(st, pfx):
-    """What a ht-programmer must run as its own gate, given the profile's `gate` dial.
+    """What a hybrid-team-programmer must run as its own gate, given the profile's `gate` dial.
     Returns (text, commands_to_run). `file` scope is the speed trick that keeps quality: a
     file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x 64."""
     c = st["commands"]
@@ -1457,7 +1457,7 @@ def _oc_cap(st: dict, tier: str) -> int:
 def oc_binary_ok(sd):
     """Cheap opencode probe for `init`: the binary resolves. Tier health is `usable_tiers`' job; the
     cached `available` flag is not read, so an old doctor run never disables opencode for a new one."""
-    binary = os.environ.get("HT_OC_BIN") or "opencode"
+    binary = os.environ.get("HYBRID_TEAM_OC_BIN") or "opencode"
     return bool(shutil.which(binary) or Path(binary).is_file())
 
 
@@ -1478,7 +1478,7 @@ def lane_line(sid, backend):
     )
 
 
-HT_STATE_REL = Path(".claude") / "hybrid-team"
+HYBRID_TEAM_STATE_REL = Path(".claude") / "hybrid-team"
 
 
 def _mark_lane_escalated(path: Path, sid: str):
@@ -1510,12 +1510,12 @@ def _mark_lane_escalated(path: Path, sid: str):
 
 
 def _remove_oc_worktree(root: Path, sid: str) -> None:
-    wt = root / ".claude" / "worktrees" / ("oc-" + sid)
+    wt = root / ".claude" / "worktrees" / (OC_PREFIX + sid)
     quiet = {"cwd": str(root), "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "check": False}
     if wt.exists():
         subprocess.run(["git", "worktree", "remove", "--force", str(wt)], **quiet)
         subprocess.run(["git", "worktree", "prune"], **quiet)
-    subprocess.run(["git", "branch", "-D", "oc-" + sid], **quiet)
+    subprocess.run(["git", "branch", "-D", OC_PREFIX + sid], **quiet)
 
 
 def halve_oc_cap(st, tier):
@@ -1544,7 +1544,7 @@ def escalate(root: Path, st: dict, sid: str, reason: str, note: str) -> str:
         return "BLOCKED {}: max escalations reached ({}): {}".format(sid, reason, note)
     counts[sid] = counts.get(sid, 0) + 1
     st.setdefault("escalation_notes", {})[sid] = {"reason": reason, "note": note}
-    rec = _mark_lane_escalated(root / HT_STATE_REL / "lanes.jsonl", sid)
+    rec = _mark_lane_escalated(root / HYBRID_TEAM_STATE_REL / "lanes.jsonl", sid)
     if not tier and rec:
         tier = rec.get("tier", "")
     if reason == "throttle":
@@ -1781,7 +1781,7 @@ def stands_in_for_oc(st, s, mode):
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
     tokens for 64 launches sit on the critical path, and the briefing file already holds everything.
-    The ht-programmer/ht-investigator system prompts say 'your prompt is the command — run it first'."""
+    The hybrid-team-programmer/hybrid-team-investigator system prompts say 'your prompt is the command — run it first'."""
     sp = q(st["script"])
     for block in blocks:
         if isinstance(block, dict) and block.get("lane"):
@@ -1792,12 +1792,12 @@ def print_dispatch(st, blocks, skipped):
         if mode == "research":
             brief = state_dir(Path(st["root"])) / "briefs" / f"{sid}.md"
             out(f"=== DISPATCH {sid} [RESEARCH] — {s['title'][:50]}",
-                f"Agent → subagent_type: ht-investigator, description: \"{sid}\", prompt: \"Read {brief} and follow it exactly.\"",
+                f"Agent → subagent_type: hybrid-team-investigator, description: \"{sid}\", prompt: \"Read {brief} and follow it exactly.\"",
                 "")
             continue
         model = dispatch_model(s) or (hybrid_shared.FALLBACK_MODEL if stands_in_for_oc(st, s, mode) else "")
         out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}",
-            f"Agent → subagent_type: ht-programmer, description: \"{sid}\"" + (f", model: {model}" if model else "")
+            f"Agent → subagent_type: hybrid-team-programmer, description: \"{sid}\"" + (f", model: {model}" if model else "")
             + f", prompt: \"python3 {sp} claim {sid}\"",
             "")
     if skipped:
@@ -1919,7 +1919,7 @@ def integrate_one(root, st, sid, remove=True):
         rp = state_dir(root) / "research" / f"{sid}.md"
         if not rp.exists():
             return reject(s, "no-report",
-                          f"{sid}: NOT INTEGRATED — no report at {rp}. SendMessage the ht-investigator to write it "
+                          f"{sid}: NOT INTEGRATED — no report at {rp}. SendMessage the hybrid-team-investigator to write it "
                           f"(read-only slice: the report IS the deliverable), then integrate again.")
         s.update({"status": "done", "merged_sha": git(["rev-parse", "HEAD"], root), "merged_at": now(),
                   "rejected": None, "report": str(rp)})
@@ -1932,7 +1932,7 @@ def integrate_one(root, st, sid, remove=True):
     if not claim:
         return reject(s, "no-claim",
                       f"{sid}: NOT INTEGRATED — no claim recorded. Report has a `## Worktree:` line → `bind {sid} <path>` "
-                      f"then integrate again; otherwise the ht-programmer never ran `claim {sid}` → `retry {sid}`.")
+                      f"then integrate again; otherwise the hybrid-team-programmer never ran `claim {sid}` → `retry {sid}`.")
     wt, branch = claim["worktree"], claim["branch"]
     # combined verify+resolve: `rev-parse --verify --quiet <branch>` both checks existence and, on
     # success, prints the tip sha — one subprocess instead of a separate verify then rev-parse.
@@ -2124,7 +2124,7 @@ def salvage_worktree(root, sid, wt, n):
     r = sh(["git"] + NO_SIGN + ["commit", "-q", "--no-verify", "-m", f"wip({sid}): salvage"], cwd=wt, check=False)
     if r.returncode == 0:
         return {"kind": "commit",
-                "msg": f"{sid}: uncommitted work salvaged as commit 'wip({sid}): salvage' on attempt/{sid}-{n}"}
+                "msg": f"{sid}: uncommitted work salvaged as commit 'wip({sid}): salvage' on hybrid-attempt/{sid}-{n}"}
     d = state_dir(root) / "salvage"
     d.mkdir(parents=True, exist_ok=True)
     patch = d / f"{sid}-{n}.patch"
@@ -2192,7 +2192,7 @@ def cmd_retry(a):
             out(res["msg"])
         remove_worktree(root, claim["worktree"])
         if claim.get("branch"):
-            keep = f"attempt/{a.id}-{s['attempt']}"
+            keep = f"hybrid-attempt/{a.id}-{s['attempt']}"
             if sh(["git", "branch", "-M", claim["branch"], keep], cwd=root, check=False).returncode == 0:
                 out(f"{a.id}: previous branch kept as {keep} (inspect or delete later)")
         claim_file(root, a.id).unlink(missing_ok=True)
@@ -2283,7 +2283,7 @@ def extract_fix_specs(text):
 
 
 def add_fixes_from_text(st, text, source="", strict=False):
-    """Queue the fix slices a reviewer/verifier/ht-investigator report asks for. Idempotent: a report
+    """Queue the fix slices a reviewer/verifier/hybrid-team-investigator report asks for. Idempotent: a report
     read twice (harvest + an explicit add-fixes) never duplicates a slice."""
     specs = extract_fix_specs(text)
     if not specs:
@@ -2466,7 +2466,7 @@ def do_review_batch(root, st, force=False, shards=1):
                   ""]
         write_atomic(state_dir(root) / "reviews" / f"{name}.md", "\n".join(lines))
         out(f"=== REVIEW {name}: {len(take)} slices, {len(scope)} files",
-            f"Agent → subagent_type: {'ht-spot-reviewer' if spot else 'ht-code-reviewer'}, description: \"review {name}\", "
+            f"Agent → subagent_type: {'hybrid-team-spot-reviewer' if spot else 'hybrid-team-code-reviewer'}, description: \"review {name}\", "
             f"prompt: \"Read {state_dir(root) / 'reviews' / (name + '.md')} and follow it exactly.\"",
             "")
     out("Nothing to report afterwards: the next `next` reads each shard's verdict out of its report file "
@@ -2508,7 +2508,7 @@ def cmd_verify_brief(a):
               "(title, files, criteria) so the Conductor can queue it."]
     p = state_dir(root) / "reviews" / "verification.md"
     write_atomic(p, "\n".join(lines))
-    out(f"Agent → subagent_type: ht-team-leader, description: \"verify intent\", prompt: \"MODE: VERIFICATION. Read {p} and follow it.\"")
+    out(f"Agent → subagent_type: hybrid-team-leader, description: \"verify intent\", prompt: \"MODE: VERIFICATION. Read {p} and follow it.\"")
 
 
 def cmd_checkpoint(a):
@@ -2534,7 +2534,7 @@ def cmd_checkpoint(a):
         return
     n = len(st["checkpoints"]) + 1
     sha = git(["rev-parse", "HEAD"], root)
-    wt = root / ".claude" / "worktrees" / f"checkpoint-{n}"
+    wt = root / ".claude" / "worktrees" / f"{CHECKPOINT_PREFIX}{n}"
     remove_worktree(root, str(wt))
     git(["worktree", "add", "--detach", str(wt), sha], root)
     link_deps(root, wt, st.get("dep_dirs"))
@@ -2697,7 +2697,7 @@ def cmd_next(a):
         st = load_state(root)
     exhausted = dag_exhausted(st)
     stuck = [sid for sid, s in st["slices"].items() if s["status"] in ("failed", "conflict")]
-    # Decide the review batch BEFORE filling ht-programmer slots: its shards occupy real slots,
+    # Decide the review batch BEFORE filling hybrid-team-programmer slots: its shards occupy real slots,
     # and a `next` that launched 62 programmers + 8 reviewers would blow past the runtime cap.
     pending = len(st["merges"]) - st.get("reviewed_upto", 0)
     batch = st.get("review_batch", DEFAULT_REVIEW_BATCH)
@@ -2740,7 +2740,7 @@ def cmd_next(a):
         high = [sid for sid, s in st["slices"].items() if s["risk"] == "high" and s["status"] == "done"]
         spikes = spike_slices(st)
         if (high or spikes) and not (state_dir(root) / "reviews" / "verification.report.md").exists():
-            steps.append(f"`verify-brief` → ht-team-leader VERIFICATION (high-risk: {' '.join(high) or 'none'}"
+            steps.append(f"`verify-brief` → hybrid-team-leader VERIFICATION (high-risk: {' '.join(high) or 'none'}"
                          + (f"; untested spike slices: {' '.join(spikes)}" if spikes else "") + ")")
         open_reviews = [rid for rid, r in (st.get("reviews") or {}).items() if r.get("status") != "done"]
         steps += ["launch the review + checkpoint blocks above, then on the next wake-up call "
@@ -2908,7 +2908,7 @@ def cmd_review_pr(a):
     sd.mkdir(parents=True, exist_ok=True)
     shards = shard_count(files, a.shards)
     per = (len(files) + shards - 1) // shards
-    agent = "ht-spot-reviewer" if a.spot else "ht-code-reviewer"
+    agent = "hybrid-team-spot-reviewer" if a.spot else "hybrid-team-code-reviewer"
     stamp = f"pr{int(time.time()) % 100000}"
     for k in range(shards):
         scope = files[k * per:(k + 1) * per]
@@ -2975,7 +2975,7 @@ def cmd_brief_debug(a):
                   "Reply with ONLY the verdict line and the report path.", ""]
         write_atomic(sd / f"{name}.md", "\n".join(lines))
         out(f"=== INVESTIGATE {name}: {angle[:60]}…",
-            f"Agent → subagent_type: ht-investigator, description: \"{name}\", "
+            f"Agent → subagent_type: hybrid-team-investigator, description: \"{name}\", "
             f"prompt: \"Read {sd / (name + '.md')} and follow it exactly.\"",
             "")
     out(f"Launch all {n_ang} in ONE message and end the turn. First `ROOT CAUSE FOUND` wins: read that report, "
@@ -3040,7 +3040,7 @@ def cmd_finish(a):
             if res:
                 out(res["msg"])
                 if res["kind"] == "commit":
-                    sh(["git", "branch", "-M", c["branch"], f"attempt/{sid}-{n}"], cwd=root, check=False)
+                    sh(["git", "branch", "-M", c["branch"], f"hybrid-attempt/{sid}-{n}"], cwd=root, check=False)
             remove_worktree(root, c["worktree"], prune=False)   # one prune after the loop
             leftovers.append(c["worktree"])
         if c and git_ok(["rev-parse", "--verify", "--quiet", c["branch"]], root) and st["slices"][sid]["status"] == "done":
@@ -3097,7 +3097,7 @@ def cmd_finish(a):
         out("no full-suite checkpoint recorded — run one before reporting done")
     if leftovers:
         out("removed leftover worktrees: " + " ".join(leftovers))
-    attempts = git(["branch", "--list", "attempt/*"], root)
+    attempts = git(["branch", "--list", "hybrid-attempt/*"], root)
     if attempts:
         out("salvage branches left for you to delete: " + " ".join(attempts.split()))
 
@@ -3115,7 +3115,7 @@ def write_summary(root, st):
     for rid, r in (st.get("reviews") or {}).items():
         lines.append(f"- review {rid}: {r.get('verdict') or r.get('status')} ({len(r.get('slices') or [])} slices, {r.get('shards') or 1} shard(s))")
     if st.get("verification_verdict"):
-        lines.append(f"- intent verification (ht-team-leader): {st['verification_verdict']}")
+        lines.append(f"- intent verification (hybrid-team-leader): {st['verification_verdict']}")
     if st["checkpoints"]:
         c = st["checkpoints"][-1]
         lines.append(f"- last full-suite checkpoint: {c['result']} @ {c['sha'][:9]}")
@@ -3184,7 +3184,7 @@ def oc_available(root: Path, routing: dict) -> bool:
     a tier is usable."""
     sd = Path(root) / STATE_DIRNAME
     sd.mkdir(parents=True, exist_ok=True)
-    binary = os.environ.get("HT_OC_BIN", "opencode")
+    binary = os.environ.get("HYBRID_TEAM_OC_BIN", "opencode")
     checks = check_opencode(binary, routing)
     issues = [c for c in checks if not c.get("ok", False)]
     shared = [c for c in issues if not check_tier(c)]
@@ -3238,8 +3238,8 @@ def doctor_opencode(root, routing, ping, only=None):
     if not ping or any(not check_tier(c) for c in issues):
         return
     static_bad = {check_tier(c) for c in issues}
-    binary = os.environ.get("HT_OC_BIN", "opencode")
-    prompt_path = SKILL_DIR / "agents" / "opencode" / "ht-programmer.prompt.md"
+    binary = os.environ.get("HYBRID_TEAM_OC_BIN", "opencode")
+    prompt_path = SKILL_DIR / "agents" / "opencode" / "hybrid-team-programmer.prompt.md"
     prompt_text = prompt_path.read_text() if prompt_path.exists() else ""
     t = time.time()
     for tier_name, tier in sorted(tiers_cfg.items()):
@@ -3247,7 +3247,7 @@ def doctor_opencode(root, routing, ping, only=None):
             continue
         if ping == "stale" and fresh_ok(before.get(tier_name), tier, t):
             continue
-        res = ping_tier(binary, tier, prompt_text, "ht-programmer", sd)
+        res = ping_tier(binary, tier, prompt_text, "hybrid-team-programmer", sd)
         ok, info = bool(res[0]), res[1]           # info: {"kind", "message", ...} from oc_doctor.ping_tier
         if not isinstance(info, dict):
             info = {"message": str(info)}
@@ -3328,7 +3328,7 @@ def cmd_doctor(a):
     skill_dir = Path(__file__).resolve().parent.parent
     agents_src = skill_dir / "agents"
     guard = str(Path(__file__).resolve().parent / "guard.py")
-    for name in ("ht-programmer", "ht-code-reviewer", "ht-spot-reviewer", "ht-team-leader", "ht-investigator"):
+    for name in ("hybrid-team-programmer", "hybrid-team-code-reviewer", "hybrid-team-spot-reviewer", "hybrid-team-leader", "hybrid-team-investigator"):
         found = [x for x in (root / ".claude" / "agents" / f"{name}.md", Path.home() / ".claude" / "agents" / f"{name}.md") if x.exists()]
         src = agents_src / f"{name}.md"
         if not found:
@@ -3447,7 +3447,7 @@ def cmd_allow(a):
     out(f"allow rules now: {allow}")
 
 
-# ----------------------------------------------------------------------------- commands: ht-programmer (inside worktree)
+# ----------------------------------------------------------------------------- commands: hybrid-team-programmer (inside worktree)
 
 def worktree_ctx():
     cwd = Path.cwd()
@@ -3545,7 +3545,7 @@ def cmd_bind(a):
     s = slice_state(st, a.id)
     wt = Path(a.worktree).resolve()
     if not (wt / ".slice" / "id").exists():
-        raise DevteamError(f"{wt} has no .slice/ — the ht-programmer never ran claim there")
+        raise DevteamError(f"{wt} has no .slice/ — the hybrid-team-programmer never ran claim there")
     branch = git(["rev-parse", "--abbrev-ref", "HEAD"], wt)
     base = (wt / ".slice" / "base").read_text().strip()
     write_atomic(claim_file(root, a.id), json.dumps({"id": a.id, "worktree": str(wt), "branch": branch,
@@ -3755,7 +3755,8 @@ def cmd_commit_green(a):
 
 
 MAX_CONTINUATIONS = 2
-OC_PREFIX = "oc-"
+OC_PREFIX = "hybrid-oc-"      # lane worktree dir and branch: never collides with dev-team's `oc-<id>`
+CHECKPOINT_PREFIX = "hybrid-checkpoint-"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 GUARD_PATH = Path(__file__).resolve().parent / "guard.py"
 LANE_USAGE_KEYS = ("input", "output", "reasoning", "cache_read", "cache_write")
@@ -3766,7 +3767,7 @@ def lane_dir(root):
 
 
 def lane_worktree(root: Path, st: dict, sid: str) -> Path:
-    """A fresh `.claude/worktrees/oc-<id>` on branch `oc-<id>` at the base `claim` expects
+    """A fresh `.claude/worktrees/hybrid-oc-<id>` on branch `hybrid-oc-<id>` at the base `claim` expects
     (`base_sha`: the accepted RED commit for a GREEN slice, the integration HEAD otherwise)."""
     s = slice_state(st, sid)
     wt = Path(root) / ".claude" / "worktrees" / (OC_PREFIX + sid)
@@ -4156,11 +4157,12 @@ def _run_lane(root, a):
             frozen = frozen_files_of(s["red_sha"], wt, st.get("test_globs") or [])
         view = dict(s, footprint=list(s.get("files") or []), contracts=list(st.get("contracts") or []))
         message = oc_brief.build_brief(claim.stdout, view, wt, frozen)
-        prompt_path = SKILL_DIR / "agents" / "opencode" / "ht-programmer.prompt.md"
+        prompt_path = SKILL_DIR / "agents" / "opencode" / "hybrid-team-programmer.prompt.md"
         prompt_text = prompt_path.read_text() if prompt_path.exists() else ""
         engine = str(st.get("script") or script_path())
-        env = dict(os.environ, **oc_config.config_env(prompt_text, engine, st.get("commands") or {}))
-        binary = os.environ.get("HT_OC_BIN") or "opencode"
+        commands = dict(st.get("commands") or {}, verify=s.get("verify") or "")   # same allow set as `claim`
+        env = dict(os.environ, **oc_config.config_env(prompt_text, engine, commands))
+        binary = os.environ.get("HYBRID_TEAM_OC_BIN") or "opencode"
         agg = lane_loop(root, sid, wt, tier, binary, env, message, stall_s, timeout_s, tier_name)
     done = agg["outcome"] == "done"
     reason = "" if done else (agg["reason"] or "crash")

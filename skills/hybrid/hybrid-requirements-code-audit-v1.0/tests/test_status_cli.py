@@ -51,7 +51,7 @@ class StatusCliTest(unittest.TestCase):
         )
         self.spec = self.repo / "spec.md"
         self.spec.write_text("# Spec\n\n1. Users must log in.\n\n2. Users must log out.\n", encoding="utf-8")
-        self.out = self.repo / ".audit"
+        self.out = self.repo / ".hybrid-audit"
         self.routing = self.tmp / "routing.json"
         self.doctor = self.tmp / "doctor.json"
         self.telemetry = self.tmp / "lanes.jsonl"
@@ -59,10 +59,10 @@ class StatusCliTest(unittest.TestCase):
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.update({
             "HOME": str(self.home),
-            "HA_ROUTING": str(self.routing),
-            "HA_DOCTOR_CACHE": str(self.doctor),
-            "HA_TELEMETRY": str(self.telemetry),
-            "HA_OC_BIN": str(FAKE),
+            "HYBRID_AUDIT_ROUTING": str(self.routing),
+            "HYBRID_AUDIT_DOCTOR_CACHE": str(self.doctor),
+            "HYBRID_AUDIT_TELEMETRY": str(self.telemetry),
+            "HYBRID_AUDIT_OC_BIN": str(FAKE),
             "XDG_DATA_HOME": str(self.tmp / "data"),
             "HYBRID_OC_RETRY_DELAY_S": "0",
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -125,7 +125,7 @@ class StatusCliTest(unittest.TestCase):
 
     def _fail_event(self, out, name, reason, message):
         _write_json(out / "events" / ("%s.json" % name), {
-            "batch": name, "ok": False, "agent_type": "opencode:ha-investigator",
+            "batch": name, "ok": False, "agent_type": "opencode:hybrid-audit-investigator",
             "backend": "oc:std", "reason": reason, "message": message,
             "rounds": 1, "written": 0, "total": 2, "t": time.time(),
         })
@@ -153,7 +153,7 @@ class StatusCliTest(unittest.TestCase):
 
     def test_status_dispatches_queued_opencode_batches_in_opencode_block(self):
         self._doctor_ok()
-        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1})
+        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1, "oc_overflow": "claude"})
         out, _ = self._bootstrap("hybrid", n_items=3, cap=4)
         oc = self._oc_batches(out)
         self.assertEqual(len(oc), 2, json.dumps(self._state(out)["batches"]))
@@ -162,7 +162,7 @@ class StatusCliTest(unittest.TestCase):
         _write_jsonl(out / "findings" / ("%s.jsonl" % first),
                      [dict(self._row(i), backend="oc:std") for i in meta["ids"]])
         _write_json(out / "events" / ("%s.json" % first), {
-            "batch": first, "ok": True, "agent_type": "opencode:ha-investigator",
+            "batch": first, "ok": True, "agent_type": "opencode:hybrid-audit-investigator",
             "backend": "oc:std", "reason": None, "message": "", "rounds": 1,
             "written": len(meta["ids"]), "total": len(meta["ids"]), "t": time.time(),
         })
@@ -173,6 +173,54 @@ class StatusCliTest(unittest.TestCase):
         self.assertIn("completion notification (Agent or background Bash)", proc.stdout)
         self.assertEqual(self._state(out)["batches"][queued]["backend"], "oc:std")
         self.assertTrue((out / "batches" / ("%s.oc.md" % queued)).exists())
+
+    def test_hybrid_queued_batch_waits_for_an_opencode_slot_instead_of_overflowing_to_claude(self):
+        self._doctor_ok()
+        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1})
+        out, _ = self._bootstrap("hybrid", n_items=3, cap=4)
+        (first, meta), (second, _), (queued, qmeta) = self._oc_batches(out)
+        self.assertEqual((qmeta["wave"], qmeta["dispatched"]), (2, None))
+        proc = self._audit("status")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("Investigator %s:" % queued, proc.stdout)
+        self.assertNotIn("oc-run %s" % queued, proc.stdout)
+        queued_state = self._state(out)["batches"][queued]
+        self.assertEqual((queued_state["backend"], queued_state["dispatched"]), ("oc:std", None))
+        _write_jsonl(out / "findings" / ("%s.jsonl" % first),
+                     [dict(self._row(i), backend="oc:std") for i in meta["ids"]])
+        _write_json(out / "events" / ("%s.json" % first), {
+            "batch": first, "ok": True, "agent_type": "opencode:hybrid-audit-investigator",
+            "backend": "oc:std", "reason": None, "message": "", "rounds": 1,
+            "written": len(meta["ids"]), "total": len(meta["ids"]), "t": time.time(),
+        })
+        proc = self._audit("status")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn('audit.py" oc-run %s' % queued, proc.stdout)
+        self.assertEqual(self._state(out)["batches"][queued]["backend"], "oc:std")
+
+    def test_queued_batch_is_not_hedged_until_its_own_run_has_started(self):
+        self._doctor_ok()
+        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 1}}, "oc_batch_max": 1})
+        out, _ = self._bootstrap("hybrid", n_items=4, cap=4)
+        oc = self._oc_batches(out)
+        self.assertEqual(len(oc), 4, json.dumps(self._state(out)["batches"]))
+        (b1, m1), (b2, m2), (b3, _), (b4, _) = oc
+        t0 = time.time() - 1000
+        state = self._state(out)
+        for name in (b1, b2, b3):  # b4 stays queued: no free slot, so it has no start time
+            state["batches"][name]["dispatched"] = t0
+        _write_json(out / "state.json", state)
+        for name, meta in ((b1, m1), (b2, m2)):
+            path = out / "findings" / ("%s.jsonl" % name)
+            _write_jsonl(path, [dict(self._row(i), backend="oc:std") for i in meta["ids"]])
+            os.utime(str(path), (t0 + 10, t0 + 10))
+        proc = self._audit("status")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        stragglers = proc.stdout[proc.stdout.index("STRAGGLERS"):]
+        self.assertIn("  %s (running " % b3, stragglers)
+        self.assertNotIn(b4, stragglers)
+        self.assertNotIn(b4, self._state(out)["hedges"])
+        self.assertIsNone(self._state(out)["batches"][b4]["dispatched"])
 
     def test_claude_preset_status_has_no_opencode_output(self):
         out, _ = self._bootstrap("claude", n_items=4, cap=1)
@@ -219,7 +267,7 @@ class StatusCliTest(unittest.TestCase):
         name, v = [(n, v) for n, v in sorted(self._state(out)["verify"].items())
                    if str(v.get("backend", "")).startswith("oc:")][0]
         _write_json(out / "events" / ("%s.json" % name), {
-            "batch": name, "ok": False, "agent_type": "opencode:ha-verifier", "backend": v["backend"],
+            "batch": name, "ok": False, "agent_type": "opencode:hybrid-audit-verifier", "backend": v["backend"],
             "reason": "format", "message": "no marker block", "rounds": 3, "written": 0,
             "total": len(v["ids"]), "t": time.time(),
         })
@@ -238,7 +286,7 @@ class StatusCliTest(unittest.TestCase):
 
     def test_slow_opencode_batch_gets_one_claude_hedge(self):
         self._doctor_ok()
-        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1})
+        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1, "oc_overflow": "claude"})
         out, _ = self._bootstrap("hybrid", n_items=3, cap=4)
         oc = self._oc_batches(out)
         self.assertEqual(len(oc), 2, json.dumps(self._state(out)["batches"]))
@@ -356,7 +404,7 @@ class StatusCliTest(unittest.TestCase):
         name, v = [(n, v) for n, v in sorted(self._state(out)["verify"].items())
                    if str(v.get("backend", "")).startswith("oc:")][0]
         _write_json(out / "events" / ("%s.json" % name), {
-            "batch": name, "ok": False, "agent_type": "opencode:ha-verifier", "backend": v["backend"],
+            "batch": name, "ok": False, "agent_type": "opencode:hybrid-audit-verifier", "backend": v["backend"],
             "reason": "format", "message": "no marker block", "rounds": 3, "written": 0,
             "total": len(v["ids"]), "t": time.time(),
         })
@@ -375,7 +423,7 @@ class StatusCliTest(unittest.TestCase):
         name, v = [(n, v) for n, v in sorted(self._state(out)["verify"].items())
                    if str(v.get("backend", "")).startswith("oc:")][0]
         _write_json(out / "events" / ("%s.json" % name), {
-            "batch": name, "ok": False, "agent_type": "opencode:ha-verifier", "backend": v["backend"],
+            "batch": name, "ok": False, "agent_type": "opencode:hybrid-audit-verifier", "backend": v["backend"],
             "reason": "format", "message": "no marker block", "rounds": 3, "written": 0,
             "total": len(v["ids"]), "t": time.time(),
         })
@@ -442,7 +490,7 @@ class StatusCliTest(unittest.TestCase):
                    if str(v.get("backend", "")).startswith("oc:") and len(v["ids"]) > 1][0]
         _write_jsonl(out / "verify" / ("%s.jsonl" % name),
                      [{"id": v["ids"][0], "verdict": "CONFIRMED", "notes": "ok"}])
-        self._failed_event(out, name, v, "opencode:ha-verifier")
+        self._failed_event(out, name, v, "opencode:hybrid-audit-verifier")
         self._assert_claude_refused(out)
 
     def test_mode_claude_is_refused_for_a_partial_findings_file_with_a_failed_event(self):
@@ -452,7 +500,7 @@ class StatusCliTest(unittest.TestCase):
         name, b = [(n, b) for n, b in sorted(self._state(out)["batches"].items())
                    if str(b.get("backend", "")).startswith("oc:") and len(b["ids"]) > 1][0]
         _write_jsonl(out / "findings" / ("%s.jsonl" % name), [dict(self._row(b["ids"][0]), backend=b["backend"])])
-        self._failed_event(out, name, b, "opencode:ha-investigator")
+        self._failed_event(out, name, b, "opencode:hybrid-audit-investigator")
         self._assert_claude_refused(out)
 
     def test_mode_claude_is_allowed_when_opencode_units_are_fully_covered(self):
@@ -554,7 +602,7 @@ class StatusCliTest(unittest.TestCase):
     def _fake(self, step):
         script, log = self.tmp / "fake.json", self.tmp / "fake.log"
         _write_json(script, step)
-        self.env.update({"HA_FAKE_SCRIPT": str(script), "HA_FAKE_LOG": str(log)})
+        self.env.update({"HYBRID_AUDIT_FAKE_SCRIPT": str(script), "HYBRID_AUDIT_FAKE_LOG": str(log)})
         return log
 
     @staticmethod
@@ -565,10 +613,10 @@ class StatusCliTest(unittest.TestCase):
 
     def _two_oc_batches(self, preset="hybrid"):
         self._doctor_ok()
-        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1})
+        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 1, "oc_overflow": "claude"})
         out, _ = self._bootstrap(preset, n_items=3, cap=4)
         oc = [n for n, _ in self._oc_batches(out)]
-        # mode opencode sends the third item to opencode too; it waits for a slot (max_parallel 2)
+        # mode opencode sends the third item to opencode too (it waits for a slot, max_parallel 2); hybrid with oc_overflow claude sends it to Claude
         self.assertEqual(len(oc), 3 if preset == "opencode" else 2, json.dumps(self._state(out)["batches"]))
         return out, oc[:2]
 

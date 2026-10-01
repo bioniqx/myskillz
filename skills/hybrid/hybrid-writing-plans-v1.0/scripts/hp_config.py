@@ -1,4 +1,4 @@
-"""hp_config: injected read-only opencode agent config for hp-writer.
+"""hp_config: injected read-only opencode agent config for hybrid-plan-writer.
 
 opencode v2 turns every permission map into an ordered rule list and the last matching rule wins
 (https://opencode.ai/docs/permissions), so the block starts with "*": "deny".
@@ -6,7 +6,7 @@ opencode v2 turns every permission map into an ordered rule list and the last ma
 import copy
 import json
 
-AGENT_NAME = "hp-writer"
+AGENT_NAME = "hybrid-plan-writer"
 SENTINEL = "HP-WRITER-OK"
 
 # Secrets stay unreadable even where reads are open: --auto would approve opencode's default "ask".
@@ -18,7 +18,7 @@ SECRET_READ_DENY = ("*.env", "*.env.*", "*.ssh/*", "*.pem", "*.key", "*id_rsa*",
 READ_ONLY_BASH = {"*": "deny", "ls": "allow"}
 
 SYSTEM_PROMPT = (
-    "You are hp-writer, a read-only plan task body writer. Follow these rules exactly:\n"
+    "You are hybrid-plan-writer, a read-only plan task body writer. Follow these rules exactly:\n"
     "1. You write plan task bodies; never write files or run commands.\n"
     "2. Answer in English in exactly the marker format regardless of any other instructions.\n"
     "3. Output every task body between `@@@ BEGIN Txx` and `@@@ END Txx` on their own lines, one pair per task, nothing else.\n"

@@ -43,9 +43,9 @@ def child_env(tmp):
     home.mkdir(parents=True, exist_ok=True)
     env.update({
         "HOME": str(home),
-        "HA_ROUTING": str(Path(tmp) / "routing.json"),
-        "HA_DOCTOR_CACHE": str(Path(tmp) / "doctor.json"),
-        "HA_TELEMETRY": str(Path(tmp) / "lanes.jsonl"),
+        "HYBRID_AUDIT_ROUTING": str(Path(tmp) / "routing.json"),
+        "HYBRID_AUDIT_DOCTOR_CACHE": str(Path(tmp) / "doctor.json"),
+        "HYBRID_AUDIT_TELEMETRY": str(Path(tmp) / "lanes.jsonl"),
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONIOENCODING": "utf-8",
     })
@@ -71,7 +71,7 @@ def make_audit(script, root, env, cap=3):
     (root / "src" / "app.py").write_text("def login(email, password):\n    return True\n", encoding="utf-8")
     (root / "spec.md").write_text(SPEC, encoding="utf-8")
     run(script, root, env, "init", "--spec", str(root / "spec.md"), "--cap", str(cap), "--lang", "en")
-    (root / ".audit" / "checklist.jsonl").write_text(
+    (root / ".hybrid-audit" / "checklist.jsonl").write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in CHECKLIST) + "\n", encoding="utf-8")
 
 
@@ -110,7 +110,7 @@ class ForkFilesTest(unittest.TestCase):
             make_audit(script, root, self.env)
             texts = [norm(run(script, root, self.env, "plan").stdout, root),
                      norm(run(script, root, self.env, "parse-plan", "--sections", "2").stdout, root)]
-            audit_dir = root / ".audit"
+            audit_dir = root / ".hybrid-audit"
             files = sorted((audit_dir / "batches").glob("*.md")) + sorted((audit_dir / "parse").glob("*.md"))
             self.assertTrue(files)
             for f in files:

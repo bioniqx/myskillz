@@ -55,14 +55,14 @@ def _pid_gone(pid, wait_s=5.0):
 
 class BuildCmdTest(unittest.TestCase):
     def test_variant_rides_on_model(self):
-        cmd = oc_run.build_cmd("opencode", "hp-writer", "zai-coding-plan/glm-5.3", "high", "hello world")
+        cmd = oc_run.build_cmd("opencode", "hybrid-plan-writer", "zai-coding-plan/glm-5.3", "high", "hello world")
         self.assertEqual(cmd, [
-            "opencode", "run", "--standalone", "--agent", "hp-writer",
+            "opencode", "run", "--standalone", "--agent", "hybrid-plan-writer",
             "--model", "zai-coding-plan/glm-5.3#high", "--format", "json", "--auto", "hello world",
         ])
 
     def test_empty_variant_and_no_optional_flags(self):
-        cmd = oc_run.build_cmd("/bin/oc", "hp-writer", "p/m", "", "q")
+        cmd = oc_run.build_cmd("/bin/oc", "hybrid-plan-writer", "p/m", "", "q")
         self.assertEqual(cmd[0], "/bin/oc")
         self.assertIn("p/m", cmd)
         for flag in ("--dir", "--variant", "-s", "--session", "-f"):
@@ -70,19 +70,19 @@ class BuildCmdTest(unittest.TestCase):
         self.assertEqual(cmd[-1], "q")
 
     def test_session_then_attach_then_message(self):
-        cmd = oc_run.build_cmd("opencode", "hp-writer", "p/m", "low", "msg",
+        cmd = oc_run.build_cmd("opencode", "hybrid-plan-writer", "p/m", "low", "msg",
                                session="ses_1", attach="/abs/briefs/O01.oc.md")
         self.assertEqual(cmd, [
-            "opencode", "run", "--standalone", "--agent", "hp-writer",
+            "opencode", "run", "--standalone", "--agent", "hybrid-plan-writer",
             "--model", "p/m#low", "--format", "json", "--auto",
             "--session", "ses_1", "-f", "/abs/briefs/O01.oc.md", "msg",
         ])
 
     def test_session_only_and_attach_only(self):
-        repair = oc_run.build_cmd("opencode", "hp-writer", "p/m", "", "fix", session="ses_2")
+        repair = oc_run.build_cmd("opencode", "hybrid-plan-writer", "p/m", "", "fix", session="ses_2")
         self.assertEqual(repair[-3:], ["--session", "ses_2", "fix"])
         self.assertNotIn("-f", repair)
-        first = oc_run.build_cmd("opencode", "hp-writer", "p/m", "", "go", attach="/abs/b.md")
+        first = oc_run.build_cmd("opencode", "hybrid-plan-writer", "p/m", "", "go", attach="/abs/b.md")
         self.assertEqual(first[-3:], ["-f", "/abs/b.md", "go"])
         self.assertNotIn("--session", first)
 
@@ -302,8 +302,8 @@ class FakeCliTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.log = self.tmp / "log.jsonl"
-        self.env = dict(os.environ, HOME=str(self.tmp / "home"), HP_FAKE_LOG=str(self.log))
-        self.env.pop("HP_FAKE_SCRIPT", None)
+        self.env = dict(os.environ, HOME=str(self.tmp / "home"), HYBRID_WRITING_PLANS_FAKE_LOG=str(self.log))
+        self.env.pop("HYBRID_WRITING_PLANS_FAKE_SCRIPT", None)
         self.env.pop("OPENCODE_CONFIG_CONTENT", None)
 
     def tearDown(self):
@@ -320,9 +320,9 @@ class FakeCliTest(unittest.TestCase):
 
     def test_constants(self):
         fake = _load_fake()
-        self.assertEqual(fake.FAKE_SCRIPT_ENV, "HP_FAKE_SCRIPT")
-        self.assertEqual(fake.FAKE_LOG_ENV, "HP_FAKE_LOG")
-        self.assertEqual(fake.FAKE_MODELS_ENV, "HP_FAKE_MODELS")
+        self.assertEqual(fake.FAKE_SCRIPT_ENV, "HYBRID_WRITING_PLANS_FAKE_SCRIPT")
+        self.assertEqual(fake.FAKE_LOG_ENV, "HYBRID_WRITING_PLANS_FAKE_LOG")
+        self.assertEqual(fake.FAKE_MODELS_ENV, "HYBRID_WRITING_PLANS_FAKE_MODELS")
 
     def test_is_executable(self):
         self.assertTrue(os.access(str(FAKE), os.X_OK))
@@ -342,8 +342,8 @@ class FakeCliTest(unittest.TestCase):
     def test_script_list_replays_one_stream_per_round_and_logs(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps([{"text": "one"}, {"text": "two", "usage": {"input": 3}}]), encoding="utf-8")
-        self.env["HP_FAKE_SCRIPT"] = str(script)
-        cmd = oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "low", "msg")
+        self.env["HYBRID_WRITING_PLANS_FAKE_SCRIPT"] = str(script)
+        cmd = oc_run.build_cmd(str(FAKE), "hybrid-plan-writer", "p/m", "low", "msg")
         out = self.tmp / "out.jsonl"
         texts = []
         for _ in range(3):
@@ -366,13 +366,13 @@ class FakeCliTest(unittest.TestCase):
         brief.write_text("BRIEF BODY", encoding="utf-8")
         script = self.tmp / "script.json"
         script.write_text(json.dumps([{"text": "round one"}, {"text": "round two"}]), encoding="utf-8")
-        self.env["HP_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_WRITING_PLANS_FAKE_SCRIPT"] = str(script)
         out = self.tmp / "out.jsonl"
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "go", attach=str(brief)))
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-plan-writer", "p/m", "", "go", attach=str(brief)))
         out.write_text(proc.stdout, encoding="utf-8")
         first = oc_run.parse_events(out)
         self.assertEqual(first["session"], "ses_fake0001")
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "fix", session="ses_prev42"))
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-plan-writer", "p/m", "", "fix", session="ses_prev42"))
         out.write_text(proc.stdout, encoding="utf-8")
         second = oc_run.parse_events(out)
         self.assertEqual(second["session"], "ses_prev42")
@@ -394,8 +394,8 @@ class FakeCliTest(unittest.TestCase):
                 "status": "completed", "input": {"filePath": "/r/x"}, "output": marker}}}],
             "text": "@@@ BEGIN T01\nok\n@@@ END T01",
         }), encoding="utf-8")
-        self.env["HP_FAKE_SCRIPT"] = str(script)
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
+        self.env["HYBRID_WRITING_PLANS_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-plan-writer", "p/m", "", "msg"))
         out = self.tmp / "out.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
         with mock.patch.dict(os.environ, {"HOME": self.env["HOME"]}):
@@ -408,8 +408,8 @@ class FakeCliTest(unittest.TestCase):
     def test_error_step_exits_one(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps({"error": {"type": "ProviderAuthError", "message": "bad key"}}), encoding="utf-8")
-        self.env["HP_FAKE_SCRIPT"] = str(script)
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
+        self.env["HYBRID_WRITING_PLANS_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-plan-writer", "p/m", "", "msg"))
         self.assertEqual(proc.returncode, 1)
         out = self.tmp / "out.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
@@ -418,8 +418,8 @@ class FakeCliTest(unittest.TestCase):
     def _run_scenario(self, step):
         script = self.tmp / "scenario.json"
         script.write_text(json.dumps(step), encoding="utf-8")
-        self.env["HP_FAKE_SCRIPT"] = str(script)
-        proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
+        self.env["HYBRID_WRITING_PLANS_FAKE_SCRIPT"] = str(script)
+        proc = self._call(oc_run.build_cmd(str(FAKE), "hybrid-plan-writer", "p/m", "", "msg"))
         out = self.tmp / "scenario.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
         return proc.returncode, oc_run.parse_events(out)
@@ -447,7 +447,7 @@ class FakeCliTest(unittest.TestCase):
         self.assertEqual((parsed["text"], parsed["events"], parsed["errors"]), ("", 0, []))
 
     def test_models_can_list_nothing(self):
-        self.env["HP_FAKE_MODELS"] = "empty"
+        self.env["HYBRID_WRITING_PLANS_FAKE_MODELS"] = "empty"
         proc = self._call([str(FAKE), "models"])
         self.assertEqual((proc.returncode, proc.stdout), (0, ""))
 
@@ -458,14 +458,14 @@ class RunOnceTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.root = self.tmp / "repo"
         self.root.mkdir()
-        self.oc_dir = self.root / "docs" / "superpowers" / "plans" / ".work" / "p" / "oc"
+        self.oc_dir = self.root / "docs" / "superpowers" / "plans" / ".hybrid-work" / "p" / "oc"
         self.script = self.tmp / "script.json"
         self.log = self.tmp / "log.jsonl"
         self.env = dict(
             os.environ,
             HOME=str(self.tmp / "home"),
-            HP_FAKE_SCRIPT=str(self.script),
-            HP_FAKE_LOG=str(self.log),
+            HYBRID_WRITING_PLANS_FAKE_SCRIPT=str(self.script),
+            HYBRID_WRITING_PLANS_FAKE_LOG=str(self.log),
         )
         self.env.pop("OPENCODE_CONFIG_CONTENT", None)
 
@@ -474,7 +474,7 @@ class RunOnceTest(unittest.TestCase):
 
     def _run(self, step, stall_s=30, timeout_s=60, binary=None, session="", attach=""):
         self.script.write_text(json.dumps(step), encoding="utf-8")
-        cmd = oc_run.build_cmd(binary or str(FAKE), "hp-writer", "zai-coding-plan/glm-5.3-flash", "low", "Write.",
+        cmd = oc_run.build_cmd(binary or str(FAKE), "hybrid-plan-writer", "zai-coding-plan/glm-5.3-flash", "low", "Write.",
                                session=session, attach=attach)
         return oc_run.run_once(
             cmd, self.root, self.env, self.oc_dir / "O01.1.jsonl", self.oc_dir / "O01.1.err", stall_s, timeout_s,

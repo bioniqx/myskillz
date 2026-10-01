@@ -36,7 +36,7 @@ class TestContextSh(unittest.TestCase):
                     script=CONTEXT_SH, default_routing=False):
         env = dict(os.environ)
         env["HOME"] = str(self.home)
-        env["HB_OC_BIN"] = oc_bin
+        env["HYBRID_BRAINSTORMING_OC_BIN"] = oc_bin
         env.pop("HYBRID_OPENCODE_STD", None)
         env.pop("HYBRID_OPENCODE_LITE", None)
         if std is not None:
@@ -44,15 +44,15 @@ class TestContextSh(unittest.TestCase):
         if lite is not None:
             env["HYBRID_OPENCODE_LITE"] = lite
         if default_routing:
-            env.pop("HB_ROUTING", None)
+            env.pop("HYBRID_BRAINSTORMING_ROUTING", None)
         elif routing_path is not None:
-            env["HB_ROUTING"] = str(routing_path)
+            env["HYBRID_BRAINSTORMING_ROUTING"] = str(routing_path)
         else:
-            env["HB_ROUTING"] = str(self.root / "no-routing.json")
+            env["HYBRID_BRAINSTORMING_ROUTING"] = str(self.root / "no-routing.json")
         if doctor_path is not None:
-            env["HB_DOCTOR_CACHE"] = str(doctor_path)
+            env["HYBRID_BRAINSTORMING_DOCTOR_CACHE"] = str(doctor_path)
         else:
-            env.pop("HB_DOCTOR_CACHE", None)
+            env.pop("HYBRID_BRAINSTORMING_DOCTOR_CACHE", None)
         result = subprocess.run(
             ["sh", str(script)],
             cwd=str(self.cwd),

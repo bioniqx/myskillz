@@ -4,11 +4,36 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import oc_doctor
+
+
+def _pipe_run_captured(cmd, timeout):
+    # These tests mock subprocess.run and hand back stdout directly; the real run_captured reads
+    # stdout from a temp file (opencode truncates pipes), which a mock cannot fill.
+    import subprocess as _sp
+    return _sp.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+_SEAM = []
+
+
+def setUpModule():
+    import hybrid_shared
+    for owner in (hybrid_shared, oc_doctor):
+        if hasattr(owner, "run_captured"):
+            patcher = mock.patch.object(owner, "run_captured", _pipe_run_captured)
+            patcher.start()
+            _SEAM.append(patcher)
+
+
+def tearDownModule():
+    while _SEAM:
+        _SEAM.pop().stop()
 import hybrid_shared
 
 FAKE = Path(__file__).resolve().parent / "fake_opencode.py"
@@ -294,7 +319,7 @@ class TestPingTier(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 tier = {"model": "zai-coding-plan/glm-5.3", "variant": "high"}
-                oc_doctor.ping_tier("opencode", tier, "you are a careful engineer", "ht-programmer", Path(tmp))
+                oc_doctor.ping_tier("opencode", tier, "you are a careful engineer", "hybrid-team-programmer", Path(tmp))
         finally:
             self._unpatch(originals)
 
@@ -303,7 +328,7 @@ class TestPingTier(unittest.TestCase):
         self.assertNotEqual(calls["build_cmd"][3], "you are a careful engineer")
         # prompt_text is injected only through config_env, as the agent's prompt
         self.assertEqual(calls["config_env"][0], "you are a careful engineer")
-        self.assertEqual(calls["config_env"][1], "ht-programmer")
+        self.assertEqual(calls["config_env"][1], "hybrid-team-programmer")
 
     def test_env_passed_to_run_once_includes_os_environ_and_config(self):
         captured = {}
@@ -322,7 +347,7 @@ class TestPingTier(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 tier = {"model": "m", "variant": "high"}
-                oc_doctor.ping_tier("opencode", tier, "prompt", "ht-programmer", Path(tmp))
+                oc_doctor.ping_tier("opencode", tier, "prompt", "hybrid-team-programmer", Path(tmp))
         finally:
             self._unpatch(originals)
 
@@ -345,7 +370,7 @@ class TestPingTier(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 tier = {"model": "zai-coding-plan/glm-5.3", "variant": "high"}
-                ok, detail = oc_doctor.ping_tier("opencode", tier, "ping", "ht-programmer", Path(tmp))
+                ok, detail = oc_doctor.ping_tier("opencode", tier, "ping", "hybrid-team-programmer", Path(tmp))
         finally:
             self._unpatch(originals)
 
@@ -368,7 +393,7 @@ class TestPingTier(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 tier = {"model": "m", "variant": "low"}
-                ok, detail = oc_doctor.ping_tier("opencode", tier, "ping", "ht-programmer", Path(tmp))
+                ok, detail = oc_doctor.ping_tier("opencode", tier, "ping", "hybrid-team-programmer", Path(tmp))
         finally:
             self._unpatch(originals)
 
@@ -389,7 +414,7 @@ class TestPingTier(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 tier = {"model": "m", "variant": "low"}
-                ok, detail = oc_doctor.ping_tier("opencode", tier, "ping", "ht-programmer", Path(tmp))
+                ok, detail = oc_doctor.ping_tier("opencode", tier, "ping", "hybrid-team-programmer", Path(tmp))
         finally:
             self._unpatch(originals)
 
@@ -432,7 +457,7 @@ class TestPingTierClassified(unittest.TestCase):
 
     def _ping(self):
         with tempfile.TemporaryDirectory() as tmp:
-            return oc_doctor.ping_tier("opencode", self.TIER, "ping", "ht-programmer", Path(tmp))
+            return oc_doctor.ping_tier("opencode", self.TIER, "ping", "hybrid-team-programmer", Path(tmp))
 
     def test_ok_ping_carries_cache_key_and_no_kind(self):
         self.result = {"session": "s0", "text": oc_doctor.SENTINEL, "rc": 0, "reason": ""}

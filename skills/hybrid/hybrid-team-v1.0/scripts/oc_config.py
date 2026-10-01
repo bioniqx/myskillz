@@ -1,4 +1,4 @@
-"""oc_config: injected opencode agent config, permission block, and prompt wiring for ht-programmer.
+"""oc_config: injected opencode agent config, permission block, and prompt wiring for hybrid-team-programmer.
 
 How opencode v2 decides (https://opencode.ai/docs/permissions, checked against v2.0.20):
 - Every permission map becomes an ordered rule list and the LAST matching rule wins. A tool or a
@@ -16,7 +16,7 @@ import copy
 import json
 import os
 
-AGENT_NAME = "ht-programmer"
+AGENT_NAME = "hybrid-team-programmer"
 SENTINEL = "HT-AGENT-OK"
 
 READ_ONLY_GIT = ("git status *", "git diff *", "git log *", "git show *")
@@ -25,7 +25,8 @@ READ_ONLY_TOOLS = ("ls *", "cat *", "head *", "tail *", "wc *", "grep *", "rg *"
 
 COMMIT_HELPERS = ("commit-red", "commit-green", "commit-work", "commit-fast")
 
-COMMAND_KEYS = ("build", "test", "test_file", "lint", "lint_file", "typecheck", "typecheck_file", "bench")
+# `verify` is the slice's own evidence command (chore/docs/perf), which the briefing calls pre-approved.
+COMMAND_KEYS = ("build", "test", "test_file", "lint", "lint_file", "typecheck", "typecheck_file", "bench", "verify")
 
 # Same text as devteam.isolation_prefix(), with the per-slice values wildcarded.
 ISOLATION_PREFIX = "PORT=* DB_SUFFIX=* TMPDIR=.slice/tmp "

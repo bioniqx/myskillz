@@ -20,9 +20,9 @@ class WaitCase(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.env = mock.patch.dict(os.environ, {
             "HOME": self.tmp,
-            "HP_ROUTING": os.path.join(self.tmp, "routing.json"),
-            "HP_DOCTOR_CACHE": os.path.join(self.tmp, "doctor.json"),
-            "HP_TELEMETRY": os.path.join(self.tmp, "lanes.jsonl"),
+            "HYBRID_WRITING_PLANS_ROUTING": os.path.join(self.tmp, "routing.json"),
+            "HYBRID_WRITING_PLANS_DOCTOR_CACHE": os.path.join(self.tmp, "doctor.json"),
+            "HYBRID_WRITING_PLANS_TELEMETRY": os.path.join(self.tmp, "lanes.jsonl"),
         })
         self.env.start()
         self.work = os.path.join(self.tmp, "work")
@@ -42,7 +42,7 @@ class WaitCase(unittest.TestCase):
     def write_fb(self, gid, tasks, reason="lint", sent=False):
         fb = {"gid": gid, "reason": reason, "tasks": tasks,
               "brief": os.path.join(self.work, "briefs", gid + "F.md"),
-              "model": "sonnet", "subagent_type": "plan-task-writer",
+              "model": "sonnet", "subagent_type": "hybrid-plan-task-writer",
               "errors": {}, "t": "2026-09-28T00:00:00Z"}
         path = os.path.join(self.oc, gid + ".fallback")
         with open(path, "w", encoding="utf-8") as f:
@@ -89,10 +89,10 @@ class TestOcAlive(WaitCase):
 class TestFallbackLines(WaitCase):
     def test_fallback_line_matches_spec_format(self):
         fb = {"gid": "O02", "reason": "lint", "tasks": ["T06"], "brief": "/w/briefs/O02F.md",
-              "model": "sonnet", "subagent_type": "plan-task-writer", "errors": {}, "t": "x"}
+              "model": "sonnet", "subagent_type": "hybrid-plan-task-writer", "errors": {}, "t": "x"}
         self.assertEqual(
             hp_wait.fallback_line(fb),
-            "FALLBACK O02 (lint) T06 → Agent subagent_type=plan-task-writer model=sonnet "
+            "FALLBACK O02 (lint) T06 → Agent subagent_type=hybrid-plan-task-writer model=sonnet "
             "description 'plan O02F' prompt: Read /w/briefs/O02F.md and follow it exactly.")
 
     def test_fallback_line_joins_tasks_with_commas(self):

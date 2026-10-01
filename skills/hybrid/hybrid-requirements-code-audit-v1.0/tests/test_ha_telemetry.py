@@ -21,12 +21,12 @@ class TestPathRecordLoad(unittest.TestCase):
 
     def test_telemetry_path_env_override(self):
         target = self.root / "t" / "lanes.jsonl"
-        with mock.patch.dict(os.environ, {"HA_TELEMETRY": str(target)}):
+        with mock.patch.dict(os.environ, {"HYBRID_AUDIT_TELEMETRY": str(target)}):
             self.assertEqual(ha_telemetry.telemetry_path(), target)
 
     def test_telemetry_path_default_under_home(self):
         env = dict(os.environ)
-        env.pop("HA_TELEMETRY", None)
+        env.pop("HYBRID_AUDIT_TELEMETRY", None)
         env["HOME"] = str(self.root)
         with mock.patch.dict(os.environ, env, clear=True):
             self.assertEqual(
@@ -36,7 +36,7 @@ class TestPathRecordLoad(unittest.TestCase):
 
     def test_record_appends_lines_and_adds_t(self):
         target = self.root / "sub" / "lanes.jsonl"
-        with mock.patch.dict(os.environ, {"HA_TELEMETRY": str(target)}):
+        with mock.patch.dict(os.environ, {"HYBRID_AUDIT_TELEMETRY": str(target)}):
             ha_telemetry.record({"kind": "run", "name": "batch-01"})
             ha_telemetry.record({"kind": "item", "id": "R1", "t": "2026-01-01T00:00:00Z"})
         lines = target.read_text(encoding="utf-8").splitlines()
@@ -52,7 +52,7 @@ class TestPathRecordLoad(unittest.TestCase):
         blocker = self.root / "file.txt"
         blocker.write_text("x", encoding="utf-8")
         target = blocker / "lanes.jsonl"
-        with mock.patch.dict(os.environ, {"HA_TELEMETRY": str(target)}):
+        with mock.patch.dict(os.environ, {"HYBRID_AUDIT_TELEMETRY": str(target)}):
             self.assertIsNone(ha_telemetry.record({"kind": "run"}))
         self.assertFalse(target.exists())
 

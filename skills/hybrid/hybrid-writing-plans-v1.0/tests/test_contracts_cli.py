@@ -105,16 +105,16 @@ class CliBase(unittest.TestCase):
         self.repo = self.tmp / "repo"
         self.plan = make_repo(self.repo)
         self.spec = self.repo / "docs" / "spec.md"
-        self.work = self.plan.parent / ".work" / self.plan.stem
+        self.work = self.plan.parent / ".hybrid-work" / self.plan.stem
         (self.tmp / "home").mkdir()
         self.env = dict(os.environ)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.update({
             "HOME": str(self.tmp / "home"),
-            "HP_ROUTING": str(self.tmp / "routing.json"),
-            "HP_DOCTOR_CACHE": str(self.tmp / "doctor.json"),
-            "HP_TELEMETRY": str(self.tmp / "lanes.jsonl"),
-            "HP_OC_BIN": str(FAKE),
+            "HYBRID_WRITING_PLANS_ROUTING": str(self.tmp / "routing.json"),
+            "HYBRID_WRITING_PLANS_DOCTOR_CACHE": str(self.tmp / "doctor.json"),
+            "HYBRID_WRITING_PLANS_TELEMETRY": str(self.tmp / "lanes.jsonl"),
+            "HYBRID_WRITING_PLANS_OC_BIN": str(FAKE),
             "XDG_DATA_HOME": str(self.tmp / "xdg"),
             "PYTHONDONTWRITEBYTECODE": "1",
         })
@@ -145,7 +145,7 @@ class CliBase(unittest.TestCase):
             tiers[name] = entry
         doctor = {"t": "2026-09-29T00:00:00Z", "ok": True, "version": "2.0.19", "binary": str(FAKE),
                   "tiers": tiers}
-        Path(self.env["HP_DOCTOR_CACHE"]).write_text(json.dumps(doctor), encoding="utf-8")
+        Path(self.env["HYBRID_WRITING_PLANS_DOCTOR_CACHE"]).write_text(json.dumps(doctor), encoding="utf-8")
 
     def work_json(self):
         return json.loads((self.work / "work.json").read_text(encoding="utf-8"))
@@ -184,7 +184,7 @@ class ContractsRoutingTest(CliBase):
         self.assertEqual(info["oc"]["tiers"]["lite"]["variant"], "low")
         self.assertEqual(info["oc"]["max_repairs"], 2)
         self.assertEqual(info["oc"]["throttle_cooldown_s"], 120)
-        self.assertEqual(info["oc"]["review_oc"], "all")
+        self.assertEqual(info["oc"]["review_oc"], "risky")
 
     def test_opencode_preset_sends_every_task_to_opencode(self):
         self.write_doctor()
@@ -287,7 +287,7 @@ class ContractsReportingTest(CliBase):
 
     def test_model_in_the_user_file_is_used_for_that_tier(self):
         self.write_doctor()
-        Path(self.env["HP_ROUTING"]).write_text(
+        Path(self.env["HYBRID_WRITING_PLANS_ROUTING"]).write_text(
             json.dumps({"tiers": {"std": {"model": "own/model"}}}), encoding="utf-8")
         rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
         self.assertEqual(rc, 0, out + err)
@@ -300,6 +300,43 @@ class ContractsReportingTest(CliBase):
         self.assertEqual(tiers["std"]["model"], "own/model")
         self.assertNotIn("variant", tiers["std"])
         self.assertEqual(tiers["lite"]["model"], "zai-coding-plan/glm-5.3-flash")
+
+
+def small_plan(n):
+    head = PLAN.split("#### T01")[0]
+    tasks = ["#### T%02d: helper %d\n- Files: `src/h%d.py`\n- Produces: `def h%d(name: str) -> str`\n- Spec: L1-4\n" % (i, i, i, i)
+             for i in range(1, n + 1)]
+    return head + "\n".join(tasks)
+
+
+class ContractsSmallPlanTest(CliBase):
+    def test_one_to_three_tasks_fan_out_in_hybrid_and_opencode(self):
+        self.write_doctor()
+        for n in (1, 2, 3):
+            for preset in ("hybrid", "opencode"):
+                with self.subTest(tasks=n, preset=preset):
+                    self.plan.write_text(small_plan(n), encoding="utf-8")
+                    rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", preset)
+                    self.assertEqual(rc, 0, out + err)
+                    self.assertIn("| 0 writers (cap 20) | %d opencode groups" % n, out)
+                    self.assertTrue(any(l.startswith("OPENCODE %d groups" % n) for l in out.splitlines()), out)
+                    self.assertEqual(sorted(self.work_json()["backend"].values()), ["oc:std"] * n)
+
+    def test_overflow_groups_queue_by_default_and_go_to_claude_with_oc_overflow_claude(self):
+        self.write_doctor()
+        self.plan.write_text(small_plan(3), encoding="utf-8")
+        routing = Path(self.env["HYBRID_WRITING_PLANS_ROUTING"])
+        routing.write_text(json.dumps({"tiers": {"std": {"max_parallel": 1}}, "oc_group_max": 1}), encoding="utf-8")
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(sorted(self.work_json()["backend"].values()), ["oc:std"] * 3)
+        self.assertIn("NOTE 2 of the 3 std groups queue for a free slot (max_parallel 1); wait covers them", out.splitlines())
+        routing.write_text(json.dumps({"tiers": {"std": {"max_parallel": 1}}, "oc_group_max": 1,
+                                       "oc_overflow": "claude"}), encoding="utf-8")
+        rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual(sorted(self.work_json()["backend"].values()), ["claude", "claude", "oc:std"])
+        self.assertFalse([l for l in out.splitlines() if l.startswith("NOTE ") and "queue" in l], out)
 
 
 def body_t02(extra=""):
@@ -375,7 +412,7 @@ class ContractsRerunTest(CliBase):
         self.assertEqual(list((self.work / "briefs").glob("*.oc.md")), [])
 
     def test_brief_of_a_partly_written_group_names_only_the_pending_tasks(self):
-        Path(self.env["HP_ROUTING"]).write_text(json.dumps({"tiers": {"std": {"max_parallel": 1}}}), encoding="utf-8")
+        Path(self.env["HYBRID_WRITING_PLANS_ROUTING"]).write_text(json.dumps({"tiers": {"std": {"max_parallel": 1}}}), encoding="utf-8")
         self.first_run()
         self.assertEqual(self.work_json()["groups"]["O02"], ["T02", "T03"])
         self.seed_written_t02()
@@ -475,19 +512,19 @@ class OcWriteTest(CliBase):
 class DoctorTest(CliBase):
     def missing_binary(self):
         missing = str(self.tmp / "no-such-opencode")
-        self.env["HP_OC_BIN"] = missing
+        self.env["HYBRID_WRITING_PLANS_OC_BIN"] = missing
         return missing
 
     def test_doctor_with_missing_binary_creates_no_routing_file(self):
         missing = self.missing_binary()
-        routing = Path(self.env["HP_ROUTING"])
+        routing = Path(self.env["HYBRID_WRITING_PLANS_ROUTING"])
         rc, out, err = self.tool("doctor")
         self.assertEqual(rc, 1, out + err)
         lines = out.splitlines()
         self.assertIn("opencode: unavailable (%s)" % missing, lines)
-        self.assertIn("doctor cache: %s" % self.env["HP_DOCTOR_CACHE"], lines)
+        self.assertIn("doctor cache: %s" % self.env["HYBRID_WRITING_PLANS_DOCTOR_CACHE"], lines)
         self.assertFalse(routing.exists())
-        cache = json.loads(Path(self.env["HP_DOCTOR_CACHE"]).read_text(encoding="utf-8"))
+        cache = json.loads(Path(self.env["HYBRID_WRITING_PLANS_DOCTOR_CACHE"]).read_text(encoding="utf-8"))
         self.assertFalse(cache.get("ok"))
         rc, out, err = self.tool("doctor")
         self.assertEqual(rc, 1, out + err)
@@ -526,7 +563,7 @@ class StatsTest(CliBase):
             {"t": "2026-09-28T12:00:00Z", "kind": "review", "repo": str(self.repo), "plan": str(self.plan),
              "task": "T01", "tier": "std", "fixed_by_review": True},
         ]
-        path = Path(self.env["HP_TELEMETRY"])
+        path = Path(self.env["HYBRID_WRITING_PLANS_TELEMETRY"])
         path.write_text("".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
         return path
 

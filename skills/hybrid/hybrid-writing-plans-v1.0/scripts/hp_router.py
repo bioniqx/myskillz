@@ -24,12 +24,13 @@ PRESETS = ("claude", "hybrid", "opencode")
 CONTRACT_TIERS = ("light", "std", "deep")
 
 _DEFAULT_PRESET = "hybrid"
-_REVIEW_DEFAULTS = {"claude": "risky", "hybrid": "all", "opencode": "risky"}
+_REVIEW_DEFAULTS = {"claude": "risky", "hybrid": "risky", "opencode": "risky"}
 _REVIEW_VALUES = ("all", "risky")
+OVERFLOW_VALUES = ("queue", "claude")
 
 
 def user_routing_path() -> Path:
-    override = os.environ.get("HP_ROUTING")
+    override = os.environ.get("HYBRID_WRITING_PLANS_ROUTING")
     if override:
         return Path(override)
     return Path(__file__).resolve().parent.parent / "routing.json"
@@ -78,7 +79,7 @@ def _drop_bad_tiers(data: dict, user_path: Path, problems: list) -> dict:
 
 
 def _drop_bad_values(data: dict, user_path: Path, problems: list) -> dict:
-    """Return data without the roles, review_oc and preset values the router cannot use, noting each in problems."""
+    """Return data without the roles, review_oc, oc_overflow and preset values the router cannot use, noting each in problems."""
     data = _drop_bad_tiers(data, user_path, problems)
     data = dict(data)
     for key in ("roles", "max_roles"):
@@ -98,6 +99,9 @@ def _drop_bad_values(data: dict, user_path: Path, problems: list) -> dict:
     if "review_oc" in data and not isinstance(data["review_oc"], dict):
         problems.append("%s: review_oc must be a JSON object; ignored" % user_path)
         del data["review_oc"]
+    if "oc_overflow" in data and data["oc_overflow"] not in OVERFLOW_VALUES:
+        problems.append("%s: oc_overflow %r is not one of queue, claude; ignored" % (user_path, data["oc_overflow"]))
+        del data["oc_overflow"]
     if "preset" in data and hybrid_shared.mode_to_preset(data["preset"])[0] not in PRESETS:
         problems.append("%s: preset %r is not one of claude, hybrid, opencode; ignored" % (user_path, data["preset"]))
         del data["preset"]
@@ -185,6 +189,12 @@ def route(tier: str, routing: dict, doctor: dict, preset: str = "", now: float =
     if tier_available(tier_name, routing, doctor, now, breaker_dir):
         return "oc:" + tier_name
     return "held" if active == "opencode" else "claude"
+
+
+def oc_overflow(routing: dict) -> str:
+    """queue (default) keeps tasks beyond a tier's max_parallel * oc_group_max on opencode; claude moves them to Claude."""
+    value = routing.get("oc_overflow")
+    return value if value in OVERFLOW_VALUES else "queue"
 
 
 def review_policy(routing: dict, preset: str = "") -> str:

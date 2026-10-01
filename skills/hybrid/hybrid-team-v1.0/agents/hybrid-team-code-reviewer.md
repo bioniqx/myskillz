@@ -1,5 +1,5 @@
 ---
-name: ht-code-reviewer
+name: hybrid-team-code-reviewer
 description: >-
   Independent senior code reviewer for the hybrid-team workflow. Read-only review of a
   merged batch of slices (or a final delta) for fidelity to the acceptance criteria,

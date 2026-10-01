@@ -25,7 +25,7 @@ class BuildCmdTest(unittest.TestCase):
         self.assertEqual(
             cmd,
             [
-                "opencode", "run", "--standalone", "--agent", "ht-programmer",
+                "opencode", "run", "--standalone", "--agent", "hybrid-team-programmer",
                 "--model", "zai-coding-plan/glm-5.3#high",
                 "--format", "json", "--auto", "do the slice",
             ],

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fake `opencode` CLI for hybrid-team tests. Never calls a model.
 
-Env HT_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
+Env HYBRID_TEAM_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
 (call N uses entry N, the last entry repeats; the count lives in <script>.calls).
-Env HT_FAKE_LOG names a file that receives one JSON line per call:
+Env HYBRID_TEAM_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config}.
 A step may set "scenario" (auth, model_not_found, throttle, recovered, empty) to start
 from a canned step, "finish" (a step_finish reason such as "stop") and, for the
@@ -16,8 +16,8 @@ import sys
 import time
 from pathlib import Path
 
-FAKE_SCRIPT_ENV = "HT_FAKE_SCRIPT"
-FAKE_LOG_ENV = "HT_FAKE_LOG"
+FAKE_SCRIPT_ENV = "HYBRID_TEAM_FAKE_SCRIPT"
+FAKE_LOG_ENV = "HYBRID_TEAM_FAKE_LOG"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
 

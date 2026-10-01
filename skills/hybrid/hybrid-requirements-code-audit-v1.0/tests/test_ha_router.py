@@ -22,9 +22,10 @@ EXPECTED_DEFAULTS = {
         "std": {"max_parallel": 6, "stall_s": 180, "timeout_s": 900},
         "lite": {"max_parallel": 6, "stall_s": 120, "timeout_s": 600},
     },
-    "roles": {"investigator": "std", "verifier": "claude", "parser": "claude"},
+    "roles": {"investigator": "std", "verifier": "claude", "parser": "std"},
     "max_roles": {"verifier": "std", "parser": "std"},
     "oc_batch_max": 4,
+    "oc_overflow": "queue",
     "max_repairs": 2,
     "throttle_cooldown_s": 120,
 }
@@ -126,7 +127,7 @@ class TestLoadRouting(unittest.TestCase):
         self.assertEqual(routing["tiers"]["lite"]["stall_s"], 120)
         self.assertEqual(routing["tiers"]["big"]["stall_s"], 5)
         self.assertEqual(routing["roles"],
-                         {"investigator": "std", "verifier": "std", "parser": "claude"})
+                         {"investigator": "std", "verifier": "std", "parser": "std"})
         self.assertEqual(routing["max_repairs"], 1)
         self.assertEqual(routing["oc_batch_max"], 4)
         self.assertEqual(routing["config_problems"], [])
@@ -172,6 +173,33 @@ class TestLoadRouting(unittest.TestCase):
         self.assertEqual(routing["oc_batch_max"], 4)
         self.assertEqual(routing["tiers"]["std"]["stall_s"], 90)
         self.assertIsInstance(routing["tiers"]["std"]["max_parallel"], int)
+
+    def test_oc_overflow_defaults_to_queue_and_accepts_claude(self):
+        self.assertEqual(self.load()["oc_overflow"], "queue")
+        user = self.tmp / "routing.json"
+        user.write_text(json.dumps({"oc_overflow": "claude"}))
+        routing = self.load(user)
+        self.assertEqual(routing["oc_overflow"], "claude")
+        self.assertEqual(routing["config_problems"], [])
+
+    def test_bad_oc_overflow_is_a_config_problem_and_falls_back_to_queue(self):
+        user = self.tmp / "routing.json"
+        for bad in ("haiku", "Claude", True, 3, ["claude"], None):
+            user.write_text(json.dumps({"oc_overflow": bad}))
+            routing = self.load(user)
+            self.assertEqual(routing["oc_overflow"], "queue", bad)
+            self.assertEqual(len(routing["config_problems"]), 1, bad)
+            self.assertIn("oc_overflow", routing["config_problems"][0])
+            self.assertIn(str(user), routing["config_problems"][0])
+
+    def test_oc_queues_overflow(self):
+        queues = ha_router.oc_queues_overflow
+        self.assertTrue(queues({"preset": "hybrid"}))
+        self.assertTrue(queues({"preset": "hybrid", "oc_overflow": "queue"}))
+        self.assertFalse(queues({"preset": "hybrid", "oc_overflow": "claude"}))
+        self.assertFalse(queues({"preset": "hybrid", "oc_overflow": "claude"}, "hybrid"))
+        self.assertTrue(queues({"preset": "hybrid", "oc_overflow": "claude"}, "opencode"))
+        self.assertTrue(queues({"oc_overflow": "claude"}, "max"))
 
     def test_null_model_in_a_user_tier_is_not_a_problem(self):
         user = self.tmp / "routing.json"
@@ -257,20 +285,20 @@ class TestLoadRouting(unittest.TestCase):
 
 class TestUserRoutingPath(unittest.TestCase):
     def test_user_routing_path_env_override(self):
-        with mock.patch.dict(os.environ, {"HA_ROUTING": "/tmp/x/routing.json"}):
+        with mock.patch.dict(os.environ, {"HYBRID_AUDIT_ROUTING": "/tmp/x/routing.json"}):
             self.assertEqual(ha_router.user_routing_path(), Path("/tmp/x/routing.json"))
 
     def test_user_routing_path_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = dict(os.environ)
-            env.pop("HA_ROUTING", None)
+            env.pop("HYBRID_AUDIT_ROUTING", None)
             env["HOME"] = tmp
             with mock.patch.dict(os.environ, env, clear=True):
                 self.assertEqual(ha_router.user_routing_path(), SKILL / "routing.json")
 
     def test_user_routing_path_default_is_next_to_shipped_defaults(self):
         with mock.patch.dict(os.environ):
-            os.environ.pop("HA_ROUTING", None)
+            os.environ.pop("HYBRID_AUDIT_ROUTING", None)
             self.assertEqual(ha_router.user_routing_path().parent, DEFAULTS.parent)
 
 
@@ -308,7 +336,7 @@ class TestPresetAndRoleTier(unittest.TestCase):
         routing = make_routing()
         self.assertEqual(ha_router.role_tier("investigator", routing, "hybrid"), "std")
         self.assertEqual(ha_router.role_tier("verifier", routing, "hybrid"), "claude")
-        self.assertEqual(ha_router.role_tier("parser", routing, "hybrid"), "claude")
+        self.assertEqual(ha_router.role_tier("parser", routing, "hybrid"), "std")
         self.assertEqual(ha_router.role_tier("investigator", routing), "std")
 
     def test_role_tier_opencode(self):
@@ -318,7 +346,7 @@ class TestPresetAndRoleTier(unittest.TestCase):
         self.assertEqual(ha_router.role_tier("parser", routing, "opencode"), "std")
         routing["max_roles"] = {"verifier": "lite"}
         self.assertEqual(ha_router.role_tier("verifier", routing, "opencode"), "lite")
-        self.assertEqual(ha_router.role_tier("parser", routing, "opencode"), "claude")
+        self.assertEqual(ha_router.role_tier("parser", routing, "opencode"), "std")
 
     def test_role_tier_unknown_role_or_missing_roles(self):
         routing = make_routing()
@@ -405,7 +433,7 @@ class TestRoute(unittest.TestCase):
     def test_route_hybrid(self):
         self.assertEqual(self.route("investigator"), "oc:std")
         self.assertEqual(self.route("verifier"), "claude")
-        self.assertEqual(self.route("parser", "hybrid"), "claude")
+        self.assertEqual(self.route("parser", "hybrid"), "oc:std")
 
     def test_route_opencode(self):
         for role in ha_router.ROLES:

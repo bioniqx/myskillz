@@ -67,9 +67,9 @@ class GoldenTests(unittest.TestCase):
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.pop("HYBRID_OPENCODE_STD", None)
         self.env.pop("HYBRID_OPENCODE_LITE", None)
-        self.env.update({"HOME": str(home), "HA_ROUTING": str(self.tmp / "config" / "routing.json"),
-                         "HA_DOCTOR_CACHE": str(self.tmp / "cache" / "doctor.json"),
-                         "HA_TELEMETRY": str(self.tmp / "cache" / "lanes.jsonl"), "HA_OC_BIN": str(FAKE),
+        self.env.update({"HOME": str(home), "HYBRID_AUDIT_ROUTING": str(self.tmp / "config" / "routing.json"),
+                         "HYBRID_AUDIT_DOCTOR_CACHE": str(self.tmp / "cache" / "doctor.json"),
+                         "HYBRID_AUDIT_TELEMETRY": str(self.tmp / "cache" / "lanes.jsonl"), "HYBRID_AUDIT_OC_BIN": str(FAKE),
                          "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"})
 
     def tearDown(self):
@@ -82,7 +82,7 @@ class GoldenTests(unittest.TestCase):
         (work / "src" / "app.py").write_text(APP, encoding="utf-8")
         spec = work / "spec.md"
         spec.write_text(SPEC, encoding="utf-8")
-        out = work / ".audit"
+        out = work / ".hybrid-audit"
 
         def cli(*args):
             r = subprocess.run([sys.executable, str(scripts / "audit.py"), "--cwd", str(work)] + list(args),

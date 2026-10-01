@@ -20,7 +20,7 @@ lanes without lowering the merge bar dev-team-v3.2 enforces today.
   the `claude` and `hybrid` modes - `doctor` reports it with an `OC-ERROR` line and every slice
   runs on Claude; in `opencode` mode those slices are held instead.
 - Drop this folder where Claude Code loads skills from, alongside (not instead of) `dev-team-v3.2`
-  if you want both installed: agents are namespaced `ht-*` and state lives under
+  if you want both installed: every shared name carries the `hybrid` prefix (see Names) and state lives under
   `.claude/hybrid-team/`, so the two skills never collide.
 
 ## Backends
@@ -28,7 +28,7 @@ lanes without lowering the merge bar dev-team-v3.2 enforces today.
 | Backend | Runs | Where |
 |---|---|---|
 | Claude | planning, all reviews, verification, investigators, RED, `research`/`perf`, anything the router can't offload | Claude Code subagents, background |
-| opencode | GREEN of small/trivial `code`, `refactor`, `test` backfill, non-large `chore`, `docs` | `.claude/worktrees/oc-<id>` via the `lane` command |
+| opencode | GREEN of `code` (any size, except `risk: high`), `refactor`, `test` backfill, `chore`, `docs` | `.claude/worktrees/hybrid-oc-<id>` via the `lane` command |
 
 ## Run modes
 
@@ -43,11 +43,22 @@ lists the `std` and `lite` model specs, each marked `(skill)` (the model is set 
 |---|---|---|
 | Claude only / `claude` | never spawned; `doctor` not required | not applicable |
 | Hybrid / `hybrid` | offloadable lanes run on it | a connection failure is retried 3 times first; then the `OC-ERROR` line is printed at once and the slice re-runs on Claude automatically. A connection or non-retryable failure also switches the rest of the run to Claude Sonnet 5.5 (`model: sonnet`, one `kind=switch` line); timeout, context and gate failures only fall back per slice |
-| opencode only / `opencode` | every lane the router can offload, including `size: large` and `risk: high` slices | a connection failure is retried 3 times first; then the `OC-ERROR` line is printed at once and the slice is held, with no Claude fallback and no switch; Claude asks once per root cause: retry on opencode, run the unit on Claude, switch the run to hybrid, or abort |
+| opencode only / `opencode` | every lane the router can offload, including `risk: high` slices | a connection failure is retried 3 times first; then the `OC-ERROR` line is printed at once and the slice is held, with no Claude fallback and no switch; Claude asks once per root cause: retry on opencode, run the unit on Claude, switch the run to hybrid, or abort |
 
 `max` is the old name of `opencode`; it is still accepted and prints an `OC-WARN ... kind=config`
 line. Any other preset name is an `OC-ERROR ... kind=config` and the command exits non-zero.
 Reviewers, the leader, RED, verification and investigation stay on Claude in every mode.
+
+A Small request (one coherent slice, about 6 files or fewer, no new shared interface, no concurrency or
+security surface) follows the mode: in `claude` the Conductor implements it in the Fast lane, in `hybrid`
+and `opencode` it runs as a one-slice pipeline (inline one-slice plan, no leader, `devteam start`): RED on
+Claude, GREEN or WORK on opencode, normal review. That is why the mode question comes before the route for
+Small work. One obvious edit, a code question, review-only and investigation need no mode and skip the
+question; an obvious edit also never starts the engine, because an opencode spin-up costs more than the
+edit. `perf` slices stay on Claude: the gate only counts lines of the pasted bench output and does not
+compare before/after numbers, so there is no deterministic oracle, and finding the optimization is
+diagnosis. A `docs` slice that runs on Claude (mode `claude` or a fallback) uses sonnet unless
+`size: large`; in `hybrid` and `opencode` it goes to the `lite` tier at any size.
 
 A connection failure (`spawn`, `stall`, `throttle`, `crash`) is retried in the lane up to 3 times,
 waiting 10 s, 30 s and 60 s, and each failed try prints
@@ -85,7 +96,7 @@ the run state directory.
   optional; `doctor --fix` no longer creates it. Write it to change stall or run timeouts, `rows` or
   `max_escalations`, or to override a tier's model (see Precedence). A file that does not parse is
   reported as a config problem, never skipped silently. Override the path with env
-  `HT_ROUTING=<path>`.
+  `HYBRID_TEAM_ROUTING=<path>`.
 - **Precedence per tier** (`std`, `lite`): when the user file sets `tiers.<tier>.model`, the tier
   uses that file's `model` and `variant` and is shown as `(skill)`; a tier that sets no `variant`
   there runs without one, and the shared variant is never mixed in. Otherwise the tier uses
@@ -115,14 +126,28 @@ in `routing.default.json`, omitted above for brevity) maps the table rows `code`
 opencode is re-dispatched to Claude in `hybrid` mode (shipped default: one, then the normal BLOCKED
 flow). `escalate_to` was documented but never read; it has been removed.
 
+## Names
+
+Everything this skill puts into a shared namespace is prefixed `hybrid`, so it installs beside dev-team:
+
+- Agents: `hybrid-team-programmer`, `hybrid-team-code-reviewer`, `hybrid-team-spot-reviewer`,
+  `hybrid-team-investigator`, `hybrid-team-leader` (files in `agents/`, installed by `doctor --fix`);
+  the opencode agent is `hybrid-team-programmer`.
+- Env vars: `HYBRID_TEAM_ROUTING`, `HYBRID_TEAM_OC_BIN`, plus the shared `HYBRID_OPENCODE_*`; test
+  harness only: `HYBRID_TEAM_FAKE_SCRIPT`, `HYBRID_TEAM_FAKE_LOG`.
+- Git: lane worktree `.claude/worktrees/hybrid-oc-<id>` on branch `hybrid-oc-<id>`, checkpoint
+  worktree `.claude/worktrees/hybrid-checkpoint-<n>`, salvage branches `hybrid-attempt/<id>-<n>`.
+  Leftover cleanup only touches these prefixes.
+- State: `.claude/hybrid-team/`.
+
 ## Environment variables
 
-- `HT_ROUTING=<path>` - routing config path, instead of `<skill dir>/routing.json`.
+- `HYBRID_TEAM_ROUTING=<path>` - routing config path, instead of `<skill dir>/routing.json`.
 - `HYBRID_OPENCODE_STD=<provider/model[#variant]>` - shared model for the `std` tier (required unless
   every tier sets its own `model` in the routing file).
 - `HYBRID_OPENCODE_LITE=<provider/model[#variant]>` - shared model for the `lite` tier; defaults to
   `HYBRID_OPENCODE_STD`.
-- `HT_OC_BIN=<path>` - path to the `opencode` executable (or a fake one, in tests) instead of
+- `HYBRID_TEAM_OC_BIN=<path>` - path to the `opencode` executable (or a fake one, in tests) instead of
   resolving `opencode` on `PATH`.
 - `HYBRID_OC_RETRY_DELAY_S=<seconds>` - replaces every wait between connection retries (10/30/60 s
   by default); tests set it to `0`.

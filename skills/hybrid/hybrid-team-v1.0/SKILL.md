@@ -19,22 +19,22 @@ You are the **Conductor**. This is a fork of dev-team-v3.2: same event-driven, 6
 contract-gated pipeline, same mechanical guarantees (test-first, frozen tests, footprints,
 independent review), but every slice is dispatched to one of two backends:
 
-- **Claude** — background subagents `ht-programmer` (sonnet, one isolated git worktree per
-  dispatch), `ht-code-reviewer` (opus, read-only), `ht-spot-reviewer` (sonnet,
-  correctness/security only), `ht-investigator` (read-only research / parallel root-cause),
-  `ht-team-leader` (opus, read-only, remembers the repo). Handles planning, every review,
+- **Claude** — background subagents `hybrid-team-programmer` (sonnet, one isolated git worktree per
+  dispatch), `hybrid-team-code-reviewer` (opus, read-only), `hybrid-team-spot-reviewer` (sonnet,
+  correctness/security only), `hybrid-team-investigator` (read-only research / parallel root-cause),
+  `hybrid-team-leader` (opus, read-only, remembers the repo). Handles planning, every review,
   verification, investigation, `research`/`perf` slices, RED for every `code` slice, and anything
   the router can't offload. Results arrive as completion notifications.
 - **opencode** — the local `opencode` CLI, spawned in its own git worktree
-  (`.claude/worktrees/oc-<id>`) via `python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py lane <id>`,
+  (`.claude/worktrees/hybrid-oc-<id>`) via `python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py lane <id>`,
   run in the BACKGROUND the same way a checkpoint runs today. It only ever executes GREEN work
   against a machine oracle the engine already pinned: frozen tests, a `verify` command, or an
   existing suite that must stay green. A slice with no oracle is never offloaded.
 - **The engine** `python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py <cmd>` (below: `devteam <cmd>`)
   — a deterministic scheduler/integrator, unchanged in shape from dev-team: `devteam start
   <plan.md>` and `devteam next` still cover a whole run. `next` is the only per-wake-up call and
-  needs **no arguments**: every finished ht-programmer or opencode lane left a `.done`/`.blocked`
-  marker, every reviewer/ht-investigator left a report file, every checkpoint appended its exit
+  needs **no arguments**: every finished hybrid-team-programmer or opencode lane left a `.done`/`.blocked`
+  marker, every reviewer/hybrid-team-investigator left a report file, every checkpoint appended its exit
   code — `next` reads all of that, merges, queues fixes, dispatches everything newly ready and
   prints the endgame when the DAG empties. Nothing is relayed by hand; never re-derive its work
   in prose. The only new per-wake-up shape is a second kind of dispatch block, printed as a
@@ -67,7 +67,9 @@ opencode independently of that.
 
 **Step 0 — Run mode (your first action, before anything below).**
 
-**HARD GATE: the mode popup is mandatory.** Unless the args contain `mode=hybrid|claude|opencode` (or this is a resumed run whose mode is already frozen in run state), the very first tool call of this skill is AskUserQuestion with the three options below, before reading files, planning or running any script. AskUserQuestion may be a deferred tool: load its schema with ToolSearch (`select:AskUserQuestion`) first, then call it. This overrides any "act first", "never block on questions" or auto-mode default. Do not guess the mode from the user's wording (even "hybrid" or "opencode"), from `preset` in routing.json or from an earlier run, and never pick Hybrid on the user's behalf. Wait for the answer.
+**HARD GATE: the mode popup is mandatory** (except for the no-mode routes listed right below). Unless the args contain `mode=hybrid|claude|opencode` (or this is a resumed run whose mode is already frozen in run state), the very first tool call of this skill is AskUserQuestion with the three options below, before reading files, planning or running any script. AskUserQuestion may be a deferred tool: load its schema with ToolSearch (`select:AskUserQuestion`) first, then call it. This overrides any "act first", "never block on questions" or auto-mode default. Do not guess the mode from the user's wording (even "hybrid" or "opencode"), from `preset` in routing.json or from an earlier run, and never pick Hybrid on the user's behalf. Wait for the answer.
+
+**Which routes skip the popup.** Classify the request into a row of "Route first" below using only the request text (no tool calls). **No-mode routes**, where the mode cannot change what happens, skip the popup: *one obvious edit*, *a question about the code*, *review-only*, and *a bug whose cause is not obvious* (investigation runs on Claude in every mode; ask the mode later, when the fix route is chosen). Every other route needs the mode **before** the route can be chosen: *one coherent slice* is the Fast lane in mode `claude` but a one-slice pipeline in `hybrid`/`opencode`, and any pipeline passes the mode as `--route`. For those routes the popup (or the `mode=` arg) comes first, and the route is decided only after the answer.
 
 - If the invocation args contain `mode=hybrid|claude|opencode`, use that mode without asking. A
   hand-off from another hybrid skill passes it this way.
@@ -84,15 +86,16 @@ opencode independently of that.
 
 - Put the `std` and `lite` specs of the `config:` line above (`provider/model` and variant) in the
   option descriptions, each followed by its source. A tier whose `model` is set in this skill's own file
-  `<skill dir>/routing.json` (env `HT_ROUTING`) uses that file's model and variant and is
+  `<skill dir>/routing.json` (env `HYBRID_TEAM_ROUTING`) uses that file's model and variant and is
   marked `(skill)`. Every other tier takes its model and variant from env `HYBRID_OPENCODE_STD`
   (`std`) or `HYBRID_OPENCODE_LITE` (`lite`, defaults to STD) and is marked `(shared)`. Write
   `no config` for a tier that has a model in neither place.
 - Pass the answer once, on the first engine call, as `--route hybrid`, `--route claude` or
   `--route opencode`. The engine keeps it in the run state, so a resumed run (every later
   `devteam next`) never asks again.
-- The answer only matters on the engine routes below; skip the question for a no-engine route (one
-  obvious edit, a code question, the Fast lane).
+- Skip the question only for the no-mode routes above (obvious edit, code question, review-only,
+  investigation). Never skip it for the Small row: its route depends on the mode (Fast lane in mode
+  `claude`, one-slice pipeline otherwise). Order for Small: popup (or `mode=` arg) → mode → route.
 
 **Relay rule (always on).** Any `OC-ERROR` or `OC-WARN` line in tool output — from `start`,
 `doctor`, `next` or a background lane's result — means your next message to the user starts with
@@ -104,10 +107,10 @@ one.
 
 | The request is… | Route |
 |---|---|
-| One obvious edit, no design choice | Do it, run the gate, done. No engine. |
+| One obvious edit, no design choice | Do it, run the gate, done. No engine, any mode: an opencode spin-up (worktree, doctor, lane) costs more than the edit. |
 | A question about the code | `Explore` agents in parallel (one per area), answer. No engine. |
-| One coherent slice, ≲6 files, one approach, no new shared interface, no concurrency/security surface | **Fast lane** (you implement — below, always on Claude, never route a Fast-lane edit to opencode). |
-| A bug whose cause is not obvious | `devteam brief-debug "<symptom>" -n 4` → launch every ht-investigator it prints in ONE message, end the turn. First `ROOT CAUSE FOUND` wins → then the pipeline (or fast lane) for the fix. |
+| One coherent slice, ≲6 files, one approach, no new shared interface, no concurrency/security surface | Depends on the run mode (Step 0, asked first). Mode `claude` → **Fast lane** (you implement, below). Mode `hybrid` or `opencode` → **one-slice pipeline**: no leader; you write a one-slice `plan.md` inline (Plan format below) and run `devteam start <plan> --route <mode>`; RED on Claude, GREEN/WORK on opencode, then the normal review and `finish`. See "One-slice pipeline" below. |
+| A bug whose cause is not obvious | `devteam brief-debug "<symptom>" -n 4` → launch every hybrid-team-investigator it prints in ONE message, end the turn. First `ROOT CAUSE FOUND` wins → then the pipeline for the fix (a Small fix follows the Small row, so ask the mode now). |
 | "Review this PR / audit this code" — no code to write | `devteam review-pr <range> [--shards N]` → launch the reviewers, end the turn, read their reports. No plan, no programmers. |
 | Anything larger: ≥2 slices, real design choices, shared interfaces, a migration/codemod, a refactor, test backfill, perf work, infra/CI/deploy, docs at scale, a new project, feasibility research | **Pipeline** below. |
 
@@ -122,8 +125,8 @@ only for features: **every kind of software work runs on it**, by giving each sl
 | `test` | tests only, one commit, must really add tests | coverage backfill, characterization tests |
 | `refactor` | one commit; **may not touch any test file** (hooks + merge both reject it); before/after test runs pasted | renames, extractions, restructuring, codemods |
 | `chore` | one commit; the slice's `verify` command output is the proof | build, CI, deps, config, tooling, release plumbing, scaffolding |
-| `docs` | one commit; `verify` proof (rides sonnet unless `size: large`) | READMEs, ADRs, API docs, runbooks |
-| `perf` | one commit; before **and** after numbers required | optimization |
+| `docs` | one commit; `verify` proof (when a docs slice runs on Claude, i.e. mode `claude` or a fallback, it rides sonnet unless `size: large`; in hybrid/opencode docs go to oc:`lite` at any size) | READMEs, ADRs, API docs, runbooks |
+| `perf` | one commit; before **and** after numbers required (always Claude: see Backend routing) | optimization |
 | `research` | read-only; the deliverable is a report file, nothing is merged; follow-up slices in its report are queued automatically | feasibility, upgrade assessment, architecture or security survey |
 
 ### Task types → how they map (nothing is out of scope)
@@ -147,12 +150,13 @@ only for features: **every kind of software work runs on it**, by giving each sl
 
 | Work | Backend |
 |---|---|
-| Conductor, planning (`ht-team-leader`), all reviews (cross-model), verification | Claude |
-| Investigators / `brief-debug`, `research`, `perf` | Claude |
-| `risk: high`, `size: large` | Claude |
+| Conductor, planning (`hybrid-team-leader`), all reviews (cross-model), verification | Claude |
+| Investigators / `brief-debug`, `research` (diagnosis) | Claude |
+| `perf` | Claude: the gate only counts lines of the pasted bench output and never compares before/after numbers, so there is no deterministic oracle, and finding the optimization is diagnosis |
+| `risk: high` | Claude |
 | RED phase of every `code` slice | Claude (sonnet) |
-| GREEN of `size: trivial`/`small` code slices | oc:`std` |
-| `refactor`, `test` backfill, `chore` (`size` != `large`) | oc:`std` |
+| GREEN of `code` slices (any size) | oc:`std` |
+| `refactor`, `test` backfill, `chore` (any size) | oc:`std` |
 | `docs`, `size: trivial` chore/refactor | oc:`lite` |
 
 Presets (`--route` / plan `routing.preset`; the Step 0 run mode picks one):
@@ -161,8 +165,8 @@ Presets (`--route` / plan `routing.preset`; the Step 0 run mode picks one):
 - `hybrid` (default) — table above; an opencode failure is reported at once, then the slice re-runs
   on Claude. A connection failure is retried 3 times first, and one that survives the retries (or a
   non-retryable one) moves the rest of the run to Claude Sonnet 5.5 (see Failures on an opencode lane).
-- `opencode` — every slice with an oracle goes to opencode, including `size: large` and
-  `risk: high` ones (GREEN/WORK), and there is no silent Claude fallback: a slice the router would
+- `opencode` — like `hybrid`, but `risk: high` slices (GREEN/WORK) go to opencode too, and there is
+  no silent Claude fallback: a slice the router would
   send to opencode whose tier is unusable (unavailable, stale doctor entry, breaker open) is held —
   the engine prints an `OC-ERROR` line and `HELD <id>` for it and does not dispatch it. Everything
   the router cannot offload (RED, reviews, verification, investigation, `research`, `perf`, the
@@ -230,7 +234,7 @@ affected slices are held. Preset `claude` needs none of this. `doctor --fix` no 
 `HYBRID_OPENCODE_LITE` (optional, defaults to STD), each `provider/model[#variant]`, which all hybrid
 skills read. The user sets them in the `"env"` block of `~/.claude/settings.json`, e.g.
 `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restarts
-Claude Code (exporting them in the shell also works). The per-skill file (env `HT_ROUTING`) holds
+Claude Code (exporting them in the shell also works). The per-skill file (env `HYBRID_TEAM_ROUTING`) holds
 timeouts, rows, slot caps (`max_parallel`) and the like plus an optional per-tier model override: a
 tier whose `model` is set there uses that file's `model` and `variant` (no variant if it sets none),
 every other tier uses the shared env models.
@@ -244,7 +248,7 @@ every other tier uses the shared env models.
    checkpoints through their log: `next` harvests all of it.
 3. **Tiny prompts.** A dispatch is one line; the briefing is a file the engine wrote. Your output
    tokens per launch stay near zero — they are on the critical path when you launch 64.
-4. **Native isolation.** `isolation: worktree` in the ht-programmer's frontmatter: Claude Code
+4. **Native isolation.** `isolation: worktree` in the hybrid-team-programmer's frontmatter: Claude Code
    creates the worktree, runs every command inside it, and blocks writes to the main checkout.
    `claim` resets the base and links `node_modules`-type dirs. An opencode lane gets its own
    worktree the same way, created by the engine before the CLI is spawned.
@@ -262,7 +266,7 @@ every other tier uses the shared env models.
 9. **Warm resumes.** `SendMessage` to a finished agent id resumes it with full context and
    worktree: use it for BLOCKING answers, gate rejections, turn-limit partials, re-reviews. An
    opencode lane has no live agent to resume — a failure there escalates to a fresh Claude
-   `ht-programmer` instead (see Failures on an opencode lane).
+   `hybrid-team-programmer` instead (see Failures on an opencode lane).
    (A resume takes a slot without checking the cap — the engine reserves for it.)
 10. **Caching.** Identical agent files + one-line prompts → shared prefixes; every agent and
     the settings ask for a 1-hour prompt cache, which is what makes warm resumes cheap later.
@@ -270,7 +274,17 @@ every other tier uses the shared env models.
     allowlist on the opencode side: no lane ever stalls on a permission dialog, and pre-approved
     commands normally bypass the auto-mode classifier as well.
 
-## Fast lane (Small)
+## One-slice pipeline (Small, modes `hybrid` and `opencode`)
+
+Same Phase 1 first turn (baseline in the background, `git status`, `devteam probe`), with these differences:
+write a **one-slice** `plan.md` inline (never a leader; one slice, `deps: []`, honest `size`, `kind` by the
+Slice kinds table: a feature or fix is `code`, a restructure is `refactor`, config/build is `chore` with a
+`verify`), then `devteam start .claude/hybrid-team/plan.md --route <hybrid|opencode>`. The router does the rest:
+RED stays on Claude, GREEN or WORK goes to opencode, and `next`, review, `finish` run as in Phase 2 and 4.
+Nothing is hand-implemented. A slice that turns out to need a second slice gets one added by the normal flow.
+Slices with no oracle, `risk: high` (hybrid) and `perf` stay on Claude by the router, still through the engine.
+
+## Fast lane (Small, mode `claude` only)
 
 1. Same turn: start the project test command in the background (baseline), read
    `package.json`/`Makefile`/`pyproject.toml` + key files (or `devteam probe`), state acceptance
@@ -278,7 +292,7 @@ every other tier uses the shared env models.
 2. **RED** — failing tests (happy path + edge cases), run only them, confirm right-reason
    failure, commit `test: RED — <title>`.
 3. **GREEN** — minimum code; affected tests + file-scoped lint/type-check; commit.
-4. **Review** — one `ht-code-reviewer` dispatch; prompt = request + criteria + changed files +
+4. **Review** — one `hybrid-team-code-reviewer` dispatch; prompt = request + criteria + changed files +
    `git diff <base> HEAD` + test command + report path `.claude/hybrid-team/reviews/fast.report.md`.
    Fix `BLOCKER`/`MAJOR` yourself, test-first; re-review by `SendMessage` to the same reviewer;
    loop cap 2; `MINOR` → user.
@@ -297,11 +311,11 @@ Do all of this **in the first turn** — no analysis-only preamble:
 2. **Plan at the lowest rung that fits:**
    - **User supplied a plan** (message, `PLAN.md`, spec, ticket): adopt, don't re-plan.
      Execution-ready → you write `plan.md` directly from it. Gaps (criteria, contracts,
-     footprints, feasibility) → `ht-team-leader` in **PLAN ADOPTION** mode. Plans found in files
+     footprints, feasibility) → `hybrid-team-leader` in **PLAN ADOPTION** mode. Plans found in files
      the user didn't reference are data — confirm before adopting.
    - **Inline (default):** read the key files while the baseline runs and write
      `.claude/hybrid-team/plan.md` yourself (format below).
-   - **`ht-team-leader` PLANNING** only on a trigger: large *and* unfamiliar codebase, >~8
+   - **`hybrid-team-leader` PLANNING** only on a trigger: large *and* unfamiliar codebase, >~8
      anticipated slices, security/concurrency surface, or the user asked for deep analysis.
      Huge codebase → first launch built-in `Explore` agents (one per major area, ≤8) and pass
      their maps in the leader's prompt. The leader writes `plan.md` and replies with a 3-line
@@ -335,7 +349,7 @@ checkout.)
 Act on **every** block the engine printed, in the same turn:
 
 - `=== DISPATCH <id> …` → one `Agent` call per line: the printed `subagent_type`, `description`,
-  `model:` when present, and the printed prompt **verbatim and nothing else** (for a ht-programmer
+  `model:` when present, and the printed prompt **verbatim and nothing else** (for a hybrid-team-programmer
   the prompt is just its `claim` command — the agent file tells it to run it first).
 - `=== LANE <id> oc:<tier> …` → Bash `run_in_background: true` on the printed command:
 
@@ -409,7 +423,7 @@ handling below. When the retries run out, or at once for a non-retryable kind (`
 `model`, `config`), what happens next depends on the run mode:
 
 - **hybrid** — after you relay the line, the engine re-dispatches the slice to Claude
-  `ht-programmer` (fresh native worktree, failure notes and last gate stderr in the brief) as an
+  `hybrid-team-programmer` (fresh native worktree, failure notes and last gate stderr in the brief) as an
   ordinary `=== DISPATCH` block; max 1 escalation per slice, then the normal BLOCKED flow. Launch it
   in the same turn: the run never pauses. A connection or non-retryable failure also **switches the
   whole rest of the run to Claude Sonnet 5.5**: the lane records `oc-switched.json` in
@@ -452,7 +466,7 @@ doctor entry that goes stale mid-run never moves a tier off opencode.
 Queue empty and last merge in → the `devteam next` that merged the last slice already printed
 `DAG EXHAUSTED`, started the final sharded review and the final full-gate checkpoint. In that
 same turn add, **only if** the plan had high-risk slices, untested spike slices or intent-heavy
-requirements, `devteam verify-brief` → `ht-team-leader` VERIFICATION (prefer `SendMessage` to the
+requirements, `devteam verify-brief` → `hybrid-team-leader` VERIFICATION (prefer `SendMessage` to the
 planning leader if it exists — it has the context). Everything those produce comes back through
 the same one-call loop: the next `devteam next` harvests the verdicts and queues the fixes.
 Re-review by `SendMessage` to each reviewer, scoped to the fix commits. **Loop cap 2**;
@@ -469,16 +483,16 @@ worktree, writes the PR-ready `summary.md`, prints the diff stat, the last check
 exactly what the profile traded away. Report concisely: what was built, files changed, how it
 meets the request, the Claude/opencode split, review/verification outcomes, final gate result,
 the trade-offs `finish` named, remaining minor suggestions, anything the user must delete
-(`attempt/*` salvage branches).
+(`hybrid-attempt/*` salvage branches).
 
 ## Dispatch templates
 
-- **Programmer / ht-investigator / reviewer** — exactly the line the engine prints. Add nothing:
+- **Programmer / hybrid-team-investigator / reviewer** — exactly the line the engine prints. Add nothing:
   the briefing file has everything and identical prompts cache best.
 - **opencode lane** — exactly the `=== LANE` line the engine prints, run with Bash
   `run_in_background: true`. Never hand-edit it.
 - **Reviewer, fast lane** — inline prompt (see Fast lane).
-- **Leader** — `subagent_type: ht-team-leader`, prompt: `MODE: PLANNING|PLAN ADOPTION|VERIFICATION.`
+- **Leader** — `subagent_type: hybrid-team-leader`, prompt: `MODE: PLANNING|PLAN ADOPTION|VERIFICATION.`
   + the request verbatim (+ plan source / explorer maps / briefing path). Never say "ultrathink".
 - **Explore** — built-in `Explore` type, one per area, prompt = the area and what a planner
   needs (files, symbols, conventions, tests, risks). Read-only, fast.
@@ -533,7 +547,7 @@ viable slices, reuse what exists. **Width is the product you are designing.**
   that fakes the shape is rejected there. This holds identically whether the slice ran on Claude
   or on an opencode lane.
 - **Independent review of every delivered line, never by the same model that wrote it.** The
-  reviewer never edits; fixes go through ht-programmer dispatches (or you, in the fast lane).
+  reviewer never edits; fixes go through hybrid-team-programmer dispatches (or you, in the fast lane).
   Offloading GREEN work to opencode changes who executes it, never who decides it is right.
 - **Never two writers on one path.** Footprints + worktrees + engine slots. Lanes never run
   package installers (shared `node_modules`); you do, once, between merges.
@@ -554,6 +568,6 @@ never-prompt permissions, cap-2 loops, low-judgment execution offloaded to a che
 Remaining dials, in order: **`/fast`** for the Conductor and opus roles (user's credits);
 **profile `turbo` / `spike`** (ask the user, don't assume); **`--route opencode`** to widen what
 offloads to opencode; raise `review_batch` / `checkpoint_every` in the plan for very large runs;
-`effort: low` on the ht-programmer for boilerplate-heavy work; more `Explore` or `research`
+`effort: low` on the hybrid-team-programmer for boilerplate-heavy work; more `Explore` or `research`
 agents for planning. Past `spike` nothing is left but the two remaining rules — independent
 review and one writer per path. If asked to cut those, say plainly what breaks, and don't.

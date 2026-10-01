@@ -30,7 +30,7 @@ class TestUserRoutingPath(unittest.TestCase):
         env = mock.patch.dict(os.environ)
         env.start()
         self.addCleanup(env.stop)
-        os.environ.pop("HB_ROUTING", None)
+        os.environ.pop("HYBRID_BRAINSTORMING_ROUTING", None)
         self.tmp = tempfile.mkdtemp()
 
     def test_default_path_is_next_to_the_shipped_defaults(self):
@@ -40,7 +40,7 @@ class TestUserRoutingPath(unittest.TestCase):
 
     def test_env_override(self):
         custom = str(Path(self.tmp) / "custom-routing.json")
-        os.environ["HB_ROUTING"] = custom
+        os.environ["HYBRID_BRAINSTORMING_ROUTING"] = custom
         self.assertEqual(hb_router.user_routing_path(), Path(custom))
 
 
@@ -322,7 +322,7 @@ def _routing(preset="hybrid"):
             "locate": "lite",
             "explore": "std",
             "fact": "lite",
-            "research": "claude",
+            "research": "std",
             "draft": "claude",
         },
         "max_roles": {"research": "std", "draft": "std"},
@@ -385,8 +385,12 @@ class TestRoute(unittest.TestCase):
         result = hb_router.route("locate", _routing(), _doctor())
         self.assertEqual(result, "oc:lite")
 
-    def test_default_hybrid_preset_routes_research_to_claude(self):
+    def test_default_hybrid_preset_routes_research_to_std(self):
         result = hb_router.route("research", _routing(), _doctor())
+        self.assertEqual(result, "oc:std")
+
+    def test_default_hybrid_preset_keeps_draft_on_claude(self):
+        result = hb_router.route("draft", _routing(), _doctor())
         self.assertEqual(result, "claude")
 
     def test_opencode_preset_routes_research_to_std(self):
@@ -423,10 +427,8 @@ class TestRoute(unittest.TestCase):
         self.assertEqual(result, "held")
 
     def test_hybrid_preset_research_falls_back_when_websearch_off(self):
-        routing = _routing()
-        routing["roles"]["research"] = "std"
         result = hb_router.route(
-            "research", routing, _doctor(websearch=False)
+            "research", _routing(), _doctor(websearch=False)
         )
         self.assertEqual(result, "claude")
 

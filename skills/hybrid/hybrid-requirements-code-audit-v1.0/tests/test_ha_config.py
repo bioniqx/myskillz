@@ -22,7 +22,7 @@ def _values(obj):
 class PermissionBlockTest(unittest.TestCase):
     def test_constants(self):
         self.assertEqual(ha_config.AGENT_NAMES,
-                         {"investigator": "ha-investigator", "verifier": "ha-verifier", "parser": "ha-parser"})
+                         {"investigator": "hybrid-audit-investigator", "verifier": "hybrid-audit-verifier", "parser": "hybrid-audit-parser"})
         self.assertEqual(ha_config.SENTINEL, "HA-INVESTIGATOR-OK")
         self.assertIsInstance(ha_config.DOC_READ_DENY, tuple)
         for pat in ("*.md", "**/*.md", "*.mdx", "**/*.mdx", "*.rst", "**/*.rst", "*.adoc", "**/*.adoc",
@@ -32,7 +32,7 @@ class PermissionBlockTest(unittest.TestCase):
 
     def test_denied_tools_never_ask(self):
         for role in ("investigator", "verifier", "parser"):
-            perm = ha_config.permission_block(role, ".audit")
+            perm = ha_config.permission_block(role, ".hybrid-audit")
             for key in DENIED:
                 self.assertEqual(perm[key], "deny", (role, key))
             self.assertEqual(perm["bash"], {"*": "deny", "ls": "allow"}, role)
@@ -53,18 +53,18 @@ class PermissionBlockTest(unittest.TestCase):
             self.assertEqual(perm["glob"], "allow")
 
     def test_audit_dir_denied_when_under_repo(self):
-        for rel in (".audit", "./.audit", ".audit/", "out/audit"):
+        for rel in (".hybrid-audit", "./.hybrid-audit", ".hybrid-audit/", "out/audit"):
             read = ha_config.permission_block("investigator", rel)["read"]
             expected = rel.replace("./", "", 1).strip("/") + "/**"
             self.assertEqual(read[expected], "deny", rel)
 
     def test_audit_dir_outside_repo_ignored(self):
         base = ha_config.permission_block("verifier")["read"]
-        for rel in ("", ".", "..", "../elsewhere/.audit", "/tmp/.audit"):
+        for rel in ("", ".", "..", "../elsewhere/.hybrid-audit", "/tmp/.hybrid-audit"):
             self.assertEqual(ha_config.permission_block("verifier", rel)["read"], base, rel)
 
     def test_parser_has_no_repo_access(self):
-        perm = ha_config.permission_block("parser", ".audit")
+        perm = ha_config.permission_block("parser", ".hybrid-audit")
         self.assertEqual(perm["read"], "deny")
         self.assertEqual(perm["grep"], "deny")
         self.assertEqual(perm["glob"], "deny")
@@ -77,12 +77,12 @@ class PermissionBlockTest(unittest.TestCase):
 class BuildConfigTest(unittest.TestCase):
     def test_build_config_agent_and_top_level(self):
         for role, name in ha_config.AGENT_NAMES.items():
-            cfg = ha_config.build_config(role, ".audit")
+            cfg = ha_config.build_config(role, ".hybrid-audit")
             self.assertEqual(list(cfg["agent"].keys()), [name])
             agent = cfg["agent"][name]
             self.assertEqual(agent["mode"], "primary")
             self.assertTrue(agent["description"])
-            self.assertEqual(agent["permission"], ha_config.permission_block(role, ".audit"))
+            self.assertEqual(agent["permission"], ha_config.permission_block(role, ".hybrid-audit"))
             self.assertEqual(cfg["permission"], agent["permission"])
             self.assertIsNot(cfg["permission"], agent["permission"])
 
@@ -101,7 +101,7 @@ class BuildConfigTest(unittest.TestCase):
 
     def test_secret_reads_denied_last(self):
         for role in ("investigator", "verifier"):
-            read = ha_config.permission_block(role, ".audit")["read"]
+            read = ha_config.permission_block(role, ".hybrid-audit")["read"]
             keys = list(read)
             for pat in ("*.env", "*.env.*", "*.ssh/*", "*.pem", "*.key", "*id_rsa*", "*id_ed25519*"):
                 self.assertEqual(read[pat], "deny", pat)
@@ -114,12 +114,12 @@ class BuildConfigTest(unittest.TestCase):
         self.assertEqual(len(prompts), 3)
 
     def test_config_env_roundtrip(self):
-        env = ha_config.config_env("investigator", ".audit")
+        env = ha_config.config_env("investigator", ".hybrid-audit")
         self.assertEqual(sorted(env.keys()), ["OPENCODE_CONFIG_CONTENT", "OPENCODE_DISABLE_PROJECT_CONFIG"])
         self.assertEqual(env["OPENCODE_DISABLE_PROJECT_CONFIG"], "1")
         self.assertIsInstance(env["OPENCODE_CONFIG_CONTENT"], str)
         self.assertEqual(json.loads(env["OPENCODE_CONFIG_CONTENT"]),
-                         ha_config.build_config("investigator", ".audit"))
+                         ha_config.build_config("investigator", ".hybrid-audit"))
         self.assertEqual(ha_config.config_env("parser"), ha_config.config_env("parser", ""))
 
 

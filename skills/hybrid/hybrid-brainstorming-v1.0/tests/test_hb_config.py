@@ -50,7 +50,7 @@ class TestImportDoesNotMutateEnviron(unittest.TestCase):
 
 class TestConstants(XdgDataHomeUnsetTestCase):
     def test_agent_name(self):
-        self.assertEqual(hb_config.AGENT_NAME, "hb-lane")
+        self.assertEqual(hb_config.AGENT_NAME, "hybrid-brainstorm-lane")
 
     def test_sentinel(self):
         self.assertEqual(hb_config.SENTINEL, "HB-LANE-OK")

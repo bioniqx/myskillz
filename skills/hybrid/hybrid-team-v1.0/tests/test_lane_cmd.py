@@ -52,9 +52,9 @@ class LaneTestBase(unittest.TestCase):
         self.script = self.tmp / "fake_script.json"
         self.log = self.tmp / "fake_log.jsonl"
         self.routing = self.tmp / "routing.json"
-        self.env = dict(os.environ, HOME=str(self.home), HT_OC_BIN=str(FAKE),
-                        HT_FAKE_SCRIPT=str(self.script), HT_FAKE_LOG=str(self.log),
-                        HT_ROUTING=str(self.routing), XDG_DATA_HOME=str(self.tmp / "xdg"),
+        self.env = dict(os.environ, HOME=str(self.home), HYBRID_TEAM_OC_BIN=str(FAKE),
+                        HYBRID_TEAM_FAKE_SCRIPT=str(self.script), HYBRID_TEAM_FAKE_LOG=str(self.log),
+                        HYBRID_TEAM_ROUTING=str(self.routing), XDG_DATA_HOME=str(self.tmp / "xdg"),
                         PYTHONDONTWRITEBYTECODE="1", HYBRID_OC_RETRY_DELAY_S="0", **MODELS_ENV)
         git(["init", "-q"], self.repo)
         git(["config", "user.email", "t@example.invalid"], self.repo)
@@ -68,7 +68,7 @@ class LaneTestBase(unittest.TestCase):
         self.engine("init", str(plan))
         self.engine("dispatch", "S1")
         self.state = self.repo / STATE
-        self.wt = self.repo / ".claude" / "worktrees" / "oc-S1"
+        self.wt = self.repo / ".claude" / "worktrees" / "hybrid-oc-S1"
 
     def engine(self, *args, check=True):
         r = subprocess.run([sys.executable, str(ENGINE)] + list(args), cwd=str(self.repo), env=self.env,
@@ -113,21 +113,23 @@ class LaneRunTest(LaneTestBase):
         self.assertIn("LANE S1 DONE", r.stdout)
         self.assertEqual(self.marker("done")["backend"], "oc:lite")
         self.assertFalse((self.state / "slices" / "S1.blocked").exists())
-        self.assertEqual(git(["rev-parse", "--abbrev-ref", "HEAD"], self.wt), "oc-S1")
+        self.assertEqual(git(["rev-parse", "--abbrev-ref", "HEAD"], self.wt), "hybrid-oc-S1")
         self.assertTrue((self.wt / "docs" / "guide.md").exists())
         calls = self.calls()
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["pwd"], str(self.wt))
         self.assertEqual(Path(calls[0]["cwd"]).resolve(), self.wt)
         argv = calls[0]["argv"]
-        self.assertEqual(argv[:5], ["run", "--standalone", "--agent", "ht-programmer", "--model"])
+        self.assertEqual(argv[:5], ["run", "--standalone", "--agent", "hybrid-team-programmer", "--model"])
         self.assertEqual(argv[argv.index("--model") + 1], "zai-coding-plan/glm-5.3-flash#low")
         self.assertIn("--auto", argv)
         self.assertNotIn("-s", argv)
         self.assertNotIn("write the user guide", argv[-1])  # the brief is attached, not in argv
         self.assertIn("write the user guide", (self.state / "lanes" / "S1.brief.md").read_text())
         self.assertEqual(argv[argv.index("-f") + 1], str(self.state / "lanes" / "S1.brief.md"))
-        self.assertIn("ht-programmer", calls[0]["config"])
+        self.assertIn("hybrid-team-programmer", calls[0]["config"])
+        # the slice's verify command is pre-approved in the lane's allowlist, as `claim` does for Claude
+        self.assertEqual(json.loads(calls[0]["config"])["permission"]["bash"].get("test -f docs/guide.md *"), "allow")
         self.assertTrue((self.state / "lanes" / "S1.jsonl").exists())
         self.assertFalse((self.state / "lanes" / "S1.pid").exists())
         rec = self.records()[-1]
@@ -169,7 +171,7 @@ class LaneRunTest(LaneTestBase):
         self.assertIn("kind=auth", (self.state / "oc-errors.jsonl").read_text())
 
     def test_missing_binary_is_spawn(self):
-        self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_TEAM_OC_BIN"] = str(self.tmp / "no-such-opencode")
         self.set_script(DONE_STEP)
         r = self.engine("lane", "S1", check=False)
         self.assertEqual(r.returncode, 1, msg="a failed lane exits non-zero")

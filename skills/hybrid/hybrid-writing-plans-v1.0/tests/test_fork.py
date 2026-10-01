@@ -33,7 +33,10 @@ class ForkCopyTest(unittest.TestCase):
     @unittest.skipUnless(SRC.is_dir(), "writing-plans-6.2 not present")
     def test_prompts_and_agent_copied_unchanged(self):
         for rel in COPIED:
-            self.assertEqual((HP / rel).read_bytes(), (SRC / rel).read_bytes(), rel)
+            mine = (HP / rel.replace("plan-task-writer", "hybrid-plan-task-writer")).read_bytes()
+            if rel.startswith("agents/"):  # only the agent name differs: it must not collide with 6.2's agent
+                mine = mine.replace(b"name: hybrid-plan-task-writer", b"name: plan-task-writer")
+            self.assertEqual(mine, (SRC / rel).read_bytes(), rel)
 
     def test_plan_tool_compiles_and_has_commands(self):
         text = (HP / "scripts" / "plan_tool.py").read_text(encoding="utf-8")

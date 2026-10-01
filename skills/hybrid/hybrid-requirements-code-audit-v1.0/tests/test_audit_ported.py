@@ -46,11 +46,11 @@ def hermetic_env():
     (_ENV_DIR / "home").mkdir(exist_ok=True)
     env.update({
         "HOME": str(_ENV_DIR / "home"),  # never let the script touch the real HOME
-        "HA_ROUTING": str(_ENV_DIR / "routing.json"),  # deliberately absent
-        "HA_DOCTOR_CACHE": str(_ENV_DIR / "doctor.json"),
-        "HA_TELEMETRY": str(_ENV_DIR / "lanes.jsonl"),
+        "HYBRID_AUDIT_ROUTING": str(_ENV_DIR / "routing.json"),  # deliberately absent
+        "HYBRID_AUDIT_DOCTOR_CACHE": str(_ENV_DIR / "doctor.json"),
+        "HYBRID_AUDIT_TELEMETRY": str(_ENV_DIR / "lanes.jsonl"),
         "XDG_DATA_HOME": str(_ENV_DIR / "data"),
-        "HA_OC_BIN": str(_ENV_DIR / "no-such-opencode"),
+        "HYBRID_AUDIT_OC_BIN": str(_ENV_DIR / "no-such-opencode"),
         "HYBRID_OC_RETRY_DELAY_S": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
     })
@@ -99,7 +99,7 @@ class AuditMiscTestCase(unittest.TestCase):
         self.cwd = Path(os.path.realpath(tempfile.mkdtemp(prefix="audit_misc_")))
         self.addCleanup(shutil.rmtree, str(self.cwd), True)
         (self.cwd / "spec.md").write_text("The system MUST do things.\n", encoding="utf-8")
-        self.out = self.cwd / ".audit"
+        self.out = self.cwd / ".hybrid-audit"
 
     def init_audit(self, agents="generic", cap=20):
         r = run(["init", "--spec", "spec.md", "--agents", agents, "--cap", str(cap), "--preset", "claude"], self.cwd)
@@ -358,7 +358,7 @@ class AuditMiscTestCase(unittest.TestCase):
 
         common_exclude = main / ".git" / "info" / "exclude"
         self.assertTrue(common_exclude.exists(), "info/exclude must be written to the COMMON git dir, not the worktree's private git dir")
-        self.assertIn(".audit", common_exclude.read_text(encoding="utf-8"))
+        self.assertIn(".hybrid-audit", common_exclude.read_text(encoding="utf-8"))
 
     # ---------------------------------------------------------------- perf: adjudicate at scale
 
@@ -518,7 +518,7 @@ class AuditStatusTestCase(unittest.TestCase):
         self.cwd = Path(os.path.realpath(tempfile.mkdtemp(prefix="audit_status_")))
         self.addCleanup(shutil.rmtree, str(self.cwd), True)
         (self.cwd / "spec.md").write_text("The system MUST do things.\n", encoding="utf-8")
-        self.out = self.cwd / ".audit"
+        self.out = self.cwd / ".hybrid-audit"
 
     def init_audit(self, agents="generic", cap=20):
         r = run(["init", "--spec", "spec.md", "--agents", agents, "--cap", str(cap), "--preset", "claude"], self.cwd)

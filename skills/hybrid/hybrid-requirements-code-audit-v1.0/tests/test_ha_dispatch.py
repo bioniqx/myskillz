@@ -225,6 +225,14 @@ class HedgeTest(unittest.TestCase):
         self.assertFalse(ha_dispatch.should_hedge_oc(c, m, "batch-04", 1.0 + 1.5 * slow))
         self.assertTrue(ha_dispatch.should_hedge_oc(c, m, "batch-04", 1.0 + 3.0 * slow))
 
+    def test_queued_batch_waiting_for_a_slot_is_never_hedged(self):
+        c, m = self._setup(2)
+        c.state["batches"]["batch-04"]["dispatched"] = None  # planned on oc:std, no free slot yet
+        self.assertFalse(ha_dispatch.should_hedge_oc(c, m, "batch-04", 1.0e9))
+        c.state["batches"]["batch-04"]["dispatched"] = 1.0e9  # slot freed: the clock starts now
+        self.assertFalse(ha_dispatch.should_hedge_oc(c, m, "batch-04", 1.0e9 + audit.HEDGE_MIN_SECONDS - 1.0))
+        self.assertTrue(ha_dispatch.should_hedge_oc(c, m, "batch-04", 1.0e9 + audit.HEDGE_MIN_SECONDS + 1.0))
+
     def test_never_for_claude_done_or_hedged(self):
         c, m = self._setup(2)
         self.assertFalse(ha_dispatch.should_hedge_oc(c, m, "batch-05", 1.0e9))

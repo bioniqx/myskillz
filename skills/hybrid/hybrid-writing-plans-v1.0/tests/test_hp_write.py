@@ -102,7 +102,7 @@ class HpWriteBase(unittest.TestCase):
         (root / "home").mkdir()
         self.plan = str(self.repo / "docs" / "demo.md")
         Path(self.plan).write_text(plan_text(), encoding="utf-8")
-        self.work = os.path.join(str(self.repo), "docs", ".work", "demo")
+        self.work = os.path.join(str(self.repo), "docs", ".hybrid-work", "demo")
         os.makedirs(os.path.join(self.work, "tasks"))
         os.makedirs(os.path.join(self.work, "briefs"))
         self.oc_brief = os.path.join(self.work, "briefs", "O01.oc.md")
@@ -116,10 +116,10 @@ class HpWriteBase(unittest.TestCase):
         })
         self.env = {
             "HOME": str(root / "home"),
-            "HP_ROUTING": str(root / "routing.json"),
-            "HP_DOCTOR_CACHE": str(root / "doctor.json"),
-            "HP_TELEMETRY": str(root / "lanes.jsonl"),
-            "HP_OC_BIN": str(Path(__file__).resolve().parent / "fake_opencode.py"),
+            "HYBRID_WRITING_PLANS_ROUTING": str(root / "routing.json"),
+            "HYBRID_WRITING_PLANS_DOCTOR_CACHE": str(root / "doctor.json"),
+            "HYBRID_WRITING_PLANS_TELEMETRY": str(root / "lanes.jsonl"),
+            "HYBRID_WRITING_PLANS_OC_BIN": str(Path(__file__).resolve().parent / "fake_opencode.py"),
             "HYBRID_OPENCODE_STD": "zai-coding-plan/glm-5.3#high",
             "HYBRID_OPENCODE_LITE": "zai-coding-plan/glm-5.3-flash#low",
             "XDG_DATA_HOME": str(root / "xdg"),
@@ -146,7 +146,7 @@ class HpWriteBase(unittest.TestCase):
         return json.loads(Path(self.work, "oc", gid + ".fallback").read_text(encoding="utf-8"))
 
     def telemetry(self) -> list:
-        path = Path(self.env["HP_TELEMETRY"])
+        path = Path(self.env["HYBRID_WRITING_PLANS_TELEMETRY"])
         if not path.exists():
             return []
         return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
@@ -301,7 +301,7 @@ class RunGroupTests(HpWriteBase):
     def script(self, step):
         path = Path(self.tmp) / "fake-script.json"
         path.write_text(json.dumps(step), encoding="utf-8")
-        return mock.patch.dict(os.environ, {"HP_FAKE_SCRIPT": str(path)})
+        return mock.patch.dict(os.environ, {"HYBRID_WRITING_PLANS_FAKE_SCRIPT": str(path)})
 
     def test_auth_failure_trips_breaker_and_queued_groups_fall_back(self):
         self.set_preset("opencode")
@@ -451,7 +451,7 @@ class RetrySwitchTests(HpWriteBase):
         path = Path(self.tmp) / "fake-script.json"
         path.write_text(json.dumps(steps), encoding="utf-8")
         self.fake_log = Path(self.tmp) / "fake.log"
-        patcher = mock.patch.dict(os.environ, {"HP_FAKE_SCRIPT": str(path), "HP_FAKE_LOG": str(self.fake_log)})
+        patcher = mock.patch.dict(os.environ, {"HYBRID_WRITING_PLANS_FAKE_SCRIPT": str(path), "HYBRID_WRITING_PLANS_FAKE_LOG": str(self.fake_log)})
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -731,6 +731,22 @@ class OcWriteTests(HpWriteBase):
         logged = Path(self.work, "oc", "oc-errors.jsonl").read_text(encoding="utf-8")
         self.assertIn("kind=breaker", logged)
 
+    def test_groups_beyond_max_parallel_queue_for_a_slot_and_still_finish(self):
+        info = self.info()
+        info["groups"] = {"O01": ["T01"], "O02": ["T02"]}
+        info["backend"] = {"O01": "oc:std", "O02": "oc:std"}
+        info["oc"]["tiers"]["std"]["max_parallel"] = 1
+        self.save_info(info)
+        Path(self.work, "briefs", "O02.oc.md").write_text("oc brief for T02\n", encoding="utf-8")
+        both = {"text": GOOD_T01 + "\n" + GOOD_T02}
+        with self.fake([dict(both), dict(both)]):
+            rc, lines = self.run_oc_write()
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual([x for x in lines if x.startswith(("OC-ERROR", "OC-WARN"))], [])
+        self.assertEqual(sorted(x.split()[1] for x in lines if x.startswith("OC O")), ["O01", "O02"])
+        self.assertEqual(lines[-1], "OC-WRITE done 2/2 groups")
+
     def test_group_lines_print_before_other_groups_finish(self):
         info = self.info()
         info["groups"] = {"O01": ["T01"], "O02": ["T02"]}
@@ -761,7 +777,7 @@ class SigtermTest(HpWriteBase):
         pid_file = Path(self.tmp) / "grandchild.pid"
         script = Path(self.tmp) / "sleepy.json"
         script.write_text(json.dumps({"grandchild": str(pid_file), "sleep": 60, "text": "x"}), encoding="utf-8")
-        env = dict(os.environ, HP_FAKE_SCRIPT=str(script), PYTHONDONTWRITEBYTECODE="1")
+        env = dict(os.environ, HYBRID_WRITING_PLANS_FAKE_SCRIPT=str(script), PYTHONDONTWRITEBYTECODE="1")
         tool = str(Path(hp_write.__file__).with_name("plan_tool.py"))
         proc = subprocess.Popen([sys.executable, tool, "oc-write", self.plan], env=env, cwd=str(self.repo),
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)

@@ -288,7 +288,7 @@ def _turns(ctx: dict, st: dict) -> tuple:
     routing = ctx["cfg"].get("routing") or {}
     env = dict(os.environ, **config_env(role, _audit_rel(out, repo)))
     env["PWD"] = str(repo)
-    binary = os.environ.get("HA_OC_BIN", "opencode")
+    binary = os.environ.get("HYBRID_AUDIT_OC_BIN", "opencode")
     folder = out / "oc"
     folder.mkdir(parents=True, exist_ok=True)
     max_repairs = max(0, int(routing.get("max_repairs", 2)))

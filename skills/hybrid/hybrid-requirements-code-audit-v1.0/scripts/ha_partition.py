@@ -7,7 +7,7 @@ from typing import List, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import audit  # noqa: E402
-from ha_router import effective_preset, route  # noqa: E402
+from ha_router import oc_queues_overflow, route  # noqa: E402
 
 
 def _order_key(item: dict) -> Tuple[str, str]:
@@ -38,8 +38,8 @@ def split_batches(active: list, routing: dict, doctor: dict, preset: str, cap: i
     max_parallel = max(1, int(routing["tiers"][tier].get("max_parallel", 1)))
     batch_max = max(1, int(routing.get("oc_batch_max", 4)))
     capacity = max_parallel * batch_max
-    opencode = effective_preset(routing, preset) == "opencode"
-    if opencode:
+    queue = oc_queues_overflow(routing, preset)
+    if queue:
         capacity = len(active)  # no Claude overflow: extra batches wait for a free opencode slot
     ordered = sorted(active, key=_order_key)
     oc_items = ordered[:capacity]
@@ -49,7 +49,7 @@ def split_batches(active: list, routing: dict, doctor: dict, preset: str, cap: i
         out.extend(("claude", b) for b in audit.partition_items(rest, cap, solo))
     if oc_items:
         n_batches = min(max_parallel, len(oc_items))
-        if opencode:
+        if queue:
             n_batches = max(n_batches, math.ceil(len(oc_items) / float(batch_max)))
         out.extend((backend, b) for b in _near_equal(oc_items, n_batches))
     return out

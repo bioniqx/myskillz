@@ -1,6 +1,16 @@
 # CHANGELOG
 
+## v1.1.1 (2026-10-01)
+
+### Changed
+- Mode `hybrid` now runs `research` lanes on opencode tier `std` (`routing.default.json`: `roles.research` is `std`, was `claude`), checked by the `hb_ground.py` grounding oracle. Claude keeps only the highest-judgment work (about 20%): `draft` stays on Claude in `hybrid` because drafts are ungrounded (no oracle) and decide the design. `locate`, `explore` and `fact` are unchanged; mode `opencode` still routes `draft` to opencode.
+- `research` needs `websearch=on` in `hybrid` too. When the doctor reports `websearch=off`, the lane prints one `OC-ERROR ... kind=config` line and falls back to its Claude lane (`FALLBACK` + `CLAUDE` lines, exit 3); mode `opencode` still holds it. New test `test_hybrid_research_with_websearch_off_falls_back_to_claude_with_an_oc_error`.
+- SKILL.md routing table and mode text, README (mode, preset and backend tables, routing example, troubleshooting) and the router/bslane test fixtures follow the new default.
+
 ## v1.1.0 (2026-09-29)
+
+### Renamed (collision-free install beside `brainstorming-6.3`)
+- Every name this skill puts into a shared namespace now carries the `hybrid` prefix: the opencode agent `hb-lane` is `hybrid-brainstorm-lane`; the env vars `HB_*` are `HYBRID_BRAINSTORMING_*` (`ROUTING`, `DOCTOR_CACHE`, `OC_BIN`, and the test-only `FAKE_*`); the project state directory `.superpowers/` is `.hybrid-superpowers/` (same sub-paths: `brainstorm/`, `drafts/`, lanes, token files, still `chmod 600`). The visual-companion server also renames its `BRAINSTORM_*` env vars to `HYBRID_BRAINSTORMING_*`, the `/tmp/brainstorm*` session directory to `/tmp/hybrid-brainstorming*`, the `--brainstorm-server-id` argument, and the `brainstorm-key-*` cookie and `brainstorm-session-key` storage key to `hybrid-brainstorming-*`. The spec output path `docs/superpowers/specs/` is unchanged on purpose. Existing `.superpowers/` data from earlier hybrid runs is not migrated.
 
 ### Added
 - Shared opencode models from the env vars `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to `STD`), each `provider/model[#variant]`, loaded through the vendored `scripts/hybrid_shared.py`. All hybrid skills read them as the default source of model and variant for the tiers `std` and `lite`. Set them in the `env` block of `~/.claude/settings.json` (restart Claude Code) or export them in the shell.
@@ -18,7 +28,7 @@
 ### Changed
 - Mode `opencode` also retries connection failures, but after the retries nothing changes: the lane is held, the breaker trips for the non-retryable kinds and there is no switch. `timeout`, `context` and the gate kinds (`grounding`, `format`, `empty`) are never retried or switched: a per-lane fallback in `hybrid`, held in `opencode`.
 - The shared model file (with its path override), `hybrid_shared.py init` and the shared `max_parallel` are removed with no fallback: set `HYBRID_OPENCODE_STD` (and optionally `HYBRID_OPENCODE_LITE`) instead, and set `max_parallel` only in `<skill dir>/routing.json`.
-- The per-skill user routing file now defaults to `<skill dir>/routing.json`, next to `routing.default.json` (it used to live under `~/.config`, with no fallback to that location). `HB_ROUTING` still overrides.
+- The per-skill user routing file now defaults to `<skill dir>/routing.json`, next to `routing.default.json` (it used to live under `~/.config`, with no fallback to that location). `HYBRID_BRAINSTORMING_ROUTING` still overrides.
 - `model` and `variant` are removed from `routing.default.json`. A per-skill user file may still set them per tier, and then it wins for that tier over the shared env vars.
 - `doctor` no longer copies the shipped defaults into `<skill dir>/routing.json`.
 - A per-run circuit breaker replaces the persistent tier "down" marks for non-retryable failures (`auth`, `quota`, `model`, `config`). Throttle keeps its cooldown.
@@ -51,7 +61,7 @@ Initial release of `hybrid-brainstorming`, a fork of `brainstorming-6.3`.
 - Stdlib modules: `oc_run.py` (opencode runner and event parser), `hb_router.py` (role routing and preset logic), `hb_ground.py` (grounding gate), `hb_prompts.py` (lane prompt templates), `hb_config.py` (opencode agent config), `hb_doctor.py` (availability and status).
 - Vendored opencode runner: opencode logic is copied from hybrid-team, not shared at runtime.
 - SKILL.md frontmatter: `name: hybrid-brainstorming`, an opt-in description, and `allowed-tools` extended with the `bslane.py` pin.
-- Lane state files under `.superpowers/brainstorm/`: `lanes/<id>.jsonl` (per-lane event log), `lanes/<id>.err` (lane stderr), `lanes/<id>.claude.md` (Claude fallback prompt), `lanes/<id>.out.md` (lane output), `lanes/slots/<tier>.<k>.lock` (slot lock), `lanes/cooldown-<tier>` (throttle cooldown expiry timestamp), `lanes/doctor/doctor-ping-<tier>.out.jsonl`/`.err` and `lanes/doctor/doctor-websearch.out.jsonl`/`.err` (doctor probe streams), and `lanes.jsonl` (aggregate per-lane telemetry).
+- Lane state files under `.hybrid-superpowers/brainstorm/`: `lanes/<id>.jsonl` (per-lane event log), `lanes/<id>.err` (lane stderr), `lanes/<id>.claude.md` (Claude fallback prompt), `lanes/<id>.out.md` (lane output), `lanes/slots/<tier>.<k>.lock` (slot lock), `lanes/cooldown-<tier>` (throttle cooldown expiry timestamp), `lanes/doctor/doctor-ping-<tier>.out.jsonl`/`.err` and `lanes/doctor/doctor-websearch.out.jsonl`/`.err` (doctor probe streams), and `lanes.jsonl` (aggregate per-lane telemetry).
 
 ### Unchanged
 - Main thread work: classification, T0, synthesis, design, spec, self-review all stay on Claude.

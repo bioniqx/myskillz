@@ -5,7 +5,7 @@ audit.py — deterministic plumbing for the `requirements-code-audit` skill.
 
 The lead model spends its tokens on judgment only. Everything mechanical lives here:
 
-  init          create .audit/, build the repo map, detect the environment, arm the guard hooks
+  init          create .hybrid-audit/, build the repo map, detect the environment, arm the guard hooks
   spec          add / list requirement files (the only source of truth)
   parse-plan    split a large spec into sections for parallel parser agents
   parse-merge   merge parser output into a checklist draft (lead still does the faithfulness pass)
@@ -34,7 +34,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-AUDIT_DIR = ".audit"
+AUDIT_DIR = ".hybrid-audit"
 CONFIG = "config.json"
 STATE = "state.json"
 ACTIVE = "ACTIVE"
@@ -308,7 +308,7 @@ def freeze_health(c, routing, preset, force=False):
     t = now()
     stale = [n for n in names if not hs.cache_fresh((data.get("tiers") or {}).get(n), tiers.get(n) or {}, t)]
     if names and (force or stale or not data.get("ok")):
-        data = ha_doctor.run_doctor(os.environ.get("HA_OC_BIN", "opencode"), routing, True, c.repo, data,
+        data = ha_doctor.run_doctor(os.environ.get("HYBRID_AUDIT_OC_BIN", "opencode"), routing, True, c.repo, data,
                                     names=names, logdir=cache.parent)
         ha_doctor.write_doctor(cache, data)
         for name, spec, kind, detail in doctor_problems(routing, data, names):
@@ -731,7 +731,7 @@ def cmd_init(a):
     for sub in ("", "batches", "findings", "verify", "parse", "spec", "events"):
         (out / sub).mkdir(parents=True, exist_ok=True)
     # a new audit starts unswitched, with closed breakers and no events or OC lines of an earlier run
-    # (`--force --out X` archives .audit/ only, so X may still hold them)
+    # (`--force --out X` archives .hybrid-audit/ only, so X may still hold them)
     shutil.rmtree(str(out / shared().BREAKER_DIR), ignore_errors=True)
     for stale in [out / shared().SWITCH_FILE, out / ERRORS_FILE, out / (ERRORS_FILE + ".seen")] \
             + list((out / "events").glob("*.json")):
@@ -1311,7 +1311,7 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
             wave = 1
             held[name] = {"role": "investigator", "reason": HOLD_REASON}
         else:
-            # beyond the tier's max_parallel (mode opencode): `status` dispatches it when a slot frees up
+            # beyond the tier's max_parallel (queued overflow): `status` dispatches it when a slot frees up
             wave = 1 if oc_free.get(backend, 0) > 0 else 2
             oc_free[backend] = oc_free.get(backend, 0) - 1
             write_text(c.out / "batches" / (name + ".oc.md"),
@@ -1333,8 +1333,11 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
     size = " of ≤%d" % max(claude_sizes) if claude_sizes else ""
     summary = "plan: %d requirements (%d skipped as static-limit/ambiguous) → %d investigator batches%s, %d wave(s), cap=%d" % (
         n, skipped, len(claude_sizes), size, waves, cap)
-    if oc_rows:
-        summary += " | %d opencode batches (%d items)" % (len(oc_rows), oc_items)
+    n_oc = sum(1 for backend, _ in groups if backend.startswith("oc:"))
+    if n_oc:
+        summary += " | %d opencode batches (%d items)" % (n_oc, oc_items)
+        if n_oc > len(oc_rows):
+            summary += ", %d queued for a free slot" % (n_oc - len(oc_rows))
     if held:
         summary += " | %d held batches (%d items)" % (len(held), held_items)
         note_oc(c, "OC-ERROR", "investigator", "config", "%d batches held: %s" % (len(held), HOLD_REASON))
@@ -1827,6 +1830,7 @@ def cmd_status(a):
     slots, oc_rows = {}, []
     if hybrid:
         import ha_briefs
+        import ha_router
         routing = c.cfg.get("routing") or {}
         doctor = run_health(c)  # frozen at plan time: a stale doctor cache never downgrades a tier mid-run
         slots = ha_dispatch.free_slots(c, m)
@@ -1872,8 +1876,8 @@ def cmd_status(a):
             meta["dispatched"] = t
             oc_rows.append((b, backend, len(meta["ids"]), ha_dispatch.oc_command(c, b)))
             continue
-        if backend != "claude" and preset == "opencode":
-            continue  # waits for a free opencode slot; preset opencode never overflows to Claude
+        if backend != "claude" and ha_router.oc_queues_overflow(routing, preset):
+            continue  # waits for a free opencode slot (always in preset opencode; in hybrid unless oc_overflow is "claude")
         if free <= 0:
             continue
         meta["backend"] = "claude"
@@ -2221,7 +2225,7 @@ HEADINGS = {
            "plan": "Remediation plan", "effort": "Effort", "current": "Current", "target": "Target", "fix": "Fix",
            "depends": "Depends on", "risk": "Risk", "decision": "Needs product decision", "runtime": "Needs runtime verification",
            "appendix": "Appendix — undocumented behavior (informational, not failures)", "none": "(none)",
-           "noplan": "(no remediation plan written yet — see .audit/plan.jsonl)",
+           "noplan": "(no remediation plan written yet — see .hybrid-audit/plan.jsonl)",
            "status": {"MATCHED": "Matched", "PARTIAL": "Partial", "MISSING": "Missing", "CONFLICT": "Conflict", "UNVERIFIABLE": "Unverifiable", "UNSEARCHED": "Unsearched"}},
     "vi": {"title": "Kiểm toán Yêu cầu ↔ Mã nguồn", "sot": "Nguồn chân lý (tài liệu yêu cầu)", "code": "Mã nguồn", "date": "Ngày",
            "constraints": "Ràng buộc đã tuân thủ: không đọc lịch sử git; không đọc tài liệu nào ngoài nguồn chân lý; không sửa mã nguồn.",
@@ -2231,7 +2235,7 @@ HEADINGS = {
            "plan": "Kế hoạch khắc phục", "effort": "Công sức", "current": "Hiện trạng", "target": "Mục tiêu", "fix": "Cách sửa",
            "depends": "Phụ thuộc", "risk": "Rủi ro", "decision": "Cần quyết định sản phẩm", "runtime": "Cần kiểm chứng lúc chạy",
            "appendix": "Phụ lục — hành vi không có trong tài liệu (chỉ tham khảo, không phải lỗi)", "none": "(không có)",
-           "noplan": "(chưa có kế hoạch khắc phục — xem .audit/plan.jsonl)",
+           "noplan": "(chưa có kế hoạch khắc phục — xem .hybrid-audit/plan.jsonl)",
            "status": {"MATCHED": "Đạt", "PARTIAL": "Một phần", "MISSING": "Thiếu", "CONFLICT": "Mâu thuẫn", "UNVERIFIABLE": "Không kiểm được", "UNSEARCHED": "Chưa tìm"}},
 }
 
@@ -2588,7 +2592,7 @@ def cmd_doctor(a):
     hs = shared()
     routing = ha_router.load_routing(SKILL_DIR / "routing.default.json", ha_router.user_routing_path())
     cache = ha_doctor.doctor_cache_path()
-    binary = os.environ.get("HA_OC_BIN", "opencode")
+    binary = os.environ.get("HYBRID_AUDIT_OC_BIN", "opencode")
     workdir = Path(a.cwd or os.getcwd()).resolve()
     data = ha_doctor.run_doctor(binary, routing, a.ping, workdir, ha_doctor.load_doctor(cache), logdir=cache.parent)
     ha_doctor.write_doctor(cache, data)
@@ -2653,14 +2657,14 @@ def cmd_stats(a):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="audit.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--cwd", help="working directory holding .audit/ (default: current directory)")
+    ap.add_argument("--cwd", help="working directory holding .hybrid-audit/ (default: current directory)")
     sub = ap.add_subparsers(dest="cmd")
 
     p = sub.add_parser("init", help="start an audit here")
     p.add_argument("--spec", action="append", help="requirements file (repeatable; .md/.txt/.docx; pdf via pdftotext)")
     p.add_argument("--spec-text", help="file containing pasted requirement text")
     p.add_argument("--repo", help="codebase root (default: cwd)")
-    p.add_argument("--out", help="audit output dir (default: <cwd>/.audit; keep it inside cwd to avoid permission prompts)")
+    p.add_argument("--out", help="audit output dir (default: <cwd>/.hybrid-audit; keep it inside cwd to avoid permission prompts)")
     p.add_argument("--lang", default="auto", help="report language: auto|en|vi|<code>")
     p.add_argument("--agents", choices=["plugin", "local", "generic", "solo"], help="how workers are spawned (see SKILL.md Step 0)")
     p.add_argument("--cap", type=int, help="concurrent subagent cap (default: $CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS or 20)")

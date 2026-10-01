@@ -37,7 +37,7 @@ findings + evidence lines]. Return ≤150 words: architecture, 3 components
 with one-line responsibilities, top 3 trade-offs, what it breaks, evidence
 it relies on." Pick and sharpen; don't draft from scratch.
 
-In mode `opencode` only (SKILL.md, Hybrid routing; modes `hybrid` and `claude` keep `draft` on `Agent` lanes, whatever the `opencode:` context line shows), dispatch each lens as a background call to `bslane.py draft --id <id> --lens reuse|best-practice|smallest|runner-up --task <TASK> --context-file <path> --preset opencode` instead of a Claude lane — never in round 1, only once the lanes that decide the approach set are back (the point where §1 would otherwise send the design message straight to Claude lanes); the runner-up lens (§3) dispatches this way too, at the same point, not before. `<path>` is `.superpowers/drafts/<id>.context.md`, written first with the constraints, key findings, and evidence lines the lens needs — the Conductor passes only the bracket values plus that file; the script owns the prompt template. Each call prints one of: `LANE <id> draft oc:<tier> OK — ungrounded` followed by the draft (a draft has no ground truth to check against, so it is never marked as grounded); `HELD <id> (<reason>) — <note>` after its OC line (act on it per SKILL.md's exit code 3 rules; mode `opencode` never falls back on its own); or the bare `CLAUDE <id> — Agent → …` line alone when the routing pins `draft` to Claude, launch that lane once.
+In mode `opencode` only (SKILL.md, Hybrid routing; modes `hybrid` and `claude` keep `draft` on `Agent` lanes, whatever the `opencode:` context line shows), dispatch each lens as a background call to `bslane.py draft --id <id> --lens reuse|best-practice|smallest|runner-up --task <TASK> --context-file <path> --preset opencode` instead of a Claude lane — never in round 1, only once the lanes that decide the approach set are back (the point where §1 would otherwise send the design message straight to Claude lanes); the runner-up lens (§3) dispatches this way too, at the same point, not before. `<path>` is `.hybrid-superpowers/drafts/<id>.context.md`, written first with the constraints, key findings, and evidence lines the lens needs — the Conductor passes only the bracket values plus that file; the script owns the prompt template. Each call prints one of: `LANE <id> draft oc:<tier> OK — ungrounded` followed by the draft (a draft has no ground truth to check against, so it is never marked as grounded); `HELD <id> (<reason>) — <note>` after its OC line (act on it per SKILL.md's exit code 3 rules; mode `opencode` never falls back on its own); or the bare `CLAUDE <id> — Agent → …` line alone when the routing pins `draft` to Claude, launch that lane once.
 
 **Design of the recommended approach:** labeled sections, each scaled to
 its complexity (a few sentences → ≤250 words when nuanced):
@@ -78,7 +78,7 @@ design. Their results are consumed in the spec turn (§4).
   permission prompt (acceptEdits, auto, or bypass mode). Use a `fork` if
   the harness offers one (it inherits the conversation); otherwise
   `general-purpose` with the design pasted. It writes the spec to
-  `.superpowers/drafts/<topic>-design.md` (never the specs path), does not
+  `.hybrid-superpowers/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. Rejected design → overwrite later.
 - **Runner-up approach** (1 `sonnet` lane) — only when the top two
   approaches are close; it fleshes out the runner-up's sections so "use B

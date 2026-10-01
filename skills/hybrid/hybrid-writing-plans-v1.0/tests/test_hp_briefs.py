@@ -17,9 +17,9 @@ class TempHomeCase(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix="hp-briefs-")
         self.addCleanup(shutil.rmtree, self.tmp, True)
         env = {"HOME": self.tmp,
-               "HP_ROUTING": os.path.join(self.tmp, "routing.json"),
-               "HP_DOCTOR_CACHE": os.path.join(self.tmp, "doctor.json"),
-               "HP_TELEMETRY": os.path.join(self.tmp, "lanes.jsonl")}
+               "HYBRID_WRITING_PLANS_ROUTING": os.path.join(self.tmp, "routing.json"),
+               "HYBRID_WRITING_PLANS_DOCTOR_CACHE": os.path.join(self.tmp, "doctor.json"),
+               "HYBRID_WRITING_PLANS_TELEMETRY": os.path.join(self.tmp, "lanes.jsonl")}
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
         self.addCleanup(patcher.stop)

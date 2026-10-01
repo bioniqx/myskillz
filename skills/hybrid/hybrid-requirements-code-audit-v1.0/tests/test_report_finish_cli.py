@@ -61,15 +61,15 @@ class BackendsLineTest(unittest.TestCase):
 class ItemRecordsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.old = os.environ.get("HA_TELEMETRY")
+        self.old = os.environ.get("HYBRID_AUDIT_TELEMETRY")
         self.tele = str(Path(self.tmp.name) / "lanes.jsonl")
-        os.environ["HA_TELEMETRY"] = self.tele
+        os.environ["HYBRID_AUDIT_TELEMETRY"] = self.tele
 
     def tearDown(self):
         if self.old is None:
-            os.environ.pop("HA_TELEMETRY", None)
+            os.environ.pop("HYBRID_AUDIT_TELEMETRY", None)
         else:
-            os.environ["HA_TELEMETRY"] = self.old
+            os.environ["HYBRID_AUDIT_TELEMETRY"] = self.old
         self.tmp.cleanup()
 
     def build(self):
@@ -115,7 +115,7 @@ class ItemRecordsTest(unittest.TestCase):
     def test_emit_swallows_write_failure(self):
         blocker = Path(self.tmp.name) / "blocker"
         blocker.write_text("a file, not a directory", encoding="utf-8")
-        os.environ["HA_TELEMETRY"] = str(blocker / "lanes.jsonl")
+        os.environ["HYBRID_AUDIT_TELEMETRY"] = str(blocker / "lanes.jsonl")
         audit.emit_item_telemetry(self.build())
         self.assertFalse(Path(self.tele).exists())
 

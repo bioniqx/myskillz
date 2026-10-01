@@ -65,9 +65,9 @@ class RouteGroupsTest(unittest.TestCase):
             "XDG_DATA_HOME": os.path.join(t, "data"),
             "HYBRID_OPENCODE_STD": "acme/std-model#high",
             "HYBRID_OPENCODE_LITE": "acme/lite-model#low",
-            "HP_ROUTING": os.path.join(t, "routing.json"),
-            "HP_DOCTOR_CACHE": os.path.join(t, "doctor.json"),
-            "HP_TELEMETRY": os.path.join(t, "lanes.jsonl"),
+            "HYBRID_WRITING_PLANS_ROUTING": os.path.join(t, "routing.json"),
+            "HYBRID_WRITING_PLANS_DOCTOR_CACHE": os.path.join(t, "doctor.json"),
+            "HYBRID_WRITING_PLANS_TELEMETRY": os.path.join(t, "lanes.jsonl"),
         }
         self.env = mock.patch.dict(os.environ, env)
         self.env.start()
@@ -136,30 +136,72 @@ class RouteGroupsTest(unittest.TestCase):
             got = run_groups(cs, "hybrid", breaker_dir=breaker_dir)
             self.assertEqual(shape(got), [("T01", "claude", ["T01"]), ("T02", "claude", ["T02"])])
 
-    def test_overflow_moves_heaviest_to_claude(self):
+    def small_tier(self, **extra):
         routing = copy.deepcopy(ROUTING)
         routing["tiers"]["std"]["max_parallel"] = 1
         routing["oc_group_max"] = 2
+        routing.update(extra)
+        return routing
+
+    def heavy_tasks(self):
         cs = [C("T01"), C("T02"), C("T03", spec=((1, 300),)), C("T04", spec=((1, 60),))]
         self.assertGreater(plan_tool.weight(cs[2]), plan_tool.weight(cs[3]))
         self.assertGreater(plan_tool.weight(cs[3]), plan_tool.weight(cs[0]))
-        got = run_groups(cs, "hybrid", routing=routing)
+        return cs
+
+    def test_overflow_moves_heaviest_to_claude_when_oc_overflow_is_claude(self):
+        got = run_groups(self.heavy_tasks(), "hybrid", routing=self.small_tier(oc_overflow="claude"))
         self.assertEqual(shape(got), [
             ("T03", "claude", ["T03"]),
             ("T04", "claude", ["T04"]),
             ("O01", "oc:std", ["T01", "T02"]),
         ])
 
-    def test_opencode_overflow_stays_on_opencode(self):
-        routing = copy.deepcopy(ROUTING)
-        routing["tiers"]["std"]["max_parallel"] = 1
-        routing["oc_group_max"] = 2
-        cs = [C("T01"), C("T02"), C("T03", spec=((1, 300),)), C("T04", spec=((1, 60),))]
-        got = run_groups(cs, "opencode", routing=routing)
-        self.assertEqual(len(got), 1)
-        gid, backend, group = got[0]
-        self.assertEqual((gid, backend), ("O01", "oc:std"))
-        self.assertEqual(sorted(c["id"] for c in group), ["T01", "T02", "T03", "T04"])
+    def test_hybrid_overflow_is_queued_on_opencode_by_default(self):
+        got = run_groups(self.heavy_tasks(), "hybrid", routing=self.small_tier())
+        self.assertEqual({backend for _, backend, _ in got}, {"oc:std"})
+        self.assertEqual(sorted(c["id"] for _, _, g in got for c in g), ["T01", "T02", "T03", "T04"])
+        self.assertEqual(len(got), 2)  # ceil(4 / oc_group_max); max_parallel 1 so the second group waits for the slot
+
+    def test_hybrid_default_with_more_than_18_std_tasks_sends_all_to_opencode(self):
+        cs = [C("T%02d" % i) for i in range(1, 31)]
+        got = run_groups(cs, "hybrid")
+        self.assertEqual({backend for _, backend, _ in got}, {"oc:std"})
+        self.assertEqual(sorted(c["id"] for _, _, g in got for c in g), [c["id"] for c in cs])
+        self.assertEqual(len(got), 10)  # 30 / oc_group_max 3; 6 slots, so 4 groups queue
+        self.assertTrue(all(len(g) <= 3 for _, _, g in got))
+
+    def test_oc_overflow_claude_restores_the_old_split_beyond_18_tasks(self):
+        cs = [C("T%02d" % i) for i in range(1, 21)]
+        got = run_groups(cs, "hybrid", routing=dict(ROUTING, oc_overflow="claude"))
+        on_oc = [c["id"] for _, backend, g in got if backend == "oc:std" for c in g]
+        on_claude = [c["id"] for _, backend, g in got if backend == "claude" for c in g]
+        self.assertEqual((len(on_oc), len(on_claude)), (18, 2))
+
+    def test_tasks_within_capacity_are_unchanged_by_oc_overflow(self):
+        cs = [C("T%02d" % i) for i in range(1, 19)]
+        queued, split = run_groups(cs, "hybrid"), run_groups(cs, "hybrid", routing=dict(ROUTING, oc_overflow="claude"))
+        self.assertEqual(shape(queued), shape(split))
+        self.assertEqual({backend for _, backend, _ in queued}, {"oc:std"})
+        self.assertEqual(len(queued), 6)
+
+    def test_unusable_tier_still_routes_to_claude_whatever_oc_overflow_says(self):
+        cs = [C("T%02d" % i) for i in range(1, 25)]
+        doctor = doctor_ok(std={"ok": False, "kind": "auth", "detail": "bad key"})
+        got = run_groups(cs, "hybrid", doctor=doctor)
+        self.assertEqual({backend for _, backend, _ in got}, {"claude"})
+
+    def test_invalid_oc_overflow_value_queues(self):
+        got = run_groups(self.heavy_tasks(), "hybrid", routing=self.small_tier(oc_overflow="bogus"))
+        self.assertEqual({backend for _, backend, _ in got}, {"oc:std"})
+
+    def test_opencode_overflow_stays_on_opencode_in_groups_capped_by_oc_group_max(self):
+        for overflow in ("queue", "claude"):
+            with self.subTest(oc_overflow=overflow):
+                got = run_groups(self.heavy_tasks(), "opencode", routing=self.small_tier(oc_overflow=overflow))
+                self.assertEqual({backend for _, backend, _ in got}, {"oc:std"})
+                self.assertEqual(sorted(c["id"] for _, _, g in got for c in g), ["T01", "T02", "T03", "T04"])
+                self.assertEqual(len(got), 2)
 
 
 if __name__ == "__main__":

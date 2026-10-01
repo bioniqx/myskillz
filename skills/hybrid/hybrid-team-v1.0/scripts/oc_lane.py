@@ -14,7 +14,7 @@ import hybrid_shared
 
 THROTTLE_RE = hybrid_shared.THROTTLE_RE
 
-AGENT_NAME = "ht-programmer"
+AGENT_NAME = "hybrid-team-programmer"
 # Short argv message that goes with an attached brief (build_cmd attach=): opencode v2 wraps an argv
 # message that has whitespace in literal quotes and escapes its quotes, which corrupts frozen-test text.
 ATTACH_MESSAGE = "Your task brief is attached as a file. Read it completely and follow it exactly."

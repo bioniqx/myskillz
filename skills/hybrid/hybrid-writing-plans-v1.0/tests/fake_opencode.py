@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Fake `opencode` CLI for hybrid-writing-plans tests. Never calls a model or the network.
 
-Env HP_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
+Env HYBRID_WRITING_PLANS_FAKE_SCRIPT names a JSON file holding one step object or a list of steps
 (call N uses entry N, so each round replays its own event stream; the last entry
 repeats; the count lives in <script>.calls).
-Env HP_FAKE_LOG names a file that receives one JSON line per call:
+Env HYBRID_WRITING_PLANS_FAKE_LOG names a file that receives one JSON line per call:
 {argv, cwd, pwd, config, session, attach, attach_text}, where session is the
 --session value, attach the -f path and attach_text that file's content ("" when
 absent or unreadable).
-Env HP_FAKE_MODELS=empty makes `models` list nothing.
+Env HYBRID_WRITING_PLANS_FAKE_MODELS=empty makes `models` list nothing.
 
 Step keys (all optional):
   session     session id to emit (default: the --session value, else ses_fake0001)
@@ -34,9 +34,9 @@ import sys
 import time
 from pathlib import Path
 
-FAKE_SCRIPT_ENV = "HP_FAKE_SCRIPT"
-FAKE_LOG_ENV = "HP_FAKE_LOG"
-FAKE_MODELS_ENV = "HP_FAKE_MODELS"
+FAKE_SCRIPT_ENV = "HYBRID_WRITING_PLANS_FAKE_SCRIPT"
+FAKE_LOG_ENV = "HYBRID_WRITING_PLANS_FAKE_LOG"
+FAKE_MODELS_ENV = "HYBRID_WRITING_PLANS_FAKE_MODELS"
 DEFAULT_SESSION = "ses_fake0001"
 FAKE_VERSION = "2.0.18"
 

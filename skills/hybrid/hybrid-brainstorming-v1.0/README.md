@@ -25,7 +25,7 @@ brainstorming contract.
   Without it, mode `claude` works as before. In modes `hybrid` and `opencode`, `bslane.py` prints an
   `OC-ERROR ... kind=spawn` line at once; hybrid then runs the lane on Claude, opencode holds it.
 - Drop this folder where Claude Code loads skills from, alongside (not instead of) `brainstorming-6.3`
-  if you want both installed: the only injected agent is `hb-lane`, and the skill's own name and
+  if you want both installed: the only injected agent is `hybrid-brainstorm-lane`, and the skill's own name and
   state directory differ from `brainstorming-6.3`'s, so the two skills never collide.
 
 ## Run modes
@@ -37,7 +37,7 @@ this skill's own routing file, `(shared)` for the shared env vars.
 
 | Mode | What runs where | On an opencode failure |
 |---|---|---|
-| `hybrid` (recommended) | Judgment on Claude; `locate`, `explore` and `fact` lanes on opencode | Reported at once. A connection failure is retried 3 times, then the rest of the run switches to Claude Sonnet 5.5. Any other failure re-runs that one lane on Claude |
+| `hybrid` (recommended) | Judgment on Claude; `locate`, `explore`, `fact` and `research` lanes on opencode (`draft` stays on Claude) | Reported at once. A connection failure is retried 3 times, then the rest of the run switches to Claude Sonnet 5.5. Any other failure re-runs that one lane on Claude |
 | `claude` | Everything on Claude; opencode is never called and no doctor run is needed | Not applicable |
 | `opencode` | Every lane that has an opencode runner goes to opencode, `research` and `draft` included | Connection failures are retried 3 times too. Then, as before: reported at once, the lane is held, and you are asked: retry / run on Claude / switch to hybrid / abort. No switch |
 
@@ -46,11 +46,11 @@ and self-review stay on Claude in every mode.
 
 ## Presets
 
-| Preset | `locate`/`explore` | `fact` | `research`/`draft` |
-|---|---|---|---|
-| `claude` | Claude | Claude | Claude |
-| `hybrid` (default) | opencode | opencode | Claude |
-| `opencode` | opencode | opencode | opencode, but `research` only while `websearch=on` (otherwise the lane is held with an `OC-ERROR`, with no Claude fallback) |
+| Preset | `locate`/`explore` | `fact` | `research` | `draft` |
+|---|---|---|---|---|
+| `claude` | Claude | Claude | Claude | Claude |
+| `hybrid` (default) | opencode | opencode | opencode, but only while `websearch=on` (otherwise one `OC-ERROR` and a Claude fallback) | Claude |
+| `opencode` | opencode | opencode | opencode, but only while `websearch=on` (otherwise the lane is held with an `OC-ERROR`, with no Claude fallback) | opencode |
 
 The old preset name `max` is still accepted as an alias for `opencode` and prints an
 `OC-WARN ... kind=config` line.
@@ -59,8 +59,8 @@ The old preset name `max` is still accepted as an alias for `opencode` and print
 
 | Backend | Runs | Where |
 |---|---|---|
-| Claude | main thread (classify, T0, synthesis, design, spec, self-review), draft lanes, research lanes (in preset `claude` or `hybrid`), claim verifier, spec pre-draft | Claude Code background |
-| opencode | Code lanes (roles `locate`, `explore`), web lanes (role `fact`, in preset `hybrid`/`opencode`), draft/research lanes (in preset `opencode` only) | `.superpowers/brainstorm/lanes/<id>` via `bslane.py` |
+| Claude | main thread (classify, T0, synthesis, design, spec, self-review), draft lanes (in preset `claude` or `hybrid`), research lanes (in preset `claude`), claim verifier, spec pre-draft | Claude Code background |
+| opencode | Code lanes (roles `locate`, `explore`), web lanes (role `fact`, in preset `hybrid`/`opencode`), research lanes (preset `hybrid`/`opencode`, while `websearch=on`), draft lanes (preset `opencode` only) | `.hybrid-superpowers/brainstorm/lanes/<id>` via `bslane.py` |
 
 ## Config
 
@@ -83,7 +83,7 @@ The old preset name `max` is still accepted as an alias for `opencode` and print
 - **User file** (optional): `<skill dir>/routing.json`, next to `routing.default.json` (for example
   `~/.claude/skills/hybrid-brainstorming-v1.0/routing.json`). `doctor` no longer creates it.
   It holds roles, timeouts and slot waits, and it may override the model of a tier. Override the path
-  with env `HB_ROUTING=<path>`. A malformed user file is reported as a config problem, never silently
+  with env `HYBRID_BRAINSTORMING_ROUTING=<path>`. A malformed user file is reported as a config problem, never silently
   ignored.
 - **Precedence per tier** (`std`, `lite`):
   - When the user file sets `tiers.<tier>.model`, that tier uses the user file's `model` and `variant`
@@ -110,7 +110,7 @@ The old preset name `max` is still accepted as an alias for `opencode` and print
  "tiers": {
    "std":  {"stall_s": 90, "timeout_s": 300},
    "lite": {"stall_s": 60, "timeout_s": 180}},
- "roles": {"locate": "lite", "explore": "std", "fact": "lite", "research": "claude", "draft": "claude"},
+ "roles": {"locate": "lite", "explore": "std", "fact": "lite", "research": "std", "draft": "claude"},
  "max_roles": {"research": "std", "draft": "std"},
  "slot_wait_s": 60, "throttle_cooldown_s": 120}
 ```
@@ -125,15 +125,24 @@ hybrid-team's because lanes answer a single question.
 is not part of the shipped defaults. A tier with it set is treated as unavailable, regardless of the
 doctor result.
 
+## Names
+
+Names this skill puts into shared namespaces, all prefixed `hybrid` so it installs beside `brainstorming-6.3`:
+
+- opencode agent: `hybrid-brainstorm-lane`
+- Env vars: `HYBRID_BRAINSTORMING_ROUTING`, `HYBRID_BRAINSTORMING_DOCTOR_CACHE`, `HYBRID_BRAINSTORMING_OC_BIN`; the visual companion uses `HYBRID_BRAINSTORMING_*` instead of `BRAINSTORM_*`
+- Project state dir: `.hybrid-superpowers/` (`brainstorm/`, `drafts/`); session dir under `/tmp/hybrid-brainstorming-*`
+- Unchanged on purpose: the spec path `docs/superpowers/specs/` (input of the next pipeline stage)
+
 ## Environment variables
 
 - `HYBRID_OPENCODE_STD=<provider/model[#variant]>` - shared `std` tier model (required for modes
   `hybrid` and `opencode`, unless every tier sets its own model in the user file).
 - `HYBRID_OPENCODE_LITE=<provider/model[#variant]>` - shared `lite` tier model, defaults to `HYBRID_OPENCODE_STD`.
-- `HB_ROUTING=<path>` - routing config path, instead of `<skill dir>/routing.json`.
-- `HB_OC_BIN=<path>` - path to the `opencode` executable (or a fake one, in tests) instead of
+- `HYBRID_BRAINSTORMING_ROUTING=<path>` - routing config path, instead of `<skill dir>/routing.json`.
+- `HYBRID_BRAINSTORMING_OC_BIN=<path>` - path to the `opencode` executable (or a fake one, in tests) instead of
   resolving `opencode` on `PATH`.
-- `HB_DOCTOR_CACHE=<path>` - doctor cache path, instead of `~/.cache/hybrid-brainstorming/doctor.json`.
+- `HYBRID_BRAINSTORMING_DOCTOR_CACHE=<path>` - doctor cache path, instead of `~/.cache/hybrid-brainstorming/doctor.json`.
 - `HYBRID_OC_RETRY_DELAY_S=<seconds>` - one delay for every retry, instead of 10/30/60 s (tests set `0`).
 
 ## Failure reporting
@@ -163,7 +172,7 @@ lane failed on opencode.
 - **Switch (mode `hybrid` only).** When the retries run out, or at once for `auth`, `quota` and
   `model`, the rest of the run moves to Claude Sonnet 5.5. `bslane.py` prints and logs one
   `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the rest of this run uses Claude sonnet`
-  and records it in `<root>/.superpowers/brainstorm/lanes/oc-switched.json`. The failed lane falls
+  and records it in `<root>/.hybrid-superpowers/brainstorm/lanes/oc-switched.json`. The failed lane falls
   back with `model: sonnet`. Every later call for a role that would run on opencode spawns nothing
   and prints only the `CLAUDE <id> ...` line with `model: sonnet`, without an OC line. Lanes already
   running on opencode finish and are used as usual. Roles that Claude owns anyway, and
@@ -196,7 +205,7 @@ lane failed on opencode.
   cancelled in a background run, so a `doctor --ping` run records `websearch=off`. Fix: open the
   `opencode` TUI once and allow web search, then re-run `bslane.py doctor --ping` - only `--ping`
   actually checks auth (via a sentinel reply) and web search, so a plain `doctor` run cannot confirm
-  the fix. Until then, `research` lanes stay on Claude in mode `hybrid` and are held in mode
+  the fix. Until then, `research` lanes fall back to Claude in mode `hybrid` and are held in mode
   `opencode`; `fact` lanes still work through webfetch.
 - A tier shows `(skill)` but you want the shared model - delete `model` and `variant` from that tier
   in `<skill dir>/routing.json`; the tier then follows the shared env vars.
@@ -225,6 +234,6 @@ lane failed on opencode.
   reach the main thread.
 - SKILL.md frontmatter changes: `name: hybrid-brainstorming`, an opt-in description, and
   `allowed-tools` that add the `bslane.py` pin.
-- Telemetry: one JSON line per lane appended to `<root>/.superpowers/brainstorm/lanes.jsonl`
+- Telemetry: one JSON line per lane appended to `<root>/.hybrid-superpowers/brainstorm/lanes.jsonl`
   with role, tier, model, variant, duration, tokens, grounded `n/m`, outcome and reason - no cost field.
 - Preset `claude` reproduces brainstorming-6.3's behaviour exactly.

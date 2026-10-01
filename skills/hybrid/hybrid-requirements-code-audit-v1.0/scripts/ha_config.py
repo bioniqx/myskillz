@@ -1,4 +1,4 @@
-"""ha_config: injected read-only opencode agents (ha-investigator, ha-verifier, ha-parser).
+"""ha_config: injected read-only opencode agents (hybrid-audit-investigator, hybrid-audit-verifier, hybrid-audit-parser).
 
 opencode v2 turns every permission map into an ordered rule list and the last matching rule wins
 (https://opencode.ai/docs/permissions), so each block starts with "*": "deny".
@@ -11,7 +11,7 @@ from typing import Dict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-AGENT_NAMES = {"investigator": "ha-investigator", "verifier": "ha-verifier", "parser": "ha-parser"}
+AGENT_NAMES = {"investigator": "hybrid-audit-investigator", "verifier": "hybrid-audit-verifier", "parser": "hybrid-audit-parser"}
 SENTINEL = "HA-INVESTIGATOR-OK"
 
 DOC_READ_DENY = (
@@ -76,9 +76,9 @@ def permission_block(role: str, audit_rel: str = "") -> dict:
 
 
 ROLE_INTRO = {
-    "investigator": "You are ha-investigator, a read-only evidence gatherer for a requirements audit.",
-    "verifier": "You are ha-verifier, a read-only verifier who re-checks requirements audit findings against the code.",
-    "parser": "You are ha-parser, who turns one requirements section into audit checklist rows.",
+    "investigator": "You are hybrid-audit-investigator, a read-only evidence gatherer for a requirements audit.",
+    "verifier": "You are hybrid-audit-verifier, a read-only verifier who re-checks requirements audit findings against the code.",
+    "parser": "You are hybrid-audit-parser, who turns one requirements section into audit checklist rows.",
 }
 
 ROLE_RULE1 = {

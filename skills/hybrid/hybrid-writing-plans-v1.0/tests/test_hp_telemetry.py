@@ -18,18 +18,18 @@ class TelemetryFileTest(unittest.TestCase):
 
     def test_default_path_is_under_home(self):
         with mock.patch.dict(os.environ, {"HOME": str(self.root)}):
-            os.environ.pop("HP_TELEMETRY", None)
+            os.environ.pop("HYBRID_WRITING_PLANS_TELEMETRY", None)
             self.assertEqual(hp_telemetry.telemetry_path(),
                              self.root / ".cache" / "hybrid-writing-plans" / "lanes.jsonl")
 
     def test_env_overrides_path(self):
         target = self.root / "t" / "lanes.jsonl"
-        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HP_TELEMETRY": str(target)}):
+        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HYBRID_WRITING_PLANS_TELEMETRY": str(target)}):
             self.assertEqual(hp_telemetry.telemetry_path(), target)
 
     def test_record_appends_json_lines_and_load_reads_them(self):
         path = self.root / "deep" / "dir" / "lanes.jsonl"
-        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HP_TELEMETRY": str(path)}):
+        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HYBRID_WRITING_PLANS_TELEMETRY": str(path)}):
             hp_telemetry.record({"kind": "group", "gid": "O01"})
             hp_telemetry.record({"kind": "review", "task": "T01", "t": "2026-09-28T00:00:00Z"})
         self.assertEqual(len(path.read_text(encoding="utf-8").splitlines()), 2)
@@ -42,7 +42,7 @@ class TelemetryFileTest(unittest.TestCase):
     def test_record_does_not_mutate_its_argument(self):
         path = self.root / "lanes.jsonl"
         rec = {"kind": "group"}
-        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HP_TELEMETRY": str(path)}):
+        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HYBRID_WRITING_PLANS_TELEMETRY": str(path)}):
             hp_telemetry.record(rec)
         self.assertEqual(rec, {"kind": "group"})
 
@@ -50,7 +50,7 @@ class TelemetryFileTest(unittest.TestCase):
         blocker = self.root / "blocker"
         blocker.write_text("not a directory", encoding="utf-8")
         target = blocker / "sub" / "lanes.jsonl"
-        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HP_TELEMETRY": str(target)}):
+        with mock.patch.dict(os.environ, {"HOME": str(self.root), "HYBRID_WRITING_PLANS_TELEMETRY": str(target)}):
             hp_telemetry.record({"kind": "group"})
             hp_telemetry.record({"kind": "group", "bad": object()})
         self.assertFalse(target.exists())

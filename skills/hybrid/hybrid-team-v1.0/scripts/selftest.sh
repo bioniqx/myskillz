@@ -4,8 +4,8 @@
 set -u
 # Legacy dev-team parity checks must run as if opencode were unavailable, so
 # routing falls back to the legacy path. The oc_* tests below set their own
-# HT_OC_BIN (real or fake CLI) before exercising the opencode lane.
-export HT_OC_BIN=/nonexistent/opencode
+# HYBRID_TEAM_OC_BIN (real or fake CLI) before exercising the opencode lane.
+export HYBRID_TEAM_OC_BIN=/nonexistent/opencode
 # Shared models come from these env vars; the caller's own values must never leak into the checks.
 unset HYBRID_OPENCODE_STD HYBRID_OPENCODE_LITE
 # a failing lane retries 3 times; no waiting between tries here
@@ -94,9 +94,9 @@ check "review batch due" '[[ "$OUT" == *"REVIEW: batch DUE"* ]]'
 check "checkpoint due" '[[ "$OUT" == *"CHECKPOINT: DUE"* ]]'
 echo "== checkpoint on a detached snapshot"
 OUT=$(D checkpoint 2>&1); echo "$OUT" | head -2
-check "checkpoint uses a detached worktree" '[[ "$OUT" == *"checkpoint-1"* ]] && [ -d "$R/.claude/worktrees/checkpoint-1" ] && [ -L "$R/.claude/worktrees/checkpoint-1/node_modules" ]'
+check "checkpoint uses a detached worktree" '[[ "$OUT" == *"hybrid-checkpoint-1"* ]] && [ -d "$R/.claude/worktrees/hybrid-checkpoint-1" ] && [ -L "$R/.claude/worktrees/hybrid-checkpoint-1/node_modules" ]'
 D checkpoint --result pass >/dev/null 2>&1
-check "checkpoint worktree removed" '[ ! -d "$R/.claude/worktrees/checkpoint-1" ]'
+check "checkpoint worktree removed" '[ ! -d "$R/.claude/worktrees/hybrid-checkpoint-1" ]'
 echo "== review batch + add-fixes"
 OUT=$(D review-batch --shards 2 2>&1)
 check "two shards" '[[ "$OUT" == *"REVIEW r1-1"* && "$OUT" == *"REVIEW r1-2"* ]]'
@@ -127,7 +127,7 @@ check "bash-ro allows redirect to /dev/null" '[[ -z "$(hook bash-ro "{\"tool_inp
 check "bash-ro denies redirect to file" '[[ "$(hook bash-ro "{\"tool_input\":{\"command\":\"echo a > b.txt\"}}")" == *deny* ]]'
 echo "== doctor on installed agents (hook pinning)"
 D doctor --fix >/dev/null 2>&1
-check "doctor pins hooks to guard.py" 'grep -q "guard.py\\\\\" edit\"" "$R/.claude/agents/ht-programmer.md"'
+check "doctor pins hooks to guard.py" 'grep -q "guard.py\\\\\" edit\"" "$R/.claude/agents/hybrid-team-programmer.md"'
 OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=64 D doctor 2>&1)
 check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
 
@@ -182,7 +182,7 @@ git -C "$R2" worktree add -q "$R2/.claude/worktrees/f3" -b wt-f3 HEAD
 ( cd "$R2/.claude/worktrees/f3" && D claim S2 >/dev/null 2>&1 && echo impl > src/two.js && D commit-green "high risk" >/dev/null 2>&1 )
 OUT=$(D next S2 2>&1)
 check "next ran the endgame when the DAG emptied" '[[ "$OUT" == *"S2: MERGED"* && "$OUT" == *"DAG EXHAUSTED"* ]]'
-check "endgame auto-started the final review on the spot reviewer" '[[ "$OUT" == *"=== REVIEW r1"* && "$OUT" == *"subagent_type: ht-spot-reviewer"* ]]' 
+check "endgame auto-started the final review on the spot reviewer" '[[ "$OUT" == *"=== REVIEW r1"* && "$OUT" == *"subagent_type: hybrid-team-spot-reviewer"* ]]' 
 check "endgame auto-started the full-gate checkpoint" '[[ "$OUT" == *"FULL GATE (test && lint && typecheck && build)"* ]]'
 check "checkpoint command chains every deferred gate" '[[ "$OUT" == *"node --test tests/ && echo lint && echo tsc && echo build"* ]]' 
 check "endgame flags the untested slice for verification" '[[ "$OUT" == *"untested spike slices: S1"* ]]'
@@ -365,8 +365,8 @@ check "a code slice whose footprint has no test path is warned about" 'printf "\
 D reset --yes >/dev/null 2>&1; D init plan.md >/dev/null 2>&1
 OUT=$(D dispatch R1 R2 C1 D1 T1 X1 2>&1)
 check "a trivial slice is routed to a cheaper model" '[[ "$OUT" == *"model: sonnet"* ]]'
-check "a research slice goes to the ht-investigator with no claim command" '[[ "$OUT" == *"[RESEARCH]"* && "$OUT" == *"subagent_type: ht-investigator"* ]]'
-check "every other kind still goes to the ht-programmer in MODE WORK" '[[ "$OUT" == *"[REFACTOR/WORK]"* && "$OUT" == *"[DOCS/WORK]"* ]]'
+check "a research slice goes to the hybrid-team-investigator with no claim command" '[[ "$OUT" == *"[RESEARCH]"* && "$OUT" == *"subagent_type: hybrid-team-investigator"* ]]'
+check "every other kind still goes to the hybrid-team-programmer in MODE WORK" '[[ "$OUT" == *"[REFACTOR/WORK]"* && "$OUT" == *"[DOCS/WORK]"* ]]'
 check "a chore briefing pins the slice's own verify command" 'grep -q "verify (THIS slice.s evidence command): .*echo verified" .claude/hybrid-team/briefs/C1.md'
 check "a refactor briefing demands a before AND after run" 'grep -qi "before your first edit" .claude/hybrid-team/briefs/R1.md'
 
@@ -466,12 +466,12 @@ OUT=$(D probe 2>&1)
 check "probe finds the npm scripts" '[[ "$OUT" == *"\"test\": \"npm run test\""* && "$OUT" == *"\"build\": \"npm run build\""* ]]'
 check "probe proposes the FILE-SCOPED lint and test commands that make the balanced gate cheap" '[[ "$OUT" == *"npx eslint {files}"* && "$OUT" == *"npx vitest run {files}"* ]]'
 OUT=$(D review-pr HEAD~1..HEAD --shards 2 2>&1)
-check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: ht-code-reviewer"* ]]'
-check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: ht-spot-reviewer"* ]]'
+check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: hybrid-team-code-reviewer"* ]]'
+check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: hybrid-team-spot-reviewer"* ]]'
 OUT=$(D brief-debug "tokens leak after refresh" -n 4 2>&1)
-check "brief-debug fans out investigators on distinct angles" '[[ "$(echo "$OUT" | grep -c "subagent_type: ht-investigator")" == 4 ]]'
-check "each ht-investigator brief names the angles the others own" 'grep -q "Other angles being investigated in parallel" .claude/hybrid-team/research/debug1.md'
-check "ht-investigator briefs demand evidence, not theories" 'grep -q "Every claim needs evidence" .claude/hybrid-team/research/debug2.md'
+check "brief-debug fans out investigators on distinct angles" '[[ "$(echo "$OUT" | grep -c "subagent_type: hybrid-team-investigator")" == 4 ]]'
+check "each hybrid-team-investigator brief names the angles the others own" 'grep -q "Other angles being investigated in parallel" .claude/hybrid-team/research/debug1.md'
+check "hybrid-team-investigator briefs demand evidence, not theories" 'grep -q "Every claim needs evidence" .claude/hybrid-team/research/debug2.md'
 
 echo "== v3 scheduling and permissions"
 RS="$(newrepo rs)"; cd "$RS"
@@ -506,7 +506,7 @@ check "doctor demands the subagent stall + bash timeouts a long gate needs" '[[ 
 check "doctor no longer writes the non-existent worktree.symlinkDirectories setting" '[[ "$OUT" != *"symlinkDirectories"* ]]'
 printf 'SECRET=1\n' > .env
 OUT=$(D doctor --fix 2>&1)
-check "doctor --fix installs all five agents" '[ -f .claude/agents/ht-programmer.md ] && [ -f .claude/agents/ht-code-reviewer.md ] && [ -f .claude/agents/ht-spot-reviewer.md ] && [ -f .claude/agents/ht-team-leader.md ] && [ -f .claude/agents/ht-investigator.md ]'
+check "doctor --fix installs all five agents" '[ -f .claude/agents/hybrid-team-programmer.md ] && [ -f .claude/agents/hybrid-team-code-reviewer.md ] && [ -f .claude/agents/hybrid-team-spot-reviewer.md ] && [ -f .claude/agents/hybrid-team-leader.md ] && [ -f .claude/agents/hybrid-team-investigator.md ]'
 check "doctor --fix carries env files into new worktrees via .worktreeinclude" 'grep -qx ".env" .worktreeinclude'
 check "doctor --fix writes the timeouts it asked for" 'grep -q "CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS" .claude/settings.local.json && grep -q "BASH_MAX_TIMEOUT_MS" .claude/settings.local.json'
 check "no agent carries a PermissionRequest hook (frontmatter never fires it; dontAsk + PreToolUse allow replace it)" '! grep -q "PermissionRequest" .claude/agents/*.md'
@@ -584,10 +584,10 @@ check "a reviewer cannot write state.json" '[[ "$(eq "$RF/.claude/hybrid-team/st
 check "a reviewer cannot rewrite plan.md" '[[ "$(eq "$RF/.claude/hybrid-team/plan.md")" == *"read-only"* ]]'
 check "a reviewer cannot rewrite another slice briefing" '[[ "$(eq "$RF/.claude/hybrid-team/briefs/S1.md")" == *"read-only"* ]]'
 check "a reviewer CAN write its own report (pre-approved, no prompt)" '[[ "$(eq "$RF/.claude/hybrid-team/reviews/r1.report.md")" == *"\"allow\""* ]]'
-check "an ht-investigator CAN write its research report" '[[ "$(eq "$RF/.claude/hybrid-team/research/X1.md")" == *"\"allow\""* ]]'
+check "an hybrid-team-investigator CAN write its research report" '[[ "$(eq "$RF/.claude/hybrid-team/research/X1.md")" == *"\"allow\""* ]]'
 eqa() { printf '{"cwd":"%s","agent_type":"%s","tool_input":{"file_path":"%s"}}' "$RF" "$1" "$2" | python3 "$G" edit-ro; }
-check "the ht-team-leader CAN write plan.md (PLANNING mode was broken in v3.1)" '[[ "$(eqa ht-team-leader "$RF/.claude/hybrid-team/plan.md")" == *"\"allow\""* ]]'
-check "a ht-code-reviewer identified by agent_type still cannot" '[[ "$(eqa ht-code-reviewer "$RF/.claude/hybrid-team/plan.md")" == *"read-only"* ]]'
+check "the hybrid-team-leader CAN write plan.md (PLANNING mode was broken in v3.1)" '[[ "$(eqa hybrid-team-leader "$RF/.claude/hybrid-team/plan.md")" == *"\"allow\""* ]]'
+check "a hybrid-team-code-reviewer identified by agent_type still cannot" '[[ "$(eqa hybrid-team-code-reviewer "$RF/.claude/hybrid-team/plan.md")" == *"read-only"* ]]'
 
 echo "== v3.1 the vacuous-test check matches assertion CALLS, not English words"
 vac() { python3 -c "
@@ -697,14 +697,14 @@ echo "== v3.1 --fast 0 means strict, and doctor refreshes a stale agent"
 cd "$RR"
 check "--fast 0 selects strict even when the plan asks for turbo" 'printf "\140\140\140json\n{\"request\":\"r\",\"profile\":\"turbo\",\"commands\":{\"test\":\"echo ok\"},\"slices\":[{\"id\":\"Z1\",\"title\":\"z\",\"deps\":[],\"files\":[\"src/z.js\",\"tests/z.test.js\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > p0.md; D init p0.md --force --fast 0 2>&1 | grep -q "PROFILE strict"'
 D doctor --fix >/dev/null 2>&1
-printf -- "---\nname: ht-programmer\ndescription: stale v2 copy\n---\nold body\n" > .claude/agents/ht-programmer.md
+printf -- "---\nname: hybrid-team-programmer\ndescription: stale v2 copy\n---\nold body\n" > .claude/agents/hybrid-team-programmer.md
 check "doctor notices an agent left behind by an older hybrid-team" 'D doctor 2>&1 | grep -q "differs from the version shipped"'
-check "doctor --fix refreshes it and keeps a .bak" 'D doctor --fix >/dev/null 2>&1; grep -q "permissionMode: dontAsk" .claude/agents/ht-programmer.md && [ -f .claude/agents/ht-programmer.md.bak ]'
+check "doctor --fix refreshes it and keeps a .bak" 'D doctor --fix >/dev/null 2>&1; grep -q "permissionMode: dontAsk" .claude/agents/hybrid-team-programmer.md && [ -f .claude/agents/hybrid-team-programmer.md.bak ]'
 
 # =============================================================================================
 # v3.2 — no-relay integration (Stop-gate markers), never-prompt permissions, tighter dispatch
 # =============================================================================================
-echo "== v3.2 the Stop gate reports for the ht-programmer: next needs no ids"
+echo "== v3.2 the Stop gate reports for the hybrid-team-programmer: next needs no ids"
 RM="$(newrepo rm32)"; cd "$RM"
 cat > plan.md <<'EOF'
 ```json
@@ -721,7 +721,7 @@ git worktree add -q .claude/worktrees/m2 -b wm2 HEAD; MW2="$RM/.claude/worktrees
 ( cd "$MW1" && D claim M1 >/dev/null 2>&1 && mktest tests/m1.test.js M1 && D commit-red m1 >/dev/null 2>&1 && echo impl > src/m1.js && D commit-green m1 >/dev/null 2>&1 )
 check "claim records the integration root for the Stop gate" '[ "$(cat "$MW1/.slice/root")" = "$RM" ]'
 stopq() { printf '{"cwd":"%s","last_assistant_message":%s}' "$1" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$2")" | python3 "$G" stop 2>&1; }
-check "a finished ht-programmer passes the Stop gate" '[ -z "$(stopq "$MW1" "## Status: Complete
+check "a finished hybrid-team-programmer passes the Stop gate" '[ -z "$(stopq "$MW1" "## Status: Complete
 ## Gate: echo ok -> ok
 ## Notes: none")" ]'
 check "and the gate wrote a .done marker into the integration checkout" '[ -f "$RM/.claude/hybrid-team/slices/M1.done" ]'
@@ -756,7 +756,7 @@ check "a small docs slice rides sonnet too" '[[ "$OUT" == *"description: \"D1\",
 check "a LARGE docs slice keeps the default model" '[[ "$OUT" == *"description: \"D2\", prompt:"* ]]'
 check "a normal code slice keeps the default model" '[[ "$OUT" == *"description: \"N1\", prompt:"* ]]'
 check "the prompt is the bare claim command and nothing else" '[[ "$OUT" == *"prompt: \"python3 "*"devteam.py"*" claim N1\""* ]]'
-check "one dispatch = header + one Agent line" '[ "$(echo "$OUT" | grep -c "^Agent → subagent_type: ht-programmer")" -eq 4 ] && [ "$(echo "$OUT" | grep -c "prompt: |")" -eq 0 ]'
+check "one dispatch = header + one Agent line" '[ "$(echo "$OUT" | grep -c "^Agent → subagent_type: hybrid-team-programmer")" -eq 4 ] && [ "$(echo "$OUT" | grep -c "prompt: |")" -eq 0 ]'
 
 echo "== v3.2 never-prompt permissions: PreToolUse pre-approves exactly the safe set"
 cd "$RM"; PW="$MW2"     # M2 is still in flight (rejected → warm fix), so its .slice/ is live
@@ -870,7 +870,7 @@ oc_test_setup() {
     && touch README.md \
     && git add README.md \
     && git commit -qm init )
-  export HT_OC_BIN="$OC_SELFTEST_FAKE"
+  export HYBRID_TEAM_OC_BIN="$OC_SELFTEST_FAKE"
   # Models come from the shared env vars, not routing.default.json: name the ids the fake opencode lists (`models`).
   export HYBRID_OPENCODE_STD="zai-coding-plan/glm-5.3#high"
   export HYBRID_OPENCODE_LITE="zai-coding-plan/glm-5.3-flash#low"
@@ -892,15 +892,15 @@ oc_test_teardown() {
 oc_lane_ok_test() {
   oc_test_setup demo1
   local events="$OC_TEST_TMP/events.jsonl"
-  # fake_opencode.py's HT_FAKE_SCRIPT holds one "step" object (see tests/fake_opencode.py's own
+  # fake_opencode.py's HYBRID_TEAM_FAKE_SCRIPT holds one "step" object (see tests/fake_opencode.py's own
   # docstring), not a raw JSONL event stream: write, commit and usage drive what it emits on stdout.
   cat > "$events" <<'EOF'
 {"write": {"out.txt": "ok\n"}, "commit": "chore(demo1): stub output",
  "usage": {"input": 10, "output": 5, "reasoning": 0, "cache_read": 0, "cache_write": 0, "cost": 0.01},
  "text": "## Slice: demo1\n## Status: Complete\n## Gate: ran `true` (the slice verify command) -> exit 0, ok\n## Notes: opencode lane selftest fixture\n"}
 EOF
-  export HT_FAKE_SCRIPT="$events"
-  export HT_FAKE_LOG="$OC_TEST_TMP/invoke.log"
+  export HYBRID_TEAM_FAKE_SCRIPT="$events"
+  export HYBRID_TEAM_FAKE_LOG="$OC_TEST_TMP/invoke.log"
   local out
   out="$( cd "$OC_TEST_TMP/repo" && python3 "$OC_SELFTEST_DEVTEAM" lane demo1 2>&1 )"
   local rc=$?
@@ -918,22 +918,22 @@ oc_lane_failures_test() {
   for reason in crash throttle spawn; do
     oc_test_setup "demo-$reason"
     if [ "$reason" = "spawn" ]; then
-      export HT_OC_BIN="$OC_TEST_TMP/no-such-opencode"
-      export HT_FAKE_SCRIPT="$OC_TEST_TMP/unused.jsonl"
+      export HYBRID_TEAM_OC_BIN="$OC_TEST_TMP/no-such-opencode"
+      export HYBRID_TEAM_FAKE_SCRIPT="$OC_TEST_TMP/unused.jsonl"
     elif [ "$reason" = "crash" ]; then
       fixture="$OC_TEST_TMP/events.jsonl"
       cat > "$fixture" <<'EOF'
 {"type":"error","sessionID":"s2","error":{"type":"crash","message":"boom"}}
 EOF
-      export HT_FAKE_SCRIPT="$fixture"
+      export HYBRID_TEAM_FAKE_SCRIPT="$fixture"
     else
       fixture="$OC_TEST_TMP/events.jsonl"
       cat > "$fixture" <<'EOF'
 {"type":"error","sessionID":"s3","error":{"type":"rate_limit","message":"429 Too Many Requests"}}
 EOF
-      export HT_FAKE_SCRIPT="$fixture"
+      export HYBRID_TEAM_FAKE_SCRIPT="$fixture"
     fi
-    export HT_FAKE_LOG="$OC_TEST_TMP/invoke-$reason.log"
+    export HYBRID_TEAM_FAKE_LOG="$OC_TEST_TMP/invoke-$reason.log"
     ok=1
     out="$( cd "$OC_TEST_TMP/repo" && python3 "$OC_SELFTEST_DEVTEAM" lane "demo-$reason" 2>&1 )"
     if ! echo "$out" | grep -q "OC-ERROR hybrid-team demo-$reason tier=std model=.* kind=$reason ::"; then
@@ -965,8 +965,8 @@ oc_stats_test() {
  "usage": {"input": 3, "output": 2, "reasoning": 0, "cache_read": 0, "cache_write": 0, "cost": 0.001},
  "text": "## Slice: demo-stats\n## Status: Complete\n## Gate: ran `true` (the slice verify command) -> exit 0, ok\n## Notes: opencode stats selftest fixture\n"}
 EOF
-  export HT_FAKE_SCRIPT="$events"
-  export HT_FAKE_LOG="$OC_TEST_TMP/invoke.log"
+  export HYBRID_TEAM_FAKE_SCRIPT="$events"
+  export HYBRID_TEAM_FAKE_LOG="$OC_TEST_TMP/invoke.log"
   ( cd "$OC_TEST_TMP/repo" && python3 "$OC_SELFTEST_DEVTEAM" lane demo-stats ) > /dev/null 2>&1
   local out
   out="$( cd "$OC_TEST_TMP/repo" && python3 "$OC_SELFTEST_DEVTEAM" stats 2>&1 )"

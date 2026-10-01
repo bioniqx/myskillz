@@ -55,7 +55,7 @@ class CliBase(unittest.TestCase):
         self.spec = self.work / "spec.md"
         self.spec.write_text("# Spec\n\n1. Users must log in.\n\n2. Admins must approve new accounts.\n",
                              encoding="utf-8")
-        self.out = self.work / ".audit"
+        self.out = self.work / ".hybrid-audit"
         home = self.tmp / "home"
         home.mkdir()
         self.cache = self.tmp / "cache" / "doctor.json"
@@ -63,8 +63,8 @@ class CliBase(unittest.TestCase):
         self.telemetry = self.tmp / "cache" / "lanes.jsonl"
         self.env = dict(os.environ)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
-        self.env.update({"HOME": str(home), "HA_ROUTING": str(self.routing), "HA_DOCTOR_CACHE": str(self.cache),
-                         "HA_TELEMETRY": str(self.telemetry), "HA_OC_BIN": str(FAKE),
+        self.env.update({"HOME": str(home), "HYBRID_AUDIT_ROUTING": str(self.routing), "HYBRID_AUDIT_DOCTOR_CACHE": str(self.cache),
+                         "HYBRID_AUDIT_TELEMETRY": str(self.telemetry), "HYBRID_AUDIT_OC_BIN": str(FAKE),
                          "XDG_DATA_HOME": str(self.tmp / "data"),
                          "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"})
         self.env.update(SHARED_VARS)
@@ -112,7 +112,7 @@ class InitTests(CliBase):
         self.write_json_file(self.cache, doctor_ok())
         lines = self.init()
         self.assertEqual(self.opencode_line(lines),
-                         "opencode: v2.0.18 preset=hybrid investigator=oc:std verifier=claude parser=claude"
+                         "opencode: v2.0.18 preset=hybrid investigator=oc:std verifier=claude parser=oc:std"
                          " (doctor 2026-09-28)")
 
     def test_failed_tier_shows_reason(self):
@@ -123,7 +123,7 @@ class InitTests(CliBase):
     def ping_reply(self, step):
         script = self.tmp / "fake.json"
         self.write_json_file(script, step)
-        self.env["HA_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_AUDIT_FAKE_SCRIPT"] = str(script)
 
     def test_missing_cache_is_refreshed_by_one_ping(self):
         self.ping_reply({"text": "HA-INVESTIGATOR-OK", "finish": "stop"})
@@ -147,7 +147,7 @@ class InitTests(CliBase):
 
     def test_preset_claude_never_pings(self):
         log = self.tmp / "fake.log"
-        self.env["HA_FAKE_LOG"] = str(log)
+        self.env["HYBRID_AUDIT_FAKE_LOG"] = str(log)
         self.assertEqual(self.opencode_line(self.init("claude")),
                          "opencode: unavailable preset=claude (run audit.py doctor --ping)")
         self.assertFalse(log.exists())
@@ -187,10 +187,11 @@ class InitTests(CliBase):
 
 
 class PlanTests(CliBase):
-    def hybrid_audit(self, preset=None, cache=True):
+    def hybrid_audit(self, preset=None, cache=True, overflow="claude"):
         if cache:
             self.write_json_file(self.cache, doctor_ok())
-        self.write_json_file(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 2})
+        self.write_json_file(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 2,
+                                            "oc_overflow": overflow})
         self.init(preset)
         self.write_checklist(10)
 
@@ -217,6 +218,28 @@ class PlanTests(CliBase):
         self.assertIn('  batch-04 oc:std (2 items) → python3 "%s/audit.py" oc-run batch-04' % scripts_dir, lines)
         self.assertTrue(any(line.startswith("DISPATCH NOW") for line in lines))
         self.assertFalse(any("batch-04 → prompt" in line for line in lines))
+
+    def test_hybrid_queues_overflow_on_opencode_by_default(self):
+        self.hybrid_audit(overflow="queue")
+        lines = self.plan()
+        self.assertEqual(lines[0], "plan: 10 requirements (0 skipped as static-limit/ambiguous) → 0 investigator"
+                                   " batches, 2 wave(s), cap=3 | 5 opencode batches (10 items), 3 queued for a free slot")
+        batches = self.state()["batches"]
+        self.assertEqual({b["backend"] for b in batches.values()}, {"oc:std"})
+        self.assertEqual([batches["batch-%02d" % i]["wave"] for i in range(1, 6)], [1, 1, 2, 2, 2])
+        self.assertEqual([batches["batch-%02d" % i]["dispatched"] is None for i in range(1, 6)],
+                         [False, False, True, True, True])
+        self.assertIn("OPENCODE 2 batches (4 items) | run each in the BACKGROUND (Bash run_in_background)"
+                      " in the SAME message:", lines)
+        self.assertFalse(any(line.startswith("DISPATCH NOW") for line in lines))
+
+    def test_shipped_default_queues_overflow(self):
+        self.write_json_file(self.cache, doctor_ok())
+        self.write_json_file(self.routing, {"tiers": {"std": {"max_parallel": 2}}, "oc_batch_max": 2})
+        self.init()
+        self.write_checklist(10)
+        self.plan()
+        self.assertEqual({b["backend"] for b in self.state()["batches"].values()}, {"oc:std"})
 
     def test_opencode_batches_get_both_briefs(self):
         self.hybrid_audit()
@@ -265,8 +288,14 @@ class ParseTests(CliBase):
         self.assertTrue(any(line.startswith("OPENCODE 2 sections") for line in lines))
         self.assertFalse(any(line.startswith("DISPATCH NOW") for line in lines))
 
-    def test_hybrid_keeps_claude_parsers(self):
+    def test_hybrid_routes_parsers_to_opencode_by_default(self):
         lines = self.parse_plan("hybrid")
+        self.assertEqual(self.state()["parse"]["backends"], {"section-01": "oc:std", "section-02": "oc:std"})
+        self.assertTrue(any(line.startswith("OPENCODE 2 sections") for line in lines))
+        self.assertFalse(any(line.startswith("DISPATCH NOW") for line in lines))
+
+    def test_hybrid_keeps_claude_parsers_when_routing_says_so(self):
+        lines = self.parse_plan("hybrid", {"roles": {"parser": "claude"}})
         self.assertEqual(self.state()["parse"]["backends"], {"section-01": "claude", "section-02": "claude"})
         self.assertTrue(any(line.startswith("DISPATCH NOW") for line in lines))
         self.assertFalse(any(line.startswith("OPENCODE") for line in lines))
@@ -278,7 +307,7 @@ class ParseTests(CliBase):
         row = {"id": "S02-001", "text": "Admins must approve new accounts.", "strength": "MUST",
                "category": "admin", "search_hints": ["approve"], "tags": []}
         (pdir / "section-02.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
-        event = {"batch": "section-01", "ok": False, "agent_type": "opencode:ha-parser", "backend": "oc:std",
+        event = {"batch": "section-01", "ok": False, "agent_type": "opencode:hybrid-audit-parser", "backend": "oc:std",
                  "reason": "format", "message": "no parsable block", "rounds": 3, "written": 0, "total": 0,
                  "t": 1.0}
         self.write_json_file(self.out / "events" / "section-01.json", event)
@@ -405,7 +434,7 @@ class CommandTests(CliBase):
         self.assertEqual((self.out / "state.json").read_bytes(), before)
 
     def test_doctor_reports_each_failed_tier_and_creates_no_routing_file(self):
-        self.env["HA_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_AUDIT_OC_BIN"] = str(self.tmp / "no-such-opencode")
         r = self.cli("doctor")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertFalse(json.loads(self.cache.read_text(encoding="utf-8"))["ok"])
@@ -421,7 +450,7 @@ class CommandTests(CliBase):
         self.assertFalse(self.out.exists())
 
     def test_doctor_reports_an_invalid_shared_env(self):
-        self.env["HA_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_AUDIT_OC_BIN"] = str(self.tmp / "no-such-opencode")
         self.env[hybrid_shared.STD_ENV] = "not-a-model"
         r = self.cli("doctor")
         self.assertEqual(r.returncode, 0, r.stdout)
@@ -429,7 +458,7 @@ class CommandTests(CliBase):
         self.assertIn("  shared  : %s = invalid" % hybrid_shared.SHARED_SOURCE, r.stdout.splitlines())
 
     def test_doctor_reports_an_unset_shared_env(self):
-        self.env["HA_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_AUDIT_OC_BIN"] = str(self.tmp / "no-such-opencode")
         self.unset_shared()
         r = self.cli("doctor")
         self.assertEqual(r.returncode, 0, r.stdout)

@@ -3,7 +3,7 @@
 Use a dynamic workflow instead of Agent-tool fan-out when any of these hold:
 
 - the subagent cap cannot be raised (stuck at 20) **and** N is large, or the lead's context is precious (N > ~300);
-- the user asked for a workflow (`ultracode`, "use a workflow") or wants a rerunnable command (`/req-audit-run`);
+- the user asked for a workflow (`ultracode`, "use a workflow") or wants a rerunnable command (`/hybrid-audit-run`);
 - the environment refuses many concurrent Agent calls but allows workflows.
 
 Trade-off: the workflow runtime caps concurrency at **16 agents** (fewer on small CPUs), so a wave of 64 batches runs
@@ -21,7 +21,7 @@ the run is pausable/resumable, and the verification pass is codified.
 
 ## Brief for the workflow script
 
-- **Phase "investigate"**: `pipeline` over every `.audit/batches/batch-*.md`; one agent per file, model `haiku`,
+- **Phase "investigate"**: `pipeline` over every `.hybrid-audit/batches/batch-*.md`; one agent per file, model `haiku`,
   prompt: `Investigator <name>: read <path> and follow it exactly.` Label each agent with the batch name.
   Use a `schema` that returns `{ "batch": string, "written": number, "total": number }` so the script can detect
   partial batches and re-run them once.
@@ -33,7 +33,7 @@ the run is pausable/resumable, and the verification pass is codified.
   (NN starting at 01, unique per chunk).
 - **Return** a short summary object (counts per status) — nothing else; the files are the real output.
 - Agents must have only Read/Grep/Glob/Write; no shell; the same hard rules as the batch files (no docs, no git).
-- Name the saved workflow `req-audit-run`; it accepts `args.auditDir` (default `.audit`).
+- Name the saved workflow `hybrid-audit-run`; it accepts `args.auditDir` (default `.hybrid-audit`).
 
 Then: `audit.py status` (prints the adjudication queue once waves are complete) → adjudicate → `plan.jsonl` →
 `audit.py report` (runs the check inline) → `finish`.

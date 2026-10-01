@@ -304,8 +304,8 @@ class FakeCliTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.log = self.tmp / "log.jsonl"
-        self.env = dict(os.environ, HOME=str(self.tmp / "home"), HA_FAKE_LOG=str(self.log))
-        self.env.pop("HA_FAKE_SCRIPT", None)
+        self.env = dict(os.environ, HOME=str(self.tmp / "home"), HYBRID_AUDIT_FAKE_LOG=str(self.log))
+        self.env.pop("HYBRID_AUDIT_FAKE_SCRIPT", None)
         self.env.pop("OPENCODE_CONFIG_CONTENT", None)
 
     def tearDown(self):
@@ -322,8 +322,8 @@ class FakeCliTest(unittest.TestCase):
 
     def test_constants(self):
         fake = _load_fake()
-        self.assertEqual(fake.FAKE_SCRIPT_ENV, "HA_FAKE_SCRIPT")
-        self.assertEqual(fake.FAKE_LOG_ENV, "HA_FAKE_LOG")
+        self.assertEqual(fake.FAKE_SCRIPT_ENV, "HYBRID_AUDIT_FAKE_SCRIPT")
+        self.assertEqual(fake.FAKE_LOG_ENV, "HYBRID_AUDIT_FAKE_LOG")
 
     def test_is_executable(self):
         self.assertTrue(os.access(str(FAKE), os.X_OK))
@@ -343,7 +343,7 @@ class FakeCliTest(unittest.TestCase):
     def test_script_list_replays_one_stream_per_round_and_logs(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps([{"text": "one"}, {"text": "two", "usage": {"input": 3}}]), encoding="utf-8")
-        self.env["HA_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_AUDIT_FAKE_SCRIPT"] = str(script)
         cmd = oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "low", "msg")
         out = self.tmp / "out.jsonl"
         texts = []
@@ -367,7 +367,7 @@ class FakeCliTest(unittest.TestCase):
         brief.write_text("BRIEF BODY", encoding="utf-8")
         script = self.tmp / "script.json"
         script.write_text(json.dumps([{"text": "round one"}, {"text": "round two"}]), encoding="utf-8")
-        self.env["HA_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_AUDIT_FAKE_SCRIPT"] = str(script)
         out = self.tmp / "out.jsonl"
         proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "go", attach=str(brief)))
         out.write_text(proc.stdout, encoding="utf-8")
@@ -395,7 +395,7 @@ class FakeCliTest(unittest.TestCase):
                 "status": "completed", "input": {"filePath": "/r/x"}, "output": marker}}}],
             "text": "@@@ BEGIN T01\nok\n@@@ END T01",
         }), encoding="utf-8")
-        self.env["HA_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_AUDIT_FAKE_SCRIPT"] = str(script)
         proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
         out = self.tmp / "out.jsonl"
         out.write_text(proc.stdout, encoding="utf-8")
@@ -409,7 +409,7 @@ class FakeCliTest(unittest.TestCase):
     def test_error_step_exits_one(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps({"error": {"type": "ProviderAuthError", "message": "bad key"}}), encoding="utf-8")
-        self.env["HA_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_AUDIT_FAKE_SCRIPT"] = str(script)
         proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
         self.assertEqual(proc.returncode, 1)
         out = self.tmp / "out.jsonl"
@@ -417,17 +417,17 @@ class FakeCliTest(unittest.TestCase):
         self.assertEqual(oc_run.parse_events(out)["errors"], ["ProviderAuthError: bad key"])
 
     def test_models_env_lists_nothing_or_a_custom_list(self):
-        self.env["HA_FAKE_MODELS"] = "none"
+        self.env["HYBRID_AUDIT_FAKE_MODELS"] = "none"
         proc = self._call([str(FAKE), "models"])
         self.assertEqual((proc.returncode, proc.stdout), (0, ""))
-        self.env["HA_FAKE_MODELS"] = "p/a,p/b"
+        self.env["HYBRID_AUDIT_FAKE_MODELS"] = "p/a,p/b"
         proc = self._call([str(FAKE), "models"])
         self.assertEqual(proc.stdout.splitlines(), ["p/a", "p/b"])
 
     def test_scenarios_expand_and_can_be_overridden(self):
         script = self.tmp / "script.json"
         script.write_text(json.dumps({"scenario": "recovered", "text": "mine"}), encoding="utf-8")
-        self.env["HA_FAKE_SCRIPT"] = str(script)
+        self.env["HYBRID_AUDIT_FAKE_SCRIPT"] = str(script)
         proc = self._call(oc_run.build_cmd(str(FAKE), "hp-writer", "p/m", "", "msg"))
         self.assertEqual(proc.returncode, 1)
         out = self.tmp / "out.jsonl"
@@ -449,8 +449,8 @@ class RunOnceTest(unittest.TestCase):
         self.env = dict(
             os.environ,
             HOME=str(self.tmp / "home"),
-            HA_FAKE_SCRIPT=str(self.script),
-            HA_FAKE_LOG=str(self.log),
+            HYBRID_AUDIT_FAKE_SCRIPT=str(self.script),
+            HYBRID_AUDIT_FAKE_LOG=str(self.log),
         )
         self.env.pop("OPENCODE_CONFIG_CONTENT", None)
 

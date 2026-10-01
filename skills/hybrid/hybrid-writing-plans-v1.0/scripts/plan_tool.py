@@ -119,7 +119,7 @@ def qtool():
 
 def default_work(plan):
     p = os.path.abspath(plan)
-    return os.path.join(os.path.dirname(p), ".work", os.path.splitext(os.path.basename(p))[0])
+    return os.path.join(os.path.dirname(p), ".hybrid-work", os.path.splitext(os.path.basename(p))[0])
 
 
 def load_work(plan):
@@ -769,7 +769,7 @@ def dispatch_lines(groups, work, kind):
 
 def agent_installed(repo):
     for base in (os.path.join(repo, ".claude", "agents"), os.path.join(os.path.expanduser("~"), ".claude", "agents")):
-        p = os.path.join(base, "plan-task-writer.md")
+        p = os.path.join(base, "hybrid-plan-task-writer.md")
         if os.path.isfile(p):
             return p
     return None
@@ -1009,7 +1009,7 @@ def cmd_contracts(a):
                "throttle_cooldown_s": routing.get("throttle_cooldown_s", 120),
                "review_oc": hp_router.review_policy(routing, preset)}}, indent=1))
     _, n, width = waves_block(cs)
-    agent = "plan-task-writer" if agent_installed(repo) else "general-purpose"
+    agent = "hybrid-plan-task-writer" if agent_installed(repo) else "general-purpose"
     extra = [] if from_env or a.agents else ["NOTE parallel cap = %d (default); run `%s setup` once to raise it to 64" % (DEFAULT_CAP, qtool())]
     extra.append("WORK %s" % work)
     if claude:
@@ -1020,6 +1020,11 @@ def cmd_contracts(a):
         extra.append("OPENCODE %d groups (%s) | run in the BACKGROUND in the SAME message: %s oc-write %s" % (
             len(oc_todo), ", ".join(span_of(g) for _, _, g in oc_todo), qtool(), shlex.quote(plan_path)))
         extra += oc_dispatch_lines(oc_todo, work)
+        for tier in sorted({b[3:] for _, b, _ in oc_todo}):
+            n = sum(1 for _, b, _ in oc_todo if b == "oc:" + tier)
+            mp = hp_partition._max_parallel(routing, tier)
+            if n > mp:
+                extra.append("NOTE %d of the %d %s groups queue for a free slot (max_parallel %d); wait covers them" % (n - mp, n, tier, mp))
     elif oc:
         extra.append("OPENCODE none to run: every opencode task body is already written (kept from the earlier run)")
     if held:
@@ -1089,7 +1094,7 @@ def cmd_hook_lint(a):
     try:
         data = json.load(sys.stdin)
         path = (data.get("tool_input") or {}).get("file_path") or ""
-        m = re.search(r"[\\/]\.work[\\/][^\\/]+[\\/]tasks[\\/]T\d{2,3}\.md$", path)
+        m = re.search(r"[\\/]\.hybrid-work[\\/][^\\/]+[\\/]tasks[\\/]T\d{2,3}\.md$", path)
         if not m:
             return 0
         work = os.path.dirname(os.path.dirname(path))
@@ -1266,6 +1271,8 @@ def cmd_wait(a):
             pend = ["%s:%s" % (t, v) for t, v in st.items() if v != "done"]
             print("PENDING %d/%d after %.0fs (%s) -> %s" % (ndone, len(ids), time.time() - t0,
                   "timeout" if time.time() - t0 > a.timeout else "no progress for %ds" % a.idle, " ".join(pend)))
+            if alive:
+                print("oc-write is still running (groups beyond a tier's max_parallel wait for a free slot): run wait again.")
             print("If their agents are still running, run wait again; if they returned FAIL or stopped, re-dispatch only these IDs.")
             return 1
         time.sleep(0.5)
@@ -1470,8 +1477,8 @@ def cmd_doctor(a):
     user = hp_router.user_routing_path()
     routing = hp_router.load_routing(Path(SKILL_DIR) / "routing.default.json", user)
     cache = hp_doctor.doctor_cache_path()
-    binary = os.environ.get("HP_OC_BIN", "opencode")
-    scratch = tempfile.mkdtemp(prefix="hp-doctor-")
+    binary = os.environ.get("HYBRID_WRITING_PLANS_OC_BIN", "opencode")
+    scratch = tempfile.mkdtemp(prefix="hybrid-plan-doctor-")
     try:
         data = hp_doctor.run_doctor(binary, routing, a.ping, Path(scratch), hp_doctor.load_doctor(cache))
     finally:
@@ -1580,9 +1587,9 @@ def cmd_context(a):
             "" if k >= MAX_AGENTS else " | one-time boost to 64: %s setup --apply (then restart)" % qtool()))
         ag = agent_installed(repo)
         if ag and agent_is_stale(ag):
-            out.append("writer agent: plan-task-writer at %s is STALE (still has __PLAN_TOOL__ placeholder) - re-run %s setup --apply" % (ag, qtool()))
+            out.append("writer agent: hybrid-plan-task-writer at %s is STALE (still has __PLAN_TOOL__ placeholder) - re-run %s setup --apply" % (ag, qtool()))
         else:
-            out.append("writer agent: %s" % ("plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
+            out.append("writer agent: %s" % ("hybrid-plan-task-writer (%s) - auto-lint hook on" % ag if ag else "not installed -> use general-purpose"))
         raw = " ".join(a.rest or [])
         out.append(opencode_line(raw))
         out.append(config_line())
@@ -1668,7 +1675,7 @@ def cmd_context(a):
 
 
 # ------------------------------------------------------------------ setup
-AGENT_TEMPLATE = os.path.join(SKILL_DIR, "agents", "plan-task-writer.md")
+AGENT_TEMPLATE = os.path.join(SKILL_DIR, "agents", "hybrid-plan-task-writer.md")
 
 
 def cmd_setup(a):
@@ -1699,7 +1706,7 @@ def cmd_setup(a):
         if rule not in allow:
             allow.append(rule)
             changes.append("permissions.allow += %s" % rule)
-    agent_path = os.path.join(agents, "plan-task-writer.md")
+    agent_path = os.path.join(agents, "hybrid-plan-task-writer.md")
     agent_text = load(AGENT_TEMPLATE).replace("__PLAN_TOOL__", qtool())
     agent_new = not os.path.exists(agent_path)
     if agent_new:

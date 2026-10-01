@@ -25,7 +25,7 @@ CONNECTION_KINDS = ("spawn", "stall", "throttle", "crash")
 OC_RETRIES = 3
 RETRY_DELAYS_S = (10, 30, 60)
 RETRY_DELAY_ENV = "HYBRID_OC_RETRY_DELAY_S"
-MODELS_EMPTY_RETRIES = 2  # an idle opencode service answers the first `models` call with an empty list
+MODELS_EMPTY_RETRIES = 2  # `models` re-runs while it lists nothing (a cold service)
 FALLBACK_MODEL = "sonnet"
 SWITCH_FILE = "oc-switched.json"
 SESSION_ENV = "CLAUDE_CODE_SESSION_ID"  # run state written in another Claude Code session is stale
@@ -231,25 +231,39 @@ def classify(rc, errors: list, stderr_tail: str, killed: str = "", finished: boo
     return "crash"
 
 
-def run_models(binary: str, timeout: float):
-    """`<binary> models` as a CompletedProcess, re-run while it lists nothing.
+def run_captured(cmd: list, timeout: float):
+    """subprocess.run with stdout captured through a temp file, stdin closed; a CompletedProcess.
 
-    Verified on opencode v2.0.20: the first `models` call after the background service was idle
-    prints nothing (rc 0) and the next calls list everything, so an empty listing is retried before
-    it counts as "listed nothing". Never pass `--standalone`: a private server always lists nothing.
-    stdin is closed because opencode may wait on an open stdin. TimeoutExpired/OSError propagate.
+    Verified on opencode v2.0.20: the CLI exits before it has flushed a pipe, so `opencode models`
+    read through a pipe came back empty or cut mid-line (0-3072 of 3467 bytes) while the same call
+    written to a file was complete every time. Read every opencode answer through this.
+    TimeoutExpired/OSError propagate.
     """
     import subprocess
+    import tempfile
+    with tempfile.TemporaryFile() as out:
+        proc = subprocess.run(cmd, stdout=out, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                              timeout=timeout)
+        out.seek(0)
+        stdout = out.read().decode("utf-8", errors="replace")
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout,
+                                       (proc.stderr or b"").decode("utf-8", errors="replace"))
+
+
+def run_models(binary: str, timeout: float):
+    """`<binary> models` through run_captured, re-run while it lists nothing (a cold service).
+
+    Never pass `--standalone`: a private server always lists nothing on v2.0.20.
+    """
     try:
         delay = float(os.environ.get(RETRY_DELAY_ENV, "2"))
     except ValueError:
         delay = 2.0
     proc = None
     for attempt in range(MODELS_EMPTY_RETRIES + 1):
-        proc = subprocess.run([binary, "models"], capture_output=True, text=True,
-                              timeout=timeout, stdin=subprocess.DEVNULL)
-        if proc.returncode != 0 or (proc.stdout or "").strip():
-            break
+        proc = run_captured([binary, "models"], timeout)
+        if proc.returncode != 0 or proc.stdout.strip():
+            return proc
         if attempt < MODELS_EMPTY_RETRIES:
             time.sleep(delay)
     return proc

@@ -12,6 +12,30 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import hp_doctor
+
+
+def _pipe_run_captured(cmd, timeout):
+    # These tests mock subprocess.run and hand back stdout directly; the real run_captured reads
+    # stdout from a temp file (opencode truncates pipes), which a mock cannot fill.
+    import subprocess as _sp
+    return _sp.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+_SEAM = []
+
+
+def setUpModule():
+    import hybrid_shared
+    for owner in (hybrid_shared, hp_doctor):
+        if hasattr(owner, "run_captured"):
+            patcher = mock.patch.object(owner, "run_captured", _pipe_run_captured)
+            patcher.start()
+            _SEAM.append(patcher)
+
+
+def tearDownModule():
+    while _SEAM:
+        _SEAM.pop().stop()
 from hp_config import AGENT_NAME, SENTINEL
 from hybrid_shared import cache_key
 
@@ -72,9 +96,9 @@ class EnvIsolatedTestCase(unittest.TestCase):
         self._tmp = tempfile.mkdtemp()
         tmp = Path(self._tmp)
         os.environ["HOME"] = self._tmp
-        os.environ["HP_ROUTING"] = str(tmp / "cfg" / "routing.json")
-        os.environ["HP_DOCTOR_CACHE"] = str(tmp / "cache" / "doctor.json")
-        os.environ["HP_TELEMETRY"] = str(tmp / "cache" / "lanes.jsonl")
+        os.environ["HYBRID_WRITING_PLANS_ROUTING"] = str(tmp / "cfg" / "routing.json")
+        os.environ["HYBRID_WRITING_PLANS_DOCTOR_CACHE"] = str(tmp / "cache" / "doctor.json")
+        os.environ["HYBRID_WRITING_PLANS_TELEMETRY"] = str(tmp / "cache" / "lanes.jsonl")
         os.environ.pop("HYBRID_OPENCODE_STD", None)
         os.environ.pop("HYBRID_OPENCODE_LITE", None)
 
@@ -86,7 +110,7 @@ class EnvIsolatedTestCase(unittest.TestCase):
 
 class TestDoctorCachePath(EnvIsolatedTestCase):
     def test_default_path_under_home_cache(self):
-        os.environ.pop("HP_DOCTOR_CACHE", None)
+        os.environ.pop("HYBRID_WRITING_PLANS_DOCTOR_CACHE", None)
         self.assertEqual(
             hp_doctor.doctor_cache_path(),
             Path(self._tmp) / ".cache" / "hybrid-writing-plans" / "doctor.json",
@@ -94,7 +118,7 @@ class TestDoctorCachePath(EnvIsolatedTestCase):
 
     def test_env_override(self):
         override = Path(self._tmp) / "custom" / "doctor.json"
-        os.environ["HP_DOCTOR_CACHE"] = str(override)
+        os.environ["HYBRID_WRITING_PLANS_DOCTOR_CACHE"] = str(override)
         self.assertEqual(hp_doctor.doctor_cache_path(), override)
 
     def test_models_timeout_constant(self):

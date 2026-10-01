@@ -54,7 +54,7 @@ class CliBase(unittest.TestCase):
         self.plan = self.root / "docs" / "plans" / "demo.md"
         self.plan.parent.mkdir(parents=True)
         self.plan.write_text(PLAN, encoding="utf-8")
-        self.work = self.root / "docs" / "plans" / ".work" / "demo"
+        self.work = self.root / "docs" / "plans" / ".hybrid-work" / "demo"
         (self.work / "tasks").mkdir(parents=True)
         (self.work / "oc").mkdir()
         (self.work / "briefs").mkdir()
@@ -62,9 +62,9 @@ class CliBase(unittest.TestCase):
         self.home.mkdir()
         self.telemetry = self.tmp / "lanes.jsonl"
         self.doctor = self.tmp / "doctor.json"
-        self.env = dict(os.environ, HOME=str(self.home), HP_ROUTING=str(self.tmp / "routing.json"),
-                        HP_DOCTOR_CACHE=str(self.doctor), HP_TELEMETRY=str(self.telemetry),
-                        HP_OC_BIN=FAKE, HYBRID_OPENCODE_STD="zai-coding-plan/glm-5.3#high",
+        self.env = dict(os.environ, HOME=str(self.home), HYBRID_WRITING_PLANS_ROUTING=str(self.tmp / "routing.json"),
+                        HYBRID_WRITING_PLANS_DOCTOR_CACHE=str(self.doctor), HYBRID_WRITING_PLANS_TELEMETRY=str(self.telemetry),
+                        HYBRID_WRITING_PLANS_OC_BIN=FAKE, HYBRID_OPENCODE_STD="zai-coding-plan/glm-5.3#high",
                         HYBRID_OPENCODE_LITE="zai-coding-plan/glm-5.3-flash#low",
                         XDG_DATA_HOME=str(self.tmp / "xdg"), PYTHONDONTWRITEBYTECODE="1",
                         PYTHONIOENCODING="utf-8")
@@ -117,12 +117,12 @@ class WaitFallbackTest(CliBase):
         (self.work / "oc" / "oc-write.pid").write_text(str(os.getpid()), encoding="utf-8")
         brief = str(self.work / "briefs" / "O01F.md")
         marker = {"gid": "O01", "reason": "lint", "tasks": ["T01"], "brief": brief, "model": "sonnet",
-                  "subagent_type": "plan-task-writer", "errors": {"T01": ["T01: no commit step"]},
+                  "subagent_type": "hybrid-plan-task-writer", "errors": {"T01": ["T01: no commit step"]},
                   "t": "2026-09-28T10:00:00Z"}
         (self.work / "oc" / "O01.fallback").write_text(json.dumps(marker), encoding="utf-8")
         r = self.run_tool("wait", str(self.plan), "--timeout", "10", "--idle", "10")
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        line = ("FALLBACK O01 (lint) T01 → Agent subagent_type=plan-task-writer model=sonnet "
+        line = ("FALLBACK O01 (lint) T01 → Agent subagent_type=hybrid-plan-task-writer model=sonnet "
                 "description 'plan O01F' prompt: Read %s and follow it exactly." % brief)
         self.assertIn(line, r.stdout.splitlines())
         self.assertIn("Launch every FALLBACK Agent call above in ONE message, then run wait again.", r.stdout)
@@ -141,6 +141,8 @@ class WaitFallbackTest(CliBase):
         self.assertIn("PENDING", r.stdout)
         self.assertIn("timeout", r.stdout)
         self.assertNotIn("no progress", r.stdout)
+        self.assertIn("oc-write is still running (groups beyond a tier's max_parallel wait for a free slot): run wait again.",
+                      r.stdout.splitlines())
 
     def test_dead_runner_writes_runner_died_fallback(self):
         self.write_work()
@@ -368,7 +370,7 @@ class ContextLineTest(CliBase):
 
     def test_config_line_marks_each_tier_skill_or_shared(self):
         self.write_doctor()
-        Path(self.env["HP_ROUTING"]).write_text(
+        Path(self.env["HYBRID_WRITING_PLANS_ROUTING"]).write_text(
             json.dumps({"tiers": {"lite": {"model": "own/model"}}}), encoding="utf-8")
         line = self.context_lines()[1]
         self.assertIn("lite=own/model", line)
@@ -438,7 +440,7 @@ class PreloadCommandTest(CliBase):
 
 class SetupAgentTest(CliBase):
     def agent_path(self):
-        return self.home / ".claude" / "agents" / "plan-task-writer.md"
+        return self.home / ".claude" / "agents" / "hybrid-plan-task-writer.md"
 
     def test_existing_agent_is_never_overwritten(self):
         self.agent_path().parent.mkdir(parents=True)

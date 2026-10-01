@@ -2,8 +2,33 @@
 
 All notable changes to `hybrid-team` are documented in this file.
 
+## 1.2.1
+
+- Routing (modes `hybrid` and `opencode`): the Small route (one coherent slice, no shared interface,
+  no concurrency/security surface) is now a one-slice pipeline (inline one-slice plan, no leader, RED on
+  Claude, GREEN/WORK on opencode) instead of the Claude-only Fast lane. The Fast lane is kept for mode
+  `claude`. Step 0 now asks the mode before choosing the Small route; the popup is still skipped for
+  obvious edits (no engine: spin-up costs more than the edit), code questions, review-only and
+  investigation. Docs: the `docs` "rides sonnet" note applies only when a docs slice runs on Claude;
+  the reason `perf` stays on Claude (no numeric before/after check, so no oracle) is now written down in
+  SKILL.md, README.md and `router.py`. No code behaviour change.
+- Routing (preset `hybrid`): `size: large` slices that are not `risk: high` now go to opencode like any
+  other slice (GREEN/WORK of `code`, `refactor`, `test`, `chore`). Only `risk: high` stays on Claude in
+  hybrid, plus the units that were never offloadable (RED, research/perf/investigators, fast mode,
+  no-oracle slices). Reason: Claude keeps only the ~20% highest-judgment work; opencode does the execution.
+  Preset `opencode` now differs from `hybrid` only by `risk: high` and by having no Claude fallback.
+
 ## 1.2.0
 
+- opencode lanes: the slice's own `verify` command (chore/docs/perf evidence) is now in the lane's
+  bash allowlist, as `claim` already allows it for Claude programmers. Before, a real lane was denied
+  the command its briefing calls pre-approved and ended blocked (`kind=gate`).
+- Names: every name in a shared namespace now carries the `hybrid` prefix so the skill installs beside
+  dev-team. Agents `ht-*` -> `hybrid-team-programmer|code-reviewer|spot-reviewer|investigator|leader`;
+  env `HT_ROUTING`/`HT_OC_BIN` (and the fake-opencode `HT_FAKE_*`) -> `HYBRID_TEAM_*`; lane worktree and
+  branch `oc-<id>` -> `hybrid-oc-<id>`; checkpoint worktree `checkpoint-<n>` -> `hybrid-checkpoint-<n>`;
+  salvage branches `attempt/*` -> `hybrid-attempt/*`. The finish sweep removes only `hybrid-oc-*`
+  worktrees. Existing `.claude/agents/ht-*.md` copies from an older install are not removed.
 - Re-synced `devteam.py` and `selftest.sh` with dev-team-v3.2 (3-way merge from the fork base):
   `remove_worktree` never removes the integration checkout; `--no-renames` on every
   `git diff --name-only`; a red-done slice keeps its footprint busy; `retry` and `finish` salvage
@@ -47,7 +72,7 @@ All notable changes to `hybrid-team` are documented in this file.
   shared `max_parallel`: slot caps come from `<skill dir>/routing.json` or `routing.default.json`.
 - The per-skill user routing file now lives next to the shipped defaults, at `<skill dir>/routing.json`
   (e.g. `~/.claude/skills/hybrid-team-v1.0/routing.json`), not under `~/.config`. There is no fallback
-  to the old location: move an existing file there or point env `HT_ROUTING` at it.
+  to the old location: move an existing file there or point env `HYBRID_TEAM_ROUTING` at it.
 - Preset `opencode` replaces `max` (`max` is still accepted as an alias and prints
   `OC-WARN ... kind=config`). An unknown preset is an `OC-ERROR ... kind=config` and a non-zero
   exit instead of silently becoming `claude`. In `opencode` mode a slice whose tier is unusable is
@@ -85,10 +110,10 @@ Initial release - a fork of `dev-team-v3.2` (event-driven, contract-gated pipeli
 gates, worker-agnostic merge) that adds a second execution backend:
 
 - Backend router (`routing.default.json`, user override at `<skill dir>/routing.json`,
-  env `HT_ROUTING`) maps each slice's `kind`/`size`/`risk` to Claude or an opencode tier, under
+  env `HYBRID_TEAM_ROUTING`) maps each slice's `kind`/`size`/`risk` to Claude or an opencode tier, under
   presets `claude` (identical to dev-team-v3.2), `hybrid` (default) and `max`.
 - New `lane <id>` engine subcommand: spawns the local `opencode` CLI in an isolated worktree
-  (`.claude/worktrees/oc-<id>`), captures its JSON event stream, and writes the same
+  (`.claude/worktrees/hybrid-oc-<id>`), captures its JSON event stream, and writes the same
   `.done`/`.blocked` marker shape a Claude programmer writes.
 - `doctor` gained an opencode availability/auth check; missing or broken opencode degrades to
   all-Claude routing with one NOTE, never a hard failure.

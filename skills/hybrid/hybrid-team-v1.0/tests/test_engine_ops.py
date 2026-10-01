@@ -108,19 +108,19 @@ class TestCmdDoctorOc(unittest.TestCase):
         self.home = Path(self.tmp.name) / "home"
         self.home.mkdir()
         self._old_home = os.environ.get("HOME")
-        self._old_ht_routing = os.environ.get("HT_ROUTING")
+        self._old_hybrid_team_routing = os.environ.get("HYBRID_TEAM_ROUTING")
         os.environ["HOME"] = str(self.home)
-        os.environ["HT_ROUTING"] = str(self.home / "routing.json")
+        os.environ["HYBRID_TEAM_ROUTING"] = str(self.home / "routing.json")
 
     def tearDown(self):
         if self._old_home is None:
             os.environ.pop("HOME", None)
         else:
             os.environ["HOME"] = self._old_home
-        if self._old_ht_routing is None:
-            os.environ.pop("HT_ROUTING", None)
+        if self._old_hybrid_team_routing is None:
+            os.environ.pop("HYBRID_TEAM_ROUTING", None)
         else:
-            os.environ["HT_ROUTING"] = self._old_ht_routing
+            os.environ["HYBRID_TEAM_ROUTING"] = self._old_hybrid_team_routing
         self.tmp.cleanup()
 
     def test_doctor_reports_opencode_ok(self):
@@ -144,7 +144,7 @@ class TestCmdDoctorOc(unittest.TestCase):
             devteam.cmd_doctor(args)
         self.assertEqual(mocked.call_count, len(ROUTING["tiers"]))
         self.assertTrue(calls)
-        prompt_path = Path(devteam.__file__).resolve().parents[1] / "agents" / "opencode" / "ht-programmer.prompt.md"
+        prompt_path = Path(devteam.__file__).resolve().parents[1] / "agents" / "opencode" / "hybrid-team-programmer.prompt.md"
         expected_prompt = prompt_path.read_text() if prompt_path.exists() else ""
         expected_workdir = self.root / ".claude" / "hybrid-team"
         for binary, tier, prompt_text, engine, workdir in calls:
@@ -216,20 +216,20 @@ class TestDoctorRoutingFile(unittest.TestCase):
         self.home = Path(self.tmp.name) / "home"
         self.home.mkdir()
         self._old_home = os.environ.get("HOME")
-        self._old_ht_routing = os.environ.get("HT_ROUTING")
+        self._old_hybrid_team_routing = os.environ.get("HYBRID_TEAM_ROUTING")
         os.environ["HOME"] = str(self.home)
         self.routing_path = self.home / "routing.json"
-        os.environ["HT_ROUTING"] = str(self.routing_path)
+        os.environ["HYBRID_TEAM_ROUTING"] = str(self.routing_path)
 
     def tearDown(self):
         if self._old_home is None:
             os.environ.pop("HOME", None)
         else:
             os.environ["HOME"] = self._old_home
-        if self._old_ht_routing is None:
-            os.environ.pop("HT_ROUTING", None)
+        if self._old_hybrid_team_routing is None:
+            os.environ.pop("HYBRID_TEAM_ROUTING", None)
         else:
-            os.environ["HT_ROUTING"] = self._old_ht_routing
+            os.environ["HYBRID_TEAM_ROUTING"] = self._old_hybrid_team_routing
         self.tmp.cleanup()
 
     def test_fix_never_writes_the_user_routing_file(self):
@@ -263,7 +263,7 @@ class TestCmdFinishSafety(unittest.TestCase):
         self.worktrees_dir = self.root / ".claude" / "worktrees"
         self.worktrees_dir.mkdir(parents=True)
         subprocess.run(
-            ["git", "worktree", "add", "-b", "oc-slice1", str(self.worktrees_dir / "oc-slice1")],
+            ["git", "worktree", "add", "-b", "hybrid-oc-slice1", str(self.worktrees_dir / "hybrid-oc-slice1")],
             cwd=str(self.root), check=True,
         )
         self.state_dir = self.root / ".claude" / "hybrid-team"
@@ -277,9 +277,9 @@ class TestCmdFinishSafety(unittest.TestCase):
         self.tmp.cleanup()
 
     def branch_exists(self):
-        out = subprocess.run(["git", "branch", "--list", "oc-slice1"], cwd=str(self.root),
+        out = subprocess.run(["git", "branch", "--list", "hybrid-oc-slice1"], cwd=str(self.root),
                              check=True, capture_output=True, text=True).stdout
-        return "oc-slice1" in out
+        return "hybrid-oc-slice1" in out
 
     def write_state(self, status):
         state = {"slices": {"slice1": {"status": status}}, "merges": [], "reviews": {}, "checkpoints": [],
@@ -291,14 +291,14 @@ class TestCmdFinishSafety(unittest.TestCase):
         args = argparse.Namespace(root=str(self.root), force=False)
         with self.assertRaises(devteam.DevteamError):
             devteam.cmd_finish(args)
-        self.assertTrue((self.worktrees_dir / "oc-slice1").exists())
+        self.assertTrue((self.worktrees_dir / "hybrid-oc-slice1").exists())
         self.assertTrue(self.branch_exists())
 
     def test_finish_success_removes_oc_worktree_and_branch(self):
         self.write_state("done")
         args = argparse.Namespace(root=str(self.root), force=False)
         devteam.cmd_finish(args)
-        self.assertFalse((self.worktrees_dir / "oc-slice1").exists())
+        self.assertFalse((self.worktrees_dir / "hybrid-oc-slice1").exists())
         self.assertFalse(self.branch_exists())
 
 
@@ -311,7 +311,7 @@ class TestCmdFinishOc(unittest.TestCase):
         self.worktrees_dir = self.root / ".claude" / "worktrees"
         self.worktrees_dir.mkdir(parents=True)
         subprocess.run(
-            ["git", "worktree", "add", "-b", "oc-slice1", str(self.worktrees_dir / "oc-slice1")],
+            ["git", "worktree", "add", "-b", "hybrid-oc-slice1", str(self.worktrees_dir / "hybrid-oc-slice1")],
             cwd=str(self.root), check=True,
         )
         subprocess.run(
@@ -334,7 +334,7 @@ class TestCmdFinishOc(unittest.TestCase):
     def test_finish_removes_only_oc_worktrees(self):
         args = argparse.Namespace(root=str(self.root))
         devteam.cmd_finish(args)
-        self.assertFalse((self.worktrees_dir / "oc-slice1").exists())
+        self.assertFalse((self.worktrees_dir / "hybrid-oc-slice1").exists())
         self.assertTrue((self.worktrees_dir / "native-slice2").exists())
 
 

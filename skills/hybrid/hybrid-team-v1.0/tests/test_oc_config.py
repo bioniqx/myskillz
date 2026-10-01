@@ -84,6 +84,14 @@ class TestPermissionBlock(unittest.TestCase):
         block = oc_config.permission_block(ENGINE, {"test_file": "pytest {files} -q"})
         assert resolve(block["bash"], "pytest tests/test_a.py") == "allow"
 
+    def test_slice_verify_command_is_allowed_but_still_fenced(self):
+        verify = "python3 -c \"import calc.version as v; print(v.__version__)\""
+        block = oc_config.permission_block(ENGINE, dict(COMMANDS, verify=verify))
+        assert resolve(block["bash"], verify) == "allow"
+        assert resolve(block["bash"], PREFIX + verify) == "allow"
+        for cmd in (verify + " > /tmp/x", verify + " --out=/etc/x", "python3 -c 'import os'"):
+            assert resolve(block["bash"], cmd) == "deny", cmd
+
     def test_plan_commands_survive_generic_denies(self):
         block = oc_config.permission_block(ENGINE, {"test": "npx vitest run"})
         assert resolve(block["bash"], "npx vitest run") == "allow"
@@ -102,9 +110,9 @@ class TestPermissionBlock(unittest.TestCase):
 
 class TestBuildConfig(unittest.TestCase):
     def test_build_config_embeds_agent_and_top_level_permission(self):
-        config = oc_config.build_config("You are ht-programmer.", ENGINE, COMMANDS)
+        config = oc_config.build_config("You are hybrid-team-programmer.", ENGINE, COMMANDS)
         agent = config["agent"][oc_config.AGENT_NAME]
-        assert agent["prompt"] == "You are ht-programmer."
+        assert agent["prompt"] == "You are hybrid-team-programmer."
         assert agent["permission"]["edit"]["*"] == "allow"
         assert config["permission"] == agent["permission"]
         assert config["permission"] is not agent["permission"]
@@ -113,16 +121,16 @@ class TestBuildConfig(unittest.TestCase):
 
 class TestConfigEnv(unittest.TestCase):
     def test_config_env_returns_json_serialized_config_and_disables_project_config(self):
-        env = oc_config.config_env("You are ht-programmer.", ENGINE, COMMANDS)
+        env = oc_config.config_env("You are hybrid-team-programmer.", ENGINE, COMMANDS)
         assert sorted(env) == ["OPENCODE_CONFIG_CONTENT", "OPENCODE_DISABLE_PROJECT_CONFIG"]
         assert env["OPENCODE_DISABLE_PROJECT_CONFIG"] == "1"
         decoded = json.loads(env["OPENCODE_CONFIG_CONTENT"])
-        assert decoded == oc_config.build_config("You are ht-programmer.", ENGINE, COMMANDS)
+        assert decoded == oc_config.build_config("You are hybrid-team-programmer.", ENGINE, COMMANDS)
         # Rule order matters to opencode (last match wins): it must survive JSON.
         assert list(decoded["permission"]["bash"]) == list(oc_config.permission_block(ENGINE, COMMANDS)["bash"])
 
     def test_constants(self):
-        assert oc_config.AGENT_NAME == "ht-programmer"
+        assert oc_config.AGENT_NAME == "hybrid-team-programmer"
         assert oc_config.SENTINEL == "HT-AGENT-OK"
 
 

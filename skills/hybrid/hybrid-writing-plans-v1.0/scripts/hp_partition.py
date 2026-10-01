@@ -31,8 +31,10 @@ def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int, n
     order and naming), then opencode groups O01, O02, ... ordered by first task ID across
     tiers, then one "held" group per task that preset opencode could not place. The caller
     reports held groups and does not dispatch them.
-    Outside preset opencode, tasks beyond max_parallel * oc_group_max per tier move to claude,
-    heaviest first. In preset opencode they all stay on opencode.
+    A tier takes max_parallel groups of up to oc_group_max tasks. Tasks beyond that capacity stay on
+    opencode by default (oc_overflow "queue", always in preset opencode): they are split into more groups
+    of about oc_group_max tasks, and oc-write runs the extra groups as slots free up (one semaphore per
+    tier). With oc_overflow "claude" (hybrid only) the heaviest overflow tasks move to claude instead.
     """
     active = hp_router.effective_preset(routing, preset)
     claude: List[dict] = []
@@ -47,16 +49,21 @@ def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int, n
         else:
             by_tier.setdefault(backend[3:], []).append(c)
     group_max = _group_max(routing)
+    queue = active == "opencode" or hp_router.oc_overflow(routing) == "queue"
     oc_groups: List[Tuple[str, List[dict]]] = []
     for tier, tasks in by_tier.items():
         mp = _max_parallel(routing, tier)
         capacity = mp * group_max
-        if active != "opencode" and len(tasks) > capacity:
-            ranked = sorted(tasks, key=lambda c: (-plan_tool.weight(c), plan_tool.num(c["id"])))
-            moved = {c["id"] for c in ranked[:len(tasks) - capacity]}
-            claude.extend(c for c in tasks if c["id"] in moved)
-            tasks = [c for c in tasks if c["id"] not in moved]
-        for g in plan_tool.partition(tasks, mp):
+        groups = mp
+        if len(tasks) > capacity:
+            if queue:
+                groups = -(-len(tasks) // group_max)
+            else:
+                ranked = sorted(tasks, key=lambda c: (-plan_tool.weight(c), plan_tool.num(c["id"])))
+                moved = {c["id"] for c in ranked[:len(tasks) - capacity]}
+                claude.extend(c for c in tasks if c["id"] in moved)
+                tasks = [c for c in tasks if c["id"] not in moved]
+        for g in plan_tool.partition(tasks, groups):
             oc_groups.append((tier, g))
     claude.sort(key=lambda c: plan_tool.num(c["id"]))
     parts = plan_tool.partition(claude, max(1, cap))

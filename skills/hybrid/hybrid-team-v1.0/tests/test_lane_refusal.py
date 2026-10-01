@@ -62,7 +62,7 @@ class LaneRefusalChildWindowTest(FlowBase):
         self.assertEqual(self.pidf.read_text(), rec)
         self.assertFalse((self.state_dir / "slices" / "D1.done").exists())
         self.assertFalse((self.state_dir / "slices" / "D1.blocked").exists())
-        self.assertFalse((self.repo / ".claude" / "worktrees" / "oc-D1").exists())
+        self.assertFalse((self.repo / ".claude" / "worktrees" / "hybrid-oc-D1").exists())
         self.assertIsNone(parent.poll())
 
     def test_child_whose_parent_is_not_this_lane_engine_is_killed_as_stale(self):
@@ -123,7 +123,7 @@ class LaneRefusalChildWindowTest(FlowBase):
         self.assertEqual(blocked.read_text(), "sentinel")
         self.assertFalse((self.state_dir / "slices" / "D1.done").exists())
         self.assertFalse(self.pidf.exists())
-        self.assertFalse((self.repo / ".claude" / "worktrees" / "oc-D1").exists())
+        self.assertFalse((self.repo / ".claude" / "worktrees" / "hybrid-oc-D1").exists())
 
     def test_lock_released_when_holder_is_sigkilled_and_new_lane_runs(self):
         holder = self.hold_lock()

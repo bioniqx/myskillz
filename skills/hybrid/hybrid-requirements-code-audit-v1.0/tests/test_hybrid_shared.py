@@ -796,6 +796,21 @@ class RunModelsTest(TempDirCase):
         self.assertEqual(proc.stdout.split(), ["opencode/some-model"])
         self.assertEqual(len(counter.read_text().split()), 2)
 
+    def test_output_is_read_through_a_file_not_a_pipe(self):
+        # opencode v2.0.20 exits before flushing a pipe; a file-backed stdout keeps the whole answer
+        script = self.root / "opencode"
+        script.write_text("#!/bin/sh\n[ -p /dev/stdout ] && exit 0\necho a/one\necho a/two\n")
+        script.chmod(0o755)
+        proc = hs.run_models(str(script), 10)
+        self.assertEqual(proc.stdout.split(), ["a/one", "a/two"])
+        self.assertEqual(hs.run_captured([str(script)], 10).stdout.split(), ["a/one", "a/two"])
+
+    def test_full_first_answer_is_not_repeated(self):
+        binary, counter = self._binary(empty_calls=0)
+        proc = hs.run_models(binary, 10)
+        self.assertEqual(proc.stdout.split(), ["opencode/some-model"])
+        self.assertEqual(len(counter.read_text().split()), 1)
+
     def test_still_empty_after_the_retries_is_returned_empty(self):
         binary, counter = self._binary(empty_calls=99)
         with mock.patch.dict(os.environ, {hs.RETRY_DELAY_ENV: "0"}):

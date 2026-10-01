@@ -13,6 +13,30 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import ha_doctor
+
+
+def _pipe_run_captured(cmd, timeout):
+    # These tests mock subprocess.run and hand back stdout directly; the real run_captured reads
+    # stdout from a temp file (opencode truncates pipes), which a mock cannot fill.
+    import subprocess as _sp
+    return _sp.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+_SEAM = []
+
+
+def setUpModule():
+    import hybrid_shared
+    for owner in (hybrid_shared, ha_doctor):
+        if hasattr(owner, "run_captured"):
+            patcher = mock.patch.object(owner, "run_captured", _pipe_run_captured)
+            patcher.start()
+            _SEAM.append(patcher)
+
+
+def tearDownModule():
+    while _SEAM:
+        _SEAM.pop().stop()
 from ha_config import AGENT_NAMES, SENTINEL
 
 MODELS_OUT = "zai-coding-plan/glm-5.3\nzai-coding-plan/glm-5.3-flash\n"
@@ -73,9 +97,9 @@ class EnvIsolatedTestCase(unittest.TestCase):
         self._tmp = tempfile.mkdtemp()
         tmp = Path(self._tmp)
         os.environ["HOME"] = self._tmp
-        os.environ["HA_ROUTING"] = str(tmp / "cfg" / "routing.json")
-        os.environ["HA_DOCTOR_CACHE"] = str(tmp / "cache" / "doctor.json")
-        os.environ["HA_TELEMETRY"] = str(tmp / "cache" / "lanes.jsonl")
+        os.environ["HYBRID_AUDIT_ROUTING"] = str(tmp / "cfg" / "routing.json")
+        os.environ["HYBRID_AUDIT_DOCTOR_CACHE"] = str(tmp / "cache" / "doctor.json")
+        os.environ["HYBRID_AUDIT_TELEMETRY"] = str(tmp / "cache" / "lanes.jsonl")
         os.environ["HYBRID_OPENCODE_STD"] = "zai-coding-plan/glm-5.3#high"
         os.environ["HYBRID_OPENCODE_LITE"] = "zai-coding-plan/glm-5.3-flash#low"
         os.environ["XDG_DATA_HOME"] = str(tmp / "data")
@@ -89,7 +113,7 @@ class EnvIsolatedTestCase(unittest.TestCase):
 
 class TestDoctorCachePath(EnvIsolatedTestCase):
     def test_default_path_under_home_cache(self):
-        os.environ.pop("HA_DOCTOR_CACHE", None)
+        os.environ.pop("HYBRID_AUDIT_DOCTOR_CACHE", None)
         self.assertEqual(
             ha_doctor.doctor_cache_path(),
             Path(self._tmp) / ".cache" / "hybrid-requirements-code-audit" / "doctor.json",
@@ -97,7 +121,7 @@ class TestDoctorCachePath(EnvIsolatedTestCase):
 
     def test_env_override(self):
         override = Path(self._tmp) / "custom" / "doctor.json"
-        os.environ["HA_DOCTOR_CACHE"] = str(override)
+        os.environ["HYBRID_AUDIT_DOCTOR_CACHE"] = str(override)
         self.assertEqual(ha_doctor.doctor_cache_path(), override)
 
     def test_constants(self):
@@ -430,7 +454,7 @@ class TestRunDoctor(EnvIsolatedTestCase):
         std_call = [s for s in seen if "zai-coding-plan/glm-5.3#high" in s["cmd"]][0]
         self.assertEqual(std_call["cmd"][std_call["cmd"].index("--agent") + 1],
                          AGENT_NAMES["investigator"])
-        self.assertEqual(std_call["cmd"][std_call["cmd"].index("--agent") + 1], "ha-investigator")
+        self.assertEqual(std_call["cmd"][std_call["cmd"].index("--agent") + 1], "hybrid-audit-investigator")
         self.assertNotIn("--session", std_call["cmd"])
         self.assertNotIn("-f", std_call["cmd"])
         self.assertEqual(std_call["stall_s"], 180)

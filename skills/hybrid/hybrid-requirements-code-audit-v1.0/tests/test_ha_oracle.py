@@ -46,13 +46,13 @@ class CheckCitationTest(unittest.TestCase):
             self.assertEqual(check_citation(self.repo, {"path": path, "lines": "1-2"}), "", path)
 
     def test_uppercase_git_and_audit_output_are_rejected(self):
-        (self.repo / ".audit" / "findings").mkdir(parents=True)
-        (self.repo / ".audit" / "findings" / "batch-01.jsonl").write_text("{}\n", encoding="utf-8")
+        (self.repo / ".hybrid-audit" / "findings").mkdir(parents=True)
+        (self.repo / ".hybrid-audit" / "findings" / "batch-01.jsonl").write_text("{}\n", encoding="utf-8")
         out = self.repo / "custom-out"
         out.mkdir()
         (out / "state.json").write_text("{}\n", encoding="utf-8")
         self.assertEqual(check_citation(self.repo, {"path": ".GIT/config", "lines": "1-1"}), ".git path")
-        self.assertEqual(check_citation(self.repo, {"path": ".audit/findings/batch-01.jsonl", "lines": "1-1"}),
+        self.assertEqual(check_citation(self.repo, {"path": ".hybrid-audit/findings/batch-01.jsonl", "lines": "1-1"}),
                          "audit output")
         self.assertEqual(check_citation(self.repo, {"path": "custom-out/state.json", "lines": "1-1"}, out),
                          "audit output")

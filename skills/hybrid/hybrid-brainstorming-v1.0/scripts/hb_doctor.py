@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from oc_run import build_cmd, run_once
 from hb_router import route
 from hb_config import AGENT_NAME, SENTINEL, config_env
-from hybrid_shared import cache_fresh, cache_key, classify, first_error, model_spec, run_models
+from hybrid_shared import cache_fresh, cache_key, classify, first_error, model_spec, run_models, run_captured
 
 MODELS_TIMEOUT_S = 60
 PING = "PING"
@@ -30,7 +30,7 @@ def _reply_has_sentinel(text: str) -> bool:
 
 
 def doctor_cache_path() -> Path:
-    env_path = os.environ.get("HB_DOCTOR_CACHE")
+    env_path = os.environ.get("HYBRID_BRAINSTORMING_DOCTOR_CACHE")
     if env_path:
         return Path(env_path)
     return Path.home() / ".cache" / "hybrid-brainstorming" / "doctor.json"
@@ -89,8 +89,7 @@ def status_line(routing: dict, doctor: dict, now: float = 0.0) -> str:
 
 def _check_version(binary: str) -> tuple:
     try:
-        proc = subprocess.run([binary, "--version"], capture_output=True, text=True,
-                               timeout=MODELS_TIMEOUT_S)
+        proc = run_captured([binary, "--version"], MODELS_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         return ("", "timed out after %ss" % MODELS_TIMEOUT_S)
     except OSError as exc:

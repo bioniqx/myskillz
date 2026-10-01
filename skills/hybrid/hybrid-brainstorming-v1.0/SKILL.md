@@ -1,6 +1,6 @@
 ---
 name: hybrid-brainstorming
-description: "Opt-in fork of brainstorming: use when the user says 'hybrid', mentions 'opencode', asks to save tokens/cost or usage limits, or invokes /hybrid-brainstorming. Turns intent into an approved design in the fewest human turns, same as brainstorming, but first asks for the run mode (hybrid, Claude only or opencode only) and offloads low-judgment exploration lanes (code lookups, single-fact web checks, and in mode opencode research and approach drafts) to a local opencode CLI, gated by a mechanical grounding check. Every opencode failure is reported at once; connection failures retry 3 times, then hybrid mode moves the rest of the run to Claude Sonnet 5.5 (other failures fall back to Claude once per lane). Every judgment step (classification, synthesis, design, spec, self-review, visual companion) stays on Claude."
+description: "Opt-in fork of brainstorming: use when the user says 'hybrid', mentions 'opencode', asks to save tokens/cost or usage limits, or invokes /hybrid-brainstorming. Turns intent into an approved design in the fewest human turns, same as brainstorming, but first asks for the run mode (hybrid, Claude only or opencode only) and offloads low-judgment exploration lanes (code lookups, single-fact web checks, web research, and in mode opencode approach drafts) to a local opencode CLI, gated by a mechanical grounding check. Every opencode failure is reported at once; connection failures retry 3 times, then hybrid mode moves the rest of the run to Claude Sonnet 5.5 (other failures fall back to Claude once per lane). Every judgment step (classification, synthesis, design, spec, self-review, visual companion) stays on Claude."
 when_to_use: "Use instead of brainstorming for: 'build/add/implement X (hybrid)', 'design X with opencode', explicit requests to cut Claude usage or cost during exploration, or the literal command /hybrid-brainstorming. Same triggers as brainstorming otherwise once the user has opted into the hybrid routing."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
@@ -85,7 +85,7 @@ Do NOT invoke any implementation skill, write code, scaffold, or take any
 implementation action until you have told your human partner what you
 intend and they have approved it. Every task, every path. Parallel work
 is read-only exploration, research, drafting (only under
-`.superpowers/drafts/`), and review — never implementation. Ceremony
+`.hybrid-superpowers/drafts/`), and review — never implementation. Ceremony
 scales with the task; the gate never does.
 </HARD-GATE>
 
@@ -180,11 +180,18 @@ Architectural 2-3. Count before sending; over budget → merge messages.
 
 The run mode from Step 0 decides where each role runs:
 
-| Mode | `locate` `explore` `fact` | `research` `draft` |
-| --- | --- | --- |
-| `claude` | `Agent` lane | `Agent` lane |
-| `hybrid` | `bslane.py` | `Agent` lane |
-| `opencode` | `bslane.py` | `bslane.py` (`research` needs `websearch=on`) |
+| Mode | `locate` `explore` `fact` | `research` | `draft` |
+| --- | --- | --- | --- |
+| `claude` | `Agent` lane | `Agent` lane | `Agent` lane |
+| `hybrid` | `bslane.py` | `bslane.py` (needs `websearch=on`, else `Agent` lane after an `OC-ERROR`) | `Agent` lane |
+| `opencode` | `bslane.py` | `bslane.py` (needs `websearch=on`, else held) | `bslane.py` |
+
+What stays on Claude in every mode, and why: T0 reads and searches (seconds
+each, and their output is the context your judgment needs), `draft` in
+`hybrid` (no oracle, it decides the design), the claim verifier (the
+independent check on lane output), the design, the spec and its
+self-review (the deliverable the user approves), and the visual companion
+(no oracle).
 
 Live context's `opencode:` line (`opencode: v<version> preset=<preset> ...
 websearch=on|off (doctor <YYYY-MM-DD>)`, or `opencode: unavailable → ...`)
@@ -221,13 +228,13 @@ dispatch this session. The env vars `HYBRID_OPENCODE_STD` and
 `HYBRID_OPENCODE_LITE` (LITE defaults to STD; each `provider/model[#variant]`,
 set in the `env` block of `~/.claude/settings.json`) set the `std` and `lite`
 models and variants for every hybrid skill. A tier whose `model` is set in
-`$HB_ROUTING` (default `<skill dir>/routing.json`) uses
+`$HYBRID_BRAINSTORMING_ROUTING` (default `<skill dir>/routing.json`) uses
 that file's `model` and `variant` instead (no variant when that file sets
-none). Roles, timeouts and slot waits also live in `$HB_ROUTING`, merged
+none). Roles, timeouts and slot waits also live in `$HYBRID_BRAINSTORMING_ROUTING`, merged
 over the shipped defaults. Per-tier caps default to 6 parallel lanes. `--preset claude|hybrid|opencode` (the mode) overrides the routing
-file's preset for one call: `hybrid` routes locate/explore/fact to opencode
-tiers and keeps research/draft on Claude; `opencode` also routes
-research/draft to opencode tiers; `claude` routes every role to Claude.
+file's preset for one call: `hybrid` routes locate/explore/fact/research to
+opencode tiers and keeps draft on Claude; `opencode` also routes draft to an
+opencode tier; `claude` routes every role to Claude.
 `init`, `stats` and `doctor` accept `--preset` and ignore it.
 `python3 "${CLAUDE_SKILL_DIR}/scripts/bslane.py" stats` summarizes the lane
 telemetry (`lanes.jsonl`); run it when the user asks how the lanes did, and in
@@ -261,8 +268,8 @@ Connection failures (`spawn`, `stall`, `throttle`, `crash`) are retried
 inside `bslane.py`: up to 3 fresh opencode runs, waiting 10, 30 then 60 s.
 Every failed try prints `OC-WARN ... kind=<kind> :: retry <n>/3 in <s>s:
 <detail>` (relay it; the lane is only slower, launch nothing for it). In mode
-`hybrid`, when the retries run out, or at once for `auth`, `quota` and
-`model`, the whole rest of the run leaves opencode for Claude Sonnet 5.5:
+`hybrid`, when the retries run out, or at once for `auth`, `quota`,
+`model` and `config` from an opencode run, the whole rest of the run leaves opencode for Claude Sonnet 5.5:
 `bslane.py` prints one `OC-ERROR ... kind=switch :: opencode <kind>:
 <detail>; the rest of this run uses Claude sonnet`, then the failed lane's
 own `FALLBACK` + `CLAUDE ... model: sonnet`. From then on every `bslane.py`

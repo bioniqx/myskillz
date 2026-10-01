@@ -27,7 +27,7 @@ _CLAUDE_AGENTS = {
 
 
 def user_routing_path() -> Path:
-    override = os.environ.get("HB_ROUTING")
+    override = os.environ.get("HYBRID_BRAINSTORMING_ROUTING")
     if override:
         return Path(override)
     return Path(__file__).resolve().parent.parent / "routing.json"

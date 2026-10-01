@@ -85,9 +85,9 @@ class FlowBase(unittest.TestCase):
         self.home.mkdir()
         self.script = self.tmp / "fake_script.json"
         self.routing = self.tmp / "routing.json"
-        self.env = dict(os.environ, HOME=str(self.home), HT_OC_BIN=str(FAKE),
-                        HT_FAKE_SCRIPT=str(self.script), HT_FAKE_LOG=str(self.tmp / "fake_log.jsonl"),
-                        HT_ROUTING=str(self.routing), XDG_DATA_HOME=str(self.tmp / "xdg"),
+        self.env = dict(os.environ, HOME=str(self.home), HYBRID_TEAM_OC_BIN=str(FAKE),
+                        HYBRID_TEAM_FAKE_SCRIPT=str(self.script), HYBRID_TEAM_FAKE_LOG=str(self.tmp / "fake_log.jsonl"),
+                        HYBRID_TEAM_ROUTING=str(self.routing), XDG_DATA_HOME=str(self.tmp / "xdg"),
                         PYTHONDONTWRITEBYTECODE="1", HYBRID_OC_RETRY_DELAY_S="0", **MODELS_ENV)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.state_dir = self.repo / STATE
@@ -131,7 +131,7 @@ class InitRoutingStateTest(FlowBase):
         self.assertEqual(self.st()["preset"], "claude")
 
     def test_missing_binary_gives_plain_dev_team_dispatch(self):
-        self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_TEAM_OC_BIN"] = str(self.tmp / "no-such-opencode")
         self.init(plan_of(code_slice("C1"), docs_slice("D1"), chore_slice("H1")))
         self.assertIs(self.st()["oc_ok"], False)
         r = self.engine("dispatch", "C1", "D1", "H1")
@@ -139,7 +139,7 @@ class InitRoutingStateTest(FlowBase):
         self.assertIn("=== DISPATCH C1 [CODE/SLICE]", r.stdout)
         self.assertIn("=== DISPATCH D1 [DOCS/WORK]", r.stdout)
         self.assertIn("=== DISPATCH H1 [CHORE/WORK]", r.stdout)
-        self.assertEqual(r.stdout.count("subagent_type: ht-programmer"), 3)
+        self.assertEqual(r.stdout.count("subagent_type: hybrid-team-programmer"), 3)
 
 
 class InitBackendPinTest(FlowBase):
@@ -208,12 +208,12 @@ class LaneStillRunningTest(FlowBase):
         self.init(plan_of(docs_slice(sid)))
         r = self.engine("dispatch", sid)
         self.assertIn(f"=== LANE {sid} oc:lite", r.stdout)
-        wt = self.repo / ".claude" / "worktrees" / ("oc-" + sid)
-        git(["worktree", "add", "-f", "-B", "oc-" + sid, str(wt)], self.repo)
+        wt = self.repo / ".claude" / "worktrees" / ("hybrid-oc-" + sid)
+        git(["worktree", "add", "-f", "-B", "hybrid-oc-" + sid, str(wt)], self.repo)
         base = git(["rev-parse", "HEAD"], self.repo)
         claim_path = self.state_dir / "slices" / (sid + ".claim.json")
         claim_path.parent.mkdir(parents=True, exist_ok=True)
-        claim_path.write_text(json.dumps({"id": sid, "worktree": str(wt), "branch": "oc-" + sid,
+        claim_path.write_text(json.dumps({"id": sid, "worktree": str(wt), "branch": "hybrid-oc-" + sid,
                                           "base": base, "claimed": "now", "attempt": 1}))
         target = wt / "docs" / (sid.lower() + ".md")
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -253,7 +253,7 @@ class LaneStillRunningTest(FlowBase):
         self.assertIn("=== LANE D1 oc:lite", r.stdout)
         self.script.write_text(json.dumps(DONE_STEP))
         self.engine("lane", "D1")
-        wt = self.repo / ".claude" / "worktrees" / "oc-D1"
+        wt = self.repo / ".claude" / "worktrees" / "hybrid-oc-D1"
         (wt / "docs" / "d1.md").write_text("# D1 edited, not committed\n")
         r = self.engine("integrate", "D1")
         self.assertIn("ESCALATE D1", r.stdout)
@@ -459,7 +459,7 @@ class LaneSingleEngineTest(FlowBase):
         self.assertEqual(self.pidf.read_text(), rec)
         self.assertFalse((marker_dir / "D1.done").exists())
         self.assertFalse((marker_dir / "D1.blocked").exists())
-        self.assertFalse((self.repo / ".claude" / "worktrees" / "oc-D1").exists())
+        self.assertFalse((self.repo / ".claude" / "worktrees" / "hybrid-oc-D1").exists())
         self.assertIsNone(proc.poll())
 
     def test_dead_engine_record_is_removed_as_stale(self):
@@ -555,7 +555,7 @@ class CodeSplitTest(FlowBase):
         self.init(plan_of(code_slice("C1")))
         r = self.engine("dispatch", "C1")
         self.assertIn("=== DISPATCH C1 [CODE/RED]", r.stdout)
-        self.assertIn("subagent_type: ht-programmer", r.stdout)
+        self.assertIn("subagent_type: hybrid-team-programmer", r.stdout)
         self.assertNotIn("=== LANE", r.stdout)
         st = self.st()
         self.assertEqual(st["slices"]["C1"]["mode"], "red")
@@ -583,7 +583,7 @@ class EscalationTest(FlowBase):
         self.assertIn("=== DISPATCH D1 [DOCS/WORK]", text)
         self.assertLess(text.index("ESCALATE D1"), text.index("=== DISPATCH D1"))
         block = text[text.index("=== DISPATCH D1"):]
-        self.assertIn("subagent_type: ht-programmer", block.splitlines()[1])
+        self.assertIn("subagent_type: hybrid-team-programmer", block.splitlines()[1])
         s = self.st()
         self.assertEqual(s["slices"]["D1"]["attempt"], 2)
         self.assertEqual(s["slices"]["D1"]["status"], "inflight")
@@ -607,7 +607,7 @@ class EscalationTest(FlowBase):
         self.dispatch_lane()
         self.script.write_text(json.dumps(DONE_STEP))
         self.engine("lane", "D1")
-        wt = self.repo / ".claude" / "worktrees" / "oc-D1"
+        wt = self.repo / ".claude" / "worktrees" / "hybrid-oc-D1"
         (wt / "docs" / "d1.md").write_text("# D1 edited, not committed\n")
         r = self.engine("integrate", "D1")
         self.assertIn("NOT READY", r.stdout)
@@ -709,7 +709,7 @@ class PresetClaudeParityTest(FlowBase):
     def normalize(text, repo):
         text = text.replace(str(repo), "REPO")
         text = re.sub(r"python3 \S*devteam\.py", "python3 ENGINE", text)
-        return text.replace("ht-programmer", "programmer")
+        return text.replace("hybrid-team-programmer", "programmer")
 
     def test_dispatch_output_matches_dev_team(self):
         if not DEVTEAM_ENGINE.exists():
@@ -827,7 +827,7 @@ class BreakerSummaryTest(FlowBase):
 
 class OpencodeHoldTest(FlowBase):
     def test_unusable_opencode_holds_the_slice_instead_of_falling_back(self):
-        self.env["HT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        self.env["HYBRID_TEAM_OC_BIN"] = str(self.tmp / "no-such-opencode")
         self.init(plan_of(docs_slice("D1")), "--route", "opencode")
         r = self.engine("dispatch", "D1")
         self.assertIn("OC-ERROR hybrid-team D1", r.stdout)

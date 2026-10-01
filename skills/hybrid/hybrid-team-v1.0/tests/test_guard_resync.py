@@ -103,9 +103,9 @@ class GuardResyncTest(unittest.TestCase):
         d, _ = self.decide("bash", "printf x > .claude/hybrid-team/slices/S1.done")
         self.assertEqual(d, "deny")
 
-    def test_only_the_ht_team_leader_may_write_plan_md(self):
+    def test_only_the_hybrid_team_leader_may_write_plan_md(self):
         plan = str(Path(self.base) / ".claude" / "hybrid-team" / "plan.md")
-        for agent, want in (("ht-team-leader", "allow"), ("team-leader", "deny"), ("ht-programmer", "deny")):
+        for agent, want in (("hybrid-team-leader", "allow"), ("team-leader", "deny"), ("hybrid-team-programmer", "deny")):
             with self.subTest(agent=agent):
                 r = run_guard("edit-ro", {"cwd": self.base, "agent_type": agent,
                                           "tool_input": {"file_path": plan}}, self.base)
