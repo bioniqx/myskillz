@@ -1,0 +1,943 @@
+{
+  "request": "Fix the confirmed bugs in every skill of this repo, cut the tokens each skill loads, and move all non-decision work to Sonnet-tier workers, without changing observable behavior beyond what each task states.",
+  "profile": "balanced",
+  "commands": {
+    "build": "none",
+    "test": "cd claude-skills && python3 -m unittest discover -s tests",
+    "test_file": "for f in {files}; do case \"$(basename \"$f\")\" in test_*.py) (cd claude-skills && python3 -m unittest \"tests.$(basename \"$f\" .py)\") || exit 1;; esac; done",
+    "lint": "none",
+    "lint_file": "none",
+    "typecheck": "none",
+    "typecheck_file": "none"
+  },
+  "contracts": [],
+  "notes": "The plan file is authoritative: implement exactly the plan section for your slice (copy its code blocks verbatim, follow its steps and Run/Expected pairs). The engine's commit commands replace the plan's own git add/git commit steps; use the plan's commit message text as the commit subject. All paths are repo-root relative (the repo root contains claude-skills/); run tests from inside claude-skills/. Never commit anything under docs/superpowers/. Tests write fixtures only under the system temp dir. Python stdlib only; shell must run on macOS bash 3.2.",
+  "test_globs": [
+    "claude-skills/tests/test_*.py"
+  ],
+  "review_batch": 8,
+  "checkpoint_every": 8,
+  "slices": [
+    {
+      "id": "T01",
+      "title": "finish gate on checkpoint state (D5)",
+      "goal": "Implement plan task T01 (finish gate on checkpoint state (D5)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T01'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/devteam.py",
+        "claude-skills/tests/test_devteam_finish_gate.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_clean_run_finishes passes (fails before the change for the stated reason)",
+        "test_run_with_no_merges_needs_no_checkpoint passes (fails before the change for the stated reason)",
+        "test_failed_last_checkpoint_blocks passes (fails before the change for the stated reason)",
+        "test_missing_checkpoint_blocks passes (fails before the change for the stated reason)",
+        "test_pending_checkpoint_blocks passes (fails before the change for the stated reason)",
+        "test_merge_after_last_checkpoint_blocks passes (fails before the change for the stated reason)",
+        "test_changes_required_verification_blocks passes (fails before the change for the stated reason)",
+        "test_force_finishes_and_names_every_bypassed_condition passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T01')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_devteam_safety.py"
+      ]
+    },
+    {
+      "id": "T02",
+      "title": "integrate only blocks on paths the slice touches",
+      "goal": "Implement plan task T02 (integrate only blocks on paths the slice touches) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T02'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [
+        "T01"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/devteam.py",
+        "claude-skills/tests/test_devteam_integrate_dirty.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_unrelated_dirty_tracked_file_does_not_block passes (fails before the change for the stated reason)",
+        "test_dirty_path_the_slice_changes_is_rejected_for_that_slice passes (fails before the change for the stated reason)",
+        "test_one_blocked_slice_does_not_stop_the_others passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T02')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_devteam_safety.py"
+      ]
+    },
+    {
+      "id": "T03",
+      "title": "stall detection for lanes without a done or blocked marker (D2)",
+      "goal": "Implement plan task T03 (stall detection for lanes without a done or blocked marker (D2)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T03'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [
+        "T02"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/devteam.py",
+        "claude-skills/tests/test_devteam_stall.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_silent_lane_older_than_default_is_stalled passes (fails before the change for the stated reason)",
+        "test_threshold_is_twenty_minutes_by_default passes (fails before the change for the stated reason)",
+        "test_done_marker_means_not_stalled passes (fails before the change for the stated reason)",
+        "test_blocked_marker_means_not_stalled passes (fails before the change for the stated reason)",
+        "test_env_override_lowers_the_threshold passes (fails before the change for the stated reason)",
+        "test_invalid_env_values_fall_back_to_default passes (fails before the change for the stated reason)",
+        "test_recent_history_event_resets_the_clock passes (fails before the change for the stated reason)",
+        "test_only_inflight_lanes_can_stall passes (fails before the change for the stated reason)",
+        "test_lane_without_a_dispatch_time_is_never_reported passes (fails before the change for the stated reason)",
+        "test_research_lane_with_finished_report_is_not_stalled passes (fails before the change for the stated reason)",
+        "test_research_lane_without_a_report_is_stalled passes (fails before the change for the stated reason)",
+        "test_stall_line_carries_the_exact_retry_command passes (fails before the change for the stated reason)",
+        "test_no_stall_lines_when_nothing_is_stalled passes (fails before the change for the stated reason)",
+        "test_next_prints_stalled_with_the_retry_command passes (fails before the change for the stated reason)",
+        "test_status_prints_stalled_with_the_retry_command passes (fails before the change for the stated reason)",
+        "test_fresh_dispatch_prints_no_stall_line passes (fails before the change for the stated reason)",
+        "test_env_override_reaches_the_engine passes (fails before the change for the stated reason)",
+        "test_a_stalled_lane_is_reported_but_never_acted_on passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T03')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_devteam_sched.py"
+      ]
+    },
+    {
+      "id": "T04",
+      "title": "model line on review dispatch and release of idle review shards (D1)",
+      "goal": "Implement plan task T04 (model line on review dispatch and release of idle review shards (D1)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T04'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [
+        "T03"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/devteam.py",
+        "claude-skills/tests/test_devteam_review_model.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_review_model_policy passes (fails before the change for the stated reason)",
+        "test_incremental_batch_review_runs_on_sonnet passes (fails before the change for the stated reason)",
+        "test_next_opens_an_incremental_review_on_sonnet passes (fails before the change for the stated reason)",
+        "test_forced_final_review_runs_on_opus passes (fails before the change for the stated reason)",
+        "test_next_opens_the_final_review_on_opus_when_the_dag_is_exhausted passes (fails before the change for the stated reason)",
+        "test_spot_depth_final_review_stays_on_sonnet passes (fails before the change for the stated reason)",
+        "test_shards_are_released_once_fix_slices_are_queued passes (fails before the change for the stated reason)",
+        "test_shards_stay_reserved_when_no_fix_slice_was_queued passes (fails before the change for the stated reason)",
+        "test_released_review_reserves_nothing_even_with_shard_verdicts passes (fails before the change for the stated reason)",
+        "test_unreleased_review_still_reserves_its_non_approved_shards passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T04')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_devteam_sched.py"
+      ]
+    },
+    {
+      "id": "T05",
+      "title": "trim repeated engine output (wait list, endgame block, launch path, programmer report)",
+      "goal": "Implement plan task T05 (trim repeated engine output (wait list, endgame block, launch path, programmer report)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T05'. The plan is authoritative.",
+      "kind": "code",
+      "size": "large",
+      "deps": [
+        "T04"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/devteam.py",
+        "claude-skills/tests/test_devteam_output.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_count_only_while_something_is_ready passes (fails before the change for the stated reason)",
+        "test_ids_are_listed_when_the_run_is_stalled passes (fails before the change for the stated reason)",
+        "test_script_under_home_is_spelled_with_a_tilde passes (fails before the change for the stated reason)",
+        "test_script_outside_home_stays_absolute_and_quoted passes (fails before the change for the stated reason)",
+        "test_launch_line_uses_the_short_path passes (fails before the change for the stated reason)",
+        "test_permission_rules_cover_both_spellings passes (fails before the change for the stated reason)",
+        "test_final_message_drops_the_per_file_and_per_criterion_detail passes (fails before the change for the stated reason)",
+        "test_research_report_format_is_unchanged passes (fails before the change for the stated reason)",
+        "test_endgame_steps_print_once_and_again_after_a_requeue passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T05')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_devteam_sched.py"
+      ]
+    },
+    {
+      "id": "T06",
+      "title": "reset stop_blocks on claim and on resume",
+      "goal": "Implement plan task T06 (reset stop_blocks on claim and on resume) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T06'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/guard.py",
+        "claude-skills/tests/test_guard_stopblocks.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_gate_blocks_again_after_it_gave_up_once passes (fails before the change for the stated reason)",
+        "test_blocked_report_clears_the_counter passes (fails before the change for the stated reason)",
+        "test_passing_gate_clears_the_counter passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T06')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_guard_denials.py"
+      ]
+    },
+    {
+      "id": "T07",
+      "title": "read-only roles may run harmless commands (command-position parsing, D3)",
+      "goal": "Implement plan task T07 (read-only roles may run harmless commands (command-position parsing, D3)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T07'. The plan is authoritative.",
+      "kind": "code",
+      "size": "large",
+      "deps": [
+        "T06"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/scripts/guard.py",
+        "claude-skills/tests/test_guard_ro_parse.py"
+      ],
+      "risk": "high",
+      "isolation": false,
+      "criteria": [
+        "test_harmless_commands_with_mutating_words_are_allowed passes (fails before the change for the stated reason)",
+        "test_compound_and_lookup_commands_are_not_denied passes (fails before the change for the stated reason)",
+        "test_mutating_tools_at_command_position_are_denied passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T07')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_guard_denials.py",
+        "claude-skills/tests/test_guard_security.py"
+      ]
+    },
+    {
+      "id": "T08",
+      "title": "slim dev-team SKILL.md and load deferred tools before use",
+      "goal": "Implement plan task T08 (slim dev-team SKILL.md and load deferred tools before use) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T08'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "large",
+      "deps": [
+        "T05",
+        "T07"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/SKILL.md",
+        "claude-skills/dev-team-v3.2/references/task-types.md",
+        "claude-skills/dev-team-v3.2/references/profiles.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T08 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T08')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "test $(wc -c < claude-skills/dev-team-v3.2/SKILL.md) -le 12000 && head -1 claude-skills/dev-team-v3.2/SKILL.md | grep -q '^---$' && grep -q 'select:SendMessage,TaskStop' claude-skills/dev-team-v3.2/SKILL.md"
+    },
+    {
+      "id": "T09",
+      "title": "dev-team agent files (prompt trim, env prefix wording, tiers, frontmatter)",
+      "goal": "Implement plan task T09 (dev-team agent files (prompt trim, env prefix wording, tiers, frontmatter)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T09'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "small",
+      "deps": [
+        "T05",
+        "T07"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/agents/programmer.md",
+        "claude-skills/dev-team-v3.2/agents/team-leader.md",
+        "claude-skills/dev-team-v3.2/agents/code-reviewer.md",
+        "claude-skills/dev-team-v3.2/agents/investigator.md",
+        "claude-skills/dev-team-v3.2/agents/spot-reviewer.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T09 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T09')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "for f in programmer team-leader code-reviewer investigator spot-reviewer; do head -1 claude-skills/dev-team-v3.2/agents/$f.md | grep -q '^---$' && grep -q '^model: ' claude-skills/dev-team-v3.2/agents/$f.md || exit 1; done; ! grep -q 'experimental' claude-skills/dev-team-v3.2/agents/*.md"
+    },
+    {
+      "id": "T10",
+      "title": "audit verifier brief budget and Sonnet investigators",
+      "goal": "Implement plan task T10 (audit verifier brief budget and Sonnet investigators) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T10'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/requirements-code-audit/scripts/audit.py",
+        "claude-skills/tests/test_audit_verify_brief.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_verify_brief_has_own_budget_not_investigator_budget passes (fails before the change for the stated reason)",
+        "test_investigator_brief_keeps_first_pass_budget passes (fails before the change for the stated reason)",
+        "test_investigators_run_on_sonnet passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T10')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_audit_misc.py"
+      ]
+    },
+    {
+      "id": "T11",
+      "title": "audit parse threshold and lean batch briefs",
+      "goal": "Implement plan task T11 (audit parse threshold and lean batch briefs) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T11'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [
+        "T10"
+      ],
+      "files": [
+        "claude-skills/requirements-code-audit/scripts/audit.py",
+        "claude-skills/tests/test_audit_batch_tokens.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_spec_over_800_words_gets_parser_dispatch passes (fails before the change for the stated reason)",
+        "test_spec_under_800_words_is_read_by_the_lead passes (fails before the change for the stated reason)",
+        "test_local_agents_batch_omits_rules_block passes (fails before the change for the stated reason)",
+        "test_generic_agents_batch_keeps_rules_block passes (fails before the change for the stated reason)",
+        "test_local_agents_target_two_to_three_items_per_batch passes (fails before the change for the stated reason)",
+        "test_generic_agents_batch_count_unchanged passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T11')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_audit_misc.py"
+      ]
+    },
+    {
+      "id": "T12",
+      "title": "audit hook blocks prose docs through Grep and Glob (D4) and tightens write checks",
+      "goal": "Implement plan task T12 (audit hook blocks prose docs through Grep and Glob (D4) and tightens write checks) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T12'. The plan is authoritative.",
+      "kind": "code",
+      "size": "large",
+      "deps": [],
+      "files": [
+        "claude-skills/requirements-code-audit/hooks/audit_guard.py",
+        "claude-skills/tests/test_audit_guard_grep.py"
+      ],
+      "risk": "high",
+      "isolation": false,
+      "criteria": [
+        "test_grep_without_glob_denied_and_message_states_allowed_form passes (fails before the change for the stated reason)",
+        "test_grep_directory_without_glob_denied_for_worker_too passes (fails before the change for the stated reason)",
+        "test_grep_with_only_md_excluded_denied passes (fails before the change for the stated reason)",
+        "test_grep_exclusion_tokens_are_matched_whole passes (fails before the change for the stated reason)",
+        "test_grep_with_all_doc_extensions_excluded_allowed passes (fails before the change for the stated reason)",
+        "test_grep_single_source_file_allowed passes (fails before the change for the stated reason)",
+        "test_grep_single_doc_file_denied passes (fails before the change for the stated reason)",
+        "test_grep_outside_repo_allowed passes (fails before the change for the stated reason)",
+        "test_grep_audit_dir_and_spec_file_allowed passes (fails before the change for the stated reason)",
+        "test_grep_git_dir_still_denied passes (fails before the change for the stated reason)",
+        "test_glob_patterns_that_can_match_docs_denied passes (fails before the change for the stated reason)",
+        "test_glob_patterns_naming_source_extensions_allowed passes (fails before the change for the stated reason)",
+        "test_worker_redirect_into_out_dir_allowed passes (fails before the change for the stated reason)",
+        "test_worker_out_dir_mention_does_not_exempt_other_writes passes (fails before the change for the stated reason)",
+        "test_worker_redirect_outside_out_dir_denied_even_if_out_dir_in_args passes (fails before the change for the stated reason)",
+        "test_worker_redirect_dotdot_escape_denied passes (fails before the change for the stated reason)",
+        "test_worker_out_dir_redirect_followed_by_rm_denied passes (fails before the change for the stated reason)",
+        "test_read_prose_under_dot_claude_inside_repo_denied passes (fails before the change for the stated reason)",
+        "test_read_prose_under_dot_claude_outside_repo_allowed passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T12')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_audit_guard.py",
+        "claude-skills/tests/test_agent_hooks.py"
+      ]
+    },
+    {
+      "id": "T13",
+      "title": "audit SKILL.md and agent files (slim, effort, model, plugin-level hooks check)",
+      "goal": "Implement plan task T13 (audit SKILL.md and agent files (slim, effort, model, plugin-level hooks check)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T13'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "large",
+      "deps": [
+        "T10",
+        "T11",
+        "T12"
+      ],
+      "files": [
+        "claude-skills/requirements-code-audit/references/design-rationale.md",
+        "claude-skills/requirements-code-audit/SKILL.md",
+        "claude-skills/requirements-code-audit/agents/rca-parser.md",
+        "claude-skills/requirements-code-audit/agents/rca-investigator.md",
+        "claude-skills/requirements-code-audit/agents/rca-verifier.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T13 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T13')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/requirements-code-audit/.claude-plugin/plugin.json"
+      ],
+      "verify": "test $(wc -c < claude-skills/requirements-code-audit/SKILL.md) -le 10000 && for f in rca-parser rca-investigator rca-verifier; do grep -q '^model: ' claude-skills/requirements-code-audit/agents/$f.md || exit 1; done"
+    },
+    {
+      "id": "T14",
+      "title": "plan hash includes producers, contracts reruns skip finished groups",
+      "goal": "Implement plan task T14 (plan hash includes producers, contracts reruns skip finished groups) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T14'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/writing-plans-6.2/scripts/plan_tool.py",
+        "claude-skills/tests/test_plan_hashing.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_changed_producer_drops_dependent_body_and_mark passes (fails before the change for the stated reason)",
+        "test_rerun_skips_groups_with_a_fresh_ok_mark passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T14')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_plan_tool.py"
+      ]
+    },
+    {
+      "id": "T15",
+      "title": "plan linter allows by stem and catches unsafe commits",
+      "goal": "Implement plan task T15 (plan linter allows by stem and catches unsafe commits) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T15'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [
+        "T14"
+      ],
+      "files": [
+        "claude-skills/writing-plans-6.2/scripts/plan_tool.py",
+        "claude-skills/tests/test_plan_lint_extra.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_without_allow_the_hit_is_reported passes (fails before the change for the stated reason)",
+        "test_stem_allows_the_plural passes (fails before the change for the stated reason)",
+        "test_stem_allows_a_longer_phrase passes (fails before the change for the stated reason)",
+        "test_regex_allow passes (fails before the change for the stated reason)",
+        "test_regex_must_match_the_whole_hit passes (fails before the change for the stated reason)",
+        "test_invalid_regex_is_ignored passes (fails before the change for the stated reason)",
+        "test_explicit_add_then_commit_passes passes (fails before the change for the stated reason)",
+        "test_commit_am_is_rejected passes (fails before the change for the stated reason)",
+        "test_commit_a_flag_is_rejected passes (fails before the change for the stated reason)",
+        "test_commit_all_flag_is_rejected passes (fails before the change for the stated reason)",
+        "test_commit_without_add_is_rejected passes (fails before the change for the stated reason)",
+        "test_amend_is_not_mistaken_for_all passes (fails before the change for the stated reason)",
+        "test_dash_a_inside_the_message_is_ignored passes (fails before the change for the stated reason)",
+        "test_add_in_an_earlier_block_counts passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T15')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_plan_lint.py"
+      ]
+    },
+    {
+      "id": "T16",
+      "title": "plan reviewer brief inlines task bodies and tier mapping",
+      "goal": "Implement plan task T16 (plan reviewer brief inlines task bodies and tier mapping) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T16'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [
+        "T15"
+      ],
+      "files": [
+        "claude-skills/writing-plans-6.2/scripts/plan_tool.py",
+        "claude-skills/tests/test_plan_reviewer.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_brief_inlines_the_task_body passes (fails before the change for the stated reason)",
+        "test_every_tier_dispatches_to_sonnet passes (fails before the change for the stated reason)",
+        "test_uses_the_writer_agent_when_installed passes (fails before the change for the stated reason)",
+        "test_falls_back_to_general_purpose passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T16')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_plan_tool.py"
+      ]
+    },
+    {
+      "id": "T17",
+      "title": "coverage tests for partition, review picking, assemble, setup, spec coverage",
+      "goal": "Implement plan task T17 (coverage tests for partition, review picking, assemble, setup, spec coverage) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T17'. The plan is authoritative.",
+      "kind": "test",
+      "size": "small",
+      "deps": [
+        "T16"
+      ],
+      "files": [
+        "claude-skills/tests/test_plan_coverage.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_tasks_beyond_the_agent_cap_share_writers passes (fails before the change for the stated reason)",
+        "test_each_task_gets_its_own_writer_when_the_cap_allows passes (fails before the change for the stated reason)",
+        "test_tier_picks_the_writer_model passes (fails before the change for the stated reason)",
+        "test_review_picks_deep_tier_and_lint_warnings_only passes (fails before the change for the stated reason)",
+        "test_review_all_picks_every_task passes (fails before the change for the stated reason)",
+        "test_review_is_none_when_nothing_is_risky passes (fails before the change for the stated reason)",
+        "test_missing_bodies_fail_and_leave_the_plan_untouched passes (fails before the change for the stated reason)",
+        "test_assemble_renders_protocol_waves_and_task_headers passes (fails before the change for the stated reason)",
+        "test_clean_removes_the_workdir passes (fails before the change for the stated reason)",
+        "test_dry_run_changes_nothing passes (fails before the change for the stated reason)",
+        "test_apply_writes_settings_and_agent_and_keeps_existing_keys passes (fails before the change for the stated reason)",
+        "test_second_apply_is_a_no_op passes (fails before the change for the stated reason)",
+        "test_uncovered_spec_section_is_warned passes (fails before the change for the stated reason)",
+        "test_fully_covered_spec_has_no_uncovered_warning passes (fails before the change for the stated reason)",
+        "test_task_without_spec_pointer_is_warned passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T17')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_plan_tool.py"
+      ]
+    },
+    {
+      "id": "T18",
+      "title": "writing-plans SKILL.md fan-out threshold and reviewer agent",
+      "goal": "Implement plan task T18 (writing-plans SKILL.md fan-out threshold and reviewer agent) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T18'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "small",
+      "deps": [
+        "T16"
+      ],
+      "files": [
+        "claude-skills/writing-plans-6.2/SKILL.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T18 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T18')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_plan_tool.py"
+      ],
+      "verify": "test $(wc -c < claude-skills/writing-plans-6.2/SKILL.md) -le 14000 && (cd claude-skills && python3 -m unittest tests.test_plan_tool)"
+    },
+    {
+      "id": "T19",
+      "title": "find-polluter excludes pollution file and vendor dirs",
+      "goal": "Implement plan task T19 (find-polluter excludes pollution file and vendor dirs) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T19'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/systematic-debugging-6.3/scripts/find-polluter.sh",
+        "claude-skills/tests/test_debug_polluter.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_finds_the_polluting_test_file passes (fails before the change for the stated reason)",
+        "test_reports_no_polluter_when_nothing_pollutes passes (fails before the change for the stated reason)",
+        "test_absolute_pollution_path_still_finds_the_polluter passes (fails before the change for the stated reason)",
+        "test_leftover_untracked_pollution_file_is_not_blamed_on_first_test passes (fails before the change for the stated reason)",
+        "test_leftover_pollution_alone_does_not_report_a_polluter passes (fails before the change for the stated reason)",
+        "test_vendor_and_build_dirs_are_not_scanned passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T19')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_debug_scripts.py"
+      ]
+    },
+    {
+      "id": "T20",
+      "title": "snapshot and stress script fixes",
+      "goal": "Implement plan task T20 (snapshot and stress script fixes) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T20'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/systematic-debugging-6.3/scripts/snapshot.sh",
+        "claude-skills/systematic-debugging-6.3/scripts/stress.sh",
+        "claude-skills/tests/test_debug_snapshot_stress.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_cpu_count_survives_relative_script_path_and_dir_argument passes (fails before the change for the stated reason)",
+        "test_missing_directory_is_reported_and_exits_zero passes (fails before the change for the stated reason)",
+        "test_zero_baseline_runs_are_rejected_up_front passes (fails before the change for the stated reason)",
+        "test_stale_results_in_reused_output_dir_are_ignored passes (fails before the change for the stated reason)",
+        "test_second_run_in_same_dir_counts_only_its_own_failures passes (fails before the change for the stated reason)",
+        "test_wilson_interval_and_fix_proof_hint_for_half_failures passes (fails before the change for the stated reason)",
+        "test_rule_of_three_when_no_failures passes (fails before the change for the stated reason)",
+        "test_fisher_exact_against_baseline passes (fails before the change for the stated reason)",
+        "test_fisher_not_significant_when_rates_match passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T20')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_debug_scripts.py"
+      ]
+    },
+    {
+      "id": "T21",
+      "title": "bisect-parallel cleans ignored output between rounds",
+      "goal": "Implement plan task T21 (bisect-parallel cleans ignored output between rounds) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T21'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/systematic-debugging-6.3/scripts/bisect-parallel.sh",
+        "claude-skills/tests/test_debug_bisect_clean.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_stale_ignored_output_does_not_flip_good_commits_to_bad passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T21')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_debug_scripts.py"
+      ]
+    },
+    {
+      "id": "T22",
+      "title": "debugging SKILL.md and playbook (move tables, per-tool recipes, Sonnet experiment agents)",
+      "goal": "Implement plan task T22 (debugging SKILL.md and playbook (move tables, per-tool recipes, Sonnet experiment agents)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T22'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "small",
+      "deps": [
+        "T19",
+        "T20",
+        "T21"
+      ],
+      "files": [
+        "claude-skills/systematic-debugging-6.3/SKILL.md",
+        "claude-skills/systematic-debugging-6.3/references/parallel-playbook.md",
+        "claude-skills/systematic-debugging-6.3/references/red-flags.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T22 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T22')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "test $(wc -c < claude-skills/systematic-debugging-6.3/SKILL.md) -le 14000 && test -f claude-skills/systematic-debugging-6.3/references/red-flags.md"
+    },
+    {
+      "id": "T23",
+      "title": "brainstorming skill text fixes (hand-off name, section reference, round 1, conditional commit)",
+      "goal": "Implement plan task T23 (brainstorming skill text fixes (hand-off name, section reference, round 1, conditional commit)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T23'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/brainstorming-6.3/SKILL.md",
+        "claude-skills/brainstorming-6.3/architectural.md",
+        "claude-skills/brainstorming-6.3/research-playbook.md",
+        "claude-skills/tests/test_brainstorm_skill_text.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_skill_names_versioned_handoff passes (fails before the change for the stated reason)",
+        "test_architectural_names_versioned_handoff_with_fallback passes (fails before the change for the stated reason)",
+        "test_claim_verifier_is_cited_at_section_3 passes (fails before the change for the stated reason)",
+        "test_round_one_loads_deferred_tools_before_calling_them passes (fails before the change for the stated reason)",
+        "test_architectural_commit_is_conditional passes (fails before the change for the stated reason)",
+        "test_skill_commit_is_conditional passes (fails before the change for the stated reason)",
+        "test_code_lane_and_spec_predraft_name_a_model passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T23')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ]
+    },
+    {
+      "id": "T24",
+      "title": "slim brainstorming (lane prompts to lanes.md, cut repeated sections, reviewer prompt)",
+      "goal": "Implement plan task T24 (slim brainstorming (lane prompts to lanes.md, cut repeated sections, reviewer prompt)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T24'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "small",
+      "deps": [
+        "T23"
+      ],
+      "files": [
+        "claude-skills/brainstorming-6.3/SKILL.md",
+        "claude-skills/brainstorming-6.3/lanes.md",
+        "claude-skills/brainstorming-6.3/spec-document-reviewer-prompt.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T24 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T24')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "test $(wc -c < claude-skills/brainstorming-6.3/SKILL.md) -le 10000 && test -f claude-skills/brainstorming-6.3/lanes.md && (cd claude-skills && python3 -m unittest tests.test_brainstorm_skill_text)"
+    },
+    {
+      "id": "T25",
+      "title": "doc-generator correctness fixes (search cap, state shape, cache key)",
+      "goal": "Implement plan task T25 (doc-generator correctness fixes (search cap, state shape, cache key)) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T25'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "trivial",
+      "deps": [],
+      "files": [
+        "claude-skills/doc-generator/SKILL.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T25 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T25')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "head -1 claude-skills/doc-generator/SKILL.md | grep -q '^---$' && grep -q 'git grep' claude-skills/doc-generator/SKILL.md"
+    },
+    {
+      "id": "T26",
+      "title": "doc-generator short dispatch prompts, Sonnet tiers and slimming",
+      "goal": "Implement plan task T26 (doc-generator short dispatch prompts, Sonnet tiers and slimming) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T26'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "large",
+      "deps": [
+        "T25"
+      ],
+      "files": [
+        "claude-skills/doc-generator/SKILL.md",
+        "claude-skills/doc-generator/references/writer-brief.md",
+        "claude-skills/doc-generator/references/reviewer-brief.md",
+        "claude-skills/doc-generator/references/doc-catalog.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T26 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T26')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "test $(wc -c < claude-skills/doc-generator/SKILL.md) -le 10000 && grep -q 'sonnet' claude-skills/doc-generator/SKILL.md"
+    },
+    {
+      "id": "T27",
+      "title": "gather.sh base validation and diff size caps",
+      "goal": "Implement plan task T27 (gather.sh base validation and diff size caps) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T27'. The plan is authoritative.",
+      "kind": "code",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/git-diff-summary/scripts/gather.sh",
+        "claude-skills/tests/test_gather_base.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_full_sha_base_resolves passes (fails before the change for the stated reason)",
+        "test_tag_base_resolves passes (fails before the change for the stated reason)",
+        "test_leading_dash_argument_is_ignored_as_free_text passes (fails before the change for the stated reason)",
+        "test_unknown_name_still_reports_no_base passes (fails before the change for the stated reason)",
+        "test_diff_over_80000_bytes_fans_out_with_top_files_summary passes (fails before the change for the stated reason)",
+        "test_diff_under_80000_bytes_still_uses_read_mode passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T27')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)",
+        "claude-skills/tests/test_gather.py"
+      ]
+    },
+    {
+      "id": "T28",
+      "title": "git-diff-summary SKILL.md argument handling",
+      "goal": "Implement plan task T28 (git-diff-summary SKILL.md argument handling) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T28'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "trivial",
+      "deps": [
+        "T27"
+      ],
+      "files": [
+        "claude-skills/git-diff-summary/SKILL.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T28 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T28')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "head -1 claude-skills/git-diff-summary/SKILL.md | grep -q '^---$' && (cd claude-skills && python3 -m unittest tests.test_gather)"
+    },
+    {
+      "id": "T29",
+      "title": "trim frontend-design and re-describe it",
+      "goal": "Implement plan task T29 (trim frontend-design and re-describe it) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T29'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "small",
+      "deps": [],
+      "files": [
+        "claude-skills/frontend-design-Jun18/SKILL.md",
+        "claude-skills/frontend-design-Jun18/references/writing.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T29 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T29')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "test $(wc -c < claude-skills/frontend-design-Jun18/SKILL.md) -lt 8200 && test -f claude-skills/frontend-design-Jun18/references/writing.md"
+    },
+    {
+      "id": "T30",
+      "title": "cross-skill frontmatter and size check",
+      "goal": "Implement plan task T30 (cross-skill frontmatter and size check) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T30'. The plan is authoritative.",
+      "kind": "test",
+      "size": "small",
+      "deps": [
+        "T08",
+        "T13",
+        "T18",
+        "T22",
+        "T24",
+        "T26",
+        "T28",
+        "T29"
+      ],
+      "files": [
+        "claude-skills/tests/test_skill_frontmatter.py"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "test_plain_and_quoted_values passes (fails before the change for the stated reason)",
+        "test_folded_block_and_continuation_lines passes (fails before the change for the stated reason)",
+        "test_list_values_are_accepted passes (fails before the change for the stated reason)",
+        "test_rejects_missing_delimiters_and_bad_lines passes (fails before the change for the stated reason)",
+        "test_every_directory_has_a_skill_file passes (fails before the change for the stated reason)",
+        "test_required_fields_present passes (fails before the change for the stated reason)",
+        "test_description_budget passes (fails before the change for the stated reason)",
+        "test_size_cap passes (fails before the change for the stated reason)"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T30')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ]
+    },
+    {
+      "id": "T31",
+      "title": "document the default subagent cap and how to raise it",
+      "goal": "Implement plan task T31 (document the default subagent cap and how to raise it) exactly as written in claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md, section '### T31'. The plan is authoritative.",
+      "kind": "docs",
+      "size": "trivial",
+      "deps": [
+        "T09",
+        "T13"
+      ],
+      "files": [
+        "claude-skills/dev-team-v3.2/README.md",
+        "claude-skills/requirements-code-audit/SETUP.md"
+      ],
+      "risk": "low",
+      "isolation": false,
+      "criteria": [
+        "every Run/Expected pair of task T31 in the plan matches",
+        "the slice's verify command exits 0"
+      ],
+      "edge_cases": [],
+      "context": [
+        "claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md (authoritative: section '### T31')",
+        "claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md (the spec lines named in the task)"
+      ],
+      "verify": "grep -q CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS claude-skills/dev-team-v3.2/README.md && grep -q CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS claude-skills/requirements-code-audit/SETUP.md"
+    }
+  ]
+}
