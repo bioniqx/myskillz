@@ -15,7 +15,7 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on OpenCode and ZCod
   setup     [--apply]                  configure harness (opencode | zcode | claude | auto)
 Common: --allow WORD exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
-import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
+import argparse, ast, hashlib, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +53,8 @@ BARE_FILENAMES = {"Makefile", "makefile", "GNUmakefile", "Dockerfile", "Containe
 TASKS_MARK = "<!-- TASKS -->"
 WAVES_OPEN, WAVES_CLOSE = "<!-- WAVES -->", "<!-- /WAVES -->"
 
-PLACEHOLDERS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b", r"implement(ed)? later",
+PLACEHOLDERS_CS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b"]
+PLACEHOLDERS = [r"implement(ed)? later",
     r"fill in (the )?details", r"add appropriate (error handling|validation)",
     r"handle (the )?edge cases", r"similar to (task\s*|T)\d+", r"same as (task\s*|T)\d+",
     r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
@@ -61,8 +62,10 @@ PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash
     r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
     r"\bOpenCode\b", r"\bZCode\b", r"\bGLM\b", r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b",
     r"\binvoke (the |a )?skill\b"]
-PH_RE = [re.compile(p, re.I) for p in PLACEHOLDERS]
+PH_RE = [re.compile(p) for p in PLACEHOLDERS_CS] + [re.compile(p, re.I) for p in PLACEHOLDERS]
 PO_RE = [re.compile(p, re.I) for p in PORTABILITY]
+INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+URL_RE = re.compile(r"https?://\S+")
 
 PROTOCOL = """## Execution Protocol (for any AI agent or human engineer)
 
@@ -383,10 +386,11 @@ def parse_contracts(text):
     return cs, errs
 
 
-def scan(text, allow, label, skip_contracts=False):
+def scan(text, allow, label, skip_contracts=False, fenced_placeholders=False):
     errs, inside = [], False
-    allow = {a.lower() for a in allow}
-    for n, l in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+    fmask = fence_mask(lines)
+    for n, l in enumerate(lines, 1):
         if skip_contracts:
             if re.match(r"^##\s+Contracts\b", l):
                 inside = True
@@ -394,10 +398,17 @@ def scan(text, allow, label, skip_contracts=False):
                 inside = False
         if inside:
             continue
-        for kind, pats in (("placeholder", PH_RE), ("portability", PO_RE)):
+        if fmask[n - 1]:
+            # fenced code: placeholders still count (opt-in), portability never does
+            if not fenced_placeholders:
+                continue
+            checks, clean = (("placeholder", PH_RE),), l
+        else:
+            checks, clean = (("placeholder", PH_RE), ("portability", PO_RE)), URL_RE.sub(" ", INLINE_CODE_RE.sub(" ", l))
+        for kind, pats in checks:
             for p in pats:
-                for m in p.finditer(l):
-                    if m.group(0).lower() not in allow:
+                for m in p.finditer(clean):
+                    if not allow_hit(m.group(0), allow):
                         errs.append("%s:%d %s %r: %s" % (label, n, kind, m.group(0), l.strip()[:100]))
     return errs
 
@@ -596,8 +607,11 @@ def files_block(body):
             continue
         if not l.lstrip().startswith("- ") or l.lstrip().startswith("- ["):
             break
-        paths += [norm_path(x) for x in TICK.findall(l)
-                  if "/" in x or "." in x or norm_path(x) in BARE_FILENAMES]  # skip `Symbol` mentions
+        toks = TICK.findall(l)
+        if toks:
+            first = toks[0]  # the path; a later `span` on the same line is just an annotation
+            if "/" in first or "." in first or norm_path(first) in BARE_FILENAMES:
+                paths.append(norm_path(first))
     return paths
 
 
@@ -646,6 +660,8 @@ def syntax_errors(blocks, label):
     return errs
 
 
+SHELL_LANGS = ("", "bash", "sh", "shell", "zsh", "console")
+COMMIT_ALL = re.compile(r"^-[^-mFCcS]*a")
 GIT_ADD = re.compile(r"^\s*git add\s+(.+)$")
 
 
@@ -753,8 +769,9 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
                     warns.append("%s: `git add %s` stages a directory - prefer explicit file paths" % (label, t))
                 else:
                     errs.append("%s: `git add` path `%s` is not in the contract Files" % (label, t))
+    errs += commit_errors(blocks, label)
     errs += syntax_errors(blocks, label)
-    errs += scan(body, allow, label)
+    errs += scan(body, allow, label, fenced_placeholders=True)
     return errs, warns
 
 
@@ -1358,8 +1375,15 @@ def cmd_wait(a):
         return report(["no work.json - run contracts first"], [], "")
     ids = info.get("review", []) if a.review else info.get("tasks", [])
     mark = "rev" if a.review else "ok"
+    try:
+        min_age = int(os.environ.get("PLAN_TOOL_WAIT_MIN_AGE", "45"))
+    except ValueError:
+        min_age = 45
     t0 = last = time.time()
     seen = -1
+    changed = {}  # task -> (last seen mtime, time the change was observed)
+    for t in ids:
+        changed[t] = (task_mtime(os.path.join(work, "tasks", t + ".md")), t0)
     while True:
         st = {t: done_state(os.path.join(work, "tasks", t + ".md"), mark) for t in ids}
         ndone = sum(1 for v in st.values() if v == "done")
@@ -1368,6 +1392,19 @@ def cmd_wait(a):
         if ndone == len(ids):
             print("DONE %d/%d %s in %.0fs" % (ndone, len(ids), "reviews" if a.review else "tasks", time.time() - t0))
             return 0
+        now = time.time()
+        elapsed = now - t0
+        pend_ids = [t for t, v in st.items() if v != "done"]
+        for t in pend_ids:
+            m = task_mtime(os.path.join(work, "tasks", t + ".md"))
+            if m != changed[t][0]:
+                changed[t] = (m, now)
+        if pend_ids and all(task_stuck(os.path.join(work, "tasks", t + ".md"), now - changed[t][1], min_age)
+                             for t in pend_ids):
+            print("PENDING %d/%d after %.0fs (all pending are failing and unchanged for >=%ds) -> %s"
+                  % (ndone, len(ids), elapsed, min_age, " ".join("%s:%s" % (t, st[t]) for t in pend_ids)))
+            print("If an agent for these IDs is still running, run wait again; otherwise re-dispatch only these IDs.")
+            return 1
         if time.time() - t0 > a.timeout or time.time() - last > a.idle:
             pend = ["%s:%s" % (t, v) for t, v in st.items() if v != "done"]
             print("PENDING %d/%d after %.0fs (%s) -> %s" % (ndone, len(ids), time.time() - t0,
@@ -1982,6 +2019,93 @@ def main(argv=None):
     except OSError as e:
         print("ERR  %s" % e)
         return 1
+
+
+def fence_mask(lines):
+    """True for each line lexically inside (or opening/closing) a ``` / ~~~ fence,
+    length-threshold aware like code_blocks(); an unterminated fence marks every
+    following line as inside, so it is never scanned or heading-checked twice."""
+    mask, open_n = [], 0
+    for l in lines:
+        m = re.match(r"^\s*(`{3,}|~{3,})(.*)$", l)
+        if open_n:
+            mask.append(True)
+            if m and len(m.group(1)) >= open_n and not m.group(2).strip():
+                open_n = 0
+            continue
+        mask.append(bool(m))
+        if m:
+            open_n = len(m.group(1))
+    return mask
+
+
+def commit_errors(blocks, label):
+    """Flag `git commit -a/--all` and a `git commit` with no earlier `git add` in the
+    body's shell code blocks (a prose mention of a commit is not checked)."""
+    errs, added = [], False
+    for info, src, line in blocks:
+        lang = (info.lower().split() or [""])[0]
+        if lang not in SHELL_LANGS:
+            continue
+        for l in src.splitlines():
+            for seg in re.split(r"\s*(?:&&|;|\|\|?)\s*", l.strip()):
+                if seg.startswith("git add"):
+                    added = True
+                elif seg.startswith("git commit"):
+                    try:
+                        toks = shlex.split(seg)[2:]
+                    except ValueError:
+                        toks = seg.split()[2:]
+                    if "--all" in toks or any(COMMIT_ALL.match(t) for t in toks):
+                        errs.append("%s: `%s` stages every tracked change - drop -a/--all and `git add` the Files paths" % (label, seg.strip()[:80]))
+                    if not added:
+                        errs.append("%s: `git commit` has no earlier `git add` of the Files paths" % label)
+                        added = True
+    return errs
+
+
+def allow_hit(hit, allow):
+    """True when an --allow entry exempts `hit`: `re:<pattern>` must match the whole hit,
+    any other entry is a case-insensitive stem (`subagent` also exempts `subagents`)."""
+    low = hit.lower()
+    for a in allow:
+        if a.startswith("re:"):
+            try:
+                if re.fullmatch(a[3:], hit, re.I):
+                    return True
+            except re.error:
+                continue
+        elif a and low.startswith(a.lower()):
+            return True
+    return False
+
+
+def apply_marks(task_path, mark, errs, warns):
+    """Shared by lint-task and hook-lint: .fail on error, .warn on a clean-but-warned
+    lint, and a stale .warn/.fail is removed as soon as it no longer applies."""
+    fail_path, warn_path = task_path + ".fail", task_path + ".warn"
+    if errs:
+        with open(fail_path, "w") as f:
+            f.write("\n".join(errs))
+        return
+    if os.path.exists(fail_path):
+        os.remove(fail_path)
+    touch(task_path + "." + mark)
+    if warns:
+        with open(warn_path, "w") as f:
+            f.write("\n".join(warns))
+    elif os.path.exists(warn_path):
+        os.remove(warn_path)
+
+
+def contract_hashes(cs):
+    """Hash of each task's own contract text plus the text of every producer it depends on (deps_all)."""
+    text = {c["id"]: c["text"] for c in cs}
+    out = {}
+    for c in cs:
+        blob = "\n".join([c["text"]] + [text[d] for d in c["deps_all"] if d in text])
+        out[c["id"]] = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+    return out
 
 
 if __name__ == "__main__":
