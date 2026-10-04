@@ -20,9 +20,11 @@ layouts?" is browser.
 
 The loop is human-gated; hide machine latency inside the human wait.
 
-- **One turn, one bundle.** Liveness check + `events` read + new screen
-  write + any read-only exploration or web lanes for upcoming questions
-  are batched tool calls in a single message. Never spread across messages.
+- **Two tool rounds per loop.** Round 1 (one message, all calls in
+  parallel): literal `kill -0 <pid> 2>/dev/null` + read `events` + any
+  read-only exploration or web lanes for upcoming questions. Round 2,
+  after round 1 returns: write the new screen (the write is what
+  triggers rotation — read `events` first).
 - **Pre-draft the next screen** while the user looks at the current
   one, but do NOT write it to `screen_dir` early — the server serves the
   newest file, so writing early replaces what they are looking at.
@@ -56,11 +58,12 @@ frame template (header, theme CSS, connection status, interactivity).
 # persists mockups and enables same-port restart.
 <skill_dir>/scripts/start-server.sh --project-dir /path/to/project --open
 # → {"type":"server-started","port":52341,"url":"http://localhost:52341/?key=…",
+#    "session_dir":".../.superpowers/brainstorm/<id>",
 #    "screen_dir":".../.superpowers/brainstorm/<id>/content",
 #    "state_dir":".../.superpowers/brainstorm/<id>/state"}
 ```
 
-Save `screen_dir` and `state_dir`. The URL carries a session key
+Save `session_dir`, `screen_dir`, and `state_dir`. The URL carries a session key
 (`?key=…`); always share the **complete** URL as a fallback for
 headless/remote setups, never a bare host:port. If you didn't capture
 stdout, read `$STATE_DIR/server-info`. Remind the user to gitignore
@@ -85,12 +88,20 @@ Unreachable URL in containers → `--host 0.0.0.0 --url-host localhost`.
 
 ## The loop
 
-1. **Same message:** confirm alive (`$STATE_DIR/server-info` exists and
-   `server-stopped` does not; if stopped, restart with the same
-   `--project-dir` — it reuses the port and the open tab reconnects),
-   read `$STATE_DIR/events` if present, write the new screen with your
+1. **Round 1 (parallel):** read `$STATE_DIR/server.pid` with your
+   file-read tool **once**, right after start/restart, and reuse that
+   PID on every later iteration (re-read only after a restart). Run the
+   literal `kill -0 <pid> 2>/dev/null` (no `$(...)`/backtick
+   substitution — the PID comes from the read, not the shell) to
+   confirm alive (if dead, restart with the same `--project-dir` — it
+   reuses the port and the open tab reconnects); in the same round,
+   read `$STATE_DIR/events` if present — a missing `events` means no
+   clicks landed on the current screen, not that it moved; never read
+   `events.prev` just because `events` is absent.
+   **Round 2 (after round 1 returns):** write the new screen with your
    file-creation tool (never cat/heredoc) under a fresh semantic name
-   (`layout.html`, `layout-v2.html` — never reuse a filename).
+   (`layout.html`, `layout-v2.html` — never reuse a filename); the
+   write rotates `events` to `events.prev` for the next screen.
 2. **End the turn** with: the URL, a one-line summary of what's on
    screen, and "Take a look — click an option if you like, then reply
    here."
@@ -107,8 +118,9 @@ Unreachable URL in containers → `--host 0.0.0.0 --url-host localhost`.
    ```
 
 Server auto-exits after 4h idle (`--idle-timeout-minutes`). Stop with
-`<skill_dir>/scripts/stop-server.sh $SESSION_DIR`; `--project-dir` sessions keep
-their mockups, `/tmp` sessions are deleted.
+`<skill_dir>/scripts/stop-server.sh $SESSION_DIR` (the `session_dir` you
+saved from `server-started`); `--project-dir` sessions keep their
+mockups, `/tmp` sessions are deleted.
 
 ## Writing fragments
 
@@ -128,6 +140,12 @@ their mockups, `/tmp` sessions are deleted.
 ```
 
 No `<html>`, CSS, or `<script>` needed.
+
+To reference an image or other asset, drop it in `screen_dir` next to
+the screen and point to it with `/files/<name>` (e.g. `<img
+src="/files/mockup-photo.png">`) — never an absolute path or an external
+URL (nothing outside `screen_dir` is served, and pages load no external
+assets).
 
 ## CSS classes provided by the frame
 
@@ -151,7 +169,15 @@ Full CSS: `scripts/frame-template.html`. Client helper: `scripts/helper.js`.
 {"type":"click","choice":"c","text":"Option C - Complex Grid","timestamp":1706000108}
 ```
 
-The file is cleared automatically when a new screen is pushed.
+On a `data-multiselect` group each click also carries `"selected":
+true|false` — whether that option is now toggled on or off — since
+multiple options can be on at once and there's no single "last choice"
+to read. Single-select groups (no `data-multiselect`) omit it.
+
+The file is renamed to `events.prev`, not cleared, when a new screen is
+pushed — that's why the loop reads `events` before writing the next
+screen (step 1 above), not after. `events.prev` is a record of the prior
+screen's clicks, never a fallback for a merely-absent `events`.
 
 ## Design tips
 

@@ -131,13 +131,17 @@
     const target = e.target.closest('[data-choice]');
     if (!target) return;
 
-    sendEvent({
+    const container = target.closest('.options') || target.closest('.cards');
+    const multi = container && container.dataset.multiselect !== undefined;
+    const event = {
       type: 'click',
-      text: target.textContent.trim(),
+      text: target.textContent.replace(/\s+/g, ' ').trim().slice(0, 120),
       choice: target.dataset.choice,
       id: target.id || null
-    });
-
+    };
+    // A multi-select group has no single "last choice": report whether this option is now on.
+    if (multi) event.selected = target.classList.contains('selected');
+    sendEvent(event);
   });
 
   // Frame UI: selection tracking
