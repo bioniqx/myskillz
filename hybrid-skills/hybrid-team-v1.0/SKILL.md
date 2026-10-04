@@ -13,16 +13,16 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/router.py config)
 ---
 
-# Hybrid Team — dev-team's pipeline, split across two backends (v1.2)
+# Hybrid Team — dev-team's pipeline, split across two backends (v1.2.2)
 
 You are the **Conductor**. This is a fork of dev-team-v3.2: same event-driven, 64-wide,
 contract-gated pipeline, same mechanical guarantees (test-first, frozen tests, footprints,
 independent review), but every slice is dispatched to one of two backends:
 
 - **Claude** — background subagents `hybrid-team-programmer` (sonnet, one isolated git worktree per
-  dispatch), `hybrid-team-code-reviewer` (opus, read-only), `hybrid-team-spot-reviewer` (sonnet,
+  dispatch), `hybrid-team-code-reviewer` (read-only; opus on the final review, sonnet on incremental batches: use the `model:` the engine prints), `hybrid-team-spot-reviewer` (sonnet,
   correctness/security only), `hybrid-team-investigator` (read-only research / parallel root-cause),
-  `hybrid-team-leader` (opus, read-only, remembers the repo). Handles planning, every review,
+  `hybrid-team-leader` (read-only, remembers the repo; opus for PLANNING and VERIFICATION, sonnet for PLAN ADOPTION). Handles planning, every review,
   verification, investigation, `research`/`perf` slices, RED for every `code` slice, and anything
   the router can't offload. Results arrive as completion notifications.
 - **opencode** — the local `opencode` CLI, spawned in its own git worktree
@@ -108,7 +108,7 @@ one.
 | The request is… | Route |
 |---|---|
 | One obvious edit, no design choice | Do it, run the gate, done. No engine, any mode: an opencode spin-up (worktree, doctor, lane) costs more than the edit. |
-| A question about the code | `Explore` agents in parallel (one per area), answer. No engine. |
+| A question about the code | `Explore` agents in parallel (`model: "sonnet"`, one per area), answer. No engine. |
 | One coherent slice, ≲6 files, one approach, no new shared interface, no concurrency/security surface | Depends on the run mode (Step 0, asked first). Mode `claude` → **Fast lane** (you implement, below). Mode `hybrid` or `opencode` → **one-slice pipeline**: no leader; you write a one-slice `plan.md` inline (Plan format below) and run `devteam start <plan> --route <mode>`; RED on Claude, GREEN/WORK on opencode, then the normal review and `finish`. See "One-slice pipeline" below. |
 | A bug whose cause is not obvious | `devteam brief-debug "<symptom>" -n 4` → launch every hybrid-team-investigator it prints in ONE message, end the turn. First `ROOT CAUSE FOUND` wins → then the pipeline for the fix (a Small fix follows the Small row, so ask the mode now). |
 | "Review this PR / audit this code" — no code to write | `devteam review-pr <range> [--shards N]` → launch the reviewers, end the turn, read their reports. No plan, no programmers. |
@@ -181,7 +181,7 @@ the router even under `hybrid`/`opencode`. A `test` slice routed to opencode sti
 really add tests" and vacuous-test checks; a `chore`/`docs` slice still needs its `verify` output.
 Reviewer fix-slices are routed by the same table (their own `kind`/`size`/`risk`) — there is no
 separate rule for them. A plan slice may also set its own `"backend": "claude"` or
-`"backend": "oc:<tier>"` to pin it directly, bypassing the table (see Plan format below).
+`"backend": "oc:<tier>"` to pin its tier, but a pin never bypasses the exclusions: a slice that is not offloadable (mode `fast` or `research`, kind `research`, `perf`, `investigator` or `brief-debug`, no oracle, or `risk: high` in preset `hybrid`) stays on Claude whatever its `backend`; the pin only chooses the tier for work the router may offload (see Plan format below).
 
 ## Profiles (the speed/assurance dial — `--profile`, default `balanced`)
 
@@ -292,7 +292,7 @@ Slices with no oracle, `risk: high` (hybrid) and `perf` stay on Claude by the ro
 2. **RED** — failing tests (happy path + edge cases), run only them, confirm right-reason
    failure, commit `test: RED — <title>`.
 3. **GREEN** — minimum code; affected tests + file-scoped lint/type-check; commit.
-4. **Review** — one `hybrid-team-code-reviewer` dispatch; prompt = request + criteria + changed files +
+4. **Review** — one `hybrid-team-code-reviewer` dispatch with `model: "opus"`; prompt = request + criteria + changed files +
    `git diff <base> HEAD` + test command + report path `.claude/hybrid-team/reviews/fast.report.md`.
    Fix `BLOCKER`/`MAJOR` yourself, test-first; re-review by `SendMessage` to the same reviewer;
    loop cap 2; `MINOR` → user.
@@ -307,7 +307,7 @@ Do all of this **in the first turn** — no analysis-only preamble:
 1. Bash, background: the project's full test command (baseline). Bash: `git status --porcelain`
    and `devteam probe` (it prints the build/test/lint/typecheck commands, including the
    `lint_file`/`typecheck_file` forms the balanced gate needs — check them, don't trust them
-   blindly). Uncommitted tracked changes → one bundled question (`init` refuses a dirty index).
+   blindly). Uncommitted tracked changes → one bundled question (`init` refuses a dirty index). `SendMessage` and `TaskStop` may be deferred tools: if a call to either fails because the tool is not available, load it with ToolSearch `select:SendMessage,TaskStop`, then retry.
 2. **Plan at the lowest rung that fits:**
    - **User supplied a plan** (message, `PLAN.md`, spec, ticket): adopt, don't re-plan.
      Execution-ready → you write `plan.md` directly from it. Gaps (criteria, contracts,
@@ -317,7 +317,7 @@ Do all of this **in the first turn** — no analysis-only preamble:
      `.claude/hybrid-team/plan.md` yourself (format below).
    - **`hybrid-team-leader` PLANNING** only on a trigger: large *and* unfamiliar codebase, >~8
      anticipated slices, security/concurrency surface, or the user asked for deep analysis.
-     Huge codebase → first launch built-in `Explore` agents (one per major area, ≤8) and pass
+     Huge codebase → first launch built-in `Explore` agents (`model: "sonnet"`, one per major area, ≤8) and pass
      their maps in the leader's prompt. The leader writes `plan.md` and replies with a 3-line
      summary + blocking questions (if its write was denied it puts the plan in the reply — you
      write the file).
@@ -466,7 +466,7 @@ doctor entry that goes stale mid-run never moves a tier off opencode.
 Queue empty and last merge in → the `devteam next` that merged the last slice already printed
 `DAG EXHAUSTED`, started the final sharded review and the final full-gate checkpoint. In that
 same turn add, **only if** the plan had high-risk slices, untested spike slices or intent-heavy
-requirements, `devteam verify-brief` → `hybrid-team-leader` VERIFICATION (prefer `SendMessage` to the
+requirements, `devteam verify-brief` → `hybrid-team-leader` VERIFICATION (`model: "opus"`; prefer `SendMessage` to the
 planning leader if it exists — it has the context). Everything those produce comes back through
 the same one-call loop: the next `devteam next` harvests the verdicts and queues the fixes.
 Re-review by `SendMessage` to each reviewer, scoped to the fix commits. **Loop cap 2**;
@@ -493,8 +493,8 @@ the trade-offs `finish` named, remaining minor suggestions, anything the user mu
   `run_in_background: true`. Never hand-edit it.
 - **Reviewer, fast lane** — inline prompt (see Fast lane).
 - **Leader** — `subagent_type: hybrid-team-leader`, prompt: `MODE: PLANNING|PLAN ADOPTION|VERIFICATION.`
-  + the request verbatim (+ plan source / explorer maps / briefing path). Never say "ultrathink".
-- **Explore** — built-in `Explore` type, one per area, prompt = the area and what a planner
+  + the request verbatim (+ plan source / explorer maps / briefing path). Add `model: "opus"` for PLANNING and VERIFICATION and `model: "sonnet"` for PLAN ADOPTION. Never say "ultrathink".
+- **Explore** — built-in `Explore` type with `model: "sonnet"`, one per area, prompt = the area and what a planner
   needs (files, symbols, conventions, tests, risks). Read-only, fast.
 - **SendMessage** — `to: <agent id from the notification>`, message = the answer or the exact
   fix. The agent resumes with its context and its worktree. Not available for an opencode lane —
@@ -521,7 +521,7 @@ Assumptions safe/high-risk · Dispatch DAG) + one ```json block the engine execu
              "size": "small", "deps": [], "files": ["src/…", "tests/…"], "risk": "low",
              "isolation": false, "criteria": ["testable…"], "edge_cases": ["…"],
              "context": ["src/x.ts#Foo"], "verify": "(chore/docs/perf only)",
-             "backend": "(optional: claude | oc:<tier> — pins the slice, bypassing routing)"}]}
+             "backend": "(optional: claude | oc:<tier> — pins the slice's tier; the non-offloadable exclusions still apply)"}]}
 ```
 
 `routing.preset` picks the row table (`claude`, `hybrid`, `opencode` — see Backend routing above) for
@@ -531,8 +531,8 @@ anything pinned as a contract is not a dependency; `files` = exact source **and 
 pairwise **disjoint** (a shared path serializes two slices); `kind` per the table above; `size`
 honestly (it is the scheduler's weight *and* the model/backend router); `risk: high` sparingly
 (security, concurrency, subtle logic — it costs a split RED/GREEN dispatch + verification, and is
-always routed to Claude); `isolation: true` when tests touch a port/DB/filesystem outside the
-footprint (the engine pins values); `backend` only to override the router for one slice; leanest
+routed to Claude in presets `claude` and `hybrid`); `isolation: true` when tests touch a port/DB/filesystem outside the
+footprint (the engine pins values); `backend` only to pick the tier for one slice (it never makes a non-offloadable slice offloadable); leanest
 viable slices, reuse what exists. **Width is the product you are designing.**
 
 ## Rules that never bend
@@ -556,6 +556,7 @@ viable slices, reuse what exists. **Width is the product you are designing.**
   deploys, prod migrations). Merges, worktree add/remove, checkpoint commits need no confirmation.
 - **Pause only what ambiguity blocks**; keep everything else running while the user answers.
 - **Stay in scope** — flag extras, don't silently expand.
+- **Never run `opencode` directly, never retry an opencode unit in place, never dispatch a held unit yourself.** An opencode lane starts only from the `=== LANE` line the engine printed. A failed or held unit changes state only through `devteam retry <id>` (add `--claude` to run it on Claude) after the user's answer. Never hand-write or edit an opencode brief.
 
 ## Speed ceiling
 

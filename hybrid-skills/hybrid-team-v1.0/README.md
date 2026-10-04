@@ -47,7 +47,7 @@ lists the `std` and `lite` model specs, each marked `(skill)` (the model is set 
 
 `max` is the old name of `opencode`; it is still accepted and prints an `OC-WARN ... kind=config`
 line. Any other preset name is an `OC-ERROR ... kind=config` and the command exits non-zero.
-Reviewers, the leader, RED, verification and investigation stay on Claude in every mode.
+Reviewers, the leader, RED, verification and investigation stay on Claude in every mode. Preset `claude` pins the same models as dev-team-v3.2: opus for the final review, PLANNING and VERIFICATION; sonnet for incremental reviews, PLAN ADOPTION, investigators and `Explore`.
 
 A Small request (one coherent slice, about 6 files or fewer, no new shared interface, no concurrency or
 security surface) follows the mode: in `claude` the Conductor implements it in the Fast lane, in `hybrid`
@@ -109,7 +109,7 @@ the run state directory.
 
   This user file moves only `std`; `lite` keeps following `HYBRID_OPENCODE_LITE`.
 - **Per run**: the plan JSON's `routing` block is merged last and overrides keys for that run only.
-- **Per slice**: a slice's `backend` field pins it directly, bypassing the routing table.
+- **Per slice**: a slice's `backend` field (`claude` or `oc:<tier>`) pins its tier. The exclusions apply first, so the pin never offloads RED, `research`, `perf`, `investigator` or `brief-debug` work, a no-oracle slice, fast or research mode, or (preset `hybrid`) a `risk: high` slice.
 
       {"preset": "hybrid",
        "tiers": {
@@ -172,7 +172,7 @@ Everything this skill puts into a shared namespace is prefixed `hybrid`, so it i
   and `variant` from that tier in `<skill dir>/routing.json` (a leftover model there keeps
   winning for hybrid-team); the tier then follows its shared env var.
 - `bash hybrid-team-v1.0/scripts/selftest.sh` - the self-check. Since 1.2.0 it passes on macOS
-  too (`passed=255 failed=0`); before the re-sync with dev-team it had 8 known macOS harness
+  too (its last line reads `passed=<N> failed=0`); before the re-sync with dev-team it had 8 known macOS harness
   failures (GNU `sed -i`, `/var` -> `/private/var`, a bash 3.2 word-split).
 - A slice is `HELD` in `opencode` mode -> the `OC-ERROR` line names the tier, model and cause.
   `devteam retry <id>` pings that tier again: an ok ping clears its breaker and the slice goes back
