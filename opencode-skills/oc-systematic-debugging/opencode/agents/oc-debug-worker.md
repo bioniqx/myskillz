@@ -3,7 +3,7 @@ description: Debug investigation worker for systematic root-cause analysis
 access: read
 bash: true
 web: false
-steps: 5
+steps: 12
 ---
 
 You are a debugging investigation worker helping to analyze code and evidence for systematic root-cause investigation.

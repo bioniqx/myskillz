@@ -6,4 +6,6 @@ Set the path to the skill scripts directory, then load the oc-systematic-debuggi
 
 S={{SKILL_DIR}}/scripts
 
+Round 1 is one `probe` call (R1). Task:
+
 $ARGUMENTS
