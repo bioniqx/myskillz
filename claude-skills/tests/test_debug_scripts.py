@@ -26,9 +26,13 @@ README = os.path.realpath(os.path.join(
     os.path.dirname(__file__), "..", "claude-systematic-debugging-6.3", "README.md"))
 
 
-def sh(cmd, cwd=None, env=None, timeout=30):
+def sh(cmd, cwd=None, env=None, timeout=30, reset_sigint=False):
+    # A runner started as a background job inherits SIGINT as ignored, and bash cannot
+    # trap a signal that was ignored on entry; restore the default for such tests.
+    pre = (lambda: signal.signal(signal.SIGINT, signal.SIG_DFL)) if reset_sigint else None
     return subprocess.run(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE, text=True, timeout=timeout)
+                           stderr=subprocess.PIPE, text=True, timeout=timeout,
+                           preexec_fn=pre)
 
 
 def wait_until(predicate, timeout=5.0, interval=0.05):
@@ -492,7 +496,7 @@ class TestKillTreeGraceAndSignals(BaseTC):
                   "sh -c 'trap \"\" TERM; while :; do sleep 1; done' & p=$!; sleep 0.3; "
                   "(sleep 0.1; kill -INT $$; kill -TERM $$) & "
                   "sd_kill_tree $p; sleep 0.3; echo done; trap -p INT TERM" % lib)
-        r = sh(["bash", "-c", script], timeout=20)
+        r = sh(["bash", "-c", script], timeout=20, reset_sigint=True)
         self.assertNotIn("GOT", r.stdout.splitlines(), r.stdout + r.stderr)
         self.assertIn("done", r.stdout)
         self.assertIn("trap -- 'echo GOT' SIGINT", r.stdout.replace(" INT", " SIGINT"))
