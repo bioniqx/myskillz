@@ -1,6 +1,6 @@
 ---
 name: oc-systematic-debugging
-description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many; parallel work runs inside the tools and through background workers on the model selected in the window, so width costs no extra model turns.
+description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many; parallel work runs inside the tools (up to 64 workers) and through background workers on the model selected in the window, so width costs no extra model turns.
 metadata:
   version: "10.0"
   harness: "opencode"
@@ -18,9 +18,11 @@ for d in "$OPENCODE_CONFIG_DIR/skills/oc-systematic-debugging" .opencode/skills/
 
 Every tool output starts with `S=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path** into every later command — `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/oc_debug_tool.py -h` and every subcommand's `-h` list the flags.
 
-## R1. One call per phase — do not batch tool calls, batch *inside* one call
+`python3 $S/oc_debug_tool.py setup` prints the install and run notes once if you need them; it defines no provider, model or effort: every worker runs on the model selected in the OpenCode window.
 
-Each model turn costs seconds of latency, so width lives inside the tools, not in your message: `probe`, `run` and `experiment` open their own threads (up to 64), and `scan` writes the worker briefs and prints one background dispatch row per worker.
+## R1. One call per phase — put width inside the tool, and independent calls in one message
+
+Each model turn costs seconds of latency, so width lives inside the tools: `probe`, `run` and `experiment` open their own threads (up to 64), and `scan` writes the worker briefs (at most 64 areas) and prints one background dispatch row per worker. Independent Read, Grep and git calls that no tool covers still go together in one message; go sequential only when call B needs the output of call A.
 
 | Phase | Exactly one call | Replaces |
 | --- | --- | --- |
@@ -39,10 +41,10 @@ Rules:
 
 ## R2. Triage — `probe` prints `LANE:` for you
 
-Take the lane `probe` printed. Override it only for these three reasons, and say which:
+Take the lane `probe` printed. Override it only for these reasons, and say which:
 
 1. FAST → STANDARD after 3 rounds without a verified fix, or after 1 failed fix.
-2. STANDARD → SWARM when the repro is not reproducible, when no hypothesis survives round 3, or after 2 failed fixes.
+2. STANDARD → SWARM when the failure is non-deterministic (intermittent, flaky), a regression with an unknown culprit, multi-component (CI→build→deploy, API→service→DB), a performance problem, or has many plausible causes; also when the repro is not reproducible, when no hypothesis survives round 3, or after 2 failed fixes.
 3. Never de-escalate after a failed fix, and escalation keeps the failed-fix count.
 
 A null / undefined / None / nil / KeyError / index-out-of-range error is never FAST: the bad value was created somewhere upstream of the line that crashed.
@@ -55,29 +57,21 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 ## R4. STANDARD lane — 3 rounds
 
 1. **Evidence** — `probe` output. Read errors completely: message, code, file:line, every in-repo frame, every `Caused by`, adjacent warnings. A bad value deep in the stack → trace it back to where it is *created*, not where it is used: `references/root-cause-tracing.md`. Multi-component (CI→build→deploy, API→service→DB) → instrument every boundary in ONE run (what entered, what exited, config per layer), then investigate only the boundary that broke. Fails only in CI → first reproduce CI conditions locally (same image, same env vars, `CI=true`, load via `oc-stress.sh -j`); if that is impossible, add boundary logging to the CI job and read its output.
-2. **Compare and hypothesize, in one message.** Find a working analogue (a sibling test that passes, the last good commit, the reference implementation) and list every difference — do not pre-filter "can't matter" — including the implicit ones: config, env vars, versions, ordering, shared state. Then write 2–4 hypotheses in the spec file:
+2. **Compare and hypothesize, in one message.** Find a working analogue (a sibling test that passes, the last good commit, the reference implementation), read the reference completely, and list every difference — do not pre-filter "can't matter" — including the implicit ones: config, env vars, versions, ordering, shared state. Then write 2–4 hypotheses in the spec file:
 
    ```bash
    python3 $S/oc_debug_tool.py experiment --template > /tmp/exp.json     # fill in: hypothesis, cmd, and ONE of patch_file / env / treatment_cmd
    python3 $S/oc_debug_tool.py experiment --spec /tmp/exp.json -j 16
    ```
 
-   Each hypothesis changes exactly one variable. The tool runs the control and treatment arms in two separate worktrees at the same time, which is also the causation proof the old manual "revert the fix, watch it break, restore" step gave you. CONFIRMED means one arm passed and the other failed — nothing else. Refuted → the evidence changed; write new hypotheses, never wilder ones.
+   Each hypothesis changes exactly one variable and states `H: <cause> because <evidence>. If true: <result A>. If false: <result B>.` A must differ from B, otherwise the experiment is not worth running. The tool runs the control arm and then the treatment arm, one after the other, each in its own worktree, so CPU contention never biases a flaky or timing verdict. CONFIRMED means one arm passed and the other failed — nothing else. Refuted → the evidence changed; write new hypotheses, never wilder ones. Stuck → say "I don't understand X", name the evidence that would settle it, and get it with one `probe` or `run` call.
 3. **Fix and verify** — one fix at the source, no drive-by refactors. Turn the repro into a failing automated test first and see it fail for the expected reason. Then one call:
 
    ```bash
    python3 $S/oc_debug_tool.py run -j 4 '<new test>' '<the failing test file>' '<affected suite>'
    ```
 
-   Flaky bug → prove it with `bash $S/oc-stress.sh -b <baseline F/N>` at the baseline's `-n`/`-j`; only Fisher p < 0.05 counts. Bad data crossed layers → `references/defense-in-depth.md`. Timing bug → condition waits, never sleeps → `references/flaky-and-timing.md`.
-
-#### Setup snippet for OpenCode
-
-```bash
-python3 $S/oc_debug_tool.py setup
-```
-
-This prints the install and run notes for OpenCode. It defines no provider, model or effort: every worker runs on the model selected in the OpenCode window.
+   When cheap and nothing runs in the tree, prove causation: run the fix as a treatment arm (`patch_file`) in `experiment`, or revert only the fix, confirm the new test fails, then restore it. Flaky bug → prove it with `bash $S/oc-stress.sh -b <baseline F/N>` at the baseline's `-n`/`-j`; only Fisher p < 0.05 counts. Bad data crossed layers → `references/defense-in-depth.md`. Timing bug → condition waits, never sleeps → `references/flaky-and-timing.md`.
 
 ## R5. SWARM lane — 4 to 6 rounds
 
@@ -86,7 +80,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/oc-stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/oc-bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/oc-find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/oc_debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It writes one worker brief per area (one shared byte-identical prefix first, so the provider cache can hit from the second worker on) and prints one dispatch row per brief for the `oc-debug-worker` agent with `background: true`. Make every printed call in one turn, one call after another without waiting, then end the turn; each worker replies with a `VERDICT:` block. Read the replies when they arrive (interactive sessions only).
+4. Unknown location or many plausible causes → `python3 $S/oc_debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It accepts at most 64 areas and writes one worker brief per area (one shared byte-identical prefix first, so the provider cache can hit from the second worker on) and prints one dispatch row per brief for the `oc-debug-worker` agent with `background: true`. Beyond ~8 workers the merge cost exceeds the gain, so dispatch more only for a genuinely broad question. Make every printed call in one turn, one call after another without waiting, then end the turn; each worker replies with a `VERDICT:` block. Read the replies when they arrive (interactive sessions only).
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit
@@ -108,7 +102,7 @@ Five lines, no more: `BUG:` · `LANE:` · `EVIDENCE SO FAR:` · `RULED OUT:` · 
 | Rationalization | Reality |
 | --- | --- |
 | "Simple / urgent, no time" | FAST costs 2 rounds; guessing costs more. |
-| "Prod is down" | Mitigate first with a reversible, cause-agnostic action (rollback, flag, failover, degrade) — that is not a fix — while ONE `probe` call gathers evidence. The root cause still precedes the code change. |
+| "Prod is down" | Mitigate first with a reversible, cause-agnostic action (rollback, flag, failover, degrade) — that is not a fix — while ONE `probe` call gathers evidence (recent deploys, provider status, DNS/TLS/egress from the host, error-rate onset). The root cause still precedes the code change. |
 | "Several fixes at once saves time" | Parallelize isolated experiments, never fixes in one tree. |
 | "Senior/author says it's X" | That is a hypothesis; one `experiment` entry settles it. |
 | "4 hours of sleeps can't be wasted" | Sunk cost. Delete them; a timing guess is not a root cause. |
