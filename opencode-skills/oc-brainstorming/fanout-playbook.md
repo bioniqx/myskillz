@@ -67,6 +67,9 @@ Vague boundaries are the main cause of duplicated work between lanes.
 
 - One message: all direct calls + all lane `subagent` calls (≤ cap). State
   the call count first (SKILL.md R4) and then make every one of them.
+- Tools not loaded yet (`websearch`, `webfetch`, `question`): load them
+  first. Call them in this message only if they are already available,
+  otherwise in the next round, never as a serial chain.
 - The agent body is the shared prefix and is byte-identical across lanes of
   the same agent. Keep the brief short and put slice-specific lines last.
 - Every agent names its output labels and a word cap, so eight or more
