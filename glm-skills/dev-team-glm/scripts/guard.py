@@ -690,6 +690,8 @@ def write_capable(argv):
         if not scripts and pos:
             scripts = pos[:1]
         for s in scripts:
+            # a plain `s/pat/rep/flags` (no w/e flag) is just text: drop its body so `s/we/us/` is not a `w` command
+            s = re.sub(r"s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1(?![a-zA-Z0-9]*[weW])", "s", s)
             if (re.search(r"(?<![a-zA-Z])[wW]\s*\S", s) or re.search(r"(?<![a-zA-Z])e(?![a-zA-Z])", s)
                     or re.search(r"s(.).*\1.*\1[a-zA-Z0-9]*e", s)):
                 return True
