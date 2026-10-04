@@ -19,6 +19,7 @@ import argparse
 import codecs
 import io
 import json
+import math
 import os
 import posixpath
 import random
@@ -816,6 +817,7 @@ JUDGE_SCHEMA = (
     '{"id":"<the id>","status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE",'
     '"confidence":"high|medium|low",'
     '"evidence":[{"path":"<from the excerpts>","lines":"41-58","note":"what this code does re: the requirement"}],'
+    '"searched":["every query or path you actually checked"],'
     '"notes":"<=200 chars, why this status","more_queries":["search terms to try if you are not sure"]}'
 )
 
@@ -823,6 +825,7 @@ VERIFY_SCHEMA = (
     '{"id":"<the id>","verified_status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE",'
     '"agree":true,"confidence":"high|medium|low",'
     '"evidence":[{"path":"…","lines":"10-20","note":"…"}],'
+    '"searched":["the new queries or paths you tried"],'
     '"reason":"<=200 chars, what you checked and what changed your mind or confirmed it"}'
 )
 
@@ -1042,6 +1045,10 @@ def lint_finding(row, item, root, retrieved_paths, kind="finding"):
         mq = [mq]
     out["more_queries"] = [str(q).strip() for q in (mq or []) if str(q).strip()][:12] \
         if kind == "finding" else []
+    if "searched" in out:
+        sr = out["searched"]
+        sr = [sr] if isinstance(sr, str) else (sr if isinstance(sr, list) else [])
+        out["searched"] = [clip(str(q), 200) for q in sr if str(q).strip()][:30]
     out.pop("excerpt", None)
     return out, errs, warns
 
@@ -1057,12 +1064,7 @@ def needs_verify(it, f):
         return True
     if f.get("confidence") != "high":
         return True
-    if str(it.get("stakes", "normal")).lower() == "high":
-        return True
-    if str(it.get("strength", "MUST")).upper() == "MUST" and f.get("passes", 1) < 2 \
-            and f.get("confidence") != "high":
-        return True
-    return False
+    return str(it.get("stakes", "normal")).lower() == "high"
 
 
 # --------------------------------------------------------------------------- merge
@@ -1121,11 +1123,11 @@ class Merged(object):
 
     def final(self, rid):
         it = self.by_id.get(rid) or {}
-        if _tagged_unverifiable(it):
-            return "UNVERIFIABLE", "tag"
         a = self.adj.get(rid)
         if a and str(a.get("final_status") or "").upper() in FINAL_STATUSES:
             return str(a["final_status"]).upper(), "lead"
+        if _tagged_unverifiable(it):
+            return "UNVERIFIABLE", "tag"
         v = self.ver.get(rid)
         if v and str(v.get("verified_status") or "").upper() in FINAL_STATUSES:
             return str(v["verified_status"]).upper(), "verifier"
@@ -1135,10 +1137,15 @@ class Merged(object):
         return "UNSEARCHED", "none"
 
     def evidence(self, rid):
-        for src in (self.ver.get(rid), self.find.get(rid)):
-            if src and src.get("evidence"):
-                return src["evidence"]
-        return []
+        """Evidence of the pass that decided the status: the verifier when its verdict
+        is the final status, else the first-pass finding."""
+        st, _src = self.final(rid)
+        v = self.ver.get(rid)
+        if v and str(v.get("verified_status") or "").upper() == st:
+            src = v
+        else:
+            src = self.find.get(rid)
+        return (src or {}).get("evidence") or []
 
     def note(self, rid):
         a = self.adj.get(rid)
@@ -1418,6 +1425,12 @@ def cmd_parse(a):
             if os.path.exists(out):
                 os.remove(out)
             write_text(brief, body)
+        if os.path.exists(out):
+            _got, bad = read_jsonl(out)
+            if bad:
+                os.replace(out, out + ".bad")
+                print("FAIL  %s: %d unparseable line(s), first: %s; output kept as %s.bad"
+                      % (name, len(bad), bad[0][1], os.path.basename(out)))
         if not os.path.exists(out):
             pending.append((name, brief))
     if pending:
@@ -1500,6 +1513,22 @@ def validate_checklist(rows):
 # --------------------------------------------------------------------------- queue / adjudicate
 
 
+def spot_sample(m):
+    """Seeded 5% (at least 3) sample of first-pass MATCHED items that never got a verdict.
+
+    The universe and the random draw depend only on the checklist and the verdict files,
+    never on adjudications, so adjudicating one sampled item never reshuffles the rest."""
+    universe = sorted(it["id"] for it in m.items
+                      if not _tagged_unverifiable(it)
+                      and str(m.find.get(it["id"], {}).get("status") or "").upper() == "MATCHED"
+                      and it["id"] not in m.ver)
+    if not universe:
+        return []
+    k = max(3, int(math.ceil(0.05 * len(universe))))
+    rnd = random.Random(len(m.items) * 7919 + len(universe))
+    return sorted(rnd.sample(universe, min(k, len(universe))))
+
+
 def cmd_queue(a):
     c = Ctx(a.out)
     m = Merged(c)
@@ -1508,31 +1537,29 @@ def cmd_queue(a):
     ids = [it["id"] for it in m.items]
     for rid in ids:
         it = m.by_id[rid]
+        if rid in m.adj or _tagged_unverifiable(it):
+            continue
         st, src = m.final(rid)
         f, v = m.find.get(rid, {}), m.ver.get(rid, {})
         why = []
-        if rid in m.adj:
-            continue
         if rid in dis:
             why.append("verifier disagreed (%s -> %s)" % (dis[rid][1], dis[rid][2]))
-        if st in ("MISSING", "CONFLICT"):
-            why.append("%s -- confirm before it reaches the report" % st)
+        if (v.get("confidence") or "").lower() == "low":
+            why.append("verifier confidence low")
         if st == "UNSEARCHED":
             why.append("unsettled")
-        if (v.get("confidence") or f.get("confidence")) == "low":
-            why.append("low confidence")
-        if str(it.get("stakes")) == "high" and st != "MATCHED":
-            why.append("high stakes")
+        if st == "CONFLICT":
+            why.append("CONFLICT -- lead must confirm the contradiction")
+        if st == "UNVERIFIABLE":
+            why.append("worker says UNVERIFIABLE (not tagged by lead)")
         if f.get("lint_error") or rid in m.ver_rejected:
             why.append("checker rejected the model's answer")
         if not why:
             continue
         ev = m.evidence(rid)
         rows.append((rid, st, "; ".join(why), ev, it, f, v))
-    # deterministic 5% spot-check of MATCHED, so a clean wave still gets sampled
-    matched = [i for i in ids if m.final(i)[0] == "MATCHED" and i not in m.adj]
-    step = max(1, int(round(1 / 0.05)))
-    spot = [matched[i] for i in range(0, len(matched), step)][:12]
+    queued = set(r[0] for r in rows)
+    spot = [rid for rid in spot_sample(m) if rid not in m.adj and rid not in queued]
     print("ADJUDICATION QUEUE  (%d to decide, %d spot-checks)" % (len(rows), len(spot)))
     print("Read the cited lines in ONE batch, then record with:")
     print("  oc_audit.py adjudicate --set REQ-007 MISSING --note \"why\"   |   --accept REQ-003 REQ-004")
@@ -1551,13 +1578,14 @@ def cmd_queue(a):
             print("    searched(%d): %s" % (len(q), clip(", ".join(q[:14]), 200)))
         print("")
     if spot:
-        print("SPOT-CHECK (MATCHED sample -- read the lines, disagree if the wording is not met)")
+        print("SPOT-CHECK (seeded 5%% sample of MATCHED items nobody verified -- read the lines, "
+              "disagree if the wording is not met)")
         for rid in spot:
             ev = m.evidence(rid)
             print("  %s  %s" % (rid, "  ".join("%s:%s" % (e["path"], e["lines"])
                                                for e in ev[:3]) or "(no evidence)"))
         st_ = c.state()
-        st_["spotcheck"] = spot
+        st_["spotcheck"] = sorted(set(st_.get("spotcheck") or []) | set(spot))
         c.save_state(st_)
     print("")
     print("Then write %s/plan.jsonl -- one entry per discrepancy (or group):" % os.path.basename(c.out))
@@ -1714,7 +1742,8 @@ def cmd_report(a):
                 L.append(u"- %s: `%s:%s` — %s" % (H["finding"], e.get("path"),
                                                         e.get("lines"), e.get("note") or ""))
         else:
-            q = (m.ver.get(rid, {}).get("searched") or m.find.get(rid, {}).get("searched") or [])
+            q = (list(m.find.get(rid, {}).get("searched") or [])
+                 + list(m.ver.get(rid, {}).get("searched") or []))
             L.append(u"- %s: %s — %s: %s" % (H["finding"], slab(fs), H["searched"],
                                                    clip(", ".join(q[:20]), 300)))
         note = m.note(rid)
@@ -1782,6 +1811,7 @@ def cmd_check(a):
     m = Merged(c)
     errs, warns = [], []
     ids = [it["id"] for it in m.items]
+    dis = dict((d[0], d) for d in m.disagreements())
     if not ids:
         errs.append("checklist is empty")
     for it in m.items:
@@ -1803,10 +1833,24 @@ def cmd_check(a):
                             "MISSING is the most damaging error this audit can make" % rid)
             q = set(str(x).lower() for x in
                     ((v or {}).get("searched") or []) + (m.find.get(rid, {}).get("searched") or []))
-            for h in (it.get("search_hints") or [])[:12]:
-                if str(h).lower() not in q and not any(str(h).lower() in x for x in q):
-                    warns.append("%s: search_hint %r never appears in the recorded searches"
-                                 % (rid, h))
+            if not adj and not q:
+                errs.append("%s is MISSING without any `searched` queries recorded -- the "
+                            "report cannot say what was searched" % rid)
+            elif not adj:
+                for h in (it.get("search_hints") or [])[:12]:
+                    if str(h).lower() not in q and not any(str(h).lower() in x for x in q):
+                        warns.append("%s: search_hint %r never appears in the recorded searches"
+                                     % (rid, h))
+        elif (rid not in m.find or needs_verify(it, m.find[rid])) \
+                and rid not in m.ver and rid not in m.ver_rejected and rid not in m.adj:
+            if fs != "MATCHED":
+                errs.append("%s: %s item was never verified or adjudicated" % (rid, fs))
+            else:
+                warns.append("%s: MATCHED with low confidence or high stakes but never verified"
+                             % rid)
+        if rid in dis and rid not in m.adj:
+            errs.append("%s: investigator (%s) and verifier (%s) disagree -- adjudicate"
+                        % (rid, dis[rid][1], dis[rid][2]))
         for e in m.evidence(rid):
             p = e.get("path")
             n = file_lines(c.repo, p)
@@ -1830,17 +1874,27 @@ def cmd_check(a):
                         % (clip(p.get("title"), 40), p.get("priority")))
         if not p.get("target"):
             warns.append("plan entry %r has no target state" % clip(p.get("title"), 40))
+        if str(p.get("effort", "")).upper() not in ("S", "M", "L"):
+            warns.append("plan entry %r: effort should be S/M/L" % clip(p.get("title"), 40))
     for it in m.items:
         rid = it["id"]
         fs, _s = m.final(rid)
         if fs in ("PARTIAL", "MISSING", "CONFLICT") and rid not in planned:
             errs.append("%s is %s but has no entry in plan.jsonl" % (rid, fs))
-        if fs == "CONFLICT" and rid in planned:
+        if fs in ("PARTIAL", "MISSING", "CONFLICT") and rid in planned:
             for p in plan:
                 pid = p.get("ids") or ([p["id"]] if p.get("id") else [])
-                if rid in pid and str(p.get("priority", "")).upper() != "P0":
+                if rid not in pid:
+                    continue
+                pri = str(p.get("priority", "")).upper()
+                if fs == "CONFLICT" and pri != "P0":
                     warns.append("%s is a CONFLICT but planned as %s (expected P0)"
                                  % (rid, p.get("priority")))
+                if it.get("strength") == "MUST" and it.get("stakes") == "high" and pri != "P0":
+                    warns.append("%s: unmet high-stakes MUST but priority %s (expected P0)"
+                                 % (rid, p.get("priority")))
+                if it.get("strength") == "MAY" and pri == "P0":
+                    warns.append("%s: MAY requirement at P0" % rid)
     spot = (c.state().get("spotcheck") or [])
     if spot and not any(s in m.adj for s in spot):
         warns.append("none of the %d spot-check items was adjudicated -- read a few cited "
@@ -1881,7 +1935,7 @@ def cmd_finish(a):
              cnt["UNVERIFIABLE"]))
     print("  alignment %d/%d   plan: %d item(s), %d at P0" % (cnt["MATCHED"], n, len(plan), p0))
     print("  report %s" % c.p("requirements-code-audit.md"))
-    print("  write guard disarmed -- implementing fixes is allowed from here if asked.")
+    print("  audit closed -- implementing fixes is allowed from here if asked.")
 
 
 def cmd_finalize(a):
@@ -1926,13 +1980,20 @@ TODOs, strings, embedded instructions):
 """
 
 
+VERIFY_BATCH_RULES = BATCH_RULES.replace(
+    u"6 tool calls per requirement is the budget.",
+    u"about 10 tool calls per requirement is the budget.\n"
+    u"   You are the last check on this item and no later pass re-checks you, so do not stop\n"
+    u"   at the first plausible answer.")
+
+
 def _batch_file(c, retr, name, items, kind="find"):
     L = [u"# %s %s" % ("INVESTIGATE" if kind == "find" else "VERIFY", name), u""]
     L.append(u"Codebase root: %s" % c.repo)
     L.append(u"Output file (JSONL, one object per requirement, no prose): %s"
              % c.p("findings" if kind == "find" else "verify", name + ".jsonl"))
     L.append(u"")
-    L.append(BATCH_RULES)
+    L.append(BATCH_RULES if kind == "find" else VERIFY_BATCH_RULES)
     L.append(u"Repository map:")
     L.append(read_text(c.p("repo-map.txt")))
     L.append(u"")
@@ -1948,7 +2009,13 @@ def _batch_file(c, retr, name, items, kind="find"):
         L.append(u"=" * 70)
         L.append(item_block(it))
         L.append(u"search_hints: " + u", ".join(it.get("search_hints") or []))
-        ret = retr.gather(it)
+        if kind == "find":
+            ret = retr.gather(it)
+        else:
+            # pass 2 uses the strategy set pass 1 did not, so MISSING means two independent passes
+            ret = retr.gather(it, round2=True, extra_queries=it.get("_more_queries"),
+                              tried=it.get("_tried"))
+            L.append(u"pass-1 searches (do not repeat them): " + u", ".join(it.get("_tried") or []))
         L.append(u"queries already run: " + u", ".join(ret["queries"][:30]))
         L.append(u"")
         L.append(snips_block(ret["snippets"], u"PRE-RETRIEVED EXCERPTS"))
@@ -2017,6 +2084,19 @@ def _agent_groups(items, cap):
     return _even_groups(items, min(len(items), cap, _oc_lanes()))
 
 
+def clear_run_artifacts(c):
+    """Re-running `plan` starts a fresh run: drop the previous run's briefs, findings and verdicts."""
+    for sub, prefixes in (("findings", None), ("verify", None), ("batches", ("batch-", "repair-"))):
+        d = c.p(sub)
+        for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+            if prefixes is None:
+                stale = name.endswith(".jsonl")
+            else:
+                stale = name.endswith(".md") and name.startswith(prefixes)
+            if stale:
+                os.remove(os.path.join(d, name))
+
+
 def cmd_plan(a):
     c = Ctx(a.out)
     items, bad = c.checklist()
@@ -2047,6 +2127,10 @@ def cmd_plan(a):
     mk(c.p("findings"))
     mk(c.p("verify"))
     st = c.state()
+    if not getattr(a, "resume", False):
+        clear_run_artifacts(c)
+        for key in ("vbatches", "repairs", "failed", "hedges", "spotcheck"):
+            st.pop(key, None)
     st["batches"] = dict(kept)
     print("plan:%d requirements -> %d batch file(s) of %d, excerpts pre-retrieved"
           % (len(live), len(groups), size))
@@ -2055,7 +2139,7 @@ def cmd_plan(a):
         name = "batch-%02d" % i
         p = _batch_file(c, retr, name, g, "find")
         st["batches"][name] = {"ids": [x["id"] for x in g], "wave": "A",
-                               "dispatched": ts_iso()}
+                               "dispatched": now()}
         lines.append((name, p))
     c.save_state(st)
     print("")
@@ -2246,8 +2330,92 @@ def judge_lint(c, redispatch=False):
     return batches, waiting
 
 
+HEDGE_MIN_SECONDS = 180  # never duplicate (hedge) a batch younger than this
+
+
+def _is_time(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _batch_mtime(c, name):
+    """Newest modification time of any findings file of `name` (0.0 when there is none)."""
+    d = c.p("findings")
+    stamps = [os.path.getmtime(os.path.join(d, f)) for f in (os.listdir(d) if os.path.isdir(d) else [])
+              if f == name + ".jsonl" or f.startswith(name + ".")]
+    return max(stamps or [0.0])
+
+
+def _apply_status_flags(c, a):
+    """--failed marks lanes as lost (their uncovered ids go to the verifier wave);
+    --undispatch clears the dispatched mark so status prints the row again."""
+    failed = list(getattr(a, "failed", None) or [])
+    undo = list(getattr(a, "undispatch", None) or [])
+    if not failed and not undo:
+        return
+    st = c.state()
+    units = dict(st.get("batches") or {})
+    units.update(st.get("vbatches") or {})
+    for name in failed + [n for n in undo if n != "all"]:
+        if name not in units:
+            die("unknown batch %s (known: %s)" % (name, ", ".join(sorted(units)) or "none"))
+    for name in failed:
+        if name not in st.setdefault("failed", []):
+            st["failed"].append(name)
+    for name in (list(units) if undo == ["all"] else undo):
+        meta = units[name]
+        meta["dispatched"] = None
+        if name in (st.get("failed") or []):
+            st["failed"].remove(name)
+    c.save_state(st)
+
+
+def _pass1_rows(c, m, st, by_id, retr):
+    """Investigator rows to print now: batches whose mark was cleared, then hedges.
+
+    A hedge is a duplicate lane for a straggler, allowed once half of the pass-1 batches are
+    done and the batch has run longer than max(HEDGE_MIN_SECONDS, 2 x the median finished
+    batch). Returns (redo, hedges) as [(name, brief_path)]."""
+    have = set(m.find)
+    failed = set(st.get("failed") or [])
+    batches = st.get("batches") or {}
+    t = now()
+
+    def covered(name):
+        return all(i in have for i in batches[name].get("ids") or [])
+
+    pending = [n for n in sorted(batches, key=batch_key) if n not in failed and not covered(n)]
+    done = [n for n in batches if n not in failed and covered(n)]
+    redo = []
+    for n in pending:
+        if not batches[n].get("dispatched"):
+            batches[n]["dispatched"] = t
+            redo.append((n, c.p("batches", n + ".md")))
+    spans = sorted(_batch_mtime(c, n) - batches[n]["dispatched"] for n in done
+                   if _is_time(batches[n].get("dispatched")) and _batch_mtime(c, n))
+    hedged = st.setdefault("hedges", {})
+    hedges = []
+    if spans and len(done) * 2 >= len(batches):
+        limit = max(HEDGE_MIN_SECONDS, 2.0 * spans[len(spans) // 2])
+        for n in pending:
+            at = batches[n].get("dispatched")
+            if n in hedged or not _is_time(at) or t - at <= limit:
+                continue
+            todo = [by_id[i] for i in batches[n]["ids"] if i not in have and i in by_id]
+            if not todo:
+                continue
+            name = n + ".r2"
+            hedges.append((name, _batch_file(c, retr, name, todo, "find")))
+            hedged[n] = t
+    if pending:
+        print("waiting on %d pass-1 batch(es): %s" % (len(pending), ", ".join(
+            "%s (running %s)" % (n, fmt_dur(t - batches[n]["dispatched"]))
+            if _is_time(batches[n].get("dispatched")) else n for n in pending)))
+    return redo, hedges
+
+
 def cmd_status(a):
     c = Ctx(a.out)
+    _apply_status_flags(c, a)
     batches, waiting = judge_lint(c, bool(getattr(a, "redispatch", False)))
     if batches:
         print("")
@@ -2272,13 +2440,26 @@ def cmd_status(a):
     if missing_ids:
         print("still open: %s" % ", ".join(missing_ids[:20]))
     redispatch = bool(getattr(a, "redispatch", False))
+    failed = set(st.get("failed") or [])
+    # output a lost lane never wrote: its ids go to the verifier wave as UNSEARCHED
+    lost = set(i for b in failed for i in ((st.get("batches") or {}).get(b) or {}).get("ids", [])
+               if i in live and i not in have)
     dispatched = set()
-    for b in (st.get("vbatches") or {}).values():
-        dispatched.update(b.get("ids") or [])
+    for name, b in (st.get("vbatches") or {}).items():
+        if name not in failed:
+            dispatched.update(b.get("ids") or [])
     pending = sorted(i for i in dispatched if i not in m.ver and i not in m.ver_rejected)
-    vset = [i for i in live if i in have and needs_verify(by_id[i], m.find[i])
+    vset = [i for i in live if (i in lost or (i in have and needs_verify(by_id[i], m.find[i])))
             and i not in m.ver and (redispatch or i not in dispatched)]
     retr = Retriever(c)
+    redo, hedges = _pass1_rows(c, m, st, by_id, retr)
+    if redo:
+        print("")
+        _print_dispatch(c, "A", redo, "oc-rca-investigator", "judge", "DISPATCH again")
+    if hedges:
+        print("")
+        _print_dispatch(c, "H", hedges, "oc-rca-investigator", "judge",
+                        "DISPATCH hedges (stragglers; whichever lane finishes first is used)")
     if vset:
         cap = int(a.cap or c.threads or 20)
         idx = len([k for k in (st.get("vbatches") or {})])
@@ -2288,21 +2469,26 @@ def cmd_status(a):
         for j, g in enumerate(groups, idx + 1):
             name = "batch-V%02d" % j
             its = []
+            prelim = {}
             for rid in g:
                 it = dict(by_id[rid])
-                f = m.find[rid]
+                f = m.find.get(rid) or {"id": rid, "status": "UNSEARCHED",
+                                        "notes": "no pass-1 output was written for this requirement"}
+                prelim[rid] = f
                 it["_prelim_note"] = f.get("notes")
+                it["_tried"] = list(f.get("searched") or [])
+                it["_more_queries"] = list(f.get("more_queries") or [])
                 its.append(it)
             p = _batch_file(c, retr, name, its, "verify")
             with io.open(p, "a", encoding="utf-8") as fh:
                 fh.write(u"\nPRELIMINARY FINDINGS to overturn:\n")
                 for rid in g:
-                    fh.write(json.dumps(m.find[rid], ensure_ascii=False) + u"\n")
+                    fh.write(json.dumps(prelim[rid], ensure_ascii=False) + u"\n")
                 fh.write(u"\nStance: MISSING -> assume it IS implemented and look again "
                          u"(tests, config, schemas, migrations, two NEW strategies). "
                          u"PARTIAL/CONFLICT -> read the whole enclosing function. "
                          u"MATCHED -> check the exact wording, limits, defaults, error paths.\n")
-            st["vbatches"][name] = {"ids": g, "wave": "B", "dispatched": ts_iso()}
+            st["vbatches"][name] = {"ids": g, "wave": "B", "dispatched": now()}
             vlines.append((name, p))
         print("")
         _print_dispatch(c, "V%02d" % (idx + 1), vlines, "oc-rca-verifier", "verify",
@@ -2310,6 +2496,11 @@ def cmd_status(a):
         c.save_state(st)
         print("")
         print("NEXT after they report: oc_audit.py status  (again), then oc_audit.py queue")
+        return
+    if redo or hedges:
+        c.save_state(st)
+        print("")
+        print("NEXT after they report: oc_audit.py status  (again)")
         return
     if pending and not redispatch:
         print("")
@@ -2408,6 +2599,10 @@ def main(argv=None):
     p.add_argument("--cap", type=int, default=None)
     p.add_argument("--redispatch", action="store_true",
                    help="re-pack verifiers that were dispatched but never reported")
+    p.add_argument("--failed", nargs="+", metavar="BATCH",
+                   help="batches whose lane was lost: their uncovered ids go to the verifier wave")
+    p.add_argument("--undispatch", nargs="+", metavar="BATCH",
+                   help="clear the dispatched mark so status prints the row again (`all` clears every batch)")
     p.set_defaults(fn=cmd_status)
 
     p = sub.add_parser("queue", help="what needs your judgment, with lines to read")
