@@ -9,7 +9,7 @@ LINT (also marks your review done - run it at the end even if you changed nothin
 
 ## Procedure (target: 3 turns)
 
-1. Read all task files above in ONE message of parallel Reads. The contracts and spec excerpts are below.
+1. Everything you need is inlined below: the contracts, the spec excerpts, each task body (line-numbered) and the existing target files. Do not re-read them. Only when a "Read before writing" section is present, read the files it lists in ONE message of parallel Reads.
 2. Check each task:
 
 | Category | Real problem |
