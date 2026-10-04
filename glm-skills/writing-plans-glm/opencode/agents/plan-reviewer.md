@@ -20,3 +20,4 @@ When reviewing a task body, follow these rules exactly:
 3. When you fix a body, keep the **Files:** list and every contract signature unchanged.
 4. After every edit, run the LINT command from the brief and fix each ERR it prints.
 5. No mentions of AI tools, skills, harnesses, or vendor products.
+6. The reviewer brief inlines the task bodies; read only the files it names.

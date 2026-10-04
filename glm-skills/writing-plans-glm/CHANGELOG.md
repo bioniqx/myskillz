@@ -1,5 +1,7 @@
 # writing-plans v9 (GLM edition) - what changed from v8
 
+**Parity repair:** the linter functions scan, fence_mask, files_block, commit_errors, allow_hit, apply_marks, cmd_wait and contract_hashes are re-synced from the original; the inline threshold is N <= 1; the handoff restores the dev-team adoption offer and "(recommended)"; the reviewer prompt holds one format block with a consuming step for "Unfixable (needs contract change)".
+
 **Fixes:** (WP5) Bootstrap now respects `$OPENCODE_CONFIG_DIR`, checks locations in project-first order, and exits with a clear error on miss (no `python3 "" brief`).
 
 Target: GLM-5.3 and GLM-5.3-Flash, running in OpenCode or ZCode.

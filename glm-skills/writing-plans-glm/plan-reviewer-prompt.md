@@ -15,7 +15,8 @@ nothing): `{LINT}`
 # Procedure - 3 turns
 
 1. Read all the files above in ONE message. Contracts and spec excerpts follow
-   below.
+   below. The task bodies and existing target files are inlined in this brief;
+   read nothing else.
 2. Judge each task against four questions only:
    - Spec alignment: is a requirement in the excerpt missing or contradicted?
    - Correctness: would the test really fail first and pass after? Is any
@@ -32,5 +33,9 @@ nothing): `{LINT}`
 ```
 Status: Approved | Fixed
 - TXX: <what you fixed, <= 15 words>
-Unfixable (needs contract change): TXX: <issue>
+Unfixable (needs contract change): TXX: <issue>   (omit if none)
 ```
+
+An Unfixable line means the contract is wrong: the conductor edits that
+contract, re-runs the contracts step, re-dispatches only the affected writers,
+then waits again.
