@@ -88,7 +88,9 @@ class AgentFiles(unittest.TestCase):
     def test_team_leader_names_no_model_routing(self):
         text = self.agents()["oc-team-leader"]
         self.assertIn("it orders the scheduler's critical path (the heaviest chain of slices starts first).", text)
-        self.assertIn("Width beyond the engine's lane limit buys nothing", text)
+        self.assertNotIn("Width beyond the engine's lane limit buys nothing", text)
+        self.assertIn("Width is the product you are designing. The engine's lane limit is a stated limit", text)
+        self.assertNotRegex(text.lower(), r"model routing|flash|sonnet|haiku")
 
 
 ROOT = Path(__file__).resolve().parents[2]
