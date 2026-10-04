@@ -234,9 +234,24 @@ def fence_mask(lines):
     return mask
 
 
+def allow_hit(hit, allow):
+    """True when an --allow entry exempts `hit`: `re:<pattern>` must match the whole hit,
+    any other entry is a case-insensitive stem (`subagent` also exempts `subagents`)."""
+    low = hit.lower()
+    for a in allow:
+        if a.startswith("re:"):
+            try:
+                if re.fullmatch(a[3:], hit, re.I):
+                    return True
+            except re.error:
+                continue
+        elif a and low.startswith(a.lower()):
+            return True
+    return False
+
+
 def scan(text, allow, label, skip_contracts=False, fenced_placeholders=False):
     errs, inside = [], False
-    allow = {a.lower() for a in allow}
     lines = text.splitlines()
     fmask = fence_mask(lines)
     for n, l in enumerate(lines, 1):
@@ -257,7 +272,7 @@ def scan(text, allow, label, skip_contracts=False, fenced_placeholders=False):
         for kind, pats in checks:
             for p in pats:
                 for m in p.finditer(clean):
-                    if m.group(0).lower() not in allow:
+                    if not allow_hit(m.group(0), allow):
                         errs.append("%s:%d %s %r: %s" % (label, n, kind, m.group(0), l.strip()[:100]))
     return errs
 
@@ -513,6 +528,35 @@ def syntax_errors(blocks, label):
     return errs
 
 
+SHELL_LANGS = ("", "bash", "sh", "shell", "zsh", "console")
+COMMIT_ALL = re.compile(r"^-[^-mFCcS]*a")
+
+
+def commit_errors(blocks, label):
+    """Flag `git commit -a/--all` and a `git commit` with no earlier `git add` in the
+    body's shell code blocks (a prose mention of a commit is not checked)."""
+    errs, added = [], False
+    for info, src, line in blocks:
+        lang = (info.lower().split() or [""])[0]
+        if lang not in SHELL_LANGS:
+            continue
+        for l in src.splitlines():
+            for seg in re.split(r"\s*(?:&&|;|\|\|?)\s*", l.strip()):
+                if seg.startswith("git add"):
+                    added = True
+                elif seg.startswith("git commit"):
+                    try:
+                        toks = shlex.split(seg)[2:]
+                    except ValueError:
+                        toks = seg.split()[2:]
+                    if "--all" in toks or any(COMMIT_ALL.match(t) for t in toks):
+                        errs.append("%s: `%s` stages every tracked change - drop -a/--all and `git add` the Files paths" % (label, seg.strip()[:80]))
+                    if not added:
+                        errs.append("%s: `git commit` has no earlier `git add` of the Files paths" % label)
+                        added = True
+    return errs
+
+
 def lint_body(c, body, allow, label, repo=None, earlier_files=()):
     errs, warns = [], []
     body_lines = body.splitlines()
@@ -598,6 +642,7 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
                     warns.append("%s: `git add %s` stages a directory - prefer explicit file paths" % (label, t))
                 else:
                     errs.append("%s: `git add` path `%s` is not in the contract Files" % (label, t))
+    errs += commit_errors(blocks, label)
     errs += syntax_errors(blocks, label)
     errs += scan(body, allow, label, fenced_placeholders=True)
     return errs, warns
@@ -743,11 +788,14 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
     gc = section(plan, "Global Constraints")
     if gc:
         parts.append("## Global Constraints\n\n" + gc)
-    for c in cs_group:
+    for c, f in zip(cs_group, files):
         parts.append("## Contract %s\n\n%s\n\n- Resolved Depends: %s" % (c["id"], c["text"], ", ".join(c["deps_all"]) or "—"))
         if spec_path and c["spec"]:
             ex = [numbered(spec_path, a, b) or "" for a, b in merge_ranges(c["spec"])]
             parts.append("## Spec excerpt for %s\n\n````text\n%s\n````" % (c["id"], "\n  ...\n".join(ex)))
+        body = numbered(f, 1, 10 ** 9)
+        if body:
+            parts.append("## Task body %s (`%s`, line-numbered; fix it by editing that file)\n\n````text\n%s\n````" % (c["id"], f, body))
     paths = [f for c in cs_group for f in c["files"]]
     inl, refs = inline_files(paths, repo)
     if inl:
@@ -931,6 +979,16 @@ def keep_run_tiers(doctor, routing, old_info, now):
 
 
 # ------------------------------------------------------------------ commands
+def contract_hashes(cs):
+    """Hash of each task's own contract text plus the text of every producer it depends on (deps_all)."""
+    text = {c["id"]: c["text"] for c in cs}
+    out = {}
+    for c in cs:
+        blob = "\n".join([c["text"]] + [text[d] for d in c["deps_all"] if d in text])
+        out[c["id"]] = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+    return out
+
+
 def cmd_contracts(a):
     preset_arg = resolve_preset(a.preset)
     if preset_arg is None:
@@ -957,7 +1015,7 @@ def cmd_contracts(a):
     work = default_work(plan_path)
     _, old_info = load_work(plan_path)
     old_hashes = old_info.get("contract_hash", {}) if old_info else {}
-    new_hashes = {c["id"]: hashlib.sha256(c["text"].encode("utf-8")).hexdigest() for c in cs}
+    new_hashes = contract_hashes(cs)
     tasks_dir = os.path.join(work, "tasks")
     for tid, h in new_hashes.items():
         if tid in old_hashes and old_hashes[tid] != h:
@@ -984,6 +1042,8 @@ def cmd_contracts(a):
     claude = [(gid, g) for gid, backend, g in routed if backend == "claude"]
     oc = [(gid, backend, g) for gid, backend, g in routed if backend.startswith("oc:")]
     held = [(gid, g) for gid, backend, g in routed if backend == "held"]
+    claude_todo = [(gid, g) for gid, g in claude
+                   if not all(os.path.exists(os.path.join(tasks_dir, c["id"] + ".md.ok")) for c in g)]
     for gid, g in claude + held:
         save(os.path.join(work, "briefs", gid + ".md"), writer_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
     # A re-run keeps every opencode task whose body survived (contract unchanged, lints clean, e.g. a reviewer fixed it):
@@ -1012,10 +1072,12 @@ def cmd_contracts(a):
     agent = "hybrid-plan-task-writer" if agent_installed(repo) else "general-purpose"
     extra = [] if from_env or a.agents else ["NOTE parallel cap = %d (default); run `%s setup` once to raise it to 64" % (DEFAULT_CAP, qtool())]
     extra.append("WORK %s" % work)
-    if claude:
-        extra += ["DISPATCH %d writers in ONE message | subagent_type=%s | model per row | description 'plan <ID>'" % (len(claude), agent),
+    if claude_todo:
+        extra += ["DISPATCH %d writers in ONE message | subagent_type=%s | model per row | description 'plan <ID>'" % (len(claude_todo), agent),
                   "prompt (verbatim): Read <brief path> and follow it exactly.",
-                  "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(claude, work, "write")
+                  "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(claude_todo, work, "write")
+    elif claude:
+        extra.append("NOTHING TO DISPATCH: every Claude task already has a fresh .ok mark")
     if oc_todo:
         extra.append("OPENCODE %d groups (%s) | run in the BACKGROUND in the SAME message: %s oc-write %s" % (
             len(oc_todo), ", ".join(span_of(g) for _, _, g in oc_todo), qtool(), shlex.quote(plan_path)))
@@ -1036,7 +1098,7 @@ def cmd_contracts(a):
         extra.append("THEN run: %s wait %s" % (qtool(), shlex.quote(plan_path)))
     else:
         extra.append("NOTHING dispatched: every group is held")
-    ok = "OK contracts: %d tasks | %d waves | max wave width %d | %d writers (cap %d)" % (len(cs), n, width, len(claude), k)
+    ok = "OK contracts: %d tasks | %d waves | max wave width %d | %d writers (cap %d)" % (len(cs), n, width, len(claude_todo), k)
     if oc:
         ok += " | %d opencode groups" % len(oc_todo)
     if held:
@@ -1708,8 +1770,8 @@ def cmd_setup(a):
             changes.append("permissions.allow += %s" % rule)
     agent_path = os.path.join(agents, "hybrid-plan-task-writer.md")
     agent_text = load(AGENT_TEMPLATE).replace("__PLAN_TOOL__", qtool())
-    agent_new = not os.path.exists(agent_path)
-    if agent_new:
+    agent_stale = not os.path.exists(agent_path) or load(agent_path) != agent_text
+    if agent_stale:
         changes.append("write agent %s (sonnet, effort medium, auto-lint PostToolUse hook)" % agent_path)
     if not changes:
         print("OK setup already complete (%s scope)" % a.scope)
@@ -1724,7 +1786,7 @@ def cmd_setup(a):
         if os.path.exists(settings):
             shutil.copy2(settings, settings + ".bak")
         save(settings, json.dumps(new, indent=2) + "\n")
-    if agent_new:
+    if agent_stale:
         save(agent_path, agent_text)
     print("OK written (backup: %s.bak). Restart Claude Code so the env and agent load." % settings)
     return 0
@@ -1746,7 +1808,7 @@ def main(argv=None):
     sub.required = True
 
     def common(p):
-        p.add_argument("--allow", action="append", default=[], help="exempt a scan hit, e.g. TODO")
+        p.add_argument("--allow", action="append", default=[], help="exempt a scan hit: a case-insensitive stem (subagent also exempts subagents) or re:PATTERN matching the whole hit")
         return p
     p = sub.add_parser("context"); p.add_argument("rest", nargs=argparse.REMAINDER); p.set_defaults(fn=cmd_context)
     p = common(sub.add_parser("contracts")); p.add_argument("plan"); p.add_argument("--spec"); p.add_argument("--agents", type=int)
