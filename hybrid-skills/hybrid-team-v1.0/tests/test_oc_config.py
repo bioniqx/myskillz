@@ -170,6 +170,36 @@ class TestReviewBypasses(unittest.TestCase):
         assert resolve(self.bash, "python3 %s integrate S1" % ENGINE) == "deny"
 
 
+class TestShellPermissionKey(unittest.TestCase):
+    """opencode v2.0.22 names its shell tool "shell"; it must carry exactly the rules of "bash"."""
+
+    def test_shell_block_equals_bash_block(self):
+        block = oc_config.permission_block(ENGINE, COMMANDS)
+        assert block["shell"] == block["bash"]
+        assert list(block["shell"]) == list(block["bash"])
+        assert block["shell"] is not block["bash"]
+
+    def test_top_level_and_agent_permission_carry_shell(self):
+        config = oc_config.build_config("prompt", ENGINE, COMMANDS)
+        agent_perm = config["agent"][oc_config.AGENT_NAME]["permission"]
+        for perm in (agent_perm, config["permission"]):
+            assert perm["shell"] == perm["bash"]
+            assert resolve(perm["shell"], "pytest tests/") == "allow"
+            assert resolve(perm["shell"], "curl http://x") == "deny"
+
+    def test_every_part_of_a_pinned_chain_is_allowed(self):
+        block = oc_config.permission_block(ENGINE, {"lint": "stylua --check {files} && selene {files}"})
+        for key in ("bash", "shell"):
+            rules = block[key]
+            assert resolve(rules, "stylua --check src/a.lua") == "allow", key
+            assert resolve(rules, "selene src/a.lua") == "allow", key
+            assert resolve(rules, PREFIX + "selene src/a.lua") == "allow", key
+            assert resolve(rules, "selene src/a.lua > out") == "deny", key
+        block = oc_config.permission_block(ENGINE, {"build": "make gen; make all || make fallback", "test": "cat a | wc"})
+        for cmd in ("make gen x", "make all x", "make fallback x"):
+            assert resolve(block["shell"], cmd) == "allow", cmd
+        assert resolve(block["shell"], "make other") == "deny"
+
 
 if __name__ == "__main__":
     unittest.main()
