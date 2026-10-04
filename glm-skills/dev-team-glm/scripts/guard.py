@@ -518,7 +518,8 @@ def _has(rest, *flags):
 
 SED_WRITE_EXEC = re.compile(  # sed w/W FILE, e CMD, s///w FILE, s///e (a false match only costs the pre-approval)
     r"(?:^|[;{}\n/!,$0-9\s])\s*[wWe](?:\s|$|;|})"
-    r"|s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImM0-9]*[we]")
+    r"|s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImM0-9]*[we]"
+    r"|\\([^\\\n])(?:\\.|(?!\2).)*\2[\s!]*[wWe](?:\s|$|;|})")  # \cREGEXc address, then w/W/e
 
 
 def sed_scripts(argv):
@@ -694,7 +695,8 @@ def write_capable(argv):
             if re.fullmatch(r"s([^\\\s\w;])(?:(?!\1)[^\\])*\1(?:(?!\1)[^\\])*\1[gpiImM0-9]*", s):
                 continue
             if (re.search(r"(?<![a-zA-Z])[wW]\s*\S", s) or re.search(r"(?<![a-zA-Z])e(?![a-zA-Z])", s)
-                    or re.search(r"s(.).*\1.*\1[a-zA-Z0-9]*e", s)):
+                    or re.search(r"s(.).*\1.*\1[a-zA-Z0-9]*e", s)
+                    or re.search(r"\\([^\\\n])(?:\\.|(?!\1).)*\1[\s!]*[wWe](?:\s|$|;|})", s)):
                 return True
     if head == "awk":
         prog, i = None, 0

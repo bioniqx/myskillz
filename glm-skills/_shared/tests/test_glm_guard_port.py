@@ -111,6 +111,27 @@ class WriteCapableTests(unittest.TestCase):
             self.assertTrue(G.write_capable(["sed", script, "in.txt"]), script)
             self.assertIsNone(G.bash_allow_reason(f"sed '{script}' in.txt", None, [], [], readonly=True), script)
 
+    SED_LETTER_DELIM_SCRIPTS = (
+        (r"\cxcw /tmp/o",),
+        (r"\cxce touch /tmp/p",),
+        (r"\axaw /tmp/o", "-n"),
+        (r"s/a/b/;\cxcw /tmp/o",),
+    )
+
+    def test_sed_w_e_behind_letter_delimited_address_is_refused(self):
+        for script, *flags in self.SED_LETTER_DELIM_SCRIPTS:
+            argv = ["sed", *flags, script, "f"]
+            self.assertTrue(G.write_capable(argv), script)
+            cmd = "sed " + "".join(f + " " for f in flags) + f"'{script}' f"
+            for ro in (True, False):
+                self.assertIsNone(G.bash_allow_reason(cmd, None, [], [], readonly=ro), (script, ro))
+
+    def test_sed_s_with_escaped_backslash_pattern_and_w_flag_is_not_approved(self):
+        self.assertIsNone(G.bash_allow_reason(r"sed 's/a\\/b/w /tmp/x' in.txt", None, [], [], readonly=True))
+
+    def test_sed_plain_address_print_stays_allowed(self):
+        self.assertTrue(G.bash_allow_reason("sed -n '/foo/p' in.txt", None, [], [], readonly=True))
+
     def test_whole_plain_sed_s_command_stays_allowed(self):
         self.assertFalse(G.write_capable(["sed", "s/we/us/g", "in.txt"]))
         self.assertFalse(G.write_capable(["sed", "-n", "s|we|us|gp", "in.txt"]))
