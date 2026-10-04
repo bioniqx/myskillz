@@ -2,14 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Role in the skillz monorepo
+
+`glm-skills/` holds the **variants for ZCode / GLM**, derived from the original skills in
+`../claude-skills/` (the source of truth). Sibling variants: `../hybrid-skills/` (Claude + opencode cost
+saving) and `../opencode-skills/` (opencode-only). Port behaviour changes from the original rather than
+editing the original from here.
+
 ## What this directory is
 
-GLM-5.3 / GLM-5.3-Flash ports of the Claude-tuned skills that sit one level up in `~/.claude/skills/`
-(`brainstorming-6.3`, `dev-team-v3.2`, `doc-generator`, `requirements-code-audit`,
-`systematic-debugging-6.3`, `writing-plans-6.2`). Each `*-glm/` folder is a self-contained skill meant to
-be copied into a harness (Claude Code on the Z.ai route, OpenCode, or ZCode). Claude Code does not load
-skills nested this deep, so nothing here is active in this session. The git root is `~/.claude`, not this
-folder.
+GLM-5.3 / GLM-5.3-Flash ports of the Claude-tuned originals in `../claude-skills/`
+(`claude-brainstorming-6.3`, `claude-dev-team-v3.2`, `claude-doc-generator`,
+`claude-requirements-code-audit`, `claude-systematic-debugging-6.3`, `claude-writing-plans-6.2`). Each
+`*-glm/` folder is a self-contained skill meant to be copied into a harness (Claude Code on the Z.ai
+route, OpenCode, or ZCode). Claude Code does not load skills nested this deep, so nothing here is active in
+this session. The git root is the skillz monorepo root (`../`), not this folder.
 
 When a port changes behaviour, compare against the sibling original. Keep GLM-specific changes in the port
 only; do not edit the originals from here.
@@ -35,7 +42,7 @@ python3 dev-team-glm/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
 
-# Install all Phase 1 + Phase 2 skills into OpenCode and print the config snippet
+# Install all six skills into OpenCode and print the config snippet (OpenCode only: for Claude Code or ZCode, copy a folder by hand)
 sh install-opencode.sh [--major N] [--home DIR]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
@@ -52,9 +59,9 @@ vendored from it by `sh _shared/sync.sh` — never edit a vendored copy by hand.
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
 `selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
 (temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
-engine behaviour gets a check there. It was written for GNU userland (the README reports 308/308). On
-macOS it currently reports 324 pass, 5 fail — pre-existing macOS/BSD-userland failures. Run it on
-Linux before trusting a red result.
+engine behaviour gets a check there. It was written for GNU userland and runs on macOS as well; the
+last full run reported 368 pass, 0 fail (the README records the same count). If it goes red on macOS,
+reproduce on Linux before blaming the change.
 `systematic-debugging-glm/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
 
@@ -130,14 +137,15 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
 - **requirements-code-audit-glm**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
-  `agents/zcode/` and `agents/opencode/` hold the fallback-lane agents in each harness's frontmatter dialect.
+  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. There is no ZCode agent folder.
 - **writing-plans-glm**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
 - **brainstorming-glm**: `scripts/context.sh` is injected through `!` preload. It must stay read-only,
   bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. It
   also contains the visual-companion server (`server.cjs`, `start-server.sh`).
-- **doc-generator-glm**: a single self-contained SKILL.md with no scripts. The skill states that it must
-  never read other files.
+- **doc-generator-glm**: a single self-contained SKILL.md. Its `scripts/` folder holds only the vendored
+  `oc_harness.py` (installer plumbing); the skill runs no script of its own and states that it must never
+  read other files.
 
 ### OpenCode version facts (v1.18.x and v2.0.x)
 
@@ -194,6 +202,6 @@ verified on 2026-09-28 by local probes against a fake provider unless marked oth
   `.claude`, `.agents` and `.zcode` skill dirs. Every SKILL.md frontmatter `name` drops the `-glm` suffix
   (`brainstorming`, `dev-team`, `doc-generator`, `requirements-code-audit`, `systematic-debugging`,
   `writing-plans`); `test_all_skills.py` enforces this.
-- Version tags: the debugging, audit and writing-plans ports are `9.0-glm` / v9, brainstorming is `9.0-glm`
+- Version tags: the debugging, audit and writing-plans ports are `9.0-glm` / v9, brainstorming is `9.3-glm`
   (per its CHANGELOG), and dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
   one exists.

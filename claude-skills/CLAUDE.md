@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Role in the skillz monorepo
+
+`claude-skills/` holds the **original (source-of-truth) skills**. The other three sibling folders are
+variants derived from these originals:
+
+- `../glm-skills/` — variants for ZCode / GLM (`*-glm`).
+- `../hybrid-skills/` — variants that combine Claude + opencode to save cost (`hybrid-*`).
+- `../opencode-skills/` — variants built specifically for opencode (`oc-*`).
+
+Make behaviour changes here first, then port them to the variants; never treat a variant as the reference.
+
 ## What this repo is
 
 A collection of **Claude Code skills** — each top-level directory is a self-contained, installable
@@ -26,7 +37,7 @@ Skills in this repo:
 | `tests/` | — | Black-box test suite (Python `unittest`) covering the scripts behind the skills above — not a skill itself. |
 
 Several skills have `hybrid-*` counterparts referenced in their descriptions/commit history (offloading
-work to a local `opencode` CLI) — those live in sibling repos, not in this one.
+work to a local `opencode` CLI) — those live in `../hybrid-skills/` (see its `CLAUDE.md`), not in this folder.
 
 ## Commands
 

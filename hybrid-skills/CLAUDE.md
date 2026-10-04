@@ -5,12 +5,19 @@ original, but hands the low-judgment units of work to the local `opencode` CLI, 
 models, while Claude keeps every judgment step. Use this file when you change a hybrid skill or turn
 another skill into one.
 
+## Role in the skillz monorepo
+
+`hybrid-skills/` holds the **variants that combine Claude + opencode to save cost**, derived from the
+original skills in `../claude-skills/` (the source of truth). Sibling variants: `../glm-skills/` (ZCode /
+GLM) and `../opencode-skills/` (opencode-only). Port behaviour changes from the original.
+
+
 | Hybrid fork | Original (`../claude-skills/`) | Offloaded to opencode | Oracle (machine check) |
 |---|---|---|---|
-| `hybrid-brainstorming-v1.0` | `brainstorming-6.3` | exploration lanes: locate, explore, fact and research; plus draft in mode opencode | `hb_ground.py` grounding check |
-| `hybrid-writing-plans-v1.0` | `writing-plans-6.2` | plan task bodies, tiers light and std (Claude reviews only risky ones); plus deep in mode opencode | the plan linter (`plan_tool.lint_file`) |
-| `hybrid-requirements-code-audit-v1.0` | `requirements-code-audit` | investigator and parser batches; plus verifiers in mode opencode | `ha_oracle.py` evidence oracle + id coverage |
-| `hybrid-team-v1.0` | `dev-team-v3.2` | GREEN/WORK of slices that have an oracle, any size; plus `risk: high` in mode opencode | `guard.py stop` gate + merge-time re-check |
+| `hybrid-brainstorming-v1.0` | `claude-brainstorming-6.3` | exploration lanes: locate, explore, fact and research; plus draft in mode opencode | `hb_ground.py` grounding check |
+| `hybrid-writing-plans-v1.0` | `claude-writing-plans-6.2` | plan task bodies, tiers light and std (Claude reviews only risky ones); plus deep in mode opencode | the plan linter (`plan_tool.lint_file`) |
+| `hybrid-requirements-code-audit-v1.0` | `claude-requirements-code-audit` | investigator and parser batches; plus verifiers in mode opencode | `ha_oracle.py` evidence oracle + id coverage |
+| `hybrid-team-v1.0` | `claude-dev-team-v3.2` | GREEN/WORK of slices that have an oracle, any size; plus `risk: high` in mode opencode | `guard.py stop` gate + merge-time re-check |
 
 ## 1. Invariants (never break these)
 
@@ -302,9 +309,9 @@ Choose the sibling that matches the shape of the work:
 
 ## 8. Porting checklist (Claude-only skill → hybrid)
 
-1. **Copy** `../claude-skills/<skill>` to `hybrid/hybrid-<skill>-v1.0`. Start from the *current*
+1. **Copy** `../claude-skills/claude-<skill>` (the original folder keeps its version suffix, for example `claude-writing-plans-6.2`) to `hybrid-skills/hybrid-<skill>-v1.0`. Start from the *current*
    original. The four existing forks were re-synced with their originals on 2026-09-30. Diff against the
-   original (`git merge-file` with the fork base `e7295d4` as base) before porting a fix either way, so
+   original (`git merge-file`, using the original's content at the commit the fork was last synced from as base; find that commit with `git log -- hybrid-skills/<fork>`) before porting a fix either way, so
    a fork never lags silently again.
 2. **Classify every unit** of the workflow as judgment (stays on Claude) or execution. For each execution
    unit, name its oracle. No oracle → Claude.
@@ -339,8 +346,7 @@ Choose the sibling that matches the shape of the work:
    - `cd <skill> && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests -q` in every
      hybrid skill; a vendored change affects all four;
    - `python3 -m compileall -q .`;
-   - for team, also `bash scripts/selftest.sh`, where the known baseline is `passed=247 failed=8` on
-     macOS.
+   - for team, also `bash scripts/selftest.sh`, where the baseline is `passed=255 failed=0` on macOS.
 10. **Deploy** only with the user's confirmation, using `rsync -a --exclude __pycache__ <skill>/
     ~/.claude/skills/<skill>/`, never `--delete`, so a user's `routing.json` survives.
 

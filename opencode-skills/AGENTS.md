@@ -30,6 +30,8 @@ All scripts are stdlib-only Python 3 or POSIX shell. There is no build step and 
   vendored-copy identity, py_compile and SKILL.md hygiene across all skills.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests` runs the full
   Python suite. The environment variable keeps skill folders free of bytecode.
+- Single test file: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_plan_lint.py -v`
+  (append `-k <name>` for one test). Tests are flat modules in `_shared/tests`; there is no root-level runner and no `pytest`.
 - `sh _shared/sync.sh` refreshes every vendored copy of `_shared/oc_harness.py`.
 
 `_shared/oc_harness.py` is the single source of truth for the shared module. Each skill's `scripts/` copy
@@ -40,8 +42,8 @@ is vendored from it by `sh _shared/sync.sh`; never edit a vendored copy by hand.
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
 `oc-selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
 (temp `HOME`, no real transcripts). New engine behaviour gets a check there. It was written for GNU
-userland. On macOS it reports 5 known failures that come from BSD userland; run it on Linux before
-trusting a red result, and never add to those 5.
+userland and now passes on macOS as well: the last full run reported 223 pass, 0 fail. If it goes red,
+reproduce on Linux before blaming the change, and never add a known failure.
 
 ## Architecture: one execution path
 
@@ -100,8 +102,9 @@ The interactive OpenCode session model launches every lane. There is no other ro
 - **brainstorming**: `scripts/oc-context.sh` supplies repo context. It must stay read-only, bounded (55 output
   lines or fewer) and always exit 0. It also contains the visual-companion server (`oc-server.cjs`,
   `oc-start-server.sh`).
-- **doc-generator**: a single self-contained SKILL.md with no scripts. It states that it must never read
-  other files.
+- **doc-generator**: a single self-contained SKILL.md. Its `scripts/` folder holds only the vendored
+  `oc_harness.py` (installer plumbing); the skill runs no script of its own and states that it must never
+  read other files.
 
 ### OpenCode v2 facts (v2.0.x)
 
