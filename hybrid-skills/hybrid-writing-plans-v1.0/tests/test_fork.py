@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 
 HP = Path(__file__).resolve().parents[1]
-SRC = Path(__file__).resolve().parents[3] / "claude-skills" / "writing-plans-6.2"
-COPIED = ["task-writer-prompt.md", "plan-reviewer-prompt.md", "agents/plan-task-writer.md"]
+SRC = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-writing-plans-6.2"
+COPIED = ["task-writer-prompt.md", "plan-reviewer-prompt.md", "agents/claude-plan-task-writer.md"]
 
 
 def load(path, name):
@@ -33,9 +33,9 @@ class ForkCopyTest(unittest.TestCase):
     @unittest.skipUnless(SRC.is_dir(), "writing-plans-6.2 not present")
     def test_prompts_and_agent_copied_unchanged(self):
         for rel in COPIED:
-            mine = (HP / rel.replace("plan-task-writer", "hybrid-plan-task-writer")).read_bytes()
-            if rel.startswith("agents/"):  # only the agent name differs: it must not collide with 6.2's agent
-                mine = mine.replace(b"name: hybrid-plan-task-writer", b"name: plan-task-writer")
+            mine = (HP / rel.replace("claude-plan-task-writer", "hybrid-plan-task-writer")).read_bytes()
+            if rel.startswith("agents/"):  # only the agent name differs: it must not collide with the original's agent
+                mine = mine.replace(b"name: hybrid-plan-task-writer", b"name: claude-plan-task-writer")
             self.assertEqual(mine, (SRC / rel).read_bytes(), rel)
 
     def test_plan_tool_compiles_and_has_commands(self):
