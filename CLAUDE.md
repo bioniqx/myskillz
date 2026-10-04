@@ -34,6 +34,10 @@ constraints and conventions, and are not repeated here.
   harness skills dir (`~/.claude/skills`, `.opencode`, `.zcode`, ...), so editing a skill here does not
   change the current session's behaviour.
 
+## Git workflow
+
+- Always work directly on `main`: write code and commit on `main`, never create new branches.
+
 ## Commands
 
 Everything is stdlib Python 3 + POSIX shell; `pytest` is not installed, use `unittest`. Run from inside the
