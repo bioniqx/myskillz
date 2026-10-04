@@ -221,9 +221,10 @@ def render_agent(text: str, major: int) -> str:
         # shape v1 uses -- not the {action, resource, effect} rule list
         # (that shape is the runtime Permission.Ruleset, never the agent
         # frontmatter schema). Object keys are read, edit, glob, grep,
-        # list, bash, task, external_directory, webfetch, skill, ...; the
-        # tool is renamed "shell" in transcripts, but the permission key
-        # itself is still "bash".
+        # list, bash, shell, task, external_directory, webfetch, skill, ...
+        # opencode v2.0.22 names the shell tool "shell": an agent that sets
+        # only "bash" has every shell command denied, so both keys are
+        # written with the same value.
         lines.append("permission:")
         if write_paths:
             lines.append("  edit:")
@@ -232,6 +233,7 @@ def render_agent(text: str, major: int) -> str:
         else:
             lines.append("  edit: {}".format(edit_perm))
         lines.append("  bash: {}".format(bash_perm))
+        lines.append("  shell: {}".format(bash_perm))
         lines.append("  webfetch: {}".format(web_perm))
         if write_paths:
             lines.append("  task: deny")
