@@ -194,7 +194,7 @@ class WriteFallbackTests(HpWriteBase):
         self.assertEqual(marker["reason"], "lint")
         self.assertEqual(marker["tasks"], ["T01"])
         self.assertEqual(marker["brief"], brief)
-        self.assertEqual(marker["model"], "opus")
+        self.assertEqual(marker["model"], "sonnet")
         self.assertEqual(marker["subagent_type"], "general-purpose")
         self.assertEqual(marker["errors"], {"T01": ["T01: no commit step"]})
         self.assertRegex(marker["t"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -293,7 +293,7 @@ class RunGroupTests(HpWriteBase):
         self.assertIn("FALLBACK (format) passed=- failed=T01,T02 — 3 rounds — ", res["line"])
         marker = self.marker("O01")
         self.assertEqual(marker["tasks"], ["T01", "T02"])
-        self.assertEqual(marker["model"], "opus")
+        self.assertEqual(marker["model"], "sonnet")
         self.assertEqual(marker["errors"]["T01"], ["missing from your reply"])
         self.assertIn(" kind=format :: no @@@ BEGIN/END block for T01,T02 after 3 rounds", res["oc_lines"][0])
         self.assertNotIn("held", marker)
@@ -558,7 +558,7 @@ class RetrySwitchTests(HpWriteBase):
         self.assertEqual(len(self.runs()), 1)
         self.assertEqual(self.kinds(res), ["OC-ERROR kind=timeout"])
         marker = self.marker("O01")
-        self.assertEqual((marker["reason"], marker["model"]), ("timeout", "opus"))
+        self.assertEqual((marker["reason"], marker["model"]), ("timeout", "sonnet"))
         self.assertEqual(self.switched(), {})
 
     def test_after_a_switch_later_groups_get_sonnet_fallbacks_without_spawning(self):
@@ -590,7 +590,7 @@ class RetrySwitchTests(HpWriteBase):
         self.assertTrue(res["line"].startswith("OC O01 oc:std HELD (crash) passed=- failed=T01,T02 — 1 rounds — "),
                         res["line"])
         marker = self.marker("O01")
-        self.assertEqual((marker["held"], marker["model"]), (True, "opus"))
+        self.assertEqual((marker["held"], marker["model"]), (True, "sonnet"))
         self.assertEqual(self.switched(), {})
 
     def test_opencode_preset_non_retryable_failure_has_no_retry_and_no_switch(self):
