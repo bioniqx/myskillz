@@ -4,6 +4,9 @@ description: "You MUST use this before any creative work - creating features, bu
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
+  - Bash(${CLAUDE_SKILL_DIR}/scripts/start-server.sh:*)
+  - Bash(${CLAUDE_SKILL_DIR}/scripts/stop-server.sh:*)
+  - Bash(kill -0:*)
   - Read
   - Grep
   - Glob
@@ -34,6 +37,8 @@ one), use it and skip the script. Otherwise run
 Do not write code, scaffold, run an implementation skill, or touch any
 file outside `.superpowers/drafts/` until you have told your human
 partner what you intend and they said yes. Every task, every path.
+The one exception is the visual companion, after the user accepts it:
+its screens go to `screen_dir` under `.superpowers/brainstorm/`.
 Parallel work is read-only: exploration, research, drafting, review.
 Ceremony scales with the task; R0 never does.
 
@@ -60,7 +65,8 @@ Nothing downgrades. In doubt, go heavier.
   independent subsystems → plan lanes for the first sub-project only.
   Round 1, one message: direct reads + direct searches for single-hop
   questions + lanes for multi-hop ones + `Read architectural.md`, then
-  follow it. The ONLY skill you invoke next is writing-plans.
+  follow it. The ONLY skill you invoke next is `writing-plans` (fallback
+  `writing-plans-glm`).
 
 Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 2-3. Count before sending; over budget → merge messages.
@@ -115,11 +121,14 @@ Spike/Bounded ≤3 rounds, Architectural ≤4; lane completions not counted.
 
 - **Round 1 = everything nameable now**, in ONE message: every file
   plausibly involved (small repo with a `files:` list → all of them), the
-  key symbol greps, all web searches (2-4 variants per question),
-  ToolSearch for every deferred tool you will need, all lanes, batched
-  TaskCreate.
-- **Round 2 = follow-ups round 1 revealed**: fetch the best primary URLs,
-  read newly discovered files.
+  key symbol greps, ToolSearch to load every deferred tool you will need
+  (WebSearch, WebFetch, AskUserQuestion, TaskCreate) first, and all
+  lanes. Web searches (2-4 variants per question) and TaskCreate join
+  round 1 only if those tools are already loaded; otherwise call them in
+  round 2.
+- **Round 2 = follow-ups round 1 revealed**: the web searches and
+  TaskCreate that round 1 had to load tools for, fetches of the best
+  primary URLs, reads of newly discovered files.
 - **Round 3 = conflicts only**, then write the message.
 - Never serialize independent calls. Never re-run a denied or failed call
   unchanged — switch source or drop it.
@@ -254,7 +263,7 @@ exploration; show the design and cite inline.
 Questions + provisional design in one message; one reply answers and
 approves, or you re-present only the changed sections. Approaches +
 recommended design in one message (architectural). Spec write + inline
-self-review + commit in one turn, then the single review gate — never a
+self-review + commit if allowed (`architectural.md` §4) in one turn, then the single review gate — never a
 separate "I wrote the spec" message. A visual-companion offer rides with
 the first question batch. Serialize only when one answer determines the
 next question.
@@ -268,7 +277,7 @@ next question.
 - **Architectural:** ∥ reads + searches + multi-hop lanes + read
   `architectural.md` → ∥ fetches → design message per `architectural.md`
   (claim-verifier and spec pre-draft lanes launched that same turn, not
-  awaited) → approval → spec + inline self-review + commit, one turn →
+  awaited) → approval → spec + inline self-review + commit if allowed, one turn →
   review gate → writing-plans.
 
 ## Red flags
@@ -288,6 +297,9 @@ next question.
   version; accuracy drops as calls grow. Verify load-bearing claims only.
 - "A sonnet lane will be smarter" → same model as the main thread at ~9×
   Flash's cost. Use Flash. And never a lane for one search.
+- "Spawn 64 because I can" → width must buy a saved human turn or a
+  better decision. One lane per question you will cite or act on; the
+  known failure is dozens of lanes for a simple query.
 - "I'll ask to be safe" → a vetoable assumption costs zero turns; a
   question costs one.
 - "It grew, but I'm almost done" → hidden complexity upgrades the path.
@@ -382,7 +394,9 @@ A browser tab for mockups and diagrams — a tool, not a mode. Offer only
 when a question is clearer shown than told, folded into the question
 batch: "Want mockups/diagrams in a browser tab as we go?
 (token-heavier)". Declined → never re-offer. Accepted → read
-`visual-companion.md`. Layouts and diagrams go to the browser;
+`visual-companion.md` and start
+`<skill_dir>/scripts/start-server.sh --project-dir <repo> --open`.
+Layouts and diagrams go to the browser;
 requirements, trade-offs and scope stay in the terminal.
 
 ---

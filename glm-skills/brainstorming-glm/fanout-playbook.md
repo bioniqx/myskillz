@@ -76,9 +76,10 @@ Vague boundaries are the main cause of duplicated work between lanes.
 
 ## 3. Dispatch
 
-- One message: all direct calls + all `Agent` calls (≤ cap) + batched
-  TaskCreate. State the call count first (SKILL.md R4) and then make
-  every one of them.
+- One message: all direct calls + all `Agent` calls (≤ cap).
+  Load deferred tools first: ToolSearch goes in this message, and batched
+  TaskCreate joins only if it is already loaded. State the call count
+  first (SKILL.md R4) and then make every one of them.
 - Shared prompt block first and byte-identical across lanes of the same
   type and model, so siblings hit the prefix cache. Slice-specific lines
   last.
