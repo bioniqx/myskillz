@@ -14,7 +14,7 @@ ORIGINAL = GLM_ROOT.parent / "claude-skills" / "claude-dev-team-v3.2"
 SUFFIXES = {".py", ".js", ".sh", ".md", ".json"}
 SKIP_DIRS = {"tests", "__pycache__", "docs", ".git"}
 
-MARKERS = ("finish_gate_problems", "commit_errors", "salvage_worktree")
+MARKERS = ("finish_gate_problems", "validate_slice_types", "salvage_worktree")
 SHELL_KEY = re.compile(r"""["']shell["']|\bshell\s*:""")
 
 
