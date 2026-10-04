@@ -104,6 +104,9 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
         expected = (
             "allowed-tools:\n"
             '  - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")\n'
+            "  - Bash(${CLAUDE_SKILL_DIR}/scripts/start-server.sh:*)\n"
+            "  - Bash(${CLAUDE_SKILL_DIR}/scripts/stop-server.sh:*)\n"
+            "  - Bash(kill -0:*)\n"
             "  - Read\n"
             "  - Grep\n"
             "  - Glob\n"
