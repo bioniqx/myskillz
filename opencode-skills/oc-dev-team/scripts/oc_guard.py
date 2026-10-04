@@ -163,7 +163,7 @@ def guard_edit(inp):
         allow()
     # find_slice_root() resolve()s the worktree, so resolve the path too: a symlinked cwd or a
     # /var -> /private/var alias must not turn an in-footprint edit into `../…` and deny it
-    path = str(Path(path if os.path.isabs(path) else os.path.join(inp.get("cwd") or os.getcwd(), path)).resolve())
+    path = os.path.realpath(path if os.path.isabs(path) else os.path.join(inp.get("cwd") or os.getcwd(), path))
     wt = find_slice_root(os.path.dirname(path))
     own = find_slice_root(inp.get("cwd") or "")
     if wt is None:
@@ -350,6 +350,8 @@ BASH_DENY = [
     # the done/blocked markers are how `next` finds finished lanes: only the Stop gate writes them
     (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\btouch\b|\bwrite(?:_text|_bytes)?\s*\()[^\n]*\.opencode/oc-dev-team/", "`.opencode/oc-dev-team/` is the Conductor's run state"),
     (r"\.opencode/oc-dev-team/[^\n]*\bwrite(?:_text|_bytes)?\s*\(", "`.opencode/oc-dev-team/` is the Conductor's run state"),
+    (r"\bopen\s*\(\s*['\"][^'\"]*\.opencode/oc-dev-team/[^'\"]*['\"]\s*,\s*['\"][wax+]", "`.opencode/oc-dev-team/` is the Conductor's run state"),
+    (r"\bopen\s*\(\s*['\"][^'\"]*\.oc-slice/[^'\"]*['\"]\s*,\s*['\"][wax+]", "`.oc-slice/` is dev-team metadata"),
 ]
 
 
@@ -392,7 +394,8 @@ def guard_bash(inp):
 # ----------------------------------------------------------------------------- the allow-list
 
 ALLOW_GIT_READ = ("git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files",
-                  "git grep", "git blame", "git branch --list", "git stash list", "git describe")
+                  "git grep", "git blame", "git branch --list", "git stash list", "git describe",
+                  "git merge-base", "git worktree list")
 # Pure filters/readers: safe anywhere in a pipeline (they only read stdin/files and print).
 FILTERS = {"tail", "head", "grep", "rg", "wc", "sort", "uniq", "cat", "cut", "tr", "awk", "jq",
            "tac", "nl", "column", "true", "false", "echo", "printf", "ls", "pwd", "diff",
@@ -432,7 +435,7 @@ SAFE_REDIRECTS = ("2>&1", "2>/dev/null", ">/dev/null", "> /dev/null", "</dev/nul
 
 def argv_of(cmd):
     """The command's argv, or None when it is not a single simple command we can vouch for."""
-    if SHELL_META.search(cmd):
+    if SHELL_META.search(strip_quoted(cmd, meta=True)):
         return None
     try:
         parts = shlex.split(cmd)
@@ -448,12 +451,30 @@ def strip_env_prefix(argv):
     return argv[i:]
 
 
+def _canon_tok(tok):
+    """Resolve an absolute path token to its real path (symlinks collapsed); leave anything else
+    (a bare word, a relative path we have no cwd to resolve against) untouched."""
+    if tok.startswith("/"):
+        try:
+            return os.path.realpath(tok)
+        except OSError:
+            return tok
+    return tok
+
+
+def canon_argv(argv):
+    return [_canon_tok(a) for a in argv]
+
+
 def prefix_match(argv, prefixes):
+    """`argv` matches a pinned prefix even when one side spells a script path literally and the
+    other through a symlink; every other token must still match exactly."""
+    cargv = canon_argv(argv)
     for pfx in prefixes:
         pargv = argv_of(pfx.strip())
         if not pargv or len(pargv) > len(argv):
             continue
-        if argv[:len(pargv)] == pargv:
+        if cargv[:len(pargv)] == canon_argv(pargv):
             return pfx.strip()
     return None
 
@@ -844,7 +865,7 @@ def bash_allow_reason(raw, wt, footprint, pinned, readonly=False):
     m = re.fullmatch(r"cd\s+([^\s;&|<>`$]+)\s*&&\s*(.+)", cmd, flags=re.S)
     if m and inside_worktree(m.group(1)):
         cmd = m.group(2)
-    if SHELL_META.search(cmd):
+    if SHELL_META.search(strip_quoted(cmd, meta=True)):
         return None
     reasons = []
     for seg in cmd.split("|"):
@@ -927,15 +948,20 @@ def guard_stop(inp):
         # Three gates remain: something was committed, any tests it wrote are still frozen, and the
         # report shows real command output — the evidence IS the safety net here.
         base = (read_lines(sd / "base") or [""])[0]
-        subjects = [ln.partition("\x1f")[2] for ln in git(["log", "--format=%H%x1f%s", "-n", "200"], wt).splitlines()]
-        committed = any(s.startswith(f"{pfx}({sid})") for s in subjects
-                        for pfx in ("feat", "test", "chore", "docs", "perf", "refactor"))
         helper = "commit-fast" if mode == "fast" else "commit-work"
-        if not committed and not (base and head and head != base):
+        if base:
+            # HEAD != base is the whole test: a commit from an earlier run that reused this slice id
+            # must never count as "committed" for THIS run
+            committed = bool(head) and head != base
+        else:
+            subjects = [ln.partition("\x1f")[2] for ln in git(["log", "--format=%H%x1f%s", "-n", "200"], wt).splitlines()]
+            committed = any(s.startswith(f"{pfx}({sid})") for s in subjects
+                            for pfx in ("feat", "test", "chore", "docs", "perf", "refactor"))
+        if not committed:
             problems.append(f"nothing committed yet → finish the slice and run "
                             f"`{helper} \"<title>\"` (no RED/GREEN split for this kind)")
         if kind == "refactor":
-            changed_tests = [f for f in git(["diff", "--name-only", base, "HEAD"], wt).splitlines()
+            changed_tests = [f for f in git(["diff", "--no-renames", "--name-only", base, "HEAD"], wt).splitlines()
                              if f and is_test_path(f, globs)] if base else []
             if changed_tests:
                 problems.append("a REFACTOR slice changed test files: " + ", ".join(changed_tests[:6]) +
@@ -945,7 +971,7 @@ def guard_stop(inp):
         red = (read_lines(sd / "red") or [""])[0]
         frozen = read_lines(sd / "red_files")
         if red and frozen:
-            changed = git(["diff", "--name-only", red, "HEAD", "--"] + frozen, wt)
+            changed = git(["diff", "--no-renames", "--name-only", red, "HEAD", "--"] + frozen, wt)
             if changed:
                 problems.append("tests you committed in " + red[:9] + " were changed afterwards: " +
                                 changed.replace("\n", ", ") + " → a spike slice needs no tests, but may not weaken "
@@ -974,7 +1000,7 @@ def guard_stop(inp):
     else:
         frozen = read_lines(sd / "red_files")
         if frozen:
-            changed = git(["diff", "--name-only", red, "HEAD", "--"] + frozen, wt)
+            changed = git(["diff", "--no-renames", "--name-only", red, "HEAD", "--"] + frozen, wt)
             if changed:
                 problems.append("frozen test files changed after RED: " + changed.replace("\n", ", ") +
                                 " → restore them (`git checkout " + red[:9] + " -- <file>`) and commit; a wrong test = Status: Blocked")
@@ -1027,16 +1053,142 @@ def guard_edit_ro(inp):
          "Report findings; a programmer applies fixes.")
 
 
+# Mutating tools are denied at command position only (see ro_mutating_tool below). RO_MUTATING_RE is the
+# plain substring scan kept as the fallback for a command whose quoting shlex cannot parse.
+RO_MUTATING_TOOLS = ("rm", "mv", "cp", "chmod", "chown", "mkdir", "touch", "truncate", "dd", "ln", "rsync",
+                     "tee", "install")
+RO_MUTATING_RE = r"(^|[\s;&|])(" + "|".join(RO_MUTATING_TOOLS) + r")\b"
+
 BASH_RO_DENY = [
-    r"(^|[\s;&|])(rm|mv|cp|chmod|chown|mkdir|touch|truncate|dd|ln|rsync|tee|install)\b",
     r"\bsed\s+-[a-zA-Z]*i",
     r"\bperl\s+-[a-zA-Z]*i",
     r"(^|[^&<>])>{1,2}(?!\s*/dev/null\b|&)",
     r"\bgit\s+(add|commit|checkout|switch|reset|merge|rebase|push|pull|fetch|stash(?!\s+(?:list|show)\b)|clean|rm|mv|tag|apply|cherry-pick|revert|worktree|branch\s+-[dDmM]|filter-branch)\b",
     r"\b(npm|pnpm|yarn|bun)\s+(install|i|add|remove|uninstall|update|publish|link)\b",
     r"\b(pip|pip3|poetry|uv|conda|cargo|go|gem|composer)\s+(install|add|remove|uninstall|update|publish)\b",
+    r"\b(brew|apt|apt-get|dnf|yum|apk|pacman|snap|pipx|bundle|make)\s+(install|remove|uninstall|upgrade)\b",
     r"\bpython[0-9.]*\s+-c\s+.*open\([^)]*['\"][wa]",
 ]
+
+
+_RO_WRAPPER_FLAGS = {       # wrapper -> its options that consume the next token
+    "env": {"-u", "-C", "--unset", "--chdir"},
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D", "-R", "--user", "--group", "--host"},
+    "time": {"-f", "-o", "--format", "--output"},
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+    "nice": {"-n", "--adjustment"},
+    "ionice": {"-c", "-n", "-p", "-P", "-u"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "xargs": {"-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "-J"},
+    "exec": {"-a"},
+    "nohup": set(), "command": set(), "setsid": set(), "busybox": set(), "builtin": set(),
+}
+_RO_SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+_RO_KEYWORDS = {"{", "}", "!", "if", "then", "else", "elif", "do", "while", "until"}
+_RO_FIND_EXEC = {"-exec", "-execdir", "-ok", "-okdir"}
+_RO_REDIRECT = re.compile(r"[<>&]*[<>][<>&]*")
+_RO_ASSIGN = re.compile(r"[A-Za-z_]\w*=.*")
+
+
+def _ro_segments(cmd):
+    """Token lists of the simple commands in `cmd`, split on unquoted `;` `&` `|` `(` `)`, newline and
+    backtick. Raises ValueError when the quoting cannot be parsed."""
+    flat, q, esc = [], "", False
+    for ch in cmd:
+        if esc:
+            esc = False
+        elif ch == "\\" and q != "'":
+            esc = True
+        elif q:
+            q = "" if ch == q else q
+        elif ch in "'\"":
+            q = ch
+        elif ch in "\n`":
+            ch = " ; "
+        flat.append(ch)
+    if q:
+        raise ValueError("unterminated quote")
+    lex = shlex.shlex("".join(flat), posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    lex.commenters = ""         # `ls a#b; rm x` has no comment: `#` only starts one at the start of a word
+    segs, cur = [], []
+    for t in lex:
+        if all(c in ";&|()" for c in t):
+            if cur:
+                segs.append(cur)
+            cur = []
+        else:
+            cur.append(t)
+    if cur:
+        segs.append(cur)
+    return segs
+
+
+def _ro_skip_wrapper(seg, i, base):
+    """Index of the command a wrapper (`env`, `sudo`, `timeout 5`, `xargs -I {}` ...) runs; `i` is the
+    index just after the wrapper word."""
+    takes_arg = _RO_WRAPPER_FLAGS[base]
+    while i < len(seg):
+        t = seg[i]
+        if t == "--":
+            return i + 1
+        if t in takes_arg:
+            i += 2
+        elif t.startswith("-") or _RO_ASSIGN.fullmatch(t):
+            i += 1
+        else:
+            break
+    return i + 1 if base == "timeout" else i       # timeout's first operand is the duration
+
+
+def _ro_seg_tool(seg, depth):
+    """The RO_MUTATING_TOOLS name that one simple command runs, else ''."""
+    if depth > 5:
+        raise ValueError("nesting too deep")
+    i = 0
+    while i < len(seg):
+        tok = seg[i]
+        base = os.path.basename(tok)
+        if _RO_REDIRECT.fullmatch(tok):
+            i += 2                                  # the operator and its target are not the command
+        elif _RO_ASSIGN.fullmatch(tok) or tok in _RO_KEYWORDS or tok.isdigit():
+            i += 1
+        elif base in RO_MUTATING_TOOLS:
+            return base
+        elif base in _RO_WRAPPER_FLAGS:
+            if base == "command" and seg[i + 1:i + 2] in (["-v"], ["-V"]):
+                return ""                           # `command -v rm` only looks the name up
+            i = _ro_skip_wrapper(seg, i + 1, base)
+        elif base in _RO_SHELLS:
+            for j in range(i + 1, len(seg) - 1):
+                if seg[j].startswith("-") and not seg[j].startswith("--") and "c" in seg[j]:
+                    return ro_mutating_tool(seg[j + 1], depth + 1)
+            return ""
+        elif base == "eval":
+            return ro_mutating_tool(" ".join(seg[i + 1:]), depth + 1)
+        elif base == "find":
+            for j in range(i + 1, len(seg)):
+                if seg[j] in _RO_FIND_EXEC:
+                    hit = _ro_seg_tool(seg[j + 1:], depth + 1)
+                    if hit:
+                        return hit
+            return ""
+        else:
+            return ""
+    return ""
+
+
+def ro_mutating_tool(cmd, depth=0):
+    """The mutating tool `cmd` runs at command position, else ''. Command position means the start of
+    any `;` `&&` `||` `|` newline segment, after env/sudo/time/timeout/nice/nohup/command wrappers,
+    after `xargs` and `find -exec`, and inside an `sh -c` / `eval` payload. A tool name that is only an
+    argument (`grep -rn install src`, `ls | grep dd`) is not a hit. Raises ValueError when `cmd`
+    cannot be parsed; the caller then falls back to RO_MUTATING_RE."""
+    for seg in _ro_segments(cmd):
+        hit = _ro_seg_tool(seg, depth)
+        if hit:
+            return hit
+    return ""
 
 
 def find_state_root(start):
@@ -1085,10 +1237,18 @@ def guard_bash_ro(inp):
     if redirected:
         deny(f"Read-only role: `{raw[:80]}` points git at another checkout (`-C` / `--git-dir` / "
              "`--work-tree`). Read this repository in place instead.")
+    scan = strip_for_scan(cmd)
+    try:
+        mutating = ro_mutating_tool(raw)
+    except ValueError:          # quoting shlex cannot parse: keep the conservative substring scan
+        mutating = re.search(RO_MUTATING_RE, scan)
+    deny_msg = (f"Read-only role: `{raw[:80]}` looks like it modifies files/packages/git state. "
+                "Use Read/Grep/Glob, run tests/linters/diffs only, and report instead of changing anything.")
+    if mutating:
+        deny(deny_msg)
     for pat in BASH_RO_DENY:
-        if re.search(pat, cmd):
-            deny(f"Read-only role: `{raw[:80]}` looks like it modifies files/packages/git state. "
-                 "Use Read/Grep/Glob, run tests/linters/diffs only, and report instead of changing anything.")
+        if re.search(pat, scan):
+            deny(deny_msg)
     why = ro_forbidden_form(cmd)
     if why:
         deny(f"Read-only role: `{raw[:80]}` is blocked: {why}. Run checks in their read-only form "
