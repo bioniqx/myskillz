@@ -177,8 +177,8 @@ def render_agent(text: str, major: int) -> str:
         lines.append("steps: {}".format(steps))
     if temperature is not None:
         lines.append("temperature: {}".format(temperature))
-    # `permission` is the nested map shape in agent frontmatter; the permission key for the shell
-    # tool is still `bash`.
+    # `permission` is the nested map shape in agent frontmatter. opencode v2.0.22 names the shell
+    # tool `shell`; earlier v2 builds read `bash`. Both keys carry the identical rule.
     lines.append("permission:")
     if write_paths:
         lines.append("  edit:")
@@ -187,6 +187,7 @@ def render_agent(text: str, major: int) -> str:
     else:
         lines.append("  edit: {}".format(edit_perm))
     lines.append("  bash: {}".format(bash_perm))
+    lines.append("  shell: {}".format(bash_perm))
     lines.append("  webfetch: {}".format(web_perm))
     if write_paths:
         lines.append("  task: deny")
