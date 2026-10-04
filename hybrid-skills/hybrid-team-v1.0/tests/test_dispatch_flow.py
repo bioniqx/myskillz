@@ -160,6 +160,14 @@ class InitBackendPinTest(FlowBase):
         self.assertIn("=== DISPATCH D1", r.stdout)
         self.assertNotIn("=== LANE", r.stdout)
 
+    def test_oc_pin_on_risk_high_slice_still_dispatches_on_claude(self):
+        plan = plan_of(docs_slice("D1"))
+        plan["slices"][0]["backend"] = "oc:lite"
+        plan["slices"][0]["risk"] = "high"
+        self.init(plan)
+        r = self.engine("dispatch", "D1")
+        self.assertIn("=== DISPATCH D1", r.stdout)
+
     def test_unknown_backend_value_warns_on_init(self):
         plan = plan_of(docs_slice("D1"))
         plan["slices"][0]["backend"] = "bogus"
