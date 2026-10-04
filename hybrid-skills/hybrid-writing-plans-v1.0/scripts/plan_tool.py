@@ -30,7 +30,7 @@ TASK_HEADING_ANYWHERE = re.compile(r"^\s*###\s*%s\s*:" % ID_RE)
 TICK = re.compile(r"`([^`\n]+)`")
 TASKS_MARK = "<!-- TASKS -->"
 WAVES_OPEN, WAVES_CLOSE = "<!-- WAVES -->", "<!-- /WAVES -->"
-TIER_MODEL = {"light": "haiku", "std": "sonnet", "deep": "opus"}
+TIER_MODEL = {"light": "sonnet", "std": "sonnet", "deep": "sonnet"}
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 
 PLACEHOLDERS_CS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b"]
