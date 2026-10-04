@@ -39,8 +39,8 @@ Routing is chosen per task by its contract `Tier` (`light`, `std` = no `Tier` li
 
 | Preset | `light` writer | `std` writer | `deep` writer | `review_oc` | On an opencode failure |
 |---|---|---|---|---|---|
-| `claude` | Claude haiku | Claude sonnet | Claude opus | - (6.2 review triggers only) | opencode is never spawned |
-| `hybrid` (default) | oc:`lite` | oc:`std` | Claude opus | `risky` (only oc tasks that hit a 6.2 trigger are reviewed) | OC line at once, connection errors retried 3 times, then the rest of the run switches to Claude sonnet |
+| `claude` | Claude sonnet | Claude sonnet | Claude sonnet | - (6.2 review triggers only) | opencode is never spawned |
+| `hybrid` (default) | oc:`lite` | oc:`std` | Claude sonnet | `risky` (only oc tasks that hit a 6.2 trigger are reviewed) | OC line at once, connection errors retried 3 times, then the rest of the run switches to Claude sonnet |
 | `opencode` | oc:`lite` | oc:`std` | oc:`std` | `risky` (6.2 review triggers only) | OC line at once, connection errors retried 3 times, then the unit is held and the user is asked |
 
 ## Backends
