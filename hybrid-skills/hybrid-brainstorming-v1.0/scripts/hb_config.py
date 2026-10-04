@@ -55,6 +55,8 @@ def permission_block(role: str) -> dict:
         "list": "allow",
         "edit": "deny",
         "bash": dict(READ_ONLY_BASH),
+        # opencode v2.0.22 names the shell tool "shell"; same rules as "bash".
+        "shell": dict(READ_ONLY_BASH),
         "task": "deny",
         "skill": "deny",
         # Deny first, last match wins: only opencode's saved tool output is readable. Rules from the
