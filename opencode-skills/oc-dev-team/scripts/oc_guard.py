@@ -1063,7 +1063,7 @@ BASH_RO_DENY = [
     r"\bsed\s+-[a-zA-Z]*i",
     r"\bperl\s+-[a-zA-Z]*i",
     r"(^|[^&<>])>{1,2}(?!\s*/dev/null\b|&)",
-    r"\bgit\s+(add|commit|checkout|switch|reset|merge|rebase|push|pull|fetch|stash(?!\s+(?:list|show)\b)|clean|rm|mv|tag|apply|cherry-pick|revert|worktree|branch\s+-[dDmM]|filter-branch)\b",
+    r"\bgit\s+(add|commit|checkout|switch|reset|merge\b(?!-)|rebase|push|pull|fetch|stash(?!\s+(?:list|show)\b)|clean|rm|mv|tag|apply|cherry-pick|revert|worktree\s+(?:add|remove|move|prune|lock|unlock|repair)|branch\s+-[dDmM]|filter-branch)\b",
     r"\b(npm|pnpm|yarn|bun)\s+(install|i|add|remove|uninstall|update|publish|link)\b",
     r"\b(pip|pip3|poetry|uv|conda|cargo|go|gem|composer)\s+(install|add|remove|uninstall|update|publish)\b",
     r"\b(brew|apt|apt-get|dnf|yum|apk|pacman|snap|pipx|bundle|make)\s+(install|remove|uninstall|upgrade)\b",
