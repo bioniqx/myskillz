@@ -61,7 +61,8 @@ end. Number steps 1..N with no gaps.
 3. Every `Run:` line is followed by an `Expected:` line holding the exact output
    or failure message.
 4. `git add` names explicit paths from `**Files:**` only. Never `.`, `-A`, `-u`
-   or a glob.
+   or a glob. Every `git commit` comes after a `git add` of those paths and never
+   uses `-a` or `--all`.
 5. Code blocks must parse. Python, JSON, TOML, bash and JS are syntax-checked.
    Open a deliberately partial snippet as ```` ```python fragment ````.
 6. No `#`, `##` or `###` heading anywhere in the body. Use bold text instead.
@@ -71,7 +72,10 @@ end. Number steps 1..N with no gaps.
    described but not written counts as a placeholder.
 8. Portable plain Markdown: shell commands and plain instructions only. Never
    name an AI product, model, agent, skill, plugin or slash command, and never
-   write the word OpenCode.
+   write the word OpenCode. These words are checked in prose only - never inside
+   code blocks, `inline code` spans or URLs - while the placeholder strings of
+   rule 7 are checked everywhere, code blocks included. The four uppercase
+   markers match only in uppercase; the phrases match in any case.
 9. At least one code block, and exactly one `git commit` per task.
 
 # Rules judgment enforces
