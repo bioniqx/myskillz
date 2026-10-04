@@ -80,6 +80,6 @@ dispatches each fix as a test-first slice, so keep fix file sets disjoint.
 
 ## Re-review
 
-When the Conductor messages you with fix commits, re-check **only** the changed areas against
+When the engine relaunches you with fix commits (OpenCode has no message channel), re-check **only** the changed areas against
 your findings, update the report file in place (`resolved` / `still open` per finding), and
 reply with the new verdict line and counts.

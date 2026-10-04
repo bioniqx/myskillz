@@ -108,6 +108,7 @@ low/high/max chưa có tài liệu chính thức chi tiết → dùng `devteam s
 
 ## Lịch sử ngắn
 
+- **Đồng bộ với bản gốc (2026-10-04)** — cổng `finish` (checkpoint pass, không merge sau checkpoint cuối, review đã gửi); `salvage_worktree` giữ lại việc chưa commit khi `fail`/`retry`/`finish`; slice `red-done` giữ footprint, slice research không giữ; `commit-red` bỏ stub không phải test; `init --force` xoá review/log/research cũ; guard từ chối lệnh engine trong lane; `path_matches` chỉ bỏ đúng `./`.
 - **OpenCode hardening (2026-09-28)** — v1 1.18.x và v2 2.0.x: bootstrap tìm thư mục skill mà không cần `${CLAUDE_SKILL_DIR}`; nhận v2 qua `OPENCODE_TERMINAL`; `resume <id> --note` thay cho SendMessage; stall theo role; checkpoint chạy tách nền; `wait` thoát khi không còn lane; `killpg` qua `lanes/<id>.pgid`; guard chặn `batch`/`question`/`execute` trong lane; báo LANE DOWN cho lane bị signal giết.
 - **v3.2** — `permissionMode: dontAsk` + hook allow-list, Stop gate tự ghi marker (`next` không cần tham số),
   dispatch 1 dòng/agent, vá 7 lỗ allow-list sau review đối kháng.
