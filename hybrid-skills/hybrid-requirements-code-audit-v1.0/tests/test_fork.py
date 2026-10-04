@@ -99,9 +99,10 @@ class ForkFilesTest(unittest.TestCase):
 
     @unittest.skipUnless(ORIG.is_dir(), "requirements-code-audit not present")
     def test_references_match_original(self):
-        for name in ("report-format.md", "workflow-mode.md"):
-            self.assertEqual((HERE / "references" / name).read_bytes(),
-                             (ORIG / "references" / name).read_bytes(), name)
+        # workflow-mode.md differs on purpose (skill/workflow names, haiku routing): not compared.
+        for name in ("report-format.md",):
+            fork = (HERE / "references" / name).read_text(encoding="utf-8").replace(".hybrid-audit", ".audit")
+            self.assertEqual(fork, (ORIG / "references" / name).read_text(encoding="utf-8"), name)
 
     @unittest.skipUnless(ORIG.is_dir(), "requirements-code-audit not present")
     def test_plan_and_parse_plan_match_original(self):

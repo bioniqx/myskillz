@@ -14,7 +14,7 @@ ORIG = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-requireme
 ORIG_SCRIPTS = ORIG / "scripts"
 FAKE = HERE / "fake_opencode.py"
 TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})?")
-UNAVAILABLE = "opencode: unavailable → preset claude (run audit.py doctor --ping)"
+UNAVAILABLE = "opencode: unavailable preset=claude (run audit.py doctor --ping)"
 
 APP = "def login(password):\n    return check(password)\n\ndef export_csv():\n    return ''\n"
 SPEC = "# Spec\n\n1. Users must log in with a password.\n\n2. Admins must approve new accounts.\n"
@@ -124,7 +124,8 @@ class GoldenTests(unittest.TestCase):
                 self.assertEqual(new[key], orig[key], key)
 
     def test_init_differs_only_by_opencode_line(self):
-        orig = self.run_side("orig", ORIG_SCRIPTS, [])["init"].splitlines()
+        orig = self.run_side("orig", ORIG_SCRIPTS, [])["init"].replace(
+            "claude-requirements-code-audit initialised", "requirements-code-audit initialised").splitlines()
         new = self.run_side("new", NEW_SCRIPTS, ["--preset", "claude"])["init"].splitlines()
         self.assertEqual([line for line in new if line.startswith("opencode:")], [UNAVAILABLE])
         self.assertEqual([line for line in new if not line.startswith("opencode:")], orig)
