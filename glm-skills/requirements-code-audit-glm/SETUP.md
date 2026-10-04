@@ -64,6 +64,11 @@ brew install ripgrep   #  macOS
 apt install ripgrep    #  Debian/Ubuntu
 ```
 
+`pdftotext` (poppler-utils) is optional: with it on PATH, `brief --spec spec.pdf` extracts the PDF text itself;
+without it the PDF is reported with a WARN and you extract it by hand. `.xlsx` sheets are read with the standard
+library alone. Retrieval also searches dot-directories such as `.github/` and `.circleci/` and template or
+contract files (`.erb`, `.sol`, `.cshtml`); `.git/` itself is never searched or cited.
+
 ## 4. Threads
 
 64 by default. Override with `run --threads N`, or `AUDIT_THREADS=N`. Lower it if the endpoint rate-limits you

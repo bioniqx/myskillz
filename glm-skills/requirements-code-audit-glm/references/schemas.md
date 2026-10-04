@@ -13,7 +13,7 @@ only `checklist.jsonl`, `plan.jsonl` and `adjudications.jsonl` (the last one via
 | `category` | no | short area label (`auth`, `orders`, `api`, …). Biases retrieval ranking toward matching directories |
 | `stakes` | no | `high` (security, auth, permissions, payments, data integrity, privacy, safety) or `normal` (default). High → always verified twice |
 | `evidence_expected` | no | what code would prove it (endpoint, validation, migration, test…). Feeds retrieval keywords |
-| `search_hints` | yes | 4-10 identifiers, endpoint paths, field/table names, config keys, error codes **and English synonyms**. Fewer than 2 makes `run` refuse the checklist |
+| `search_hints` | yes | 4-10 identifiers, endpoint paths, field/table names, config keys, error codes **and English synonyms**. A thin list causes false MISSING; `check` warns about hints that never appear in the searches |
 | `tags` | no | `static-limit` (needs runtime verification) / `ambiguous` (needs product decision). Tagged items skip the waves |
 | `source` | no | section/page reference in the spec |
 | `question` | required if `ambiguous` | the question for the product owner |
@@ -30,9 +30,11 @@ only `checklist.jsonl`, `plan.jsonl` and `adjudications.jsonl` (the last one via
 
 Enforced by the checker before the row is kept: every `path` exists and is not prose documentation; every line
 range is inside the file; `MATCHED`/`PARTIAL`/`CONFLICT` carry at least one evidence entry; a citation outside
-the excerpts downgrades `confidence`. `searched` and `passes` are filled by the script from the real queries,
-never taken from the model. `UNSEARCHED` means the answer was rejected or the request failed — `run --resume`
-re-asks it.
+the excerpts downgrades `confidence`. On the api lane `searched` and `passes` are filled by the script from the
+real queries, never taken from the model; workers on the agent lane write `searched` themselves (the batch schema
+asks for it) and every MISSING must list it. A citation under `.git/` is rejected like prose documentation. The
+keys `more_queries`, `retrieval`, `lint_warn` and `lint_error` exist only on rows written by `run`.
+`UNSEARCHED` means the answer was rejected or the request failed — `run --resume` re-asks it.
 
 ## `verdicts.jsonl` — written by the adversarial pass, or by verifiers into `verify/batch-VNN.jsonl`
 
@@ -54,7 +56,7 @@ re-asks it.
 
 | key | meaning |
 |---|---|
-| `ids` | list of requirement ids covered (or `id` for one) |
+| `ids` | list of requirement ids covered; a single string id, or an `id` key, also works |
 | `title` | short imperative title |
 | `priority` | `P0` (CONFLICT, or unmet MUST on a core/high-stakes flow) / `P1` (other unmet/partial MUST, user-visible SHOULD gaps) / `P2` (rest) |
 | `effort` | `S` / `M` / `L` |
@@ -66,9 +68,11 @@ re-asks it.
 
 ## Final status precedence (computed by `audit.py`)
 
-`adjudication` > `verifier verdict` > `first-pass finding` > `UNSEARCHED`; items tagged
-`static-limit`/`ambiguous` are always `UNVERIFIABLE`. A `MISSING` that never had a second pass fails
-`audit.py check`.
+`adjudication` > `UNVERIFIABLE` for items tagged `static-limit`/`ambiguous` > `verifier verdict` >
+`first-pass finding` > `UNSEARCHED`. A `MISSING` that never had a second pass, a non-MATCHED item nobody verified
+or adjudicated, and an investigator/verifier disagreement all fail `audit.py check`. The evidence shown in the
+report comes from the pass that decided the status: the verdict when its status equals the final status,
+otherwise the first-pass finding.
 
 ## `index.json` (internal)
 
@@ -80,5 +84,5 @@ re-run `brief` if the repository changed substantially mid-audit.
 ## `state.json` / `config.json` (internal)
 
 `state.json`: the run summary (duration, wave sizes, api calls, token and cached-token counts, peak threads),
-agent-lane batch bookkeeping, the spot-check sample. `config.json`: `active`, `repo_root`, `out_dir`,
+agent-lane batch bookkeeping (`batches` and `vbatches`; `plan` resets both unless `--resume`), the spot-check sample. `config.json`: `active`, `repo_root`, `out_dir`,
 `spec_files`, `lang`, `lane`, `tier`, `threads`, `base_url`, `route`, `models`, `retrieval`. Safe to inspect.
