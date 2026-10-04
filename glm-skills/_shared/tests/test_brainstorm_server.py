@@ -91,21 +91,24 @@ class ServerSignalTest(unittest.TestCase):
         self.assertTrue(info.exists(), "server never wrote server-info")
         return proc, Path(tmp) / "state"
 
-    def _assert_stops_cleanly(self, sig, name):
+    def _assert_stops_cleanly(self, sig):
         proc, state = self._start()
         proc.send_signal(sig)
         proc.wait(timeout=10)
         stopped = state / "server-stopped"
         self.assertTrue(stopped.exists(), "server-stopped not written")
         self.assertFalse((state / "server-info").exists(), "stale server-info left behind")
-        self.assertEqual(json.loads(stopped.read_text())["reason"], name)
+        self.assertEqual(json.loads(stopped.read_text())["reason"], "signal")
         self.assertEqual(proc.returncode, 0)
 
     def test_sigterm_writes_server_stopped(self):
-        self._assert_stops_cleanly(signal.SIGTERM, "SIGTERM")
+        self._assert_stops_cleanly(signal.SIGTERM)
+
+    def test_sigint_writes_server_stopped(self):
+        self._assert_stops_cleanly(signal.SIGINT)
 
     def test_sighup_writes_server_stopped(self):
-        self._assert_stops_cleanly(signal.SIGHUP, "SIGHUP")
+        self._assert_stops_cleanly(signal.SIGHUP)
 
 
 HELPER_DRIVER = """
