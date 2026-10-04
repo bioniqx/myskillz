@@ -14,8 +14,9 @@ nothing): `{LINT}`
 
 # Procedure - 3 turns
 
-1. Read all the files above in ONE message. Contracts and spec excerpts follow
-   below.
+1. The contracts, spec excerpts, line-numbered task bodies and the target files
+   are inlined below. Do not read them again; edit a task body in place by its
+   file path from the list above.
 2. Judge each task against four questions only:
    - Spec alignment: is a requirement in the excerpt missing or contradicted?
    - Correctness: would the test really fail first and pass after? Is any

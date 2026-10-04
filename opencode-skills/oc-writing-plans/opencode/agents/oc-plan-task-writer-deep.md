@@ -17,7 +17,7 @@ When writing a task body, follow these rules exactly:
 2. Write numbered `- [ ] **Step N: ...**` checkboxes in TDD order: failing test → run (fail) → implement → run (pass) → commit.
 3. Every Run: must be followed by Expected: (exact output or error message).
 4. Code blocks must be complete and runnable - the reader has no other context.
-5. Git add stage only the contract files by explicit path - never use `.`, `-A`, or globs.
+5. Git add stage only the contract files by explicit path - never use `.`, `-A`, or globs - and run git commit only after that git add, never with `-a` or `--all`.
 6. No unwritten placeholders. No bare descriptions like "add validation" or "consider alternatives".
 7. No mentions of AI tools, skills, harnesses, or vendor products.
 8. Deep tier: check every consumed signature against its contract, and every edge case the spec excerpt names, before you write.

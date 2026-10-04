@@ -43,15 +43,17 @@ file and three or four auto-selected pattern files.
 
 # R2 - Read nothing the brief already gave you
 
-1. Do not re-read the spec. Do not open pattern files. Do not search the repo.
-2. The single exception: the brief names a file as "not inlined" AND a contract
-   cannot be written without it. Then read at most three such files, all in one
-   message, and go straight on.
+1. Do not re-read the spec. Do not search the repo.
+2. The brief inlines up to four auto-selected pattern files. If they miss the
+   test framework or a similar module a contract needs, pick up to three more
+   from the brief's file list (2-5 pattern files in total) and read them in ONE
+   message of parallel reads. The same applies to a file the brief names as
+   "not inlined" that a contract cannot be written without. Then go straight on.
 3. Never open the plan tool's source.
 
 # R3 - Call 2: write the Contracts file
 
-Count the tasks N from the spec. `N <= 3` -> inline path (R7). `N >= 4` ->
+Count the tasks N from the spec. `N = 1` -> inline path (R7). `N >= 2` ->
 write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
 only this:
 
@@ -112,6 +114,11 @@ Contract rules - all plan quality is decided here, nowhere later:
    reviewer could reject on its own.
 8. `References` is optional and is inlined into every writer's shared prefix -
    put one or two exemplars there, never a pile.
+9. Legitimate project vocabulary that the placeholder and portability scan would
+   flag (a to-do list app, a class named `Task`) needs `--allow WORD` on every
+   `build`, `assemble` and `check` call. `--allow` takes a case-insensitive stem
+   (`subagent` also exempts `subagents`) or `re:PATTERN` matching the whole hit.
+   Decide this now, not after `assemble` fails.
 
 # R4 - Call 3: build
 
@@ -125,13 +132,18 @@ when the user asked for maximum assurance) to review every task instead of only
 the risky ones.
 
 1. `ERR` before the table means a contract problem. Fix those lines in the plan
-   file and re-run the same command.
+   file and re-run the same command. Treat `WARN spec uncovered` as a missing
+   task unless the section is non-functional.
 2. Send each printed MESSAGE verbatim: every call in it runs in the background
    and all of them go in one message. Then end the turn. When the last writer of
    a MESSAGE reports, send the next MESSAGE, if any.
 3. When every writer has reported, run the printed `wait`, `review` and
    `assemble` commands in that order. `review` prints its own DISPATCH table:
-   send it the same way, then run `wait --review` and `assemble`.
+   send it the same way, then run `wait --review` and `assemble`. A reviewer
+   reply `T07 FAIL: ...` names an issue that needs a contract change: edit that
+   contract in the plan file, re-run `build --resume` (a changed contract
+   deletes its own task file and the task files of every task that depends on
+   it), send only the rows it prints, then run `wait` again.
 4. `wait` names failing task IDs: re-run `build` with `--resume` added. It writes
    briefs only for tasks that do not lint OK yet.
 5. A row that names the `general` agent means the writer agents are not
@@ -147,10 +159,11 @@ Report, with the numbers from the build output:
 
 "Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K in
 parallel. It is self-contained: any agent or engineer can execute it from its
-Execution Protocol. Options: (1) subagent-driven here, fresh worker per task,
-each wave's `[P]` tasks together; (2) inline here, sequential with checkpoints;
-(3) hand the file to any coding agent or engineer with 'Execute this plan
-following its Execution Protocol.' Which one?"
+Execution Protocol. Options: (1) subagent-driven here (recommended), fresh
+worker per task, each wave's `[P]` tasks together; (2) inline here, sequential
+with checkpoints; (3) hand off: the oc-dev-team skill adopts this plan as
+authoritative and implements it end to end, or give the file to any coding agent
+or engineer with 'Execute this plan following its Execution Protocol.' Which one?"
 
 # R6 - Speed rules that decide the wall clock
 
@@ -168,7 +181,7 @@ following its Execution Protocol.' Which one?"
    conversation uncached.
 6. Independent subsystems get one plan each, and they can be built concurrently.
 
-# R7 - Inline path (N <= 3)
+# R7 - Inline path (N = 1)
 
 Read `references/body-rules.md` in this skill directory for the body format.
 Write the skeleton and Contracts, then `<!-- TASKS -->`, then each task as
