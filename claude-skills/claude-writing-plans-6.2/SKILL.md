@@ -8,6 +8,8 @@ compatibility: Claude Code v2.1.217+ recommended (subagent cap setting); python3
 
 # Writing Plans (v8 - max-parallel)
 
+> Version labels: `claude-writing-plans-6.2` is the install folder name; `v8` is the skill's internal version (see `CHANGELOG.md`). Both name the same release.
+
 Write implementation plans for an engineer with zero context and questionable taste: exact files, real code, exact commands with expected output, commits. DRY. YAGNI. TDD.
 
 **Announce:** "I'm using the claude-writing-plans skill to create the implementation plan."
@@ -88,7 +90,7 @@ Contract rules (quality is locked here):
 - `Files` (required): every path the task creates/modifies/tests. Tasks sharing a file are auto-serialized (Runs after), so give each task its own files; wire shared registries in one final task.
 - `Produces`: exact backticked declarations (name, params, types, return) as they will appear in code. `Consumes`: copy the producer's text byte-for-byte; `(existing)` for codebase symbols. Omit `Consumes` to mean "all Produces of my Depends". Depends are auto-added from Consumes.
 - `Spec`: line ranges from the context heading map; writers get exactly these lines.
-- `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs -> haiku) or `deep` (algorithmic, security, concurrency -> opus). Default: sonnet.
+- `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs) or `deep` (algorithmic, security, concurrency). Every writer runs on sonnet whatever the tier; the tier only decides which tasks `review` picks (`deep` is always reviewed). Default: standard.
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently.
 - Legitimate project vocabulary that the placeholder/portability scan would flag (e.g. a TODO app, a class named `Task`) needs `--allow WORD` on every `contracts`/`assemble`/`check` call - decide this now, not after `assemble` fails.
 
@@ -130,7 +132,7 @@ After `OK`, offer (waves/width from the script output):
 
 **2. Inline Execution here** - sequential, with checkpoints.
 
-**3. Hand off** - the `claude-dev-team` skill adopts this plan as authoritative and implements it end to end; or give the file to any coding agent or human with: *"Execute this plan following its Execution Protocol."*
+**3. Hand off** - the `claude-dev-team-v3.2` skill (or `claude-dev-team` when only the bare name is installed) adopts this plan as authoritative and implements it end to end; or give the file to any coding agent or human with: *"Execute this plan following its Execution Protocol."*
 
 **Which approach?"**
 

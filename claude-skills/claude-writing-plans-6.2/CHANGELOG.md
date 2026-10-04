@@ -1,5 +1,7 @@
 # claude-writing-plans v8 (max-parallel) — thay đổi so với v7
 
+Ghi chú nhãn phiên bản: `claude-writing-plans-6.2` là tên thư mục cài đặt; `v8` là số phiên bản nội bộ của skill (cùng một bản phát hành).
+
 ## Sửa lỗi nghiêm trọng về song song
 - Claude Code mặc định chỉ cho **20 subagent chạy cùng lúc** (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`). v7 bắn 64 writer trong một message → từ writer thứ 21 bị từ chối "Concurrent subagent limit reached". v8 đọc giới hạn thật, tự gom task vào ≤ cap writer (chia cân bằng theo khối lượng), và `setup --apply` nâng lên 64.
 
@@ -12,7 +14,7 @@
 - Script tạo **brief riêng cho từng writer**: hợp đồng, dòng spec đã cắt sẵn, file hiện có đã inline kèm số dòng, luật lint đầy đủ → writer chỉ đọc 1 file.
 - Luật cứng cấm writer đọc script/khám phá repo (đo thực tế: đây là nguyên nhân chính làm writer chậm).
 - Agent tùy chọn `claude-plan-task-writer`: sonnet, effort medium, không nạp CLAUDE.md, hook PostToolUse tự lint sau Write/Edit → bớt 1 lượt/writer.
-- `Tier: light|deep` → haiku / sonnet / opus theo độ khó.
+- `Tier: light|deep` chỉ ảnh hưởng việc chọn task để review (deep luôn được review); mọi writer đều chạy sonnet.
 - `wait` chặn đến khi mọi task lint OK (không phải xử lý 64 notification).
 
 ## Kiểm tra máy móc mạnh hơn (thay review bằng model)
