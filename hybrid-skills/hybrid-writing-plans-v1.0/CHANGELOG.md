@@ -13,7 +13,7 @@ Claude chỉ giữ ~20% việc cần phán đoán cao nhất; phần thực thi 
 
 ### Fixed
 - SKILL.md no longer calls Claude-only mode "identical to writing-plans 6.2"; it says the mode follows 6.2's contract rules and linter, which `tests/test_lint_parity.py` compares.
-- SKILL.md Portability Rule no longer claims the linter enforces the absence of the word opencode: it does not scan for it. The opencode writer brief, the Claude writer agent and the reviewer brief now forbid it in a task body, and a reviewer removes any hit.
+- SKILL.md Portability Rule no longer claims the linter enforces the absence of the word opencode: it does not scan for it. The opencode writer brief and the reviewer brief (added by `plan_tool.py`) forbid it in a task body, and a reviewer removes any hit; the Claude writer agent is a byte-identical copy of the original and says nothing about it.
 - SKILL.md dropped the stale `superpowers:*` hand-off references and the `ultracode` remark, and gained the contract rule about `--allow WORD` for legitimate project vocabulary.
 - SKILL.md and README now describe `setup` as replacing a stale or placeholder writer agent instead of never touching an existing one.
 - The reviewer brief says to skip re-reading task files whose bodies are already inlined.
