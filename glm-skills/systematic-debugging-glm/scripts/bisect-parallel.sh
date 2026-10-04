@@ -35,7 +35,10 @@ L=("$GOOD"); while IFS= read -r c; do L+=("$c"); done < <(git rev-list --reverse
 N=$(( ${#L[@]} - 1 ))
 [ "$N" -lt 1 ] && { echo "error: no commits between good and bad" >&2; exit 2; }
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/pbisect.XXXXXX")
-cleanup() {   # worktrees always go (unless --keep); logs stay when KEEPLOGS=1
+cleanup() {   # kill any still-running probes first, then worktrees (unless --keep); logs stay when KEEPLOGS=1
+  if [ -f "$WORK/pids" ]; then
+    while IFS= read -r p; do [ -n "$p" ] && sd_kill_tree "$p"; done <"$WORK/pids"
+  fi
   if [ "$KEEP" != 1 ]; then
     for w in "$WORK"/w*; do [ -d "$w" ] && git worktree remove --force "$w" >/dev/null 2>&1; done
     git worktree prune >/dev/null 2>&1
@@ -49,11 +52,12 @@ status_of() { cat "$WORK/st.$1" 2>/dev/null; }   # good|bad|skip
 # test_batch idx...  — runs each index in its own worktree concurrently
 test_batch() {
   local k=0 idx w sha pids=""
+  : >"$WORK/pids"
   for idx in "$@"; do
     [ -n "$(status_of "$idx")" ] && continue
     k=$((k+1)); w="$WORK/w$k"; sha=${L[$idx]}
     (
-      if [ -d "$w" ]; then git -C "$w" checkout -q --detach -f "$sha" >/dev/null 2>&1 && git -C "$w" clean -fdq >/dev/null 2>&1
+      if [ -d "$w" ]; then git -C "$w" checkout -q --detach -f "$sha" >/dev/null 2>&1 && git -C "$w" clean -fdxq >/dev/null 2>&1
       else sd_worktree_add "$sha" "$w"; fi || { echo skip >"$WORK/st.$idx"; exit 0; }
       sd_link_deps "$w"
       log="$WORK/log.$idx.$(git rev-parse --short "$sha")"
@@ -63,9 +67,10 @@ test_batch() {
       if [ $rc -eq 0 ]; then s=good; elif [ $rc -eq 125 ] || [ $rc -ge 128 ]; then s=skip; else s=bad; fi
       echo "$s" >"$WORK/st.$idx"; echo "$log" >"$WORK/lg.$idx"
     ) &
-    pids="$pids $!"
+    pids="$pids $!"; echo "$!" >>"$WORK/pids"
   done
   [ -n "$pids" ] && wait $pids
+  : >"$WORK/pids"
   return 0
 }
 
