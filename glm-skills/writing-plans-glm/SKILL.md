@@ -41,7 +41,9 @@ python3 "$T" brief SPEC
 The output starts with a `TOOL:` line. Use that exact string for every later
 call. The brief already contains the spec body with real line numbers, the spec
 heading map, the repo file list, the stack, the test commands, the conventions
-file and three or four auto-selected pattern files.
+file, and the 2-5 pattern files the brief ranks; if the repository is large and
+the affected code is not in the brief, up to 3 narrow read-only explore
+dispatches may run in that same turn.
 
 # R2 - Read nothing the brief already gave you
 
@@ -53,7 +55,7 @@ file and three or four auto-selected pattern files.
 
 # R3 - Call 2: write the Contracts file
 
-Count the tasks N from the spec. `N <= 3` -> inline path (R7). `N >= 4` ->
+Count the tasks N from the spec. `N <= 1` -> inline path (R7). `N >= 2` ->
 write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
 only this:
 
@@ -113,6 +115,9 @@ Contract rules - all plan quality is decided here, nowhere later:
    reviewer could reject on its own.
 8. `References` is optional and is inlined into every writer's shared prefix -
    put one or two exemplars there, never a pile.
+9. Legitimate project vocabulary that the placeholder or portability scan would
+   flag (a todo app, a class named Task) needs --allow WORD on every build,
+   check and assemble call. Decide it now, not after assemble fails.
 
 # R4 - Call 3: build
 
@@ -131,6 +136,8 @@ to review every task instead of only the risky ones.
 2. Named failing task IDs after the fan-out: re-run with `--resume` added. It
    retries only those.
 3. `OK assembled ...` is done. Go to R5.
+   Treat a "WARN spec uncovered" line as a missing task unless that spec
+   section is non-functional: add a contract and re-run.
 4. `LANE agent` in the output means no API key was found, so the script fell
    back to printing a DISPATCH table: dispatch one subagent per row, ALL in a
    single message, each with the prompt `Read <brief path> and follow it
@@ -146,12 +153,24 @@ to review every task instead of only the risky ones.
 
 Report, with the numbers from the build output:
 
-"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K in
-parallel. It is self-contained: any agent or engineer can execute it from its
-Execution Protocol. Options: (1) subagent-driven here, fresh worker per task,
-each wave's `[P]` tasks together; (2) inline here, sequential with checkpoints;
-(3) hand the file to any coding agent or engineer with 'Execute this plan
-following its Execution Protocol.' Which one?"
+"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K
+tasks in parallel. It is self-contained: any agent or engineer can execute it
+via its Execution Protocol. Options:
+
+1. Subagent-Driven here (recommended) - fresh subagent per task, review between
+   tasks; each wave's `[P]` tasks dispatched together in one message (within
+   the subagent cap).
+2. Inline Execution here - sequential, with checkpoints.
+3. Hand off - the dev-team skill adopts this plan as authoritative and
+   implements it end to end; or give the file to any coding agent or human
+   with: 'Execute this plan following its Execution Protocol.'
+
+Which approach?"
+
+- Subagent-Driven -> dispatch each wave's `[P]` tasks yourself as subagents
+  here, reviewing between waves.
+- Inline -> execute the plan yourself here, sequentially, with checkpoints.
+- Hand off -> nothing else; the plan carries everything.
 
 # R6 - Speed rules that decide the wall clock
 
@@ -169,7 +188,7 @@ following its Execution Protocol.' Which one?"
    conversation uncached.
 6. Independent subsystems get one plan each, and they can be built concurrently.
 
-# R7 - Inline path (N <= 3)
+# R7 - Inline path (N <= 1)
 
 Read `references/body-rules.md` in this skill directory for the body format.
 Write the skeleton and Contracts, then `<!-- TASKS -->`, then each task as

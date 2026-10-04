@@ -40,8 +40,9 @@ does not need it.
 | `deep` | glm-5.3 | max | sonnet |
 
 The z.ai Anthropic-compatible route maps `haiku` to Flash and both `sonnet` and
-`opus` to GLM-5.3, so never ask the agent lane for `opus`: it costs the same as
-`sonnet` and buys nothing.
+`opus` to GLM-5.3, so ask the agent lane for `opus` only never: it costs the same as
+`sonnet`, and the provider cap on parallel requests is a stated limit of this
+route, not a design goal. Width stays the product you are designing.
 
 Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
 
