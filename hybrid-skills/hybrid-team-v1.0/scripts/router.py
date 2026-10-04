@@ -169,12 +169,8 @@ def route(s: dict, routing: dict, oc_ok: bool, breaker_dir: Path = None) -> str:
     backend = s.get("backend")
     if backend == "claude":
         return "claude"
-    if backend and backend.startswith("oc:"):
-        tier_name = backend.split(":", 1)[1]
-        if _tier_available(tier_name, routing, oc_ok, breaker_dir):
-            return backend
-        return _no_tier(preset)
 
+    # the exclusions apply to a pinned slice too: a pin chooses a tier, it never lifts a guard
     kind = s.get("kind")
     if kind in _NON_OFFLOADABLE_KINDS:
         return "claude"
@@ -182,6 +178,12 @@ def route(s: dict, routing: dict, oc_ok: bool, breaker_dir: Path = None) -> str:
     if preset == "hybrid":
         if s.get("risk") == "high":
             return "claude"
+
+    if backend and backend.startswith("oc:"):
+        tier_name = backend.split(":", 1)[1]
+        if _tier_available(tier_name, routing, oc_ok, breaker_dir):
+            return backend
+        return _no_tier(preset)
 
     row_key = _row_key(s)
     if row_key is None:
