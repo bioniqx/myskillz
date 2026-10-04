@@ -1,7 +1,8 @@
 """Tracked files must not name other model vendors or harnesses.
 
 The few files below keep one intentional mention each (OpenCode scans the foreign skills folder, plan
-bodies are linted for vendor names, repos may carry a convention file of another harness). The banned words are
+bodies are linted for vendor names, repos may carry a convention file of another harness, the repo guide
+`CLAUDE.md` names the sibling folders it is derived from). The banned words are
 assembled from fragments so this file never matches itself.
 """
 import os
@@ -15,10 +16,18 @@ BANNED = re.compile(
     + r")\b|z\." + "ai|cla" + "ude", re.I)
 ALLOWED = {
     "install-opencode.sh",
-    "writing-plans/scripts/oc_plan_tool.py",
+    "CLAUDE.md",
+    "oc-writing-plans/scripts/oc_plan_tool.py",
     "_shared/tests/test_plan_perf.py",
     "_shared/tests/test_plan_lint.py",
     "_shared/tests/test_oc_install.py",
+    "_shared/tests/test_oc_debug_port.py",
+    "_shared/tests/test_oc_devteam_port.py",
+    "_shared/tests/test_oc_guard_port.py",
+    "_shared/tests/test_oc_plan_lint_port.py",
+    "_shared/tests/test_parity_markers.py",
+    "_shared/tests/test_no_foreign_refs.py",
+    "oc-systematic-debugging/scripts/oc-find-polluter.sh",
 }
 
 
@@ -35,6 +44,22 @@ class NoForeignRefs(unittest.TestCase):
                     if BANNED.search(line):
                         hits.append(f"{rel}:{n}: {line.strip()[:100]}")
         self.assertEqual(hits, [])
+
+    def test_allowlist_names_only_existing_files(self):
+        missing = [rel for rel in sorted(ALLOWED) if not os.path.isfile(os.path.join(ROOT, rel))]
+        self.assertEqual(missing, [])
+
+    def test_allowlist_contains_repo_guide_and_installer(self):
+        self.assertIn("CLAUDE.md", ALLOWED)
+        self.assertIn("install-opencode.sh", ALLOWED)
+
+    def test_allowlist_uses_oc_prefixed_plan_tool_key(self):
+        self.assertIn("oc-writing-plans/scripts/oc_plan_tool.py", ALLOWED)
+        self.assertNotIn("writing-plans/scripts/oc_plan_tool.py", ALLOWED)
+
+    def test_docstring_explains_repo_guide_mention(self):
+        self.assertIn("repo guide", " ".join(__doc__.split()))
+        self.assertIn("sibling folders it is derived from", " ".join(__doc__.split()))
 
 
 if __name__ == "__main__":
