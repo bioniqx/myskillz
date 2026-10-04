@@ -116,7 +116,8 @@ nothing downgrades.
   repo, research that must compare several sources) + `Read
   architectural.md`. Then follow `architectural.md`. The ONLY skill you
   invoke next is hybrid-writing-plans with args `mode=<mode>`, or
-  writing-plans (no args) if it is not installed.
+  writing-plans (no args) if it is not installed. Pass it the spec path,
+  committed or not.
 
 Turn budget (human replies before hand-off): Spike 1-2 · Bounded 1-2 ·
 Architectural 2-3. Count before sending; over budget → merge messages.
@@ -137,11 +138,15 @@ Architectural 2-3. Count before sending; over budget → merge messages.
    completions not counted).
    - **Round 1 = everything you can name now**, in ONE message: Read every
      file plausibly involved (small repo with a `files:` list → read all
-     relevant source files at once), Grep for the key symbols, all web
-     searches (2-4 variants per question), ToolSearch for any deferred
-     tool you will need (WebSearch/WebFetch/AskUserQuestion/TaskCreate),
-     all T1 lanes, and batched TaskCreate.
-   - **Round 2 = follow-ups revealed by round 1**, in ONE message: WebFetch
+     relevant source files at once), Grep for the key symbols, ToolSearch
+     for any deferred tool you will need
+     (WebSearch/WebFetch/AskUserQuestion/TaskCreate), and all T1 lanes
+     (`Agent` lanes and `bslane.py` calls). Web searches (2-4 variants per
+     question) and TaskCreate join round 1 only if those tools are already
+     loaded: load first, call in the same round only if already
+     available; otherwise call them in round 2.
+   - **Round 2 = follow-ups revealed by round 1**, in ONE message: the web
+     searches and TaskCreate that round 1 had to load first, WebFetch of
      the best primary URLs, reads of newly discovered files.
    - **Round 3 = conflicts only**, then write the message.
    - Never serialize independent calls. Never re-run a denied or failed
@@ -231,7 +236,8 @@ models and variants for every hybrid skill. A tier whose `model` is set in
 `$HYBRID_BRAINSTORMING_ROUTING` (default `<skill dir>/routing.json`) uses
 that file's `model` and `variant` instead (no variant when that file sets
 none). Roles, timeouts and slot waits also live in `$HYBRID_BRAINSTORMING_ROUTING`, merged
-over the shipped defaults. Per-tier caps default to 6 parallel lanes. `--preset claude|hybrid|opencode` (the mode) overrides the routing
+over the shipped defaults. Per-tier caps default to 4 parallel lanes (`max_parallel`).
+`--preset claude|hybrid|opencode` (the mode) overrides the routing
 file's preset for one call: `hybrid` routes locate/explore/fact/research to
 opencode tiers and keeps draft on Claude; `opencode` also routes draft to an
 opencode tier; `claude` routes every role to Claude.
@@ -403,8 +409,9 @@ narrate the exploration; show the design and cite inline.
 - Questions + provisional design in one message; one reply answers and
   approves, or you re-present only the changed sections.
 - Approaches + recommended design in one message (architectural).
-- Spec write + inline self-review + commit in one turn, then the single
-  review gate. Never a separate "I wrote the spec" message.
+- Spec write + inline self-review + commit (only when allowed, see
+  `architectural.md` §4) in one turn, then the single review gate. Never a
+  separate "I wrote the spec" message.
 - Visual-companion offer rides with the first question batch when a
   visual question is foreseeable — never its own message.
 - Serialize only when an answer determines the next question.
@@ -424,7 +431,7 @@ narrate the exploration; show the design and cite inline.
 claim-verifier / spec pre-draft lanes launched in that same turn and not
 awaited → approval → spec
 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` + inline self-review
-+ commit (one turn) → review gate → hybrid-writing-plans with args
++ commit if allowed (one turn) → review gate → hybrid-writing-plans with args
 `mode=<mode>` (writing-plans, no args, if it is not installed).
 
 ## Red flags

@@ -49,5 +49,6 @@ ISSUES: one per line `[Section] — issue — why it matters for planning`
 ADVISORY: ≤3 non-blocking recommendations | none
 ```
 
-Merge: union ISSUES, drop duplicates, fix inline, one commit. No
-re-review loop — go straight to the user review gate.
+Merge: union ISSUES, drop duplicates, fix inline, one commit
+when committing is allowed (`architectural.md` §4). No re-review loop —
+go straight to the user review gate.
