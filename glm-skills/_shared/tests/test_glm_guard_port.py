@@ -113,8 +113,15 @@ class WriteCapableTests(unittest.TestCase):
         (tmp / "real").mkdir()
         os.symlink(tmp / "real", tmp / "link")
         self.assertEqual(G.canon_argv([str(tmp / "link"), "plain"]), [str(tmp / "real"), "plain"])
-        self.assertTrue(G.prefix_match(["python3", str(tmp / "link" / "d.py"), "claim"],
-                                       [f"python3 {tmp / 'real' / 'd.py'}"]) is not None or True)
+        pinned = f"python3 {tmp / 'real' / 'd.py'}"
+        self.assertEqual(G.prefix_match(["python3", str(tmp / "link" / "d.py"), "claim"], [pinned]), pinned)
+
+    def test_segment_allowed_refuses_sed_in_place_forms(self):
+        for flag in ("-i", "-ni", "-nI", "-i.bak", "--in-place", "--in-pl", "--in-place=.bak"):
+            self.assertIsNone(G.segment_allowed(["sed", flag, "s/a/b/", "f"], [], []), flag)
+
+    def test_segment_allowed_keeps_plain_sed_read_only(self):
+        self.assertEqual(G.segment_allowed(["sed", "-n", "1p", "f"], [], []), "read-only command")
 
 
 class StopGateTests(GuardCase):

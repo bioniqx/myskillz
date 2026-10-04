@@ -828,7 +828,23 @@ def location_escapes(argv):
     return False
 
 
-def segment_allowed(argv, footprint, pinned, readonly=False, wt=None):
+def _sed_in_place(args):
+    """sed edits in place via `-i[SUF]` anywhere in a short cluster (`-ni`, `-nI`) or any `--in-place`
+    abbreviation; a cluster's `e`/`f` ends option parsing (the rest is its script/file)."""
+    for a in args:
+        if a.startswith("--"):
+            if len(a) > 2 and "in-place".startswith(a[2:].split("=", 1)[0]):
+                return True
+        elif a.startswith("-"):
+            for ch in a[1:]:
+                if ch in "iI":
+                    return True
+                if ch in "ef":
+                    break
+    return False
+
+
+def segment_allowed(argv,footprint, pinned, readonly=False, wt=None):
     """Why this single argv is pre-approved, or None."""
     if not argv:
         return None
@@ -846,7 +862,7 @@ def segment_allowed(argv, footprint, pinned, readonly=False, wt=None):
         if pat and any(pat.search(a) for a in argv[1:]):
             return None
         return "read-only command"
-    if head == "sed" and not any(a.startswith("-i") or a == "--in-place" for a in argv[1:]):
+    if head == "sed" and not _sed_in_place(argv[1:]):
         return "read-only command"
     if head in TOOLCHAIN:
         sub = next((a for a in argv[1:] if not a.startswith("-")), "")
