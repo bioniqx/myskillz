@@ -2,8 +2,8 @@
 # Debugging snapshot in one call: git state, recent changes, relevant toolchain versions, CPU count.
 # Always exits 0. Output is capped to stay context-cheap.  Usage: snapshot.sh [dir]
 set +e
-if [ -n "$1" ]; then cd "$1" 2>/dev/null || { echo "snapshot: no such dir: $1"; exit 0; }; fi
 . "$(dirname "$0")/_lib.sh"
+if [ -n "$1" ]; then cd "$1" 2>/dev/null || { echo "snapshot: no such dir: $1"; exit 0; }; fi
 echo "## cwd: $(pwd)   cpus: $(sd_cpus)   os: $(uname -sm)"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "## git: $(git rev-parse --abbrev-ref HEAD 2>/dev/null) @ $(git log -1 --pretty='%h %ad %s' --date=short 2>/dev/null)"

@@ -27,12 +27,20 @@ SD_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || SD_ROOT=""
 case "$POLL" in /*) [ "$J" -gt 1 ] && echo "warn: absolute pollution path is shared by all workers -> -j 1" >&2; J=1;; esac
 [ -z "$SD_ROOT" ] && { [ "$J" -gt 1 ] && echo "warn: not a git repo -> sequential in place" >&2; J=1; }
 REL=""; [ -n "$SD_ROOT" ] && REL=$(git rev-parse --show-prefix)   # run from the same subdir inside worktrees
-FILES=$(find . -type f \( -path "./$PAT" -o -path "./${PAT//\*\*\//}" \) -not -path '*/node_modules/*' -not -path './.git/*' 2>/dev/null | sed 's|^\./||' | sort -u)
+EXCL=(-not -path '*/node_modules/*' -not -path './.git/*' -not -path '*/dist/*' -not -path '*/.venv/*' -not -path '*/.claude/*')
+while IFS= read -r d; do [ -n "$d" ] && EXCL+=(-not -path "*/${d%/}/*"); done <<LINKS
+$SD_LINKS
+LINKS
+FILES=$(find . -type f \( -path "./$PAT" -o -path "./${PAT//\*\*\//}" \) "${EXCL[@]}" 2>/dev/null | sed 's|^\./||' | sort -u)
 TOTAL=$(printf '%s' "$FILES" | grep -c .)
 [ "$TOTAL" -eq 0 ] && { echo "no test files match '$PAT'"; exit 0; }
 [ "$J" -gt "$TOTAL" ] && J=$TOTAL
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/polluter.XXXXXX")
-cleanup() { for w in "$WORK"/w*; do [ -d "$w" ] && git worktree remove --force "$w" >/dev/null 2>&1; done
+cleanup() {   # kill any still-running probes first, then worktrees
+  if [ -f "$WORK/pids" ]; then
+    while IFS= read -r p; do [ -n "$p" ] && sd_kill_tree "$p"; done <"$WORK/pids"
+  fi
+  for w in "$WORK"/w*; do [ -d "$w" ] && git worktree remove --force "$w" >/dev/null 2>&1; done
   [ -n "$SD_ROOT" ] && git worktree prune >/dev/null 2>&1; rm -rf "$WORK"; }
 trap cleanup EXIT; trap 'exit 130' INT TERM
 echo "find-polluter: '$POLL' across $TOTAL test files, $J worker(s)" >&2
@@ -46,14 +54,16 @@ if [ "$ISO" = 1 ] && [ "$ABS" = 0 ] && git ls-files --error-unmatch "$POLL" >/de
 i=0; printf '%s\n' "$FILES" | while IFS= read -r f; do echo "$f" >>"$WORK/bucket.$(( i % J + 1 ))"; i=$((i+1)); done
 if [ "$ISO" = 1 ]; then   # carry uncommitted edits + untracked (non-ignored) files into worktrees
   git diff HEAD --binary >"$WORK/wip.patch" 2>/dev/null
-  (cd "$SD_ROOT" && u=$(git ls-files --others --exclude-standard | head -1) && [ -n "$u" ] &&
-    git ls-files -z --others --exclude-standard | tar -cf "$WORK/untracked.tar" --null -T - 2>/dev/null)
+  PX=(--); [ "$ABS" = 0 ] && PX=(-- . ":(exclude,literal)$REL$POLL")   # a leftover pollution file must not seed the worktrees
+  (cd "$SD_ROOT" && u=$(git ls-files --others --exclude-standard "${PX[@]}" | head -1) && [ -n "$u" ] &&
+    git ls-files -z --others --exclude-standard "${PX[@]}" | tar -cf "$WORK/untracked.tar" --null -T - 2>/dev/null)
 fi
 reset_tree() {   # $1 = worktree dir: back to HEAD + uncommitted changes + dep links
   git -C "$1" checkout -q -f -- . 2>/dev/null; git -C "$1" clean -fdxq 2>/dev/null   # -x: pollution is often gitignored
   [ -s "$WORK/wip.patch" ] && git -C "$1" apply "$WORK/wip.patch" 2>/dev/null
   [ -s "$WORK/untracked.tar" ] && tar -xf "$WORK/untracked.tar" -C "$1" 2>/dev/null
   sd_link_deps "$1"
+  [ "$ABS" = 0 ] && case "$POLL" in ""|.|*..*) ;; *) rm -rf "$1/$REL$POLL";; esac
 }
 run_bucket() {
   local k=$1 dir f target rc
@@ -78,8 +88,10 @@ run_bucket() {
     fi
   done <"$WORK/bucket.$k"
 }
-k=1; pids=""; while [ $k -le $J ]; do run_bucket $k & pids="$pids $!"; k=$((k+1)); done
+k=1; pids=""; : >"$WORK/pids"
+while [ $k -le $J ]; do run_bucket $k & pids="$pids $!"; echo "$!" >>"$WORK/pids"; k=$((k+1)); done
 wait $pids
+: >"$WORK/pids"
 tested=$(cat "$WORK"/tested.* 2>/dev/null | grep -c .); nz=$(cat "$WORK"/nonzero.* 2>/dev/null | grep -c .)
 echo "test runs: $tested executed, $nz exited non-zero" >&2
 if [ "$nz" -gt 0 ] && [ "$nz" -eq "$tested" ]; then
