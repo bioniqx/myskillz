@@ -8,6 +8,8 @@ when_to_use: Error or stack trace, failing or intermittent test, "it worked befo
 
 **Iron Law:** no fix until you can write `ROOT CAUSE: X causes Y because Z` backed by evidence observed in this session (output, trace, diff, repro). A guess is not evidence. Speed comes from parallelism and fewer round-trips, never from skipping the root cause.
 
+**Routing:** this skill owns finding the root cause of a bug, test failure or flake; once `ROOT CAUSE` is written, a one-slice fix stays here, and a fix that spans several slices or needs independent review is handed to `claude-dev-team`.
+
 Scripts: `S=${CLAUDE_SKILL_DIR}/scripts` — prefix script commands with that absolute path (reference files write `$S/...`). If the variable was not substituted, use the `scripts/` folder next to this file. Every script supports `-h`.
 
 ## Speed rules (every lane)
