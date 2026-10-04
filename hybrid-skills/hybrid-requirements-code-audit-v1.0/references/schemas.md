@@ -133,7 +133,7 @@ Added by hybrid-requirements-code-audit: `preset` (the effective preset: `init -
 
 ## `events/<name>.json` — completion events
 
-The req-audit guard hook writes one per Claude worker on `SubagentStop` (`batch`, `ok`, `agent_type`, `agent_id`,
+This fork's guard hook (`hooks/audit_guard.py`, when registered as SETUP.md section 5 shows) writes one per Claude worker on `SubagentStop` (`batch`, `ok`, `agent_type`, `agent_id`,
 `msg`). `audit.py oc-run` writes one per opencode batch, verifier batch or section:
 
 ```json
@@ -145,7 +145,7 @@ The req-audit guard hook writes one per Claude worker on `SubagentStop` (`batch`
 |---|---|
 | `batch` | batch, verifier batch or section name |
 | `ok` | true only when every id was written (sections: a non-empty block with no parse errors) |
-| `agent_type` | `opencode:ha-<role>` (`investigator`, `verifier` or `parser`) |
+| `agent_type` | `opencode:hybrid-audit-<role>` (`investigator`, `verifier` or `parser`) |
 | `backend` | `oc:<tier>` |
 | `reason` | `null` on success, else a failure kind: `auth`, `quota`, `model`, `config`, `throttle`, `context`, `spawn`, `stall`, `timeout`, `crash`, `empty`, `format`; or `switched`, `breaker` or `cooldown` when the unit never spawned |
 | `message` | provider or runner message |

@@ -23,6 +23,7 @@ while [ $# -gt 0 ]; do case "$1" in
 [ $# -eq 0 ] && { usage >&2; exit 2; }
 case "$N" in ''|*[!0-9]*|0) echo "error: -n must be a positive integer" >&2; exit 2;; esac
 case "$BASE" in ''|*[0-9]/*[0-9]) ;; *) echo "error: -b expects F/N, e.g. 14/200" >&2; exit 2;; esac
+[ -n "$BASE" ] && case "${BASE#*/}" in *[1-9]*) ;; *) echo "error: -b expects F/N with N > 0, e.g. 14/200" >&2; exit 2;; esac
 if [ -n "$OUT" ] && [ -d "$OUT" ] && ls -A "$OUT" 2>/dev/null | grep -q -e '^rc\.' -e '^FAIL\.' -e '^run\.'; then
   echo "error: -o $OUT already holds stress results (rc.*/FAIL.*/run.*); they would be counted. Use an empty dir or remove them first" >&2
   exit 2
@@ -43,9 +44,13 @@ worker() {
   exit 0
 }
 export -f worker
+XPID=""
+trap 'sd_kill_tree "$XPID" 1; [ "$OWN_OUT" = 1 ] && [ "$KEEP" != 1 ] && rm -rf "$OUT"; exit 130' INT TERM
 start=$(sd_now)
 echo "stress: $N runs, $J parallel, logs in $OUT" >&2
-seq 1 "$N" | xargs -P "$J" -I{} bash -c 'worker "$@"' _ {}
+seq 1 "$N" | xargs -P "$J" -I{} bash -c 'worker "$@"' _ {} &
+XPID=$!
+wait "$XPID"
 el=$(( $(sd_now) - start ))
 ran=$(ls "$OUT" | grep -c '^rc\.'); fails=$(ls "$OUT" | grep -c '^FAIL\.')
 awk -v f="$fails" -v n="$ran" -v el="$el" -v base="$BASE" '

@@ -80,7 +80,7 @@ otherwise — the tier rule in every web-lane prompt is what prevents it.
   if still unresolved, present both readings as a trade-off, not a
   confident answer.
 - Architectural designs: the claim-verifier lane runs while the user
-  reads the design (`architectural.md` §4) — zero added wait.
+  reads the design (`architectural.md` §3) — zero added wait.
 
 ## 6. Budgets and stopping
 

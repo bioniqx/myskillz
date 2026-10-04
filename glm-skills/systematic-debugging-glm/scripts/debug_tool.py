@@ -165,7 +165,8 @@ NULLISH_RE = re.compile(
 SWARM_RE = re.compile(
     r"flak|intermittent|sometimes|randomly|\brace\b|\braces\b|\bracy\b|timeout|timed out|hangs?\b|"
     r"only in CI|passes locally|slow|performance|regress|worked before|"
-    r"used to work|non-?deterministic", re.I)
+    r"used to work|non-?deterministic|multi-?component|multiple (?:components|services|layers)|"
+    r"(?:many|several) (?:plausible |possible )?causes|culprit unknown|unknown culprit", re.I)
 
 
 def parse_frames(text, root, limit=8):
@@ -653,7 +654,11 @@ def cmd_experiment(a):
         r["fails"], r["runs"], r["out"], r["cmd"] = fails, runs, last, cmd
         return r
 
-    armres = pmap(run_arm, arms, j)
+    def is_serial(job):
+        return int(job[0].get("runs", 1)) > 1
+
+    armres = pmap(run_arm, [job for job in arms if not is_serial(job)], j)
+    armres += [run_arm(job) for job in arms if is_serial(job)]
     by = {}
     for r in armres:
         by.setdefault(r["id"], {})[r["side"]] = r
@@ -677,10 +682,15 @@ def cmd_experiment(a):
                 "needs a file the worktree lacks - list it under \"link\" or commit it")
         elif c["fails"] == t["fails"]:
             r["verdict"], r["note"] = "REFUTED", "the variable changed nothing"
-        elif expect == "treatment_passes" and t["fails"] < c["fails"]:
+        elif expect == "treatment_passes" and t["fails"] == 0:
             r["verdict"] = "CONFIRMED"
-        elif expect == "treatment_fails" and t["fails"] > c["fails"]:
+        elif expect == "treatment_fails" and c["fails"] == 0 and t["fails"] > 0:
             r["verdict"] = "CONFIRMED"
+        elif (expect == "treatment_passes" and t["fails"] < c["fails"]) or \
+                (expect == "treatment_fails" and t["fails"] > c["fails"]):
+            r["verdict"], r["note"] = "INCONCLUSIVE", (
+                "the failure rate moved the predicted way but one arm did not pass every run while "
+                "the other failed; prove it with stress.sh -b F/N (Fisher p < 0.05)")
         else:
             r["verdict"], r["note"] = "REFUTED", "the outcome moved opposite to the prediction"
         if max(c["runs"], t["runs"]) > 1 and abs(c["fails"] - t["fails"]) < 2:

@@ -20,6 +20,7 @@ import hybrid_shared  # noqa: E402
 
 PRESETS = ("claude", "hybrid", "opencode")
 ROLES = ("investigator", "verifier", "parser")
+OFFLOAD_PRESETS = ("hybrid", "opencode")  # presets that send work to opencode; only these may use cheaper values
 
 _DEFAULT_PRESET = "hybrid"
 

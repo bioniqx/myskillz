@@ -24,7 +24,7 @@ The agent loads the instructions through its `skill` tool by name.
     python3 oc-requirements-code-audit/scripts/oc_audit.py doctor
 
 It prints the python version, the ripgrep path, the OpenCode version and the lane width (workers per wave). It
-makes no network call. To confirm the three `rca-*` agents are installed, run:
+makes no network call. To confirm the three `oc-rca-*` agents are installed, run:
 
     python3 oc-requirements-code-audit/scripts/oc_harness.py check oc-requirements-code-audit
 
@@ -52,7 +52,7 @@ The audit needs to run one script and write under one directory:
   `requirements-code-audit.md`, `traceability.csv`, `state.json`, `config.json`, and the worker briefs. Added to
   `.git/info/exclude` automatically (local and untracked — the repository itself is not touched).
 - `brief --force` archives a previous audit to `.oc-audit.prev-<timestamp>/`.
-- Uninstall: delete the installed folder and the three `rca-*.md` agent files. Nothing is written outside audit
+- Uninstall: delete the installed folder and the three `oc-rca-*.md` agent files. Nothing is written outside audit
   dirs.
 
 ## 6. Windows

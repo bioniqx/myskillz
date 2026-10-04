@@ -25,7 +25,7 @@ text — must already be in the spec's language.
 ## Discrepancies (detail)
 ### ⚠️ PARTIAL REQ-007 — <short title>
 - Requirement: …
-- Finding: `path:lines` — what the code does  (or: MISSING — Searched: <the queries actually run>)
+- Finding: `path:lines` — what the code does  (or: MISSING — Searched: <the queries both passes ran>)
 - Why it diverges: adjudication note / verifier reason / first-pass note
 
 ## Remediation plan

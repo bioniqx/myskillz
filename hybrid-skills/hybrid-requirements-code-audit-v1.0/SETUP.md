@@ -2,14 +2,14 @@
 
 hybrid-requirements-code-audit is an opt-in fork of requirements-code-audit: the same audit, with investigators and spec
 parsers (and, in mode `opencode`, verifiers) run on the opencode CLI while every judgment step stays on Claude. It ships no
-agents, hooks or plugin manifest of its own: it reuses the `rca-*` agents and the guard hook of the installed req-audit
+agents or plugin manifest of its own and only an optional guard hook (`hooks/audit_guard.py`, section 5): it reuses the `claude-rca-*` agents of the installed claude-req-audit
 plugin (the `requirements-code-audit` skill). It works at the same three levels. Pick the highest one your environment
 allows; the skill detects the rest.
 
 | Level | What loads | Speed / hardening |
 |---|---|---|
-| **Plugin (recommended)** — `requirements-code-audit` copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json`, this folder next to it | this skill + the plugin's agents `req-audit:rca-investigator/verifier/parser` + guard hooks | 64-way fan-out, tool-restricted workers (no shell), git-history/docs/writes blocked structurally, zero permission prompts for audit-dir writes and this skill's `scripts/audit.py` (every `oc-run` included) |
-| **Local agents** — this skill + requirements-code-audit's `agents/*.md` copied into `.claude/agents/` | this skill + agents `rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
+| **Plugin (recommended)** — `requirements-code-audit` copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json`, this folder next to it | this skill + the plugin's agents `claude-req-audit:claude-rca-investigator/verifier/parser` | 64-way fan-out, tool-restricted workers (no shell); with this fork's guard hook registered (section 5) git-history, docs and writes are blocked structurally and audit-dir writes and this skill's `scripts/audit.py` (every `oc-run` included) need no permission prompt |
+| **Local agents** — this skill + requirements-code-audit's `agents/*.md` copied into `.claude/agents/` | this skill + agents `claude-rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
 | **Generic** — this folder only (also Cowork / claude.ai upload) | this skill; workers are `general-purpose` subagents on `haiku`/`sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
 
 opencode is independent of the level. When it is missing or unhealthy, `init` prints
@@ -21,14 +21,14 @@ requirements-code-audit does (in mode opencode the units are held).
 ```bash
 # personal scope: loads in every project, no trust dialog, no install step
 cp -R hybrid-requirements-code-audit-v1.0 ~/.claude/skills/hybrid-requirements-code-audit-v1.0
-chmod +x ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py
-# recommended: the req-audit plugin that provides the agents and the guard (skip if already installed)
+chmod +x ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py ~/.claude/skills/hybrid-requirements-code-audit-v1.0/hooks/audit_guard.sh
+# recommended: the claude-req-audit plugin that provides the agents (skip if already installed)
 cp -R requirements-code-audit ~/.claude/skills/requirements-code-audit
 chmod +x ~/.claude/skills/requirements-code-audit/hooks/audit_guard.sh ~/.claude/skills/requirements-code-audit/scripts/audit.py
 ```
 
 Restart Claude Code (or run `/reload-plugins`). Verify: `/hybrid-requirements-code-audit` appears in `/`; with the
-plugin, `/agents` lists `rca-investigator`, `rca-verifier`, `rca-parser` and `/hooks` shows the plugin's `PreToolUse`
+plugin, `/agents` lists `claude-rca-investigator`, `claude-rca-verifier`, `claude-rca-parser` and, once you register this fork's guard (section 5), `/hooks` shows its `PreToolUse`
 and `SubagentStop` entries.
 
 Project scope instead: copy both folders into `<repo>/.claude/skills/`. Skills-directory plugins load only after you
@@ -52,7 +52,7 @@ opencode batches are background Bash processes, not subagents, so they do not co
 tier runs at most its own `max_parallel` batches at once (section 3).
 
 Optional, subscription plans only: keep worker prompt caches warm for an hour during very long audits by adding
-`experimental:\n  cacheTtl: 1h` to the req-audit plugin's agent files (v2.1.248+). Not needed for normal runs.
+`experimental:\n  cacheTtl: 1h` to the claude-req-audit plugin's agent files (v2.1.248+). Not needed for normal runs.
 
 ## 3. opencode and routing
 
@@ -112,7 +112,7 @@ output after an evidence oracle has checked every citation.
 
 - Read/Grep/Glob inside the working directory never prompt. Workers write only under `<cwd>/.hybrid-audit/`; opencode
   workers write nothing themselves.
-- Plugin level: the guard hook auto-approves writes under the audit dir and calls to this skill's `scripts/audit.py`
+- With this fork's guard hook registered (section 5), the hook auto-approves writes under the audit dir and calls to this skill's `scripts/audit.py`
   (the `scripts_dir` recorded in `config.json`), including every background `oc-run`, so the audit runs prompt-free
   even in Manual permission mode. Auto mode (Pro/Max/Team default) is also prompt-free.
 - Local-agents level in Manual mode: the agents' `permissionMode: acceptEdits` covers their writes; to also avoid
@@ -122,17 +122,17 @@ output after an evidence oracle has checked every citation.
 - The guard is armed only while `<cwd>/.hybrid-audit/ACTIVE` exists (created by `audit.py init`, removed by
   `audit.py finish`). Outside an audit it exits in a few milliseconds and does nothing.
 
-## 5. Hooks at the local-agents level (optional)
+## 5. Guard hook (optional, any level)
 
-The guard ships with requirements-code-audit, not with this fork. Add to `.claude/settings.local.json` (adjust the path):
+The guard ships with this fork (`hooks/audit_guard.sh` launches `hooks/audit_guard.py`). The original skill's guard only watches `.audit/` and never arms for `.hybrid-audit/`. Add to `.claude/settings.local.json` (adjust the path):
 
 ```json
 {
   "hooks": {
     "PreToolUse": [{ "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Read|Grep|Glob",
-                     "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/requirements-code-audit/hooks/audit_guard.sh\"" }] }],
+                     "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/hybrid-requirements-code-audit-v1.0/hooks/audit_guard.sh\"" }] }],
     "SubagentStop": [{ "matcher": ".*",
-                       "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/requirements-code-audit/hooks/audit_guard.sh\"" }] }]
+                       "hooks": [{ "type": "command", "command": "\"$HOME/.claude/skills/hybrid-requirements-code-audit-v1.0/hooks/audit_guard.sh\"" }] }]
   }
 }
 ```
@@ -141,8 +141,7 @@ The guard ships with requirements-code-audit, not with this fork. Add to `.claud
 
 Use `python` instead of `python3` in the `allowed-tools` line of `SKILL.md` and when calling the script, including the
 printed `oc-run` commands. Set `HYBRID_AUDIT_OC_BIN` when opencode is not on `PATH` as `opencode`. The guard's bash launcher
-(req-audit plugin) needs Git Bash; without it, point the hook commands at `python hooks/audit_guard.py` of
-requirements-code-audit directly (the fast-path marker check is then skipped — the Python script does the same check).
+(`hooks/audit_guard.sh`) needs Git Bash; without it, point the hook commands at `python hooks/audit_guard.py` of this fork directly (the fast-path marker check is then skipped — the Python script does the same check).
 
 ## 7. Where things go
 

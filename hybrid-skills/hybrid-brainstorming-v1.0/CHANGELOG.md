@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v1.1.2 (2026-10-04)
+
+### Fixed
+- Ported the 6.3 spec-commit rule: `architectural.md` §4 commits the spec only when neither the user nor a loaded project or user instruction file says not to commit self-initiated files; otherwise the spec stays untracked and the review gate says "not committed, per your instructions". SKILL.md (merge rules, checklist) and `spec-document-reviewer-prompt.md` follow it, and the hand-off passes the spec path, committed or not.
+- `research-playbook.md` cites the claim-verifier lane at `architectural.md` §3 (it said §4).
+- SKILL.md states the per-tier cap as 4 parallel lanes (it said 6), matching the shipped default and the README.
+- The spec pre-draft lane in `architectural.md` §3 passes `model: "sonnet"` again.
+- Round 1 and round 2 use the 6.3 wording: load deferred tools first, call them in round 1 only if already loaded, otherwise in round 2 (SKILL.md, `fanout-playbook.md`).
+- `scripts/helper.js`: `window.brainstorm.choice()` also sends a `choice` key, because `server.cjs` records only events that carry one.
+
+### Changed
+- README: preset `claude` no longer claims to reproduce brainstorming-6.3 exactly; it lists what still differs (run-mode question, `hybrid-` names, state directory, relay rule, hand-off).
+
 ## v1.1.1 (2026-10-01)
 
 ### Changed

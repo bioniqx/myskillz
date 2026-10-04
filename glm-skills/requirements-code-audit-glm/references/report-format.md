@@ -17,6 +17,7 @@ text — must already be in the spec's language.
 ## Summary
 - Total requirements: N
 - ✅ Matched: a · ⚠️ Partial: b · ❌ Missing: c · ⛔ Conflict: d · ❓ Unverifiable: e
+- Unsettled (UNSEARCHED): f  (this line appears only when f > 0)
 - Alignment: a / N
 
 ## Traceability
@@ -50,5 +51,9 @@ UTF-8 with BOM so Excel opens Vietnamese text correctly.
 The `Method` line is generated from `state.json`, so the report states how the audit was actually run — which
 models, how many threads, which retrieval engine, and how many items went through the adversarial pass. Keep it:
 it is what makes the numbers auditable later.
+
+The requirement text in the traceability table is printed in full; the Notes cell is cut at 200 characters (the
+CSV keeps the whole note). An item that is still UNSEARCHED is listed under Discrepancies as Unsettled instead of
+being dropped, and each Evidence cell comes from the pass that decided the status.
 
 In chat after `finalize`: the headline numbers, the P0 count and the report path. Do not paste the report.

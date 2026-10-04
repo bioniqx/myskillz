@@ -1,5 +1,10 @@
 # 9.0 (from 8.0) — docs match the fixed scripts
 
+Version labels: `claude-brainstorming-6.3` is the install folder name (kept so paths stay stable); `9.0` is the skill's internal version.
+
+## Fix: brainstorm.choice() event
+- `window.brainstorm.choice(value, metadata)` now sends `choice: value`, so `server.cjs` records the event in `state/events` (it drops events without a `choice` key).
+
 ## W9–W10
 - W9 (scripts/*): crash/signal safety, literal-content injection fixes,
   `session_dir` in the `server-started`/`server-info` JSON, decoded

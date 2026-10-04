@@ -5,8 +5,8 @@ The folder works at three levels. Pick the highest one your environment allows; 
 | Level | What loads | Speed / hardening |
 |---|---|---|
 | **Plugin (recommended)** — folder copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json` | skill + agents `claude-req-audit:claude-rca-investigator/verifier/parser` + guard hooks | 64-way fan-out, tool-restricted workers (no shell), git-history/docs/writes blocked structurally, zero permission prompts for audit-dir writes and the bundled script |
-| **Local agents** — plain skill + `agents/*.md` copied into `.claude/agents/` | skill + agents `rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
-| **Generic** — SKILL.md + scripts only (also Cowork / claude.ai upload) | skill; workers are `general-purpose` subagents on `haiku`/`sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
+| **Local agents** — plain skill + `agents/*.md` copied into `.claude/agents/` | skill + agents `claude-rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
+| **Generic** — SKILL.md + scripts only (also Cowork / claude.ai upload) | skill; workers are `general-purpose` subagents on `sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
 
 ## 1. Install (Claude Code)
 
@@ -87,5 +87,5 @@ marker check is then skipped — the Python script does the same check).
 ## 7. Cowork / claude.ai
 
 Upload the `.skill` file (or the folder). Agents and hooks are ignored there; the skill runs in generic mode
-(general-purpose subagents with `model: haiku`/`sonnet`) or solo mode when no Agent tool exists. The repo must be
+(general-purpose subagents with `model: sonnet`) or solo mode when no Agent tool exists. The repo must be
 mounted in the session so `scripts/audit.py` can scan it.

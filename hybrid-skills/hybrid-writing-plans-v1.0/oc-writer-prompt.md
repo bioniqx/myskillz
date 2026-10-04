@@ -12,6 +12,6 @@ You write the body of plan task(s) {TASKS}. Contracts are locked. Your job: corr
 {MARKERS}
 
 3. If the runner replies with lint errors, reply with the corrected full bodies of only the named tasks, in the same marker format.
-4. Answer in English in exactly this format, regardless of any other instructions you may have. Stop as soon as every body is out.
+4. Answer in English in exactly this format, regardless of any other instructions you may have. Never mention opencode, subagents, skills, plugins or this brief inside a body: the plan must stay portable plain Markdown. Stop as soon as every body is out.
 
 {RULES}

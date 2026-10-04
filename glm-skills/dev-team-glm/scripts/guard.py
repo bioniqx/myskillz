@@ -106,8 +106,12 @@ def is_test_path(rel, extra_globs=()):
 
 
 def path_matches(rel, entry):
-    rel = rel.replace("\\", "/").lstrip("./")
-    entry = entry.replace("\\", "/").lstrip("./")
+    rel = rel.replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    entry = entry.replace("\\", "/")
+    while entry.startswith("./"):
+        entry = entry[2:]
     if entry.endswith("/"):
         return rel.startswith(entry)
     if any(ch in entry for ch in "*?["):
@@ -137,7 +141,10 @@ def ensure_red_cache(wt, sd, sid, globs):
     """If commit-red wasn't used, discover the RED commit by subject and cache its frozen files."""
     if (sd / "red").exists():
         return
-    log = git(["log", "--format=%H%x1f%s", "-n", "200"], wt)
+    # Only this slice's own commits: an older run may have reused the same slice id.
+    base = (read_lines(sd / "base") or [""])[0]
+    rng = [f"{base}..HEAD"] if base else ["-n", "200"]
+    log = git(["log", "--format=%H%x1f%s", *rng], wt)
     red = None
     for line in log.splitlines():
         h, _, subj = line.partition("\x1f")
@@ -164,9 +171,8 @@ def guard_edit(inp):
     path = tool_path(inp)
     if not path:
         allow()
-    # find_slice_root() resolve()s the worktree, so resolve the path too: a symlinked cwd or a
-    # /var -> /private/var alias must not turn an in-footprint edit into `../…` and deny it
-    path = str(Path(path if os.path.isabs(path) else os.path.join(inp.get("cwd") or os.getcwd(), path)).resolve())
+    path = os.path.abspath(os.path.join(inp.get("cwd", ""), path)) if not os.path.isabs(path) else path
+    path = os.path.realpath(path)  # a symlinked worktree/project dir must resolve to the same real path
     wt = find_slice_root(os.path.dirname(path))
     own = find_slice_root(inp.get("cwd") or "")
     if wt is None:
@@ -189,7 +195,11 @@ def guard_edit(inp):
              "Do not touch it: finish what you can inside the footprint and report `Status: Blocked` naming this file and why.")
     sid = read_lines(sd / "id")[0] if read_lines(sd / "id") else ""
     globs = read_lines(sd / "test_globs")
-    ensure_red_cache(wt, sd, sid, globs)
+    mode = (read_lines(sd / "mode") or ["slice"])[0]
+    # RED/WORK/FAST never have a frozen-RED-commit to discover before their one commit exists, so
+    # probing for it on every Edit would spawn `git log` for nothing; the Stop gate checks once, later.
+    if mode not in ("red", "work", "fast"):
+        ensure_red_cache(wt, sd, sid, globs)
     frozen = read_lines(sd / "red_files")
     if rel in frozen:
         deny(f"`{rel}` is a test committed in the RED commit and is FROZEN. Make the implementation satisfy it. "
@@ -212,8 +222,42 @@ def normalize_git(cmd):
     return GIT_GLOBAL_OPT.sub("git ", cmd), redirected
 
 
+_QUOTED_RE = re.compile(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"")
+
+_UNWRAP_BEFORE_RE = re.compile(r"(?:>>?|\b(?:bash|sh|zsh|dash)\s+(?:-\w+\s+)*-\w*c|\beval)\s*$")
+
+
+def strip_quoted(cmd, meta=False):
+    """Drop single/double-quoted spans so a `>` or `->` inside a quoted argument (a grep pattern,
+    a --format string) is never mistaken for a shell metacharacter or a redirect. Two exceptions:
+    a double-quoted span holding `$` or a backtick is kept for the metachar scan (`"$(cmd)"` still
+    substitutes), and for the deny scan the payload of `sh -c`/`eval` and a redirect target is
+    unwrapped (`bash -c "git push"`, `> ".slice/red"` are what they look like)."""
+    def repl(m):
+        s = m.group(0)
+        if meta:
+            return s if s[0] == '"' and ("$" in s or "`" in s) else ""
+        if _UNWRAP_BEFORE_RE.search(cmd[:m.start()]):
+            return " " + s[1:-1] + " "
+        return s if s[0] == '"' and ("$(" in s or "`" in s) else ""
+    return _QUOTED_RE.sub(repl, cmd)
+
+
+def strip_for_scan(cmd):
+    """`cmd`, with quoted spans and safe stderr/stdout-to-null redirects removed, for running the
+    BASH_DENY/BASH_RO_DENY regexes over, so `cat .slice/base 2>/dev/null` or `git log
+    --format='%h -> %s'` aren't mistaken for a write just because a `>` appears somewhere in them."""
+    cmd = strip_quoted(cmd)
+    for r in SAFE_REDIRECTS:
+        cmd = cmd.replace(r, " ")
+    return cmd
+
+
 BASH_DENY = [
-    (r"\bgit\s+(push|rebase|filter-branch|worktree|merge|stash(?!\s+(?:list|show)\b)|switch|cherry-pick|revert)\b", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+(push|rebase|filter-branch|switch|cherry-pick|revert)\b", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+merge\b(?!-)", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+worktree\b(?!\s+list\b)", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+stash\b(?!\s+(list|show)\b)", "integration/history commands are the Conductor's"),
     (r"\bgit\s+reset\s+(--hard|--merge|--soft)\b", "history rewriting is forbidden in a slice worktree"),
     (r"\bgit\s+branch\s+(-[dDmM]\b|--delete|--move|--force)", "branch surgery is forbidden in a slice worktree"),
     (r"\bgit\s+commit\b[^|;&]*--amend", "--amend would rewrite the RED audit trail; make a new commit"),
@@ -223,26 +267,144 @@ BASH_DENY = [
     # any write-shaped mention of .slice/ at all: it is the record the integrator and the Stop gate
     # read, so an agent that can rewrite it can claim a RED commit it never made
     (r"\.slice/(red|red_files|base|mode|kind|footprint|allow|id|notest|criteria|root)\b[^\n]*"
-     r"(>|>>|\bwrite\b|\bopen\s*\(|\bmv\b|\bcp\b|\brm\b)", "`.slice/` is dev-team metadata"),
-    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\bwrite\s*\()[^\n]*\.slice/", "`.slice/` is dev-team metadata"),
+     r"(>|>>|\bwrite(?:_text|_bytes)?\b|\bopen\s*\(|\bmv\b|\bcp\b|\brm\b)", "`.slice/` is dev-team metadata"),
+    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\bwrite(?:_text|_bytes)?\s*\()[^\n]*\.slice/", "`.slice/` is dev-team metadata"),
     # the done/blocked markers are how `next` finds finished lanes: only the Stop gate writes them
-    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\btouch\b|\bwrite\s*\()[^\n]*\.claude/dev-team/", "`.claude/dev-team/` is the Conductor's run state"),
+    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\btouch\b|\bwrite(?:_text|_bytes)?\s*\()[^\n]*\.claude/dev-team/", "`.claude/dev-team/` is the Conductor's run state"),
+    (r"\.claude/dev-team/[^\n]*\bwrite(?:_text|_bytes)?\s*\(", "`.claude/dev-team/` is the Conductor's run state"),
+    (r"\bopen\s*\(\s*['\"][^'\"]*\.claude/dev-team/[^'\"]*['\"]\s*,\s*['\"][wax+]", "`.claude/dev-team/` is the Conductor's run state"),
+    (r"\bopen\s*\(\s*['\"][^'\"]*\.slice/[^'\"]*['\"]\s*,\s*['\"][wax+]", "`.slice/` is dev-team metadata"),
 ]
+
+
+# Only patterns naming dev-team metadata run over the quote-KEPT command (`python3 -c "open('.slice/x','w')"`
+# must match); git/history verbs run over strip_for_scan so `grep "git push"` is not a push.
+def _is_meta_pat(pat):
+    return ".slice" in pat or ".claude/dev-team" in pat
+
+
+DEVTEAM_LANE_SUBS = {"claim", "commit-red", "commit-green", "commit-work", "commit-fast"}
+
+_PY_INTERPRETER_RE = re.compile(r"^python[0-9.]*$")
+
+
+def _is_devteam_script(tok):
+    return tok.replace("\\", "/").rstrip("/").split("/")[-1] == "devteam.py"
+
+
+def devteam_subcommand(cmd):
+    """If `cmd` actually EXECUTES .../devteam.py (directly, or via a python interpreter, optionally
+    with interpreter flags like `-B`), its subcommand; else None. `devteam.py` appearing only as a
+    plain ARGUMENT to some other program (`grep ... scripts/devteam.py`, `git diff -- .../devteam.py`,
+    `wc -l .../devteam.py`) must never be mistaken for invoking the engine. Only a simple (non-piped,
+    non-shell-meta) command is inspected."""
+    argv = argv_of(cmd)
+    if not argv:
+        return None
+    argv = strip_env_prefix(argv)
+    if not argv:
+        return None
+    head, rest = argv[0], argv[1:]
+    if _is_devteam_script(head):
+        script_rest = rest
+    elif _PY_INTERPRETER_RE.match(os.path.basename(head)):
+        i = 0
+        while i < len(rest) and rest[i].startswith("-"):
+            i += 1
+        if i >= len(rest) or not _is_devteam_script(rest[i]):
+            return None
+        script_rest = rest[i + 1:]
+    else:
+        return None
+    return next((x for x in script_rest if not x.startswith("-")), "")
+
+
+_WRAPPERS = {"timeout", "env", "nice", "nohup", "time", "command", "exec", "sudo", "ionice", "stdbuf", "setsid"}
+
+
+def wrapped_engine_subcommand(cmd):
+    """The devteam.py subcommand run by ANY segment of a compound command (`;`, `&&`, `||`, `|`,
+    newline) or behind wrappers like `timeout 600` / `env` / `nice`: the first one that is NOT a lane
+    helper if there is one, else the first found, else None. Deny-side only."""
+    segs = []
+    # an unquoted newline separates commands; a quoted one (multi-line -m message) must not split
+    flat, q, esc = [], "", False
+    for ch in cmd:
+        if esc:
+            esc = False
+        elif ch == "\\" and q != "'":
+            esc = True
+        elif q:
+            q = "" if ch == q else q
+        elif ch in "'\"":
+            q = ch
+        elif ch == "\n":
+            ch = " ; "
+        flat.append(ch)
+    for line in (cmd.split("\n") if q else ["".join(flat)]):
+        try:
+            lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            toks = list(lex)
+        except ValueError:
+            continue
+        cur = []
+        for t in toks:
+            if t and all(c in ";&|()" for c in t):
+                segs.append(cur)
+                cur = []
+            else:
+                cur.append(t)
+        segs.append(cur)
+    found = []
+    for seg in segs:
+        for j, tok in enumerate(seg):
+            if not all(re.fullmatch(r"[A-Za-z_]\w*=.*|-.*|\d+[smhd]?", p) or os.path.basename(p) in _WRAPPERS
+                       for p in seg[:j]):
+                break
+            rest = seg[j + 1:]
+            if _is_devteam_script(tok):
+                found.append(next((x for x in rest if not x.startswith("-")), ""))
+                break
+            if _PY_INTERPRETER_RE.match(os.path.basename(tok)):
+                k = 0
+                while k < len(rest) and rest[k].startswith("-"):
+                    k += 1
+                if k < len(rest) and _is_devteam_script(rest[k]):
+                    found.append(next((x for x in rest[k + 1:] if not x.startswith("-")), ""))
+                    break
+    return next((f for f in found if f not in DEVTEAM_LANE_SUBS), found[0] if found else None)
 
 
 def guard_bash(inp):
     raw = (inp.get("tool_input") or {}).get("command", "") or ""
+    sub = devteam_subcommand(raw)
+    denied = sub if sub is not None else wrapped_engine_subcommand(raw)
+    if denied is not None and denied not in DEVTEAM_LANE_SUBS:
+        deny(f"`devteam.py {denied}` drives the engine (integrate/finish/reset/next/dispatch and everything "
+             "else are the Conductor's); a lane may only run claim / commit-red / commit-green / "
+             "commit-work / commit-fast.")
+    if sub is not None:
+        wt0 = find_slice_root(inp.get("cwd") or os.getcwd())
+        pinned0 = read_lines(wt0 / ".slice" / "allow") if wt0 else []
+        argv0 = argv_of(raw)
+        match = prefix_match(argv0, pinned0) if argv0 else None
+        allow(f"dev-team: pinned command from the briefing — {match}" if match else None)
     cmd, redirected = normalize_git(raw)
     if redirected:
         deny(f"Blocked `{raw[:80]}`: it points git at another checkout (`-C` / `--git-dir` / "
              "`--work-tree` / `GIT_DIR`). Every git command must act on YOUR worktree only.")
+    scan = cmd      # quotes kept: `python3 -c "open('.slice/red','w')"` must still match; only safe redirects go
+    for r in SAFE_REDIRECTS:
+        scan = scan.replace(r, " ")
+    scan_hist = strip_for_scan(cmd)
     for pat, why in BASH_DENY:
-        if re.search(pat, cmd):
+        if re.search(pat, scan if _is_meta_pat(pat) else scan_hist):
             deny(f"Blocked `{raw[:80]}`: {why}. Use commit-red / commit-green / commit-work for commits; "
                  "the Conductor merges.")
-    if re.search(r"\bgit\s+checkout\b", cmd) and not re.search(r"\bgit\s+checkout\b[^|;&]*\s--(\s|$)", cmd):
+    if re.search(r"\bgit\s+checkout\b", scan_hist) and not re.search(r"\bgit\s+checkout\b[^|;&]*\s--(\s|$)", scan_hist):
         deny("`git checkout <ref>` would leave your slice branch. Only `git checkout [<ref>] -- <file>` (restore a file) is allowed.")
-    if re.search(r"\bgit\s+reset\b", cmd) and not re.search(r"\bgit\s+reset\b[^|;&]*\s--(\s|$)", cmd):
+    if re.search(r"\bgit\s+reset\b", scan_hist) and not re.search(r"\bgit\s+reset\b[^|;&]*\s--(\s|$)", scan_hist):
         deny("`git reset <ref>` would drop commits (the RED audit trail). Only `git reset -- <file>` (unstage) is allowed.")
     wt = find_slice_root(inp.get("cwd") or os.getcwd())
     reason = bash_allow_reason(raw, wt, footprint=read_lines(wt / ".slice" / "footprint") if wt else [],
@@ -253,7 +415,8 @@ def guard_bash(inp):
 # ----------------------------------------------------------------------------- the allow-list
 
 ALLOW_GIT_READ = ("git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files",
-                  "git grep", "git blame", "git branch --list", "git stash list", "git describe")
+                  "git grep", "git blame", "git branch --list", "git stash list", "git describe",
+                  "git merge-base", "git worktree list")
 # Pure filters/readers: safe anywhere in a pipeline (they only read stdin/files and print).
 FILTERS = {"tail", "head", "grep", "rg", "wc", "sort", "uniq", "cat", "cut", "tr", "awk", "jq",
            "tac", "nl", "column", "true", "false", "echo", "printf", "ls", "pwd", "diff",
@@ -293,7 +456,7 @@ SAFE_REDIRECTS = ("2>&1", "2>/dev/null", ">/dev/null", "> /dev/null", "</dev/nul
 
 def argv_of(cmd):
     """The command's argv, or None when it is not a single simple command we can vouch for."""
-    if SHELL_META.search(cmd):
+    if SHELL_META.search(strip_quoted(cmd, meta=True)):
         return None
     try:
         parts = shlex.split(cmd)
@@ -309,12 +472,31 @@ def strip_env_prefix(argv):
     return argv[i:]
 
 
+def _canon_tok(tok):
+    """Resolve an absolute path token to its real path (symlinks collapsed); leave anything else
+    (a bare word, a relative path we have no cwd to resolve against) untouched."""
+    if tok.startswith("/"):
+        try:
+            return os.path.realpath(tok)
+        except OSError:
+            return tok
+    return tok
+
+
+def canon_argv(argv):
+    return [_canon_tok(a) for a in argv]
+
+
 def prefix_match(argv, prefixes):
+    """`argv` matches a pinned prefix even when one side spells a script path literally and the
+    other through a symlink (canonical `.slice/allow` match); every other token must still match exactly."""
+    cargv = canon_argv(argv)
     for pfx in prefixes:
         pargv = argv_of(pfx.strip())
         if not pargv or len(pargv) > len(argv):
             continue
-        if argv[:len(pargv)] == pargv:
+        cpargv = canon_argv(pargv)
+        if cargv[:len(cpargv)] == cpargv:
             return pfx.strip()
     return None
 
@@ -336,7 +518,8 @@ def _has(rest, *flags):
 
 SED_WRITE_EXEC = re.compile(  # sed w/W FILE, e CMD, s///w FILE, s///e (a false match only costs the pre-approval)
     r"(?:^|[;{}\n/!,$0-9\s])\s*[wWe](?:\s|$|;|})"
-    r"|s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImM0-9]*[we]")
+    r"|s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiImM0-9]*[we]"
+    r"|\\([^\\\n])(?:\\.|(?!\2).)*\2[\s!]*[wWe](?:\s|$|;|})")  # \cREGEXc address, then w/W/e
 
 
 def sed_scripts(argv):
@@ -450,6 +633,92 @@ def rewrites_files(head, rest):
     return False
 
 
+def _has_long_flag(tok, full):
+    """`--output`/`--out=F` both mean `--output=F`: getopt_long accepts any unambiguous prefix of a
+    long option, so a 3+ char prefix of `full` (with or without `=value`) counts as that flag."""
+    if not tok.startswith("--"):
+        return False
+    name = tok[2:].split("=", 1)[0]
+    return len(name) >= 3 and full.startswith(name)
+
+
+def _has_short_flag(tok, letter):
+    """`letter` present anywhere in a bundled single-dash cluster (`-nOtouch` carries `-O`, `-uo`
+    carries `-o`); short flags combine, and one taking an argument may have it glued on directly."""
+    return tok.startswith("-") and not tok.startswith("--") and letter in tok[1:]
+
+
+def write_capable(argv):
+    """A command that LOOKS read-only but carries a flag/script that writes to an arbitrary file or
+    runs an arbitrary program: `git show/diff/log --output(=)`, `git grep -O`/`--open...`
+    (any unambiguous abbreviation or bundled short form), `sort -o`/`--output`/`--out`, a sed `w`
+    command (with or without a space before the filename), awk `system`/`getline`/pipes/`-f`,
+    `rg --pre`. Never pre-approved, pinned or not."""
+    head, rest = argv[0], argv[1:]
+    if head == "git":
+        sub = rest[0] if rest else ""
+        args = rest[1:]
+        if sub in ("diff", "log", "show") and any(_has_long_flag(a, "output") for a in args):
+            return True
+        if sub == "grep" and any(_has_long_flag(a, "open-files-in-pager") or _has_short_flag(a, "O")
+                                  for a in args):
+            return True
+    if head == "sort" and any(_has_long_flag(a, "output") or _has_short_flag(a, "o") for a in rest):
+        return True
+    if head == "sed":
+        scripts, pos, i = [], [], 0
+        while i < len(rest):
+            a = rest[i]
+            long_name = a[2:].split("=", 1)[0] if a.startswith("--") else ""
+            if (long_name in ("fi", "fil", "file")) or (not a.startswith("--") and a.startswith("-") and "f" in a[1:]):
+                return True
+            if long_name and "expression".startswith(long_name):
+                if "=" in a:
+                    scripts.append(a.split("=", 1)[1])
+                else:
+                    i += 1
+                    scripts.append(rest[i] if i < len(rest) else "")
+            elif a.startswith("-") and not a.startswith("--") and "e" in a[1:]:
+                glued = a[a.index("e", 1) + 1:]
+                if glued:
+                    scripts.append(glued)
+                else:
+                    i += 1
+                    scripts.append(rest[i] if i < len(rest) else "")
+            elif not a.startswith("-"):
+                pos.append(a)
+            i += 1
+        if not scripts and pos:
+            scripts = pos[:1]
+        for s in scripts:
+            # only a WHOLE, unambiguous plain `s/pat/rep/flags` (no backslash, no w/e flag) is just text
+            if re.fullmatch(r"s([^\\\s\w;])(?:(?!\1)[^\\])*\1(?:(?!\1)[^\\])*\1[gpiImM0-9]*", s):
+                continue
+            if (re.search(r"(?<![a-zA-Z])[wW]\s*\S", s) or re.search(r"(?<![a-zA-Z])e(?![a-zA-Z])", s)
+                    or re.search(r"s(.).*\1.*\1[a-zA-Z0-9]*e", s)
+                    or re.search(r"\\([^\\\n])(?:\\.|(?!\1).)*\1[\s!]*[wWe](?:\s|$|;|})", s)):
+                return True
+    if head == "awk":
+        prog, i = None, 0
+        while i < len(rest) and prog is None:
+            a = rest[i]
+            if a in ("-f", "--file") or a.startswith(("-f", "--file=")):
+                return True                      # program from a file: cannot be inspected
+            if a.startswith("--") or a in ("-E", "-l", "-i", "-e"):
+                return True                      # --assign/--include/-E/-l...: cannot be inspected
+            if a in ("-v", "-F"):
+                i += 1                           # skip the option's value
+            elif not a.startswith("-"):
+                prog = a
+            i += 1
+        if prog is not None and (re.search(r"system|getline|\|", prog)
+                                 or re.search(r"\bprintf?\b[^;}]*>", prog)):
+            return True
+    if head == "rg" and any(a == "--pre" or a.startswith("--pre=") or a.startswith("--pre-glob") for a in rest):
+        return True
+    return False
+
+
 def write_exec_form(argv, readonly=False):
     """Why one argv writes a file or runs another program although its command looks read-only
     (`git diff --output`, `git grep -O`, `rg --pre`, `uniq IN OUT`, sed `w`/`e`,
@@ -457,6 +726,8 @@ def write_exec_form(argv, readonly=False):
     argv = strip_env_prefix(argv)
     if not argv:
         return None
+    if write_capable(argv):
+        return "writes a file or runs another program (output flag, sed w/e, awk program, rg --pre)"
     head, rest = os.path.basename(argv[0]), argv[1:]
     sub = rest[0] if rest else ""
     if head == "git":
@@ -562,7 +833,23 @@ def location_escapes(argv):
     return False
 
 
-def segment_allowed(argv, footprint, pinned, readonly=False, wt=None):
+def _sed_in_place(args):
+    """sed edits in place via `-i[SUF]` anywhere in a short cluster (`-ni`, `-nI`) or any `--in-place`
+    abbreviation; a cluster's `e`/`f` ends option parsing (the rest is its script/file)."""
+    for a in args:
+        if a.startswith("--"):
+            if len(a) > 2 and "in-place".startswith(a[2:].split("=", 1)[0]):
+                return True
+        elif a.startswith("-"):
+            for ch in a[1:]:
+                if ch in "iI":
+                    return True
+                if ch in "ef":
+                    break
+    return False
+
+
+def segment_allowed(argv,footprint, pinned, readonly=False, wt=None):
     """Why this single argv is pre-approved, or None."""
     if not argv:
         return None
@@ -580,7 +867,7 @@ def segment_allowed(argv, footprint, pinned, readonly=False, wt=None):
         if pat and any(pat.search(a) for a in argv[1:]):
             return None
         return "read-only command"
-    if head == "sed" and not any(a.startswith("-i") or a == "--in-place" for a in argv[1:]):
+    if head == "sed" and not _sed_in_place(argv[1:]):
         return "read-only command"
     if head in TOOLCHAIN:
         sub = next((a for a in argv[1:] if not a.startswith("-")), "")
@@ -705,7 +992,7 @@ def bash_allow_reason(raw, wt, footprint, pinned, readonly=False):
     m = re.fullmatch(r"cd\s+([^\s;&|<>`$]+)\s*&&\s*(.+)", cmd, flags=re.S)
     if m and inside_worktree(m.group(1)):
         cmd = m.group(2)
-    if SHELL_META.search(cmd):
+    if SHELL_META.search(strip_quoted(cmd, meta=True)):
         return None
     reasons = []
     for seg in cmd.split("|"):
@@ -751,6 +1038,10 @@ def guard_perm(inp):
 def write_marker(wt, sd, sid, kind, note=""):
     """Tell the Conductor's engine this lane is finished: `<root>/.claude/dev-team/slices/<id>.done`
     (or `.blocked`). Best effort — `devteam next <id>` remains the manual fallback."""
+    try:
+        (sd / "stop_blocks").unlink()   # the lane is finished: a resume after a rejection is gated afresh
+    except OSError:
+        pass
     root = (read_lines(sd / "root") or [""])[0]
     if not root:
         return
@@ -810,15 +1101,20 @@ def guard_stop(inp):
         # Three gates remain: something was committed, any tests it wrote are still frozen, and the
         # report shows real command output — the evidence IS the safety net here.
         base = (read_lines(sd / "base") or [""])[0]
-        subjects = [ln.partition("\x1f")[2] for ln in git(["log", "--format=%H%x1f%s", "-n", "200"], wt).splitlines()]
-        committed = any(s.startswith(f"{pfx}({sid})") for s in subjects
-                        for pfx in ("feat", "test", "chore", "docs", "perf", "refactor"))
         helper = "commit-fast" if mode == "fast" else "commit-work"
-        if not committed and not (base and head and head != base):
+        if base:
+            # HEAD != base is the whole test: an old commit from a previous run that
+            # reused this slice id must never count as "committed" for THIS run.
+            committed = bool(head) and head != base
+        else:
+            subjects = [ln.partition("\x1f")[2] for ln in git(["log", "--format=%H%x1f%s", "-n", "200"], wt).splitlines()]
+            committed = any(s.startswith(f"{pfx}({sid})") for s in subjects
+                            for pfx in ("feat", "test", "chore", "docs", "perf", "refactor"))
+        if not committed:
             problems.append(f"nothing committed yet → finish the slice and run "
                             f"`{helper} \"<title>\"` (no RED/GREEN split for this kind)")
         if kind == "refactor":
-            changed_tests = [f for f in git(["diff", "--name-only", base, "HEAD"], wt).splitlines()
+            changed_tests = [f for f in git(["diff", "--no-renames", "--name-only", base, "HEAD"], wt).splitlines()
                              if f and is_test_path(f, globs)] if base else []
             if changed_tests:
                 problems.append("a REFACTOR slice changed test files: " + ", ".join(changed_tests[:6]) +
@@ -828,7 +1124,7 @@ def guard_stop(inp):
         red = (read_lines(sd / "red") or [""])[0]
         frozen = read_lines(sd / "red_files")
         if red and frozen:
-            changed = git(["diff", "--name-only", red, "HEAD", "--"] + frozen, wt)
+            changed = git(["diff", "--no-renames", "--name-only", red, "HEAD", "--"] + frozen, wt)
             if changed:
                 problems.append("tests you committed in " + red[:9] + " were changed afterwards: " +
                                 changed.replace("\n", ", ") + " → a spike slice needs no tests, but may not weaken "
@@ -857,7 +1153,7 @@ def guard_stop(inp):
     else:
         frozen = read_lines(sd / "red_files")
         if frozen:
-            changed = git(["diff", "--name-only", red, "HEAD", "--"] + frozen, wt)
+            changed = git(["diff", "--no-renames", "--name-only", red, "HEAD", "--"] + frozen, wt)
             if changed:
                 problems.append("frozen test files changed after RED: " + changed.replace("\n", ", ") +
                                 " → restore them (`git checkout " + red[:9] + " -- <file>`) and commit; a wrong test = Status: Blocked")
@@ -910,16 +1206,149 @@ def guard_edit_ro(inp):
          "Report findings; a programmer applies fixes.")
 
 
+# Mutating tools are denied at command position only (see ro_mutating_tool below). RO_MUTATING_RE is the
+# plain substring scan kept as the fallback for a command whose quoting shlex cannot parse.
+RO_MUTATING_TOOLS = ("rm", "mv", "cp", "chmod", "chown", "mkdir", "touch", "truncate", "dd", "ln", "rsync",
+                     "tee", "install")
+RO_MUTATING_RE = r"(^|[\s;&|])(" + "|".join(RO_MUTATING_TOOLS) + r")\b"
+
 BASH_RO_DENY = [
-    r"(^|[\s;&|])(rm|mv|cp|chmod|chown|mkdir|touch|truncate|dd|ln|rsync|tee|install)\b",
     r"\bsed\s+-[a-zA-Z]*i",
     r"\bperl\s+-[a-zA-Z]*i",
     r"(^|[^&<>])>{1,2}(?!\s*/dev/null\b|&)",
-    r"\bgit\s+(add|commit|checkout|switch|reset|merge|rebase|push|pull|fetch|stash(?!\s+(?:list|show)\b)|clean|rm|mv|tag|apply|cherry-pick|revert|worktree|branch\s+-[dDmM]|filter-branch)\b",
+    r"\bgit\s+(add|commit|checkout|switch|reset|rebase|push|pull|fetch|clean|rm|mv|tag|apply|cherry-pick|revert|branch\s+-[dDmM]|filter-branch)\b",
+    r"\bgit\s+merge\b(?!-)",
+    r"\bgit\s+worktree\b(?!\s+list\b)",
+    r"\bgit\s+stash\b(?!\s+(list|show)\b)",
     r"\b(npm|pnpm|yarn|bun)\s+(install|i|add|remove|uninstall|update|publish|link)\b",
     r"\b(pip|pip3|poetry|uv|conda|cargo|go|gem|composer)\s+(install|add|remove|uninstall|update|publish)\b",
+    r"\b(brew|apt|apt-get|dnf|yum|apk|pacman|snap|pipx|bundle|make)\s+(install|remove|uninstall|upgrade)\b",
     r"\bpython[0-9.]*\s+-c\s+.*open\([^)]*['\"][wa]",
 ]
+
+_RO_WRAPPER_FLAGS = {       # wrapper -> its options that consume the next token
+    "env": {"-u", "-C", "--unset", "--chdir"},
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D", "-R", "--user", "--group", "--host"},
+    "time": {"-f", "-o", "--format", "--output"},
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+    "nice": {"-n", "--adjustment"},
+    "ionice": {"-c", "-n", "-p", "-P", "-u"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "xargs": {"-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "-J"},
+    "exec": {"-a"},
+    "nohup": set(), "command": set(), "setsid": set(), "busybox": set(), "builtin": set(),
+}
+_RO_SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+_RO_KEYWORDS = {"{", "}", "!", "if", "then", "else", "elif", "do", "while", "until"}
+_RO_FIND_EXEC = {"-exec", "-execdir", "-ok", "-okdir"}
+_RO_REDIRECT = re.compile(r"[<>&]*[<>][<>&]*")
+_RO_ASSIGN = re.compile(r"[A-Za-z_]\w*=.*")
+
+
+def _ro_segments(cmd):
+    """Token lists of the simple commands in `cmd`, split on unquoted `;` `&` `|` `(` `)`, newline and
+    backtick. Raises ValueError when the quoting cannot be parsed."""
+    flat, q, esc = [], "", False
+    for ch in cmd:
+        if esc:
+            esc = False
+        elif ch == "\\" and q != "'":
+            esc = True
+        elif q:
+            q = "" if ch == q else q
+        elif ch in "'\"":
+            q = ch
+        elif ch in "\n`":
+            ch = " ; "
+        flat.append(ch)
+    if q:
+        raise ValueError("unterminated quote")
+    lex = shlex.shlex("".join(flat), posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    lex.commenters = ""         # `ls a#b; rm x` has no comment: `#` only starts one at the start of a word
+    segs, cur = [], []
+    for t in lex:
+        if all(c in ";&|()" for c in t):
+            if cur:
+                segs.append(cur)
+            cur = []
+        else:
+            cur.append(t)
+    if cur:
+        segs.append(cur)
+    return segs
+
+
+def _ro_skip_wrapper(seg, i, base):
+    """Index of the command a wrapper (`env`, `sudo`, `timeout 5`, `xargs -I {}` ...) runs; `i` is the
+    index just after the wrapper word."""
+    takes_arg = _RO_WRAPPER_FLAGS[base]
+    while i < len(seg):
+        t = seg[i]
+        if t == "--":
+            return i + 1
+        if t in takes_arg:
+            i += 2
+        elif t.startswith("-") or _RO_ASSIGN.fullmatch(t):
+            i += 1
+        else:
+            break
+    return i + 1 if base == "timeout" else i       # timeout's first operand is the duration
+
+
+def _ro_seg_tool(seg, depth):
+    """The RO_MUTATING_TOOLS name that one simple command runs, else ''."""
+    if depth > 5:
+        raise ValueError("nesting too deep")
+    i = 0
+    while i < len(seg):
+        tok = seg[i]
+        base = os.path.basename(tok)
+        if _RO_REDIRECT.fullmatch(tok):
+            i += 2                                  # the operator and its target are not the command
+        elif _RO_ASSIGN.fullmatch(tok) or tok in _RO_KEYWORDS or tok.isdigit():
+            i += 1
+        elif base in RO_MUTATING_TOOLS:
+            return base
+        elif base in _RO_WRAPPER_FLAGS:
+            if base == "command" and seg[i + 1:i + 2] in (["-v"], ["-V"]):
+                return ""                           # `command -v rm` only looks the name up
+            i = _ro_skip_wrapper(seg, i + 1, base)
+        elif base in _RO_SHELLS:
+            for j in range(i + 1, len(seg) - 1):
+                if seg[j].startswith("-") and not seg[j].startswith("--") and "c" in seg[j]:
+                    return ro_mutating_tool(seg[j + 1], depth + 1)
+            return ""
+        elif base == "eval":
+            return ro_mutating_tool(" ".join(seg[i + 1:]), depth + 1)
+        elif base == "find":
+            for j in range(i + 1, len(seg)):
+                if seg[j] in _RO_FIND_EXEC:
+                    hit = _ro_seg_tool(seg[j + 1:], depth + 1)
+                    if hit:
+                        return hit
+            return ""
+        else:
+            return ""
+    return ""
+
+
+def ro_mutating_tool(cmd, depth=0):
+    """The mutating tool `cmd` runs at command position, else ''. Command position means the start of
+    any `;` `&&` `||` `|` newline segment, after env/sudo/time/timeout/nice/nohup/command wrappers,
+    after `xargs` and `find -exec`, and inside an `sh -c` / `eval` payload. A tool name that is only an
+    argument (`grep -rn install src`, `ls | grep dd`) is not a hit. Raises ValueError when `cmd`
+    cannot be parsed; the caller then falls back to RO_MUTATING_RE."""
+    for seg in _ro_segments(cmd):
+        hit = _ro_seg_tool(seg, depth)
+        if hit:
+            return hit
+    return ""
+
+
+def deny_ro(raw):
+    deny(f"Read-only role: `{raw[:80]}` looks like it modifies files/packages/git state. "
+         "Use Read/Grep/Glob, run tests/linters/diffs only, and report instead of changing anything.")
 
 
 def find_state_root(start):
@@ -968,10 +1397,16 @@ def guard_bash_ro(inp):
     if redirected:
         deny(f"Read-only role: `{raw[:80]}` points git at another checkout (`-C` / `--git-dir` / "
              "`--work-tree`). Read this repository in place instead.")
+    scan = strip_for_scan(cmd)
+    try:
+        mutating = ro_mutating_tool(raw)
+    except ValueError:          # quoting shlex cannot parse: keep the conservative substring scan
+        mutating = re.search(RO_MUTATING_RE, scan)
+    if mutating:
+        deny_ro(raw)
     for pat in BASH_RO_DENY:
-        if re.search(pat, cmd):
-            deny(f"Read-only role: `{raw[:80]}` looks like it modifies files/packages/git state. "
-                 "Use Read/Grep/Glob, run tests/linters/diffs only, and report instead of changing anything.")
+        if re.search(pat, scan):
+            deny_ro(raw)
     why = ro_forbidden_form(cmd)
     if why:
         deny(f"Read-only role: `{raw[:80]}` is blocked: {why}. Run checks in their read-only form "

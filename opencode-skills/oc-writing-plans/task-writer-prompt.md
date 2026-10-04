@@ -20,6 +20,7 @@ LINT: `{LINT}`
 3. Lint. If the write result already shows a `plan-lint:` note, that note IS the
    lint result - do not run the command again. Otherwise run LINT in one shell
    call. On `ERR`, edit the file and lint again; at most 3 rounds. Fix `WARN`
-   lines that are real problems.
+   lines that are real problems. A `.fail` mark beside a task file holds its last
+   lint errors and is removed by the next clean lint.
 4. Reply with exactly one line per task: `T07 OK` or `T07 FAIL: <first error>`.
    Never echo the body. No summary, no preamble.

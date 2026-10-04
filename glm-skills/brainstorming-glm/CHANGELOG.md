@@ -28,6 +28,17 @@
   `background: true`).
 - researcher agent: falls back to web fetch when web search has no
   provider, and never waits on an interactive prompt.
+- Parity repair against the original brainstorming 6.3: the spec commit is
+  conditional (skipped when the user or a loaded instruction file forbids
+  committing self-initiated files, with the "not committed" review-gate
+  text); the hand-off passes the committed or untracked spec path and
+  checks the installed `writing-plans` name first; R0 allows visual
+  companion screens; round 1 loads deferred tools first; `allowed-tools`
+  gains `start-server.sh`, `stop-server.sh` and `kill -0`; red flag
+  "Spawn 64 because I can"; `glm-tuning.md` states the weaker independence
+  of Flash judgment lanes and fixes the install path.
+- Visual companion scripts, `helper.js`, `frame-template.html`, `context.sh`
+  and `visual-companion.md` re-synced from the original.
 
 # 9.2-glm (from 9.1) — OpenCode effort correction
 

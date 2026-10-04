@@ -43,6 +43,7 @@ Needs bash (3.2+ works), git and python3 (stdlib only). `timeout`/`gtimeout` is 
     scripts/oc-bisect-parallel.sh       k-ary git bisect in worktrees, log_(J+1) N rounds
     scripts/oc-find-polluter.sh         parallel polluter search, one worktree per worker
     opencode/agents/oc-debug-worker.md  worker agent for the scan rows (declares no model)
+    evals/README.md                     manual scenarios graded by hand, never loaded at runtime
 
 ## Measured
 
@@ -67,3 +68,5 @@ Iron Law; two-sided hypotheses; failed candidate fixes count toward the 3-fix st
 ## Changelog
 
 10.0 - OpenCode v2 only. `scan` always writes worker briefs and prints one background dispatch row per worker plus a `NEXT:` line that tells the model to read the `VERDICT:` replies; it no longer calls a model API. Removed the tier, model and effort flags, the API-key and base-URL handling, harness detection and the other-harness setup blocks. The `oc-debug-worker` agent declares no model, and the model-tuning reference and the duplicate top-level agent file are deleted.
+
+Parity repair against the original systematic-debugging 6.3 (still 10.0): the control and treatment arms of a hypothesis run one after the other; SWARM routing again covers non-deterministic, multi-component, performance, many-cause and unknown-culprit failures; the worker agent gets `steps: 12`; `scan` is capped at 64 areas; evals are ported into `evals/README.md`.

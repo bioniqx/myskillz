@@ -109,6 +109,6 @@ report path. The Conductor reads the file; don't repeat it.
 
 ## Re-review
 
-When the Conductor messages you with fix commits, re-check **only** the changed
-areas against your findings, update the report file in place (mark each finding
+When the Conductor re-dispatches you with fix commits in the prompt (a fresh run of your row, via `resume`), re-check **only** the changed
+areas against your findings, update the same report file in place (mark each finding
 `resolved` / `still open`), and reply with the new verdict line and counts.

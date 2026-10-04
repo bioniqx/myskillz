@@ -9,7 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-ORIG = Path(__file__).resolve().parents[2] / "requirements-code-audit"
+ORIG = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-requirements-code-audit"
 FORK_AUDIT = HERE / "scripts" / "audit.py"
 
 SPEC = (
@@ -66,12 +66,13 @@ def run(script, root, env, *args):
     return p
 
 
-def make_audit(script, root, env, cap=3):
+def make_audit(script, root, env, cap=3, audit_dir=".hybrid-audit"):
     (root / "src").mkdir(parents=True, exist_ok=True)
     (root / "src" / "app.py").write_text("def login(email, password):\n    return True\n", encoding="utf-8")
     (root / "spec.md").write_text(SPEC, encoding="utf-8")
-    run(script, root, env, "init", "--spec", str(root / "spec.md"), "--cap", str(cap), "--lang", "en")
-    (root / ".hybrid-audit" / "checklist.jsonl").write_text(
+    extra = ["--preset", "claude"] if audit_dir == ".hybrid-audit" else []
+    run(script, root, env, "init", "--spec", str(root / "spec.md"), "--cap", str(cap), "--lang", "en", *extra)
+    (root / audit_dir / "checklist.jsonl").write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in CHECKLIST) + "\n", encoding="utf-8")
 
 
@@ -98,23 +99,24 @@ class ForkFilesTest(unittest.TestCase):
 
     @unittest.skipUnless(ORIG.is_dir(), "requirements-code-audit not present")
     def test_references_match_original(self):
-        for name in ("report-format.md", "workflow-mode.md"):
-            self.assertEqual((HERE / "references" / name).read_bytes(),
-                             (ORIG / "references" / name).read_bytes(), name)
+        # workflow-mode.md differs on purpose (skill/workflow names, haiku routing): not compared.
+        for name in ("report-format.md",):
+            fork = (HERE / "references" / name).read_text(encoding="utf-8").replace(".hybrid-audit", ".audit")
+            self.assertEqual(fork, (ORIG / "references" / name).read_text(encoding="utf-8"), name)
 
     @unittest.skipUnless(ORIG.is_dir(), "requirements-code-audit not present")
     def test_plan_and_parse_plan_match_original(self):
         outs = []
-        for script, sub in ((ORIG / "scripts" / "audit.py", "orig"), (FORK_AUDIT, "fork")):
+        for script, sub, adir in ((ORIG / "scripts" / "audit.py", "orig", ".audit"), (FORK_AUDIT, "fork", ".hybrid-audit")):
             root = self.tmp / sub / "work"
-            make_audit(script, root, self.env)
-            texts = [norm(run(script, root, self.env, "plan").stdout, root),
-                     norm(run(script, root, self.env, "parse-plan", "--sections", "2").stdout, root)]
-            audit_dir = root / ".hybrid-audit"
+            make_audit(script, root, self.env, audit_dir=adir)
+            texts = [norm(run(script, root, self.env, "plan").stdout, root).replace(adir, "<AUDIT>"),
+                     norm(run(script, root, self.env, "parse-plan", "--sections", "2").stdout, root).replace(adir, "<AUDIT>")]
+            audit_dir = root / adir
             files = sorted((audit_dir / "batches").glob("*.md")) + sorted((audit_dir / "parse").glob("*.md"))
             self.assertTrue(files)
             for f in files:
-                texts.append(f.name + "\n" + norm(f.read_text(encoding="utf-8"), root))
+                texts.append(f.name + "\n" + norm(f.read_text(encoding="utf-8"), root).replace(adir, "<AUDIT>"))
             outs.append(texts)
         self.assertEqual(outs[0], outs[1])
 

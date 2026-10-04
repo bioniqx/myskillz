@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -11,7 +12,7 @@ HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
 TOOL = SKILL / "scripts" / "plan_tool.py"
 FAKE = HERE / "fake_opencode.py"
-WP62 = Path(__file__).resolve().parents[3] / "claude-skills" / "writing-plans-6.2"
+WP62 = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-writing-plans-6.2"
 TOOL62 = WP62 / "scripts" / "plan_tool.py"
 
 PLAN = "\n".join([
@@ -130,6 +131,8 @@ class GoldenTest(unittest.TestCase):
         briefs = work / "briefs"
         return {f.name: f.read_text(encoding="utf-8") for f in sorted(briefs.iterdir())} if briefs.is_dir() else {}
 
+    maxDiff = None
+
     def compare(self, *args):
         rc62, out62 = self.run_tool(TOOL62, "contracts", self.plan, *args)
         briefs62 = self.snapshot(self.work62)
@@ -141,9 +144,13 @@ class GoldenTest(unittest.TestCase):
             # the fork differs from 6.2 only by its tool path and its own work dir name
             return s.replace(str(TOOL62), str(TOOL)).replace("/.work/", "/.hybrid-work/")
 
+        def norm(s):
+            # the fork pins every TIER_MODEL to sonnet (the original varies): normalise the writer MODEL column
+            return re.sub(r"^(\s*[TW]\d+\s+)(?:haiku|sonnet|opus)\s+", r"\1MODEL ", s, flags=re.M)
+
         self.assertEqual(rc62, 0, out62)
         self.assertEqual(rc, rc62, out)
-        self.assertEqual(out, swap(out62))
+        self.assertEqual(norm(out), norm(swap(out62)))
         self.assertTrue(briefs62)
         self.assertEqual(sorted(briefs), sorted(briefs62))
         for name, text in briefs62.items():

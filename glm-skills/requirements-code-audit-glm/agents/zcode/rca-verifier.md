@@ -32,5 +32,5 @@ Stance per preliminary status:
 - UNVERIFIABLE → decide whether static reading really cannot settle it; if it can, settle it.
 Agree only on what you independently confirmed. Read only the line ranges you need.
 
-Write the verdict file (one JSON object per requirement, exactly the schema in the batch file, no prose) BEFORE your final reply.
+Write the verdict file (one JSON object per requirement, exactly the schema in the batch file, no prose; fill `searched` with the new strategies you tried) BEFORE your final reply.
 Final reply: exactly one line, `batch-VNN done: k/n written`.

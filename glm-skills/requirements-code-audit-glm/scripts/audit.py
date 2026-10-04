@@ -22,6 +22,7 @@ import argparse
 import codecs
 import io
 import json
+import math
 import os
 import posixpath
 import random
@@ -61,6 +62,7 @@ TIERS = {
     },
 }
 DEFAULT_TIER = "std"
+VERIFY_MAX_PER_AGENT = 3  # items per verifier batch on the agent lane (the original's value)
 AGENT_ALIAS = {FLASH: "haiku", PRO: "sonnet"}  # agent lane only; never "opus"
 
 STATUSES = ["MATCHED", "PARTIAL", "MISSING", "CONFLICT", "UNVERIFIABLE", "UNSEARCHED"]
@@ -107,25 +109,66 @@ def write_json(p, obj):
 
 
 def read_jsonl(p):
-    rows, bad = [], []
+    """Tolerant JSONL reader: returns (rows, errors). Skips blank lines and
+    // or # comments, tolerates trailing commas and a JSON array wrapper, and
+    falls back to a whole-file parse (or a stream of concatenated values) when
+    nothing parses line by line. Strips a leading BOM."""
+    rows, line_errors = [], []
     if not os.path.exists(p):
-        return rows, bad
-    with io.open(p, encoding="utf-8", errors="replace") as fh:
-        for i, line in enumerate(fh, 1):
-            line = line.strip().lstrip(u"﻿")
-            if not line or line.startswith("//"):
-                continue
-            try:
-                obj = json.loads(line)
-                if isinstance(obj, dict):
-                    rows.append(obj)
-                elif isinstance(obj, list):
-                    rows.extend([o for o in obj if isinstance(o, dict)])
-                else:
-                    bad.append((i, "not an object"))
-            except Exception as e:
-                bad.append((i, str(e)[:90]))
-    return rows, bad
+        return rows, line_errors
+    with io.open(p, encoding="utf-8-sig", errors="replace") as fh:
+        raw = fh.read()
+    whole = raw.strip()
+    if not whole:
+        return rows, line_errors
+    name = os.path.basename(p)
+    try:
+        obj = json.loads(whole)
+        if isinstance(obj, dict):
+            return [obj], []
+        if isinstance(obj, list):
+            return [o for o in obj if isinstance(o, dict)], []
+    except json.JSONDecodeError:
+        pass
+    for n, line in enumerate(raw.splitlines(), 1):
+        s = line.strip()
+        if not s or s.startswith("//") or s.startswith("#"):
+            continue
+        s = s.rstrip(",")
+        if s in ("[", "]"):
+            continue
+        try:
+            obj = json.loads(s)
+            if isinstance(obj, dict):
+                rows.append(obj)
+            elif isinstance(obj, list):
+                rows.extend(o for o in obj if isinstance(o, dict))
+        except json.JSONDecodeError as e:
+            line_errors.append("%s:%d: %s" % (name, n, e.msg))
+    if rows and not line_errors:
+        return rows, []
+    decoder = json.JSONDecoder()
+    idx, size, stream_rows, stream_errors = 0, len(whole), [], []
+    while idx < size:
+        while idx < size and whole[idx] in " \t\r\n,":
+            idx += 1
+        if idx >= size:
+            break
+        try:
+            obj, end = decoder.raw_decode(whole, idx)
+        except json.JSONDecodeError as e:
+            stream_errors.append("%s: %s" % (name, e.msg))
+            break
+        if isinstance(obj, dict):
+            stream_rows.append(obj)
+        elif isinstance(obj, list):
+            stream_rows.extend(o for o in obj if isinstance(o, dict))
+        idx = end
+    if stream_rows and not stream_errors:
+        return stream_rows, []
+    if rows:
+        return rows, line_errors
+    return stream_rows, (stream_errors or line_errors)
 
 
 def write_jsonl(p, rows):
@@ -261,7 +304,7 @@ __pycache__ .pytest_cache .mypy_cache .ruff_cache .tox .nox dist build out targe
 .next .nuxt .svelte-kit .parcel-cache .turbo .cache coverage htmlcov .idea .vscode
 .gradle .terraform .serverless .dart_tool Pods DerivedData bin obj .audit
 """.split())
-SKIP_DIR_RE = re.compile(r"^(\.audit\.prev-|\.)")
+SKIP_DIR_RE = re.compile(r"^\.audit\.prev-")
 BIN_EXT = set("""
 .png .jpg .jpeg .gif .bmp .ico .webp .svgz .pdf .zip .gz .bz2 .xz .7z .rar .tar
 .mp3 .mp4 .mov .avi .wav .ogg .webm .ttf .otf .woff .woff2 .eot .so .dylib .dll
@@ -291,6 +334,7 @@ CODE_EXT = set("""
 .erl .hrl .clj .cljs .cljc .hs .ml .mli .fs .fsx .dart .lua .r .jl .sh .bash .zsh .ps1
 .sql .graphql .gql .proto .prisma .tf .yaml .yml .json .toml .ini .cfg .conf .xml
 .html .htm .css .scss .sass .less .styl .tsv .env .properties .gradle .bzl .cmake
+.erb .sol .cshtml
 """.split())
 
 
@@ -489,6 +533,69 @@ def docx_text(path):
     return txt.strip(), warn
 
 
+def xml_unescape(s):
+    for a, b in ((u"&lt;", u"<"), (u"&gt;", u">"), (u"&quot;", u'"'),
+                 (u"&apos;", u"'"), (u"&amp;", u"&")):
+        s = s.replace(a, b)
+    return s
+
+
+def xml_text(s):
+    return xml_unescape(re.sub(r"<[^>]+>", "", s))
+
+
+def pdf_text(path):
+    exe = shutil.which("pdftotext")
+    if not exe:
+        return "", ("pdftotext not found -- extract the PDF text with another tool, save it "
+                    "under .audit/spec/ and re-add it with `spec --add`")
+    try:
+        res = subprocess.run([exe, "-layout", path, "-"], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, timeout=120)
+    except Exception as e:
+        return "", "pdftotext failed: %s" % e
+    txt = res.stdout.decode("utf-8", "replace").strip()
+    if res.returncode != 0 or not txt:
+        return "", "pdftotext produced no text -- scanned PDF? extract it by hand"
+    return txt, ""
+
+
+def xlsx_text(path):
+    lines = []
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = z.namelist()
+            shared = []
+            if "xl/sharedStrings.xml" in names:
+                xml = z.read("xl/sharedStrings.xml").decode("utf-8", "replace")
+                for si in re.findall(r"<si\b.*?</si>", xml, re.S):
+                    shared.append(xml_text(si))
+            sheets = sorted((n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n)),
+                            key=lambda n: int(re.search(r"(\d+)\.xml$", n).group(1)))
+            for name in sheets:
+                xml = z.read(name).decode("utf-8", "replace")
+                for row in re.findall(r"<row\b.*?</row>", xml, re.S):
+                    cells = []
+                    for attrs, body in re.findall(r"<c\b([^>]*?)(?:/>|>(.*?)</c>)", row, re.S):
+                        v = re.search(r"<v>(.*?)</v>", body or "", re.S)
+                        if 't="s"' in attrs and v and v.group(1).strip().isdigit():
+                            i = int(v.group(1))
+                            cells.append(shared[i] if i < len(shared) else "")
+                        elif 't="inlineStr"' in attrs:
+                            cells.append(xml_text(body or ""))
+                        elif v:
+                            cells.append(xml_unescape(v.group(1)))
+                        else:
+                            cells.append("")
+                    line = "\t".join(cells).rstrip("\t")
+                    if line.strip():
+                        lines.append(line)
+    except Exception as e:
+        return "", "xlsx extract failed: %s" % e
+    txt = "\n".join(lines).strip()
+    return txt, ("" if txt else "xlsx text looks empty -- check extraction")
+
+
 def load_spec(paths):
     chunks, warns = [], []
     for p in paths:
@@ -497,7 +604,15 @@ def load_spec(paths):
             t, w = docx_text(p)
             if w:
                 warns.append("%s: %s" % (p, w))
-        elif ext in (".pdf", ".xlsx", ".pptx", ".doc"):
+        elif ext == ".pdf":
+            t, w = pdf_text(p)
+            if w:
+                warns.append("%s: %s" % (p, w))
+        elif ext in (".xlsx", ".xlsm"):
+            t, w = xlsx_text(p)
+            if w:
+                warns.append("%s: %s" % (p, w))
+        elif ext in (".pptx", ".doc"):
             t = ""
             warns.append("%s: binary spec -- extract it to text with the matching skill, "
                          "save under .audit/spec/ and re-add with `spec --add`" % p)
@@ -597,11 +712,12 @@ class Retriever(object):
     def _rg(self, patterns, fixed=True, tests_only=False, data_only=False):
         args = [self.rg, "--no-heading", "--line-number", "--no-messages", "-i",
                 "--max-count", "6", "--max-columns", "400", "--max-filesize", "1200K",
-                "--threads", "2"]
+                "--threads", "2", "--hidden"]
         if fixed:
             args.append("-F")
         for d in sorted(SKIP_DIRS):
             args += ["--glob", "!" + d + "/**"]
+        args += ["--glob", "!.audit.prev-*/**"]
         for e in sorted(DOC_EXT):
             args += ["--glob", "!*" + e]
         if tests_only:
@@ -1178,6 +1294,17 @@ def norm_cite_path(raw, root):
     return rel, False
 
 
+def is_git_path(path):
+    """True when a cited path lies under a .git directory."""
+    return ".git" in str(path or "").replace(os.sep, "/").split("/")
+
+
+def is_audit_path(path):
+    """True when a cited path lies under .audit or an archived .audit.prev-* folder."""
+    return any(seg == ".audit" or SKIP_DIR_RE.match(seg)
+               for seg in str(path or "").replace(os.sep, "/").split("/"))
+
+
 def lint_finding(row, item, root, retrieved_paths, kind="finding"):
     """Deterministic gate. Everything it rejects is handed straight back to the
     model as the repair prompt, so a bad answer costs one cheap retry, never a
@@ -1212,6 +1339,15 @@ def lint_finding(row, item, root, retrieved_paths, kind="finding"):
         if outside:
             errs.append("evidence path %s is outside the codebase; cite repo-relative "
                         "paths shown in the excerpts" % path)
+            continue
+        if is_git_path(path):
+            errs.append("evidence path %s is under .git/, which is never evidence; cite "
+                        "code, tests, schemas, config or migrations" % path)
+            continue
+        if is_audit_path(path):
+            errs.append("evidence path %s is under .audit/ or an archived .audit.prev-* "
+                        "folder, which is never evidence; cite code, tests, schemas, "
+                        "config or migrations" % path)
             continue
         if is_doc(path):
             errs.append("evidence path %s is prose documentation, which is never "
@@ -1481,6 +1617,44 @@ def verify_targets(order, by_id, findings, done, prev_ver):
 
 # --------------------------------------------------------------------------- merge
 
+def as_list(v):
+    if v is None or v == "":
+        return []
+    if isinstance(v, list):
+        return v
+    return [v]
+
+
+def plan_ids(p):
+    """A plan.jsonl entry's ids, normalised: `ids` may be a string or a list."""
+    ids = as_list(p.get("ids"))
+    if not ids and p.get("id"):
+        ids = [p.get("id")]
+    return ids
+
+
+def normalize_row(r):
+    """Coerce worker output into the expected shapes (string evidence, string searched)."""
+    ev = []
+    for e in as_list(r.get("evidence")):
+        if isinstance(e, dict):
+            ev.append({"path": str(e.get("path") or e.get("file") or ""),
+                       "lines": str(e.get("lines") or e.get("line") or ""),
+                       "note": str(e.get("note") or e.get("summary") or "")})
+        elif isinstance(e, str):
+            mm = re.match(r"^\s*([^\s:]+):(\d+(?:\s*-\s*\d+)?)\s*(?:[—:-]\s*(.*))?$", e)
+            if mm:
+                ev.append({"path": mm.group(1), "lines": mm.group(2).replace(" ", ""),
+                           "note": mm.group(3) or ""})
+            else:
+                ev.append({"path": e, "lines": "", "note": ""})
+    r["evidence"] = ev
+    r["searched"] = [str(s) for s in as_list(r.get("searched"))]
+    if isinstance(r.get("confidence"), str):
+        r["confidence"] = r["confidence"].strip().lower()
+    return r
+
+
 class Merged(object):
     """Single source of truth for 'where does every requirement stand'.
     Precedence: adjudication > verifier verdict > investigator finding."""
@@ -1519,6 +1693,9 @@ class Merged(object):
         for row in rows:
             if row.get("id"):
                 self.adj[row["id"]] = row
+        for table in (self.find, self.ver, self.ver_rejected):
+            for row in table.values():
+                normalize_row(row)
 
     def _add_verdict(self, row):
         """RA5: a verdict row carrying lint_error was rejected by the checker.
@@ -1534,12 +1711,12 @@ class Merged(object):
             self.ver_rejected.pop(rid, None)
 
     def final(self, rid):
-        it = self.by_id.get(rid) or {}
-        if _tagged_unverifiable(it):
-            return "UNVERIFIABLE", "tag"
         a = self.adj.get(rid)
         if a and str(a.get("final_status") or "").upper() in FINAL_STATUSES:
             return str(a["final_status"]).upper(), "lead"
+        it = self.by_id.get(rid) or {}
+        if _tagged_unverifiable(it):
+            return "UNVERIFIABLE", "tag"
         v = self.ver.get(rid)
         if v and str(v.get("verified_status") or "").upper() in FINAL_STATUSES:
             return str(v["verified_status"]).upper(), "verifier"
@@ -1549,10 +1726,11 @@ class Merged(object):
         return "UNSEARCHED", "none"
 
     def evidence(self, rid):
-        for src in (self.ver.get(rid), self.find.get(rid)):
-            if src and src.get("evidence"):
-                return src["evidence"]
-        return []
+        fs, _src = self.final(rid)
+        v = self.ver.get(rid)
+        vs = str((v or {}).get("verified_status") or "").upper()
+        src = v if (v and vs == fs) else self.find.get(rid)
+        return list((src or {}).get("evidence") or [])
 
     def note(self, rid):
         a = self.adj.get(rid)
@@ -1808,6 +1986,49 @@ def split_sections(text, k):
     return [text[a:b] for a, b in secs if text[a:b].strip()]
 
 
+def section_rows(res):
+    """Rows from every section reply, and the sections that failed or returned nothing."""
+    rows, failed = [], []
+    for key in sorted(res):
+        txt, err = res[key]
+        if err:
+            failed.append((key, clip(str(err), 160)))
+            continue
+        got = extract_jsonl(txt)
+        if not got:
+            failed.append((key, "no requirement rows in the reply"))
+            continue
+        rows.extend(got)
+    return rows, failed
+
+
+def renumber_draft(rows):
+    """Number the draft REQ-001.. in order and default the optional keys. Identical
+    text is kept: two real requirements can read the same."""
+    out = []
+    for i, r in enumerate(rows, 1):
+        r = dict(r)
+        r["id"] = "REQ-%03d" % i
+        r.setdefault("tags", [])
+        r.setdefault("stakes", "normal")
+        r.setdefault("search_hints", [])
+        out.append(r)
+    return out
+
+
+def possible_duplicates(rows):
+    """(id, id, jaccard) for near-identical requirement text; informational only."""
+    toks = [set(re.findall(r"\w{2,}", (r.get("text") or "").lower())) for r in rows]
+    dups = []
+    for i in range(len(rows)):
+        for j in range(i + 1, min(len(rows), i + 60)):
+            if toks[i] and toks[j]:
+                jac = len(toks[i] & toks[j]) / float(len(toks[i] | toks[j]))
+                if jac >= 0.8:
+                    dups.append((rows[i]["id"], rows[j]["id"], round(jac, 2)))
+    return dups
+
+
 def cmd_parse(a):
     c = Ctx(a.out)
     draft = c.p("checklist.draft.jsonl")
@@ -1827,7 +2048,7 @@ def cmd_parse(a):
         return
     if c.lane != "api":
         die("parse runs on the api lane. Without a key, write checklist.jsonl yourself "
-            "(the brief printed the schema), or use the parser subagents in agents/.")
+            "(the brief printed the schema).")
     text = read_text(c.p("spec", "spec.txt"))
     if not text.strip():
         die("no spec text -- re-run brief")
@@ -1854,26 +2075,15 @@ def cmd_parse(a):
         jobs.append(("s%02d" % i, mk_job()))
     fan = Fan(cl, c.threads)
     res = fan.run(jobs, "parse")
-    rows = []
-    for k2 in sorted(res):
-        txt, err = res[k2]
-        if err:
-            print("WARN  %s failed: %s" % (k2, clip(str(err), 160)))
-            continue
-        rows.extend(extract_jsonl(txt))
-    seen, clean = set(), []
-    for r in rows:
-        t = re.sub(r"\W+", " ", (r.get("text") or "").lower()).strip()
-        if not t or t in seen:
-            continue
-        seen.add(t)
-        clean.append(r)
-    for i, r in enumerate(clean, 1):
-        r["id"] = "REQ-%03d" % i
-        r.setdefault("tags", [])
-        r.setdefault("stakes", "normal")
-        r.setdefault("search_hints", [])
+    rows, failed = section_rows(res)
+    if failed:
+        for k2, why in failed:
+            print("ERR   section %s: %s" % (k2, why))
+        die("%d of %d section(s) produced no requirements; no draft was written. "
+            "Re-run: audit.py parse" % (len(failed), len(res)))
+    clean = renumber_draft(rows)
     write_jsonl(draft, clean)
+    dups = possible_duplicates(clean)
     errs = validate_checklist(clean)
     print("")
     print("draft: %d requirements -> %s   (%d api calls, %d in / %d out tokens, "
@@ -1882,6 +2092,9 @@ def cmd_parse(a):
         print("schema problems to fix while you review:")
         for e in errs[:15]:
             print("  " + e)
+    if dups:
+        print("possible duplicates (merge or keep): "
+              + ", ".join("%s~%s(%.2f)" % d for d in dups[:20]))
     print("NEXT: read the draft next to the original spec -- paraphrase drift, missing")
     print("      splits, thin search_hints are yours to fix. Then: audit.py parse --accept")
 
@@ -1893,8 +2106,8 @@ def validate_checklist(rows):
     seen = set()
     for i, r in enumerate(rows, 1):
         rid = r.get("id")
-        if not rid or not re.match(r"^[A-Z]+[-_]?\d+", str(rid)):
-            errs.append("line %d: id missing or not like REQ-001" % i)
+        if not rid or not isinstance(rid, str) or not rid.strip():
+            errs.append("line %d: id missing (any non-empty string, for example REQ-001)" % i)
             continue
         if rid in seen:
             errs.append("%s: duplicate id" % rid)
@@ -1911,11 +2124,6 @@ def validate_checklist(rows):
             errs.append("%s: tags must be a list" % rid)
         elif "ambiguous" in [str(t).lower() for t in tags] and not (r.get("question") or "").strip():
             errs.append("%s: tagged ambiguous but no question" % rid)
-        hints = r.get("search_hints") or []
-        if not _tagged_unverifiable(r) and len(hints) < 2:
-            errs.append("%s: only %d search_hint(s) -- thin hints are the main cause of a "
-                        "false MISSING; give identifiers, paths, field names and English "
-                        "synonyms" % (rid, len(hints)))
     return errs
 
 
@@ -2055,42 +2263,65 @@ def cmd_run(a):
 # --------------------------------------------------------------------------- queue / adjudicate
 
 
+def queue_rows(m):
+    """The original queue rule: verifier disagreement, a low-confidence verdict,
+    an unsettled item, a CONFLICT, an UNVERIFIABLE the checklist did not tag.
+    Rows the checker rejected stay queued: only this edition has a checker."""
+    out = []
+    dis = dict((d[0], d) for d in m.disagreements())
+    for it in m.items:
+        rid = it["id"]
+        if rid in m.adj or _tagged_unverifiable(it):
+            continue
+        st, _src = m.final(rid)
+        f, v = m.find.get(rid, {}), m.ver.get(rid, {})
+        why = []
+        if rid in dis:
+            why.append("verifier disagreed (%s -> %s)" % (dis[rid][1], dis[rid][2]))
+        if str(v.get("confidence") or "").lower() == "low":
+            why.append("verifier confidence low")
+        if st == "UNSEARCHED":
+            why.append("unsettled")
+        if st == "CONFLICT":
+            why.append("CONFLICT -- lead must confirm the contradiction")
+        if st == "UNVERIFIABLE":
+            why.append("worker says UNVERIFIABLE (not tagged by lead)")
+        if f.get("lint_error") or rid in m.ver_rejected:
+            why.append("checker rejected the model's answer")
+        if why:
+            out.append((rid, st, "; ".join(why)))
+    return out
+
+
+def spot_sample(m):
+    """Seeded random sample (at least 3, about 5%) of unverified MATCHED items.
+    The population and the draw depend only on the item set, so adjudicating one
+    sampled item never reshuffles the rest."""
+    universe = sorted(
+        it["id"] for it in m.items
+        if not _tagged_unverifiable(it)
+        and str((m.find.get(it["id"]) or {}).get("status") or "").upper() == "MATCHED"
+        and it["id"] not in m.ver)
+    if not universe:
+        return []
+    k = max(3, int(math.ceil(0.05 * len(universe))))
+    rnd = random.Random(len(m.items) * 7919 + len(universe))
+    sample = sorted(rnd.sample(universe, min(k, len(universe))))
+    return [rid for rid in sample if rid not in m.adj]
+
+
 def cmd_queue(a):
     c = Ctx(a.out)
     m = Merged(c)
     rows = []
-    dis = dict((d[0], d) for d in m.disagreements())
-    ids = [it["id"] for it in m.items]
-    for rid in ids:
-        it = m.by_id[rid]
-        st, src = m.final(rid)
-        f, v = m.find.get(rid, {}), m.ver.get(rid, {})
-        why = []
-        if rid in m.adj:
-            continue
-        if rid in dis:
-            why.append("verifier disagreed (%s -> %s)" % (dis[rid][1], dis[rid][2]))
-        if st in ("MISSING", "CONFLICT"):
-            why.append("%s -- confirm before it reaches the report" % st)
-        if st == "UNSEARCHED":
-            why.append("unsettled")
-        if (v.get("confidence") or f.get("confidence")) == "low":
-            why.append("low confidence")
-        if str(it.get("stakes")) == "high" and st != "MATCHED":
-            why.append("high stakes")
-        if f.get("lint_error") or rid in m.ver_rejected:
-            why.append("checker rejected the model's answer")
-        if not why:
-            continue
-        ev = m.evidence(rid)
-        rows.append((rid, st, "; ".join(why), ev, it, f, v))
-    # deterministic 5% spot-check of MATCHED, so a clean wave still gets sampled
-    matched = [i for i in ids if m.final(i)[0] == "MATCHED" and i not in m.adj]
-    step = max(1, int(round(1 / 0.05)))
-    spot = [matched[i] for i in range(0, len(matched), step)][:12]
+    for rid, st, why in queue_rows(m):
+        rows.append((rid, st, why, m.evidence(rid), m.by_id[rid],
+                     m.find.get(rid, {}), m.ver.get(rid, {})))
+    spot = spot_sample(m)
     print("ADJUDICATION QUEUE  (%d to decide, %d spot-checks)" % (len(rows), len(spot)))
     print("Read the cited lines in ONE batch, then record with:")
-    print("  audit.py adjudicate --set REQ-007 MISSING --note \"why\"   |   --accept REQ-003 REQ-004")
+    print("  audit.py adjudicate --set REQ-007 MISSING --note \"why\"   |   "
+          "--accept REQ-003 REQ-004   |   --accept-queue")
     print("")
     for rid, st, why, ev, it, f, v in rows:
         print("%s  %-12s %s" % (rid, st, why))
@@ -2129,28 +2360,50 @@ def cmd_adjudicate(a):
     c = Ctx(a.out)
     m = Merged(c)
     rows = []
-    if a.set:
-        rid, st = a.set[0], str(a.set[1]).upper()
+
+    def entry(rid, st, note):
+        return {"id": rid, "final_status": st, "note": note, "by": "lead", "at": ts_iso()}
+
+    for rid, st in (a.set or []):
+        st = str(st).upper()
         if rid not in m.by_id:
             die("unknown id %s" % rid)
         if st not in FINAL_STATUSES:
-            die("status must be one of %s" % "/".join(FINAL_STATUSES))
-        rows.append({"id": rid, "final_status": st, "note": a.note or "",
-                     "by": "lead", "at": ts_iso()})
+            die("%s: status must be one of %s" % (rid, "/".join(FINAL_STATUSES)))
+        rows.append(entry(rid, st, a.note or ""))
     for rid in (a.accept or []):
         if rid not in m.by_id:
             die("unknown id %s" % rid)
         st, _s = m.final(rid)
-        rows.append({"id": rid, "final_status": st, "note": a.note or "accepted as-is",
-                     "by": "lead", "at": ts_iso()})
-    if not rows:
-        die("nothing to record. Use --set ID STATUS --note \"...\" or --accept ID ...")
-    mk(c.out)
-    with io.open(c.p("adjudications.jsonl"), "a", encoding="utf-8") as fh:
+        if st == "UNSEARCHED":
+            die("%s: cannot accept UNSEARCHED (no finding yet) -- investigate it first, "
+                "or use --set %s STATUS" % (rid, rid))
+        rows.append(entry(rid, st, a.note or "accepted as-is"))
+    skipped = []
+    if a.accept_queue:
+        seen = set(r["id"] for r in rows)
+        queued = [r[0] for r in queue_rows(m)] + spot_sample(m)
+        for rid in queued:
+            if rid in seen:
+                continue
+            seen.add(rid)
+            st, _s = m.final(rid)
+            if st == "UNSEARCHED":
+                skipped.append(rid)
+                continue
+            rows.append(entry(rid, st, a.note or "accepted as-is"))
+    if not rows and not skipped:
+        die("nothing to record. Use --set ID STATUS [--note ...], --accept ID ..., "
+            "or --accept-queue")
+    if rows:
+        mk(c.out)
+        with io.open(c.p("adjudications.jsonl"), "a", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r, ensure_ascii=False) + u"\n")
         for r in rows:
-            fh.write(json.dumps(r, ensure_ascii=False) + u"\n")
-    for r in rows:
-        print("recorded %s = %s" % (r["id"], r["final_status"]))
+            print("recorded %s = %s" % (r["id"], r["final_status"]))
+    if skipped:
+        print("skipped (UNSEARCHED, run `audit.py run --resume` first): %s" % ", ".join(skipped))
 
 # --------------------------------------------------------------------------- report
 
@@ -2203,6 +2456,9 @@ ICON = {"MATCHED": "✅", "PARTIAL": "⚠️", "MISSING": "❌",
         "CONFLICT": "⛔", "UNVERIFIABLE": "❓", "UNSEARCHED": "⁉️"}
 
 
+HEADINGS["vi"]["unsearched"] = u"Chưa xác định"
+
+
 def ev_str(ev, limit=3):
     if not ev:
         return ""
@@ -2244,6 +2500,8 @@ def cmd_report(a):
                 ICON["MISSING"], H["missing"], cnt["MISSING"],
                 ICON["CONFLICT"], H["conflict"], cnt["CONFLICT"],
                 ICON["UNVERIFIABLE"], H["unverifiable"], cnt["UNVERIFIABLE"]))
+    if cnt["UNSEARCHED"]:
+        L.append(u"- %s %s: %d" % (ICON["UNSEARCHED"], H["unsearched"], cnt["UNSEARCHED"]))
     L.append(u"- %s: %d / %d\n" % (H["alignment"], cnt["MATCHED"], n))
     L.append(u"## " + H["trace"] + u"\n")
     L.append(u"| %s | %s | %s | %s | %s | %s |" % (H["id"], H["req"], H["strength"],
@@ -2253,10 +2511,10 @@ def cmd_report(a):
         rid = it["id"]
         fs, _src = m.final(rid)
         L.append(u"| %s | %s | %s | %s %s | %s | %s |" % (
-            rid, clip(it.get("text"), 160).replace("|", "\\|"),
+            rid, (it.get("text") or "").replace("|", "\\|").replace("\n", " "),
             it.get("strength", ""), ICON.get(fs, ""), slab(fs),
             ev_str(m.evidence(rid)).replace("|", "\\|"),
-            clip(m.note(rid), 120).replace("|", "\\|")))
+            clip(m.note(rid), 200).replace("|", "\\|")))
     L.append(u"")
     disc = [it for it in m.items if m.final(it["id"])[0] in ("PARTIAL", "MISSING",
                                                              "CONFLICT", "UNSEARCHED")]
@@ -2292,7 +2550,7 @@ def cmd_report(a):
             continue
         L.append(u"### " + pri + u"\n")
         for i, p in enumerate(grp, 1):
-            ids = p.get("ids") or ([p["id"]] if p.get("id") else [])
+            ids = plan_ids(p)
             L.append(u"%d. **%s** (%s) — %s %s" % (i, p.get("title", ""),
                                                          ", ".join(ids), H["effort"],
                                                          p.get("effort", "")))
@@ -2345,70 +2603,104 @@ def cmd_check(a):
     ids = [it["id"] for it in m.items]
     if not ids:
         errs.append("checklist is empty")
+    dis = dict((d[0], d) for d in m.disagreements())
+    second_pass_needed = False
     for it in m.items:
         rid = it["id"]
-        fs, src = m.final(rid)
+        fs, _src = m.final(rid)
         if fs == "UNSEARCHED":
             errs.append("%s is still unsettled (run: audit.py run --resume)" % rid)
             continue
         if _tagged_unverifiable(it):
             continue
-        if rid in m.ver_rejected and rid not in m.adj:
+        f = m.find.get(rid) or {}
+        v = m.ver.get(rid)
+        adj = m.adj.get(rid)
+        if rid in m.ver_rejected and not adj:
             errs.append("%s: the checker rejected the verifier's answer, so it has no second "
                         "pass -- adjudicate it or rerun: audit.py run --resume" % rid)
+        unverified = (not adj) and (not v) and needs_verify(it, f)
+        if unverified:
+            second_pass_needed = True
+        if unverified and fs == "MATCHED":
+            warns.append("%s: MATCHED with low confidence or high stakes but never verified"
+                         % rid)
+        elif unverified and fs != "MISSING":
+            errs.append("%s: %s item was never verified or adjudicated" % (rid, fs))
+        if rid in dis and not adj:
+            errs.append("%s: investigator (%s) and verifier (%s) disagree -- adjudicate"
+                        % (rid, dis[rid][1], dis[rid][2]))
         if fs == "MISSING":
-            v = m.ver.get(rid)
-            adj = m.adj.get(rid)
             if not v and not adj:
                 errs.append("%s is MISSING but never got a second pass -- a single-pass "
                             "MISSING is the most damaging error this audit can make" % rid)
-            q = set(str(x).lower() for x in
-                    ((v or {}).get("searched") or []) + (m.find.get(rid, {}).get("searched") or []))
-            for h in (it.get("search_hints") or [])[:12]:
-                if str(h).lower() not in q and not any(str(h).lower() in x for x in q):
-                    warns.append("%s: search_hint %r never appears in the recorded searches"
-                                 % (rid, h))
+            searched = [str(x).lower() for x in
+                        list((v or {}).get("searched") or []) + list(f.get("searched") or [])]
+            if not adj:
+                if not searched:
+                    errs.append("%s: MISSING without any `searched` terms -- every MISSING "
+                                "must list the searches run" % rid)
+                else:
+                    for h in (it.get("search_hints") or [])[:12]:
+                        hl = str(h).lower()
+                        if not any(hl in s or s in hl for s in searched):
+                            warns.append("%s: search_hint %r never appears in the recorded "
+                                         "searches" % (rid, h))
         for e in m.evidence(rid):
             p = e.get("path")
+            if is_git_path(p):
+                errs.append("%s cites %s which is under .git/" % (rid, p))
+                continue
             n = file_lines(c.repo, p)
             if n is None:
                 errs.append("%s cites %s which does not exist" % (rid, p))
                 continue
             aa, bb = parse_lines(e.get("lines"))
             if aa is None or aa > n:
-                errs.append("%s cites %s:%s beyond the file (%d lines)" % (rid, p, e.get("lines"), n))
+                errs.append("%s cites %s:%s beyond the file (%d lines)"
+                            % (rid, p, e.get("lines"), n))
             if is_doc(p or ""):
                 errs.append("%s cites prose documentation %s as evidence" % (rid, p))
     plan, bad = read_jsonl(c.p("plan.jsonl"))
     if bad:
         errs.append("plan.jsonl has %d unparseable line(s)" % len(bad))
-    planned = set()
+    planned = {}
     for p in plan:
-        for i in (p.get("ids") or ([p["id"]] if p.get("id") else [])):
-            planned.add(i)
+        for i in plan_ids(p):
+            planned.setdefault(i, []).append(p)
+        label = clip(p.get("title"), 40)
         if str(p.get("priority", "")).upper() not in ("P0", "P1", "P2"):
             errs.append("plan entry %r has priority %r (expected P0/P1/P2)"
-                        % (clip(p.get("title"), 40), p.get("priority")))
+                        % (label, p.get("priority")))
+        if str(p.get("effort", "")).upper() not in ("S", "M", "L"):
+            warns.append("plan entry %r: effort should be S/M/L" % label)
         if not p.get("target"):
-            warns.append("plan entry %r has no target state" % clip(p.get("title"), 40))
+            warns.append("plan entry %r has no target state" % label)
     for it in m.items:
         rid = it["id"]
         fs, _s = m.final(rid)
-        if fs in ("PARTIAL", "MISSING", "CONFLICT") and rid not in planned:
+        if fs not in ("PARTIAL", "MISSING", "CONFLICT"):
+            continue
+        if rid not in planned:
             errs.append("%s is %s but has no entry in plan.jsonl" % (rid, fs))
-        if fs == "CONFLICT" and rid in planned:
-            for p in plan:
-                pid = p.get("ids") or ([p["id"]] if p.get("id") else [])
-                if rid in pid and str(p.get("priority", "")).upper() != "P0":
-                    warns.append("%s is a CONFLICT but planned as %s (expected P0)"
-                                 % (rid, p.get("priority")))
+            continue
+        for p in planned[rid]:
+            pr = str(p.get("priority", "")).upper()
+            if fs == "CONFLICT" and pr != "P0":
+                warns.append("%s is a CONFLICT but planned as %s (expected P0)" % (rid, pr))
+            if it.get("strength") == "MUST" and it.get("stakes") == "high" and pr != "P0":
+                warns.append("%s: unmet high-stakes MUST but priority %s (expected P0)"
+                             % (rid, pr))
+            if it.get("strength") == "MAY" and pr == "P0":
+                warns.append("%s: MAY requirement at P0" % rid)
     spot = (c.state().get("spotcheck") or [])
     if spot and not any(s in m.adj for s in spot):
         warns.append("none of the %d spot-check items was adjudicated -- read a few cited "
                      "ranges yourself before signing off" % len(spot))
     run = c.state().get("run") or {}
-    if run and run.get("wave_b", 0) == 0 and c.lane == "api":
-        warns.append("no second pass ran in this audit")
+    if run and run.get("wave_b", 0) == 0 and c.lane == "api" and second_pass_needed:
+        errs.append("no second pass ran in this audit although items needed one "
+                    "(do not use --no-verify for a real audit)")
     for e in errs:
         print("ERR   " + e)
     for w in warns[:25]:
@@ -2450,7 +2742,7 @@ def cmd_finish(a):
               % (fmt_dur(run.get("seconds", 0)), run.get("calls", 0),
                  run.get("peak_threads", 0), run.get("cached_in_tokens", 0)))
     print("  report %s" % c.p("requirements-code-audit.md"))
-    print("  write guard disarmed -- implementing fixes is allowed from here if asked.")
+    print("  audit closed -- implementing fixes is allowed from here if asked.")
 
 
 def cmd_finalize(a):
@@ -2506,7 +2798,13 @@ def _batch_file(c, retr, name, items, kind="find"):
     L.append(read_text(c.p("repo-map.txt")))
     L.append(u"")
     L.append(u"Output schema per line:")
-    L.append(JUDGE_SCHEMA if kind == "find" else VERIFY_SCHEMA)
+    if kind == "find":
+        L.append(JUDGE_SCHEMA.replace(
+            '"notes":', '"searched":["every query, glob or path you actually ran"],"notes":'))
+    else:
+        L.append(VERIFY_SCHEMA.replace(
+            '"reason":', '"searched":["new queries or paths you tried"],"reason":'))
+    L.append(u"Every MISSING must list the searches you ran in \"searched\".")
     L.append(u"")
     L.append(u"Status meanings: MATCHED implemented as worded | PARTIAL a specified detail "
              u"missing or deviating | CONFLICT code does the opposite | MISSING nothing found "
@@ -2641,6 +2939,18 @@ def _agent_groups(items, cap, max_per, opencode):
     return [items[i:i + size] for i in range(0, len(items), size)]
 
 
+def clear_run_artifacts(c, st):
+    """Re-running `plan` starts a fresh wave: drop stale findings and verify rows and the
+    verifier batch bookkeeping, so a re-plan never layers on a previous run."""
+    for sub in ("findings", "verify"):
+        d = c.p(sub)
+        if os.path.isdir(d):
+            for name in os.listdir(d):
+                if name.endswith(".jsonl"):
+                    os.remove(os.path.join(d, name))
+    st["vbatches"] = {}
+
+
 def cmd_plan(a):
     c = Ctx(a.out)
     items, bad = c.checklist()
@@ -2671,6 +2981,8 @@ def cmd_plan(a):
     mk(c.p("findings"))
     mk(c.p("verify"))
     st = c.state()
+    if not getattr(a, "resume", False):
+        clear_run_artifacts(c, st)
     st["batches"] = dict(kept)
     print("plan:%d requirements -> %d batch file(s) of %d, excerpts pre-retrieved"
           % (len(live), len(groups), size))
@@ -2711,7 +3023,7 @@ def cmd_status(a):
     if vset:
         cap = int(a.cap or c.threads or 20)
         idx = len([k for k in (st.get("vbatches") or {})])
-        groups = _agent_groups(list(vset), cap, 6, _on_opencode())
+        groups = _agent_groups(list(vset), cap, VERIFY_MAX_PER_AGENT, _on_opencode())
         st.setdefault("vbatches", {})
         vlines = []
         for j, g in enumerate(groups, idx + 1):
@@ -2916,8 +3228,10 @@ def main(argv=None):
     p.set_defaults(fn=cmd_queue)
 
     p = sub.add_parser("adjudicate", help="record final decisions")
-    p.add_argument("--set", nargs=2, metavar=("ID", "STATUS"))
+    p.add_argument("--set", nargs=2, action="append", metavar=("ID", "STATUS"))
     p.add_argument("--accept", nargs="+")
+    p.add_argument("--accept-queue", action="store_true",
+                   help="accept every queued item (UNSEARCHED ones are skipped)")
     p.add_argument("--note", default=None)
     p.set_defaults(fn=cmd_adjudicate)
 

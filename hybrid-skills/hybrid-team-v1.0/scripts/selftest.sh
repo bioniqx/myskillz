@@ -631,6 +631,7 @@ check "finish refuses to close over a review that is not APPROVED" '[[ "$(D fini
 printf '## Review verdict: APPROVED\n## Findings\nNo issues found.\n' > .claude/hybrid-team/reviews/r1.report.md
 OUT=$(D next 2>&1)
 check "a report rewritten in place IS re-harvested (the re-review loop can close)" '[[ "$OUT" == *"REVIEW r1: APPROVED"* && "$OUT" == *"re-review, round 2"* ]]'
+D checkpoint >/dev/null 2>&1; D checkpoint --result pass >/dev/null 2>&1
 check "and finish then closes cleanly" '[[ "$(D finish 2>&1)" == *"FINISHED"* ]]'
 
 echo "== v3.1 fix slices from agent-written reports are untrusted input"

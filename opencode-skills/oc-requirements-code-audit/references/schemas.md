@@ -13,28 +13,27 @@ only `checklist.jsonl`, `plan.jsonl` and `adjudications.jsonl` (the last one via
 | `category` | no | short area label (`auth`, `orders`, `api`, …). Biases retrieval ranking toward matching directories |
 | `stakes` | no | `high` (security, auth, permissions, payments, data integrity, privacy, safety) or `normal` (default). High → always verified twice |
 | `evidence_expected` | no | what code would prove it (endpoint, validation, migration, test…). Feeds retrieval keywords |
-| `search_hints` | yes | 4-10 identifiers, endpoint paths, field/table names, config keys, error codes **and English synonyms**. Fewer than 2 makes `run` refuse the checklist |
+| `search_hints` | yes | 4-10 identifiers, endpoint paths, field/table names, config keys, error codes **and English synonyms**. Fewer than 2 makes `plan` refuse the checklist |
 | `tags` | no | `static-limit` (needs runtime verification) / `ambiguous` (needs product decision). Tagged items skip the waves |
 | `source` | no | section/page reference in the spec |
 | `question` | required if `ambiguous` | the question for the product owner |
 
-## `findings.jsonl` — written by the first pass (`run`), or by investigators into `findings/batch-NN.jsonl`
+## `findings/batch-NN.jsonl` — written by investigators (hedges: `batch-NN.r2.jsonl`, repairs: `repair-rN-NN.jsonl`)
 
 ```json
 {"id":"REQ-001","status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE|UNSEARCHED","confidence":"high|medium|low",
  "evidence":[{"path":"src/auth/login.py","lines":"41-58","note":"what the code does re: the requirement"}],
- "searched":["every query actually run, both passes"],"passes":2,"notes":"<=200 chars",
+ "searched":["every query actually run"],"notes":"<=200 chars",
  "more_queries":["terms the model asked for"],
  "retrieval":{"engine":"ripgrep","files":["ranked files"],"layers":["strategies used"]}}
 ```
 
 Enforced by the checker before the row is kept: every `path` exists and is not prose documentation; every line
 range is inside the file; `MATCHED`/`PARTIAL`/`CONFLICT` carry at least one evidence entry; a citation outside
-the excerpts downgrades `confidence`. `searched` and `passes` are filled by the script from the real queries,
-never taken from the model. `UNSEARCHED` means the answer was rejected or the request failed — `run --resume`
-re-asks it.
+the excerpts downgrades `confidence`. `searched` is written by the worker; `check` fails a MISSING without it. `UNSEARCHED` means the answer was
+rejected or the lane was lost — the verifier wave re-investigates it (`status --failed`, `plan --resume`).
 
-## `verdicts.jsonl` — written by the adversarial pass, or by verifiers into `verify/batch-VNN.jsonl`
+## `verify/batch-VNN.jsonl` — written by verifiers
 
 ```json
 {"id":"REQ-001","verified_status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE","agree":true,

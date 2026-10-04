@@ -8,7 +8,7 @@
   wait      PLAN [--review] [--timeout S] [--idle S]   block until every task (or review) file lints OK
   review    PLAN [--all] [--size N] [--agents K] pick risky tasks, write reviewer briefs, print DISPATCH
   assemble  PLAN [--clean]                       full check, render canonical plan, splice task bodies
-  check     PLAN [--spec S]                      same as assemble for a plan with inline tasks (<= 3 tasks)
+  check     PLAN [--spec S]                      same as assemble for a plan with inline tasks (the single-task path)
   setup     [--scope user|project] [--apply]     raise subagent cap to 64, pre-approve tools, install writer agent
 Common: --allow WORD (repeatable) exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """

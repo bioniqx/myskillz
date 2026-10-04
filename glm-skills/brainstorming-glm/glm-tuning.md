@@ -24,6 +24,16 @@ Time to first token: GLM-5.3 3.43 s, Flash 2.34 s. Both carry a 1M
 context window and 128K max output, so "read everything plausible in
 round 1" is cheap in context and expensive only in rounds.
 
+Judgment lanes on Flash. The claim verifier, the approach drafts, the
+spec pre-draft and any escalated spec reviewers also run on Flash (R2):
+a cost-justified choice we keep, with weaker independence. Flash and
+GLM-5.3 are one model family, so a lane shares the main thread's blind
+spots, and Flash is less likely to catch a subtle contradiction. Treat a
+Flash verifier or reviewer as a cheap second look, not an independent
+audit: check only the claims that decide the design, force different
+lenses on drafts, and promote at most one lane to GLM-5.3 when its
+verdict picks the approach.
+
 ## 2. Runtime setup
 
 Claude Code against the coding plan (`~/.claude/settings.json` env, or
@@ -114,8 +124,8 @@ instruction; R4 is written to hold either way.
 
 ## 6. OpenCode harness
 
-Install with `python3 skills/glm/_shared/oc_harness.py install
-skills/glm/brainstorming-glm`, which renders `opencode/agents/explorer.md`
+Install from the `glm-skills/` folder with `python3 _shared/oc_harness.py install
+brainstorming-glm`, which renders `opencode/agents/explorer.md`
 and `opencode/agents/researcher.md` plus `opencode/commands/brainstorm.md`
 into the detected v1 or v2 dialect and writes `.oc-major` under the installed
 skill folder. Tool-name map: `task` for a lane, `todowrite` for TaskCreate,

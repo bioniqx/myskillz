@@ -50,6 +50,13 @@ Verified 2026-09-18 against z.ai's own model pages, the ZCode docs and the OpenC
    client drops that one field, retries without spending a retry, and remembers the working shape for the rest
    of the run. `doctor --ping` prints the shape that was accepted.
 
+6. **Gate parity with the Claude Code edition.** `check` applies the original gate: a non-MATCHED item must be
+   verified or adjudicated, a verifier disagreement must be adjudicated, a MISSING needs a second pass and
+   recorded searches, citations must exist and must not be prose or `.git/`, and the plan must cover every
+   discrepancy (warnings: effort, P0 anchors, MATCHED with low confidence or high stakes never verified). The
+   adjudication queue and the seeded spot-check follow the original rule; the checker-rejected rows stay in the
+   queue because only this edition has a checker. A verify batch holds at most 3 items on the agent lane.
+
 ## Failure modes seen with GLM on this task
 
 1. **Fabricated `path:lines`.** The most common bad answer, and the reason the checker verifies every citation

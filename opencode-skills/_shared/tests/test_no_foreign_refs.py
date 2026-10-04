@@ -1,8 +1,13 @@
 """Tracked files must not name other model vendors or harnesses.
 
 The few files below keep one intentional mention each (OpenCode scans the foreign skills folder, plan
-bodies are linted for vendor names, repos may carry a convention file of another harness). The banned words are
-assembled from fragments so this file never matches itself.
+bodies are linted for vendor names, repos may carry a convention file of another harness, the repo guide
+`CLAUDE.md` names the sibling folders it is derived from). Further entries, and why:
+the port and parity tests (test_oc_*_port.py, test_parity_markers.py, test_plan_lint.py, test_plan_perf.py,
+test_oc_install.py) name the original folder they compare against or exercise vendor detection itself; the
+ported scripts (oc_plan_tool.py, oc-find-polluter.sh) keep the harness dot-dir exclude from the original;
+this file lists itself because it names the repo guide `CLAUDE.md`. The banned words are still assembled
+from fragments, but that alone does not keep the file clean, hence its own entry.
 """
 import os
 import re
@@ -15,10 +20,18 @@ BANNED = re.compile(
     + r")\b|z\." + "ai|cla" + "ude", re.I)
 ALLOWED = {
     "install-opencode.sh",
-    "writing-plans/scripts/oc_plan_tool.py",
+    "CLAUDE.md",
+    "oc-writing-plans/scripts/oc_plan_tool.py",
     "_shared/tests/test_plan_perf.py",
     "_shared/tests/test_plan_lint.py",
     "_shared/tests/test_oc_install.py",
+    "_shared/tests/test_oc_debug_port.py",
+    "_shared/tests/test_oc_devteam_port.py",
+    "_shared/tests/test_oc_guard_port.py",
+    "_shared/tests/test_oc_plan_lint_port.py",
+    "_shared/tests/test_parity_markers.py",
+    "_shared/tests/test_no_foreign_refs.py",
+    "oc-systematic-debugging/scripts/oc-find-polluter.sh",
 }
 
 
@@ -35,6 +48,10 @@ class NoForeignRefs(unittest.TestCase):
                     if BANNED.search(line):
                         hits.append(f"{rel}:{n}: {line.strip()[:100]}")
         self.assertEqual(hits, [])
+
+    def test_allowlist_names_only_existing_files(self):
+        missing = [rel for rel in sorted(ALLOWED) if not os.path.isfile(os.path.join(ROOT, rel))]
+        self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":

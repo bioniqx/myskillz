@@ -237,4 +237,7 @@ lane failed on opencode.
   `allowed-tools` that add the `bslane.py` pin.
 - Telemetry: one JSON line per lane appended to `<root>/.hybrid-superpowers/brainstorm/lanes.jsonl`
   with role, tier, model, variant, duration, tokens, grounded `n/m`, outcome and reason - no cost field.
-- Preset `claude` reproduces brainstorming-6.3's behaviour exactly.
+- The preset `claude` runs every lane on Claude with brainstorming-6.3's
+  lane roles, prompts and flow. It still differs in the run-mode question
+  at Step 0, the `hybrid-` names, the `.hybrid-superpowers/` state
+  directory, the relay rule and the `hybrid-writing-plans` hand-off.

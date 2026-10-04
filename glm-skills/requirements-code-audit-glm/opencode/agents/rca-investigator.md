@@ -34,7 +34,8 @@ How to work fast without missing things:
    CONFLICT (code actively contradicts it), MISSING (nothing found within the budget), UNVERIFIABLE (not settleable by reading;
    say why). confidence=high only when the evidence directly implements the requirement.
 4. An adversarial verifier re-checks every non-MATCHED item, so over-searching only slows the wave. Report MISSING with
-   `searched` filled in and move on.
+   `searched` listing every query, glob and path you ran (the gate rejects a MISSING without it) and move on.
+   Never cite a path under `.git/` or a prose document: the checker rejects it.
 5. Write the findings file (one JSON object per requirement, exactly the schema in the batch file, no prose) BEFORE your final
    reply. Running out of turns: write what you have and mark the rest `"status":"UNSEARCHED"`.
 6. Final reply: exactly one line, `batch-NN done: k/n written`. All detail belongs in the file.

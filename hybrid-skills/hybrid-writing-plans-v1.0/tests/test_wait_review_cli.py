@@ -442,14 +442,20 @@ class SetupAgentTest(CliBase):
     def agent_path(self):
         return self.home / ".claude" / "agents" / "hybrid-plan-task-writer.md"
 
-    def test_existing_agent_is_never_overwritten(self):
+    def test_stale_agent_is_refreshed_and_current_agent_left_untouched(self):
         self.agent_path().parent.mkdir(parents=True)
         self.agent_path().write_text("custom agent\n", encoding="utf-8")
         r = self.run_tool("setup", "--apply")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertNotIn("write agent", r.stdout)
-        self.assertEqual(self.agent_path().read_text(encoding="utf-8"), "custom agent\n")
+        self.assertIn("write agent", r.stdout)
+        refreshed = self.agent_path().read_text(encoding="utf-8")
+        self.assertNotEqual(refreshed, "custom agent\n")
+        self.assertNotIn("__PLAN_TOOL__", refreshed)
         self.assertTrue((self.home / ".claude" / "settings.json").exists())
+        r = self.run_tool("setup", "--apply")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("write agent", r.stdout)
+        self.assertEqual(self.agent_path().read_text(encoding="utf-8"), refreshed)
 
     def test_missing_agent_is_installed(self):
         r = self.run_tool("setup", "--apply")

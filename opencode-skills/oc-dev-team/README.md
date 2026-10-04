@@ -24,7 +24,7 @@ oc-dev-team/                    ← thư mục nguồn; được copy thành ~/.
   SKILL.md  README.md
   scripts/oc_devteam.py  scripts/oc_guard.py  scripts/oc_harness.py  scripts/oc-selftest.sh
   opencode/agents/*.md          ← agent không có dòng model/effort
-  opencode/plugins/devteam-guard.v2.js
+  opencode/plugins/oc-devteam-guard.v2.js
 ```
 
 1. Chạy `sh install-opencode.sh`: script copy skill, các agent và plugin guard vào thư mục cấu hình OpenCode.
@@ -45,7 +45,7 @@ Yêu cầu: OpenCode 2.0.x (kiểm chứng với 2.0.20), git ≥ 2.31, python3;
 
 ## Đã kiểm thử
 
-- `bash scripts/oc-selftest.sh` — dựng repo git tạm, đi hết vòng đời (init, dispatch, claim `--worktree`, RED/GREEN, integrate, checkpoint, review, report, resume, retry, guard `oc`, plugin v2). Môi trường test cô lập (HOME tạm) và không khởi chạy tiến trình `opencode` nào. Đã bỏ phần governor/provider, các check hook của harness khác và toàn bộ check tiến trình lane; các check engine giữ nguyên. Trên macOS có 5 check lỗi từ trước do khác biệt userland BSD; hãy chạy trên Linux trước khi tin một kết quả đỏ.
+- `bash scripts/oc-selftest.sh` — dựng repo git tạm, đi hết vòng đời (init, dispatch, claim `--worktree`, RED/GREEN, integrate, checkpoint, review, report, resume, retry, guard `oc`, plugin v2). Môi trường test cô lập (HOME tạm) và không khởi chạy tiến trình `opencode` nào. Đã bỏ phần governor/provider, các check hook của harness khác và toàn bộ check tiến trình lane; các check engine giữ nguyên. Selftest phải kết thúc với 0 FAIL; số PASS hiện hành được ghi trong kết quả chạy xác minh, không cố định trong tài liệu này.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests` — bộ test Python chung.
 
 ## Lịch sử ngắn

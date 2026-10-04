@@ -1303,7 +1303,7 @@ def briefing_text(st, s, mode):
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_OC_MAX_PARALLEL = 6
+DEFAULT_OC_MAX_PARALLEL = 4
 SKILL_NAME = "hybrid-team"
 BREAKER_KINDS = ("auth", "quota", "model", "config")   # non-retryable: trip the run's breaker
 WARN_KINDS = ("gate", "empty", "format", "recovered")  # opencode answered; a gate rejected or rescued it
@@ -1813,8 +1813,6 @@ def cmd_dispatch(a):
 
 
 def do_integrate(root, st, ids, remove=True):
-    if git(["status", "--porcelain", "--untracked-files=no"], root):
-        raise DevteamError("integration checkout has uncommitted tracked changes — commit/stash first")
     cur = git(["rev-parse", "--abbrev-ref", "HEAD"], root)
     if cur != st["integration_branch"]:
         raise DevteamError(f"HEAD is {cur}, expected integration branch {st['integration_branch']}")
@@ -2063,6 +2061,14 @@ def integrate_one(root, st, sid, remove=True):
 
 
 def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, remove, label=None):
+    # an uncommitted change to a path this slice also changes would be overwritten by the merge;
+    # every other uncommitted change in the integration checkout is none of this slice's business
+    clash = sorted(set(touched) & {p for _, p in dirty_tracked(root)})
+    if clash:
+        return reject(s, "dirty-root",
+                      f"{sid}: NOT INTEGRATED — uncommitted changes in the integration checkout touch paths "
+                      f"this slice also changes: {', '.join(clash)}. Commit or stash them there, then "
+                      f"integrate again.", files=clash)
     # merge (repo hooks and signing off: 64 background agents can't answer prompts)
     r = sh(["git"] + NO_SIGN + ["merge", "--no-ff", "--no-verify", "--no-edit", "-m", f"merge({sid}): {s['title']}", tip],
            cwd=root, check=False)
@@ -3025,6 +3031,27 @@ def cmd_stats(a):
     return 0
 
 
+def finish_gate_problems(st):
+    """Conditions that make `finish` unsafe: an empty list means the run is verified. A run that
+    merged nothing (research only) needs no checkpoint."""
+    problems = []
+    cps = st.get("checkpoints") or []
+    if st.get("checkpoint_pending"):
+        problems.append("a checkpoint is still pending (its exit code has not been read yet)")
+    if st["merges"]:
+        if not cps:
+            problems.append("no checkpoint has been recorded")
+        else:
+            if cps[-1].get("result") != "pass":
+                problems.append(f"the last checkpoint result is {cps[-1].get('result')}, not pass")
+            since = st.get("merges_since_checkpoint", 0)
+            if since > 0:
+                problems.append(f"{since} merge(s) landed after the last checkpoint snapshot")
+    if st.get("verification_verdict") == "CHANGES_REQUIRED":
+        problems.append("the verification verdict is CHANGES_REQUIRED")
+    return problems
+
+
 def cmd_finish(a):
     root = Path(a.root) if getattr(a, "root", None) else find_root()
     st = load_state(root)
@@ -3063,11 +3090,17 @@ def cmd_finish(a):
         raise DevteamError("reviews not closed: " + "; ".join(open_reviews) +
                            " — address their findings (`next` harvests each report, `add-fixes` for a "
                            "report it could not parse) or pass --force to finish anyway")
+    gate = finish_gate_problems(st)
+    if gate and not a.force:
+        raise DevteamError("finish gate: " + "; ".join(gate) + " (clear it with `next` / `checkpoint`, "
+                           "or pass --force to finish anyway)")
     out(f"FINISHED: {len(st['merges'])} slices merged on {st['integration_branch']}   [profile {profile(st)}]")
     summary = write_summary(root, st)
     out(f"PR-ready summary written to {summary} (e.g. `gh pr create --fill --body-file {q(summary)}`)")
     if open_reviews:
         out("! REVIEWS NOT CLOSED (finishing anyway because --force): " + "; ".join(open_reviews))
+    if gate:
+        out("! FINISH GATE BYPASSED (--force): " + "; ".join(gate))
     traded = []
     if pol(st, "gate") == "deferred":
         traded.append("lint/type-check/build ran once at the end instead of per slice")
@@ -3262,6 +3295,17 @@ def doctor_opencode(root, routing, ping, only=None):
     write_atomic(sd / "oc_status.json", json.dumps(status))
 
 
+def doctor_wants_oc(root, routing, explicit):
+    """Whether doctor runs the opencode checks: an explicit `oc` wins, else the run's preset, else the
+    routing preset. Preset claude never spawns opencode."""
+    if explicit is not None:
+        return bool(explicit)
+    try:
+        return st_preset(load_state(root)) != "claude"
+    except DevteamError:
+        return hybrid_shared.mode_to_preset(routing.get("preset") or "hybrid")[0] != "claude"
+
+
 def cmd_doctor(a):
     root = Path(a.root) if getattr(a, "root", None) else toplevel()
     routing_path = Path(a.routing) if getattr(a, "routing", None) else user_routing_path()
@@ -3276,7 +3320,7 @@ def cmd_doctor(a):
         routing = json.loads(routing_path.read_text())
     else:
         routing = {"tiers": {}}
-    if getattr(a, "oc", True):          # preset claude: opencode is never spawned
+    if doctor_wants_oc(root, routing, getattr(a, "oc", None)):   # preset claude: opencode is never spawned
         doctor_opencode(root, routing, getattr(a, "ping", False))
     problems, notes, fixes = [], [], {}
     gv = git(["--version"]).split()[-1]

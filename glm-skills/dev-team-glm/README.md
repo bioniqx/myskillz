@@ -79,7 +79,7 @@ Trên OpenCode, engine tự nhận harness qua `oc_harness.harness()` khi có m�
 
 ## Đã kiểm thử
 
-- `bash scripts/selftest.sh` — **308 check, 308 pass** (247 check cũ vẫn giữ, 61 check mới cho v4). Dựng
+- `bash scripts/selftest.sh` — **368 check, 368 pass, 0 fail** (247 check cũ vẫn giữ, phần còn lại là check mới cho v4 và bản vá parity). Dựng
   repo git tạm, đi hết vòng đời; môi trường test cô lập (HOME tạm, không đọc transcript thật).
 - **Mutation test**: cố tình phá 13 cơ chế mới (halving, re-queue, leo thang khi retry, effort lite,
   capability, offset transcript, cửa sổ tier, peak, khử trùng request, baseline run mới, relaunch, điều

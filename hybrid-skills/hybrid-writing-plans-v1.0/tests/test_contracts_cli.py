@@ -168,7 +168,7 @@ class ContractsRoutingTest(CliBase):
             self.assertIn("%-4s %-7s %-9s %s" % (gid, backend, span, briefs / (gid + ".oc.md")), lines)
             self.assertTrue((briefs / (gid + ".oc.md")).is_file(), gid)
             self.assertFalse((briefs / (gid + ".md")).exists(), gid)
-        self.assertIn("%-4s %-7s %-9s %s" % ("T04", "opus", "T04", briefs / "T04.md"), lines)
+        self.assertIn("%-4s %-7s %-9s %s" % ("T04", "sonnet", "T04", briefs / "T04.md"), lines)
         self.assertTrue((briefs / "T04.md").is_file())
         dispatch = [i for i, l in enumerate(lines) if l.startswith("DISPATCH 1 writers in ONE message")]
         self.assertEqual(len(dispatch), 1, out)

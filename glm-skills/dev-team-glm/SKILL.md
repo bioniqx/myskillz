@@ -85,6 +85,7 @@ Launch dev-team agents only through the engine's process lane (`devteam next` / 
    relaunch for a review or research lane).
 5. `Explore` and `general-purpose` do not exist on OpenCode. Wherever this file says `Explore`, use
    the built-in `general` agent.
+6. Re-review: a reviewer lane has exited and cannot be messaged. Once the fixes are merged, the next review dispatch that `next` prints is a fresh reviewer lane scoped to the fix commits; never try to message the old one. The loop cap of 2 still applies.
 
 ## Route first (one line to the user, then act)
 
@@ -135,7 +136,7 @@ A skipped RED run is replaced by a static check: `commit-red` refuses tests with
 cases than criteria. Choose `turbo`/`spike` **only when the user asks** ("fast mode", "nhanh nhất",
 "prototype", "throwaway", "no tests"); never infer it, never carry it to the next request. `spike`: say
 in one line what is traded, list every untested slice at the end with an offer to harden it. In
-`turbo`/`spike` never block on a question: take the recommended default, record it under `## Assumptions`.
+`turbo`/`spike` never block on a question: take the recommended default, record it under `## Assumptions`; every decision taken this way also goes in the final report.
 
 ## GLM runtime (what v4 adds)
 
@@ -162,7 +163,7 @@ in one line what is traded, list every untested slice at the end with an offer t
 3. **GREEN** — minimum code; affected tests + file-scoped lint/type-check; commit.
 4. **Review** — one `code-reviewer`; prompt = request + criteria + changed files + `git diff <base> HEAD` +
    test command + report path `.claude/dev-team/reviews/fast.report.md`. Fix BLOCKER/MAJOR yourself,
-   test-first; re-review by `SendMessage` to the same reviewer; loop cap 2; MINOR → user.
+   test-first; re-review by `SendMessage` to the same reviewer (on OpenCode: item 6 of "Phases 2-4 on OpenCode"); loop cap 2; MINOR → user.
 5. Report as in Phase 4.
 
 ## Pipeline
@@ -171,7 +172,7 @@ in one line what is traded, list every untested slice at the end with an offer t
 
 1. Bash, background: the full test command (baseline). Bash: `git status --porcelain` and `devteam probe`
    (prints build/test/lint/typecheck incl. the `lint_file`/`typecheck_file` forms — check them). Dirty
-   tracked files → one bundled question (`init` refuses a dirty index).
+   tracked files → one bundled question (`init` refuses a dirty index). `SendMessage` and `TaskStop` may be deferred tools (Claude Code): if a call fails because the tool is not available, load it with ToolSearch `select:SendMessage,TaskStop`, then retry.
 2. **Plan at the lowest rung that fits:**
    - **User supplied a plan** (message, `PLAN.md`, spec, ticket): adopt it. Execution-ready → write
      `plan.md` from it. Gaps → `team-leader` in **PLAN ADOPTION** mode. Plans in files the user didn't
@@ -267,8 +268,8 @@ Slicing rules: **vertical** (S1 = thinnest end-to-end path); `deps` only for tru
 a pinned contract is not a dependency; `files` = exact source **and test** paths, pairwise **disjoint**;
 `size` honestly — it is the scheduler weight *and* the model router (`trivial` → lite lane, `large` →
 GLM-5.3); `risk: high` sparingly (security, concurrency, subtle logic — split RED/GREEN on GLM-5.3 +
-verification); `isolation: true` when tests touch a port/DB/filesystem outside the footprint. Width beyond
-the governor window buys nothing: on a small tier prefer fewer coherent slices over many tiny ones.
+verification); `isolation: true` when tests touch a port/DB/filesystem outside the footprint. **Width is the product you are designing**: cut the leanest viable slices, give each slice a `kind`,
+and keep footprints disjoint. The governor window is a stated limit that only queues the width you designed.
 
 ## Rules that never bend
 

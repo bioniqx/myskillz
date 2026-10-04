@@ -1,7 +1,7 @@
 ---
 name: hybrid-requirements-code-audit
 description: "Opt-in fork of requirements-code-audit: use only when the user says 'hybrid', mentions 'opencode', asks to save tokens, cost or usage limits in a requirements/spec audit, or invokes /hybrid-requirements-code-audit. Audits whether a codebase implements a requirements document and produces the same traceability report and prioritized fix plan as requirements-code-audit, but runs the investigator wave and the spec parsers (and, in mode opencode, verifiers) on the opencode CLI, with models from $HYBRID_OPENCODE_STD and $HYBRID_OPENCODE_LITE. Asks for the run mode (hybrid, Claude only or opencode only) first and reports every opencode failure at once. Every opencode row must pass a deterministic evidence oracle before it counts; the checklist, adjudication, verification of risky items and the remediation plan stay on Claude."
-compatibility: Claude Code (full speed - parallel subagents, bundled agents, guard hooks) or Cowork/claude.ai (generic subagents or solo mode). Needs python3; no third-party packages.
+compatibility: Claude Code (full speed - parallel subagents, optional guard hook) or Cowork/claude.ai (generic subagents or solo mode). Needs python3; no third-party packages.
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
@@ -39,13 +39,13 @@ the number of agents. So:
 ## Roles and modes
 
 - **Lead** (you, Claude): parses the spec, dispatches waves, adjudicates the queue, writes the plan. Never does legwork a worker can do.
-- **Investigators** (opencode agent `hybrid-audit-investigator`, or Claude `rca-investigator` haiku): one batch file each, evidence gathering only.
-- **Verifiers** (`rca-verifier`, sonnet; opencode `hybrid-audit-verifier` in mode `opencode`): adversarial second pass on every non-MATCHED, low-confidence or high-stakes item.
-- **Parsers** (opencode `hybrid-audit-parser` in modes `hybrid` and `opencode`; Claude `rca-parser`, sonnet, in mode `claude` and as the fallback): only for large specs — parallel decomposition, lead keeps the faithfulness pass.
+- **Investigators** (opencode agent `hybrid-audit-investigator`, or Claude `claude-rca-investigator`, sonnet in mode claude and haiku for overflow, hedges and fallbacks): one batch file each, evidence gathering only.
+- **Verifiers** (`claude-rca-verifier`, sonnet; opencode `hybrid-audit-verifier` in mode `opencode`): adversarial second pass on every non-MATCHED, low-confidence or high-stakes item.
+- **Parsers** (opencode `hybrid-audit-parser` in modes `hybrid` and `opencode`; Claude `claude-rca-parser`, sonnet, in mode `claude` and as the fallback): only for large specs — parallel decomposition, lead keeps the faithfulness pass.
 
-The Claude workers `rca-investigator`, `rca-verifier` and `rca-parser` (and the `req-audit:` plugin prefix) belong to the original `requirements-code-audit` skill; this fork ships none. They exist only when that skill is installed; otherwise use generic mode.
+The Claude workers `claude-rca-investigator`, `claude-rca-verifier` and `claude-rca-parser` (and the `claude-req-audit:` plugin prefix) belong to the original `requirements-code-audit` skill; this fork ships none of them. They exist only when that skill is installed; otherwise use generic mode.
 Pick `--agents` at init from the subagent types your Agent tool lists:
-`req-audit:rca-investigator` listed → `plugin` (hardened: hooks + tool-restricted agents) · `rca-investigator` listed → `local` ·
+`claude-req-audit:claude-rca-investigator` listed → `plugin` (hardened: tool-restricted agents; add this fork's guard hook for structural blocking) · `claude-rca-investigator` listed → `local` ·
 neither, but an Agent tool exists → `generic` (general-purpose + `model: haiku`/`sonnet`; rules are prompt-enforced) ·
 no Agent tool → `solo` (runs as preset `claude`, you do every batch yourself; every MISSING needs two independent search strategies).
 Dynamic-workflow alternative (16 concurrent, results outside your context, rerunnable): see `references/workflow-mode.md` —
@@ -62,7 +62,7 @@ Each role shows `claude`, `oc:<tier>` (opencode on that routing tier) or the rea
 | Work | `claude` | `hybrid` (default) | `opencode` |
 |---|---|---|---|
 | Lead: init, checklist, faithfulness pass, adjudication, plan.jsonl, report | Claude | Claude | Claude |
-| Investigators | Claude haiku | oc:`std`, overflow queues for a free slot (`oc_overflow: "claude"` → Claude haiku) | oc:`std`, no Claude overflow |
+| Investigators | Claude sonnet | oc:`std`, overflow queues for a free slot (`oc_overflow: "claude"` → Claude haiku) | oc:`std`, no Claude overflow |
 | Verifiers (Wave B) | Claude sonnet | Claude sonnet | oc:`std`, no Claude fallback |
 | Parsers (large specs) | Claude sonnet | oc:`std`, section fallback → Claude sonnet | oc:`std`, no Claude fallback |
 | Hedges, fallbacks | — | Claude, same model as the role (sonnet once the run has switched) | none: the unit is held |
@@ -97,7 +97,7 @@ override the user, who may amend scope explicitly ("also treat file X as part of
 1. **The input file is the supreme source of truth.** Only the document(s) the user provided define "correct".
    Code that disagrees is flagged; your own assumptions that disagree lose.
 2. **Never read git history** — no `git log/blame/show/reflog`, commit messages, tags, PR/branch history, `.git/`.
-   In plugin/local mode a hook blocks this structurally, for the lead too; the opencode agents are read-only and the
+   With this fork's guard hook registered (SETUP.md section 5) a hook blocks this structurally, for the lead too; without it the rule is prompt-enforced; the opencode agents are read-only and the
    oracle drops any `.git` citation.
 3. **Never read prose documentation** — README, CHANGELOG, other `*.md`, `docs/`, wikis, ADRs. Boundary: anything the
    program itself loads, validates against or executes (runtime schemas, migrations, config, manifests) is
@@ -155,7 +155,7 @@ object per line:
 - `tags`: `static-limit` (latency/SLA/infra/external behaviour) or `ambiguous` (+ `question`). Tagged items skip the
   waves and go straight to the report's follow-up lists — never spend agent time on them.
 
-Large specs (init says so, > ~2,500 words): `A parse-plan` → dispatch the parser agents and the `OPENCODE` sections it
+Large specs (init says so, > ~800 words): `A parse-plan` → dispatch the parser agents and the `OPENCODE` sections it
 lists (one message) → `A parse-merge` (launch any `FALLBACK` parser line it prints, then run it again) → **read the
 draft next to the original** (paraphrase drift, missing splits, hints) → `A parse-merge --accept`. Parsing is
 parallelised; faithfulness is not.
@@ -195,7 +195,7 @@ verifier. Never skip it to save time — it is the quality mechanism that makes 
 
 ### Step 5 — Adjudicate, then plan (lead judgment)
 
-`A status` prints the adjudication queue itself once both waves finish (`A queue` re-lists it). It holds disagreements, low-confidence verdicts, every CONFLICT, every MISSING/PARTIAL/CONFLICT verdict an **opencode verifier** gave (in every mode: opencode verdicts never settle a risky item without you) and a deterministic 5% spot-check sample,
+`A status` prints the adjudication queue itself once both waves finish (`A queue` re-lists it). It holds disagreements, low-confidence verdicts, every CONFLICT, every MISSING/PARTIAL/CONFLICT verdict an **opencode verifier** gave (in every mode: opencode verdicts never settle a risky item without you) and a stable spot-check sample of at least 5% of the MATCHED items (the accepted ceiling for a MATCHED, high-confidence item of normal stakes: it is verified only when sampled),
 each with the exact `path:lines` to read. Batch those Reads in one turn, decide, record with
 `A adjudicate --set ID STATUS --note "why"` / `--accept ID…`. Your judgment is authoritative; keep MISSING only when
 both passes found nothing and the searches were adequate.
@@ -247,6 +247,6 @@ A discrepancy is anything not ✅; ❓ items are listed separately by tag.
 
 ## One-time setup (tell the user when `init` shows `opencode: unavailable` or a `claude(down: …)` / `held(…)` role)
 
-This fork ships no Claude agents or guard hooks; it uses the original skill's `rca-*` agents and `req-audit` plugin when installed, else generic mode; install and concurrency-cap details: `SETUP.md`.
+This fork ships no Claude agents; it uses the original skill's `claude-rca-*` agents and `claude-req-audit` plugin when installed, else generic mode. Its own guard hook (`hooks/audit_guard.py`, armed by `.hybrid-audit/ACTIVE`) is optional: register it as SETUP.md section 5 shows; install and concurrency-cap details: `SETUP.md`.
 The tier models come from `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to STD), each `provider/model[#variant]`. Set them in the `"env"` block of `~/.claude/settings.json`, for example `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restart Claude Code (exporting them in the shell works too).
 `A doctor --ping` validates the shared env vars, checks the opencode binary and version, confirms each tier's model is listed, sends each tier one tiny ping and writes the doctor cache the `opencode:` line reads. Every failure prints as an `OC-ERROR` line, one tier's failure never disables the other, and the doctor never creates or edits a config file. Run it once after installing opencode or editing the config, and again when `init` shows `unavailable`, `claude(down: …)` or `held(…)`. The ping logs go to the cache folder, never into the audited repo. `init` pings once itself for the tiers its mode uses when their cache entry is missing or stale (preset `claude` never does).

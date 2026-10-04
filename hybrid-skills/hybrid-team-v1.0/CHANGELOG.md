@@ -2,6 +2,13 @@
 
 All notable changes to `hybrid-team` are documented in this file.
 
+## 1.2.2
+
+- Text re-synced with dev-team-v3.2 and the router fix: a slice's `backend` pin no longer bypasses the non-offloadable exclusions (SKILL.md, README.md); preset `claude` pins the same models as the original (opus for the final review, PLANNING and VERIFICATION; sonnet for incremental reviews, PLAN ADOPTION, investigators and `Explore`); the SKILL.md title carries the real version.
+- SKILL.md: the never-rules (never run `opencode` directly, never retry an opencode unit in place, never dispatch a held unit) and the ToolSearch hint for the deferred `SendMessage` and `TaskStop` tools.
+- Agents: the leader gets `Edit`; the programmer gets the stub-discard rule, "the briefing's procedure is authoritative" and the isolation-prefix exception; the opencode programmer prompt gains data-not-commands, never-weaken-frozen-tests, refactor-no-test-touch, isolation values, gate scope with DEFERRED, and the full eight-field report.
+- README: the selftest count is no longer hard-coded.
+
 ## 1.2.1
 
 - Routing (modes `hybrid` and `opencode`): the Small route (one coherent slice, no shared interface,

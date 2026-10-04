@@ -70,7 +70,10 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "git: root=$(git rev-parse --show-toplevel 2>/dev/null) branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) tracked=$files modified=$dirty"
   echo "recent_commits:"
   git log --oneline -n 6 2>/dev/null | cut -c1-100 | sed 's/^/  /'
-  echo "hot_dirs_30d: $(git log --since=30.days -n 300 --name-only --pretty=format: 2>/dev/null \
+  # --relative -- . scopes both which commits count and which paths are shown to $PWD;
+  # head -n 20000 caps the pipeline before awk/sort so a huge commit stays fast.
+  echo "hot_dirs_30d: $(git log --since=30.days -n 300 --name-only --pretty=format: --relative -- . 2>/dev/null \
+    | head -n 20000 \
     | awk -F/ 'NF>2{print $1"/"$2} NF==2{print $1} NF==1&&$1!=""{print "."}' | sort | uniq -c | sort -rn | cap 6 \
     | awk '{printf "%s(%s) ", $2, $1}')"
   if [ "$files" -le 50 ] 2>/dev/null; then
@@ -94,10 +97,11 @@ if [ "$in_home" = no ]; then
          -o -name '*.csproj' -o -name pubspec.yaml -o -name Package.swift -o -name deno.json \) -print 2>/dev/null | cap 12)
   [ -n "$m" ] && echo "manifests: $(echo "$m" | sed 's|^\./||' | tr '\n' ' ')"
   if [ -f package.json ]; then
-    npm=$(awk '/"(dependencies|devDependencies|peerDependencies)"[[:space:]]*:/{f=1;next} f&&/}/{f=0} f{gsub(/[ \t",]/,"");print}' package.json 2>/dev/null | cap 30 | tr '\n' ' ')
-    [ -z "$(echo "$npm" | tr -d ' ')" ] && npm=$(tr ',' '\n' < package.json 2>/dev/null \
-      | grep -oE '"[^"]+"[[:space:]]*:[[:space:]]*"[~^>=< ]*[0-9][^"]*"' 2>/dev/null | tr -d ' "' | cap 30 | tr '\n' ' ')
-    [ -n "$(echo "$npm" | tr -d ' ')" ] && echo "npm_deps: $npm"
+    # Squash to one line first so a one-line package.json parses the same as a multi-line one.
+    echo "npm_deps: $(tr '\n' ' ' < package.json 2>/dev/null \
+      | grep -oE '"(dependencies|devDependencies|peerDependencies)"[[:space:]]*:[[:space:]]*\{[^}]*\}' \
+      | sed -E 's/^"[a-zA-Z]+"[[:space:]]*:[[:space:]]*\{//; s/\}$//' \
+      | tr ',' '\n' | cut -d: -f1 | tr -d ' "' | grep -v '^$' | cap 30 | tr '\n' ' ')"
   fi
   if [ -f pyproject.toml ]; then
     echo "py_deps: $(awk '/^[[:space:]]*dependencies[[:space:]]*=[[:space:]]*\[/{f=1} f{print} f&&/\][[:space:]]*$/{exit}' pyproject.toml 2>/dev/null \

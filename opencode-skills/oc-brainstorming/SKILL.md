@@ -22,10 +22,13 @@ manifests. Reference files live in `skill_dir`; read by absolute path.
 ## R0 — The gate
 
 Do not write code, scaffold, run an implementation skill, or touch any
-file outside `.oc-brainstorm/drafts/` until you have told your human
-partner what you intend and they said yes. Every task, every path.
-Parallel work is read-only: exploration, research, drafting, review.
-Ceremony scales with the task; R0 never does.
+file outside `.oc-brainstorm/` until you have told your human partner
+what you intend and they said yes. Inside `.oc-brainstorm/` write only
+the spec pre-draft (`drafts/`) and, once the user accepts the visual
+companion, its screens and state (the session folder the start script
+creates). Every task, every path. Parallel work is read-only:
+exploration, research, drafting, review. Ceremony scales with the task;
+R0 never does.
 
 ## R1 — Classify; open your first message with it
 
@@ -50,7 +53,9 @@ Nothing downgrades. In doubt, go heavier.
   independent subsystems → plan lanes for the first sub-project only.
   Round 1, one message: direct reads + direct searches for single-hop
   questions + lanes for multi-hop ones + `Read architectural.md`, then
-  follow it. The ONLY skill you invoke next is writing-plans.
+  follow it. The ONLY skill you invoke next is `oc-writing-plans`
+  (fallback `writing-plans`, only when no skill with that exact name is
+  installed).
 
 Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 2-3. Count before sending; over budget → merge messages.
@@ -91,9 +96,13 @@ Spike/Bounded ≤3 rounds, Architectural ≤4; lane completions not counted.
   context call. When the repo layout is not known yet, keep round 1 to
   the context call plus the web searches and lanes the request alone
   justifies, and issue the file reads, greps and repo lanes in round 2.
+  Load any deferred tool you will need (`websearch`, `webfetch`,
+  `question`) first: call it in round 1 only if it is already available,
+  otherwise in round 2.
 - **Round 2 = the repo fan-out and follow-ups**: every file plausibly
   involved (small repo with a `files:` list → all of them), the key symbol
-  greps, the remaining lanes, the best primary URLs to fetch.
+  greps, the remaining lanes, the web searches that round 1 had to load
+  first, the best primary URLs to fetch.
 - **Round 3 = conflicts only**, then write the message.
 - Never serialize independent calls. Never re-run a denied or failed call
   unchanged — switch source or drop it.
@@ -200,8 +209,9 @@ exploration; show the design and cite inline.
 Questions + provisional design in one message; one reply answers and
 approves, or you re-present only the changed sections. Approaches +
 recommended design in one message (architectural). Spec write + inline
-self-review + commit in one turn, then the single review gate — never a
-separate "I wrote the spec" message. A visual-companion offer rides with
+self-review + commit (only when allowed, see `architectural.md` §4) in
+one turn, then the single review gate — never a separate "I wrote the
+spec" message. A visual-companion offer rides with
 the first question batch. Serialize only when one answer determines the
 next question.
 
@@ -214,8 +224,8 @@ next question.
 - **Architectural:** ∥ reads + searches + multi-hop lanes + read
   `architectural.md` → ∥ fetches → design message per `architectural.md`
   (claim-verifier lane launched that same turn, not awaited) → approval →
-  spec + inline self-review + commit, one turn → review gate →
-  writing-plans.
+  spec + inline self-review + commit if allowed, one turn → review gate →
+  oc-writing-plans.
 
 ## Red flags
 
@@ -233,6 +243,8 @@ next question.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
 - "I'll spawn a lane for this one search" → one direct call answers it.
+- "Spawn 64 because I can" → one lane per question you will act on; stay
+  under the `lanes=` ceiling in Live context (default 8).
 - "I'll ask to be safe" → a vetoable assumption costs zero turns; a
   question costs one.
 - "It grew, but I'm almost done" → hidden complexity upgrades the path.

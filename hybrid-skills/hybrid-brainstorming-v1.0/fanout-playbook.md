@@ -83,6 +83,9 @@ Vague boundaries are the main cause of duplicated work between lanes.
   locate|explore|fact|research ...`, one call per lane). Shared prompt
   block first and byte-identical across lanes of the same type/model so
   siblings can reuse the prompt cache; the slice-specific lines go last.
+- Deferred tools (WebSearch/WebFetch/AskUserQuestion/TaskCreate):
+  ToolSearch them first. Call them in this message only if they are
+  already loaded, otherwise in the next round.
 - Model per lane: `haiku` locate/lookup and single-fact checks; `sonnet`
   judgment and multi-source research; never the most expensive model for
   workers.

@@ -3,8 +3,10 @@
 # Usage: bash selftest.sh   (needs git >= 2.31, python3). Exit 0 = all checks passed.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# physical (symlink-free) temp dir: macOS /var -> /private/var would break path-prefix matching
+mkt() { local d; d="$(mktemp -d)" && d="$(cd "$d" && pwd -P)" || { echo 'selftest: mktemp -d failed' >&2; kill "$$"; exit 1; }; printf '%s\n' "$d"; }
 # copy the skill to a path WITH SPACES to exercise quoting
-TMP="$(mktemp -d)/dev team"; mkdir -p "$TMP"; cp -r "$HERE/.." "$TMP/skill"
+TMP="$(mkt)/dev team"; mkdir -p "$TMP"; cp -r "$HERE/.." "$TMP/skill"
 S="$TMP/skill/scripts"; G="$S/guard.py"
 D() { python3 "$S/devteam.py" "$@"; }
 # Deterministic environment: GLM provider (what v4 is tuned for), the governor OFF for the legacy
@@ -14,7 +16,7 @@ export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_TRANSC
 unset DEVTEAM_GLM_TIER DEVTEAM_MAX_PARALLEL ANTHROPIC_BASE_URL CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS CLAUDE_CONFIG_DIR
 export HOME="$TMP/home"; mkdir -p "$HOME"
 git config --global user.email t@t; git config --global user.name t
-R="$(mktemp -d)/repo"; mkdir -p "$R"; cd "$R"
+R="$(mkt)/repo"; mkdir -p "$R"; cd "$R"
 git init -q -b main; git config user.email t@t; git config user.name t; git config commit.gpgsign true
 mkdir -p src node_modules/pkg && echo "base" > src/a.js && echo x > node_modules/pkg/i.js
 printf 'node_modules/\n' > .gitignore
@@ -129,7 +131,7 @@ check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
 
 # ---------------------------------------------------------------- FAST MODE --
 echo "== fast mode: a second repo, --spike (level 4) + start + next"
-R2="$(mktemp -d)/repo2"; mkdir -p "$R2"; cd "$R2"
+R2="$(mkt)/repo2"; mkdir -p "$R2"; cd "$R2"
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo base > src/a.js
 git add -A && git commit -qm init
@@ -185,7 +187,7 @@ check "endgame flags the untested slice for verification" '[[ "$OUT" == *"untest
 check "finish names exactly what the profile traded away" 'OUT2=$(D finish --force 2>&1); [[ "$OUT2" == *"TRADE-OFFS"* && "$OUT2" == *"never watched to fail"* && "$OUT2" == *"UNTESTED slices shipped with no tests at all: S1"* ]]' 
 
 echo "-- level 2 keeps tests but skips the RED verification run"
-R3="$(mktemp -d)/repo3"; mkdir -p "$R3"; cd "$R3"
+R3="$(mkt)/repo3"; mkdir -p "$R3"; cd "$R3"
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src && echo b > src/a.js && git add -A && git commit -qm init
 cat > plan.md <<'EOF'
@@ -209,10 +211,10 @@ check "normal mode keeps incremental review batches" '! D ready | grep -q "REVIE
 
 # ------------------------------------------------- fast-mode hardening ------
 echo "== hardening: slot budget, frozen tests in a spike, fix slices, bare --fast"
-check "bare --fast means the turbo profile" 'R9="$(mktemp -d)/r9"; mkdir -p "$R9"; ( cd "$R9" && git init -q -b main && git config user.email t@t && git config user.name t && mkdir -p src && echo b > src/a.js && git add -A && git commit -qm i && printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"true\"},\"slices\":[{\"id\":\"S1\",\"title\":\"a\",\"deps\":[],\"files\":[\"src/b.js\"],\"risk\":\"low\",\"criteria\":[\"c\"],\"kind\":\"chore\",\"verify\":\"true\"}]}\n\140\140\140\n" > p.md && D init p.md --fast 2>&1 | grep -q "PROFILE turbo" )' 
+check "bare --fast means the turbo profile" 'R9="$(mkt)/r9"; mkdir -p "$R9"; ( cd "$R9" && git init -q -b main && git config user.email t@t && git config user.name t && mkdir -p src && echo b > src/a.js && git add -A && git commit -qm i && printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"true\"},\"slices\":[{\"id\":\"S1\",\"title\":\"a\",\"deps\":[],\"files\":[\"src/b.js\"],\"risk\":\"low\",\"criteria\":[\"c\"],\"kind\":\"chore\",\"verify\":\"true\"}]}\n\140\140\140\n" > p.md && D init p.md --fast 2>&1 | grep -q "PROFILE turbo" )' 
 
 echo "-- one next call must never launch more agents than the runtime allows"
-R8="$(mktemp -d)/r8"; mkdir -p "$R8"; cd "$R8"
+R8="$(mkt)/r8"; mkdir -p "$R8"; cd "$R8"
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
 { printf '```json\n{"request":"r","commands":{"test":"true"},"review_batch":1,"slices":['
@@ -243,7 +245,7 @@ check "an open review batch cannot starve the programmers forever" '[ -n "$CAP_O
 unset CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS
 
 echo "-- a spike slice may skip tests, but may not weaken tests it wrote"
-R7="$(mktemp -d)/r7"; mkdir -p "$R7"; cd "$R7"
+R7="$(mkt)/r7"; mkdir -p "$R7"; cd "$R7"
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
 printf '```json\n{"request":"r","commands":{"test":"true"},"slices":[{"id":"S1","title":"a","deps":[],"files":["src/b.js","tests/b.test.js"],"risk":"low","criteria":["c"]}]}\n```\n' > plan.md
@@ -269,7 +271,7 @@ check "add-fixes coerced the bogus risk to low" 'python3 -c "import json;s=json.
 check "a review fix slice is dispatched with tests (MODE: SLICE), not as a spike" '[[ "$(D dispatch F1 2>&1)" == *"DISPATCH F1 [CODE/SLICE]"* ]]'
 
 echo "-- the endgame waits for unresolved slices"
-R6="$(mktemp -d)/r6"; mkdir -p "$R6"; cd "$R6"
+R6="$(mkt)/r6"; mkdir -p "$R6"; cd "$R6"
 git init -q -b main; git config user.email t@t; git config user.name t
 mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
 printf '```json\n{"request":"r","commands":{"test":"true"},"review_batch":8,"checkpoint_every":8,"slices":[{"id":"S1","title":"a","deps":[],"files":["src/b.js","tests/b.test.js"],"risk":"low","criteria":["c"]},{"id":"S2","title":"b","deps":[],"files":["src/c.js","tests/c.test.js"],"risk":"low","criteria":["c"]}]}\n```\n' > plan.md
@@ -295,7 +297,7 @@ check "fast-mode briefing says the gates are deferred" 'grep -q "DEFERRED to one
 # v3: profiles, slice kinds, zero-round-trip harvesting, routing, probe/review-pr/brief-debug
 # =============================================================================================
 newrepo() { # $1 = var-safe name -> echoes the repo path
-  local d; d="$(mktemp -d)/$1"; mkdir -p "$d"
+  local d; d="$(mkt)/$1"; mkdir -p "$d"
   ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t \
     && mkdir -p src tests && echo base > src/a.js && git add -A && git commit -qm init ) >/dev/null
   echo "$d"
@@ -548,8 +550,9 @@ check "a rename inside the footprint commits (was: refused as outside the footpr
 git worktree add -q .claude/worktrees/n2 -b wn2 HEAD
 ( cd "$RN/.claude/worktrees/n2" && D claim C1 >/dev/null 2>&1 && rm src/gone.ts && echo more >> src/keep.ts && D commit-work drop >/dev/null 2>&1 )
 check "a delete inside the footprint is really in the commit (was: silently dropped)" '( cd "$RN/.claude/worktrees/n2" && git show --name-status --format= HEAD | grep -q "^D.*src/gone.ts" )'
-check "and the worktree is clean afterwards, so the Stop gate passes" '( cd "$RN/.claude/worktrees/n2" && [ -z "$(git status --porcelain)" ] \
-  && [ -z "$( printf "{\"cwd\":\"%s\",\"last_assistant_message\":\"## Status: Complete -- ## Gate: echo ok -> ok, and again -> ok\"}" "$PWD" | python3 "$G" stop 2>&1 )" ] )'
+N2ST="$(cd "$RN/.claude/worktrees/n2" && git status --porcelain)"
+N2STOP="$(printf '{"cwd":"%s","last_assistant_message":"## Status: Complete -- ## Gate: echo ok -> ok, and again -> ok"}' "$RN/.claude/worktrees/n2" | python3 "$G" stop 2>&1)"
+check "and the worktree is clean afterwards, so the Stop gate passes" '[ -z "$N2ST" ] && [ -z "$N2STOP" ]'
 
 echo "== v3.1 the permission hook approves one simple pre-approved command, nothing else"
 cd "$RF"
@@ -590,14 +593,22 @@ echo "== v3.1 the vacuous-test check matches assertion CALLS, not English words"
 vac() { python3 -c "
 import sys; sys.path.insert(0, '$S')
 import devteam, pathlib, tempfile
-d = pathlib.Path(tempfile.mkdtemp()); (d/'t.js').write_text(sys.argv[1])
-print(len(devteam.vacuous_test_check(d, ['t.js'], ['c1'])))" "$1"; }
+d = pathlib.Path(tempfile.mkdtemp()); f = sys.argv[2]; (d/f).write_text(sys.argv[1])
+print(len(devteam.vacuous_test_check(d, [f], ['c1'])))" "$1" "${2:-t.js}"; }
 check "a require() import line does not count as an assertion" '[[ "$(vac "const foo = require(\"../src/foo\");
 test(\"a\", () => { foo(1); });")" != "0" ]]'
 check "the English word should in a comment does not count" '[[ "$(vac "// this should do things
 test(\"a\", () => { foo(1); });")" != "0" ]]'
 check "a real assertion call does count" '[[ "$(vac "test(\"a\", () => { assert.equal(1,1); });")" == "0" ]]'
 check "expect(...) counts" '[[ "$(vac "test(\"a\", () => { expect(x).toBe(1); });")" == "0" ]]'
+check "unittest self.assertIn(...) counts" '[[ "$(vac "class T(unittest.TestCase):
+    def test_a(self):
+        self.assertIn(1, f())" test_x.py)" == "0" ]]'
+check "pytest.raises(...) counts" '[[ "$(vac "def test_a():
+    with pytest.raises(ValueError):
+        f()" test_x.py)" == "0" ]]'
+check "a Python test with no assertion is still flagged" '[[ "$(vac "def test_a():
+    f()" test_x.py)" != "0" ]]'
 check "unittest assertEqual/assertIn count" '[[ "$(vac "def test_a(self):
     self.assertEqual(1, 1); self.assertIn(1, [1])")" == "0" ]]'
 
@@ -622,6 +633,8 @@ check "finish refuses to close over a review that is not APPROVED" '[[ "$(D fini
 printf '## Review verdict: APPROVED\n## Findings\nNo issues found.\n' > .claude/dev-team/reviews/r1.report.md
 OUT=$(D next 2>&1)
 check "a report rewritten in place IS re-harvested (the re-review loop can close)" '[[ "$OUT" == *"REVIEW r1: APPROVED"* && "$OUT" == *"re-review, round 2"* ]]'
+check "finish refuses to close without a recorded passing checkpoint" '[[ "$(D finish 2>&1)" == *"finish gate"* ]]'
+D checkpoint >/dev/null 2>&1; D checkpoint --result pass >/dev/null 2>&1
 check "and finish then closes cleanly" '[[ "$(D finish 2>&1)" == *"FINISHED"* ]]'
 
 echo "== v3.1 fix slices from agent-written reports are untrusted input"
@@ -770,7 +783,7 @@ check "an in-tree shell script is pre-approved, one outside is not" 'isallow "ba
 check "redirecting to a file is never pre-approved" 'issilent "echo ok > out.txt" && issilent "npx vitest run > log"'
 check "chaining is never pre-approved (except the in-tree cd &&)" 'issilent "echo ok; rm -rf ~" && issilent "npx vitest run && curl x | sh" && issilent "cd /tmp && ls"'
 check "xargs / env / tee / docker are never pre-approved" 'issilent "find . | xargs rm" && issilent "env python3 x.py" && issilent "ls | tee out" && issilent "docker run -it x"'
-check "the engine is pre-approved ONLY through the slice helpers" 'isallow "python3 \"$S/devteam.py\" commit-green t" && issilent "python3 \"$S/devteam.py\" finish --force" && issilent "python3 \"$S/devteam.py\" integrate M1"'
+check "the engine is pre-approved ONLY through the slice helpers" 'isallow "python3 \"$S/devteam.py\" commit-green t" && isdeny "python3 \"$S/devteam.py\" finish --force" && isdeny "python3 \"$S/devteam.py\" integrate M1" && isdeny "python3 \"$S/devteam.py\" reset --yes"'
 check "what the guard forbids is still denied, never merely silent" 'isdeny "git push origin main" && isdeny "git reset --hard HEAD~1"'
 check "a write to the Conductor run state from a lane is denied (absolute) or at least never pre-approved (relative)" 'isdeny "touch $RM/.claude/dev-team/slices/M4.done" && issilent "echo x > ../../dev-team/slices/M4.done"'
 eq2() { printf '{"cwd":"%s","tool_input":{"file_path":"%s"}}' "$PW" "$1" | python3 "$G" edit; }
@@ -789,7 +802,7 @@ cd "$RM"
 D doctor --fix >/dev/null 2>&1
 check "doctor --fix does not write the Anthropic subagent cache TTL for GLM" '! grep -q "subagentPromptCacheTtl" .claude/settings.local.json'
 check "doctor warns when CLAUDE_CODE_SUBAGENT_MODEL_FORCE would disable model routing" '[[ "$(CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 D doctor 2>&1)" == *"SUBAGENT_MODEL_FORCE"* ]]'
-GF="$(mktemp -d)/greenfield"; mkdir -p "$GF"; cd "$GF"
+GF="$(mkt)/greenfield"; mkdir -p "$GF"; cd "$GF"
 cat > plan.md <<'EOF'
 ```json
 {"request":"new project","commands":{"test":"echo ok","test_file":"echo ok {files}","lint":"none","typecheck":"none","build":"none"},
@@ -1052,7 +1065,7 @@ cat > plan.md <<'EOF'
 {"request":"oc port","commands":{"test":"true"},"slices":[{"id":"O1","title":"oc slice","deps":[],"files":["src/o1.js","tests/o1.test.js"],"risk":"low","criteria":["works"]}]}
 ```
 EOF
-OCBIN="$(mktemp -d)"
+OCBIN="$(mkt)"
 export DEVTEAM_PY="$S/devteam.py"
 cat > "$OCBIN/opencode" <<'SH'
 #!/usr/bin/env bash
@@ -1203,7 +1216,7 @@ check "DE4: the detached checkpoint ran to the end and recorded EXIT=0" 'grep -q
 D4NEXT=$(OCD next 2>&1)
 check "DE4: next harvested the checkpoint from its log and nothing stays pending" '[[ "$D4NEXT" == *"PASS (exit 0)"* ]] && python3 -c "import json;s=json.load(open(\".claude/dev-team/state.json\"));assert not s.get(\"checkpoint_pending\")"'
 echo "== OpenCode hardening DE6: resume relaunches a blocked lane in its worktree"
-OCB6="$(mktemp -d)"; OCLOG6="$OCB6/calls.log"; export OCLOG6
+OCB6="$(mkt)"; OCLOG6="$OCB6/calls.log"; export OCLOG6
 cat > "$OCB6/opencode" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -1234,6 +1247,46 @@ check "DE6: resume reset .slice/stop_blocks" '[ ! -s "$B1WT/.slice/stop_blocks" 
 check "DE6: the --note text reaches the relaunched lane" 'grep -q "use src/y.js instead" "$OCLOG6" || grep -rqs "use src/y.js instead" "$RD6/.claude/dev-team/briefs" "$B1WT/.slice"'
 cd "$R"
 unset DEVTEAM_PY OCLOG6
+
+echo "== parity: path matching, engine-subcommand deny, quoted text, red-done footprint, stubs, init --force, plan types"
+RPT="$(newrepo rpt)"; cd "$RPT"
+printf '\140\140\140json\n%s\n\140\140\140\n' '{"request":"parity","commands":{"test":"echo ok","test_file":"echo ok {files}","lint":"none","typecheck":"none","build":"none"},"slices":[{"id":"Y1","title":"y","deps":[],"files":["src/y1.js","tests/y1.test.js","hidden"],"risk":"low","criteria":["c"]}]}' > plan.md
+D init plan.md >/dev/null 2>&1; D dispatch Y1 >/dev/null 2>&1
+git worktree add -q .claude/worktrees/y1 -b wy1 HEAD; YW="$RPT/.claude/worktrees/y1"
+( cd "$YW" && D claim Y1 >/dev/null 2>&1 )
+yedit() { printf '{"cwd":"%s","tool_input":{"file_path":"%s"}}' "$YW" "$1" | python3 "$G" edit; }
+ybash() { printf '{"cwd":"%s","tool_input":{"command":%s}}' "$YW" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" | python3 "$G" bash; }
+yro() { printf '{"cwd":"%s","tool_input":{"command":%s}}' "$RPT" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" | python3 "$G" bash-ro; }
+check "a footprint entry hidden does not cover the dotfile .hidden (only a literal ./ is stripped)" '[[ "$(yedit "$YW/.hidden")" == *"outside your slice footprint"* ]]'
+check "the footprint entry itself is still editable" '[[ "$(yedit "$YW/hidden")" == *"\"permissionDecision\": \"allow\""* ]]'
+check "a lane cannot run the engine Conductor commands (finish, reset)" '[[ "$(ybash "python3 \"$S/devteam.py\" finish --force")" == *"\"permissionDecision\": \"deny\""* && "$(ybash "python3 \"$S/devteam.py\" reset --yes")" == *"\"permissionDecision\": \"deny\""* ]]'
+check "quoted text is not a command: grep for git push is not denied" '[[ "$(ybash "grep \"git push\" README.md")" != *deny* ]]'
+check "read-only roles may run git merge-base and git worktree list" '[[ "$(yro "git merge-base HEAD HEAD")" != *deny* && "$(yro "git worktree list")" != *deny* ]]'
+
+RPR="$(newrepo rpr)"; cd "$RPR"
+printf '\140\140\140json\n%s\n\140\140\140\n' '{"request":"r","commands":{"test":"echo ok","test_file":"echo ok {files}","lint":"none","typecheck":"none","build":"none"},"slices":[{"id":"X1","title":"x1","deps":[],"files":["src/x.js","tests/x1.test.js"],"risk":"high","criteria":["c"]},{"id":"X2","title":"x2","deps":[],"files":["src/x.js","tests/x2.test.js"],"risk":"low","criteria":["c"]}]}' > plan.md
+D init plan.md >/dev/null 2>&1; D dispatch X1 >/dev/null 2>&1
+git worktree add -q .claude/worktrees/x1 -b wx1 HEAD; XW="$RPR/.claude/worktrees/x1"
+( cd "$XW" && D claim X1 >/dev/null 2>&1 && mktest tests/x1.test.js x1 && mkdir -p src && echo stub > src/x.js && D commit-red x1 >/dev/null 2>&1 )
+check "commit-red discards a non-test stub: the RED commit holds test files only" '[ -z "$(git -C "$XW" show --name-only --format= HEAD | grep -v "^tests/")" ]'
+OUT=$(D integrate X1 2>&1)
+check "the RED commit is accepted at integration" '[[ "$OUT" == *"X1: RED accepted"* ]]'
+OUT=$(D dispatch X2 2>&1)
+check "a slice with an accepted RED still holds its footprint: the overlapping slice is not dispatched" '[[ "$OUT" != *"DISPATCH X2"* ]]'
+
+RPI="$(newrepo rpi)"; cd "$RPI"
+printf '\140\140\140json\n%s\n\140\140\140\n' '{"request":"r","commands":{"test":"echo ok"},"slices":[{"id":"P1","title":"p","deps":[],"files":["src/p1.js","tests/p1.test.js"],"risk":"low","criteria":["c"]}]}' > plan.md
+D init plan.md >/dev/null 2>&1
+mkdir -p .claude/dev-team/reviews .claude/dev-team/research .claude/dev-team/logs
+printf '## Review verdict: APPROVED\n' > .claude/dev-team/reviews/r1.report.md
+printf '## Verdict: INCONCLUSIVE\n' > .claude/dev-team/research/Q9.md
+printf 'EXIT=0\n' > .claude/dev-team/logs/checkpoint-1.log
+D init plan.md --force >/dev/null 2>&1
+check "init --force removes the previous run reviews, research notes and logs" '[ ! -e .claude/dev-team/reviews/r1.report.md ] && [ ! -e .claude/dev-team/research/Q9.md ] && [ ! -e .claude/dev-team/logs/checkpoint-1.log ]'
+printf '\140\140\140json\n%s\n\140\140\140\n' '{"request":"r","commands":{"test":"echo ok"},"slices":[{"id":"Z1","title":"z","deps":"Z0","files":"src/z.js","risk":"low","criteria":["c"]}]}' > badtypes.md
+OUT=$(D init badtypes.md --force 2>&1)
+check "a plan with wrongly typed slice fields is refused with a message, not a traceback" '[[ "$OUT" != *Traceback* && -n "$OUT" ]]'
+cd "$R"
 
 echo
 echo "passed=$pass failed=$fail"
