@@ -104,6 +104,18 @@ class WriteCapableTests(unittest.TestCase):
         self.assertTrue(G.write_capable(["sort", "--out", "x"]))
         self.assertFalse(G.write_capable(["grep", "-n", "x", "f"]))
 
+    SED_WRITE_SCRIPTS = (r"\%s%w /tmp/a%b%c", r"\%s%e touch%a%b", r"s/a\/b/w /tmp/x", "s/a/b/;w /tmp/x")
+
+    def test_sed_w_e_hidden_in_s_lookalikes_is_write_capable(self):
+        for script in self.SED_WRITE_SCRIPTS:
+            self.assertTrue(G.write_capable(["sed", script, "in.txt"]), script)
+            self.assertIsNone(G.bash_allow_reason(f"sed '{script}' in.txt", None, [], [], readonly=True), script)
+
+    def test_whole_plain_sed_s_command_stays_allowed(self):
+        self.assertFalse(G.write_capable(["sed", "s/we/us/g", "in.txt"]))
+        self.assertFalse(G.write_capable(["sed", "-n", "s|we|us|gp", "in.txt"]))
+        self.assertTrue(G.bash_allow_reason("sed 's/we/us/g' in.txt", None, [], [], readonly=True))
+
     def test_write_exec_form_delegates_to_write_capable(self):
         self.assertTrue(G.write_exec_form(["awk", 'BEGIN{system("x")}']))
 
