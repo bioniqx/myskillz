@@ -118,17 +118,20 @@ missing splits, thin hints are yours to fix) and `A parse --accept`. Parsing is 
 4. Verifier wave over every non-MATCHED, low-confidence and high-stakes item, each verifier searching with
    strategies the first pass did not use.
 
-- A worker that has not written its file yet shows as pending in `A status`; wait for it or let `status`
-  print its row again.
+- A worker that has not written its file yet shows as pending in `A status` with its running time; wait for it.
+  A lane that was lost: `A status --failed batch-NN` sends its uncovered ids to the verifier wave, and
+  `A status --undispatch batch-NN` (or `all`) prints its row again. A straggler gets a hedge row once half
+  of the batches are done. After editing the checklist, `A plan` starts a fresh run and clears old findings;
+  `A plan --resume` keeps finished batches and re-batches only unsettled ids.
 - `A check` is the gate `finalize` runs; it fails on purpose while a verifier wave is missing. Do not skip that
   wave for a real audit.
 - While a wave runs you may read a couple of cited ranges yourself; that is the spot-check, not busywork.
 
 ## R6 — Step 4: adjudicate, plan, finalize
 
-`A queue` prints everything that needs your judgment — verifier disagreements, every MISSING and CONFLICT, low
-confidence, high-stakes non-matches, checker rejections — each with the exact `path:lines` to read, plus a
-deterministic 5% MATCHED spot-check. Batch those `read` calls in ONE turn, decide, then record:
+`A queue` prints everything that needs your judgment — verifier disagreements, low verifier confidence, CONFLICT,
+untagged UNVERIFIABLE, unsettled items, checker rejections — each with the exact `path:lines` to read, plus a
+seeded 5% sample of MATCHED items that no verifier saw. Batch those `read` calls in ONE turn, decide, then record:
 
 `A adjudicate --set REQ-007 MISSING --note "why"` · `A adjudicate --accept REQ-003 REQ-004`
 
