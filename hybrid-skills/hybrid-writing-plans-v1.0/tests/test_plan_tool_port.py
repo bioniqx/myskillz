@@ -42,6 +42,11 @@ def lint(text):
     return M.lint_body(CONTRACT, text, [], "T01", None, ())[0]
 
 
+class TierModelTests(unittest.TestCase):
+    def test_every_writer_tier_is_sonnet(self):
+        self.assertEqual(M.TIER_MODEL, {"light": "sonnet", "std": "sonnet", "deep": "sonnet"})
+
+
 class ScanPortTests(unittest.TestCase):
     def test_allow_hit_stem_and_regex(self):
         self.assertTrue(M.allow_hit("subagents", ["subagent"]))
