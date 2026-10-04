@@ -131,13 +131,18 @@
     const target = e.target.closest('[data-choice]');
     if (!target) return;
 
-    sendEvent({
+    const container = target.closest('.options') || target.closest('.cards');
+    const multi = container && container.dataset.multiselect !== undefined;
+
+    const payload = {
       type: 'click',
-      text: target.textContent.trim(),
+      text: target.textContent.replace(/\s+/g, ' ').trim().slice(0, 120),
       choice: target.dataset.choice,
       id: target.id || null
-    });
+    };
+    if (multi) payload.selected = target.classList.contains('selected');
 
+    sendEvent(payload);
   });
 
   // Frame UI: selection tracking
