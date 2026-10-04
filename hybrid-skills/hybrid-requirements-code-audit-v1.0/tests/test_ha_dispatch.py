@@ -177,7 +177,7 @@ class HarvestTest(unittest.TestCase):
     def test_ok_claude_and_known_events_are_ignored(self):
         ok = self._event("batch-01", "investigator", True, None)
         known = self._event("batch-02", "investigator", False, "stall")
-        claude_ev = {"batch": "batch-03", "ok": False, "agent_type": "req-audit:rca-investigator"}
+        claude_ev = {"batch": "batch-03", "ok": False, "agent_type": "claude-req-audit:claude-rca-investigator"}
         state = {"batches": {
             "batch-01": {"ids": ["R1"], "backend": "oc:std", "dispatched": 1.0},
             "batch-02": {"ids": ["R2"], "backend": "claude", "dispatched": 1.0},

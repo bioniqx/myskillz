@@ -10,7 +10,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 NEW_SCRIPTS = HERE.parent / "scripts"
-ORIG = Path(__file__).resolve().parents[2] / "requirements-code-audit"
+ORIG = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-requirements-code-audit"
 ORIG_SCRIPTS = ORIG / "scripts"
 FAKE = HERE / "fake_opencode.py"
 TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})?")
@@ -82,7 +82,7 @@ class GoldenTests(unittest.TestCase):
         (work / "src" / "app.py").write_text(APP, encoding="utf-8")
         spec = work / "spec.md"
         spec.write_text(SPEC, encoding="utf-8")
-        out = work / ".hybrid-audit"
+        out = work / (".audit" if side == "orig" else ".hybrid-audit")
 
         def cli(*args):
             r = subprocess.run([sys.executable, str(scripts / "audit.py"), "--cwd", str(work)] + list(args),
@@ -91,6 +91,7 @@ class GoldenTests(unittest.TestCase):
             return r.stdout
 
         def norm(text):
+            text = text.replace(".hybrid-audit", ".audit")
             text = text.replace(str(scripts), "<SCRIPTS>").replace(str(root), "<ROOT>")
             return TS_RE.sub("<TS>", text)
 
