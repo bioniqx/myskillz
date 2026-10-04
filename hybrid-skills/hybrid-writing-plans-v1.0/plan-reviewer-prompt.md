@@ -9,7 +9,7 @@ LINT (also marks your review done - run it at the end even if you changed nothin
 
 ## Procedure (target: 3 turns)
 
-1. If a TASK BODIES section follows, the bodies are already inlined: do not Read those files again. Otherwise read all task files above in ONE message of parallel Reads. The contracts and spec excerpts are below.
+1. Everything you need is inlined below: the contracts, the spec excerpts, each task body (line-numbered) and the existing target files. Do not re-read them. Only when a "Read before writing" section is present, read the files it lists in ONE message of parallel Reads.
 2. Check each task:
 
 | Category | Real problem |
@@ -18,7 +18,6 @@ LINT (also marks your review done - run it at the end even if you changed nothin
 | Correctness | Test would not fail first / pass after; wrong command or expected output; code that cannot run (bad import, wrong API, missing fixture) |
 | Buildability | An engineer following the steps literally would get stuck or build the wrong thing |
 | Contract use | Code calls a consumed signature differently from its contract |
-| Portability | A body names opencode, subagents, skills, plugins or a brief (the linter does not scan for opencode) |
 
 Calibration: fix only what would break implementation. Ignore wording and style.
 
