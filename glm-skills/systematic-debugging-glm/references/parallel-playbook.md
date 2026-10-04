@@ -23,6 +23,7 @@ Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `expe
 - CPU-bound (tests, builds): total processes ≤ CPU count. A runner that already uses every core (jest, vitest, `pytest -n auto`, `go test`) counts as one job using all of them — do not multiply it.
 - IO-bound (network, waiting on services): up to 64, each job with its own port / DB / temp dir; respect remote rate limits.
 - API workers (`scan`): 64 is fine; they are pure network waits.
+- Agent-lane workers: one per genuinely independent unit (hypothesis, module, service). Beyond ~8 for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
 - Nested parallelism multiplies: bisect `-j` × stress `-j` ≤ CPUs.
 
 ## 3. Isolation — the quality guard
@@ -48,10 +49,10 @@ Parallel work that writes anything must not share mutable state.
    - `patch_file` — a diff applied only to the treatment arm.
    - `env` — variables set only for the treatment arm.
    - `treatment_cmd` — a different command for the treatment arm (shuffled seed, serial run, different runner flag).
-   - `runs: N` — repeat both arms N times; use it for anything flaky.
+   - `runs: N` — repeat both arms N times; use it for anything flaky. With N above 1 the arms run one after another, control first, never at the same time, so CPU contention cannot bias the timing.
    - `expect: treatment_passes | treatment_fails` — which way the outcome should move.
    - `setup`, `cwd`, `link`, `timeout` — per hypothesis.
-3. **CONFIRMED** means the outcome flipped in the predicted direction. With `runs > 1`, a difference of one run is noise: prove a flaky fix with `stress.sh -b F/N` and require Fisher p < 0.05.
+3. **CONFIRMED** means one arm passed every run and the other failed. A failure rate that only moved is INCONCLUSIVE, not a confirmation. Flaky bug: both arms use the same `-n` and `-j`, run one after another (control first), and the difference must be significant: prove a flaky fix with `stress.sh -b F/N` and require Fisher p < 0.05.
 4. Several CONFIRMED → one upstream cause or an interaction: test the combination, or trace upstream. None → get new evidence, do not guess wider.
 5. A candidate *fix* that fails counts toward the 3-fix limit even in a worktree. Apply exactly one fix to the main tree, then verify.
 
