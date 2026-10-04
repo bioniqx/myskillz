@@ -717,6 +717,7 @@ class Retriever(object):
             args.append("-F")
         for d in sorted(SKIP_DIRS):
             args += ["--glob", "!" + d + "/**"]
+        args += ["--glob", "!.audit.prev-*/**"]
         for e in sorted(DOC_EXT):
             args += ["--glob", "!*" + e]
         if tests_only:
@@ -1298,6 +1299,12 @@ def is_git_path(path):
     return ".git" in str(path or "").replace(os.sep, "/").split("/")
 
 
+def is_audit_path(path):
+    """True when a cited path lies under .audit or an archived .audit.prev-* folder."""
+    return any(seg == ".audit" or SKIP_DIR_RE.match(seg)
+               for seg in str(path or "").replace(os.sep, "/").split("/"))
+
+
 def lint_finding(row, item, root, retrieved_paths, kind="finding"):
     """Deterministic gate. Everything it rejects is handed straight back to the
     model as the repair prompt, so a bad answer costs one cheap retry, never a
@@ -1336,6 +1343,11 @@ def lint_finding(row, item, root, retrieved_paths, kind="finding"):
         if is_git_path(path):
             errs.append("evidence path %s is under .git/, which is never evidence; cite "
                         "code, tests, schemas, config or migrations" % path)
+            continue
+        if is_audit_path(path):
+            errs.append("evidence path %s is under .audit/ or an archived .audit.prev-* "
+                        "folder, which is never evidence; cite code, tests, schemas, "
+                        "config or migrations" % path)
             continue
         if is_doc(path):
             errs.append("evidence path %s is prose documentation, which is never "

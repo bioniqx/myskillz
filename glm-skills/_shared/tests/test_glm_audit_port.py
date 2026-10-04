@@ -434,6 +434,38 @@ class AgentLaneAndReportTests(AuditCase):
         _out, errs, _warns = audit.lint_finding(row, {"id": "REQ-001"}, self.repo, set())
         self.assertTrue(any(".git/" in e for e in errs), errs)
 
+    def test_audit_and_archived_audit_citations_are_rejected(self):
+        for rel in (".audit/findings/a.jsonl", ".audit.prev-1/findings/a.jsonl"):
+            self.write_file(os.path.join(self.repo, rel), "needle\n")
+            row = {"status": "MATCHED", "confidence": "high",
+                   "evidence": [{"path": rel, "lines": "1", "note": "n"}]}
+            _out, errs, _warns = audit.lint_finding(
+                row, {"id": "REQ-001"}, self.repo, set())
+            self.assertTrue(any(".audit" in e and "evidence" in e for e in errs),
+                            (rel, errs))
+
+    def test_retrieval_skips_archived_audits_but_searches_dot_folders(self):
+        tree = os.path.join(self.root, "tree")
+        self.write_file(os.path.join(tree, ".audit.prev-1", "findings", "a.jsonl"),
+                        "zebrafish marker\n")
+        self.write_file(os.path.join(tree, ".github", "workflows", "ci.yml"),
+                        "zebrafish marker\n")
+        self.write_file(os.path.join(tree, ".circleci", "config.yml"),
+                        "zebrafish marker\n")
+        r = audit.Retriever.__new__(audit.Retriever)
+        r.root = tree
+        r.files = [f[0] for f in audit.walk_repo(tree)]
+        engines = [("py", r._py_search)]
+        rg = audit.Retriever._find_rg()
+        if rg:
+            r.rg = rg
+            engines.append(("rg", r._rg))
+        for name, fn in engines:
+            paths = set(h[0] for h in fn(["zebrafish"]))
+            self.assertNotIn(".audit.prev-1/findings/a.jsonl", paths, name)
+            self.assertIn(".github/workflows/ci.yml", paths, name)
+            self.assertIn(".circleci/config.yml", paths, name)
+
     def test_report_keeps_full_text_and_counts_unsettled(self):
         long_text = "The system MUST " + "x" * 300
         self.checklist([item("REQ-001", text=long_text), item("REQ-002")])
