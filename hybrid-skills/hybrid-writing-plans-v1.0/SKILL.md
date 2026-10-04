@@ -61,9 +61,9 @@ For each contract tier (`light`, `std` = no `Tier` line, `deep`) the value is `c
 |---|---|---|---|
 | Phase 0, Contracts, assemble | Claude | Claude | Claude |
 | Inline path (N <= 3) | Claude | never used: always fan-out | never used: always fan-out |
-| Writer, contract `Tier: light` | Claude haiku | oc:`lite` | oc:`lite` |
+| Writer, contract `Tier: light` | Claude sonnet | oc:`lite` | oc:`lite` |
 | Writer, default tier | Claude sonnet | oc:`std` | oc:`std` |
-| Writer, contract `Tier: deep` | Claude opus | Claude opus | oc:`std` |
+| Writer, contract `Tier: deep` | Claude sonnet | Claude sonnet | oc:`std` |
 | Reviewers | Claude sonnet, 6.2 triggers | Claude sonnet, 6.2 triggers | Claude sonnet, 6.2 triggers |
 | Fallback writer | - | Claude, model per the tier map (`sonnet` once the run has switched) | none: the unit is held (Failure policy) |
 
@@ -144,7 +144,7 @@ Contract rules (quality is locked here):
 - `Files` (required): every path the task creates/modifies/tests. Tasks sharing a file are auto-serialized (Runs after), so give each task its own files; wire shared registries in one final task.
 - `Produces`: exact backticked declarations (name, params, types, return) as they will appear in code. `Consumes`: copy the producer's text byte-for-byte; `(existing)` for codebase symbols. Omit `Consumes` to mean "all Produces of my Depends". Depends are auto-added from Consumes.
 - `Spec`: line ranges from the context heading map; writers get exactly these lines.
-- `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs) or `deep` (algorithmic, security, concurrency). Default: `std`. The tier also picks the backend (see Hybrid routing), so tier honestly: a contract that needs deep judgment must say `Tier: deep`, which keeps it on Claude opus in `hybrid`.
+- `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs) or `deep` (algorithmic, security, concurrency). Default: `std`. The tier also picks the backend (see Hybrid routing), so tier honestly: a contract that needs deep judgment must say `Tier: deep`, which keeps it on Claude (sonnet) in `hybrid`.
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently. The tighter the contract, the better a cheap writer does.
 - Legitimate project vocabulary that the placeholder/portability scan would flag (for example a to-do app, or a class named `Task`) needs `--allow WORD` on every `contracts`/`assemble`/`check` call - decide this now, not after `assemble` fails.
 

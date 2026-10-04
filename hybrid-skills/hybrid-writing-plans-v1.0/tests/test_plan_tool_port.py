@@ -47,6 +47,13 @@ class TierModelTests(unittest.TestCase):
         self.assertEqual(M.TIER_MODEL, {"light": "sonnet", "std": "sonnet", "deep": "sonnet"})
 
 
+    def test_docs_do_not_claim_an_opus_writer(self):
+        for name in ("README.md", "SKILL.md"):
+            text = (HP / name).read_text(encoding="utf-8")
+            self.assertNotIn("Claude opus", text, name)
+            self.assertNotIn("keeps it on Claude opus", text, name)
+
+
 class ScanPortTests(unittest.TestCase):
     def test_allow_hit_stem_and_regex(self):
         self.assertTrue(M.allow_hit("subagents", ["subagent"]))

@@ -145,7 +145,7 @@ class GoldenTest(unittest.TestCase):
             return s.replace(str(TOOL62), str(TOOL)).replace("/.work/", "/.hybrid-work/")
 
         def norm(s):
-            # the fork keeps haiku/sonnet/opus TIER_MODEL: normalise the writer MODEL column
+            # the fork pins every TIER_MODEL to sonnet (the original varies): normalise the writer MODEL column
             return re.sub(r"^(\s*[TW]\d+\s+)(?:haiku|sonnet|opus)\s+", r"\1MODEL ", s, flags=re.M)
 
         self.assertEqual(rc62, 0, out62)
