@@ -149,6 +149,7 @@ SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
 # ordinary imports, comments and identifiers, and would wave a vacuous test straight through.
 ASSERT_TOKENS = re.compile(
     r"(\bassert\b|\bassert\s*[!(]|\bassert_eq!|\bassert_ne!|\bassert[A-Z]\w*\s*\(|\bself\.fail\s*\(|"
+    r"\bpytest\.raises\s*\(|"
     r"XCTAssert|EXPECT_[A-Z]|ASSERT_[A-Z]|\bexpect\s*\(|\.should\b|\bshould\s*\(|"
     r"\bt\.Error|\bt\.Fatal|\bAssert\.[A-Za-z]|\bShould\(\)|require\.[A-Za-z]+\s*\(|"
     r"\.to(Be|Equal|Throw|Contain|Match|HaveBeenCalled)[A-Za-z]*\s*\(|"
@@ -320,8 +321,12 @@ def is_test_path(rel, extra_globs=()):
 
 def path_matches(rel, entry):
     """Does repo-relative path `rel` fall under footprint entry `entry`?"""
-    rel = rel.replace("\\", "/").lstrip("./")
-    entry = entry.replace("\\", "/").lstrip("./")
+    rel = rel.replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    entry = entry.replace("\\", "/")
+    while entry.startswith("./"):
+        entry = entry[2:]
     if entry.endswith("/"):
         return rel.startswith(entry)
     if any(ch in entry for ch in "*?["):
@@ -419,11 +424,35 @@ def extract_plan(path):
     raise DevteamError("no ```json block with a `slices` array found in the plan")
 
 
+def validate_slice_types(slices):
+    """Type-check id/deps/files/criteria on each slice dict, raising a clean DevteamError
+    (never a raw crash) on a malformed plan or plan refresh."""
+    type_errs = []
+    for s in slices:
+        sid = s.get("id")
+        if not isinstance(sid, str):
+            type_errs.append(f"{sid!r}: id must be a string")
+        for key in ("deps", "files", "criteria"):
+            val = s.get(key)
+            if val is None:
+                continue
+            if not isinstance(val, list) or not all(isinstance(x, str) for x in val):
+                type_errs.append(f"{sid!r}: {key} must be a list of strings")
+    if type_errs:
+        raise DevteamError("invalid plan:\n  - " + "\n  - ".join(type_errs))
+
+
+def plan_fp(s):
+    """Footprint of a slice dict; research slices hold none (they only write their report)."""
+    return [] if s.get("kind", "code") == "research" else list(s.get("files") or [])
+
+
 def validate_plan(plan):
     errs = []
     slices = plan.get("slices") or []
     if not slices:
         errs.append("plan has no slices")
+    validate_slice_types(slices)
     ids = [s.get("id") for s in slices]
     if len(set(ids)) != len(ids):
         errs.append("duplicate slice ids")
@@ -548,6 +577,10 @@ def ready_slices(st):
     themselves (greedy in priority order), so the whole printed set can be dispatched at once."""
     done = {sid for sid, s in st["slices"].items() if s["status"] == "done"}
     inflight = [s for s in st["slices"].values() if s["status"] == "inflight"]
+    # a slice between RED and GREEN (red-done) still holds its footprint: nothing else may touch
+    # those files until its GREEN half is dispatched, even though no agent is running right now.
+    busy = [s for s in inflight + [s for s in st["slices"].values() if s["status"] == "red-done"]
+            if slice_kind(s) != "research"]
     cpl, dependents = crit_path_len(st)
     candidates = []
     for sid, s in st["slices"].items():
@@ -555,7 +588,8 @@ def ready_slices(st):
             continue
         if not all(d in done for d in s["deps"]):
             continue
-        if any(footprints_overlap(s["files"], f["files"]) for f in inflight):
+        if slice_kind(s) != "research" and \
+                any(footprints_overlap(s["files"], f["files"]) for f in busy if f["id"] != sid):
             continue
         candidates.append(sid)
     candidates.sort(key=lambda sid: (-cpl[sid], -len(dependents[sid]),
@@ -563,7 +597,9 @@ def ready_slices(st):
                                      0 if st["slices"][sid]["risk"] == "high" else 1, sid))
     ready = []
     for sid in candidates:
-        if not any(footprints_overlap(st["slices"][sid]["files"], st["slices"][x]["files"]) for x in ready):
+        if slice_kind(st["slices"][sid]) == "research" or \
+                not any(footprints_overlap(st["slices"][sid]["files"], st["slices"][x]["files"])
+                        for x in ready if slice_kind(st["slices"][x]) != "research"):
             ready.append(sid)
     return ready, inflight
 
@@ -798,6 +834,11 @@ def cmd_init(a):
     sd = state_dir(root)
     if (sd / "state.json").exists() and not a.force:
         raise DevteamError(f"{sd}/state.json exists — use `init --force` to start a new run (or `reset --yes`)")
+    if a.force:
+        for sub_ in ("reviews", "logs", "research"):
+            d = sd / sub_
+            if d.exists():
+                shutil.rmtree(d)
     for sub_ in ("slices", "briefs", "reviews", "logs", "research"):
         (sd / sub_).mkdir(parents=True, exist_ok=True)
     ensure_excludes(root, extra=plan.get("dep_dirs") or [])
@@ -808,7 +849,7 @@ def cmd_init(a):
             "id": s["id"], "title": s.get("title", s["id"]), "goal": s.get("goal", ""),
             "kind": s.get("kind", "code"), "size": s.get("size", "small"),
             "verify": s.get("verify", ""),
-            "deps": list(s.get("deps") or []), "files": list(s["files"]),
+            "deps": list(s.get("deps") or []), "files": plan_fp(s),
             "risk": s.get("risk", "low"), "criteria": list(s.get("criteria") or []),
             "edge_cases": list(s.get("edge_cases") or []), "context": list(s.get("context") or []),
             "isolation": ({"PORT": PORT_BASE + i, "DB_SUFFIX": f"_s{i}", "TMPDIR": "<worktree>/.oc-slice/tmp"}
@@ -1383,7 +1424,7 @@ def cmd_integrate(a):
 
 
 def frozen_files_of(red_sha, cwd, extra_globs):
-    files = git(["show", "--name-only", "--format=", red_sha], cwd).splitlines()
+    files = git(["show", "--no-renames", "--name-only", "--format=", red_sha], cwd).splitlines()
     return [f for f in files if f and is_test_path(f, extra_globs)]
 
 
@@ -1444,7 +1485,7 @@ def integrate_one(root, st, sid, remove=True):
         if tip == base:
             return warm("no-commit", f"{sid}: REJECTED — nothing committed on {branch}. {ask} to "
                                      f"finish and run `commit-work`, then integrate again; or `retry {sid}`.")
-        touched = git(["diff", "--name-only", base, tip], root).splitlines()
+        touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
         outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
         if outside:
             return warm("footprint-violation",
@@ -1472,7 +1513,7 @@ def integrate_one(root, st, sid, remove=True):
         if red:
             # the agent chose to write tests anyway → they are frozen exactly like any RED commit
             frozen = frozen_files_of(red, root, st["test_globs"])
-            changed = git(["diff", "--name-only", red, tip, "--"] + frozen, root) if frozen else ""
+            changed = git(["diff", "--no-renames", "--name-only", red, tip, "--"] + frozen, root) if frozen else ""
             if changed:
                 return warm("tests-modified",
                             f"{sid}: REJECTED — tests committed in {red[:9]} were modified afterwards: "
@@ -1483,7 +1524,7 @@ def integrate_one(root, st, sid, remove=True):
         if tip == base:
             return warm("no-commit", f"{sid}: REJECTED — nothing committed on {branch}. {ask} to "
                                      f"implement and run `commit-fast`, then integrate again; or `retry {sid}`.")
-        touched = git(["diff", "--name-only", base, tip], root).splitlines()
+        touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
         outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
         if outside:
             return warm("footprint-violation",
@@ -1505,15 +1546,23 @@ def integrate_one(root, st, sid, remove=True):
                     f"this slice was written test-first. Worktree kept at {wt}: {ask} to "
                     f"write the failing tests for every criterion and commit them with `commit-red` "
                     f"(not a hand-rolled `git commit`), then integrate again.", red=red)
+    red_src = [f for f in git(["show", "--no-renames", "--name-only", "--format=", red], root).splitlines()
+               if f and not is_test_path(f, st["test_globs"])]
+    if red_src:
+        return warm("red-touches-source",
+                    f"{sid}: REJECTED — the RED commit {red[:9]} modifies non-test files: {', '.join(red_src)}. "
+                    "Tests must be committed before and without the implementation. Redo RED with only "
+                    "test files (`commit-red` stages tests only), then integrate again.",
+                    red=red, files=red_src)
     if frozen:
-        changed = git(["diff", "--name-only", red, tip, "--"] + frozen, root)
+        changed = git(["diff", "--no-renames", "--name-only", red, tip, "--"] + frozen, root)
         if changed:
             return warm("tests-modified",
                         f"{sid}: REJECTED — frozen tests modified after the RED commit: {', '.join(changed.splitlines())}. "
                         f"Worktree kept at {wt}. {ask} to restore them (`git checkout {red[:9]} -- <file>`, "
                         f"commit-green) or, if the test is wrong, `retry {sid}` with a note.", files=changed.splitlines())
     # footprint check on everything the branch touched
-    touched = git(["diff", "--name-only", base, tip], root).splitlines()
+    touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
     outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
     if outside:
         return warm("footprint-violation",
@@ -1540,7 +1589,7 @@ def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, r
            cwd=root, check=False)
     if r.returncode != 0:
         in_merge = (common_dir(root) / "MERGE_HEAD").exists() or (git_dir(root) / "MERGE_HEAD").exists()
-        conflicts = git(["diff", "--name-only", "--diff-filter=U"], root).splitlines() if in_merge else []
+        conflicts = git(["diff", "--no-renames", "--name-only", "--diff-filter=U"], root).splitlines() if in_merge else []
         if in_merge:
             sh(["git", "merge", "--abort"], cwd=root, check=False)
         if conflicts:
@@ -1568,15 +1617,40 @@ def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, r
     return f"{sid}: MERGED {merged[:9]} ({nfiles} files; RED {red[:9]} ok; {len(frozen)} frozen tests unchanged)"
 
 
-def remove_worktree(root, wt):
+def remove_worktree(root, wt, prune=True):
     if not wt:
         return
+    if os.path.realpath(str(wt)) == os.path.realpath(str(root)):
+        return  # never remove the integration checkout itself
     if Path(wt).exists():
-        sh(["git", "worktree", "unlock", wt], cwd=root, check=False)
-        r = sh(["git", "worktree", "remove", "--force", wt], cwd=root, check=False)
-        if r.returncode != 0 and Path(wt).exists():
+        # a second --force also removes a locked worktree; a clean remove needs no prune
+        r = sh(["git", "worktree", "remove", "--force", "--force", wt], cwd=root, check=False)
+        if r.returncode == 0:
+            return
+        if Path(wt).exists():
             shutil.rmtree(wt, ignore_errors=True)
-    sh(["git", "worktree", "prune"], cwd=root, check=False)
+    if prune:
+        sh(["git", "worktree", "prune"], cwd=root, check=False)
+
+
+def salvage_worktree(root, sid, wt, n):
+    """Commit a lane's uncommitted work as 'wip(<id>): salvage' on its branch (else save a patch).
+    Returns {"kind": "commit"|"patch", "msg": ...}, or None when the worktree is clean/absent."""
+    if not wt or not Path(wt).exists():
+        return None
+    ex = ["--", ".", ":(exclude).oc-slice"]
+    if not sh(["git", "status", "--porcelain"] + ex, cwd=wt, check=False).stdout.strip():
+        return None
+    sh(["git", "add", "-A"] + ex, cwd=wt, check=False)
+    r = sh(["git"] + NO_SIGN + ["commit", "-q", "--no-verify", "-m", f"wip({sid}): salvage"], cwd=wt, check=False)
+    if r.returncode == 0:
+        return {"kind": "commit",
+                "msg": f"{sid}: uncommitted work salvaged as commit 'wip({sid}): salvage' on attempt/{sid}-{n}"}
+    d = state_dir(root) / "salvage"
+    d.mkdir(parents=True, exist_ok=True)
+    patch = d / f"{sid}-{n}.patch"
+    patch.write_text(sh(["git", "diff", "--cached", "--binary", "--no-renames", "HEAD"], cwd=wt, check=False).stdout)
+    return {"kind": "patch", "msg": f"{sid}: uncommitted work saved as patch {patch}"}
 
 
 def cmd_fail(a):
@@ -1600,6 +1674,10 @@ def cmd_retry(a):
         raise DevteamError(f"{a.id} is {s['status']} — nothing to retry")
     claim = read_claim(root, a.id)
     clear_markers(root, a.id)
+    if claim:
+        res = salvage_worktree(root, a.id, claim["worktree"], s["attempt"])
+        if res:
+            out(res["msg"])
     remove_worktree(root, claim["worktree"] if claim else str(state_dir(root) / "wt" / a.id))
     branch = (claim or {}).get("branch") or f"oc-devteam/{a.id}"
     if git_ok(["rev-parse", "--verify", "--quiet", branch], root):
@@ -1659,12 +1737,19 @@ def add_slice(st, spec):
     }
 
 
+def next_fix_id(st):
+    """Next free F<n> id; skips ids already taken (e.g. a fix added by hand with --id)."""
+    st["fix_counter"] += 1
+    while f"F{st['fix_counter']}" in st["slices"]:
+        st["fix_counter"] += 1
+    return f"F{st['fix_counter']}"
+
+
 def cmd_add_fix(a):
     root = find_root()
     st = load_state(root)
     if not a.id:
-        st["fix_counter"] += 1
-        a.id = f"F{st['fix_counter']}"
+        a.id = next_fix_id(st)
     add_slice(st, {"id": a.id, "title": a.title, "goal": a.goal or a.title, "deps": a.deps or [],
                    "files": a.files, "criteria": a.criteria, "risk": a.risk, "context": a.context or [],
                    "kind": getattr(a, "kind", "code"), "size": getattr(a, "size", "small"),
@@ -1725,8 +1810,7 @@ def add_fixes_from_text(st, text, source="", strict=False):
             continue
         sid = str(spec.get("id") or "")
         if not re.fullmatch(r"[A-Za-z0-9_-]+", sid) or sid in st["slices"]:
-            st["fix_counter"] += 1
-            spec["id"] = f"F{st['fix_counter']}"
+            spec["id"] = next_fix_id(st)
         if spec.get("risk") not in ("low", "high"):
             spec["risk"] = "low"
         spec["from_review"] = True   # a reviewer found this: it gets tests even in the spike profile
@@ -2324,7 +2408,7 @@ def cmd_review_pr(a):
         diff_from, diff_to = git(["rev-parse", a_ref], root), git(["rev-parse", b_ref or "HEAD"], root)
     else:
         diff_from, diff_to = git(["rev-parse", f"{rng}^"], root), git(["rev-parse", rng], root)
-    files = [f for f in git(["diff", "--name-only", diff_from, diff_to], root).splitlines() if f]
+    files = [f for f in git(["diff", "--no-renames", "--name-only", diff_from, diff_to], root).splitlines() if f]
     if not files:
         raise DevteamError(f"no changed files in {rng}")
     sd = root / STATE_DIRNAME / "reviews"
@@ -2431,6 +2515,27 @@ def cmd_status(a):
         out(f"last checkpoint: {c['result']} @ {c['sha'][:9]}")
 
 
+def finish_gate_problems(st):
+    """Conditions that make `finish` unsafe: an empty list means the run is verified. A run that
+    merged nothing (research only) needs no checkpoint."""
+    problems = []
+    cps = st.get("checkpoints") or []
+    if st.get("checkpoint_pending"):
+        problems.append("a checkpoint is still pending (its exit code has not been read yet)")
+    if st["merges"]:
+        if not cps:
+            problems.append("no checkpoint has been recorded")
+        else:
+            if cps[-1].get("result") != "pass":
+                problems.append(f"the last checkpoint result is {cps[-1].get('result')}, not pass")
+            since = st.get("merges_since_checkpoint", 0)
+            if since > 0:
+                problems.append(f"{since} merge(s) landed after the last checkpoint snapshot")
+    if st.get("verification_verdict") == "CHANGES_REQUIRED":
+        problems.append("the verification verdict is CHANGES_REQUIRED")
+    return problems
+
+
 def cmd_finish(a):
     root = find_root()
     st = load_state(root)
@@ -2441,7 +2546,13 @@ def cmd_finish(a):
     for sid in st["slices"]:
         c = read_claim(root, sid)
         if c and Path(c["worktree"]).exists():
-            remove_worktree(root, c["worktree"])
+            n = st["slices"][sid]["attempt"]
+            res = salvage_worktree(root, sid, c["worktree"], n)
+            if res:
+                out(res["msg"])
+                if res["kind"] == "commit":
+                    sh(["git", "branch", "-M", c["branch"], f"attempt/{sid}-{n}"], cwd=root, check=False)
+            remove_worktree(root, c["worktree"], prune=False)   # one prune after the loop
             leftovers.append(c["worktree"])
         if c and git_ok(["rev-parse", "--verify", "--quiet", c["branch"]], root) and st["slices"][sid]["status"] == "done":
             sh(["git", "branch", "-D", c["branch"]], cwd=root, check=False)
@@ -2449,15 +2560,24 @@ def cmd_finish(a):
     open_reviews = [f"{rid} ({r.get('status')}/{r.get('verdict') or 'no verdict'})"
                     for rid, r in (st.get("reviews") or {}).items()
                     if r.get("status") != "done" or r.get("verdict") != "APPROVED"]
+    unreviewed = st["merges"][st.get("reviewed_upto", 0):]
+    if unreviewed:
+        open_reviews.append(f"{len(unreviewed)} merged slice(s) never sent to review: {' '.join(unreviewed)}")
     if open_reviews and not a.force:
         raise DevteamError("reviews not closed: " + "; ".join(open_reviews) +
                            " — address their findings (`next` harvests each report, `add-fixes` for a "
                            "report it could not parse) or pass --force to finish anyway")
+    gate = finish_gate_problems(st)
+    if gate and not a.force:
+        raise DevteamError("finish gate: " + "; ".join(gate) + " (clear it with `next` / `checkpoint`, "
+                           "or pass --force to finish anyway)")
     out(f"FINISHED: {len(st['merges'])} slices merged on {st['integration_branch']}   [profile {profile(st)}]")
     summary = write_summary(root, st)
     out(f"PR-ready summary written to {summary} (e.g. `gh pr create --fill --body-file {q(summary)}`)")
     if open_reviews:
         out("! REVIEWS NOT CLOSED (finishing anyway because --force): " + "; ".join(open_reviews))
+    if gate:
+        out("! FINISH GATE BYPASSED (finishing anyway because --force): " + "; ".join(gate))
     traded = []
     if pol(st, "gate") == "deferred":
         traded.append("lint/type-check/build ran once at the end instead of per slice")
@@ -2829,6 +2949,15 @@ def cmd_commit_red(a):
         raise DevteamError("GREEN mode: tests are already committed and frozen; do not add tests")
     staged = stage_footprint(top, fp)
     tests = [f for f in staged if is_test_path(f, globs)]
+    support = [f for f in staged if f not in tests]
+    patch = None
+    if support:   # stubs never ride with RED: save a patch, unstage now, discard after the commit
+        salvage = state_dir(find_root()) / "salvage"
+        salvage.mkdir(parents=True, exist_ok=True)
+        patch = salvage / f"{sid}-red.patch"
+        patch.write_text(sh(["git", "diff", "--cached", "--binary", "--no-renames", "HEAD", "--"] + support,
+                            cwd=top, check=False).stdout)
+        git(["reset", "-q", "--"] + support, top)
     if not tests:
         raise DevteamError("no test files staged — RED must contain failing tests (test_*.py, *.test.ts, tests/…, or plan test_globs)")
     criteria = [ln for ln in (sd / "criteria").read_text().splitlines() if ln.strip()] if (sd / "criteria").exists() else []
@@ -2843,8 +2972,16 @@ def cmd_commit_red(a):
     sha = git(["rev-parse", "HEAD"], top)
     (sd / "red").write_text(sha)
     (sd / "red_files").write_text("\n".join(tests) + "\n")
+    if support:
+        tracked = set(git(["ls-files", "--"] + support, top, check=False).splitlines())
+        if tracked:
+            git(["checkout", "-q", "HEAD", "--"] + sorted(tracked), top)
+        for f in support:
+            if f not in tracked:
+                (Path(top) / f).unlink(missing_ok=True)
     out(f"RED committed {sha[:9]}: {len(tests)} test files frozen ({', '.join(tests)}); "
-        f"{len(staged) - len(tests)} stub/support files")
+        f"{len(support)} non-test stub files discarded (write the implementation in GREEN)"
+        + (f"; recoverable from {patch}" if patch else ""))
 
 
 def cmd_commit_fast(a):
@@ -2924,7 +3061,7 @@ def cmd_commit_green(a):
     git(NO_SIGN + ["commit", "-q", "--no-verify", "-m", f"feat({sid}): GREEN — {a.title}"], top)
     sha = git(["rev-parse", "HEAD"], top)
     if frozen:
-        changed = git(["diff", "--name-only", red, "HEAD", "--"] + frozen, top)
+        changed = git(["diff", "--no-renames", "--name-only", red, "HEAD", "--"] + frozen, top)
         if changed:
             out("WARNING: frozen tests differ from RED: " + changed.replace("\n", ", ") + " — the Conductor will reject this")
     out(f"GREEN committed {sha[:9]} ({len(staged)} files). Now run the gate if you haven't, then report.")
