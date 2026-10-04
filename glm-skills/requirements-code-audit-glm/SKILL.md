@@ -141,8 +141,8 @@ user-visible impact, **P2** the rest. Order P0 first, then by dependency.
 
 `A finalize` = report + gate + close. It writes `.audit/requirements-code-audit.md` and `traceability.csv` in
 the spec's language and fails loudly on: a non-MATCHED item that no verifier or adjudication settled, an
-investigator/verifier disagreement, a MISSING that never had a second pass or lists no searches, an unplanned
-discrepancy, and a citation that does not exist, is prose documentation or lies under `.git/`. It warns on a
+investigator/verifier disagreement, a MISSING that never had a second pass or lists no searches,
+an unplanned discrepancy, and a citation that does not exist, is prose documentation or lies under `.git/`. It warns on a
 MATCHED item with low confidence or high stakes that was never verified, on an effort that is not S/M/L, and on
 priority mismatches (a CONFLICT or an unmet high-stakes MUST not at P0, a MAY at P0). It prints the headline
 numbers. In chat: headline numbers, P0 count and the report path — never the whole report.
