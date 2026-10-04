@@ -21,7 +21,7 @@ the run is pausable/resumable, and the verification pass is codified.
 
 ## Brief for the workflow script
 
-- **Phase "investigate"**: `pipeline` over every `.hybrid-audit/batches/batch-*.md`; one agent per file, model `haiku`,
+- **Phase "investigate"**: `pipeline` over every `.hybrid-audit/batches/batch-*.md`; one agent per file, model `sonnet`,
   prompt: `Investigator <name>: read <path> and follow it exactly.` Label each agent with the batch name.
   Use a `schema` that returns `{ "batch": string, "written": number, "total": number }` so the script can detect
   partial batches and re-run them once.

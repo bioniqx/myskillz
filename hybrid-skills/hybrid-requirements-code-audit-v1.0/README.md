@@ -25,8 +25,7 @@ Honest gain: `hybrid` cuts request and usage-limit pressure a lot and Claude cos
 - `opencode` CLI v2.0.18 on `PATH` for modes `hybrid` and `opencode`, authenticated for the providers of your
   `HYBRID_OPENCODE_STD` / `HYBRID_OPENCODE_LITE` models. Without it the audit runs as mode `claude`.
 - Runs in Claude Code or Cowork, like the original.
-- Reuses the installed `req-audit` plugin's `rca-*` agents and guard hook; this skill ships no agents,
-  hooks or plugin manifest of its own. Without the plugin it falls back to generic mode
+- Reuses the installed `claude-req-audit` plugin's `claude-rca-*` agents; this skill ships no agents or plugin manifest of its own, only an optional guard hook (`hooks/audit_guard.py`, armed by `.hybrid-audit/ACTIVE`; SETUP.md section 5 shows how to register it). Without the plugin it falls back to generic mode
   (`general-purpose` subagents).
 - One-time check: `python3 scripts/audit.py doctor --ping`.
 
@@ -36,17 +35,17 @@ SKILL.md asks for the mode once per audit (or takes `mode=hybrid|claude|opencode
 
 | Mode (`preset`) | Investigators | Verifiers | Parsers | On an opencode failure |
 |---|---|---|---|---|
-| `claude` | Claude haiku | Claude sonnet | Claude sonnet (identical to requirements-code-audit) | opencode is never called |
+| `claude` | Claude sonnet | Claude sonnet | Claude sonnet (identical to requirements-code-audit) | opencode is never called |
 | `hybrid` (default) | `oc:std` (overflow queues for a free slot; `oc_overflow: "claude"` → Claude haiku) | Claude sonnet | `oc:std` (section fallback → Claude sonnet) | connection failures are retried 3 times; then the line is shown at once, the batch falls back to Claude and the rest of the run switches to Claude sonnet |
 | `opencode` | `oc:std`, no Claude overflow | `oc:std` | `oc:std` | connection failures are retried 3 times; then the line is shown at once and the unit is held: retry / run on Claude / switch to hybrid / abort |
 
-The lead's work (init, checklist, faithfulness pass, adjudication, `plan.jsonl`, report, check, finish) is Claude in every mode. `max` is a deprecated alias of `opencode`; workflow mode requires mode `claude`. Every MISSING, PARTIAL or CONFLICT verdict an opencode verifier gives goes to Claude adjudication (it is listed in the queue and `check` flags it until adjudicated), in every mode. Tier health is frozen when the audit starts: `init` pings once when the doctor cache is missing or stale for the tiers its mode uses (or prints an `OC-ERROR`), and later commands never downgrade a tier because the cache aged; `status --retry` re-pings and closes the breaker of a tier that answers.
+The lead's work (init, checklist, faithfulness pass, adjudication, `plan.jsonl`, report, check, finish) is Claude in every mode. `max` is a deprecated alias of `opencode`; workflow mode requires mode `claude`. Every MISSING, PARTIAL or CONFLICT verdict an opencode verifier gives goes to Claude adjudication (it is listed in the queue and `check` flags it until adjudicated), in every mode. A MATCHED, high-confidence item of normal stakes is not re-verified in any mode; the accepted ceiling is the stable spot-check sample of at least 5% of MATCHED items that the queue lists for Claude. Tier health is frozen when the audit starts: `init` pings once when the doctor cache is missing or stale for the tiers its mode uses (or prints an `OC-ERROR`), and later commands never downgrade a tier because the cache aged; `status --retry` re-pings and closes the breaker of a tier that answers.
 
 ## Backends
 
 | Backend | Runs | Where |
 |---|---|---|
-| Claude | lead, Claude-routed roles, hedges, fallbacks | Agent-tool subagents (`req-audit:rca-*`, or `general-purpose` in generic mode), as in the original |
+| Claude | lead, Claude-routed roles, hedges, fallbacks | Agent-tool subagents (`claude-req-audit:claude-rca-*`, or `general-purpose` in generic mode), as in the original |
 | opencode | batches routed to `oc:<tier>` (mode `hybrid`/`opencode`) | one background Bash process per batch: `python3 "<scripts_dir>/audit.py" oc-run <name>`, printed in the `OPENCODE` block after the `DISPATCH` blocks |
 
 The lead runs `audit.py status` on every completion notification (Agent or background Bash). Hedges and
@@ -86,7 +85,7 @@ Every name in a shared namespace is prefixed `hybrid`, so this skill installs be
 - Env vars: `HYBRID_AUDIT_ROUTING`, `HYBRID_AUDIT_DOCTOR_CACHE`, `HYBRID_AUDIT_OC_BIN`, `HYBRID_AUDIT_TELEMETRY` (plus `HYBRID_AUDIT_FAKE_*` for tests).
 - Project state dir: `<cwd>/.hybrid-audit/` (archives `.hybrid-audit.prev-<timestamp>/`); the original uses `.audit/`.
 - Saved workflow: `hybrid-audit-run`.
-- Claude workers `rca-*` and the `req-audit:` prefix come from the original skill, when installed; otherwise generic mode is used.
+- Claude workers `claude-rca-*` and the `claude-req-audit:` prefix come from the original skill, when installed; otherwise generic mode is used.
 
 ## Troubleshooting
 
@@ -114,3 +113,4 @@ Every name in a shared namespace is prefixed `hybrid`, so this skill installs be
 - One Claude fallback per failed opencode batch.
 - The `- Backends:` report line.
 - With preset `claude` the output is byte-identical to the original.
+- `hooks/audit_guard.py` and `hooks/audit_guard.sh`: the original guard retargeted to `.hybrid-audit/` (optional; registered by the user as SETUP.md section 5 shows).
