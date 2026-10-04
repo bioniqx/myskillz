@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the claude-* skills and their agents into Claude Code.
 #
-#   ./install.sh [--project DIR] [--dry-run] [--only NAME[,NAME...]] [--keep-old] [--uninstall]
+#   ./install-skill.sh [--project DIR] [--dry-run] [--only NAME[,NAME...]] [--keep-old] [--uninstall]
 # By default the old un-prefixed copies (dev-team-v3.2, programmer.md, ...) are DELETED, no backup.
 # --keep-old leaves them in place.
 #
@@ -21,7 +21,7 @@ DRY=0 UNINSTALL=0 KEEP_OLD=0 ONLY=""
 OLD_SKILLS="brainstorming-6.3 dev-team-v3.2 doc-generator frontend-design-Jun18 git-diff-summary requirements-code-audit systematic-debugging-6.3 writing-plans-6.2"
 OLD_AGENTS="programmer code-reviewer spot-reviewer investigator team-leader plan-task-writer rca-parser rca-investigator rca-verifier"
 
-usage() { sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { echo "install.sh: $*" >&2; exit 1; }
 run() { if [ "$DRY" = 1 ]; then echo "  [dry-run] $*"; else "$@"; fi; }
 
