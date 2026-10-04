@@ -28,8 +28,8 @@ token spend on task bodies without changing the planning contract.
 - Drop this folder where Claude Code loads skills from, alongside (not instead of) `writing-plans-6.2`
   if you want both installed. Every name this skill puts into a shared namespace carries the `hybrid` prefix
   (see Names), so it never collides with writing-plans-6.2: the Claude writer agent is
-  `~/.claude/agents/hybrid-plan-task-writer.md` (installed by this skill's `setup` only when missing, never
-  overwritten), and the scratch folder is `<plan-dir>/.hybrid-work/<plan>/`.
+  `~/.claude/agents/hybrid-plan-task-writer.md` (installed by this skill's `setup`; a stale or placeholder copy is
+  replaced, a current one is left alone), and the scratch folder is `<plan-dir>/.hybrid-work/<plan>/`.
 
 ## Run mode and presets
 
@@ -126,4 +126,5 @@ The example tiers use the `zai-coding-plan` provider. While that GLM Coding Plan
   opencode group (task IDs, tier, model, variant, rounds, outcome, reason, duration, tokens) and one review
   record per reviewed task from `wait --review` (whether review fixed it), summarised by `plan_tool.py stats`.
 - Shared models from env vars for the four hybrid skills, a run-mode question at the start, preset `opencode` (alias `max`), and immediate `OC-ERROR` / `OC-WARN` reporting with a held state instead of a silent fallback in mode `opencode`.
-- Preset `claude` reproduces writing-plans-6.2's behaviour exactly.
+- Preset `claude` follows writing-plans-6.2 (same contract rules and linter); `tests/test_lint_parity.py` runs both linters over the same bodies.
+- The plan text must not mention opencode. The shared linter does not scan for that word, so the writer and reviewer briefs forbid it and a reviewer removes any hit.
