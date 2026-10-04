@@ -79,8 +79,9 @@ In ONE turn, run
 `A brief --spec <file> [--spec <file2>] [--repo <root>] [--tier light|std|deep] [--lang vi|en]`.
 
 - No requirements input → stop and ask. Pasted text → `--spec-text "..."` saves it verbatim first.
-- `.docx` is extracted by the script. `.pdf/.xlsx/.pptx` → extract with the matching skill, save under
-  `.audit/spec/`, add with `A spec --add`. Flag an unclean extraction instead of guessing.
+- `.docx`, `.pdf` (needs `pdftotext` on PATH) and `.xlsx` are extracted by the script. `.pptx/.doc` → extract with
+  the matching skill, save under `.audit/spec/`, add with `A spec --add`. Flag an unclean extraction instead of
+  guessing; a PDF or sheet that yields no text prints a WARN.
 - Then state the contract in one line — "Treating `<file>` as the only source of truth; not reading git history
   or other docs." — and keep going without waiting for a reply.
 - Fewer than ~6 requirements: `A run` is still the right call; it just runs a small wave.
@@ -95,14 +96,16 @@ sentences. One JSON object per line in `.audit/checklist.jsonl`; `brief` printed
 2. `stakes: "high"` — security, auth, permissions, payments, data integrity, privacy. Always verified twice.
 3. `search_hints` — **4-10 strings, and the single biggest lever on accuracy you hold.** Identifiers, endpoint
    paths, table and field names, config keys, error codes **and English synonyms**: the spec's language will not
-   appear in identifiers. Thin hints are the main cause of a false MISSING, and `run` refuses a checklist whose
-   items carry fewer than two.
+   appear in identifiers. Thin hints are the main cause of a false MISSING; `A check` warns about every hint that
+   never shows up in the recorded searches.
 4. `tags` — `static-limit` (latency/SLA/infra/third-party) or `ambiguous` (+ `question`). Tagged items skip the
    waves entirely and go straight to the report's follow-up lists. Never spend a request on them.
 
 Spec over ~1800 words: `A parse` fans the sections out in parallel and writes `checklist.draft.jsonl`; then
 **read the draft next to the original** (paraphrase drift, missing splits, thin hints are yours to fix) and
-`A parse --accept`. Parsing is parallelised; faithfulness is not.
+`A parse --accept`. A section that fails or returns nothing stops `A parse` with an ERR and no draft is written:
+re-run it. Identical requirement text is kept (it can be two real requirements); possible duplicates are only
+listed. Parsing is parallelised; faithfulness is not.
 
 ## R5 — Step 3: run
 
@@ -116,16 +119,20 @@ and prints the counts.
 
 - One call. No polling, no waiting, no status loop. It returns when the audit is judged.
 - Interrupted or partial → `A run --resume` re-asks only the unsettled ids.
-- `--no-verify` exists for a quick look and makes `A check` fail on purpose. Do not use it for a real audit.
+- `--no-verify` exists for a quick look: every item that needed the second pass then fails `A check` (and so
+  `A finalize`). Do not use it for a real audit.
 - While it runs you may read a couple of cited ranges yourself; that is the spot-check, not busywork.
 
 ## R6 — Step 4: adjudicate, plan, finalize
 
-`A queue` prints everything that needs your judgment — verifier disagreements, every MISSING and CONFLICT, low
-confidence, high-stakes non-matches, checker rejections — each with the exact `path:lines` to read, plus a
-deterministic 5% MATCHED spot-check. Batch those `Read` calls in ONE turn, decide, then record:
+`A queue` prints everything that needs your judgment — verifier disagreements, CONFLICT, low-confidence verdicts,
+unsettled items, UNVERIFIABLE results the checklist did not tag, checker rejections — each with the exact
+`path:lines` to read, plus a seeded random spot-check of unverified MATCHED items (at least 3, about 5%). Batch
+those `Read` calls in ONE turn, decide, then record:
 
-`A adjudicate --set REQ-007 MISSING --note "why"` · `A adjudicate --accept REQ-003 REQ-004`
+`A adjudicate --set REQ-007 MISSING --set REQ-009 PARTIAL --note "why"` · `A adjudicate --accept REQ-003 REQ-004` ·
+`A adjudicate --accept-queue` (accepts every queued item; an UNSEARCHED item is skipped and listed, it needs
+`A run --resume` first)
 
 Your judgment is authoritative. Keep MISSING only when both passes found nothing and the recorded searches were
 adequate. Then write `.audit/plan.jsonl` (schema printed by `queue`): priority anchors to strength — **P0** any
@@ -133,9 +140,12 @@ CONFLICT or unmet MUST on a core/high-stakes flow, **P1** other unmet/partial MU
 user-visible impact, **P2** the rest. Order P0 first, then by dependency.
 
 `A finalize` = report + gate + close. It writes `.audit/requirements-code-audit.md` and `traceability.csv` in
-the spec's language, fails loudly on a single-pass MISSING, an unplanned discrepancy or a citation that does not
-exist, warns on CONFLICT, and prints the headline numbers. In chat: headline numbers, P0 count and
-the report path — never the whole report.
+the spec's language and fails loudly on: a non-MATCHED item that no verifier or adjudication settled, an
+investigator/verifier disagreement, a MISSING that never had a second pass or lists no searches, an unplanned
+discrepancy, and a citation that does not exist, is prose documentation or lies under `.git/`. It warns on a
+MATCHED item with low confidence or high stakes that was never verified, on an effort that is not S/M/L, and on
+priority mismatches (a CONFLICT or an unmet high-stakes MUST not at P0, a MAY at P0). It prints the headline
+numbers. In chat: headline numbers, P0 count and the report path — never the whole report.
 
 ## R7 — Status taxonomy
 
@@ -163,7 +173,9 @@ it maps to the same model as `sonnet`, at no gain.
 ## R9 — Fallback lane
 
 No API key → `brief` reports `lane agent` and the pipeline becomes `A plan` → dispatch the printed subagents in
-ONE message → `A status` (repeat as they report) → `A queue`, unchanged from there. The batch files carry the
+ONE message → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
+the earlier findings and verifier batches (`A plan --resume` keeps finished batches); each worker lists in
+`searched` the queries it ran, and the gate rejects a MISSING without them. The batch files carry the
 pre-retrieved excerpts, so the workers mostly judge rather than search. ZCode runs subagents launched together
 in parallel; OpenCode v1 serialises them, which is exactly why the api lane exists there. OpenCode v2's
 `subagent` tool takes `background: true` (a `background` param on your subagent tool is how you detect v2):
