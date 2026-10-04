@@ -16,7 +16,10 @@ SKIP_DIRS = {"tests", "__pycache__", "docs", ".git"}
 
 MARKERS = ("finish_gate_problems", "validate_slice_types", "salvage_worktree")
 SHELL_KEY = re.compile(r"""["']shell["']|\bshell\s*:""")
-OLD_BASH_KEY = re.compile(r"""["']bash["']\s*:|^\s*bash\s*:""", re.M)
+SOURCE_SUFFIXES = {".py", ".js", ".mjs", ".ts"}
+# A permission-map key: `"bash":` or a rendered line such as `"  bash: {}"`.
+BASH_KEY = re.compile(r"""["']\s*bash["']?\s*:""")
+SHELL_KEY_BUILT = re.compile(r"""["']\s*shell["']?\s*:""")
 
 
 def corpus(base):
@@ -51,11 +54,23 @@ class ParityMarkerTests(unittest.TestCase):
         self.assertRegex(corpus(SKILL), SHELL_KEY)
 
     def test_port_has_no_v1_bash_permission_key(self):
-        agents = SKILL / "opencode" / "agents"
-        self.assertTrue(agents.is_dir(), str(agents))
-        for path in sorted(agents.glob("*.md")):
-            with self.subTest(agent=path.name):
-                self.assertNotRegex(path.read_text(encoding="utf-8"), OLD_BASH_KEY)
+        # Agent markdown is not scanned: its `bash: true` is the repo's authoring field, which
+        # oc_harness renders into both the bash and shell permission keys. Only source files that
+        # build a permission map are checked.
+        sources = []
+        for base in sorted(OC_ROOT.glob("oc-*")) + [OC_ROOT / "_shared"]:
+            for path in sorted(base.rglob("*")):
+                if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
+                    continue
+                if SKIP_DIRS & set(path.relative_to(base).parts):
+                    continue
+                if BASH_KEY.search(path.read_text(encoding="utf-8", errors="replace")):
+                    sources.append(path)
+        self.assertTrue(sources, "no source file builds a bash permission key")
+        for path in sources:
+            with self.subTest(source=str(path.relative_to(OC_ROOT))):
+                text = path.read_text(encoding="utf-8", errors="replace")
+                self.assertRegex(text, SHELL_KEY_BUILT)
 
 
 if __name__ == "__main__":
