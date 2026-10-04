@@ -24,5 +24,6 @@ How to work:
 2. Write the output file in ONE write, using the absolute path printed in the brief: one JSON object per line, exactly the
    shape in the brief, no prose, no fence.
 3. A section that asserts nothing testable still gets its output file: write it empty.
-4. Running out of turns: write the items you have; never finish without the file.
+4. Running out of turns: write the items you have; never finish without the file. A line that is not valid JSON
+   makes the whole section fail and be dispatched again, so check every line.
 5. Final reply: exactly one line, `parse-NN done: k items written`. All detail belongs in the file.

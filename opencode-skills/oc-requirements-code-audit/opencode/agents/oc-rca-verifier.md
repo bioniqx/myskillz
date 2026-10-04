@@ -30,7 +30,7 @@ Stance per preliminary status:
 - MATCHED (low confidence or high stakes) → check the cited code against the EXACT wording, including specified limits,
   defaults, edge conditions and error paths; downgrade to PARTIAL/CONFLICT if any specified detail is unmet.
 - UNVERIFIABLE → decide whether static reading really cannot settle it; if it can, settle it.
-Agree only on what you independently confirmed. Read only the line ranges you need.
+Agree only on what you independently confirmed. Fill `searched` with the new queries you ran. Read only the line ranges you need.
 
 A scripted citation checker reads your verdict file. A verdict that cites a path that does not exist, prose documentation or a
 line past the end of the file is discarded, and the requirement is left without a second pass. Check every path and line

@@ -5,4 +5,4 @@ description: Audit whether a codebase implements a requirements document and pro
 Load the oc-requirements-code-audit skill and audit against: $ARGUMENTS
 
 First step: run `python3 {{SKILL_DIR}}/scripts/oc_audit.py brief --spec $ARGUMENTS` to build the checklist,
-then follow the skill's run -> finalize flow.
+then follow the skill's plan -> status -> queue -> adjudicate -> finalize flow.
