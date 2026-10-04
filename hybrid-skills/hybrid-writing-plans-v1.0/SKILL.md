@@ -29,7 +29,7 @@ The context ends its opencode block with a `mode:` line (a separate `mode: THORO
 - `mode: <hybrid|claude|opencode> (from arguments)` -> use that mode and do not ask. Hand-offs between the hybrid skills (brainstorming, writing-plans, team) pass it along as `mode=<mode>`.
 - `mode: unset ...` or `mode: '<x>' is not valid ...` -> your first tool call is AskUserQuestion, "Run this skill in which mode?", with three options. Put the configured `std` and `lite` specs from the config line (the line after `opencode:`) into the descriptions, each with its `(skill)` or `(shared)` mark from the end of that line, or "no config" when that line says the config is missing or invalid:
   - **Hybrid (Recommended)** - judgment on Claude, task writers on opencode, every opencode error reported at once, automatic Claude fallback; after 3 failed retries of a connection error the rest of the run moves to Claude Sonnet.
-  - **Claude only** - opencode is never called; identical to writing-plans 6.2.
+  - **Claude only** - opencode is never called; the same pipeline, contract rules and linter as writing-plans 6.2.
   - **opencode only** - every task the routing table sends to opencode goes to opencode, with no silent Claude fallback.
 - Persist the choice by passing `--preset <mode>` to `contracts` (Phase 1). The script freezes it in `work.json`; `wait`, `review` and `assemble` never ask again.
 - The old name `max` still works as an alias of `opencode` and prints one OC-WARN line.
@@ -45,7 +45,7 @@ The context ends its opencode block with a `mode:` line (a separate `mode: THORO
 
 ## Portability Rule (the plan is the product)
 
-The process uses subagents and opencode; the plan file must not mention them. It is plain Markdown any AI agent or human with a shell, an editor and git can execute. The linter enforces this.
+The process uses subagents and opencode; the plan file must not mention them. It is plain Markdown any AI agent or human with a shell, an editor and git can execute. The linter enforces the terms it scans for; it does not scan for the word opencode, so the writer and reviewer briefs forbid it and a reviewer removes any hit.
 
 ## Scope Check
 
@@ -67,7 +67,7 @@ For each contract tier (`light`, `std` = no `Tier` line, `deep`) the value is `c
 | Reviewers | Claude sonnet, 6.2 triggers | Claude sonnet, 6.2 triggers | Claude sonnet, 6.2 triggers |
 | Fallback writer | - | Claude, model per the tier map (`sonnet` once the run has switched) | none: the unit is held (Failure policy) |
 
-Models come from two environment variables shared by all four hybrid skills: `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to `STD`), each `provider/model[#variant]`, for example `opencode/muse-spark-1.3-contributor-free#xhigh`. Set them in the `"env"` block of `~/.claude/settings.json`, for example `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restart Claude Code; exporting them in the shell works too. When the config line says `HYBRID_OPENCODE_STD is not set`, tell the user that. Timeouts, roles and review policy stay in `$HYBRID_WRITING_PLANS_ROUTING` (default `<skill dir>/routing.json`, for example `~/.claude/skills/hybrid-writing-plans-v1.0/routing.json`), merged over the shipped `routing.default.json`. That per-skill file may also override a tier's model: a tier whose `tiers.<tier>.model` is set there uses that `model` and its `variant` (none when omitted), every other tier uses the shared models. `max_parallel` comes only from that file or the shipped defaults. The context config line and the doctor's tier lines mark each tier `(skill)` or `(shared)`. The mode comes from Step 0: `contracts --preset <mode>` routes once and records the result in `work.json`. Mode `claude` is identical to writing-plans 6.2 and never needs a doctor run.
+Models come from two environment variables shared by all four hybrid skills: `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to `STD`), each `provider/model[#variant]`, for example `opencode/muse-spark-1.3-contributor-free#xhigh`. Set them in the `"env"` block of `~/.claude/settings.json`, for example `{"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}`, then restart Claude Code; exporting them in the shell works too. When the config line says `HYBRID_OPENCODE_STD is not set`, tell the user that. Timeouts, roles and review policy stay in `$HYBRID_WRITING_PLANS_ROUTING` (default `<skill dir>/routing.json`, for example `~/.claude/skills/hybrid-writing-plans-v1.0/routing.json`), merged over the shipped `routing.default.json`. That per-skill file may also override a tier's model: a tier whose `tiers.<tier>.model` is set there uses that `model` and its `variant` (none when omitted), every other tier uses the shared models. `max_parallel` comes only from that file or the shipped defaults. The context config line and the doctor's tier lines mark each tier `(skill)` or `(shared)`. The mode comes from Step 0: `contracts --preset <mode>` routes once and records the result in `work.json`. Mode `claude` follows writing-plans 6.2 (same contract rules and linter, compared by `tests/test_lint_parity.py`) and never needs a doctor run.
 
 Rules:
 - Routing, partitioning and every brief are the script's job. Never hand-write an opencode brief, never edit a `<gid>.oc.md` or `<gid>F.md` brief, never run `opencode` yourself.
@@ -146,8 +146,9 @@ Contract rules (quality is locked here):
 - `Spec`: line ranges from the context heading map; writers get exactly these lines.
 - `Read` (optional): extra existing files this writer needs. `Tier` (optional): `light` (trivial config/docs) or `deep` (algorithmic, security, concurrency). Default: `std`. The tier also picks the backend (see Hybrid routing), so tier honestly: a contract that needs deep judgment must say `Tier: deep`, which keeps it on Claude opus in `hybrid`.
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently. The tighter the contract, the better a cheap writer does.
+- Legitimate project vocabulary that the placeholder/portability scan would flag (for example a to-do app, or a class named `Task`) needs `--allow WORD` on every `contracts`/`assemble`/`check` call - decide this now, not after `assemble` fails.
 
-Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if the context shows ultracode or a raised cap it could not read; always add `--preset <mode>` with the mode chosen in Step 0). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table for the Claude groups (only when there are any), the `OPENCODE` block for the opencode groups (only when there are any) and the next command.
+Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if you know the real cap is higher than what the script detected; always add `--preset <mode>` with the mode chosen in Step 0). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table for the Claude groups (only when there are any), the `OPENCODE` block for the opencode groups (only when there are any) and the next command.
 
 ### Phase 2 - Fan-out writers (ONE message)
 
@@ -198,12 +199,12 @@ After `OK`, offer (waves/width from the script output):
 
 - Team-driven, mode `hybrid` or `opencode` -> invoke the `hybrid-team` skill with args `<plan path> mode=<mode>` (`<mode>` is the Step 0 run mode; the chain brainstorming -> writing-plans -> team keeps one mode). If `hybrid-team` is not installed, say so and offer `dev-team` (args `<plan path>`).
 - Team-driven, mode `claude` -> invoke the `dev-team` skill with args `<plan path>`.
-- Subagent-Driven -> REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
-- Inline -> REQUIRED SUB-SKILL: `superpowers:executing-plans`
+- Subagent-Driven -> dispatch each wave's `[P]` tasks yourself as subagents here, reviewing between waves.
+- Inline -> execute the plan yourself here, sequentially, with checkpoints.
 - Hand off -> nothing else; the plan carries everything.
 
-## One-time setup (tell the user when the context shows cap < 64 or `opencode: unavailable`)
+## One-time setup (tell the user when the context shows cap < 64, `opencode: unavailable`, or a stale/placeholder writer agent)
 
-`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `hybrid-plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn) only when no copy exists - an existing one is never overwritten. Never run `--apply` without the user's consent.
+`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `hybrid-plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn); a stale or placeholder copy is replaced, a current one is left alone. Never run `--apply` without the user's consent.
 
 `TOOL doctor --ping` checks the opencode binary and version, validates the shared models (`HYBRID_OPENCODE_STD` / `HYBRID_OPENCODE_LITE`) and the per-skill routing file, confirms each tier's model is listed, sends each tier one tiny ping and writes the doctor cache the context line reads. Failures print as `OC-ERROR` lines and one tier's failure never disables the other; it never creates or edits a config file. Run it once after installing opencode or changing the variables (restart Claude Code first), and again when the context line shows `unavailable` or a `claude(...)` tier; a cache entry past its time limit counts as unusable. The context line itself never spawns opencode. `TOOL stats` summarises the per-tier telemetry (round-1 pass rate, fallbacks, review fix rate). Optional: `/fast` speeds the serial contract phase on Opus.

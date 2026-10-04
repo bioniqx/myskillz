@@ -11,6 +11,14 @@ Claude chỉ giữ ~20% việc cần phán đoán cao nhất; phần thực thi 
 - `contracts` in thêm dòng `NOTE ... groups queue for a free slot` khi một tier có nhiều group hơn `max_parallel`. Thời gian đo của một group (dòng `OC ...`, telemetry) tính từ lúc nhận được slot, không tính thời gian chờ. `wait` không coi group đang chờ slot là treo: khi `oc-write` còn chạy, `PENDING ... timeout` kèm dòng `oc-write is still running` (chạy `wait` lại).
 - Đường inline (N <= 3) chỉ còn ở chế độ `claude`. `hybrid` và `opencode` luôn fan-out kể cả N = 1: Claude chỉ viết Contracts, body do opencode viết theo tier (SKILL.md Phase 0, bảng routing và mục Inline Path; README). `plan_tool.py contracts` và `context` không có ngưỡng inline nên không cần đổi; `contracts` xử lý đúng N = 1..3 (có test).
 
+### Fixed
+- SKILL.md no longer calls Claude-only mode "identical to writing-plans 6.2"; it says the mode follows 6.2's contract rules and linter, which `tests/test_lint_parity.py` compares.
+- SKILL.md Portability Rule no longer claims the linter enforces the absence of the word opencode: it does not scan for it. The opencode writer brief, the Claude writer agent and the reviewer brief now forbid it in a task body, and a reviewer removes any hit.
+- SKILL.md dropped the stale `superpowers:*` hand-off references and the `ultracode` remark, and gained the contract rule about `--allow WORD` for legitimate project vocabulary.
+- SKILL.md and README now describe `setup` as replacing a stale or placeholder writer agent instead of never touching an existing one.
+- The reviewer brief says to skip re-reading task files whose bodies are already inlined.
+- The v1.1.0 entry below named a path that does not exist (`claude-skills/writing-plans-6.2`); it now names `claude-skills/claude-writing-plans-6.2`.
+
 ## v1.1.0 (2026-09-29)
 
 Shared opencode config, run-mode prompt and immediate error reporting.
@@ -39,7 +47,7 @@ Shared opencode config, run-mode prompt and immediate error reporting.
 ### Fixed
 - The README and the v1.0.0 changelog said `doctor` validates the routing file; it now does.
 - The `!` preload quotes `"$ARGUMENTS"` again, so an apostrophe in the arguments no longer cancels the skill; `context` reads `mode=` and `--preset` out of one string.
-- `plan_tool.py` is re-synced with writing-plans 6.2 (three-way merge): fence-aware heading and spec-map checks, case-sensitive `TODO` with inline code and URLs skipped, first-token `Files` handling plus bare filenames (`Makefile`, `Dockerfile`, `LICENSE`), `git add a b && git commit` split, contract hashing (an edited contract drops its stale body, marks and `.oc` marker), `.fail`/`.warn` marks, stale writer-agent notice, `git --no-optional-locks` and the preload caps. `tests/test_lint_parity.py` runs both `lint_body` functions over the same bodies; `test_fork.py` and `test_golden.py` now find the original at `claude-skills/writing-plans-6.2` instead of always skipping.
+- `plan_tool.py` is re-synced with writing-plans 6.2 (three-way merge): fence-aware heading and spec-map checks, case-sensitive `TODO` with inline code and URLs skipped, first-token `Files` handling plus bare filenames (`Makefile`, `Dockerfile`, `LICENSE`), `git add a b && git commit` split, contract hashing (an edited contract drops its stale body, marks and `.oc` marker), `.fail`/`.warn` marks, stale writer-agent notice, `git --no-optional-locks` and the preload caps. `tests/test_lint_parity.py` runs both `lint_body` functions over the same bodies; `test_fork.py` and `test_golden.py` now find the original at `claude-skills/claude-writing-plans-6.2` instead of always skipping.
 - A `contracts` re-run keeps opencode task bodies that survived and only dispatches groups with a pending or invalidated task; `oc-write` no longer overwrites a body a reviewer fixed.
 - The Execution Handoff offers `hybrid-team` with `mode=<mode>` (`dev-team` in mode `claude`), completing the brainstorming -> writing-plans -> team chain. The relay rule now uses hybrid-team's full text.
 - A connection retry of a repair turn is a fresh run with the brief plus the repair message, never `--session`.
