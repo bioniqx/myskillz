@@ -30,6 +30,9 @@ run a deep-research command in parallel.
 - Two batches, not a chain. Batch 1 = all searches in parallel; batch 2 =
   all fetches of the best primary URLs in parallel; batch 3 only for
   conflicts. Start broad and short, then narrow.
+- Load deferred tools first. If WebSearch or WebFetch are deferred, load
+  them with ToolSearch in round 1 and run batch 1 in round 2; call them
+  in round 1 only when they are already loaded.
 - Pin to the versions in Live context AND query the latest release notes.
   Report the gap: breaking changes, deprecations, new built-ins.
 - Target primary sources directly when you know them: the docs domain,

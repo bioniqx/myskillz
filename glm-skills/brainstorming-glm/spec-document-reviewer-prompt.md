@@ -59,5 +59,6 @@ ADVISORY: up to 3 non-blocking recommendations | none
 Lens instructions: [LENS INSTRUCTIONS from the list above]
 ```
 
-Merge: union the ISSUES, drop duplicates, fix inline, one commit. No
+Merge: union the ISSUES, drop duplicates, fix inline, then make the one
+spec commit only when committing is allowed (`architectural.md` §4). No
 re-review loop — go straight to the user review gate.

@@ -131,18 +131,29 @@ targeted edits, not judgment.
 2. Inline self-review per `spec-document-reviewer-prompt.md` — five
    lenses, one pass, about a minute; fix in place. Escalate to parallel
    reviewers only under that file's criteria, and wait for all of them.
-3. `git add` + `git commit` the spec (one commit, after fixes).
+3. Commit the spec (`git add` + `git commit`, one commit, after fixes)
+   only when neither the user nor a loaded project or user instruction
+   file says not to commit self-initiated files; otherwise leave the spec
+   untracked.
 4. End the turn with the review gate:
 
    > "Spec written and committed to `<path>`. Please review it and let me
    > know if you want to make any changes before we start writing out the
    > implementation plan."
 
+   If the commit was skipped, say so instead: "Spec written to `<path>`
+   (not committed, per your instructions). Please review it and let me
+   know if you want to make any changes before we start writing out the
+   implementation plan."
+
 Changes requested → apply, re-run the self-review on the changed sections
-only, commit, ask again. Proceed only on approval.
+only, commit if committing, ask again. Proceed only on approval.
 
 ## 5. Hand-off
 
-Invoke `writing-plans` and pass the committed spec path
+Invoke `writing-plans` (the name this port installs under); if no skill
+with that exact name is installed, invoke `writing-plans-glm`. Pass the
+spec path as its input: the committed path
 (`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
-preferences chose) as its input. No other skill, no code, no scaffolding.
+preferences chose), or the untracked path when the commit was skipped. No
+other skill, no code, no scaffolding.
