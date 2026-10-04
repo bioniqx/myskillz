@@ -99,8 +99,12 @@ def is_test_path(rel, extra_globs=()):
 
 
 def path_matches(rel, entry):
-    rel = rel.replace("\\", "/").lstrip("./")
-    entry = entry.replace("\\", "/").lstrip("./")
+    rel = rel.replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    entry = entry.replace("\\", "/")
+    while entry.startswith("./"):
+        entry = entry[2:]
     if entry.endswith("/"):
         return rel.startswith(entry)
     if any(ch in entry for ch in "*?["):
@@ -205,8 +209,133 @@ def normalize_git(cmd):
     return GIT_GLOBAL_OPT.sub("git ", cmd), redirected
 
 
+_QUOTED_RE = re.compile(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"")
+
+_UNWRAP_BEFORE_RE = re.compile(r"(?:>>?|\b(?:bash|sh|zsh|dash)\s+(?:-\w+\s+)*-\w*c|\beval)\s*$")
+
+
+def strip_quoted(cmd, meta=False):
+    """Drop single/double-quoted spans so a `>` or `->` inside a quoted argument (a grep pattern,
+    a --format string) is never mistaken for a shell metacharacter or a redirect. Two exceptions:
+    a double-quoted span holding `$` or a backtick is kept for the metachar scan, and for the deny
+    scan the payload of `sh -c`/`eval` and a redirect target is unwrapped."""
+    def repl(m):
+        s = m.group(0)
+        if meta:
+            return s if s[0] == '"' and ("$" in s or "`" in s) else ""
+        if _UNWRAP_BEFORE_RE.search(cmd[:m.start()]):
+            return " " + s[1:-1] + " "
+        return s if s[0] == '"' and ("$(" in s or "`" in s) else ""
+    return _QUOTED_RE.sub(repl, cmd)
+
+
+def strip_for_scan(cmd):
+    """`cmd` with quoted spans and safe redirects removed, for the BASH_DENY regexes."""
+    cmd = strip_quoted(cmd)
+    for r in SAFE_REDIRECTS:
+        cmd = cmd.replace(r, " ")
+    return cmd
+
+
+def _is_meta_pat(pat):
+    return ".oc-slice" in pat or ".opencode/oc-dev-team" in pat
+
+
+DEVTEAM_LANE_SUBS = {"claim", "report", "commit-red", "commit-green", "commit-work", "commit-fast"}
+
+_PY_INTERPRETER_RE = re.compile(r"^python[0-9.]*$")
+
+
+def _is_devteam_script(tok):
+    return tok.replace("\\", "/").rstrip("/").split("/")[-1] == "oc_devteam.py"
+
+
+def devteam_subcommand(cmd):
+    """If `cmd` actually EXECUTES .../oc_devteam.py (directly, or via a python interpreter), its
+    subcommand; else None. The script name as a plain ARGUMENT to another program (grep, git diff,
+    wc) is never an invocation."""
+    argv = argv_of(cmd)
+    if not argv:
+        return None
+    argv = strip_env_prefix(argv)
+    if not argv:
+        return None
+    head, rest = argv[0], argv[1:]
+    if _is_devteam_script(head):
+        script_rest = rest
+    elif _PY_INTERPRETER_RE.match(os.path.basename(head)):
+        i = 0
+        while i < len(rest) and rest[i].startswith("-"):
+            i += 1
+        if i >= len(rest) or not _is_devteam_script(rest[i]):
+            return None
+        script_rest = rest[i + 1:]
+    else:
+        return None
+    return next((x for x in script_rest if not x.startswith("-")), "")
+
+
+_WRAPPERS = {"timeout", "env", "nice", "nohup", "time", "command", "exec", "sudo", "ionice", "stdbuf", "setsid"}
+
+
+def wrapped_engine_subcommand(cmd):
+    """The engine subcommand run by ANY segment of a compound command (`;`, `&&`, `||`, `|`,
+    newline) or behind wrappers like `timeout 600` / `env` / `nice`: the first one that is NOT a lane
+    helper if there is one, else the first found, else None. Deny-side only."""
+    segs = []
+    flat, q, esc = [], "", False
+    for ch in cmd:
+        if esc:
+            esc = False
+        elif ch == "\\" and q != "'":
+            esc = True
+        elif q:
+            q = "" if ch == q else q
+        elif ch in "'\"":
+            q = ch
+        elif ch == "\n":
+            ch = " ; "
+        flat.append(ch)
+    for line in (cmd.split("\n") if q else ["".join(flat)]):
+        try:
+            lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            toks = list(lex)
+        except ValueError:
+            continue
+        cur = []
+        for t in toks:
+            if t and all(c in ";&|()" for c in t):
+                segs.append(cur)
+                cur = []
+            else:
+                cur.append(t)
+        segs.append(cur)
+    found = []
+    for seg in segs:
+        for j, tok in enumerate(seg):
+            if not all(re.fullmatch(r"[A-Za-z_]\w*=.*|-.*|\d+[smhd]?", p) or os.path.basename(p) in _WRAPPERS
+                       for p in seg[:j]):
+                break
+            rest = seg[j + 1:]
+            if _is_devteam_script(tok):
+                found.append(next((x for x in rest if not x.startswith("-")), ""))
+                break
+            if _PY_INTERPRETER_RE.match(os.path.basename(tok)):
+                k = 0
+                while k < len(rest) and rest[k].startswith("-"):
+                    k += 1
+                if k < len(rest) and _is_devteam_script(rest[k]):
+                    found.append(next((x for x in rest[k + 1:] if not x.startswith("-")), ""))
+                    break
+    return next((f for f in found if f not in DEVTEAM_LANE_SUBS), found[0] if found else None)
+
+
 BASH_DENY = [
-    (r"\bgit\s+(push|rebase|filter-branch|worktree|merge|stash(?!\s+(?:list|show)\b)|switch|cherry-pick|revert)\b", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+(push|rebase|filter-branch|switch|cherry-pick|revert)\b", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+merge\b(?!-)", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+worktree\b(?!\s+list\b)", "integration/history commands are the Conductor's"),
+    (r"\bgit\s+stash\b(?!\s+(list|show)\b)", "integration/history commands are the Conductor's"),
     (r"\bgit\s+reset\s+(--hard|--merge|--soft)\b", "history rewriting is forbidden in a slice worktree"),
     (r"\bgit\s+branch\s+(-[dDmM]\b|--delete|--move|--force)", "branch surgery is forbidden in a slice worktree"),
     (r"\bgit\s+commit\b[^|;&]*--amend", "--amend would rewrite the RED audit trail; make a new commit"),
@@ -216,26 +345,43 @@ BASH_DENY = [
     # any write-shaped mention of .oc-slice/ at all: it is the record the integrator and the Stop gate
     # read, so an agent that can rewrite it can claim a RED commit it never made
     (r"\.oc-slice/(red|red_files|base|mode|kind|footprint|allow|id|notest|criteria|root)\b[^\n]*"
-     r"(>|>>|\bwrite\b|\bopen\s*\(|\bmv\b|\bcp\b|\brm\b)", "`.oc-slice/` is dev-team metadata"),
-    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\bwrite\s*\()[^\n]*\.oc-slice/", "`.oc-slice/` is dev-team metadata"),
+     r"(>|>>|\bwrite(?:_text|_bytes)?\b|\bopen\s*\(|\bmv\b|\bcp\b|\brm\b)", "`.oc-slice/` is dev-team metadata"),
+    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\bwrite(?:_text|_bytes)?\s*\()[^\n]*\.oc-slice/", "`.oc-slice/` is dev-team metadata"),
     # the done/blocked markers are how `next` finds finished lanes: only the Stop gate writes them
-    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\btouch\b|\bwrite\s*\()[^\n]*\.opencode/oc-dev-team/", "`.opencode/oc-dev-team/` is the Conductor's run state"),
+    (r"(>|>>|\bmv\b|\bcp\b|\btee\b|\btouch\b|\bwrite(?:_text|_bytes)?\s*\()[^\n]*\.opencode/oc-dev-team/", "`.opencode/oc-dev-team/` is the Conductor's run state"),
+    (r"\.opencode/oc-dev-team/[^\n]*\bwrite(?:_text|_bytes)?\s*\(", "`.opencode/oc-dev-team/` is the Conductor's run state"),
 ]
 
 
 def guard_bash(inp):
     raw = (inp.get("tool_input") or {}).get("command", "") or ""
+    sub = devteam_subcommand(raw)
+    denied = sub if sub is not None else wrapped_engine_subcommand(raw)
+    if denied is not None and denied not in DEVTEAM_LANE_SUBS:
+        deny(f"`oc_devteam.py {denied}` drives the engine (integrate/finish/reset/next/dispatch and everything "
+             "else are the Conductor's); a lane may only run claim / report / commit-red / commit-green / "
+             "commit-work / commit-fast.")
+    if sub is not None:
+        wt0 = find_slice_root(inp.get("cwd") or os.getcwd())
+        pinned0 = read_lines(wt0 / ".oc-slice" / "allow") if wt0 else []
+        argv0 = argv_of(raw)
+        match = prefix_match(argv0, pinned0) if argv0 else None
+        allow(f"dev-team: pinned command from the briefing — {match}" if match else None)
     cmd, redirected = normalize_git(raw)
     if redirected:
         deny(f"Blocked `{raw[:80]}`: it points git at another checkout (`-C` / `--git-dir` / "
              "`--work-tree` / `GIT_DIR`). Every git command must act on YOUR worktree only.")
+    scan = cmd      # quotes kept: `python3 -c "open('.oc-slice/red','w')"` must still match; only safe redirects go
+    for r in SAFE_REDIRECTS:
+        scan = scan.replace(r, " ")
+    scan_hist = strip_for_scan(cmd)
     for pat, why in BASH_DENY:
-        if re.search(pat, cmd):
+        if re.search(pat, scan if _is_meta_pat(pat) else scan_hist):
             deny(f"Blocked `{raw[:80]}`: {why}. Use commit-red / commit-green / commit-work for commits; "
                  "the Conductor merges.")
-    if re.search(r"\bgit\s+checkout\b", cmd) and not re.search(r"\bgit\s+checkout\b[^|;&]*\s--(\s|$)", cmd):
+    if re.search(r"\bgit\s+checkout\b", scan_hist) and not re.search(r"\bgit\s+checkout\b[^|;&]*\s--(\s|$)", scan_hist):
         deny("`git checkout <ref>` would leave your slice branch. Only `git checkout [<ref>] -- <file>` (restore a file) is allowed.")
-    if re.search(r"\bgit\s+reset\b", cmd) and not re.search(r"\bgit\s+reset\b[^|;&]*\s--(\s|$)", cmd):
+    if re.search(r"\bgit\s+reset\b", scan_hist) and not re.search(r"\bgit\s+reset\b[^|;&]*\s--(\s|$)", scan_hist):
         deny("`git reset <ref>` would drop commits (the RED audit trail). Only `git reset -- <file>` (unstage) is allowed.")
     wt = find_slice_root(inp.get("cwd") or os.getcwd())
     reason = bash_allow_reason(raw, wt, footprint=read_lines(wt / ".oc-slice" / "footprint") if wt else [],
@@ -717,6 +863,10 @@ def bash_allow_reason(raw, wt, footprint, pinned, readonly=False):
 def write_marker(wt, sd, sid, kind, note=""):
     """Tell the Conductor's engine this lane is finished: `<root>/.opencode/oc-dev-team/slices/<id>.done`
     (or `.blocked`). Best effort — `devteam next <id>` remains the manual fallback."""
+    try:
+        (sd / "stop_blocks").unlink()   # the lane is finished: a resume after a rejection is gated afresh
+    except OSError:
+        pass
     root = (read_lines(sd / "root") or [""])[0]
     if not root:
         return
