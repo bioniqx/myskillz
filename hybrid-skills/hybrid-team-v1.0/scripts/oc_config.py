@@ -15,6 +15,7 @@ sandbox (sandbox-exec, bwrap or a container) with no network and a worktree-only
 import copy
 import json
 import os
+import re
 
 AGENT_NAME = "hybrid-team-programmer"
 SENTINEL = "HT-AGENT-OK"
@@ -70,11 +71,15 @@ def bash_block(engine: str, commands: dict) -> dict:
     for pattern in INSPECTION_DENY:
         bash[pattern] = "deny"
     for name in COMMAND_KEYS:
-        cmd = str(commands.get(name) or "").split("{files}")[0].strip()
-        if cmd and cmd.lower() not in ("none", "n/a", "-"):
-            tail = "*" if cmd.endswith("/") else " *"  # "pytest tests/" also covers "pytest tests/unit"
-            bash[cmd + tail] = "allow"
-            bash[ISOLATION_PREFIX + cmd + tail] = "allow"
+        # opencode matches each command of a chain on its own, so allow every part of a pinned chain
+        # ("stylua --check {files} && selene {files}" must allow "selene <file>" too).
+        # Operators inside quotes (python3 -c "a; b") do not split: the lookahead needs balanced quotes after it.
+        for part in re.split(r"""(?:&&|\|\||;|\|)(?=(?:[^"']|"[^"]*"|'[^']*')*$)""", str(commands.get(name) or "")):
+            cmd = part.split("{files}")[0].strip()
+            if cmd and cmd.lower() not in ("none", "n/a", "-"):
+                tail = "*" if cmd.endswith("/") else " *"  # "pytest tests/" also covers "pytest tests/unit"
+                bash[cmd + tail] = "allow"
+                bash[ISOLATION_PREFIX + cmd + tail] = "allow"
     for pattern in PATH_DENY:
         bash[pattern] = "deny"
     for sub in COMMIT_HELPERS:
@@ -99,6 +104,8 @@ def permission_block(engine: str, commands: dict) -> dict:
         "list": "allow",
         "todowrite": "allow",
         "bash": bash_block(engine, commands),
+        # opencode v2.0.22 names the shell tool "shell"; same rules, or every lane's gate is denied.
+        "shell": bash_block(engine, commands),
         "webfetch": "deny",
         "websearch": "deny",
         "task": "deny",
