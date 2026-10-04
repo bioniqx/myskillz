@@ -63,9 +63,10 @@ Input: the user's request (+ optional explorer maps). Output: `.opencode/oc-dev-
      second dispatch (separate test author and implementer) plus verification.
    - `isolation: true` when the slice's tests touch a port, database or filesystem
      outside the footprint (the engine pins PORT/DB_SUFFIX/TMPDIR per slice).
-   - Width beyond the engine's lane limit buys nothing (`oc_devteam.py ready` prints the free slots).
-     With few slots prefer fewer, coherent slices over
-     many tiny ones — every slice costs a dispatch, a merge and a Conductor turn.
+   - Width is the product you are designing. The engine's lane limit is a stated limit (the provider
+     cap; `oc_devteam.py ready` prints the free slots), not a reason to merge independent slices.
+     Still split no finer than a coherent change needs: every slice costs a dispatch, a merge and
+     a Conductor turn.
    - Each slice: objective, testable `criteria` (they become the failing tests) and
      the `edge_cases` its tests must cover. Lean: the smallest change that fully
      achieves the goal, reusing what exists.

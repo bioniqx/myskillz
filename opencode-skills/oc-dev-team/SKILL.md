@@ -104,11 +104,11 @@ Task shapes: **greenfield** → `start` runs `git init`; S1 = `chore` scaffold (
 | `turbo` | one final full gate | none | one final, sharded, spot | one final |
 | `spike` | turbo, **low-risk slices ship with no tests** | none | final, spot | one final |
 
-A skipped RED run is replaced by a static check: `commit-red` refuses tests with no assertions or fewer cases than criteria. Choose `turbo`/`spike` **only when the user asks** ("fast mode", "nhanh nhất", "prototype", "throwaway", "no tests"); never infer it, never carry it to the next request. `spike`: say in one line what is traded, list every untested slice at the end with an offer to harden it. In `turbo`/`spike` never block on a question: take the recommended default, record it under `## Assumptions`.
+A skipped RED run is replaced by a static check: `commit-red` refuses tests with no assertions or fewer cases than criteria. Choose `turbo`/`spike` **only when the user asks** ("fast mode", "nhanh nhất", "prototype", "throwaway", "no tests"); never infer it, never carry it to the next request. `spike`: say in one line what is traded, list every untested slice at the end with an offer to harden it. In `turbo`/`spike` never block on a question: take the recommended default, record it under `## Assumptions`; every decision goes in the final report.
 
 ## Concurrency
 
-The engine never has more lanes live than its built-in hard cap, and there is no other window arithmetic. Width beyond what the model in this window can serve buys nothing, so prefer fewer coherent slices over many tiny ones.
+**Width is the product you are designing.** The engine never has more lanes live than its built-in hard cap (the provider's limit), and there is no other window arithmetic. Design the plan as wide as its true dependencies allow: the cap is a stated limit that the engine enforces, not a reason to merge independent slices. Slices that would overlap on a path stay serial, and every slice still costs a dispatch, a merge and a Conductor turn, so do not split below what a coherent change needs.
 
 ## Fast lane (Small)
 
@@ -182,7 +182,7 @@ Prose for the user (Understanding · Open questions with options/recommended/aff
              "context": ["src/x.ts#Foo"], "verify": "(chore/docs/perf only)"}]}
 ```
 
-Slicing rules: **vertical** (S1 = thinnest end-to-end path); `deps` only for true runtime prerequisites — a pinned contract is not a dependency; `files` = exact source **and test** paths, pairwise **disjoint**; `size` honestly — it is the scheduler weight; `risk: high` sparingly (security, concurrency, subtle logic — split RED/GREEN + verification); `isolation: true` when tests touch a port/DB/filesystem outside the footprint.
+Slicing rules: leanest viable slices, and give each slice a `kind` (it picks the pipeline the engine runs for it); **vertical** (S1 = thinnest end-to-end path); `deps` only for true runtime prerequisites — a pinned contract is not a dependency; `files` = exact source **and test** paths, pairwise **disjoint**; `size` honestly — it is the scheduler weight; `risk: high` sparingly (security, concurrency, subtle logic — split RED/GREEN + verification); `isolation: true` when tests touch a port/DB/filesystem outside the footprint.
 
 ## Rules that never bend
 

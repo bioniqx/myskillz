@@ -78,6 +78,6 @@ dispatches each fix as a test-first slice, so keep fix file sets disjoint.
 
 ## Re-review
 
-When the Conductor messages you with fix commits, re-check **only** the changed areas against
+When the Conductor re-dispatches you with fix commits in the prompt (a fresh run of your row, via `resume`), re-check **only** the changed areas against
 your findings, update the report file in place (`resolved` / `still open` per finding), and
 reply with the new verdict line and counts.
