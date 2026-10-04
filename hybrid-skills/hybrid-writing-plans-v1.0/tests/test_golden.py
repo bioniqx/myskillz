@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
 TOOL = SKILL / "scripts" / "plan_tool.py"
 FAKE = HERE / "fake_opencode.py"
-WP62 = Path(__file__).resolve().parents[3] / "claude-skills" / "writing-plans-6.2"
+WP62 = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-writing-plans-6.2"
 TOOL62 = WP62 / "scripts" / "plan_tool.py"
 
 PLAN = "\n".join([

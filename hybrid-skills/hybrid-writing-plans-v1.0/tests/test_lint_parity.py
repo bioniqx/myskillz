@@ -5,7 +5,7 @@ import warnings
 from pathlib import Path
 
 HP = Path(__file__).resolve().parents[1]
-SRC = Path(__file__).resolve().parents[3] / "claude-skills" / "writing-plans-6.2"
+SRC = Path(__file__).resolve().parents[3] / "claude-skills" / "claude-writing-plans-6.2"
 FENCE = "`" * 3
 
 PLAN = "\n".join([
@@ -55,6 +55,8 @@ BODIES = {
         body(A, "def a() -> int:\n    return 1", "git add src/a.py tests/test_a.py\n" + COMMIT, run=False),
         body(A, "def a( -> int:\n    return 1", "git add src/a.py tests/test_a.py\n" + COMMIT),
         body(A, "def b() -> int:\n    return 1", "git add src/a.py tests/test_a.py\n" + COMMIT),
+        body(A, "def a() -> int:\n    return 1", "git add src/a.py tests/test_a.py\ngit commit -am x"),
+        body(A, "def a() -> int:\n    return 1", "git commit -m x"),
     ],
     "T02": [
         body(["- Create: `Makefile`", "- Create: `Dockerfile`"], "x = 1", "git add Makefile Dockerfile\n" + COMMIT),
@@ -83,6 +85,13 @@ class LintParityTest(unittest.TestCase):
             self.assertEqual(n, o, "%s body %d" % (o[0], o[1]))
         accepted = [r for r in results["new"] if not r[2][0]]
         self.assertTrue(accepted and len(accepted) < len(results["new"]))  # the set exercises both outcomes
+
+    def test_allow_stem_matches_6_2(self):
+        old = load(SRC / "scripts" / "plan_tool.py", "wp62_parity_allow")
+        new = load(HP / "scripts" / "plan_tool.py", "hp_parity_allow")
+        text = "The Claude subagent writes a todo list.\n"
+        for allow in ([], ["subagent"], ["re:Claude"], ["claude", "subagent"]):
+            self.assertEqual(new.scan(text, allow, "t"), old.scan(text, allow, "t"), allow)
 
     def test_bare_filenames_can_lint(self):
         new = load(HP / "scripts" / "plan_tool.py", "hp_parity_bare")
