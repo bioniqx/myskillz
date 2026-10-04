@@ -141,6 +141,19 @@ class ContractsPortTests(unittest.TestCase):
         brief = M.reviewer_brief(str(self.plan), PLAN_TEXT, cs[:1], str(self.work), None, str(self.repo))
         self.assertIn("    3| BODY-MARKER-LINE", brief)
 
+    def test_reviewer_brief_forbids_opencode_in_task_bodies(self):
+        cs, _ = M.parse_contracts(PLAN_TEXT)
+        M.analyze(cs, None, None)
+        self.write(self.work / "tasks" / "T01.md", "**Files:**\n- Create: `src/one.py`\n")
+        brief = M.reviewer_brief(str(self.plan), PLAN_TEXT, cs[:1], str(self.work), None, str(self.repo))
+        self.assertIn("must not name opencode", brief)
+        self.assertIn("remove any mention", brief)
+
+    def test_copied_prompts_stay_byte_identical_and_changelog_is_honest(self):
+        self.assertNotIn("opencode", (HP / "agents" / "hybrid-plan-task-writer.md").read_text(encoding="utf-8").lower())
+        log = (HP / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertNotIn("the Claude writer agent and the reviewer brief now forbid", log)
+
     def test_setup_refreshes_a_stale_agent_file(self):
         agent_path = self.tmp / "home" / ".claude" / "agents" / "hybrid-plan-task-writer.md"
         self.write(agent_path, "old agent text\n")
