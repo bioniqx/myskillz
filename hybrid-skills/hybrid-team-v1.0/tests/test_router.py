@@ -614,5 +614,31 @@ class TestBreaker(RouterTestCase):
             self.assertFalse(router.needs_split(s, hybrid, True, self.breaker_dir))
 
 
+class TestBackendPinExclusions(RouterTestCase):
+    """A slice's `backend: "oc:<tier>"` pin may not bypass the exclusions the router applies to
+    every other slice (hybrid invariant 1: judgment stays on Claude)."""
+
+    def route(self, s, **overrides):
+        return router.route(s, self.routing(**overrides), True, self.breaker_dir)
+
+    def test_pin_does_not_bypass_non_offloadable_kinds(self):
+        for kind in ("research", "perf", "investigator", "brief-debug"):
+            s = {"kind": kind, "size": "small", "backend": "oc:std", "verify": "pytest -q"}
+            self.assertEqual(self.route(s), "claude", kind)
+            self.assertEqual(self.route(s, preset="opencode"), "claude", kind)
+
+    def test_pin_does_not_bypass_risk_high_in_hybrid(self):
+        s = {"kind": "code", "size": "small", "risk": "high", "backend": "oc:std"}
+        self.assertEqual(self.route(s), "claude")
+
+    def test_pin_still_runs_risk_high_in_opencode_preset(self):
+        s = {"kind": "code", "size": "small", "risk": "high", "backend": "oc:std"}
+        self.assertEqual(self.route(s, preset="opencode"), "oc:std")
+
+    def test_pin_is_honoured_for_an_ordinary_slice(self):
+        s = {"kind": "code", "size": "small", "backend": "oc:lite"}
+        self.assertEqual(self.route(s), "oc:lite")
+
+
 if __name__ == "__main__":
     unittest.main()
