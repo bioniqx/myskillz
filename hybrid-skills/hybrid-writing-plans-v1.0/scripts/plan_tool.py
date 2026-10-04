@@ -785,6 +785,7 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
     lint = "; ".join("%s lint-task %s %s --mark rev" % (qtool(), shlex.quote(plan_path), shlex.quote(f)) for f in files)
     parts = [tmpl.replace("{TASKS}", ", ".join(c["id"] for c in cs_group)).replace("{LINT}", lint)
              .replace("{FILES}", "\n".join("- `%s`" % f for f in files))]
+    parts.append("## Portability (hybrid)\n\nA task body must not name opencode: remove any mention of it by editing the task file.")
     gc = section(plan, "Global Constraints")
     if gc:
         parts.append("## Global Constraints\n\n" + gc)
