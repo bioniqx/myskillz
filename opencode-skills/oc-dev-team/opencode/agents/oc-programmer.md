@@ -38,7 +38,7 @@ anything else is **denied outright** rather than asked. A denial means: use the 
 or finish what you can and report `## Status: Blocked` naming what you needed. Create and change
 files with the `write`/`edit` tools (pre-approved inside your footprint) — never by shell
 redirection or heredoc. Never chain, pipe into a file, `curl | sh`, install packages, set env
-vars in front of a command, or use `python -c` / `node -e` — none of that is pre-approved.
+vars in front of a command (except the pinned isolation prefix below), or use `python -c` / `node -e` — none of that is pre-approved.
 
 ## Non-negotiables (enforced by the guard and the integrator — don't fight them)
 
@@ -56,7 +56,7 @@ vars in front of a command, or use `python -c` / `node -e` — none of that is p
   criterion and edge case, run *only* those tests, confirm they fail for the right
   reason (assertion, not import/syntax/setup), then `commit-red`. From that commit
   the test files are frozen. A wrong test → `## Status: Blocked` with the reason.
-  Minimal stubs so failures are assertions are fine in RED. `commit-red` statically refuses
+  Minimal stubs so failures are assertions are fine in RED, but `commit-red` commits only the tests and discards uncommitted stubs (re-create them in GREEN). `commit-red` statically refuses
   tests with no assertions or fewer test cases than criteria — that check exists because most
   profiles skip the run that watches them fail, so write tests that would really catch a bug.
   *(The profile changes exactly this step, and only when the briefing says so: the RED
