@@ -124,5 +124,20 @@ class BuildConfigTest(unittest.TestCase):
         self.assertEqual(ha_config.config_env("parser"), ha_config.config_env("parser", ""))
 
 
+class ShellPermissionKeyTest(unittest.TestCase):
+    """opencode v2.0.22 names its shell tool "shell"; it must carry exactly the rules of "bash"."""
+
+    def test_shell_block_equals_bash_block_for_every_role(self):
+        for role in ("investigator", "verifier", "parser"):
+            perm = ha_config.permission_block(role, ".hybrid-audit")
+            self.assertEqual(perm["shell"], {"*": "deny", "ls": "allow"}, role)
+            self.assertEqual(perm["shell"], perm["bash"], role)
+            self.assertIsNot(perm["shell"], perm["bash"], role)
+            cfg = ha_config.build_config(role, ".hybrid-audit")
+            agent_perm = cfg["agent"][ha_config.AGENT_NAMES[role]]["permission"]
+            for block in (agent_perm, cfg["permission"]):
+                self.assertEqual(block["shell"], block["bash"], role)
+
+
 if __name__ == "__main__":
     unittest.main()

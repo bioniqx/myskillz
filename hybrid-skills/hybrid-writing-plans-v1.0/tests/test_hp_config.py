@@ -109,5 +109,18 @@ class TestHPConfig(unittest.TestCase):
         self.assertIn("permission", parsed)
 
 
+class TestShellPermissionKey(unittest.TestCase):
+    """opencode v2.0.22 names its shell tool "shell"; it must carry exactly the rules of "bash"."""
+
+    def test_shell_block_equals_bash_block(self):
+        perm = hp_config.permission_block()
+        self.assertEqual(perm["shell"], {"*": "deny", "ls": "allow"})
+        self.assertEqual(perm["shell"], perm["bash"])
+        self.assertIsNot(perm["shell"], perm["bash"])
+        config = hp_config.build_config("task")
+        for block in (config["agent"][hp_config.AGENT_NAME]["permission"], config["permission"]):
+            self.assertEqual(block["shell"], block["bash"])
+
+
 if __name__ == "__main__":
     unittest.main()

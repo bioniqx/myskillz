@@ -201,5 +201,19 @@ class TestConfigEnv(unittest.TestCase):
         self.assertEqual(parsed, expected)
 
 
+class TestShellPermissionKey(XdgDataHomeUnsetTestCase):
+    """opencode v2.0.22 names its shell tool "shell"; it must carry exactly the rules of "bash"."""
+
+    def test_shell_block_equals_bash_block_for_every_role(self):
+        for role in ROLES:
+            perm = hb_config.permission_block(role)
+            self.assertEqual(perm["shell"], READ_ONLY_BASH, role)
+            self.assertEqual(perm["shell"], perm["bash"], role)
+            self.assertIsNot(perm["shell"], perm["bash"], role)
+            config = hb_config.build_config(role, "task")
+            for block in (config["agent"][hb_config.AGENT_NAME]["permission"], config["permission"]):
+                self.assertEqual(block["shell"], block["bash"], role)
+
+
 if __name__ == "__main__":
     unittest.main()

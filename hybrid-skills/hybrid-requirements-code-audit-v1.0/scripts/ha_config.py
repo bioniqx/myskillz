@@ -63,6 +63,8 @@ def permission_block(role: str, audit_rel: str = "") -> dict:
     for key in DENIED_TOOLS:
         perm[key] = "deny"
     perm["bash"] = dict(READ_ONLY_BASH)
+    # opencode v2.0.22 names the shell tool "shell"; same rules as "bash".
+    perm["shell"] = dict(READ_ONLY_BASH)
     if role == "parser":
         for key in PARSER_DENIED:
             perm[key] = "deny"
