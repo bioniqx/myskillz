@@ -7,7 +7,7 @@ Arbitrary sleeps guess at timing: they pass on a fast laptop and fail under CI l
 ```bash
 bash $S/stress.sh -n 200 -- <single test command>      # $S = the path printed as S= by every tool output
 ```
-A failure rate plus failing logs is your evidence. Test a candidate timing fix with `debug_tool.py experiment` using `runs: <3/p>` on both arms, never by rerunning it a few times by hand. Raising `-j` above the CPU count adds load so races surface more often — but keep the same `-j` for before/after comparisons, and rule out runs interfering with each other (shared ports/DB/files) by checking `-j 1`. Prove the fix with `-b F/N` (Fisher p < 0.05) — see parallel-playbook §6.
+A failure rate plus failing logs is your evidence. Test a candidate timing fix with `debug_tool.py experiment` using `runs: <3/p>` on both arms, never by rerunning it a few times by hand. With `runs` above 1 the tool runs the control arm and then the treatment arm, one after another (control first), never at the same time: arms that run together compete for CPU and bias a timing result. Raising `-j` above the CPU count adds load so races surface more often — but keep the same `-j` for before/after comparisons, and rule out runs interfering with each other (shared ports/DB/files) by checking `-j 1`. Prove the fix with `-b F/N` (Fisher p < 0.05) — see parallel-playbook §6.
 
 ## Replace sleeps with condition waits
 

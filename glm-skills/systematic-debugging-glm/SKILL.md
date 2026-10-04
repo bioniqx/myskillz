@@ -20,6 +20,8 @@ for d in "${CLAUDE_SKILL_DIR:-}" "$OPENCODE_CONFIG_DIR/skills/systematic-debuggi
 
 Every tool output starts with `S=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path** into every later command — `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags.
 
+One-time OpenCode setup: `python3 $S/debug_tool.py setup --harness opencode` prints a provider block that defines the `low` / `high` / `max` `reasoningEffort` variants for `glm-5.3` and `glm-5.3-flash` under `zai-coding-plan`. Paste it into your OpenCode provider config. Without it, `#max` fails with "Variant unavailable".
+
 ## R1. One call per phase — do not batch tool calls, batch *inside* one call
 
 You emit few parallel tool calls per turn, and each turn costs seconds of latency. So width never lives in your message; it lives inside the tools, which open up to 64 threads themselves.
@@ -41,11 +43,12 @@ Rules:
 
 ## R2. Triage — `probe` prints `LANE:` for you
 
-Take the lane `probe` printed. Override it only for these three reasons, and say which:
+Take the lane `probe` printed. `probe` routes on the error text alone, so override it in these cases, and say which:
 
 1. FAST → STANDARD after 3 rounds without a verified fix, or after 1 failed fix.
-2. STANDARD → SWARM when the repro is not reproducible, when no hypothesis survives round 3, or after 2 failed fixes.
-3. Never de-escalate after a failed fix, and escalation keeps the failed-fix count.
+2. STANDARD → SWARM when the repro is not reproducible, when the failure is multi-component (CI→build→deploy, API→service→DB), when no hypothesis survives round 3, or after 2 failed fixes.
+3. Any lane → SWARM when the bug is intermittent or flaky, a regression with an unknown culprit, a performance problem, or has many plausible causes.
+4. Never de-escalate after a failed fix, and escalation keeps the failed-fix count.
 
 A null / undefined / None / nil / KeyError / index-out-of-range error is never FAST: the bad value was created somewhere upstream of the line that crashed.
 
@@ -57,29 +60,21 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 ## R4. STANDARD lane — 3 rounds
 
 1. **Evidence** — `probe` output. Read errors completely: message, code, file:line, every in-repo frame, every `Caused by`, adjacent warnings. A bad value deep in the stack → trace it back to where it is *created*, not where it is used: `references/root-cause-tracing.md`. Multi-component (CI→build→deploy, API→service→DB) → instrument every boundary in ONE run (what entered, what exited, config per layer), then investigate only the boundary that broke. Fails only in CI → first reproduce CI conditions locally (same image, same env vars, `CI=true`, load via `stress.sh -j`); if that is impossible, add boundary logging to the CI job and read its output.
-2. **Compare and hypothesize, in one message.** Find a working analogue (a sibling test that passes, the last good commit, the reference implementation) and list every difference — do not pre-filter "can't matter" — including the implicit ones: config, env vars, versions, ordering, shared state. Then write 2–4 hypotheses in the spec file:
+2. **Compare and hypothesize, in one message.** Find a working analogue (a sibling test that passes, the last good commit, the reference implementation), read the reference completely, then list every difference — do not pre-filter "can't matter" — including the implicit ones: config, env vars, versions, ordering, shared state. Then write 2–4 hypotheses in the spec file, each one as `H: <cause> because <evidence>. Experiment E: <one-variable change>. If H is true: <result A>. If false: <result B>.` — A ≠ B, or E is not worth running:
 
    ```bash
    python3 $S/debug_tool.py experiment --template > /tmp/exp.json     # fill in: hypothesis, cmd, and ONE of patch_file / env / treatment_cmd
    python3 $S/debug_tool.py experiment --spec /tmp/exp.json -j 16
    ```
 
-   Each hypothesis changes exactly one variable. The tool runs the control and treatment arms in two separate worktrees at the same time, which is also the causation proof the old manual "revert the fix, watch it break, restore" step gave you. CONFIRMED means one arm passed and the other failed — nothing else. Refuted → the evidence changed; write new hypotheses, never wilder ones.
+   Each hypothesis changes exactly one variable. The tool runs the control and treatment arms in two separate worktrees. An arm of a hypothesis with `runs` above 1 (a flaky or timing check) runs one after another, control first, so CPU contention cannot bias the result; single-run arms run at the same time. CONFIRMED means one arm passed every run and the other failed — nothing else; a failure rate that only moved is INCONCLUSIVE. Refuted → the evidence changed; write new hypotheses, never wilder ones. Stuck → say "I don't understand X", name the evidence that would settle it, and get it.
 3. **Fix and verify** — one fix at the source, no drive-by refactors. Turn the repro into a failing automated test first and see it fail for the expected reason. Then one call:
 
    ```bash
    python3 $S/debug_tool.py run -j 4 '<new test>' '<the failing test file>' '<affected suite>'
    ```
 
-   Flaky bug → prove it with `bash $S/stress.sh -b <baseline F/N>` at the baseline's `-n`/`-j`; only Fisher p < 0.05 counts. Bad data crossed layers → `references/defense-in-depth.md`. Timing bug → condition waits, never sleeps → `references/flaky-and-timing.md`.
-
-#### Setup snippet for OpenCode
-
-```bash
-python3 $S/debug_tool.py setup --harness opencode
-```
-
-This prints a provider block defining `variants` `low`/`high`/`max` (`reasoningEffort`) for `glm-5.3` and `glm-5.3-flash` under `zai-coding-plan`. Paste it into your OpenCode provider config. Without this, `#max` fails with "Variant unavailable" (fixes SD12).
+   Flaky bug → prove it with `bash $S/stress.sh -b <baseline F/N>` at the baseline's `-n`/`-j`; only Fisher p < 0.05 counts. When it is cheap and nothing else runs in the tree, prove causation too: run the fix as the treatment arm of one `experiment` entry (`patch_file` holding the fix, `expect: treatment_passes`), or revert only the fix, confirm the new test fails, and restore it. Bad data crossed layers → `references/defense-in-depth.md`. Timing bug → condition waits, never sleeps → `references/flaky-and-timing.md`.
 
 ## R5. SWARM lane — 4 to 6 rounds
 
@@ -88,7 +83,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `debug-worker` agent instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `debug-worker` agent instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report. Beyond ~8 workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit
@@ -118,7 +113,7 @@ Five lines, no more: `BUG:` · `LANE:` · `EVIDENCE SO FAR:` · `RULED OUT:` · 
 | Rationalization | Reality |
 | --- | --- |
 | "Simple / urgent, no time" | FAST costs 2 rounds; guessing costs more. |
-| "Prod is down" | Mitigate first with a reversible, cause-agnostic action (rollback, flag, failover, degrade) — that is not a fix — while ONE `probe` call gathers evidence. The root cause still precedes the code change. |
+| "Prod is down" | Mitigate first with a reversible, cause-agnostic action (rollback, feature flag, failover, degrade the feature) — that is not a fix — while ONE `probe` call gathers evidence (change timeline vs error onset, DNS/TLS/egress from the host, provider status). The root cause still precedes the code change. |
 | "Several fixes at once saves time" | Parallelize isolated experiments, never fixes in one tree. |
 | "Senior/author says it's X" | That is a hypothesis; one `experiment` entry settles it. |
 | "4 hours of sleeps can't be wasted" | Sunk cost. Delete them; a timing guess is not a root cause. |
