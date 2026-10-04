@@ -1,8 +1,10 @@
+import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -90,6 +92,87 @@ class GlmLintPortTests(unittest.TestCase):
         out = self.lint(body("git add src/greet.py tests/test_greet.py\ngit commit -m 'x'",
                              prose="TODO fill this in."), "--allow", "TODO")
         self.assertNotIn("ERR", out)
+
+
+GOOD = "git add src/greet.py tests/test_greet.py\ngit commit -m 'x'"
+BAD = "git commit -m 'x'"
+
+
+class GlmMarksAndWaitTests(unittest.TestCase):
+    def setUp(self):
+        self.d = Path(os.path.realpath(tempfile.mkdtemp()))
+        self.addCleanup(shutil.rmtree, str(self.d), True)
+        self.plan = self.d / "plan.md"
+        self.plan.write_text(PLAN)
+        self.work = self.d / ".work" / "plan"
+        (self.work / "tasks").mkdir(parents=True)
+        (self.work / "work.json").write_text(json.dumps({"plan": str(self.plan), "tasks": ["T01"], "allow": []}))
+        self.task = self.work / "tasks" / "T01.md"
+
+    def run_tool(self, *args, stdin=None):
+        env = dict(os.environ, PLAN_TOOL_WAIT_MIN_AGE="0")
+        return subprocess.run([sys.executable, TOOL] + list(args), capture_output=True, text=True,
+                              input=stdin, env=env, timeout=60)
+
+    def lint(self, text):
+        self.task.write_text(text)
+        return self.run_tool("lint-task", str(self.plan), str(self.task))
+
+    def mark(self, suffix):
+        return Path(str(self.task) + suffix)
+
+    def test_lint_task_fail_then_clean_then_warn_marks(self):
+        self.lint(body(BAD))
+        self.assertTrue(self.mark(".fail").exists())
+        self.assertFalse(self.mark(".ok").exists())
+        self.lint(body(GOOD))
+        self.assertFalse(self.mark(".fail").exists())
+        self.assertTrue(self.mark(".ok").exists())
+        self.mark(".warn").write_text("stale")
+        self.lint(body(GOOD))
+        self.assertFalse(self.mark(".warn").exists())
+
+    def test_lint_task_warn_only_writes_warn_and_clean_removes_it(self):
+        self.lint(body("git add src tests/test_greet.py\ngit commit -m 'x'"))
+        self.assertFalse(self.mark(".fail").exists())
+        self.assertTrue(self.mark(".ok").exists())
+        self.assertIn("stages a directory", self.mark(".warn").read_text())
+        self.lint(body(GOOD))
+        self.assertFalse(self.mark(".warn").exists())
+        self.assertTrue(self.mark(".ok").exists())
+
+    def test_hook_lint_writes_fail_then_ok(self):
+        self.task.write_text(body(BAD))
+        payload = json.dumps({"tool_input": {"file_path": str(self.task)}})
+        r = self.run_tool("hook-lint", stdin=payload)
+        self.assertIn("plan-lint: FAIL", r.stdout)
+        self.assertTrue(self.mark(".fail").exists())
+        self.task.write_text(body(GOOD))
+        r = self.run_tool("hook-lint", stdin=payload)
+        self.assertIn("plan-lint: OK", r.stdout)
+        self.assertFalse(self.mark(".fail").exists())
+        self.assertTrue(self.mark(".ok").exists())
+
+    def test_wait_reports_stuck_failing_unchanged_task(self):
+        self.task.write_text(body(BAD))
+        self.mark(".fail").write_text("ERR")
+        r = self.run_tool("wait", str(self.plan))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("failing and unchanged", r.stdout)
+        self.assertNotIn("NameError", r.stdout + r.stderr)
+
+    def test_wait_exits_zero_when_ok_mark_is_newer(self):
+        self.task.write_text(body(GOOD))
+        time.sleep(0.05)
+        self.mark(".ok").write_text("1")
+        r = self.run_tool("wait", str(self.plan))
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("DONE 1/1", r.stdout)
+
+    def test_task_mtime_and_task_stuck_defined(self):
+        src = Path(TOOL).read_text()
+        self.assertIn("def task_mtime(", src)
+        self.assertIn("def task_stuck(", src)
 
 
 if __name__ == "__main__":
