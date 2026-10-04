@@ -14,7 +14,7 @@ ORIGINAL = OC_ROOT.parent / "claude-skills" / "claude-dev-team-v3.2"
 SUFFIXES = {".py", ".js", ".sh", ".md", ".json"}
 SKIP_DIRS = {"tests", "__pycache__", "docs", ".git"}
 
-MARKERS = ("finish_gate_problems", "commit_errors", "salvage_worktree")
+MARKERS = ("finish_gate_problems", "validate_slice_types", "salvage_worktree")
 SHELL_KEY = re.compile(r"""["']shell["']|\bshell\s*:""")
 OLD_BASH_KEY = re.compile(r"""["']bash["']\s*:|^\s*bash\s*:""", re.M)
 
@@ -51,7 +51,7 @@ class ParityMarkerTests(unittest.TestCase):
         self.assertRegex(corpus(SKILL), SHELL_KEY)
 
     def test_port_has_no_v1_bash_permission_key(self):
-        agents = SKILL / "agents"
+        agents = SKILL / "opencode" / "agents"
         self.assertTrue(agents.is_dir(), str(agents))
         for path in sorted(agents.glob("*.md")):
             with self.subTest(agent=path.name):
