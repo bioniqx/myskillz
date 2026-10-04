@@ -15,7 +15,7 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on OpenCode and ZCod
   setup     [--apply]                  configure harness (opencode | zcode | claude | auto)
 Common: --allow WORD exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
-import argparse, ast, hashlib, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
+import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1330,11 +1330,7 @@ def lint_file(plan_path, task_path, allow_extra=()):
 def cmd_lint_task(a):
     e, w, c = lint_file(os.path.abspath(a.plan), a.task, a.allow)
     rc = report(e, w, "OK %s" % (c["id"] if c else ""))
-    if rc == 0:
-        touch(a.task + "." + a.mark)
-        if w:
-            with open(a.task + ".warn", "w") as f:
-                f.write("\n".join(w))
+    apply_marks(a.task, a.mark, e, w)
     return rc
 
 
@@ -1348,8 +1344,8 @@ def cmd_hook_lint(a):
         work = os.path.dirname(os.path.dirname(path))
         info = json.loads(load(os.path.join(work, "work.json")))
         e, w, c = lint_file(info["plan"], path)
+        apply_marks(path, "ok", e, w)
         if not e:
-            touch(path + ".ok")
             msg = "plan-lint: OK %s%s" % (c["id"], "".join("\nWARN " + x for x in w))
         else:
             msg = "plan-lint: FAIL %d error(s) - fix with Edit (re-linted automatically):\n%s" % (len(e), "\n".join("ERR  " + x for x in e[:25]))
@@ -1366,6 +1362,22 @@ def done_state(path, mark):
     if os.path.exists(mk) and os.stat(mk).st_mtime_ns >= os.stat(path).st_mtime_ns:
         return "done"
     return "not-reviewed" if mark == "rev" else "unlinted-or-failing"
+
+
+def task_mtime(task_path):
+    """Latest mtime of the body and its .fail mark; 0.0 when neither exists."""
+    m = 0.0
+    for p in (task_path, task_path + ".fail"):
+        if os.path.exists(p):
+            m = max(m, os.stat(p).st_mtime)
+    return m
+
+
+def task_stuck(task_path, quiet, min_age=45):
+    """A pending task is 'stuck' once its body and .fail mark both exist and have not
+    changed for min_age seconds of wait time (quiet = seconds since wait observed the
+    last change; starts at wait start) - its agent is gone, not just slow."""
+    return os.path.exists(task_path) and os.path.exists(task_path + ".fail") and quiet >= min_age
 
 
 def cmd_wait(a):
@@ -2096,16 +2108,6 @@ def apply_marks(task_path, mark, errs, warns):
             f.write("\n".join(warns))
     elif os.path.exists(warn_path):
         os.remove(warn_path)
-
-
-def contract_hashes(cs):
-    """Hash of each task's own contract text plus the text of every producer it depends on (deps_all)."""
-    text = {c["id"]: c["text"] for c in cs}
-    out = {}
-    for c in cs:
-        blob = "\n".join([c["text"]] + [text[d] for d in c["deps_all"] if d in text])
-        out[c["id"]] = hashlib.sha256(blob.encode("utf-8")).hexdigest()
-    return out
 
 
 if __name__ == "__main__":
