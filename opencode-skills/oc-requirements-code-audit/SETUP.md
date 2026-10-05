@@ -28,6 +28,10 @@ makes no network call. To confirm the three `oc-rca-*` agents are installed, run
 
     python3 oc-requirements-code-audit/scripts/oc_harness.py check oc-requirements-code-audit
 
+Concurrency: at most 8 workers run at once (the provider allows 8 concurrent calls). `OC_MAX_LANES` sets the wave
+width, default 8; a lower value narrows it and a higher one is clamped to 8. `--threads` and `AUDIT_THREADS` are clamped
+to 8 the same way.
+
 ## 3. ripgrep
 
 Strongly recommended — it is the retrieval engine. Without it the script falls back to a pure-Python scanner,

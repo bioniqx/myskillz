@@ -39,7 +39,7 @@ The context ends its opencode block with a `mode:` line (a separate `mode: THORO
 1. **Serial only where divergence is born** (the Contracts). Everything else runs in parallel, one message per wave.
 2. **Never type what the script generates:** Execution Protocol, File Structure, Execution Waves, `[P]`, Depends/Runs-after lines, Interfaces blocks, writer briefs, opencode briefs, fallback briefs. Output tokens are the bottleneck.
 3. **Machines check, models judge.** Structure, placeholders, portability, file ownership, signatures, Run/Expected, `git add` scope and code-block syntax are one script call - never a model re-read. The linter is the oracle for every body, whoever wrote it.
-4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the fan-out to the cap from the context line, and sizes the opencode fan-out to each tier's `max_parallel`; never dispatch more.
+4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the fan-out to the cap from the context line, and sizes the opencode fan-out to each tier's `max_parallel` (at most 8 concurrent opencode runs per tier, clamped); never dispatch more.
 5. **Keep the cache warm.** Don't change model or effort mid-skill (each change re-reads the whole conversation uncached). Writers get facts from briefs, not from exploring.
 6. **Fix-and-move-on.** After a fix, re-run only the script - no re-review.
 

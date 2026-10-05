@@ -10,7 +10,7 @@ Read this when something is slow, when `scan` falls back to the agent lane, or w
 | `reasoning_effort` = `low` \| `high` \| `max`, default `max`. | R7 effort ladder; `scan` sets it per worker so mechanical fan-out never pays for `max`. |
 | Both models: 1M context, 128K output. | Long `probe` output is affordable; verbosity, not context, is the risk — every tool caps its output. |
 | Few tool calls per model turn (2 observed in public testing), even where the API advertises parallel tool calls. | R1: never rely on batching tool calls. Width lives inside one call. |
-| Automatic prompt caching, keyed on the prefix (`cached_tokens` / `cache_read_input_tokens`). | `scan` sends a byte-identical system prompt and shared-context block to all 64 workers, so every worker after the first reads from cache. |
+| Automatic prompt caching, keyed on the prefix (`cached_tokens` / `cache_read_input_tokens`). | `scan` sends a byte-identical system prompt and shared-context block to every worker (at most 8 at once), so every worker after the first reads from cache. |
 | Flash is faster per token but more verbose than median. | Every worker prompt caps the answer at 12 lines in a fixed shape. |
 | Weaker over long horizons; error accumulates. | R8 state carry (5 lines) and a hard round budget per lane. |
 | Trained toward brevity; long ceremony-heavy prompts work against it. | Numbered rules instead of behavior tables and XML scaffolding. Tables are reference data only. |
@@ -34,7 +34,7 @@ On Anthropic-style routing, `haiku` maps to Flash while **both** `sonnet` and `o
 
 **ZCode.** Skill at `~/.zcode/skills/systematic-debugging/SKILL.md`, invoked as `$systematic-debugging`; agents at `~/.zcode/agents/` (user-level, no nested subagents). Foreground subagents do run in parallel, so the agent-lane fallback of `scan` is a real option here — copy `agents/debug-worker.md` into `~/.zcode/agents/`. Thinking effort is chosen per model in Settings → Model Settings.
 
-**Claude-compatible harnesses.** `setup --harness claude` prints the settings block: z.ai base URL, Flash as the small model, and a raised concurrent-subagent limit (the default is 20).
+**Claude-compatible harnesses.** `setup --harness claude` prints the settings block: z.ai base URL, Flash as the small model, and a concurrent-subagent limit of 8 (the most the provider allows at once).
 
 ## Failure modes and what to do
 

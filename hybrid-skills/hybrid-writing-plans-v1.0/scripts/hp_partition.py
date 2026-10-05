@@ -7,12 +7,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import plan_tool  # noqa: E402
 import hp_router  # noqa: E402
+import hybrid_shared  # noqa: E402
 
 
 def _max_parallel(routing: dict, tier: str) -> int:
     settings = (routing.get("tiers") or {}).get(tier) or {}
     try:
-        return max(1, int(settings.get("max_parallel", 1)))
+        return max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, int(settings.get("max_parallel", 1))))
     except (TypeError, ValueError):
         return 1
 

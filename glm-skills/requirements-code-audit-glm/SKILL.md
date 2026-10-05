@@ -3,7 +3,7 @@ name: requirements-code-audit
 description: >-
   Audit whether a codebase implements a requirements/spec document and produce a traceability report plus a
   prioritized fix plan. The requirements file is the only source of truth (no git history, no README/docs).
-  A bundled script does the retrieval and fans out up to 64 parallel GLM requests, then an adversarial second
+  A bundled script does the retrieval and fans out up to 8 parallel GLM requests, then an adversarial second
   pass, then scripted merging and reporting. Use whenever the user wants to verify, audit, cross-check or trace
   an implementation against a spec, PRD, SRS, user stories or requirements list: "does the code match the
   requirements", "find gaps between spec and code", "requirement traceability", "conformance/compliance check",
@@ -14,7 +14,7 @@ compatibility: OpenCode and ZCode with GLM-5.3 / GLM-5.3-Flash. Needs python3; r
 metadata:
   version: 9.0-glm
   models: glm-5.3-flash, glm-5.3
-  parallelism: 64 threads inside scripts/audit.py
+  parallelism: 8 threads inside scripts/audit.py
 ---
 
 # Requirements ↔ Code Audit — GLM edition
@@ -30,7 +30,7 @@ deliberate about plumbing.
 
 1. `A brief --spec <file>` — repo index, repo map, the spec verbatim, the checklist schema, lane and model report.
 2. You write `.audit/checklist.jsonl`. **This is the one step quality cannot delegate.**
-3. `A run` — retrieval, 64-way judgment, lint, repair, adversarial second pass, merge. One call.
+3. `A run` — retrieval, 8-way judgment, lint, repair, adversarial second pass, merge. One call.
 4. `A queue` → read the printed lines → `A adjudicate` → write `.audit/plan.jsonl` → `A finalize`.
 
 Do not invent extra steps between them. Do not dispatch subagents on the api lane: the parallelism is already
@@ -38,7 +38,7 @@ running inside the script.
 
 ## R1 — Where the speed comes from (do not undo it)
 
-1. **The parallel work is not in your turn.** `audit.py run` opens up to 64 threads, each one request straight
+1. **The parallel work is not in your turn.** `audit.py run` opens up to 8 threads, each one request straight
    at the GLM endpoint. Nothing depends on the harness dispatching anything, so it is equally fast in OpenCode
    v1 (which dispatches subagents one at a time), OpenCode v2 (whose `subagent` tool can dispatch with
    `background: true` instead, but that path serves the agent-lane fallback, not this one) and ZCode.
@@ -173,7 +173,7 @@ it maps to the same model as `sonnet`, at no gain.
 ## R9 — Fallback lane
 
 No API key → `brief` reports `lane agent` and the pipeline becomes `A plan` → dispatch the printed subagents in
-ONE message → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
+ONE message (at most 8 at once; when `A plan` prints more batches, dispatch them in waves of 8 and wait for each wave) → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
 the earlier findings and verifier batches (`A plan --resume` keeps finished batches); each worker lists in
 `searched` the queries it ran, and the gate rejects a MISSING without them. The batch files carry the
 pre-retrieved excerpts, so the workers mostly judge rather than search. ZCode runs subagents launched together

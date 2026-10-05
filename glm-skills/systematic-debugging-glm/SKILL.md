@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many, and fan-out to 64 parallel workers from inside the tools, so width costs no extra model turns.
+description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many, and fan-out to up to 8 parallel model workers (and up to 64 local jobs) from inside the tools, so width costs no extra model turns.
 license: MIT
 metadata:
   version: "9.0-glm"
@@ -24,7 +24,7 @@ One-time OpenCode setup: `python3 $S/debug_tool.py setup --harness opencode` pri
 
 ## R1. One call per phase — do not batch tool calls, batch *inside* one call
 
-You emit few parallel tool calls per turn, and each turn costs seconds of latency. So width never lives in your message; it lives inside the tools, which open up to 64 threads themselves.
+You emit few parallel tool calls per turn, and each turn costs seconds of latency. So width never lives in your message; it lives inside the tools, which open up to 64 local threads themselves (model/API workers and subagents stay at 8 or fewer).
 
 | Phase | Exactly one call | Replaces |
 | --- | --- | --- |
@@ -83,7 +83,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `debug-worker` agent instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report. Beyond ~8 workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to at most 8 workers at once itself (`-j` above 8 is clamped), with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `debug-worker` agent instead — dispatch them in waves of at most 8 per message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report. Beyond ~8 workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit

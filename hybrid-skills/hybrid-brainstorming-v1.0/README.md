@@ -77,7 +77,7 @@ The old preset name `max` is still accepted as an alias for `opencode` and print
 ```
 
   `provider/model` is required and `#variant` (the thinking level) is optional. The slot count of a
-  tier (`max_parallel`, 1 to 64) comes from the env var `HYBRID_OPENCODE_MAX_PARALLEL` (shared by all
+  tier (`max_parallel`, 1 to 8) comes from the env var `HYBRID_OPENCODE_MAX_PARALLEL` (shared by all
   four hybrid skills; the shipped default is 4). A tier that sets `max_parallel` in the user file below
   keeps that value. An invalid value is a config problem and makes modes `hybrid` and `opencode` unavailable.
 - **Shipped defaults**: `hybrid-brainstorming-v1.0/routing.default.json`. It carries no model or variant.

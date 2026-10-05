@@ -67,7 +67,7 @@ Input: the user's request (+ optional explorer maps). Output: `.claude/dev-team/
    - `isolation: true` when the slice's tests touch a port, database or filesystem
      outside the footprint (the engine pins PORT/DB_SUFFIX/TMPDIR per slice).
    - Width is the product you are designing: the engine's concurrency window (`devteam.py status` prints the
-     window; on a small plan tier it can be 3–6) is a stated limit that only queues what you designed;
+     window; at most 8, and on a small plan tier it can be 3–6) is a stated limit that only queues what you designed;
      cut the leanest viable slices, but never merge slices only to fit the window.
    - Each slice: objective, testable `criteria` (they become the failing tests) and
      the `edge_cases` its tests must cover. Lean: the smallest change that fully

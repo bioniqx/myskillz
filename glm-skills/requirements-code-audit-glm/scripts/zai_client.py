@@ -26,6 +26,7 @@ TERMINAL_CODES = ("1113", "1308", "1309", "1310", "1311", "1314", "1315",
                    "1316", "1317", "1318", "1319", "1320", "1321")
 BACKOFF_BASE = 1.0
 BACKOFF_CAP = 30.0
+MAX_PARALLEL = 8  # the provider allows 8 concurrent API calls
 THROTTLE_WINDOW = 2.0
 
 
@@ -336,7 +337,7 @@ class Client:
         self.route = route or route_of(self.base)
         self.url = endpoint_of(self.base, self.route)
         self.timeout = timeout
-        self.gate = gate if gate is not None else Gate(64)
+        self.gate = gate if gate is not None else Gate(MAX_PARALLEL)
         self.user_agent = user_agent
         host = urllib.parse.urlsplit(self.url).hostname or ""
         self._opener = _DIRECT if host in ("127.0.0.1", "localhost") else _PROXIED

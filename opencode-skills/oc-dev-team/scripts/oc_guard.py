@@ -415,7 +415,7 @@ FILTER_WRITE_FLAGS = {
 PY_MODULE_DENY = {"pip", "venv", "ensurepip", "http.server", "uv", "poetry", "pipx", "site"}
 NODE_LOADER_FLAGS = {"--import", "--require", "-r", "--loader", "--experimental-loader", "-i", "--interactive"}
 # Project toolchains: they run inside the worktree and are what every gate is made of. Subcommands
-# that install, publish or touch a shared cache are excluded — 64 lanes share `node_modules` via a
+# that install, publish or touch a shared cache are excluded — all lanes share `node_modules` via a
 # symlink, so a stray `npm install` in one lane would race every other.
 TOOLCHAIN = {"node", "npx", "npm", "pnpm", "yarn", "bun", "deno", "tsc", "eslint", "prettier", "vitest",
              "jest", "mocha", "playwright", "cypress", "python", "python3", "pytest", "ruff", "mypy", "black",

@@ -156,9 +156,9 @@ Make an error reach Claude immediately by combining the parts below:
    - `HYBRID_OPENCODE_STD` is required, as `provider/model[#variant]`. The `#variant` part is the thinking
      level; opencode has no `--variant` flag.
    - `HYBRID_OPENCODE_LITE` is optional and defaults to STD.
-   - `HYBRID_OPENCODE_MAX_PARALLEL` is optional: an integer from 1 to 64, the slot cap of every tier (opencode
-     runs at once per tier). Without it the shipped `max_parallel` (4) applies. A tier whose per-skill
-     `routing.json` sets `max_parallel` keeps that value. Applied by `hybrid_shared.resolve_tiers()`.
+   - `HYBRID_OPENCODE_MAX_PARALLEL` is optional: an integer from 1 to 8, the slot cap of every tier (opencode
+     runs at once per tier; 8 because the non-Claude provider allows 8 concurrent API calls, so a larger value is invalid). Without it the shipped `max_parallel` (4) applies. A tier whose per-skill
+     `routing.json` sets `max_parallel` keeps that value, clamped to 8. Applied by `hybrid_shared.resolve_tiers()`.
    - Loaded by `hybrid_shared.load_shared()`. A missing or invalid STD, or an invalid MAX_PARALLEL, makes the
      hybrid and opencode modes unavailable, and the preload line says so.
 2. **Per-skill overrides:** `<skill dir>/routing.json`, next to `routing.default.json` (env override
@@ -171,7 +171,7 @@ Make an error reach Claude immediately by combining the parts below:
      `--delete`.
 3. **Shipped defaults:** `routing.default.json`. It **never contains `model` or `variant`**. Common keys:
    - `preset` sets the default mode.
-   - `tiers.{std,lite}` holds `max_parallel` (slot cap, 4; `$HYBRID_OPENCODE_MAX_PARALLEL` overrides it),
+   - `tiers.{std,lite}` holds `max_parallel` (slot cap, 4; `$HYBRID_OPENCODE_MAX_PARALLEL` overrides it; `resolve_tiers()` clamps any value, including one from `routing.json`, to 8),
      `stall_s` (no-output watchdog) and `timeout_s`
      (wall-clock limit; team keys it by slice size). An optional `disabled` exists.
    - `roles` or `rows` map a unit type to `std`, `lite` or `claude`. `max_roles` is the same table for

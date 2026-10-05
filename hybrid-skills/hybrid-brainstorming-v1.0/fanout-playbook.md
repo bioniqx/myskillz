@@ -90,7 +90,7 @@ Vague boundaries are the main cause of duplicated work between lanes.
   judgment and multi-source research; never the most expensive model for
   workers.
 - opencode lanes: never launch more than a tier's `max_parallel`
-  lanes at once (see the `opencode:` context line for the routed tier
+  lanes at once, and never more than 8 across all tiers together (see the `opencode:` context line for the routed tier
   per role); these lanes are plain background shell processes, so they
   do not count toward the subagent cap or the workflow cap. A printed
   fallback line is acted on by launching exactly the named Claude

@@ -19,7 +19,7 @@ MODES = ("hybrid", "claude", "opencode")
 STD_ENV = "HYBRID_OPENCODE_STD"
 LITE_ENV = "HYBRID_OPENCODE_LITE"
 MAX_PARALLEL_ENV = "HYBRID_OPENCODE_MAX_PARALLEL"
-MAX_PARALLEL_LIMIT = 64
+MAX_PARALLEL_LIMIT = 8  # concurrent opencode (non-Claude) API calls per tier; Claude subagents are not capped here
 SHARED_SOURCE = "$%s/$%s" % (STD_ENV, LITE_ENV)
 DOCTOR_TTL_S = 600
 NON_RETRYABLE = ("auth", "quota", "model", "config")
@@ -53,7 +53,7 @@ def _parse_spec(text: str) -> dict:
 def max_parallel_from_env(env: dict = None) -> tuple:
     """Read the opencode slot cap from $HYBRID_OPENCODE_MAX_PARALLEL; never raises.
 
-    Returns (value, problem): value is an int from 1 to 64, or None when the variable is
+    Returns (value, problem): value is an int from 1 to MAX_PARALLEL_LIMIT (8), or None when the variable is
     unset or invalid; problem is "" unless it is set to something invalid.
     """
     env = os.environ if env is None else env
@@ -98,7 +98,8 @@ def resolve_tiers(routing: dict, shared_tiers: dict, user_routing: dict, env: di
     variant; otherwise model and variant come from the shared tier. result["model_sources"]
     maps each tier to "skill", "shared" or "none". `max_parallel` follows the same order:
     the per-skill file's tier value wins, else $HYBRID_OPENCODE_MAX_PARALLEL when it is set
-    and valid, else the value already in routing (the shipped default).
+    and valid, else the value already in routing (the shipped default). The result is
+    clamped to MAX_PARALLEL_LIMIT.
     """
     result = copy.deepcopy(routing)
     cap, _ = max_parallel_from_env(env)
@@ -116,6 +117,9 @@ def resolve_tiers(routing: dict, shared_tiers: dict, user_routing: dict, env: di
         dest.pop("variant", None)
         if cap is not None and "max_parallel" not in user_tier:
             dest["max_parallel"] = cap
+        mp = dest.get("max_parallel")
+        if isinstance(mp, int) and not isinstance(mp, bool) and mp > MAX_PARALLEL_LIMIT:
+            dest["max_parallel"] = MAX_PARALLEL_LIMIT  # a routing file can lower the cap, never exceed it
         if user_tier.get("model"):
             source, pick = "skill", user_tier
         elif shared_tier.get("model"):

@@ -20,7 +20,7 @@ Verified 2026-09-18 against z.ai's own model pages, the ZCode docs and the OpenC
 
 | Harness | Fact | Consequence |
 |---|---|---|
-| OpenCode v1 | dispatches subagents **sequentially** (`tasks.pop()` + await; issues #14195 / #29638 open, PR #47107 proposes a parallel task tool); no `background` param | a 64-subagent fan-out is nearly worthless there → the api lane is the fast path |
+| OpenCode v1 | dispatches subagents **sequentially** (`tasks.pop()` + await; issues #14195 / #29638 open, PR #47107 proposes a parallel task tool); no `background` param | an 8-subagent fan-out is nearly worthless there → the api lane is the fast path |
 | OpenCode v2 | `subagent` tool takes `background: true`; live probe (2026-09-25) ran two background children concurrently — real parallelism even at one call per turn, detectable by a `background` param on your subagent tool; interactive sessions only, since headless `opencode run` can exit before children report | the api lane stays the fast path for this skill's own fan-out, but the agent lane's fallback dispatch is no longer serial here |
 | OpenCode | reads only `name`, `description`, `license`, `compatibility`, `metadata` from skill frontmatter; ignores the rest; no `allowed-tools`, no command injection | no `allowed-tools` field; permissions are configured in the harness, not the skill |
 | OpenCode | finds skills in `.opencode/skills/`, `~/.config/opencode/skills/`, `.claude/skills/`, `~/.claude/skills/`, `.agents/skills/`, `~/.agents/skills/` | drop-in anywhere; `setup --harness opencode` uses the global path |
@@ -32,9 +32,9 @@ Verified 2026-09-18 against z.ai's own model pages, the ZCode docs and the OpenC
 
 ## What changed from the Claude Code edition
 
-1. **Parallelism moved out of the model's turn.** `audit.py run` opens up to 64 threads and issues one request
-   per requirement. Measured on a mock endpoint (0.4 s latency): 80 requirements, **peak concurrency 64**,
-   wave A in 2 s, **2 unique prompt prefixes** for the whole run (one judge, one verify).
+1. **Parallelism moved out of the model's turn.** `audit.py run` opens up to 8 threads and issues one request
+   per requirement. Capped at **8 concurrent requests** (the provider limit): 80 requirements take 10 rounds
+   of 8 (about 4 s at 0.4 s latency, computed, not re-measured), with **2 unique prompt prefixes** for the whole run (one judge, one verify).
 2. **Retrieval became deterministic.** Six independent strategies in pass 1 (literal hints, identifier case
    variants, symbol index, route index, path match, spec keywords) and four disjoint ones in pass 2
    (model-suggested queries, symbol prefix, tests-only, config/migrations/schemas). Every query is recorded, so

@@ -39,7 +39,7 @@ a public API or contract others depend on — or the user asks for a
 review. Then dispatch lenses 1-4 as four background `subagent` lanes
 (agent `general`) in ONE message; lens 5 stays with the claim verifier. Each reads
 the spec itself — do not paste it. Wait for all four before the review
-gate.
+gate (all lanes in flight together stay within the `lanes=` ceiling, max 8).
 
 ```
 You are a spec reviewer with exactly one lens: [LENS]. Ignore everything outside it; other reviewers cover the rest.

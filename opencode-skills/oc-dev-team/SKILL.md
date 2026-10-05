@@ -108,7 +108,7 @@ A skipped RED run is replaced by a static check: `commit-red` refuses tests with
 
 ## Concurrency
 
-**Width is the product you are designing.** The engine never has more lanes live than its built-in hard cap (the provider's limit), and there is no other window arithmetic. Design the plan as wide as its true dependencies allow: the cap is a stated limit that the engine enforces, not a reason to merge independent slices. Slices that would overlap on a path stay serial, and every slice still costs a dispatch, a merge and a Conductor turn, so do not split below what a coherent change needs.
+**Width is the product you are designing.** The engine never has more than 8 lanes live (its built-in hard cap, the provider's limit of 8 concurrent calls, leader and reviewers included), and there is no other window arithmetic. Design the plan as wide as its true dependencies allow: the cap is a stated limit that the engine enforces, not a reason to merge independent slices. Slices that would overlap on a path stay serial, and every slice still costs a dispatch, a merge and a Conductor turn, so do not split below what a coherent change needs.
 
 ## Fast lane (Small)
 

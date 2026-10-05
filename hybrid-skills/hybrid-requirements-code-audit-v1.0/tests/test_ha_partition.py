@@ -96,6 +96,13 @@ class SplitBatchesTest(unittest.TestCase):
         self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 24)
         self.assertEqual(sum(len(items) for b, items in got if b == "claude"), 36)
 
+    def test_max_parallel_above_8_is_clamped_in_the_capacity_split(self):
+        self.routing["oc_overflow"] = "claude"
+        self.routing["tiers"]["std"]["max_parallel"] = 64
+        got = split(make_items(200), self.routing, self.doctor, "hybrid")
+        self.assertEqual(len([1 for b, _ in got if b == "oc:std"]), 8)
+        self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 8 * 4)
+
     def test_oc_overflow_is_ignored_in_opencode_preset(self):
         self.routing["oc_overflow"] = "claude"
         got = split(make_items(30), self.routing, self.doctor, "opencode")

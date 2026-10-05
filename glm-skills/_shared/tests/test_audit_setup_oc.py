@@ -204,6 +204,12 @@ class AgentLaneBatchSizing(unittest.TestCase):
         groups = audit._agent_groups(list(range(64)), 64, 12, True)
         self.assertEqual([len(g) for g in groups], [8] * 8)
 
+    def test_oc_max_lanes_never_exceeds_eight(self):
+        self.env("64")
+        self.assertEqual(audit._oc_lanes(), 8)
+        groups = audit._agent_groups(list(range(64)), 64, 12, True)
+        self.assertEqual([len(g) for g in groups], [8] * 8)
+
     def test_opencode_honours_oc_max_lanes(self):
         self.env("3")
         groups = audit._agent_groups(list(range(10)), 64, 12, True)
@@ -222,9 +228,22 @@ class AgentLaneBatchSizing(unittest.TestCase):
 
     def test_non_opencode_keeps_fixed_chunking(self):
         groups = audit._agent_groups(list(range(64)), 20, 12, False)
-        self.assertEqual([len(g) for g in groups], [4] * 16)
+        self.assertEqual([len(g) for g in groups], [8] * 8)
         small = audit._agent_groups(list(range(7)), 20, 12, False)
         self.assertEqual([len(g) for g in small], [1] * 7)
+
+    def test_cpu_threads_clamps_to_eight(self):
+        self.env()
+        for var in ("AUDIT_THREADS", "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"):
+            os.environ.pop(var, None)
+        self.assertEqual(audit.cpu_threads(), 8)
+        self.assertEqual(audit.cpu_threads(64), 8)
+        self.assertEqual(audit.cpu_threads(3), 3)
+        os.environ["AUDIT_THREADS"] = "64"
+        self.assertEqual(audit.cpu_threads(), 8)
+        os.environ["AUDIT_THREADS"] = "2"
+        self.assertEqual(audit.cpu_threads(), 2)
+        self.assertEqual(audit.Fan(None, 64).threads, 8)
 
     def test_empty_input_gives_no_batches(self):
         self.assertEqual(audit._agent_groups([], 20, 12, True), [])

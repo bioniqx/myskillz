@@ -101,7 +101,7 @@ the run state directory.
   uses that file's `model` and `variant` and is shown as `(skill)`; a tier that sets no `variant`
   there runs without one, and the shared variant is never mixed in. Otherwise the tier uses
   `model` and `variant` from its shared env var and is shown as `(shared)`. `max_parallel` comes from
-  the user file, else the env var `HYBRID_OPENCODE_MAX_PARALLEL` (1 to 64), else the shipped defaults (4). The shared env vars are
+  the user file, else the env var `HYBRID_OPENCODE_MAX_PARALLEL` (1 to 8), else the shipped defaults (4). The shared env vars are
   reported as unset or invalid only when some tier needs them, and a tier with no model in either
   place is an `OC-ERROR ... kind=config`. The run-mode question shows each tier's source next to its spec.
 

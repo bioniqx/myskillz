@@ -964,11 +964,12 @@ def cmd_parse_plan(a):
     use_scripts()
     import ha_briefs
     import ha_dispatch
+    import ha_router
     backend = "claude"
     if c.cfg.get("agents") != "solo":
         backend = route_for(c, "parser", routing, doctor, preset, now())
     if backend.startswith("oc:"):
-        at_once = max(1, int(routing["tiers"][backend[3:]].get("max_parallel", 1)))
+        at_once = ha_router.tier_parallel(routing["tiers"][backend[3:]])
         if len(chunks) > at_once:
             chunks = split_sections(text, at_once)
     lines_out, oc_rows, backends = [], [], {}
@@ -1324,6 +1325,7 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
     import ha_briefs
     import ha_dispatch
     import ha_partition
+    import ha_router
     n = len(active)
     t = now()
     groups = ha_partition.split_batches(active, routing, doctor, preset, cap, False, t, c.out)
@@ -1332,7 +1334,8 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
         old.unlink()
     state_batches, lines, oc_rows, held = {}, [], [], {}
     k_claude = 0
-    oc_free = {"oc:" + name: max(1, int(tier.get("max_parallel", 1))) for name, tier in routing["tiers"].items()}
+    oc_free = {"oc:" + name: ha_router.tier_parallel(tier) for name, tier in routing["tiers"].items()}
+    oc_free["oc"] = ha_router.hybrid_shared.MAX_PARALLEL_LIMIT
     for i, (backend, items) in enumerate(groups, 1):
         name = "batch-%02d" % i
         path = c.out / "batches" / (name + ".md")
@@ -1345,8 +1348,9 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
             held[name] = {"role": "investigator", "reason": HOLD_REASON}
         else:
             # beyond the tier's max_parallel (queued overflow): `status` dispatches it when a slot frees up
-            wave = 1 if oc_free.get(backend, 0) > 0 else 2
-            oc_free[backend] = oc_free.get(backend, 0) - 1
+            wave = 1 if ha_dispatch.has_slot(oc_free, backend) else 2
+            if wave == 1:
+                ha_dispatch.take_slot(oc_free, backend)
             write_text(c.out / "batches" / (name + ".oc.md"),
                        ha_briefs.to_oc_brief(path.read_text(encoding="utf-8"), name))
             if wave == 1:
@@ -1906,12 +1910,12 @@ def cmd_status(a):
             meta["backend"] = "held"
             newly_held += 1
             continue
-        if backend != "claude" and slots.get(backend, 0) > 0:
+        if backend != "claude" and ha_dispatch.has_slot(slots, backend):
             oc_path = out / "batches" / (b + ".oc.md")
             if not oc_path.exists():
                 body = (out / "batches" / (b + ".md")).read_text(encoding="utf-8")
                 write_text(oc_path, ha_briefs.to_oc_brief(body, b))
-            slots[backend] -= 1
+            ha_dispatch.take_slot(slots, backend)
             meta["backend"] = backend
             meta["dispatched"] = t
             oc_rows.append((b, backend, len(meta["ids"]), ha_dispatch.oc_command(c, b)))
@@ -1938,12 +1942,12 @@ def cmd_status(a):
             if backend == "held":
                 mark_held(c, v, "verifier")
                 meta["backend"] = "held"
-            elif backend != "claude" and slots.get(backend, 0) > 0:
+            elif backend != "claude" and ha_dispatch.has_slot(slots, backend):
                 oc_path = out / "verify" / (v + ".oc.md")
                 if not oc_path.exists():
                     body = (out / "verify" / (v + ".md")).read_text(encoding="utf-8")
                     write_text(oc_path, ha_briefs.to_oc_brief(body, v))
-                slots[backend] -= 1
+                ha_dispatch.take_slot(slots, backend)
                 meta["backend"] = backend
                 meta["dispatched"] = t
                 oc_rows.append((v, backend, len(meta["ids"]), ha_dispatch.oc_command(c, v)))
@@ -2005,10 +2009,10 @@ def cmd_status(a):
     if vbackend.startswith("oc:") and pending and (len(pending) >= VERIFY_TRIGGER or m.wave_a_done()):
         pending.sort(key=lambda rid: (m.items[rid].get("category") or "", rid))
         queue, plan_v = list(pending), []
-        while queue and slots.get(vbackend, 0) > 0:
+        while queue and ha_dispatch.has_slot(slots, vbackend):
             plan_v.append((vbackend, queue[:VERIFY_MAX_PER_AGENT]))
             queue = queue[VERIFY_MAX_PER_AGENT:]
-            slots[vbackend] -= 1
+            ha_dispatch.take_slot(slots, vbackend)
         while queue and free > 0 and preset != "opencode":
             plan_v.append(("claude", queue[:VERIFY_MAX_PER_AGENT]))
             queue = queue[VERIFY_MAX_PER_AGENT:]

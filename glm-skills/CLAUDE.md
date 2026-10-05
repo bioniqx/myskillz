@@ -42,7 +42,10 @@ python3 dev-team-glm/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
 
-# Install all six skills into OpenCode and print the config snippet (OpenCode only: for Claude Code or ZCode, copy a folder by hand)
+# Install all six skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode frontmatter into ~/.zcode/agents
+sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
+
+# Install all six skills into OpenCode and print the config snippet (for Claude Code, copy a folder by hand)
 sh install-opencode.sh [--major N] [--home DIR]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
@@ -60,7 +63,7 @@ The Python suite under `_shared/tests` is the main automated suite and runs on e
 `selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
 (temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
 engine behaviour gets a check there. It was written for GNU userland and runs on macOS as well; the
-last full run reported 368 pass, 0 fail (the README records the same count). If it goes red on macOS,
+last full run reported 371 pass, 0 fail (the README records the same count). If it goes red on macOS,
 reproduce on Linux before blaming the change.
 `systematic-debugging-glm/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
@@ -79,7 +82,7 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   `variant:` when the `subagent` tool dispatches it (a v2 agent with no variant runs at max). `opencode run
   --model` overrides the agent's model and variant, so `oc_harness.py` adds a `#<effort>` suffix to lanes.
 - **GLM emits few parallel tool calls per turn, and OpenCode v1 runs subagents serially.** Fan-out therefore
-  lives inside the Python tools: each one opens up to 64 threads and calls the Z.ai API directly (the "api
+  lives inside the Python tools: each one opens up to 8 threads and calls the Z.ai API directly (the "api
   lane"). A single model turn replaces many batched tool calls. Each tool has an **agent lane** fallback
   that writes briefs for subagents when no API key is found (`--lane api|agent`). On OpenCode v2 the
   `subagent` tool takes `background: true`, so agent-lane workers run concurrently even at one call per
@@ -132,12 +135,12 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   working directory passed as the subprocess `cwd` and `$PWD` (v2 `--standalone` resolves its project root
   from `$PWD`; v1 keeps `--dir`).
 - **systematic-debugging-glm**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
-  `experiment` (a separate worktree for each control and treatment arm) and `scan` (64 API workers). Helper
+  `experiment` (a separate worktree for each control and treatment arm) and `scan` (8 API workers). Helper
   shell scripts: `stress.sh` (Wilson CI and Fisher test), `bisect-parallel.sh` and `find-polluter.sh`.
 - **requirements-code-audit-glm**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
-  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. There is no ZCode agent folder.
+  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. ZCode agents live in `agents/zcode/` (audit, doc-generator); `install-zcode.sh` also rewrites debug-worker and the dev-team agents to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no `effort`/`hooks`/`isolation`) and gets plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
 - **writing-plans-glm**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
 - **brainstorming-glm**: `scripts/context.sh` is injected through `!` preload. It must stay read-only,

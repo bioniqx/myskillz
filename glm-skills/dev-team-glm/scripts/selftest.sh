@@ -126,7 +126,7 @@ check "bash-ro denies redirect to file" '[[ "$(hook bash-ro "{\"tool_input\":{\"
 echo "== doctor on installed agents (hook pinning)"
 D doctor --fix >/dev/null 2>&1
 check "doctor pins hooks to guard.py" 'grep -q "guard.py\\\\\" edit\"" "$R/.claude/agents/programmer.md"'
-OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=64 D doctor 2>&1)
+OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=8 D doctor 2>&1)
 check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
 
 # ---------------------------------------------------------------- FAST MODE --
@@ -466,6 +466,15 @@ check "probe proposes the FILE-SCOPED lint and test commands that make the balan
 OUT=$(D review-pr HEAD~1..HEAD --shards 2 2>&1)
 check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: code-reviewer"* ]]'
 check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: spot-reviewer"* ]]'
+check "non-Claude caps: every tier <= 8 and monotone, shards <= window, Anthropic keeps 64" 'DEVTEAM_HARNESS=claude python3 - "$S" <<PY
+import sys; sys.path.insert(0, sys.argv[1]); import devteam as d
+t = [d.TIERS[k] for k in ("lite", "pro", "max", "api")]
+assert all(a <= c <= 8 for a, c in t) and t == sorted(t), t
+assert d.hard_cap() == 8 and d.concurrency_limit() == 8 and d.max_shards() == 8
+assert d.shard_count([str(i) for i in range(500)], 12) <= 6
+g = d.new_gov("anthropic", "pro"); assert (g["cap"], g["ceiling"]) == (64, 64), g
+assert d.new_gov("glm", "api")["ceiling"] == 8 and d.reserve_min({"gov": {"cap": 8}, "provider": "glm"}) == 2
+PY'
 OUT=$(D brief-debug "tokens leak after refresh" -n 4 2>&1)
 check "brief-debug fans out investigators on distinct angles" '[[ "$(echo "$OUT" | grep -c "subagent_type: investigator")" == 4 ]]'
 check "each investigator brief names the angles the others own" 'grep -q "Other angles being investigated in parallel" .claude/dev-team/research/debug1.md'
@@ -888,7 +897,9 @@ check "doctor maps the aliases to GLM ids (opus/sonnet → glm-5.3, haiku → gl
 check "doctor makes Claude Code forward effort to the pinned GLM models" '[ "$(jget ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES)" = effort,thinking ] && [ "$(jget ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES)" = effort,thinking ]'
 check "doctor applies Z.ai's recommended timeout, 1M compact window and non-essential-traffic switch" '[ "$(jget API_TIMEOUT_MS)" = 3000000 ] && [ "$(jget CLAUDE_CODE_AUTO_COMPACT_WINDOW)" = 1000000 ] && [ "$(jget CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC)" = 1 ]'
 check "doctor never writes credentials or the base URL" '! grep -q "ANTHROPIC_AUTH_TOKEN\|ANTHROPIC_BASE_URL\|ANTHROPIC_API_KEY" $L'
-check "doctor is all good after --fix" '[[ "$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=64 D doctor 2>&1)" == *"DOCTOR: all good"* ]]'
+check "doctor is all good after --fix" '[[ "$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=8 D doctor 2>&1)" == *"DOCTOR: all good"* ]]'
+check "doctor --fix writes 8 for the concurrency envs on GLM (the provider allows 8 concurrent calls)" '[ "$(jget CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS)" = 8 ] && [ "$(jget CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY)" = 8 ]'
+check "doctor flags 64 on GLM as too wide, and asks for 64 on Anthropic" '[[ "$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D doctor 2>&1)" == *"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is 64 — need 8"* && "$(DEVTEAM_PROVIDER=anthropic CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 D doctor 2>&1)" == *"need 64 for full width"* ]]'
 check "an older GLM mapping is upgraded, a deliberate custom one is kept" 'python3 - "$L" <<PY
 import json,sys; p=sys.argv[1]; d=json.load(open(p)); d["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"]="glm-4.7"; d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"]="glm-5.3"; json.dump(d,open(p,"w"))
 PY
@@ -933,7 +944,7 @@ PY
 TX="$RGV/tx"; mkdir -p "$TX/sess/subagents"
 G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D "$@"; }
 OUT=$(G4 init plan.md 2>&1)
-check "tier pro starts at a 6-agent window (not 64) with 1 slot reserved on a small window" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6, ceiling 20, tier pro, slow start)"* && "$OUT" == *"5 free of 5 programmer slots"* ]]'
+check "tier pro starts at a 6-agent window (not 8) with 1 slot reserved on a small window" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6, ceiling 8, tier pro, slow start)"* && "$OUT" == *"5 free of 5 programmer slots"* ]]'
 check "tier lite starts at 3 with no reserve eating the width" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force 2>&1)" == *"3 free of 3 programmer slots"* ]]'
 check "--tier on the command line wins" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force --tier max 2>&1)" == *"tier max"* ]]'
 check "the Z.ai peak window halves the ceiling (lite 8 → 4)" 'DEVTEAM_GLM_TIER=lite G4 init plan.md --force >/dev/null 2>&1; [[ "$(DEVTEAM_PEAK=on G4 status 2>&1)" == *"ceiling 4"*"Z.ai PEAK"* && "$(DEVTEAM_PEAK=off G4 status 2>&1)" == *"ceiling 8"*"off-peak"* ]]'
@@ -944,7 +955,7 @@ check "dispatch never exceeds the window" '[ "$(echo "$OUT" | grep -c "^=== DISP
 for i in 1 2; do printf '## Verdict: INCONCLUSIVE\n## Findings\n- x\n' > .claude/dev-team/research/Q$i.md; done
 OUT=$(G4 next 2>&1)
 check "slow start: each finished lane widens the window by one" '[[ "$OUT" == *"GOVERNOR: 8 agents (window 8"* ]]'
-check "the widened window is used in the same call (3 still running + 4 new = 8 - 1 reserved)" '[ "$(echo "$OUT" | grep -c "^=== DISPATCH")" -eq 4 ] && [[ "$OUT" == *"0 free of 7 slots"* ]]'
+check "the widened window is used in the same call (3 still running + 3 new = 8 - 2 reserved)" '[ "$(echo "$OUT" | grep -c "^=== DISPATCH")" -eq 3 ] && [[ "$OUT" == *"0 free of 6 slots"* ]]'
 NOW=$(python3 -c 'import datetime;print(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))')
 printf '{"type":"user","message":{"role":"user","content":"Read %s/.claude/dev-team/briefs/Q3.md and follow it exactly."},"timestamp":"%s"}\n{"type":"system","subtype":"api_error","level":"error","error":{"status":429,"error":{"code":"1302","message":"rate limit"}},"retryInMs":4000,"retryAttempt":1,"maxRetries":10,"timestamp":"%s"}\n' "$RGV" "$NOW" "$NOW" > "$TX/sess/subagents/agent-a1.jsonl"
 OUT=$(G4 next 2>&1)
@@ -1021,7 +1032,7 @@ import json,sys; p=sys.argv[1]; s=json.load(open(p)); s["gov"]["cap"]=20; json.d
 PY2
 G4 dispatch Q1 >/dev/null 2>&1
 printf '{"type":"system","subtype":"api_error","error":{"status":429},"timestamp":"%s"}\n' "$(nowz)" > "$TX/sess/subagents/agent-p.jsonl"
-check "a cut during the peak halves the window really in force (ceiling 10 → 5), not the stale 20" '[[ "$(DEVTEAM_PEAK=on G4 next 2>&1)" == *"window 10 → 5"* ]]'
+check "a cut during the peak halves the window really in force (ceiling 4 → 2), not the stale 20" '[[ "$(DEVTEAM_PEAK=on G4 next 2>&1)" == *"window 4 → 2"* ]]'
 
 govrepo rgh3
 G4 init plan.md >/dev/null 2>&1; G4 dispatch Q1 >/dev/null 2>&1

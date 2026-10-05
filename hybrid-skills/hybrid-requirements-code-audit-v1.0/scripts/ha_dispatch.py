@@ -8,6 +8,8 @@ from typing import Dict, List, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import audit  # noqa: E402
+import ha_router  # noqa: E402
+import hybrid_shared  # noqa: E402
 
 
 def _routing(c) -> dict:
@@ -61,12 +63,26 @@ def backend_running(c, m) -> dict:
 
 
 def free_slots(c, m) -> dict:
+    """Free Claude slots and free opencode slots per tier; key "oc" is the pool shared by all tiers (at most
+    MAX_PARALLEL_LIMIT opencode calls run at once, whatever the tier split)."""
     running = backend_running(c, m)
     free = {"claude": max(0, _cap(c) - running.get("claude", 0))}
+    oc_running = 0
     for tier, spec in _routing(c).get("tiers", {}).items():
         key = "oc:" + tier
-        free[key] = max(0, int(spec.get("max_parallel", 0)) - running.get(key, 0))
+        oc_running += running.get(key, 0)
+        free[key] = max(0, ha_router.tier_parallel(spec) - running.get(key, 0))
+    free["oc"] = max(0, hybrid_shared.MAX_PARALLEL_LIMIT - oc_running)
     return free
+
+
+def has_slot(slots: dict, backend: str) -> bool:
+    return slots.get(backend, 0) > 0 and slots.get("oc", 0) > 0
+
+
+def take_slot(slots: dict, backend: str) -> None:
+    slots[backend] -= 1
+    slots["oc"] = slots.get("oc", 0) - 1
 
 
 def _role_of(name: str, ev: dict) -> str:

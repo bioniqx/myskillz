@@ -163,6 +163,14 @@ class RouteGroupsTest(unittest.TestCase):
         self.assertEqual(sorted(c["id"] for _, _, g in got for c in g), ["T01", "T02", "T03", "T04"])
         self.assertEqual(len(got), 2)  # ceil(4 / oc_group_max); max_parallel 1 so the second group waits for the slot
 
+    def test_max_parallel_above_8_is_clamped_to_8_groups(self):
+        routing = copy.deepcopy(ROUTING)
+        routing["tiers"]["std"]["max_parallel"] = 40
+        routing["oc_group_max"] = 1
+        got = run_groups([C("T%02d" % i) for i in range(1, 21)], "hybrid", routing=routing)
+        self.assertEqual(hp_partition._max_parallel(routing, "std"), 8)
+        self.assertEqual(len(got), 20)  # one task per group; at most 8 run at once, the rest queue
+
     def test_hybrid_default_with_more_than_18_std_tasks_sends_all_to_opencode(self):
         cs = [C("T%02d" % i) for i in range(1, 31)]
         got = run_groups(cs, "hybrid")

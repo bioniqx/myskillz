@@ -149,13 +149,16 @@ def batch_key(name):
     return (int(m.group(1)) if m else 0, name or "")
 
 
+MAX_PARALLEL = 8  # most model calls in flight at once; the provider allows no more
+
+
 def cpu_threads(requested=None):
     if requested:
-        return max(1, min(64, int(requested)))
+        return max(1, min(MAX_PARALLEL, int(requested)))
     env = os.environ.get("AUDIT_THREADS")
     if env and str(env).strip().isdigit():
-        return max(1, min(64, int(str(env).strip())))
-    return 64
+        return max(1, min(MAX_PARALLEL, int(str(env).strip())))
+    return MAX_PARALLEL
 
 
 # --------------------------------------------------------------------------- context object
@@ -171,7 +174,7 @@ class Ctx(object):
             self.cfg = {}
         self.repo = self.cfg.get("repo_root") or os.getcwd()
         self.lang = self.cfg.get("lang", "en")
-        self.threads = int(self.cfg.get("threads", 64) or 64)
+        self.threads = cpu_threads(self.cfg.get("threads"))
 
     # paths
     def p(self, *a):
@@ -1293,8 +1296,8 @@ def cmd_brief(a):
     if words > 1800:
         print("NEXT: spec is large (%d words). Either write checklist.jsonl yourself, or run"
               % words)
-        print("      oc_audit.py parse      (fans out %d-way over sections, you review the draft)"
-              % min(64, max(2, words // 600)))
+        print("      oc_audit.py parse      (%d sections, parsed in waves of at most %d; you review the draft)"
+              % (min(64, max(2, words // 600)), MAX_PARALLEL))
     else:
         print("NEXT: write %s/checklist.jsonl, then run: oc_audit.py plan" % os.path.basename(out))
     print("      Say in one line: treating <spec> as the only source of truth; not reading")
@@ -1435,14 +1438,21 @@ def cmd_parse(a):
             pending.append((name, brief))
     if pending:
         mk(c.p("parse"))
-        print("parse: %d section(s), %d rca-parser lane(s) to run" % (len(batches), len(pending)))
+        wave, later = pending[:_oc_lanes()], len(pending) - _oc_lanes()
+        print("parse: %d section(s), %d rca-parser lane(s) to run, %d in this wave"
+              % (len(batches), len(pending), len(wave)))
         print("")
         print("DISPATCH -- emit ALL of these in ONE message (background subagents run in parallel):")
-        for name, brief in pending:
+        for name, brief in wave:
             print("  " + oc_harness.dispatch_line("oc-rca-parser", brief, "rca " + name, 2,
                                                   background=True))
         print("")
-        print("NEXT: once the parsers report, run oc_audit.py parse   (merges the lane files into the draft)")
+        if later > 0:
+            print("%d more section(s) wait: dispatch only this wave, never more than %d at once."
+                  % (later, _oc_lanes()))
+            print("NEXT: once these parsers report, run oc_audit.py parse   (dispatches the next wave)")
+        else:
+            print("NEXT: once the parsers report, run oc_audit.py parse   (merges the lane files into the draft)")
         print("      A lane that keeps failing: write that section's items by hand to the")
         print("      output file named in its brief, then run oc_audit.py parse again.")
         return
@@ -2055,12 +2065,12 @@ def _print_dispatch(c, wave, batches, agent, role, header):
 
 
 def _oc_lanes():
-    """OpenCode lane width: OC_MAX_LANES, default 8, never below 1."""
+    """OpenCode lane width: OC_MAX_LANES, default and ceiling MAX_PARALLEL, never below 1."""
     try:
-        n = int(os.environ.get("OC_MAX_LANES") or 8)
+        n = int(os.environ.get("OC_MAX_LANES") or MAX_PARALLEL)
     except ValueError:
-        n = 8
-    return max(1, n)
+        n = MAX_PARALLEL
+    return max(1, min(MAX_PARALLEL, n))
 
 
 def _even_groups(items, n):
@@ -2119,7 +2129,7 @@ def cmd_plan(a):
             c.save_state(st)
             print("NEXT: oc_audit.py status")
             return
-    cap = int(a.cap or c.threads or 20)
+    cap = min(MAX_PARALLEL, int(a.cap or c.threads or MAX_PARALLEL))
     ordered = sorted(live, key=lambda r: (r.get("category") or "", r["id"]))
     groups = _agent_groups(ordered, cap)
     size = max([len(g) for g in groups] or [0])
@@ -2231,8 +2241,8 @@ def repair_wave(work_dir: str, rejected: list, repo: str, round_no: int) -> list
 
     work_dir is the audit dir. rejected holds finding rows the citation checker
     refused (they carry lint_error). Each brief holds only those rows, at most
-    REPAIR_BATCH per brief, with the checker's exact errors; its lane writes the
-    corrected rows to <work_dir>/findings/<name>.jsonl, where the next lint and
+    REPAIR_BATCH per brief (more only when that would exceed the lane width),
+    with the checker's exact errors; its lane writes the corrected rows to <work_dir>/findings/<name>.jsonl, where the next lint and
     Merged pick them up. Names are repair-r<round_no>-<NN> and never reuse a
     number already taken in that round. Nothing is written and [] comes back
     when rejected is empty or round_no is outside 1..MAX_REPAIR_ROUNDS."""
@@ -2248,7 +2258,8 @@ def repair_wave(work_dir: str, rejected: list, repo: str, round_no: int) -> list
     mk(os.path.join(work_dir, "findings"))
     taken = [_repair_tag(n)[1] for n in os.listdir(bdir) if _repair_tag(n)[0] == round_no]
     batches = []
-    for seq, i in enumerate(range(0, len(rows), REPAIR_BATCH), max(taken or [0]) + 1):
+    step = max(REPAIR_BATCH, -(-len(rows) // _oc_lanes()))  # never more briefs than lanes
+    for seq, i in enumerate(range(0, len(rows), step), max(taken or [0]) + 1):
         name = "repair-r%d-%02d" % (round_no, seq)
         out = os.path.join(work_dir, "findings", name + ".jsonl")
         L = [u"REPAIR %s (round %d of %d)" % (name, round_no, MAX_REPAIR_ROUNDS), u"",
@@ -2258,7 +2269,7 @@ def repair_wave(work_dir: str, rejected: list, repo: str, round_no: int) -> list
         if repo_map:
             L += [u"Repository map:", repo_map, u""]
         L += [u"Output schema per line:", JUDGE_SCHEMA, u""]
-        for row in rows[i:i + REPAIR_BATCH]:
+        for row in rows[i:i + step]:
             it = by_id.get(row["id"]) or {"id": row["id"]}
             L.append(u"=" * 70)
             L.append(item_block(it))
@@ -2369,12 +2380,30 @@ def _apply_status_flags(c, a):
     c.save_state(st)
 
 
-def _pass1_rows(c, m, st, by_id, retr):
+def _lanes_free(st, m):
+    """(in flight, free) lanes by state: unanswered pass-1 batches, one more for each outstanding
+    hedge, and unanswered verifier batches. A lost lane is marked failed and no longer counts."""
+    have = set(m.find)
+    failed = set(st.get("failed") or [])
+    batches = st.get("batches") or {}
+    pend = [n for n in batches
+            if n not in failed and not all(i in have for i in batches[n].get("ids") or [])]
+    flight = len(pend) + len([n for n in (st.get("hedges") or {}) if n in pend])
+    for n, b in (st.get("vbatches") or {}).items():
+        if n not in failed and any(i not in m.ver and i not in m.ver_rejected
+                                   for i in b.get("ids") or []):
+            flight += 1
+    return flight, max(0, _oc_lanes() - flight)
+
+
+def _pass1_rows(c, m, st, by_id, retr, free=MAX_PARALLEL):
     """Investigator rows to print now: batches whose mark was cleared, then hedges.
 
     A hedge is a duplicate lane for a straggler, allowed once half of the pass-1 batches are
     done and the batch has run longer than max(HEDGE_MIN_SECONDS, 2 x the median finished
-    batch). Returns (redo, hedges) as [(name, brief_path)]."""
+    batch), and only while a lane is free: a hedge cut by `free` is not marked hedged, so a
+    later status call retries it. A cleared batch replaces its own lane and is never held.
+    Returns (redo, hedges, held) with rows as [(name, brief_path)]."""
     have = set(m.find)
     failed = set(st.get("failed") or [])
     batches = st.get("batches") or {}
@@ -2394,6 +2423,7 @@ def _pass1_rows(c, m, st, by_id, retr):
                    if _is_time(batches[n].get("dispatched")) and _batch_mtime(c, n))
     hedged = st.setdefault("hedges", {})
     hedges = []
+    held = 0
     if spans and len(done) * 2 >= len(batches):
         limit = max(HEDGE_MIN_SECONDS, 2.0 * spans[len(spans) // 2])
         for n in pending:
@@ -2403,6 +2433,9 @@ def _pass1_rows(c, m, st, by_id, retr):
             todo = [by_id[i] for i in batches[n]["ids"] if i not in have and i in by_id]
             if not todo:
                 continue
+            if len(hedges) >= free:
+                held += 1
+                continue
             name = n + ".r2"
             hedges.append((name, _batch_file(c, retr, name, todo, "find")))
             hedged[n] = t
@@ -2410,7 +2443,7 @@ def _pass1_rows(c, m, st, by_id, retr):
         print("waiting on %d pass-1 batch(es): %s" % (len(pending), ", ".join(
             "%s (running %s)" % (n, fmt_dur(t - batches[n]["dispatched"]))
             if _is_time(batches[n].get("dispatched")) else n for n in pending)))
-    return redo, hedges
+    return redo, hedges, held
 
 
 def cmd_status(a):
@@ -2440,6 +2473,11 @@ def cmd_status(a):
     if missing_ids:
         print("still open: %s" % ", ".join(missing_ids[:20]))
     redispatch = bool(getattr(a, "redispatch", False))
+    if redispatch:  # the user calls the unanswered verifier lanes lost: the re-pack replaces them
+        for n, b in (st.get("vbatches") or {}).items():
+            if n not in st.setdefault("failed", []) and any(
+                    i not in m.ver and i not in m.ver_rejected for i in b.get("ids") or []):
+                st["failed"].append(n)
     failed = set(st.get("failed") or [])
     # output a lost lane never wrote: its ids go to the verifier wave as UNSEARCHED
     lost = set(i for b in failed for i in ((st.get("batches") or {}).get(b) or {}).get("ids", [])
@@ -2452,7 +2490,9 @@ def cmd_status(a):
     vset = [i for i in live if (i in lost or (i in have and needs_verify(by_id[i], m.find[i])))
             and i not in m.ver and (redispatch or i not in dispatched)]
     retr = Retriever(c)
-    redo, hedges = _pass1_rows(c, m, st, by_id, retr)
+    flight, free = _lanes_free(st, m)
+    redo, hedges, held = _pass1_rows(c, m, st, by_id, retr, free)
+    free -= len(hedges)
     if redo:
         print("")
         _print_dispatch(c, "A", redo, "oc-rca-investigator", "judge", "DISPATCH again")
@@ -2461,9 +2501,11 @@ def cmd_status(a):
         _print_dispatch(c, "H", hedges, "oc-rca-investigator", "judge",
                         "DISPATCH hedges (stragglers; whichever lane finishes first is used)")
     if vset:
-        cap = int(a.cap or c.threads or 20)
+        cap = min(MAX_PARALLEL, int(a.cap or c.threads or MAX_PARALLEL))
         idx = len([k for k in (st.get("vbatches") or {})])
         groups = _agent_groups(list(vset), cap)
+        held += max(0, len(groups) - free)
+        groups = groups[:free]  # the rest stays undispatched; a later status call picks it up
         st.setdefault("vbatches", {})
         vlines = []
         for j, g in enumerate(groups, idx + 1):
@@ -2490,14 +2532,22 @@ def cmd_status(a):
                          u"MATCHED -> check the exact wording, limits, defaults, error paths.\n")
             st["vbatches"][name] = {"ids": g, "wave": "B", "dispatched": now()}
             vlines.append((name, p))
+        if vlines:
+            print("")
+            _print_dispatch(c, "V%02d" % (idx + 1), vlines, "oc-rca-verifier", "verify",
+                            "DISPATCH verifiers")
+            c.save_state(st)
+    else:
+        vlines = []
+    if held:
         print("")
-        _print_dispatch(c, "V%02d" % (idx + 1), vlines, "oc-rca-verifier", "verify",
-                        "DISPATCH verifiers")
-        c.save_state(st)
+        print("holding %d row(s): lanes in flight %d of %d; run status again when some finish"
+              % (held, flight + len(hedges) + len(vlines), _oc_lanes()))
+    if vlines:
         print("")
         print("NEXT after they report: oc_audit.py status  (again), then oc_audit.py queue")
         return
-    if redo or hedges:
+    if redo or hedges or held:
         c.save_state(st)
         print("")
         print("NEXT after they report: oc_audit.py status  (again)")
@@ -2534,7 +2584,7 @@ def cmd_doctor(a):
     else:
         found = "NOT FOUND -- install OpenCode v2"
     print("opencode    %s" % found)
-    print("lanes       %d per wave (OC_MAX_LANES)" % _oc_lanes())
+    print("lanes       %d per wave (OC_MAX_LANES, at most %d)" % (_oc_lanes(), MAX_PARALLEL))
 
 
 def cmd_setup(a):
@@ -2556,7 +2606,7 @@ def cmd_setup(a):
     print("")
     print("Agents run on the model selected in the OpenCode window; none names a model.")
     print("plan and status print background agent calls, one per batch. A wave has at")
-    print("most OC_MAX_LANES (default 8) batches.")
+    print("most OC_MAX_LANES (default and maximum 8) batches.")
     print("\nVerify with: python3 %s doctor" % os.path.join(here, "oc_audit.py"))
     return 0
 

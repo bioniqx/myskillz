@@ -201,6 +201,12 @@ class RoutingConfigTest(_TempEnvCase):
         self.assertEqual(routing["tiers"]["std"]["max_parallel"], 2)
         self.assertEqual(routing["tiers"]["lite"]["max_parallel"], 4)
 
+    def test_skill_file_max_parallel_above_8_is_clamped_to_8(self):
+        self.set_shared(SHARED)
+        user = self.write_user({"tiers": {"std": {"max_parallel": 40}}})
+        routing = hp_router.load_routing(DEFAULTS, user)
+        self.assertEqual(routing["tiers"]["std"]["max_parallel"], 8)
+
     def test_max_parallel_env_sits_between_skill_file_and_defaults(self):
         self.set_shared(SHARED)
         os.environ["HYBRID_OPENCODE_MAX_PARALLEL"] = "3"

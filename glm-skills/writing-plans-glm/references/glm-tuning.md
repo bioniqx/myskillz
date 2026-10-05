@@ -48,7 +48,7 @@ Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
 
 ## Lanes
 
-1. **api** (default when a key is found). One `build` call opens up to 64
+1. **api** (default when a key is found). One `build` call opens up to 8
    threads, one request per task, no subagent, no per-writer system prompt, no
    tool round trips. Lint and repair happen in Python. This is the fast path on
    every harness.
@@ -69,7 +69,7 @@ Force a lane with `build --lane api|agent`.
 export ZAI_API_KEY=<GLM Coding Plan key>          # or ANTHROPIC_AUTH_TOKEN
 export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 # China / BigModel: https://open.bigmodel.cn/api/paas/v4  (protocol auto-detects as openai)
-export PLAN_MAX_WORKERS=64        # optional, 64 is the default and the cap
+export PLAN_MAX_WORKERS=8         # optional, 8 is the default and the cap (provider limit)
 export PLAN_PROTOCOL=anthropic    # optional override: anthropic | openai
 ```
 
@@ -107,8 +107,8 @@ Settings), cannot spawn further subagents, and run in parallel in the
 foreground. ZCode can import a Claude Code or Codex skill directory directly
 from Settings, by symlink or copy.
 
-**Claude Code.** Unchanged from v8: `setup --apply` raises
-`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` to 64 and installs the auto-lint hook.
+**Claude Code.** Unchanged from v8: `setup --apply` sets
+`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` to 8 and installs the auto-lint hook.
 
 ## Failure modes seen in practice
 

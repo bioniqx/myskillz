@@ -143,7 +143,7 @@ def new_shared(info: dict) -> dict:
     sems = {}
     for name, cfg in tiers.items():
         size = int((cfg or {}).get("max_parallel", 1) or 1)
-        sems[name] = threading.BoundedSemaphore(max(1, size))
+        sems[name] = threading.BoundedSemaphore(max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, size)))
     return {"lock": threading.Lock(), "sems": sems, "cooldown": {}, "tripped": {},
             "binary": os.environ.get("HYBRID_WRITING_PLANS_OC_BIN", "opencode")}
 
@@ -152,7 +152,7 @@ def _semaphore(shared: dict, tier: str, size) -> threading.BoundedSemaphore:
     with shared["lock"]:
         sem = shared["sems"].get(tier)
         if sem is None:
-            sem = threading.BoundedSemaphore(max(1, int(size or 1)))
+            sem = threading.BoundedSemaphore(max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, int(size or 1))))
             shared["sems"][tier] = sem
         return sem
 

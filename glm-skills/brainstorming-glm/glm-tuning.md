@@ -49,8 +49,8 @@ a `claude-glm` launcher):
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
-    "CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS": "64" },
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "8",
+    "CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS": "8" },
   "permissions": { "allow": ["WebSearch", "WebFetch"] },
   "workflowSizeGuideline": "unrestricted" }
 ```
@@ -58,8 +58,8 @@ a `claude-glm` launcher):
 Why each matters here: the long `API_TIMEOUT_MS` covers always-on
 thinking at effort `max`; the 1M auto-compact window stops Claude Code
 compacting at Claude-sized thresholds and throwing away the round-1
-reads; the two concurrency vars are what let R7's 64-lane ceiling be
-real (default is 20 subagents / 16 workflow agents); disabling
+reads; the two concurrency vars are what pin R7's 8-lane ceiling to
+the provider's concurrent-call limit (defaults are 20 subagents / 16 workflow agents); disabling
 non-essential traffic drops telemetry and update calls that the z.ai
 route cannot serve anyway; and pre-allowing WebSearch/WebFetch stops
 background lanes stalling on a permission prompt, which skill

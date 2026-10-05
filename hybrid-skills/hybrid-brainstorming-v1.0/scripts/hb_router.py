@@ -64,7 +64,7 @@ def _sanitize(routing, defaults, label):
                           and math.isfinite(v) and v >= low)
 
     is_obj = lambda v: isinstance(v, dict)  # noqa: E731
-    slots = lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 64  # noqa: E731
+    slots = lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= hybrid_shared.MAX_PARALLEL_LIMIT  # noqa: E731
     fix(routing, "preset", "preset", lambda v: v in PRESETS or v == "max", "claude, hybrid or opencode", defaults)
     for key in ("roles", "max_roles"):
         fix(routing, key, key, is_obj, "an object mapping role to tier name", defaults)
@@ -78,7 +78,8 @@ def _sanitize(routing, defaults, label):
         if name not in tiers:
             continue
         dtier = (defaults.get("tiers") or {}).get(name)
-        fix(tiers[name], "max_parallel", "tiers.%s.max_parallel" % name, slots, "an integer from 1 to 64", dtier)
+        fix(tiers[name], "max_parallel", "tiers.%s.max_parallel" % name, slots,
+            "an integer from 1 to %d" % hybrid_shared.MAX_PARALLEL_LIMIT, dtier)
         for key in ("stall_s", "timeout_s"):
             fix(tiers[name], key, "tiers.%s.%s" % (name, key), number(1), "a number of seconds", dtier)
         for key in ("model", "variant"):

@@ -3,13 +3,13 @@
 """requirements-code-audit -- GLM edition (v9.0-glm).
 
 One script, no third-party packages. It is the parallel engine of the skill:
-retrieval, fan-out (up to 64 threads straight at the GLM endpoint), lint,
+retrieval, fan-out (up to 8 threads straight at the GLM endpoint), lint,
 repair, adversarial verification, merge, report and the quality gate all run
 here so the model spends its turns on judgment only.
 
 Lanes
   api    -- default when a key is found. Python retrieves evidence and fans out
-            one request per requirement. True 64-way concurrency in every
+            one request per requirement. True 8-way concurrency in every
             harness, because no harness is asked to dispatch anything.
   agent  -- automatic fallback with no key: writes batch files for subagents
             (ZCode runs them in parallel; OpenCode serialises them).
@@ -62,6 +62,7 @@ TIERS = {
     },
 }
 DEFAULT_TIER = "std"
+MAX_PARALLEL = 8  # provider limit on concurrent model/API calls: threads, lanes and agents never exceed it
 VERIFY_MAX_PER_AGENT = 3  # items per verifier batch on the agent lane (the original's value)
 AGENT_ALIAS = {FLASH: "haiku", PRO: "sonnet"}  # agent lane only; never "opus"
 
@@ -246,11 +247,11 @@ def endpoint_of(base, route):
 
 def cpu_threads(requested=None):
     if requested:
-        return max(1, min(64, int(requested)))
+        return max(1, min(MAX_PARALLEL, int(requested)))
     env = os.environ.get("AUDIT_THREADS") or os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
     if env and str(env).strip().isdigit():
-        return max(1, min(64, int(str(env).strip())))
-    return 64
+        return max(1, min(MAX_PARALLEL, int(str(env).strip())))
+    return MAX_PARALLEL
 
 
 # --------------------------------------------------------------------------- context object
@@ -268,7 +269,7 @@ class Ctx(object):
         self.lang = self.cfg.get("lang", "en")
         self.lane = self.cfg.get("lane", "api")
         self.tier = self.cfg.get("tier", DEFAULT_TIER)
-        self.threads = int(self.cfg.get("threads", 64) or 64)
+        self.threads = max(1, min(MAX_PARALLEL, int(self.cfg.get("threads", MAX_PARALLEL) or MAX_PARALLEL)))
 
     # paths
     def p(self, *a):
@@ -1398,12 +1399,12 @@ REPAIR_HEAD = (u"Your previous answer was rejected by the deterministic checker.
 # --------------------------------------------------------------------------- fan-out
 
 class Fan(object):
-    """Up to 64 real threads, each one request. The model is never asked to
+    """Up to 8 real threads, each one request. The model is never asked to
     dispatch anything, so concurrency does not depend on the harness."""
 
     def __init__(self, client, threads, quiet=False):
         self.client = client
-        self.threads = max(1, min(64, int(threads or 64)))
+        self.threads = max(1, min(MAX_PARALLEL, int(threads or MAX_PARALLEL)))
         self.quiet = quiet
         self.peak = 0
         self._live = 0
@@ -1908,7 +1909,7 @@ def cmd_brief(a):
         print("NEXT: spec is large (%d words). Either write checklist.jsonl yourself, or run"
               % words)
         print("      audit.py parse      (fans out %d-way over sections, you review the draft)"
-              % min(64, max(2, words // 600)))
+              % min(MAX_PARALLEL, max(2, words // 600)))
     else:
         print("NEXT: write %s/checklist.jsonl, then run: audit.py run" % os.path.basename(out))
     print("      Say in one line: treating <spec> as the only source of truth; not reading")
@@ -2053,7 +2054,7 @@ def cmd_parse(a):
     if not text.strip():
         die("no spec text -- re-run brief")
     words = len(re.findall(r"\S+", text))
-    k = a.sections or max(2, min(64, words // 600))
+    k = a.sections or max(2, min(MAX_PARALLEL, words // 600))
     secs = split_sections(text, k)
     cl = _client(c)
     tcfg = c.tcfg
@@ -2898,20 +2899,26 @@ def _print_dispatch(c, wave, batches, agent, role, header):
         print(_oc_lane_wave(c.p("oc-lanes"), wave, batches, agent, model, effort,
                             os.getcwd()))
         return
-    print(header + " -- emit ALL of these in ONE message (they are independent):")
+    if len(batches) > MAX_PARALLEL:
+        print(header + " -- %d batches, at most %d agents at once: dispatch %d per message and wait"
+              " for each wave to finish before the next:" % (len(batches), MAX_PARALLEL, MAX_PARALLEL))
+    else:
+        print(header + " -- emit ALL of these in ONE message (they are independent):")
     print("  ZCode: subagents launched together run in parallel.")
     print("  OpenCode v2: background subagent calls run in parallel.")
-    for name, p in batches:
+    for i, (name, p) in enumerate(batches):
+        if i and i % MAX_PARALLEL == 0:
+            print("  -- wave %d (after the previous wave finished) --" % (i // MAX_PARALLEL + 1))
         print("  " + _dispatch(agent, p, "rca " + name))
 
 
 def _oc_lanes():
-    """OpenCode lane width: OC_MAX_LANES, default 8, never below 1."""
+    """OpenCode lane width: OC_MAX_LANES, default and ceiling 8, never below 1."""
     try:
-        n = int(os.environ.get("OC_MAX_LANES") or 8)
+        n = int(os.environ.get("OC_MAX_LANES") or MAX_PARALLEL)
     except ValueError:
-        n = 8
-    return max(1, n)
+        n = MAX_PARALLEL
+    return max(1, min(MAX_PARALLEL, n))
 
 
 def _even_groups(items, n):
@@ -2930,9 +2937,11 @@ def _even_groups(items, n):
 
 def _agent_groups(items, cap, max_per, opencode):
     """Agent-lane batches. OpenCode: at most _oc_lanes() batches, grouped evenly.
-    Elsewhere: fixed chunks of 1..max_per items so at most cap batches."""
+    Elsewhere: fixed chunks of 1..max_per items so at most cap batches (cap <= 8);
+    more batches than that are dispatched in waves of at most 8."""
     if not items:
         return []
+    cap = max(1, min(MAX_PARALLEL, cap))
     if opencode:
         return _even_groups(items, min(len(items), cap, _oc_lanes()))
     size = 1 if len(items) <= cap else min(max_per, (len(items) + cap - 1) // cap)
@@ -2973,7 +2982,7 @@ def cmd_plan(a):
             c.save_state(st)
             print("NEXT: audit.py status")
             return
-    cap = int(a.cap or c.threads or 20)
+    cap = int(a.cap or c.threads or MAX_PARALLEL)
     ordered = sorted(live, key=lambda r: (r.get("category") or "", r["id"]))
     groups = _agent_groups(ordered, cap, 12, _on_opencode())
     size = max([len(g) for g in groups] or [0])
@@ -3021,7 +3030,7 @@ def cmd_status(a):
             and i not in m.ver and (redispatch or i not in dispatched)]
     retr = Retriever(c)
     if vset:
-        cap = int(a.cap or c.threads or 20)
+        cap = int(a.cap or c.threads or MAX_PARALLEL)
         idx = len([k for k in (st.get("vbatches") or {})])
         groups = _agent_groups(list(vset), cap, VERIFY_MAX_PER_AGENT, _on_opencode())
         st.setdefault("vbatches", {})
@@ -3134,7 +3143,7 @@ def cmd_setup(a):
         print("zai-coding-plan login also works, audit.py reads its auth.json):")
         print(SETUP_ENV_OPENCODE)
         print("\nOpenCode: agents run on zai-coding-plan/glm-5.3-flash (workers) and")
-        print("zai-coding-plan/glm-5.3 (judgment). The api lane holds the 64 threads.")
+        print("zai-coding-plan/glm-5.3 (judgment). The api lane holds up to 8 threads.")
         print("Agent-lane fallback: plan makes at most OC_MAX_LANES (default 8) batches.")
         print("v1 runs them in parallel through oc_harness.py run (one opencode process")
         print("per lane; plan/status print the exact NEXT command).")

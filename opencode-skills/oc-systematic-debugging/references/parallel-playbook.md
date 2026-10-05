@@ -8,20 +8,20 @@ Goal: cut wall-clock time with width, without letting parallel work corrupt the 
 | Layer | Concurrency | Model turns it costs | Use for |
 |---|---|---|---|
 | `python3 $S/oc_debug_tool.py probe` | ~10 internal jobs | 1 | the whole evidence phase |
-| `python3 $S/oc_debug_tool.py run -j N` | up to 64 | 1 | any N shell commands |
-| `bash $S/*.sh -j N` | up to 64 | 1 | reruns, bisect, polluter search |
-| `python3 $S/oc_debug_tool.py experiment -j N` | up to 64 (2 worktrees per hypothesis) | 1 | hypotheses, control vs treatment |
-| `python3 $S/oc_debug_tool.py scan`, then one background call per printed row | as many workers as you dispatch | 1 dispatch turn | judgment: read an area, rank suspects |
+| `python3 $S/oc_debug_tool.py run -j N` | local jobs, up to 64 | 1 | any N shell commands |
+| `bash $S/*.sh -j N` | local jobs, up to 64 | 1 | reruns, bisect, polluter search |
+| `python3 $S/oc_debug_tool.py experiment -j N` | local jobs, up to 64 (2 worktrees per hypothesis) | 1 | hypotheses, control vs treatment |
+| `python3 $S/oc_debug_tool.py scan`, then one background call per printed row | at most 8 workers at once (waves of 8) | 1 dispatch turn per wave | judgment: read an area, rank suspects |
 
-**Model turns are the slow layer.** `probe`, `run`, `experiment` and the shell scripts do their parallel work inside one call. `scan` writes one brief per area and prints one background dispatch row each, so the fan-out costs one turn of dispatch calls and the workers then run concurrently.
+**Model turns are the slow layer.** `probe`, `run`, `experiment` and the shell scripts do their parallel work inside one call. `scan` writes one brief per area and prints one background dispatch row each, in waves of at most 8, so the fan-out costs one turn of dispatch calls per wave and the workers of a wave then run concurrently.
 
 Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `experiment`.
 
 ## 2. Width
 
 - CPU-bound (tests, builds): total processes ≤ CPU count. A runner that already uses every core (jest, vitest, `pytest -n auto`, `go test`) counts as one job using all of them — do not multiply it.
-- IO-bound (network, waiting on services): up to 64, each job with its own port / DB / temp dir; respect remote rate limits.
-- `scan` workers: each is a full agent session on the window's model, so keep the area count within what the provider's rate limit allows. Beyond ~8 workers the merge cost exceeds the gain, so dispatch more only for a genuinely broad question; `scan` accepts at most 64 areas.
+- IO-bound local jobs (network, waiting on services): up to 64 (`-j` is local work, not model calls), each job with its own port / DB / temp dir; respect remote rate limits.
+- `scan` workers: each is a full agent session on the window's model, and the provider allows 8 concurrent API calls, so `scan` prints rows in waves of at most 8 and you send the next wave only after the previous one has replied. Dispatch more than one wave only for a genuinely broad question, since the merge cost grows with the worker count.
 - Nested parallelism multiplies: bisect `-j` × stress `-j` ≤ CPUs.
 
 ## 3. Isolation — the quality guard

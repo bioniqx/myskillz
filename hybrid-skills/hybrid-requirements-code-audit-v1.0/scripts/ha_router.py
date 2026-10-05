@@ -61,6 +61,15 @@ OC_OVERFLOW = ("queue", "claude")
 _DEFAULT_OC_OVERFLOW = "queue"
 
 
+def tier_parallel(spec: dict, default: int = 1) -> int:
+    """A tier's opencode slot count, forced into 1..MAX_PARALLEL_LIMIT (the provider's concurrent-call cap)."""
+    try:
+        value = int(spec.get("max_parallel", default))
+    except (TypeError, ValueError, OverflowError):
+        value = default
+    return max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, value))
+
+
 def _drop_bad_numbers(entry: dict, keys: tuple, where: str, user_path, problems: list) -> None:
     """A tuning key that is not a JSON number is reported and dropped, so the shipped default applies."""
     for key in keys:

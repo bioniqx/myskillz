@@ -318,6 +318,10 @@ class TestOpencodeDbKey(_HomeCase):
 
 
 class TestGate(unittest.TestCase):
+    def test_default_client_gate_is_8(self):
+        g = zai_client.Client(KEY, base="http://127.0.0.1:1/v1").gate
+        self.assertEqual((g.width, g.max), (8, 8))
+
     def test_halves_on_throttle(self):
         g = zai_client.Gate(8)
         with mock.patch("zai_client.time.monotonic", side_effect=[0, 3, 6, 9]):

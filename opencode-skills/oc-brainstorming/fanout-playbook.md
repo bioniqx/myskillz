@@ -9,8 +9,9 @@ the human's reading time.
 - Lanes are background `subagent` calls (`background: true`) to the agents
   `oc-explorer` (code), `oc-researcher` (web) and `general`. They run on the
   model selected in this window; no model argument is ever passed.
-- Live context prints `caps: lanes=N` (default 8, set by `OC_MAX_LANES`).
-  Treat it as the ceiling on lanes in flight and trust it over this page.
+- Live context prints `caps: lanes=N` (default and hard max 8; `OC_MAX_LANES` can only
+  lower it). Treat it as the ceiling on lanes in flight, claim verifier and
+  reviewer lanes included, and trust it over this page.
 - Lanes cannot ask the user questions and must not spawn lanes. Flat
   fan-outs keep merging and cost under your control.
 - Direct `read`/`grep`/`glob`/`websearch`/`webfetch` calls are not lanes
@@ -20,7 +21,7 @@ the human's reading time.
 
 ## 1. Width in 10 seconds
 
-| Task | Direct calls | Code lanes | Web lanes |
+| Task | Direct calls | Code lanes (total) | Web lanes (total) |
 | --- | --- | --- | --- |
 | Spike | 2-6 (incl. 2-4 web) | 0 | 0-1 |
 | Bounded, small repo | 3-10 | 0-2 | 0 (direct web instead) |
@@ -28,7 +29,8 @@ the human's reading time.
 | Architectural, single service | 5-10 | 4-12 | 2-6 |
 | Architectural, monorepo | 5-10 | 12-40 | 4-16 |
 
-Counts above the cap run in waves (section 3). Size bands from Live
+Lane counts are totals, never concurrency: run them in waves of at most 8
+in flight (section 3). Size bands from Live
 context (`tracked=`): under 1k files small, 1k-20k medium, over 20k or
 several manifests is a monorepo. Published research scaling rule: one
 agent with 3-10 calls for a simple fact, 2-4 agents with 10-15 calls for a

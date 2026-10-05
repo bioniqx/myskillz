@@ -22,6 +22,13 @@ class ConstantsTest(unittest.TestCase):
     def test_concurrency_limit_is_the_hard_cap(self):
         self.assertEqual(devteam.concurrency_limit(), devteam.HARD_CAP)
 
+    def test_hard_cap_is_8_and_reviewers_always_fit_with_a_programmer_slot(self):
+        self.assertEqual(devteam.HARD_CAP, 8)
+        busy = {"reviews": {"r1": {"status": "dispatched", "shards": 50}}}
+        self.assertLessEqual(devteam.reserved_slots(busy, extra=50), devteam.HARD_CAP - 1)
+        self.assertEqual(devteam.slots(busy, [], extra=50)[0], 1)
+        self.assertEqual(devteam.shard_count([f"f{i}" for i in range(500)], 64), devteam.HARD_CAP - devteam.RESERVED_MIN)
+
     def test_doctor_checks_the_five_agents(self):
         self.assertEqual(devteam.OC_AGENT_NAMES,
                          ("programmer", "code-reviewer", "spot-reviewer", "investigator", "team-leader"))

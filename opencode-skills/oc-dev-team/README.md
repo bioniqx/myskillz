@@ -12,7 +12,7 @@ Bộ điều phối nhiều lane song song trên OpenCode v2: mỗi programmer l
 | **Report** | `report <id> --file <report.md>` thay cho stop gate: gọi `guard_stop`, in lỗi ngay trong output khi exit 2 (programmer sửa rồi report lại), thành công thì ghi marker `slices/<id>.done` hoặc `.blocked`. `MAX_STOP_BLOCKS` (2) vẫn ép hoàn tất |
 | **Guard** | `oc_guard.py` chỉ còn `oc` và `stop`. `guard_oc` xác định lane từ path của `edit`/`write` hoặc `workdir` của `shell` nằm dưới `.opencode/oc-dev-team/wt/<id>/`; role chỉ lấy từ `event.agent` của plugin. Ghi ra ngoài worktree, hoặc gọi `shell` không có `workdir`, bị TỪ CHỐI kèm thông báo nêu worktree |
 | **Model** | Không còn định tuyến model. Một model duy nhất chạy mọi lane; agent `programmer-lite` bị xoá, slice `trivial` đi qua `oc-programmer`; `dispatch_route` chỉ trả về tên agent |
-| **Song song** | Không còn governor. `concurrency_limit()` trả về `HARD_CAP`; không còn cắt đôi cửa sổ hay LANE DOWN |
+| **Song song** | Không còn governor. `concurrency_limit()` trả về `HARD_CAP` = 8 (giới hạn 8 lời gọi model đồng thời, gồm cả leader và reviewer); không còn cắt đôi cửa sổ hay LANE DOWN |
 | **Thư mục trạng thái** | `.opencode/oc-dev-team/` |
 | **Biến môi trường** | Gỡ toàn bộ biến chọn provider, tier, governor, giờ cao điểm, harness, role và slice của lane. `ENGINE_VERSION` là `5.0` |
 | **Tài liệu** | SKILL.md và README này được viết lại, không còn nội dung dành cho một provider cụ thể |

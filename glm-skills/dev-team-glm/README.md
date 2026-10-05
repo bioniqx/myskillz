@@ -11,7 +11,7 @@ Anthropic bằng cấu hình đúng cho GLM, cộng thêm bộ **governor** tự
 |---|---|---|
 | Lane chạy `sonnet` = model rẻ/nhanh | Z.ai map `opus` **và** `sonnet` → `glm-5.3`, chỉ `haiku` → `glm-5.3-flash` | Mọi lane chạy GLM-5.3: chậm hơn, tốn ~3× quota |
 | `effort: medium/high` trong frontmatter | GLM luôn bật thinking, mặc định `max`; Claude Code chỉ gửi effort cho model bên thứ ba nếu `*_SUPPORTED_CAPABILITIES` có `effort` | Mọi lời gọi chạy ở mức `max`, chậm nhất |
-| Mở 64 luồng cùng lúc | Z.ai không công bố giới hạn đồng thời; giới hạn theo gói, thay đổi động, thấp hơn giờ cao điểm | Dính 429/1302 hàng loạt, lane bị retry/backoff, bị treo |
+| Mở 64 luồng cùng lúc | Provider ngoài Claude chỉ cho 8 lời gọi API đồng thời; giới hạn theo gói còn có thể thấp hơn và thay đổi động, thấp hơn giờ cao điểm | Dính 429/1302 hàng loạt, lane bị retry/backoff, bị treo |
 | `subagentPromptCacheTtl: 1h`, `cacheTtl: 1h` | Z.ai tự cache ngầm, TTL 1h của Anthropic không áp dụng | Cấu hình vô ích |
 | Mẹo `/fast` | Chỉ có với Opus của Anthropic | Không dùng được |
 | Spawn bị runtime từ chối ("Concurrent subagent limit reached") | Slice vẫn đánh dấu đang chạy | Treo vĩnh viễn |
@@ -21,12 +21,12 @@ Anthropic bằng cấu hình đúng cho GLM, cộng thêm bộ **governor** tự
 | Hạng mục | v4 |
 |---|---|
 | **Định tuyến model** | Lane mặc định: GLM-5.3-Flash (`haiku`, effort high). Slice `trivial`/`docs` nhỏ: agent mới **`programmer-lite`** (Flash, effort low; system prompt giống hệt byte-for-byte để dùng chung cache). `risk: high`, `size: large` và **mọi slice phải retry** → GLM-5.3 (`model: opus`). Leader GLM-5.3 effort max, code-reviewer GLM-5.3 high, spot-reviewer/investigator Flash high |
-| **doctor --fix cho Z.ai** | Map alias → `glm-5.3` / `glm-5.3-flash`; `*_SUPPORTED_CAPABILITIES=effort,thinking` (để effort thật sự được gửi đi); `API_TIMEOUT_MS=3000000`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (theo tài liệu Z.ai); bỏ TTL cache kiểu Anthropic. Không bao giờ ghi token hay base URL. Nâng cấp mapping GLM cũ, giữ nguyên mapping tuỳ chỉnh có chủ đích |
-| **Governor (AIMD)** | Cửa sổ song song khởi đầu theo gói (`DEVTEAM_GLM_TIER`/`--tier`: lite 3/8, pro 6/20, max 10/40, api 16/64). Tăng dần khi lane hoàn thành (chỉ khi cửa sổ đang được dùng hết), **giảm một nửa** khi transcript có 429/1302/1305/overload (tối đa một lần mỗi 90 giây), trần giảm một nửa trong giờ cao điểm Z.ai (T2–T6, 14–18h UTC+8, tức 13–17h giờ Việt Nam) |
+| **doctor --fix cho Z.ai** | Map alias → `glm-5.3` / `glm-5.3-flash`; `*_SUPPORTED_CAPABILITIES=effort,thinking` (để effort thật sự được gửi đi); `API_TIMEOUT_MS=3000000`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (theo tài liệu Z.ai); `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8` và `CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=8` (provider Anthropic: 64); bỏ TTL cache kiểu Anthropic. Không bao giờ ghi token hay base URL. Nâng cấp mapping GLM cũ, giữ nguyên mapping tuỳ chỉnh có chủ đích |
+| **Governor (AIMD)** | Cửa sổ song song khởi đầu theo gói (`DEVTEAM_GLM_TIER`/`--tier`: lite 3/8, pro 6/8, max 7/8, api 8/8 — không tier nào vượt 8 vì provider chỉ cho 8 lời gọi đồng thời; leader/reviewer cũng nằm trong 8 đó; Claude vẫn giữ trần 64). Tăng dần khi lane hoàn thành (chỉ khi cửa sổ đang được dùng hết), **giảm một nửa** khi transcript có 429/1302/1305/overload (tối đa một lần mỗi 90 giây), trần giảm một nửa trong giờ cao điểm Z.ai (T2–T6, 14–18h UTC+8, tức 13–17h giờ Việt Nam) |
 | **Tự phục hồi** | Spawn bị từ chối/lỗi → đưa slice về hàng đợi (không re-queue nếu Conductor đã tự launch lại thành công); lỗi "agent type not found" lặp lại → báo cần restart Claude Code; lane chết vì lỗi API → in `LANE DOWN` kèm cách sửa warm (`SendMessage "continue"`) |
 | **`devteam stats`** | Số liệu **đo được** từ transcript của Claude Code theo role/model: số request (khử trùng lặp theo requestId), output token, tỉ lệ cache hit, effort thực gửi, lỗi API, thời gian chạy; cảnh báo nếu effort không được gửi |
 | **SKILL.md** | 25,4 KB → ~17,9 KB: ngắn gọn, dạng mệnh lệnh, ưu tiên "mỗi turn = 1 lệnh engine + launch song song" (GLM luôn thinking nên mỗi turn thừa đều đắt), thêm `effort: high` cho Conductor |
-| **Agent prompts** | Bỏ nhắc sonnet/opus/64; thêm quy tắc "ít turn, gộp đọc file thành tool call song song" (mỗi turn là một lần gọi model có thinking) |
+| **Agent prompts** | Bỏ nhắc sonnet/opus/64 (trần 64 chỉ còn cho provider Anthropic; GLM/OpenCode tối đa 8); thêm quy tắc "ít turn, gộp đọc file thành tool call song song" (mỗi turn là một lần gọi model có thinking) |
 | Anthropic | Vẫn chạy được (`DEVTEAM_PROVIDER=anthropic` hoặc tự nhận từ base URL): routing, chi phí và TTL cache giữ nguyên như v3 |
 
 ## Cài đặt
@@ -71,7 +71,7 @@ Trên OpenCode, engine tự nhận harness qua `oc_harness.harness()` khi có m�
 | Biến | Tác dụng |
 |---|---|
 | `DEVTEAM_GLM_TIER` | `lite` / `pro` (mặc định) / `max` / `api` — cửa sổ khởi đầu của governor |
-| `DEVTEAM_MAX_PARALLEL=N` | Ghim cứng số agent chạy song song (tắt thích nghi) |
+| `DEVTEAM_MAX_PARALLEL=N` | Ghim cứng số agent chạy song song (tắt thích nghi); tối đa 8 ngoài Claude, giá trị lớn hơn bị kẹp về 8 |
 | `DEVTEAM_GOVERNOR=off` | Tắt governor (vẫn giữ re-queue spawn lỗi và LANE DOWN) |
 | `DEVTEAM_PROVIDER` | `glm` / `anthropic` — ép provider |
 | `DEVTEAM_PEAK=on/off` | Ép trạng thái giờ cao điểm (dùng cho test) |
@@ -79,7 +79,7 @@ Trên OpenCode, engine tự nhận harness qua `oc_harness.harness()` khi có m�
 
 ## Đã kiểm thử
 
-- `bash scripts/selftest.sh` — **368 check, 368 pass, 0 fail** (247 check cũ vẫn giữ, phần còn lại là check mới cho v4 và bản vá parity). Dựng
+- `bash scripts/selftest.sh` — **371 check, 371 pass, 0 fail** (247 check cũ vẫn giữ, phần còn lại là check mới cho v4 và bản vá parity). Dựng
   repo git tạm, đi hết vòng đời; môi trường test cô lập (HOME tạm, không đọc transcript thật).
 - **Mutation test**: cố tình phá 13 cơ chế mới (halving, re-queue, leo thang khi retry, effort lite,
   capability, offset transcript, cửa sổ tier, peak, khử trùng request, baseline run mới, relaunch, điều

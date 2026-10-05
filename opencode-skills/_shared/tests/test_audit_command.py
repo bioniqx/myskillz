@@ -168,6 +168,55 @@ class TestAuditCli(unittest.TestCase):
         _rc, third = self._main("status", "--redispatch")
         self.assertIn("batch-V02", third)
 
+    def _lane_cap_audit(self, pending, age=5):
+        """10 requirements: batches 1..pending unanswered, the rest answered MISSING (verifier work)."""
+        items = [dict(ITEMS[0], id="REQ-%03d" % i) for i in range(1, 11)]
+        t = audit.now()
+        batches = {"batch-%02d" % i: {"ids": [items[i - 1]["id"]], "wave": "A",
+                                      "dispatched": t - (age if i <= pending else 5)}
+                   for i in range(1, 11)}
+        self._make_audit({"batches": batches})
+        _write_jsonl(os.path.join(self.out, "checklist.jsonl"), items)
+        for i in range(pending + 1, 11):
+            self._answer_missing(i)
+
+    def _answer_missing(self, i):
+        _write_jsonl(os.path.join(self.out, "findings", "batch-%02d.jsonl" % i), [
+            {"id": "REQ-%03d" % i, "status": "MISSING", "confidence": "low",
+             "evidence": [], "searched": ["x"], "notes": "nothing found"}])
+
+    def test_status_holds_verifiers_while_eight_pass1_lanes_are_in_flight(self):
+        self._lane_cap_audit(8)
+        _rc, out = self._main("status")
+        self.assertNotIn("DISPATCH", out)
+        self.assertIn("holding 2 row(s): lanes in flight 8 of 8", out)
+        self.assertEqual(self._state()["vbatches"], {})
+
+    def test_status_dispatches_at_most_the_free_lanes_then_the_rest_later(self):
+        self._lane_cap_audit(3)
+        _rc, out = self._main("status")
+        self.assertEqual(len([l for l in out.splitlines() if "oc-rca-verifier" in l]), 5)
+        self.assertEqual(len(self._state()["vbatches"]), 5)
+        self.assertIn("holding 2 row(s): lanes in flight 8 of 8", out)
+        for i in range(1, 4):  # the pass-1 lanes answer: 5 verifiers still out, 3 lanes free
+            self._answer_missing(i)
+        _rc, again = self._main("status")
+        self.assertEqual(len([l for l in again.splitlines() if "oc-rca-verifier" in l]), 3)
+        self.assertEqual(len(self._state()["vbatches"]), 8)
+        self.assertIn("holding 2 row(s): lanes in flight 8 of 8", again)
+
+    def test_status_hedges_only_into_free_lanes(self):
+        self._lane_cap_audit(4, age=10 ** 6)
+        with mock.patch.dict(os.environ, {"OC_MAX_LANES": "4"}):
+            _rc, out = self._main("status")
+        self.assertNotIn("DISPATCH hedges", out)
+        self.assertEqual(self._state()["hedges"], {})
+        with mock.patch.dict(os.environ, {"OC_MAX_LANES": "6"}):
+            _rc, out = self._main("status")
+        self.assertEqual(len([l for l in out.splitlines() if ".r2" in l and "oc-rca-inv" in l]), 2)
+        self.assertEqual(len(self._state()["hedges"]), 2)
+        self.assertIn("holding 8 row(s): lanes in flight 6 of 6", out)
+
     def test_plan_resume_skips_finished_batches(self):
         state = {"batches": {
             "batch-01": {"ids": ["REQ-001"], "wave": "A", "dispatched": "earlier"},
@@ -317,6 +366,13 @@ class TestAuditParse(unittest.TestCase):
         self.assertIn("NEXT:", out)
         self.assertIn("oc_audit.py parse", out)
         self.assertFalse(os.path.exists(self.draft))
+
+    def test_parser_wave_holds_at_most_eight_rows(self):
+        self._spec(u"\n\n".join(u"## s%d\n\n%s" % (i, u"The system must log. " * 300)
+                                 for i in range(12)))
+        row, out = self._parse()
+        self.assertEqual(len(row.call_args_list), 8)
+        self.assertIn("more section(s) wait", out)
 
     def test_second_call_dispatches_only_the_sections_without_an_output_file(self):
         self._parse()

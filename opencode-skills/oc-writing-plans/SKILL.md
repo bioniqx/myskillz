@@ -135,8 +135,9 @@ the risky ones.
    file and re-run the same command. Treat `WARN spec uncovered` as a missing
    task unless the section is non-functional.
 2. Send each printed MESSAGE verbatim: every call in it runs in the background
-   and all of them go in one message. Then end the turn. When the last writer of
-   a MESSAGE reports, send the next MESSAGE, if any.
+   and all of them go in one message. Then end the turn. At most 8 calls may be
+   in flight: send the next MESSAGE, if any, only after the last writer of the
+   previous one reported and its task files exist.
 3. When every writer has reported, run the printed `wait`, `review` and
    `assemble` commands in that order. `review` prints its own DISPATCH table:
    send it the same way, then run `wait --review` and `assemble`. A reviewer

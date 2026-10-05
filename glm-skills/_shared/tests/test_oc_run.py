@@ -320,9 +320,10 @@ class RunLanesTest(unittest.TestCase):
         self.assertEqual(results[2]["width"], 1)
         self.assertEqual(results[2]["status"], "OK")
 
-    def test_width_is_capped_at_64(self):
+    def test_width_is_capped_at_8(self):
         results = oc_harness.run_lanes([lane("a", "one")], self.out, width=500, binary=STUB, major=1)
-        self.assertEqual(results[0]["width"], 64)
+        self.assertEqual(results[0]["width"], oc_harness.MAX_PARALLEL)
+        self.assertEqual(oc_harness.MAX_PARALLEL, 8)
 
     def test_stall_kills_lane(self):
         start = time.monotonic()

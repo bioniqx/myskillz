@@ -6,7 +6,7 @@ The Iron Law: no fix until a `ROOT CAUSE: X causes Y because Z` line is backed b
 
 ## How it saves turns
 
-One call per phase, and each call opens its own threads (up to 64):
+One call per phase, and each call opens its own local threads (`-j` up to 64 or the CPU count; model workers started by `scan` run in waves of at most 8):
 
 | Phase | One call | Without the tool |
 |---|---|---|
@@ -69,4 +69,4 @@ Iron Law; two-sided hypotheses; failed candidate fixes count toward the 3-fix st
 
 10.0 - OpenCode v2 only. `scan` always writes worker briefs and prints one background dispatch row per worker plus a `NEXT:` line that tells the model to read the `VERDICT:` replies; it no longer calls a model API. Removed the tier, model and effort flags, the API-key and base-URL handling, harness detection and the other-harness setup blocks. The `oc-debug-worker` agent declares no model, and the model-tuning reference and the duplicate top-level agent file are deleted.
 
-Parity repair against the original systematic-debugging 6.3 (still 10.0): the control and treatment arms of a hypothesis run one after the other; SWARM routing again covers non-deterministic, multi-component, performance, many-cause and unknown-culprit failures; the worker agent gets `steps: 12`; `scan` is capped at 64 areas; evals are ported into `evals/README.md`.
+Parity repair against the original systematic-debugging 6.3 (still 10.0): the control and treatment arms of a hypothesis run one after the other; SWARM routing again covers non-deterministic, multi-component, performance, many-cause and unknown-culprit failures; the worker agent gets `steps: 12`; `scan` prints its dispatch rows in waves of at most 8 workers; evals are ported into `evals/README.md`.

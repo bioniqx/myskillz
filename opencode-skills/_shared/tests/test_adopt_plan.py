@@ -247,6 +247,9 @@ class WriterGroupingTests(unittest.TestCase):
             self.assertEqual(plan_tool.lane_width(), 3)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "x"}):
             self.assertEqual(plan_tool.lane_width(), 8)
+        with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "64"}):
+            self.assertEqual(plan_tool.lane_width(), 8)
+        self.assertEqual(plan_tool.MAX_WORKERS, 8)
 
     def test_on_opencode_asks_shared_harness_with_script_path(self):
         with mock.patch.object(plan_tool.oc_harness, "harness", return_value="opencode") as h:
@@ -334,6 +337,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
         self.assertTrue(all(len(v) == 4 for v in info["groups"].values()))
         self.assertIn("MESSAGE 1 (8 calls", out)
         self.assertIn("MESSAGE 2 (2 calls", out)
+        self.assertIn("At most 8 calls may be in flight", out)
         self.assertIn(self.expected("oc-plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
 
     def test_build_prints_dispatch_without_any_key(self):

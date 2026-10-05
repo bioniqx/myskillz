@@ -162,7 +162,7 @@ parallelised; faithfulness is not.
 
 ### Step 2 — Plan (one command)
 
-`A plan` validates the checklist, routes the investigator role, splits items into opencode batches of up to `oc_batch_max` items (the first `max_parallel` start at once, the rest wait for a
+`A plan` validates the checklist, routes the investigator role, splits items into opencode batches of up to `oc_batch_max` items (the first `max_parallel` (at most 8, shared by all tiers) start at once, the rest wait for a
 free slot; with `oc_overflow: "claude"` in mode hybrid the items beyond `max_parallel × oc_batch_max` go to Claude batches
 instead: size 1 whenever `N ≤ cap`, never more than 12; also the batches of a tier that is unusable),
 writes `.hybrid-audit/batches/batch-NN.md` (plus `batch-NN.oc.md` for opencode batches) and prints the exact dispatch list.

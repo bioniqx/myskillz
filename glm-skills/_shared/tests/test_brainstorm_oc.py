@@ -346,15 +346,30 @@ class TestBrainstormContextCaps(ContextCase):
         )
         self.assertIn("lanes=4", self.line_starting(proc.stdout, "caps: "))
 
+    def test_opencode_caps_clamps_oc_max_lanes_to_8(self):
+        root = make_skill(self.plain_root(), oc_major="2\n")
+        proc = run_context(
+            root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": "64"}
+        )
+        self.assertIn("lanes=8", self.line_starting(proc.stdout, "caps: "))
+
     def test_opencode_caps_prints_oc_major(self):
         root = make_skill(self.plain_root(), oc_major="2\n")
         proc = run_context(root, self.home)
         self.assertIn("oc_major=2", self.line_starting(proc.stdout, "caps: "))
 
-    def test_claude_caps_unchanged(self):
+    def test_claude_caps_default_8(self):
         root = make_skill(self.plain_root())
         proc = run_context(root, self.home, {"CLAUDECODE": "1"})
-        self.assertIn("subagents=20", self.line_starting(proc.stdout, "caps: "))
+        self.assertIn("subagents=8", self.line_starting(proc.stdout, "caps: "))
+
+    def test_claude_caps_clamped_to_8(self):
+        root = make_skill(self.plain_root())
+        env = {"CLAUDECODE": "1", "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
+               "CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS": "16"}
+        caps = self.line_starting(run_context(root, self.home, env).stdout, "caps: ")
+        self.assertIn("subagents=8", caps)
+        self.assertIn("workflow=8", caps)
 
     def test_opencode_output_is_bounded_and_exits_zero(self):
         root = make_skill(self.plain_root(), oc_major="2\n")

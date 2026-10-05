@@ -227,6 +227,13 @@ class TestLoadRouting(RouterTestCase):
         self.assertEqual(routing["tiers"]["std"]["max_parallel"], 2)
         self.assertEqual(routing["tiers"]["lite"]["max_parallel"], 6)
 
+    def test_max_parallel_is_clamped_to_one_through_eight(self):
+        self.set_shared()
+        routing = self.load(json.dumps({"tiers": {"std": {"max_parallel": 40}, "lite": {"max_parallel": 0}}}))
+        self.assertEqual([routing["tiers"][t]["max_parallel"] for t in ("std", "lite")], [8, 1])
+        plan = {"tiers": {"std": {"max_parallel": 64}}}
+        self.assertEqual(self.load(plan=plan)["tiers"]["std"]["max_parallel"], 8)
+
     def test_max_parallel_env_sits_between_user_file_and_defaults(self):
         self.set_shared(dict(MODELS_ENV, HYBRID_OPENCODE_MAX_PARALLEL="3"))
         routing = self.load()

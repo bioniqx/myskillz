@@ -731,6 +731,13 @@ class OcWriteTests(HpWriteBase):
         logged = Path(self.work, "oc", "oc-errors.jsonl").read_text(encoding="utf-8")
         self.assertIn("kind=breaker", logged)
 
+    def test_tier_semaphore_is_clamped_to_8_slots(self):
+        info = self.info()
+        info["oc"]["tiers"]["std"]["max_parallel"] = 40
+        sem = hp_write.new_shared(info)["sems"]["std"]
+        held = [sem.acquire(blocking=False) for _ in range(9)]
+        self.assertEqual(held.count(True), 8)
+
     def test_groups_beyond_max_parallel_queue_for_a_slot_and_still_finish(self):
         info = self.info()
         info["groups"] = {"O01": ["T01"], "O02": ["T02"]}

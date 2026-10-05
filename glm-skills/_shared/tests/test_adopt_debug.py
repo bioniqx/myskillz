@@ -125,6 +125,41 @@ class TestCmdScanSharesOneClientAcrossThePmap(unittest.TestCase):
         assert len(created) == 1, "cmd_scan must share one Client (and its AIMD gate) across the pmap"
 
 
+class TestCmdScanCapsApiWorkersAtEight(unittest.TestCase):
+    def test_scan_peak_concurrency_never_exceeds_eight(self):
+        import threading
+        import time
+        mod = load_debug_tool()
+        lock, state = threading.Lock(), {"now": 0, "peak": 0}
+
+        class FakeClient:
+            def __init__(self, key, base="", route=""):
+                pass
+
+            def call(self, model, effort, system, user, max_tokens):
+                with lock:
+                    state["now"] += 1
+                    state["peak"] = max(state["peak"], state["now"])
+                time.sleep(0.05)
+                with lock:
+                    state["now"] -= 1
+                return "VERDICT: CONFIRMED"
+
+        tf = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump([{"id": "t%d" % i, "prompt": "p"} for i in range(20)], tf)
+        tf.close()
+        self.addCleanup(lambda: Path(tf.name).unlink(missing_ok=True))
+        a = mod.argparse.Namespace(
+            tasks=tf.name, area=None, question=None, context_file=None, context=None,
+            tier="light", model=None, effort=None, base="https://api.z.ai/api/coding/paas/v4",
+            max_tokens=100, print_prompts=False, out=None, jobs=64, dir=".")
+        with patch.object(mod, "find_key", lambda: ("k123456789012345", "env:ZAI_API_KEY")), \
+                patch.object(mod.zai_client, "Client", FakeClient), \
+                redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            assert mod.cmd_scan(a) == 0
+        assert state["peak"] == 8, state
+
+
 class TestCmdSetupMentionsOcHarness(unittest.TestCase):
     def test_setup_opencode_mentions_oc_harness(self):
         mod = load_debug_tool()

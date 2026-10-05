@@ -1447,7 +1447,8 @@ def _oc_cap(st: dict, tier: str) -> int:
     tiers = (st.get("routing") or {}).get("tiers") or {}
     if tier not in tiers:
         return 0
-    cap = int((tiers[tier] or {}).get("max_parallel", DEFAULT_OC_MAX_PARALLEL))
+    cap = min(int((tiers[tier] or {}).get("max_parallel", DEFAULT_OC_MAX_PARALLEL)),
+              hybrid_shared.MAX_PARALLEL_LIMIT)
     live = (st.get("oc_caps") or {}).get(tier)
     if live is not None:
         cap = min(cap, int(live))

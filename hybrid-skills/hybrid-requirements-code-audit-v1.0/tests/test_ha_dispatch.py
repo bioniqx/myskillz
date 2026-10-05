@@ -101,7 +101,18 @@ class SlotsTest(unittest.TestCase):
 
     def test_free_slots(self):
         self.assertEqual(ha_dispatch.free_slots(self._ctx(), self._merged()),
-                         {"claude": 0, "oc:std": 4, "oc:lite": 2})
+                         {"claude": 0, "oc:std": 4, "oc:lite": 2, "oc": 6})
+
+    def test_free_slots_clamp_each_tier_and_the_shared_pool_to_8(self):
+        routing = json.loads(json.dumps(ROUTING))
+        routing["tiers"]["std"]["max_parallel"] = 64
+        routing["tiers"]["lite"]["max_parallel"] = 64
+        free = ha_dispatch.free_slots(FakeCtx("/tmp/out", {}, routing=routing), FakeMerged())
+        self.assertEqual((free["oc:std"], free["oc:lite"], free["oc"]), (8, 8, 8))
+        for _ in range(8):
+            self.assertTrue(ha_dispatch.has_slot(free, "oc:lite"))
+            ha_dispatch.take_slot(free, "oc:lite")
+        self.assertFalse(ha_dispatch.has_slot(free, "oc:std"))
 
     def test_free_slots_never_negative(self):
         c = self._ctx()

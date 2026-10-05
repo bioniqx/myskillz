@@ -113,6 +113,11 @@ class TestLoadRouting(unittest.TestCase):
         self.assertEqual(routing["tiers"]["std"]["timeout_s"], 1200)
         self.assertEqual(routing["tiers"]["lite"]["max_parallel"], 4)
 
+    def test_tier_parallel_is_forced_into_1_to_8(self):
+        for raw, want in ((64, 8), (12.5, 8), (8, 8), (3, 3), (0, 1), (-2, 1), ("x", 1), (None, 1)):
+            self.assertEqual(ha_router.tier_parallel({"max_parallel": raw}), want, raw)
+        self.assertEqual(ha_router.tier_parallel({}), 1)
+
     def test_max_parallel_env_sits_between_the_user_file_and_the_defaults(self):
         os.environ["HYBRID_OPENCODE_MAX_PARALLEL"] = "3"
         routing = self.load()

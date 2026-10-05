@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -316,10 +317,10 @@ class WriterGroupingTests(unittest.TestCase):
             self.assertEqual(plan_tool.writer_group_count(n, True, 8), want, n)
 
     def test_group_count_elsewhere_is_one_per_task_up_to_cap(self):
-        self.assertEqual(plan_tool.writer_group_count(5, False, 20), 5)
-        self.assertEqual(plan_tool.writer_group_count(30, False, 20), 20)
-        self.assertEqual(plan_tool.writer_group_count(100, False, 20), 25)
-        self.assertEqual(plan_tool.writer_group_count(0, False, 20), 0)
+        self.assertEqual(plan_tool.writer_group_count(5, False, 8), 5)
+        self.assertEqual(plan_tool.writer_group_count(30, False, 8), 8)
+        self.assertEqual(plan_tool.writer_group_count(100, False, 8), 25)
+        self.assertEqual(plan_tool.writer_group_count(0, False, 8), 0)
 
     def test_cap_groups_splits_oversized_groups(self):
         self.assertEqual(plan_tool.cap_groups([[1, 2, 3, 4, 5, 6], [7]]), [[1, 2, 3, 4], [5, 6], [7]])
@@ -331,6 +332,27 @@ class WriterGroupingTests(unittest.TestCase):
             self.assertEqual(plan_tool.lane_width(), 3)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "x"}):
             self.assertEqual(plan_tool.lane_width(), 8)
+        with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "64"}):
+            self.assertEqual(plan_tool.lane_width(), 8)
+
+    def test_model_call_concurrency_never_exceeds_eight(self):
+        self.assertEqual(plan_tool.MAX_WORKERS, 8)
+        with mock.patch.dict(os.environ, {"PLAN_MAX_WORKERS": "64"}):
+            self.assertEqual(plan_tool.workers_cap(), 8)
+        self.assertEqual(plan_tool.workers_cap(64), 8)
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64"}):
+            self.assertEqual(plan_tool.agent_cap()[0], 8)
+        live, peak, lock = [0], [0], threading.Lock()
+
+        def fn(_):
+            with lock:
+                live[0] += 1
+                peak[0] = max(peak[0], live[0])
+            time.sleep(0.01)
+            with lock:
+                live[0] -= 1
+        plan_tool.pmap(fn, range(40), 64)
+        self.assertLessEqual(peak[0], 8)
 
     def test_on_opencode_asks_shared_harness_with_script_path(self):
         with mock.patch.object(plan_tool.oc_harness, "harness", return_value="opencode") as h:

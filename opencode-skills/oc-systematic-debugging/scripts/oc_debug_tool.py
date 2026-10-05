@@ -32,7 +32,8 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 import oc_harness
 WORKER_AGENT = "oc-debug-worker"
-MAXJ = 64
+MAXJ = 64  # local CPU jobs (probe/run/experiment -j); model lanes use MAX_LANES
+MAX_LANES = 8  # worker rows in flight at once (provider allows 8 concurrent API calls)
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -859,14 +860,19 @@ def cmd_scan(a):
         briefs.append((t["id"], str(p.resolve())))
     print("S=%s" % SCRIPTS)
     print("scan: %d briefs written to %s" % (len(briefs), d))
-    print("Make every call below in ONE turn, one after another without waiting "
-          "(interactive sessions only):")
-    for tid, p in briefs:
-        print("  " + oc_harness.dispatch_line(WORKER_AGENT, p, "scan " + tid, 2, background=True))
+    waves = [briefs[i:i + MAX_LANES] for i in range(0, len(briefs), MAX_LANES)]
+    print("Make every call of ONE wave in one turn, one after another without waiting "
+          "(interactive sessions only); at most %d workers run at once, so send the next wave "
+          "only after every worker of the previous wave has replied:" % MAX_LANES)
+    for n, wave in enumerate(waves, 1):
+        if len(waves) > 1:
+            print("WAVE %d of %d (%d workers):" % (n, len(waves), len(wave)))
+        for tid, p in wave:
+            print("  " + oc_harness.dispatch_line(WORKER_AGENT, p, "scan " + tid, 2, background=True))
     print("Each worker answers in the VERDICT shape written at the top of its brief.")
-    print("NEXT: make the %d calls above, end the turn, then read each worker's VERDICT: reply "
-          "and confirm any claimed root cause with one experiment before writing a fix."
-          % len(briefs))
+    print("NEXT: make the %d calls above (wave by wave, at most %d at once), end each turn, then read "
+          "each worker's VERDICT: reply and confirm any claimed root cause with one experiment "
+          "before writing a fix." % (len(briefs), MAX_LANES))
     return 0
 
 

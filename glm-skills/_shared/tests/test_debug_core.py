@@ -43,6 +43,10 @@ class DebugToolClampTest(unittest.TestCase):
         self.assertEqual(DT16.clamp(999, 8), DT16.MAXJ)
         self.assertEqual(DT16.clamp("x", 8), 8)
 
+    def test_api_cap_is_eight(self):
+        self.assertEqual(DT16.MAX_API, 8)
+        self.assertEqual(DT16.clamp(999, 8, DT16.MAX_API), 8)
+
 
 class DebugToolParallelDefaultTest(_T16TmpRepo):
     def test_run_default_is_parallel(self):

@@ -228,6 +228,10 @@ class TestBrainstormContext(ContextCase):
         proc = self.run_context({"OC_MAX_LANES": "4"})
         self.assertIn("lanes=4", line_starting(self, proc.stdout, "caps: "))
 
+    def test_caps_clamps_oc_max_lanes_to_8(self):
+        proc = self.run_context({"OC_MAX_LANES": "99"})
+        self.assertIn("lanes=8", line_starting(self, proc.stdout, "caps: "))
+
     def test_lists_agents_md(self):
         with open(os.path.join(self.proj, "AGENTS.md"), "w") as f:
             f.write("rules\n")

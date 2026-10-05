@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""plan_tool.py v9 GLM - deterministic engine + in-process 64-way fan-out.
+"""plan_tool.py v9 GLM - deterministic engine + in-process 8-way fan-out.
 Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on OpenCode and ZCode.
 
   brief     [SPEC] [--thorough]        repo+spec+patterns in ONE call (replaces Phase 0)
@@ -25,8 +25,8 @@ import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
 import oc_harness  # vendored by _shared/sync.sh
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
-MAX_WORKERS = 64
-DEFAULT_AGENT_CAP = 20
+MAX_WORKERS = 8           # provider limit: concurrent model calls (threads, writers, reviewers)
+DEFAULT_AGENT_CAP = 8
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
 DEFAULT_LANE_WIDTH = 8    # background lanes one OpenCode dispatch message starts
 
@@ -268,7 +268,7 @@ def writer_group_count(n_tasks, opencode, cap):
 
 # ------------------------------------------------------------------ http fan-out
 class Budget:
-    """Shared failure budget so a dead endpoint aborts fast instead of 64x retrying."""
+    """Shared failure budget so a dead endpoint aborts fast instead of every worker retrying."""
     def __init__(self, limit=8):
         self.lock = threading.Lock()
         self.left = limit
@@ -317,7 +317,7 @@ def call_model(cfg, system_blocks, user_text, tier, budget, max_tokens=16000, ti
 def pmap(fn, items, workers):
     if not items:
         return []
-    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(items)))) as ex:
+    with ThreadPoolExecutor(max_workers=max(1, min(workers, MAX_WORKERS, len(items)))) as ex:
         return list(ex.map(fn, items))
 # ------------------------------------------------------------------ parsing
 def section(text, title):
@@ -1291,7 +1291,9 @@ def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
         agent = "plan-task-writer" if installed else "general-purpose"
         head = [lane,
                 "WORK %s" % work,
-                "DISPATCH %d writers, ALL in ONE message | subagent_type=%s | description 'plan <ID>'" % (len(groups), agent),
+                ("DISPATCH %d writers, ALL in ONE message" % len(groups) if len(groups) <= MAX_WORKERS else
+                 "DISPATCH %d writers in waves of at most %d (send the next wave after the previous one replied)"
+                 % (len(groups), MAX_WORKERS)) + " | subagent_type=%s | description 'plan <ID>'" % agent,
                 "prompt (verbatim): Read <brief path> and follow it exactly.",
                 "ID   MODEL   TASKS     BRIEF"]
         rows = dispatch_lines(groups, work, "write")
@@ -1869,7 +1871,7 @@ def agent_file(harness, name="plan-task-writer"):
               "description: Writes implementation-plan task bodies from a writing-plans brief file. "
               "Use only when given a writing-plans brief path.\n"
               "model: glm-5.3-flash\n"
-              "thinking: low\n"
+              "thoughtLevel: low\n"
               "tools: Read, Write, Edit, Bash\n"
               "---\n\n")
         return fm + AGENT_BODY
@@ -1921,8 +1923,8 @@ def cmd_setup(a):
             return 1
         new = json.loads(json.dumps(cur))
         env = new.setdefault("env", {})
-        for k, v in (("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "64"),
-                     ("CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS", "64"),
+        for k, v in (("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", str(MAX_WORKERS)),
+                     ("CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS", str(MAX_WORKERS)),
                      ("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "1000000"),
                      ("API_TIMEOUT_MS", "3000000")):
             if str(env.get(k, "")) != v:

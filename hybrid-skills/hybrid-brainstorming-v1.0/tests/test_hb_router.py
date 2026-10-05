@@ -296,6 +296,7 @@ class TestLoadRouting(SharedConfigCase):
             ({"roles": {"locate": 5}}, "roles.locate"),
             ({"tiers": {"lite": {"max_parallel": "abc"}}}, "tiers.lite.max_parallel"),
             ({"tiers": {"lite": {"max_parallel": 0}}}, "tiers.lite.max_parallel"),
+            ({"tiers": {"lite": {"max_parallel": hybrid_shared.MAX_PARALLEL_LIMIT + 1}}}, "tiers.lite.max_parallel"),
             ({"tiers": {"lite": {"stall_s": None}}}, "tiers.lite.stall_s"),
             ({"tiers": {"lite": {"timeout_s": True}}}, "tiers.lite.timeout_s"),
             ({"tiers": {"lite": {"model": 5}}}, "tiers.lite.model"),

@@ -107,6 +107,10 @@ def load_routing(defaults_path: Path, user_path: Path, plan_routing: dict) -> di
                             % (name, name, user_path, hybrid_shared.SHARED_SOURCE))
     if plan_routing:
         routing = _merge(routing, plan_routing)
+    for tier in (routing.get("tiers") or {}).values():   # opencode lanes: 1..MAX_PARALLEL_LIMIT whatever the source
+        mp = tier.get("max_parallel") if isinstance(tier, dict) else None
+        if isinstance(mp, int) and not isinstance(mp, bool):
+            tier["max_parallel"] = max(1, min(mp, hybrid_shared.MAX_PARALLEL_LIMIT))
     _normalize_preset(routing, problems, warnings)
     routing["config_problems"] = problems
     routing["config_warnings"] = warnings

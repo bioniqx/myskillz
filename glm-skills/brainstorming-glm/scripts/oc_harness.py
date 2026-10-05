@@ -15,6 +15,7 @@ import time
 PROVIDER = "zai-coding-plan"
 MODELS = {"flash": "glm-5.3-flash", "pro": "glm-5.3"}
 EFFORTS = ("low", "high", "max")
+MAX_PARALLEL = 8  # the provider allows 8 concurrent API calls
 
 
 def detect(binary: str = "opencode") -> int:
@@ -613,7 +614,7 @@ def _standalone_race(state, major):
     return any(m in text for m in markers)
 
 
-def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binary: str = "opencode", major: int = 0) -> list:
+def run_lanes(lanes: list, out_dir: str, width: int = MAX_PARALLEL, stall: int = 180, binary: str = "opencode", major: int = 0) -> list:
     """Run one `opencode run` process per lane; write <id>.jsonl, <id>.err and <id>.done."""
     if not major:
         major = detect(binary)
@@ -623,7 +624,7 @@ def run_lanes(lanes: list, out_dir: str, width: int = 8, stall: int = 180, binar
     if missing:
         raise SystemExit("opencode run --help lacks flag(s): " + ", ".join(missing))
     os.makedirs(out_dir, exist_ok=True)
-    width = max(1, min(int(width), 64))
+    width = max(1, min(int(width), MAX_PARALLEL))
     pending = list(lanes)
     running = []
     results = {}
@@ -915,7 +916,7 @@ def main(argv: list = None) -> int:
     p = sub.add_parser("run", help="run a lanes JSON file as parallel opencode processes")
     p.add_argument("lanes_json")
     p.add_argument("--out", default=".oc-lanes")
-    p.add_argument("--width", type=int, default=int(os.environ.get("OC_MAX_LANES") or 8))
+    p.add_argument("--width", type=int, default=max(1, min(MAX_PARALLEL, int(os.environ.get("OC_MAX_LANES") or MAX_PARALLEL))))
     p.add_argument("--stall", type=int, default=180,
                    help="stall seconds for lanes with no `stall` value and no role in STALL_BY_ROLE")
     p = sub.add_parser("result", help="print each lane's final assistant text")
@@ -957,7 +958,7 @@ def main(argv: list = None) -> int:
     if a.cmd == "run":
         with open(a.lanes_json) as fh:
             lanes = json.load(fh)
-        rows = run_lanes(lanes, a.out, width=max(1, min(64, a.width)), stall=a.stall)
+        rows = run_lanes(lanes, a.out, width=max(1, min(MAX_PARALLEL, a.width)), stall=a.stall)
         for r in rows:
             print("LANE %s %s exit=%s %s" % (r["id"], r["status"], r.get("exit"), r.get("error") or ""))
         bad = [r["id"] for r in rows if r["status"] != "OK"]

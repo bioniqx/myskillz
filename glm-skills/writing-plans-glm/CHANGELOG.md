@@ -2,6 +2,8 @@
 
 **Parity repair:** the linter functions scan, fence_mask, files_block, commit_errors, allow_hit, apply_marks, cmd_wait and contract_hashes are re-synced from the original; the inline threshold is N <= 1; the handoff restores the dev-team adoption offer and "(recommended)"; the reviewer prompt holds one format block with a consuming step for "Unfixable (needs contract change)".
 
+**Concurrency:** every model-call fan-out (script threads, writer and reviewer dispatch, `PLAN_MAX_WORKERS`, `PLAN_LANE_WIDTH`, `--workers`, `--agents`, subagent-cap env vars) is capped at 8, the provider limit on concurrent API calls; the 4-task writer group size is unchanged.
+
 **Fixes:** (WP5) Bootstrap now respects `$OPENCODE_CONFIG_DIR`, checks locations in project-first order, and exits with a clear error on miss (no `python3 "" brief`).
 
 Target: GLM-5.3 and GLM-5.3-Flash, running in OpenCode or ZCode.
@@ -16,7 +18,7 @@ facts break that on this target:
 2. OpenCode's task tool dispatches subagents one at a time. Background
    dispatch exists only behind `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`.
 
-v9 puts the fan-out inside `plan_tool.py`: one `build` call opens up to 64
+v9 puts the fan-out inside `plan_tool.py`: one `build` call opens up to 8
 threads and sends one request per task straight to the coding endpoint. No
 subagent, no per-writer system prompt, no tool round trips, and lint plus repair
 run in Python. The agent lane is kept as an automatic fallback for anyone
@@ -51,8 +53,8 @@ six skill directories.
 - Writer output is bounded by explicit start and end markers, because Flash runs
   verbose.
 - Retries handle 429 and 5xx with jittered backoff, and a shared failure budget
-  aborts the whole fan-out fast when the endpoint is down instead of 64 slow
-  retries.
+  aborts the whole fan-out fast when the endpoint is down instead of every
+  worker retrying slowly.
 - OpenCode v2's `subagent` tool takes `background: true`, so the agent-lane
   DISPATCH table can fan out with real parallelism from one tool call per
   turn; `render_agent` now writes `variant: <effort>` into v2 agent
@@ -69,7 +71,7 @@ six skill directories.
   with the exact lint errors fed back - failures that used to need a
   re-dispatch turn are gone.
 - Risk-based review still runs (deep tier, long body, many consumers, lint
-  warnings), also 64-wide, and a rewritten body is accepted only if it lints at
+  warnings), also 8-wide, and a rewritten body is accepted only if it lints at
   least as well as the one it replaces.
 - Portability scan now also rejects the words OpenCode, ZCode and GLM inside a
   plan.

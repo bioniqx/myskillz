@@ -60,8 +60,8 @@ fallbacks always go to Claude with the role's model (`sonnet` once the run has s
 
 Keys of the routing file:
 
-- `max_parallel` - opencode processes per tier (default 4, or `$HYBRID_OPENCODE_MAX_PARALLEL` when set; a value here wins); batches beyond that wait for a free slot (`status` dispatches them as slots free up).
-- `oc_overflow` - `"queue"` (default) or `"claude"`. In mode hybrid, `"queue"` keeps every investigator item on opencode (60 items = 15 batches, 6 at a time); `"claude"` restores the old split: items beyond `max_parallel × oc_batch_max` go to Claude haiku at `plan` time. Mode opencode always queues. A value other than these two is a config problem and the default is used.
+- `max_parallel` - opencode processes per tier (default 4, or `$HYBRID_OPENCODE_MAX_PARALLEL` when set; a value here wins; capped at 8, the most concurrent opencode calls, shared by both tiers); batches beyond that wait for a free slot (`status` dispatches them as slots free up).
+- `oc_overflow` - `"queue"` (default) or `"claude"`. In mode hybrid, `"queue"` keeps every investigator item on opencode (60 items = 15 batches, 4 at a time by default, 8 at most); `"claude"` restores the old split: items beyond `max_parallel × oc_batch_max` go to Claude haiku at `plan` time. Mode opencode always queues. A value other than these two is a config problem and the default is used.
 - `oc_batch_max` - items per opencode batch. `max_repairs` - repair turns per batch (same opencode session).
 - `stall_s` / `timeout_s` - stall and wall-time limits per turn, so a batch's worst case is `(1 + max_repairs) × timeout_s`.
 - `throttle_cooldown_s` - how long a throttled tier waits or stays on Claude.

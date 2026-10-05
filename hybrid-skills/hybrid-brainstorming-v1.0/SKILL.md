@@ -225,8 +225,9 @@ together, never split across rounds. `draft` never dispatches in round 1:
 it fires later, once the approach-deciding lanes are back — see
 `architectural.md` §2. Never launch more oc lanes for one tier at once than
 that tier's `max_parallel` (the skill's own routing file if it sets one,
-else `$HYBRID_OPENCODE_MAX_PARALLEL`, else the shipped default 4); queue the rest and dispatch a replacement
-the moment a slot frees up (a lane's stdout line signals completion).
+else `$HYBRID_OPENCODE_MAX_PARALLEL`, else the shipped default 4, never above 8) and never more than 8 oc lanes
+across all tiers together (the provider's concurrent-call limit); queue the
+rest and dispatch a replacement the moment a slot frees up (a lane's stdout line signals completion).
 
 Lane ids match `[A-Za-z0-9_-]{1,40}` and must be unique per lane you
 dispatch this session. The env vars `HYBRID_OPENCODE_STD` and
@@ -236,7 +237,7 @@ models and variants for every hybrid skill. A tier whose `model` is set in
 `$HYBRID_BRAINSTORMING_ROUTING` (default `<skill dir>/routing.json`) uses
 that file's `model` and `variant` instead (no variant when that file sets
 none). Roles, timeouts and slot waits also live in `$HYBRID_BRAINSTORMING_ROUTING`, merged
-over the shipped defaults. Per-tier caps default to 4 parallel lanes (`max_parallel`).
+over the shipped defaults. Per-tier caps default to 4 parallel lanes (`max_parallel`, at most 8).
 `--preset claude|hybrid|opencode` (the mode) overrides the routing
 file's preset for one call: `hybrid` routes locate/explore/fact/research to
 opencode tiers and keeps draft on Claude; `opencode` also routes draft to an

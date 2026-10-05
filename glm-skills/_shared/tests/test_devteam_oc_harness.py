@@ -85,15 +85,15 @@ class ProgrammerLiteInstallTest(unittest.TestCase):
 
 
 class ConcurrencyCapTest(unittest.TestCase):
-    """DE8: Claude Code's subagent cap (default 20) must not bound OpenCode lanes."""
+    """DE8: Claude Code's subagent cap (default 20) must not bound OpenCode lanes; OpenCode is non-Claude, so 8."""
 
-    def test_opencode_is_not_capped_by_claude_limit(self):
+    def test_opencode_is_capped_at_8_not_by_claude_limit(self):
         with mock.patch.dict(os.environ, {}, clear=True), \
                 mock.patch.object(devteam, "is_opencode", return_value=True):
-            self.assertEqual(devteam.concurrency_limit(), devteam.HARD_CAP)
+            self.assertEqual(devteam.concurrency_limit(), devteam.NON_CLAUDE_CAP)
         with mock.patch.dict(os.environ, {"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "8"}, clear=True), \
                 mock.patch.object(devteam, "is_opencode", return_value=True):
-            self.assertEqual(devteam.concurrency_limit(), devteam.HARD_CAP)
+            self.assertEqual(devteam.concurrency_limit(), devteam.NON_CLAUDE_CAP)
 
     def test_claude_keeps_its_cap(self):
         with mock.patch.dict(os.environ, {}, clear=True), \

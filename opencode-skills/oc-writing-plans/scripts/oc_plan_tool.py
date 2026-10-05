@@ -23,10 +23,10 @@ if HERE not in sys.path:
 import oc_harness  # vendored by _shared/sync.sh
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
-MAX_WORKERS = 64
+MAX_WORKERS = 8           # provider limit: at most 8 concurrent model calls
 OC_MAJOR = 2              # v2 only
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
-DEFAULT_LANE_WIDTH = 8    # background calls one dispatch message starts
+DEFAULT_LANE_WIDTH = 8    # background calls one dispatch message starts (never above MAX_WORKERS)
 
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 
@@ -176,7 +176,7 @@ def on_opencode():
 
 
 def lane_width():
-    """Background calls one dispatch message may start (PLAN_LANE_WIDTH, default 8)."""
+    """Background calls one dispatch message may start (PLAN_LANE_WIDTH, clamped to 1..8, default 8)."""
     v = os.environ.get("PLAN_LANE_WIDTH", "").strip()
     return min(MAX_WORKERS, int(v)) if v.isdigit() and int(v) > 0 else DEFAULT_LANE_WIDTH
 
@@ -916,13 +916,14 @@ def dispatch_lines(groups, work, kind, installed=True, deep=True):
 
 
 def oc_dispatch(groups, work, kind, installed, width, deep=True):
-    """Dispatch calls, at most `width` per message, one agent per row."""
+    """Dispatch calls, at most `width` per message and only one message in flight at a time."""
     sub = "review-briefs" if kind == "review" else "briefs"
     verb = "review" if kind == "review" else "plan"
     rows = []
     for b in range(0, len(groups), width):
         batch = groups[b:b + width]
-        rows.append("MESSAGE %d (%d calls, ALL in ONE message):" % (b // width + 1, len(batch)))
+        later = "" if b == 0 else "; send ONLY after every call of MESSAGE %d replied and its result files exist" % (b // width)
+        rows.append("MESSAGE %d (%d calls, ALL in ONE message%s):" % (b // width + 1, len(batch), later))
         for gid, g in batch:
             rows.append("  " + oc_harness.dispatch_line(row_agent(g, kind, installed, deep),
                                                         os.path.join(work, sub, gid + ".md"),
@@ -1021,7 +1022,7 @@ def build_agent_lane(a, plan_path, plan, cs, pending, repo, work, spec, warns, t
             "WORK %s" % work,
             "DISPATCH %d writers in %d message(s) of at most %d background calls | one agent per row"
             % (len(groups), -(-len(groups) // width), width),
-            "Send each MESSAGE below verbatim; send the next MESSAGE after every writer of the previous one replied.",
+            "Send each MESSAGE below verbatim. At most %d calls may be in flight: send the next MESSAGE only after every writer of the previous one replied and its task files exist." % width,
             "ID   AGENT                 TASKS     BRIEF"]
     rows = dispatch_lines(groups, work, "write", installed, deep) \
         + oc_dispatch(groups, work, "write", installed, width, deep)
@@ -1235,6 +1236,7 @@ def cmd_review(a):
             % (len(groups), -(-len(groups) // width), width),
             "ID   AGENT                 TASKS     BRIEF"] \
         + dispatch_lines(groups, work, "review", installed) \
+        + ["At most %d calls may be in flight: send the next MESSAGE only after every reviewer of the previous one replied and its review files exist." % width] \
         + oc_dispatch(groups, work, "review", installed, width)
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
     for r in rows:
@@ -1420,7 +1422,7 @@ def cmd_brief(a):
         out.append("date %s | cwd %s | repo %s" % (time.strftime("%Y-%m-%d"), cwd, repo))
         out.append("TOOL: %s" % qtool())
         out.append("harness: %s" % ("opencode" if oc else "not detected"))
-        out.append("lane: agent | up to %d background calls per dispatch message" % lane_width())
+        out.append("lane: agent | at most %d background calls in flight; further MESSAGEs only after the previous wave finished" % lane_width())
         if "--thorough" in args:
             out.append("mode: THOROUGH -> review every task")
         branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).strip()
@@ -1525,7 +1527,7 @@ def cmd_doctor(a):
     print("harness   : %s" % ("opencode" if on_opencode() else "not detected"))
     print("python    : %s" % sys.version.split()[0])
     print("tool      : %s" % qtool())
-    print("lane width: %d (PLAN_LANE_WIDTH to change)" % lane_width())
+    print("lane width: %d (PLAN_LANE_WIDTH can lower it, max %d)" % (lane_width(), MAX_WORKERS))
     missing = []
     for name in WRITER_AGENTS:
         where = agent_installed(repo, name)
@@ -1602,7 +1604,7 @@ def main(argv=None):
 
     p = common(sub.add_parser("build"))
     p.add_argument("plan"); p.add_argument("--spec")
-    p.add_argument("--workers", type=int, help="background calls per dispatch message")
+    p.add_argument("--workers", type=int, help="background calls per dispatch message (1..8)")
     p.add_argument("--thorough", action="store_true", help="review every task, not only risky ones")
     p.add_argument("--resume", action="store_true", help="write briefs only for tasks that do not lint OK yet")
     p.set_defaults(fn=cmd_build)

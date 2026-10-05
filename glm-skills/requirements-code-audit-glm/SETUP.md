@@ -71,8 +71,9 @@ contract files (`.erb`, `.sol`, `.cshtml`); `.git/` itself is never searched or 
 
 ## 4. Threads
 
-64 by default. Override with `run --threads N`, or `AUDIT_THREADS=N`. Lower it if the endpoint rate-limits you
-(the client already backs off on 429/5xx); raise nothing above 64.
+8 by default, and 8 is the ceiling (the provider allows 8 concurrent API calls). Override with `run --threads N`, or
+`AUDIT_THREADS=N`. Lower it if the endpoint rate-limits you (the client already backs off on 429/5xx); values above 8
+are clamped to 8. `OC_MAX_LANES` (OpenCode agent-lane width) is clamped to 8 the same way.
 
 ## 5. Permissions
 

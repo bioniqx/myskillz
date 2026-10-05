@@ -1,6 +1,6 @@
 ---
 name: oc-systematic-debugging
-description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many; parallel work runs inside the tools (up to 64 workers) and through background workers on the model selected in the window, so width costs no extra model turns.
+description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many; parallel work runs inside the tools (local jobs) and through background workers on the model selected in the window (at most 8 at once), so width costs no extra model turns.
 metadata:
   version: "10.0"
   harness: "opencode"
@@ -22,7 +22,7 @@ Every tool output starts with `S=<absolute path>`. Shell variables do not surviv
 
 ## R1. One call per phase — put width inside the tool, and independent calls in one message
 
-Each model turn costs seconds of latency, so width lives inside the tools: `probe`, `run` and `experiment` open their own threads (up to 64), and `scan` writes the worker briefs (at most 64 areas) and prints one background dispatch row per worker. Independent Read, Grep and git calls that no tool covers still go together in one message; go sequential only when call B needs the output of call A.
+Each model turn costs seconds of latency, so width lives inside the tools: `probe`, `run` and `experiment` open their own local CPU threads (`-j` up to 64, or the CPU count), and `scan` writes the worker briefs and prints one background dispatch row per worker, in waves of at most 8 (model lanes: at most 8 in flight). Independent Read, Grep and git calls that no tool covers still go together in one message; go sequential only when call B needs the output of call A.
 
 | Phase | Exactly one call | Replaces |
 | --- | --- | --- |
@@ -80,7 +80,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/oc-stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/oc-bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/oc-find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/oc_debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It accepts at most 64 areas and writes one worker brief per area (one shared byte-identical prefix first, so the provider cache can hit from the second worker on) and prints one dispatch row per brief for the `oc-debug-worker` agent with `background: true`. Beyond ~8 workers the merge cost exceeds the gain, so dispatch more only for a genuinely broad question. Make every printed call in one turn, one call after another without waiting, then end the turn; each worker replies with a `VERDICT:` block. Read the replies when they arrive (interactive sessions only).
+4. Unknown location or many plausible causes → `python3 $S/oc_debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It writes one worker brief per area (one shared byte-identical prefix first, so the provider cache can hit from the second worker on) and prints one dispatch row per brief for the `oc-debug-worker` agent with `background: true`, grouped in waves of at most 8 (the provider allows 8 concurrent API calls). Make every call of one wave in one turn, one call after another without waiting, then end the turn; send the next wave only after every worker of the previous wave has replied; each worker replies with a `VERDICT:` block. Read the replies when they arrive (interactive sessions only).
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit

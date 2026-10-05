@@ -8,7 +8,7 @@ adds the shape of the messages.
 
 **Merge (default).** Goal and key constraints are clear, no open question
 would change WHICH approaches are viable, and all lanes fit under the
-subagent cap. Send the design message (§2) as soon as the lanes that
+`lanes=` ceiling (max 8). Send the design message (§2) as soon as the lanes that
 decide the approach set are back; fold later lanes into the spec. While
 decisive lanes are still running, end the turn with one status line
 ("Exploring N code + M web lanes; design follows") — do not poll. Budget:

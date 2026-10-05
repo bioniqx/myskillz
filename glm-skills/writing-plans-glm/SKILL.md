@@ -1,6 +1,6 @@
 ---
 name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 64 concurrent writers by the script itself, verified by a deterministic linter.
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 8 concurrent writers by the script itself, verified by a deterministic linter.
 argument-hint: "[spec-path] [--thorough]"
 compatibility: python3 3.8+; OpenCode, ZCode, or any harness with a shell
 ---
@@ -126,7 +126,7 @@ Contract rules - all plan quality is decided here, nowhere later:
 ```
 
 Run it with a shell timeout of 900000 ms or more. It validates the contracts,
-fans out one writer per task over up to 64 concurrent threads, lints every body,
+fans out one writer per task over up to 8 concurrent threads, lints every body,
 repairs failures automatically, runs a risk-based review pass, then assembles
 and cleans up. Add `--thorough` (or when the user asked for maximum assurance)
 to review every task instead of only the risky ones.

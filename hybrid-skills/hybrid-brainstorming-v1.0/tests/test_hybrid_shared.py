@@ -109,17 +109,17 @@ class TestSharedConfig(unittest.TestCase):
         self.assertEqual(tiers["std"], {"model": "openrouter/vendor/model-1", "variant": "high"})
 
     def test_max_parallel_env(self):
-        for text, want in (("4", 4), (" 8 ", 8), ("1", 1), ("64", 64)):
+        for text, want in (("4", 4), (" 8 ", 8), ("1", 1)):
             self.assertEqual(hs.max_parallel_from_env({hs.MAX_PARALLEL_ENV: text}), (want, ""), text)
         self.assertEqual(hs.max_parallel_from_env({}), (None, ""))
         self.assertEqual(hs.max_parallel_from_env({hs.MAX_PARALLEL_ENV: "  "}), (None, ""))
-        for bad in ("0", "65", "-1", "2.5", "four", "4 4"):
+        for bad in ("0", "9", "64", "-1", "2.5", "four", "4 4"):
             value, problem = hs.max_parallel_from_env({hs.MAX_PARALLEL_ENV: bad})
             self.assertIsNone(value, bad)
-            self.assertEqual(problem, "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 64, got %r" % bad)
+            self.assertEqual(problem, "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 8, got %r" % bad)
 
     def test_invalid_max_parallel_empties_tiers_and_names_the_variable(self):
-        problem = "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 64, got 'many'"
+        problem = "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 8, got 'many'"
         tiers, problems = hs.load_shared({hs.STD_ENV: BOTH, hs.MAX_PARALLEL_ENV: "many"})
         self.assertEqual((tiers, problems), ({}, [problem]))
         tiers, problems = hs.load_shared({hs.MAX_PARALLEL_ENV: "many"})
@@ -190,9 +190,16 @@ class TestPrecedence(unittest.TestCase):
         self.assertEqual(result["tiers"]["std"]["max_parallel"], 2)
         self.assertEqual(result["tiers"]["lite"]["max_parallel"], 3)
 
+    def test_routing_max_parallel_is_clamped_to_the_limit(self):
+        self.assertEqual(hs.MAX_PARALLEL_LIMIT, 8)
+        merged = {"tiers": {"std": {"max_parallel": 40}, "lite": {"max_parallel": 8}}}
+        user = {"tiers": {"std": {"max_parallel": 40}}}
+        result = hs.resolve_tiers(merged, {}, user, {})
+        self.assertEqual([result["tiers"][t]["max_parallel"] for t in ("std", "lite")], [8, 8])
+
     def test_unset_or_invalid_env_keeps_the_routing_value(self):
         routing = {"tiers": {"std": {"max_parallel": 4}}}
-        for env in ({}, {hs.MAX_PARALLEL_ENV: "0"}, {hs.MAX_PARALLEL_ENV: "65"}, {hs.MAX_PARALLEL_ENV: "two"}):
+        for env in ({}, {hs.MAX_PARALLEL_ENV: "0"}, {hs.MAX_PARALLEL_ENV: "9"}, {hs.MAX_PARALLEL_ENV: "two"}):
             result = hs.resolve_tiers(routing, {}, {}, env)
             self.assertEqual(result["tiers"]["std"]["max_parallel"], 4, env)
 

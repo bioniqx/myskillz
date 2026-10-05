@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 64 parallel lanes across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
+description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
@@ -154,10 +154,10 @@ approves; otherwise ask in plain text.
 ## R7 — Width
 
 One lane per question whose answer you will cite or act on; never pad.
-Ceiling 64 concurrent lanes, and never over the subagent cap in Live
-context (the harness rejects the next one and says not to retry). Over
-the cap → dispatch the lanes that can change the approach set first, then
-refill in batches as completions arrive. Details: `fanout-playbook.md`
+Ceiling 8 concurrent lanes (the provider allows 8 concurrent API calls),
+and never over the subagent cap in Live context (the harness rejects the
+next one and says not to retry). Over the cap → dispatch the lanes that
+can change the approach set first, then refill in batches as completions arrive. Details: `fanout-playbook.md`
 (read when planning >8 lanes or after a fan-out failure).
 
 ## R8 — Overlap machine work with human wait
@@ -297,7 +297,7 @@ next question.
   version; accuracy drops as calls grow. Verify load-bearing claims only.
 - "A sonnet lane will be smarter" → same model as the main thread at ~9×
   Flash's cost. Use Flash. And never a lane for one search.
-- "Spawn 64 because I can" → width must buy a saved human turn or a
+- "Spawn 8 because I can" → width must buy a saved human turn or a
   better decision. One lane per question you will cite or act on; the
   known failure is dozens of lanes for a simple query.
 - "I'll ask to be safe" → a vetoable assumption costs zero turns; a

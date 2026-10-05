@@ -141,6 +141,26 @@ class AgentLaneBatchSizing(unittest.TestCase):
         groups = audit._agent_groups(list(range(10)), 64)
         self.assertEqual([len(g) for g in groups], [4, 3, 3])
 
+    def test_oc_max_lanes_above_ceiling_is_clamped_to_eight(self):
+        self.env("64")
+        self.assertEqual(audit._oc_lanes(), 8)
+        groups = audit._agent_groups(list(range(64)), 64)
+        self.assertEqual([len(g) for g in groups], [8] * 8)
+
+    def test_cpu_threads_never_exceeds_eight(self):
+        self.env()
+        self.assertEqual(audit.cpu_threads(64), 8)
+        self.assertEqual(audit.cpu_threads(), 8)
+        with mock.patch.dict(os.environ, {"AUDIT_THREADS": "32"}):
+            self.assertEqual(audit.cpu_threads(), 8)
+            self.assertEqual(audit.cpu_threads(3), 3)
+
+    def test_repair_wave_never_makes_more_briefs_than_lanes(self):
+        self.env()
+        with tempfile.TemporaryDirectory() as d:
+            rows = [{"id": "REQ-%03d" % i, "lint_error": "x"} for i in range(100)]
+            self.assertLessEqual(len(audit.repair_wave(d, rows, d, 1)), 8)
+
     def test_cap_below_lane_width_wins(self):
         self.env()
         groups = audit._agent_groups(list(range(64)), 2)

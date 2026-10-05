@@ -127,7 +127,8 @@ approves; otherwise ask in plain text.
 ## R7 — Width
 
 One lane per question whose answer you will cite or act on; never pad.
-The ceiling is `lanes=` in Live context (default 8). Over the ceiling →
+The ceiling is `lanes=` in Live context (default and hard max 8, claim
+verifier and reviewer lanes included). Over the ceiling →
 dispatch the lanes that can change the approach set first, then refill in
 batches as completions arrive. A rejected dispatch is never retried
 unchanged. Details: `fanout-playbook.md` (read when planning >8 lanes or
@@ -243,8 +244,8 @@ next question.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
 - "I'll spawn a lane for this one search" → one direct call answers it.
-- "Spawn 64 because I can" → one lane per question you will act on; stay
-  under the `lanes=` ceiling in Live context (default 8).
+- "Spawn dozens because I can" → one lane per question you will act on; stay
+  under the `lanes=` ceiling in Live context (hard max 8).
 - "I'll ask to be safe" → a vetoable assumption costs zero turns; a
   question costs one.
 - "It grew, but I'm almost done" → hidden complexity upgrades the path.

@@ -9,7 +9,11 @@ skill_dir=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
 echo "date: $(date +%F)   cwd: $(pwd)"
 echo "skill_dir: $skill_dir"
 echo "harness: opencode oc_major=2"
-echo "caps: lanes=${OC_MAX_LANES:-8} (set OC_MAX_LANES to change; default 8) oc_major=2"
+lanes=${OC_MAX_LANES:-8}
+case "$lanes" in ''|*[!0-9]*) lanes=8 ;; esac
+[ "$lanes" -gt 8 ] && lanes=8
+[ "$lanes" -lt 1 ] && lanes=8
+echo "caps: lanes=$lanes (set OC_MAX_LANES to lower; hard max 8) oc_major=2"
 
 # --- repo ------------------------------------------------------------------
 in_home=no

@@ -53,13 +53,15 @@ The interactive OpenCode session model launches every lane. There is no other ro
   row per lane: a v2 `subagent(agent=..., description=..., prompt="Read <brief> and follow it exactly.",
   background=true)` call. The session model emits all rows in one message and the background lanes run
   concurrently. Agent files carry no `model`, `variant`, `effort` or `reasoningEffort` field, so a lane runs
-  on the model of the primary agent that launched it.
+  on the model of the primary agent that launched it. At most 8 background lanes are in flight per session
+  (the provider allows 8 concurrent API calls); the per-skill scripts enforce it, so larger fan-outs run in
+  waves of at most 8.
 - **Result files.** Every lane writes its own result to a file the script names (task file, findings or
   verdict JSONL, report, slice marker). A script command (`status`, `wait`, `next`) reads those files,
   merges them and prints the next rows and a `NEXT:` line. Debug `scan` workers only reply with a
   `VERDICT:` line and need no file.
 - **Lost lanes.** A lane that never writes its result file is reported by id, and the script prints the
-  same dispatch row again (`--redispatch` in the audit, `resume` in dev-team). Scripts hold no rate-limit
+  same dispatch row again (`--redispatch` in the audit, `resume` in dev-team). Scripts hold no other rate-limit
   logic: a failing lane is visible to the session.
 - **Prefix caching.** Every brief in a fan-out wave shares a byte-identical prefix block. Keep it identical
   when editing prompts.

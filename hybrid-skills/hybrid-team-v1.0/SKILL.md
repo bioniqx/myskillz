@@ -45,7 +45,7 @@ independent review), but every slice is dispatched to one of two backends:
   Run it with Bash `run_in_background: true`, exactly like a Claude `=== DISPATCH` Agent call is
   run with the `Agent` tool — process exit is the completion notification, and the next `devteam
   next` harvests its `.done`/`.blocked` marker. opencode lanes have their own slot cap
-  (`max_parallel` per tier, default 4 each, set by `$HYBRID_OPENCODE_MAX_PARALLEL`), independent of the Claude subagent cap, so both
+  (`max_parallel` per tier, default 4 each, never above 8, set by `$HYBRID_OPENCODE_MAX_PARALLEL`), independent of the Claude subagent cap, so both
   kinds of dispatch line from one `next` call can run at once.
 - **Guards** — hooks shipped in the agent files enforce footprint, frozen tests, refactor
   invariants, no history rewriting and read-only roles mechanically, **and pre-approve** every

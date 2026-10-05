@@ -9,18 +9,18 @@ The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` lin
 The generic skill buys speed by telling the model to put many tool calls in one message and to launch many subagents at once. On this pairing, both assumptions fail:
 
 - GLM-5.3 emits only a couple of tool calls per turn, so a "batch of 12 reads" quietly becomes six round-trips.
-- OpenCode v1 dispatches subagent tasks one at a time, so a 64-way fan-out becomes 64 sequential runs. OpenCode v2's `subagent` tool takes `background: true`, so dispatching workers that way (one call after another, without waiting) gets real parallelism even from a single turn — interactive sessions only, since a headless `opencode run` can exit before background children report. (ZCode does run foreground subagents in parallel.)
+- OpenCode v1 dispatches subagent tasks one at a time, so a wide fan-out becomes that many sequential runs. OpenCode v2's `subagent` tool takes `background: true`, so dispatching workers that way (one call after another, without waiting) gets real parallelism even from a single turn — interactive sessions only, since a headless `opencode run` can exit before background children report. (ZCode does run foreground subagents in parallel.)
 
-So the parallelism moved **out of the model's turn and into the tools**. One call per phase; each call opens its own threads, up to 64.
+So the parallelism moved **out of the model's turn and into the tools**. One call per phase; each call opens its own threads: up to 64 for local jobs, at most 8 for model/API workers.
 
 | Phase | 9.0-glm: one call | Generic version |
 |---|---|---|
 | Evidence | `debug_tool.py probe` | snapshot + N frame reads + M greps + repro + git history, batched by the model |
 | N commands | `debug_tool.py run -j N` | N Bash calls in one message |
 | Hypotheses | `debug_tool.py experiment -j N` | one subagent per hypothesis |
-| Judgment fan-out | `debug_tool.py scan -j 64` | one subagent per area |
+| Judgment fan-out | `debug_tool.py scan -j 8` | one subagent per area |
 
-Plus: deterministic lane triage printed by `probe` (no model reasoning spent on a routing table), an effort ladder so mechanical work does not run at `reasoning_effort: max`, a byte-identical prompt prefix across all 64 `scan` workers so the provider cache hits from the second worker on, a 5-line state carry against long-horizon drift, and prose rewritten as numbered rules — GLM follows those better than behavior tables.
+Plus: deterministic lane triage printed by `probe` (no model reasoning spent on a routing table), an effort ladder so mechanical work does not run at `reasoning_effort: max`, a byte-identical prompt prefix across all `scan` workers (at most 8 at once) so the provider cache hits from the second worker on, a 5-line state carry against long-horizon drift, and prose rewritten as numbered rules — GLM follows those better than behavior tables.
 
 ## Install
 
@@ -31,7 +31,7 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 | Claude-compatible | `~/.claude/skills/systematic-debugging/` |
 
 ```bash
-export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the 64-thread scan lane
+export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)
 python3 <skill>/scripts/debug_tool.py doctor --ping
 python3 <skill>/scripts/debug_tool.py setup --harness opencode   # or zcode | claude
 ```
@@ -63,7 +63,7 @@ Verified in this build (2-CPU container; the model-turn column is what actually 
 | | measured |
 |---|---|
 | `probe` on a 3-frame traceback | 0.3 s, **one** call — replaces snapshot + 3 frame reads + 2 greps + git history + 3 repro runs |
-| `scan`, 64 workers, 0.4 s mock latency | 0.65 s wall, **peak concurrency 64**, **1 distinct prompt prefix** (cache hit from worker 2) |
+| `scan`, 20 tasks, `-j 64` requested, mock latency | **peak concurrency 8** (capped), **1 distinct prompt prefix** (cache hit from worker 2) |
 | `experiment`, 8 hypotheses × 2 arms | 1.4 s, 16 isolated worktrees, 1 CONFIRMED / 7 REFUTED |
 | `run`, 3 × 1 s commands | 1.0 s wall, exit codes preserved |
 | `bisect-parallel.sh -j 5`, 13 commits | 2 rounds, correct culprit |

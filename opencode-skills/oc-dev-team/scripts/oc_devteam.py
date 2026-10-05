@@ -107,15 +107,15 @@ DEP_DIRS = ["node_modules", ".venv", "venv", "vendor", ".pnpm-store", "Pods", ".
 ENV_FILES = [".env", ".env.local", ".env.test", ".env.development"]
 # bare names (no trailing slash) so that symlinked dependency dirs are ignored too
 EXCLUDE_LINES = [".opencode/oc-dev-team/", ".opencode/agent-memory-local/", ".oc-slice/"] + DEP_DIRS + ENV_FILES
-NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall 64 background agents
+NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall background agents
 LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail", "retry", "bind",
                "add-fix", "add-fixes", "review-batch", "review-done", "verify-brief", "checkpoint",
                "status", "finish", "review-pr", "resume"}
-HARD_CAP = 64               # this skill's ceiling
+HARD_CAP = 8                # provider limit: 8 concurrent model calls, leader and reviewers included
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
-MAX_SHARDS = 12             # reviewers per batch — the final review sits on the critical path
+MAX_SHARDS = HARD_CAP - RESERVED_MIN  # reviewers per batch, always inside the live budget
 FILES_PER_SHARD = 10        # auto shard size (smaller shards = shorter critical path, more reviewers)
 NEVER = 10 ** 9             # "not until the end" for review_batch / checkpoint_every
 ENGINE_VERSION = "5.0"
@@ -650,7 +650,7 @@ def reserved_slots(st, extra=0):
     for r in (st.get("reviews") or {}).values():
         if r.get("status") == "dispatched" or (r.get("status") == "done" and r.get("verdict") == "CHANGES_REQUIRED"):
             open_shards += int(r.get("shards") or 1)
-    return RESERVED_MIN + min(MAX_SHARDS, open_shards + max(0, int(extra or 0)))
+    return min(HARD_CAP - 1, RESERVED_MIN + min(MAX_SHARDS, open_shards + max(0, int(extra or 0))))  # >=1 slot stays for programmers
 
 
 def marker_file(root, sid, kind):
@@ -949,7 +949,7 @@ GATE_KEYS = ("lint", "typecheck", "build")
 def gate_plan(st, pfx):
     """What a programmer must run as its own gate, given the profile's `gate` dial.
     Returns (text, commands_to_run). `file` scope is the speed trick that keeps quality: a
-    file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x 64."""
+    file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x lanes."""
     c = st["commands"]
     mode = pol(st, "gate")
     if mode == "deferred":
@@ -1584,7 +1584,7 @@ def integrate_one(root, st, sid, remove=True):
 
 
 def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, remove, label=None):
-    # merge (repo hooks and signing off: 64 background agents can't answer prompts)
+    # merge (repo hooks and signing off: background agents can't answer prompts)
     r = sh(["git"] + NO_SIGN + ["merge", "--no-ff", "--no-verify", "--no-edit", "-m", f"merge({sid}): {s['title']}", tip],
            cwd=root, check=False)
     if r.returncode != 0:

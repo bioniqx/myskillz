@@ -147,8 +147,12 @@ in one line what is traded, list every untested slice at the end with an offer t
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`; subagent/Bash timeouts; installs the six agents. **If it
   changed env or agents, tell the user to restart Claude Code once.** Provider is auto-detected from
   `ANTHROPIC_BASE_URL` (`DEVTEAM_PROVIDER=glm|anthropic` forces it).
-- **Governor:** Z.ai publishes no numeric concurrency limit, so the engine measures. Window starts from
-  the plan tier (`DEVTEAM_GLM_TIER` or `start --tier lite|pro|max|api`; default `pro`), grows as lanes
+- **Governor:** the provider allows only 8 concurrent API calls, so the window never exceeds 8 (leader and
+  reviewer slots included; `doctor --fix` sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` and
+  `CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY` to 8; Claude models keep the 64 cap), and the engine measures the
+  rest. Window starts from
+  the plan tier (`DEVTEAM_GLM_TIER` or `start --tier lite|pro|max|api`; default `pro`; starts 3/6/7/8, all
+  ceiling 8), grows as lanes
   finish, halves when a 429 / 1302 / 1305 / overload shows up in the transcripts, and its ceiling halves
   in the Z.ai peak (Mon–Fri 14:00–18:00 UTC+8, full credit rate). Off-peak costs half the credits — mention
   it once if a big run starts in the peak. `DEVTEAM_MAX_PARALLEL=N` pins it; `DEVTEAM_GOVERNOR=off` disables.

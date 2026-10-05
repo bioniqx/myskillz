@@ -5,7 +5,7 @@ Subcommands
   probe       whole evidence phase in ONE call (snapshot + frames + grep + repro + triage)
   run         N shell commands in parallel, capped output, exit codes kept
   experiment  N hypotheses tested control-vs-treatment in isolated worktrees (up to 64)
-  scan        N judgment workers fanned out to the model API directly (up to 64)
+  scan        N judgment workers fanned out to the model API directly (at most 8 at once)
   doctor      environment / key / harness check
   setup       print or apply harness config
 
@@ -35,7 +35,8 @@ if str(SCRIPTS) not in sys.path:
 import zai_client
 import oc_harness
 WORKER_AGENT = "debug-worker"
-MAXJ = 64
+MAXJ = 64  # local CPU jobs (run/probe/experiment)
+MAX_API = 8  # concurrent model/API calls (scan workers, subagent lanes)
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -52,7 +53,7 @@ def cpus():
         return 4
 
 
-def clamp(j, default):
+def clamp(j, default, cap=MAXJ):
     """Parse a -j value. 0, negative or unparseable means `default`."""
     try:
         j = int(j)
@@ -60,7 +61,7 @@ def clamp(j, default):
         j = default
     if j <= 0:
         j = default
-    return max(1, min(MAXJ, int(j)))
+    return max(1, min(cap, int(j)))
 
 
 def sh(cmd, cwd=None, timeout=None, env=None):
@@ -898,26 +899,26 @@ def cmd_scan(a):
                   "dir": root} for tid, p in briefs], indent=2) + "\n")
             print("lanes: %s (%d x %s)" % (lanes_file, len(briefs), WORKER_AGENT))
             if mj >= 2:
-                print("Or dispatch them as background subagents IN ONE message:")
+                print("Or dispatch them as background subagents, at most %d per message (waves):" % MAX_API)
                 for tid, p in briefs:
                     print("  " + oc_harness.dispatch_line(WORKER_AGENT, p, "scan " + tid, mj,
                                                           background=True))
             print("Each worker answers in the VERDICT shape written at the top of its file.")
             print("NEXT: python3 %s/oc_harness.py run %s" % (SCRIPTS, shlex.quote(str(lanes_file))))
             return 0
-        print("Dispatch these %d prompts as %s subagents IN ONE message (they are independent):"
-              % (len(briefs), WORKER_AGENT))
+        print("Dispatch these %d prompts as %s subagents, at most %d per message, in waves "
+              "(they are independent):" % (len(briefs), WORKER_AGENT, MAX_API))
         for tid, p in briefs:
             print("  %s: %s" % (WORKER_AGENT, p))
         print("Model for each worker: the cheap/fast tier. Each must answer in the VERDICT shape "
               "written at the top of its file.")
-        print("NEXT: dispatch the %d %s subagents above in one message, then read their VERDICTs."
-              % (len(briefs), WORKER_AGENT))
+        print("NEXT: dispatch the %d %s subagents above in waves of at most %d, then read their "
+              "VERDICTs." % (len(briefs), WORKER_AGENT, MAX_API))
         return 0
 
     base = a.base or os.environ.get("ZAI_BASE_URL") or "https://api.z.ai/api/coding/paas/v4"
     anthropic = "/anthropic" in base
-    j = clamp(a.jobs, min(MAXJ, len(tasks)))
+    j = clamp(a.jobs, min(MAX_API, len(tasks)), MAX_API)
     t0 = time.time()
     print("S=%s\nscan: %d workers, %d parallel, model=%s effort=%s key=%s"
           % (SCRIPTS, len(tasks), j, model, effort, src), file=sys.stderr)
@@ -1020,7 +1021,7 @@ SETUP = {
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5.3-flash",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3",
-    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "8",
     "API_TIMEOUT_MS": "3000000"
   },
   "permissions": { "allow": ["Bash(git worktree *)"] }

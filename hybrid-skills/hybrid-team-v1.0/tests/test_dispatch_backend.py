@@ -118,6 +118,11 @@ class OcSlotsTest(TempHomeCase):
         st = make_state(oc_caps={"std": 3}, oc_running={"S1": "std"})
         self.assertEqual(devteam.oc_slots(st, "std"), 2)
 
+    def test_configured_cap_never_exceeds_eight(self):
+        st = make_state()
+        st["routing"]["tiers"]["std"]["max_parallel"] = 40
+        self.assertEqual(devteam.oc_slots(st, "std"), 8)
+
     def test_unknown_tier_has_no_slots(self):
         self.assertEqual(devteam.oc_slots(make_state(), "huge"), 0)
 

@@ -34,7 +34,7 @@ Conductor commands (run in the integration checkout):
   add-fix --id F1 --title T --files a b --criteria "c1" ["c2"] [--deps S1]
   add-fixes <report.md>     enqueue fix slices from a reviewer report's ```json block
   review-batch [--force] [--shards N]   next incremental review batch → briefing + Agent block
-                            (--shards defaults to auto: ~12 files per reviewer, max 8)
+                            (--shards defaults to auto: ~12 files per reviewer, never above the live window; max 8 off Claude)
   review-done <rN> --verdict APPROVED|CHANGES_REQUIRED
   verify-brief              write verification briefing for team-leader (high-risk plans)
   checkpoint [--result pass|fail] [--note ...]
@@ -72,8 +72,8 @@ Provider + governor (v4):
   routing   GLM: lanes on GLM-5.3-Flash (`haiku` alias, effort high); trivial / small-docs slices on the
             lite lane (effort low); high-risk, large and RETRIED slices, the leader and the full reviewer on
             GLM-5.3 (`opus`). `doctor --fix` maps the aliases and forwards effort (*_SUPPORTED_CAPABILITIES).
-  governor  AIMD window over the fan-out: start/ceiling by DEVTEAM_GLM_TIER (lite 3/8, pro 6/20, max 10/40,
-            api 16/64 — engineering starting points, Z.ai publishes no numbers), slow start on success,
+  governor  AIMD window over the fan-out: start/ceiling by DEVTEAM_GLM_TIER (lite 3/8, pro 6/8, max 7/8,
+            api 8/8 — the provider allows 8 concurrent API calls, so no tier goes above 8), slow start on success,
             halve on a 429/1302/1305/overload signal found in the transcripts, ceiling halved during the
             Z.ai peak (Mon–Fri 14–18 UTC+8). A spawn the runtime refused is re-queued; a lane that died on
             an API error is reported with the warm fix. DEVTEAM_MAX_PARALLEL=N pins; DEVTEAM_GOVERNOR=off.
@@ -114,16 +114,17 @@ ENV_FILES = [".env", ".env.local", ".env.test", ".env.development"]
 # bare names (no trailing slash) so that symlinked dependency dirs are ignored too
 EXCLUDE_LINES = [".claude/worktrees/", ".claude/dev-team/", ".claude/agent-memory-local/", ".slice/"] + DEP_DIRS + ENV_FILES
 GIT_READ_PREFIXES = ["git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git grep", "git blame"]
-NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall 64 background agents
+NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall every background agent
 LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail", "retry", "bind",
                "add-fix", "add-fixes", "review-batch", "review-done", "verify-brief", "checkpoint",
                "status", "finish", "review-pr", "resume"}
 DEFAULT_LIMIT = 20          # Claude Code default concurrent-subagent cap
-HARD_CAP = 64               # this skill's ceiling
+HARD_CAP = 64               # this skill's ceiling on Claude (provider "anthropic")
+NON_CLAUDE_CAP = 8          # every other provider (and OpenCode) allows only 8 concurrent API calls
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
-MAX_SHARDS = 12             # reviewers per batch — the final review sits on the critical path
+MAX_SHARDS = 12             # reviewers per batch on Claude (min'd with NON_CLAUDE_CAP elsewhere) — the final review sits on the critical path
 FILES_PER_SHARD = 10        # auto shard size (smaller shards = shorter critical path, more reviewers)
 NEVER = 10 ** 9             # "not until the end" for review_batch / checkpoint_every
 ENGINE_VERSION = "4.0-glm"
@@ -200,11 +201,11 @@ GLM_HOSTS = ("z.ai", "bigmodel.cn")
 
 # --- concurrency governor (AIMD). Z.ai publishes NO numeric concurrency limit for the GLM Coding Plan:
 # "rate (concurrency) limits are tied to your plan tier ... adjusted dynamically"; off-peak raises them.
-# 64 lanes against that wall = 429/1302 storms, client retries with backoff, stalled lanes. So the engine
+# many lanes against that wall = 429/1302 storms, client retries with backoff, stalled lanes. So the engine
 # measures instead of guessing: slow start from a tier-based window, +1 per productive wake-up, halve on a
 # throttle signal read from Claude Code's own transcripts. The numbers below are ENGINEERING STARTING
 # POINTS, not Z.ai figures — the governor corrects them within a few wake-ups.
-TIERS = {"lite": (3, 8), "pro": (6, 20), "max": (10, 40), "api": (16, 64)}   # (start, ceiling)
+TIERS = {"lite": (3, 8), "pro": (6, 8), "max": (7, 8), "api": (8, 8)}   # (start, ceiling); ceiling <= NON_CLAUDE_CAP
 DEFAULT_TIER = "pro"
 PEAK_FACTOR = 0.5            # Z.ai peak: Mon–Fri 14:00–18:00 UTC+8 (full credit rate, lower concurrency)
 GOV_COOLDOWN_S = 90          # one cut per burst: signals inside the window after a cut are the same burst
@@ -435,14 +436,28 @@ def footprints_overlap(a, b):
     return False
 
 
-def concurrency_limit():
-    """Claude Code's concurrent-subagent cap. OpenCode lanes are plain processes: only HARD_CAP
-    (and the governor) bounds them, so the 40/64 tier ceilings stay reachable."""
+def hard_cap_for(provider):
+    """Concurrent model calls the skill may ever have: 64 on Claude, 8 for any other provider or OpenCode."""
+    return HARD_CAP if provider == "anthropic" and not is_opencode() else NON_CLAUDE_CAP
+
+
+def hard_cap(st=None):
+    return hard_cap_for(provider_of(st) if st else detect_provider())
+
+
+def max_shards(st=None):
+    return min(MAX_SHARDS, hard_cap(st))
+
+
+def concurrency_limit(st=None):
+    """Claude Code's concurrent-subagent cap, bounded by hard_cap(). OpenCode lanes are plain processes:
+    only hard_cap() (8, non-Claude) and the governor bound them."""
+    cap = hard_cap(st)
     if is_opencode():
-        return HARD_CAP
+        return cap
     raw = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "")
     limit = int(raw) if raw.isdigit() else DEFAULT_LIMIT
-    return max(1, min(HARD_CAP, limit))
+    return max(1, min(cap, limit))
 
 
 # ----------------------------------------------------------------------------- provider + governor
@@ -502,17 +517,17 @@ def zai_peak(t=None):
 
 
 def new_gov(provider, tier):
-    if provider == "glm":
-        start, ceiling = TIERS[tier]
-    else:                                   # Anthropic: the runtime cap is the limit; only cut on throttling
-        start = ceiling = HARD_CAP
-    return {"cap": start, "ceiling": ceiling, "tier": tier if provider == "glm" else "-", "cut_at": 0,
+    if provider == "anthropic":             # Claude: the runtime cap is the limit; only cut on throttling
+        start = ceiling = hard_cap_for(provider)
+    else:                                   # every non-Claude provider: tier window, never above 8
+        start, ceiling = (min(v, NON_CLAUDE_CAP) for v in TIERS[tier])
+    return {"cap": start, "ceiling": ceiling, "tier": tier if provider != "anthropic" else "-", "cut_at": 0,
             "cuts": 0, "grown": 0, "throttles": 0, "tx": {}, "seen_down": []}
 
 
 def gov_ceiling(st):
     g = st.get("gov") or {}
-    ceiling = int(g.get("ceiling") or HARD_CAP)
+    ceiling = min(int(g.get("ceiling") or hard_cap(st)), hard_cap(st))
     if provider_of(st) == "glm" and zai_peak():
         ceiling = max(GOV_MIN, int(ceiling * PEAK_FACTOR))
     return ceiling
@@ -520,7 +535,7 @@ def gov_ceiling(st):
 
 def effective_cap(st=None):
     """Agents the engine lets run at once: the runtime limit, bounded by the governor's window."""
-    rt = min(HARD_CAP, concurrency_limit())
+    rt = min(hard_cap(st), concurrency_limit(st))
     if st is None or not gov_enabled(st) or not st.get("gov"):
         return rt
     pin = os.environ.get("DEVTEAM_MAX_PARALLEL", "")
@@ -535,7 +550,7 @@ def reserve_min(st=None):
     if st is None or not gov_enabled(st) or provider_of(st) != "glm" or not st.get("gov"):
         return RESERVED_MIN
     cap = effective_cap(st)
-    return RESERVED_MIN if cap >= 12 else (1 if cap >= 6 else 0)
+    return RESERVED_MIN if cap >= 8 else (1 if cap >= 6 else 0)
 
 
 def gov_line(st):
@@ -847,7 +862,7 @@ def govern(root, st, successes):
     oc = is_opencode()
     sig = lane_signals(root, st) if oc else scan_transcripts(root, st)   # always: re-queue / LANE DOWN are correctness
     t = time.time()
-    bound = max(GOV_MIN, min(gov_ceiling(st), concurrency_limit(), HARD_CAP))
+    bound = max(GOV_MIN, min(gov_ceiling(st), concurrency_limit(st), hard_cap(st)))
     # 1. Agent spawns that failed: the lane never started — put the slice back, untouched
     requeued, relaunch, failed_hard, limit_hits = [], [], [], 0
     for desc, ts, text, limit in sig["spawn_fail"]:
@@ -1239,7 +1254,7 @@ def reserved_slots(st, extra=0):
                 open_shards += sum(1 for v in verdicts if v != "APPROVED")
             else:
                 open_shards += int(r.get("shards") or 1)
-    return reserve_min(st) + min(MAX_SHARDS, open_shards + max(0, int(extra or 0)))
+    return reserve_min(st) + min(max_shards(st), open_shards + max(0, int(extra or 0)))
 
 
 def marker_file(root, sid, kind):
@@ -1544,7 +1559,7 @@ def cmd_init(a):
         out("  KINDS: " + ", ".join(f"{k}×{v}" for k, v in sorted(kinds.items())))
     out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; programmer slots {cap} "
         f"(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={os.environ.get('CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS', 'unset→20')}, "
-        f"hard cap {HARD_CAP}, {reserved_slots(st)} reserved for reviewers/leader)")
+        f"hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
     out(f"PROVIDER {PROVIDERS[provider]['label']}: " + (
         "lanes on GLM-5.3-Flash (`haiku`), high-risk / large / retried slices, the leader and the full reviewer "
         "on GLM-5.3 (`opus`)" if provider == "glm" else "lanes on sonnet, leader/reviewer on opus"))
@@ -1562,9 +1577,10 @@ def cmd_init(a):
     if added:
         out(f"PERMISSIONS: added {added} Bash allow rules for the plan commands to .claude/settings.local.json "
             f"(no prompts for gate commands; approve once with 'don't ask again' if one still appears)")
-    if concurrency_limit() < HARD_CAP and (provider != "glm" or not gov_enabled(st)):
-        out(f"NOTE: concurrency limit is {concurrency_limit()} (< {HARD_CAP}). Set env CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 "
-            f"in .claude/settings.json (`doctor --fix`) and restart Claude Code for full width.")
+    if concurrency_limit(st) < hard_cap(st) and (provider != "glm" or not gov_enabled(st)):
+        out(f"NOTE: concurrency limit is {concurrency_limit(st)} (< {hard_cap(st)}). Set env "
+            f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={hard_cap(st)} in .claude/settings.json (`doctor --fix`) "
+            f"and restart Claude Code for full width.")
     print_ready(st)
 
 
@@ -1635,7 +1651,7 @@ GATE_KEYS = ("lint", "typecheck", "build")
 def gate_plan(st, pfx):
     """What a programmer must run as its own gate, given the profile's `gate` dial.
     Returns (text, commands_to_run). `file` scope is the speed trick that keeps quality: a
-    file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x 64."""
+    file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x every lane."""
     c = st["commands"]
     mode = pol(st, "gate")
     if mode == "deferred":
@@ -2410,7 +2426,7 @@ def cmd_resume(a):
 
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
-    tokens for 64 launches sit on the critical path, and the briefing file already holds everything.
+    tokens for every launch sit on the critical path, and the briefing file already holds everything.
     The programmer/investigator system prompts say 'your prompt is the command — run it first'.
     On OpenCode `emit_agent` starts each lane itself and prints a LANE line instead."""
     sp = q(st["script"])
@@ -2633,7 +2649,7 @@ def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, r
                       f"{sid}: NOT INTEGRATED — uncommitted changes in the integration checkout touch paths "
                       f"this slice also changes: {', '.join(clash)}. Commit or stash them there, then "
                       f"integrate again.", files=clash)
-    # merge (repo hooks and signing off: 64 background agents can't answer prompts)
+    # merge (repo hooks and signing off: background agents can't answer prompts)
     r = sh(["git"] + NO_SIGN + ["merge", "--no-ff", "--no-verify", "--no-edit", "-m", f"merge({sid}): {s['title']}", tip],
            cwd=root, check=False)
     if r.returncode != 0:
@@ -2920,7 +2936,7 @@ def shard_count(files, requested, st=None):
     asked for 8 shards on a 6-agent window would simply queue (or starve the programmers)."""
     n = int(requested) if requested and int(requested) >= 1 else 1 + (max(1, len(files)) - 1) // FILES_PER_SHARD
     budget = max(1, effective_cap(st) - reserve_min(st))
-    return max(1, min(n, MAX_SHARDS, max(1, len(files)), budget))
+    return max(1, min(n, max_shards(st), max(1, len(files)), budget))
 
 
 def plan_review(st, force, requested):
@@ -3383,7 +3399,7 @@ def ensure_repo():
 
 
 def cmd_start(a):
-    """doctor --fix + init + dispatch the whole ready set in ONE call — zero-to-64-agents in one turn."""
+    """doctor --fix + init + dispatch the whole ready set in ONE call — a whole wave of agents in one turn."""
     ensure_repo()
     root = toplevel()
     doctor_fixed = cmd_doctor(argparse.Namespace(fix=True)) or []
@@ -3517,7 +3533,7 @@ def cmd_review_pr(a):
         raise DevteamError(f"no changed files in {rng}")
     sd = root / STATE_DIRNAME / "reviews"
     sd.mkdir(parents=True, exist_ok=True)
-    shards = shard_count(files, a.shards)
+    shards = shard_count(files, a.shards, {"root": str(root)})
     per = (len(files) + shards - 1) // shards
     agent = "spot-reviewer" if a.spot else "code-reviewer"
     stamp = f"pr{int(time.time()) % 100000}"
@@ -4009,6 +4025,13 @@ def doctor_opencode(a, root):
         out("RESTART OpenCode so it loads the new agents and plugin.")
 
 
+def cap_value_ok(raw, want, provider):
+    """Claude: at least `want` (more width is harmless). Any other provider: at most `want` (never above 8)."""
+    if not str(raw).isdigit() or int(raw) < 1:
+        return False
+    return int(raw) >= want if provider == "anthropic" else int(raw) <= want
+
+
 def cmd_doctor(a):
     root = toplevel()
     harness = getattr(a, "harness", None) or ("opencode" if is_opencode() else "claude")
@@ -4021,16 +4044,21 @@ def cmd_doctor(a):
         problems.append("uncommitted tracked changes in the integration checkout (commit/stash before a run)")
     st = merged_settings(root)
     env = st.get("env", {}) if isinstance(st.get("env"), dict) else {}
+    provider = detect_provider(root)
+    want_cap = hard_cap_for(provider)
     lim = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS") or env.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
-    if not (str(lim).isdigit() and int(lim) >= HARD_CAP):
-        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim or 'unset (20)'} — need {HARD_CAP} for full width")
-        fixes.setdefault("env", {})["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(HARD_CAP)
+    if not cap_value_ok(lim, want_cap, provider):
+        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim or 'unset (20)'} — need {want_cap} "
+                        + ("for full width" if provider == "anthropic" else "(the provider allows 8 concurrent calls)"))
+        fixes.setdefault("env", {})["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(want_cap)
     tc = os.environ.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY") or env.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY")
-    if not (str(tc).isdigit() and int(tc) >= HARD_CAP):
-        problems.append(f"CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY is {tc or 'unset'} — raise to {HARD_CAP} so one message can launch a full wave")
-        fixes.setdefault("env", {})["CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY"] = str(HARD_CAP)
+    if not cap_value_ok(tc, want_cap, provider):
+        problems.append(f"CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY is {tc or 'unset'} — set to {want_cap}"
+                        + (" so one message can launch a full wave" if provider == "anthropic" else
+                           " (the provider allows 8 concurrent calls)"))
+        fixes.setdefault("env", {})["CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY"] = str(want_cap)
     # a background agent that is silent for longer than the stall timeout is killed mid-slice, and a
-    # Bash gate longer than the bash timeout is killed too: both cost a whole retry on 64 lanes.
+    # Bash gate longer than the bash timeout is killed too: both cost a whole retry per lane.
     for var, want, why in (("CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS", 1800000,
                             "a subagent running a long test suite is aborted after 10 min by default"),
                            ("BASH_DEFAULT_TIMEOUT_MS", 600000,
@@ -4041,7 +4069,6 @@ def cmd_doctor(a):
         if not (str(cur_v).isdigit() and int(cur_v) >= want):
             problems.append(f"{var} is {cur_v or 'unset'} — raise to {want}: {why}")
             fixes.setdefault("env", {})[var] = str(want)
-    provider = detect_provider(root)
     url = base_url_of(root)
     notes.append(f"provider {PROVIDERS[provider]['label']} (ANTHROPIC_BASE_URL={url or 'unset'}"
                  + (", forced by DEVTEAM_PROVIDER" if os.environ.get("DEVTEAM_PROVIDER") else "") + ")")

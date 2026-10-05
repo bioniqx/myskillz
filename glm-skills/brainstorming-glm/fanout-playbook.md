@@ -1,17 +1,17 @@
-# Fan-out Playbook — up to 64 concurrent lanes on GLM
+# Fan-out Playbook — up to 8 concurrent lanes on GLM
 
-Read when planning more than 8 lanes, or when a fan-out fails. Goal: the
+Read when planning a wave-based fan-out (more than 8 lanes in total), or when a fan-out fails. Goal: the
 whole exploration costs one tool round plus background time that overlaps
 the human's reading time.
 
 ## 0. Capacity facts
 
-- Subagents: 20 running at once by default. The 21st `Agent` call fails
+- Subagents: 8 running at once (the provider's concurrent-call limit). The 9th `Agent` call fails
   with "Concurrent subagent limit reached" and tells you not to retry.
-  Raise with `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`.
-- Workflow runtime: up to 16 concurrent agents by default (fewer on fewer
-  CPUs); raise with `CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS`. Needs
-  explicit user opt-in. Worth it only when its cap beats the subagent cap.
+  Never raise `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` above 8.
+- Workflow runtime: keep `CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS` at 8
+  (fewer on fewer CPUs). Needs explicit user opt-in. It never beats the
+  subagent cap, so prefer plain subagents.
 - Subagents run in the background in interactive sessions; results arrive
   as completion notifications. They have WebSearch/WebFetch but not
   AskUserQuestion or Workflow. They may nest three levels — do not. Flat
@@ -20,7 +20,7 @@ the human's reading time.
   not count toward the cap.
 - Live context prints the caps actually in force. Trust it over this page.
 
-Settings for a true 64-wide fan-out are in `glm-tuning.md` §2. Skill
+Settings for the 8-wide cap are in `glm-tuning.md` §2. Skill
 `allowed-tools` pre-approve only the invoking turn; background lanes
 follow session permission rules, which is why WebSearch/WebFetch belong
 in the settings allow-list.
@@ -38,6 +38,8 @@ put on GLM-5.3, and never run more than 2 of those.
 | Architectural, single service | 5-10 | 4-12 | 2-6 |
 | Architectural, monorepo | 5-10 | 12-40 | 4-16 |
 
+Lane counts above 8 run in waves of at most 8 concurrent lanes.
+
 Size bands from Live context (`tracked=`): under 1k files small, 1k-20k
 medium, over 20k or several manifests is a monorepo. Published research
 scaling rule: one agent with 3-10 calls for a simple fact, 2-4 agents with
@@ -45,7 +47,7 @@ scaling rule: one agent with 3-10 calls for a simple fact, 2-4 agents with
 known failure is spawning dozens of agents for a simple query. Do not.
 
 Wide fan-outs multiply token use and hit quota sooner. Flash's 3× quota
-and ~9× lower price is what makes 20-40 lanes affordable — the same
+and ~9× lower price is what makes 20-40 lanes (in waves of 8) affordable — the same
 fan-out on GLM-5.3 lanes is not. Width must still buy a saved human turn
 or a better decision.
 
@@ -104,7 +106,7 @@ const results = await parallel(lanes.map(l => () =>
 return results.filter(Boolean)
 ```
 
-Schema-shaped results merge mechanically and keep 64 outputs small —
+Schema-shaped results merge mechanically and keep many outputs small —
 worth more on GLM than on Claude, because Flash is verbose by default.
 
 ## 4. Failure handling
