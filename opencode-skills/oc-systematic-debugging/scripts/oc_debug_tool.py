@@ -33,7 +33,12 @@ if str(SCRIPTS) not in sys.path:
 import oc_harness
 WORKER_AGENT = "oc-debug-worker"
 MAXJ = 64  # local CPU jobs (probe/run/experiment -j); model lanes use MAX_LANES
-MAX_LANES = 8  # worker rows in flight at once (provider allows 8 concurrent API calls)
+def _lanes():  # worker rows in flight at once: default 6, OC_MAX_LANES up to 8 (provider ceiling), 0 -> 1
+    v = os.environ.get("OC_MAX_LANES", "")
+    return max(1, min(8, int(v))) if v.isdigit() else 6
+
+
+MAX_LANES = _lanes()
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)

@@ -8,15 +8,15 @@ adds the shape of the messages.
 
 **Merge (default).** Goal and key constraints are clear, no open question
 would change WHICH approaches are viable, and all lanes fit under the
-subagent cap. Send the design message (§2) as soon as the lanes that
+`lanes=` width. Send the design message (§2) as soon as the lanes that
 decide the approach set are back; fold later lanes into the spec. While
 decisive lanes are still running, end the turn with one status line
 ("Exploring N code + M web lanes; design follows") — do not poll. Budget:
 2 human turns.
 
 **Split.** The request is too open to design (unknown users, goal, or a
-constraint that eliminates whole approaches), or lanes exceed the cap and
-must run in waves. Send questions + assumptions right away while lanes
+constraint that eliminates whole approaches), or lanes exceed `lanes=` (default 6,
+hard max 8) and must run in waves. Send questions + assumptions right away while lanes
 keep running; the user thinks while machines work. Next message is the
 design. Budget: 3 human turns.
 
@@ -103,7 +103,7 @@ Claims:
   permission prompt (acceptEdits, auto, or bypass mode). Use a `fork` if
   the harness offers one (it inherits the conversation); otherwise
   `general-purpose` with the design pasted. It writes to
-  `.superpowers/drafts/<topic>-design.md` (never the specs path), does not
+  `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
   On OpenCode the lane agents (`explorer`, `researcher`) are `edit: deny`,
   so no lane can write it: the main session writes the pre-draft itself
@@ -122,7 +122,7 @@ targeted edits, not judgment.
 1. If a pre-draft lane is still running, stop it (TaskStop) and write the
    spec yourself. OpenCode has no TaskStop and no pre-draft lane: skip
    straight to the move below. Otherwise move the draft to
-   `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
+   `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the
    approved design. Content = the approved design, including Evidence and
@@ -154,6 +154,6 @@ only, commit if committing, ask again. Proceed only on approval.
 Invoke `writing-plans` (the name this port installs under); if no skill
 with that exact name is installed, invoke `writing-plans-glm`. Pass the
 spec path as its input: the committed path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), or the untracked path when the commit was skipped. No
 other skill, no code, no scaffolding.

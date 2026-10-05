@@ -64,6 +64,7 @@ class CliBase(unittest.TestCase):
         self.env = dict(os.environ)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.pop("HYBRID_OPENCODE_MAX_PARALLEL", None)
+        self.env.pop("HYBRID_OPENCODE_POOL", None)
         self.env.update({"HOME": str(home), "HYBRID_AUDIT_ROUTING": str(self.routing), "HYBRID_AUDIT_DOCTOR_CACHE": str(self.cache),
                          "HYBRID_AUDIT_TELEMETRY": str(self.telemetry), "HYBRID_AUDIT_OC_BIN": str(FAKE),
                          "XDG_DATA_HOME": str(self.tmp / "data"),
@@ -204,21 +205,21 @@ class PlanTests(CliBase):
     def test_capacity_overflow_and_continuous_naming(self):
         self.hybrid_audit()
         lines = self.plan()
-        self.assertEqual(lines[0], "plan: 10 requirements (0 skipped as static-limit/ambiguous) → 3 investigator"
-                                   " batches of ≤2, 1 wave(s), cap=3 | 2 opencode batches (4 items)")
+        self.assertEqual(lines[0], "plan: 10 requirements (0 skipped as static-limit/ambiguous) → 2 investigator"
+                                   " batches of ≤3, 1 wave(s), cap=3 | 2 opencode batches (4 items)")
         batches = self.state()["batches"]
-        self.assertEqual(sorted(batches), ["batch-%02d" % i for i in range(1, 6)])
-        self.assertEqual([batches["batch-%02d" % i]["backend"] for i in range(1, 6)],
-                         ["claude", "claude", "claude", "oc:std", "oc:std"])
-        self.assertEqual(batches["batch-01"]["ids"], ["REQ-005", "REQ-006"])
-        self.assertEqual(batches["batch-04"]["ids"], ["REQ-001", "REQ-002"])
-        self.assertEqual(batches["batch-05"]["ids"], ["REQ-003", "REQ-004"])
+        self.assertEqual(sorted(batches), ["batch-%02d" % i for i in range(1, 5)])
+        self.assertEqual([batches["batch-%02d" % i]["backend"] for i in range(1, 5)],
+                         ["claude", "claude", "oc:std", "oc:std"])
+        self.assertEqual(batches["batch-01"]["ids"], ["REQ-005", "REQ-006", "REQ-007"])
+        self.assertEqual(batches["batch-03"]["ids"], ["REQ-001", "REQ-002"])
+        self.assertEqual(batches["batch-04"]["ids"], ["REQ-003", "REQ-004"])
         scripts_dir = self.config()["scripts_dir"]
         self.assertIn("OPENCODE 2 batches (4 items) | run each in the BACKGROUND (Bash run_in_background)"
                       " in the SAME message:", lines)
-        self.assertIn('  batch-04 oc:std (2 items) → python3 "%s/audit.py" oc-run batch-04' % scripts_dir, lines)
+        self.assertIn('  batch-03 oc:std (2 items) → python3 "%s/audit.py" oc-run batch-03' % scripts_dir, lines)
         self.assertTrue(any(line.startswith("DISPATCH NOW") for line in lines))
-        self.assertFalse(any("batch-04 → prompt" in line for line in lines))
+        self.assertFalse(any("batch-03 → prompt" in line for line in lines))
 
     def test_hybrid_queues_overflow_on_opencode_by_default(self):
         self.hybrid_audit(overflow="queue")
@@ -449,6 +450,16 @@ class CommandTests(CliBase):
             hybrid_shared.SHARED_SOURCE, SHARED_VARS[hybrid_shared.STD_ENV], SHARED_VARS[hybrid_shared.LITE_ENV]),
             lines)
         self.assertFalse(self.out.exists())
+
+    def test_doctor_reports_the_pool_and_an_invalid_pool_env(self):
+        self.env["HYBRID_AUDIT_OC_BIN"] = str(self.tmp / "no-such-opencode")
+        r = self.cli("doctor")
+        self.assertIn("  pool    : 6 opencode lanes at once across tiers (HYBRID_OPENCODE_POOL, default 6, max 8)",
+                      r.stdout.splitlines())
+        self.env["HYBRID_OPENCODE_POOL"] = "9"
+        r = self.cli("doctor")
+        self.assertRegex(r.stdout, r"OC-ERROR %s config tier=none model=none kind=config :: "
+                                   r"HYBRID_OPENCODE_POOL must be an integer from 1 to 8" % SKILL)
 
     def test_doctor_reports_an_invalid_shared_env(self):
         self.env["HYBRID_AUDIT_OC_BIN"] = str(self.tmp / "no-such-opencode")

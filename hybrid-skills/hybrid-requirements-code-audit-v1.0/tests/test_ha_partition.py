@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -53,6 +54,10 @@ def split(active, routing, doctor, preset, breaker_dir=None):
 
 class SplitBatchesTest(unittest.TestCase):
     def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("HYBRID_OPENCODE_POOL", None)
         self.routing = make_routing()
         self.doctor = make_doctor(self.routing)
 
@@ -96,12 +101,23 @@ class SplitBatchesTest(unittest.TestCase):
         self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 24)
         self.assertEqual(sum(len(items) for b, items in got if b == "claude"), 36)
 
-    def test_max_parallel_above_8_is_clamped_in_the_capacity_split(self):
+    def test_max_parallel_above_the_pool_is_clamped_in_the_capacity_split(self):
         self.routing["oc_overflow"] = "claude"
         self.routing["tiers"]["std"]["max_parallel"] = 64
         got = split(make_items(200), self.routing, self.doctor, "hybrid")
+        self.assertEqual(len([1 for b, _ in got if b == "oc:std"]), 6)
+        self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 6 * 4)
+        os.environ["HYBRID_OPENCODE_POOL"] = "8"
+        got = split(make_items(200), self.routing, self.doctor, "hybrid")
         self.assertEqual(len([1 for b, _ in got if b == "oc:std"]), 8)
         self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 8 * 4)
+
+    def test_small_pool_shrinks_the_capacity_split(self):
+        self.routing["oc_overflow"] = "claude"
+        os.environ["HYBRID_OPENCODE_POOL"] = "2"
+        got = split(make_items(60), self.routing, self.doctor, "hybrid")
+        self.assertEqual(len([1 for b, _ in got if b == "oc:std"]), 2)
+        self.assertEqual(sum(len(items) for b, items in got if b == "oc:std"), 2 * 4)
 
     def test_oc_overflow_is_ignored_in_opencode_preset(self):
         self.routing["oc_overflow"] = "claude"

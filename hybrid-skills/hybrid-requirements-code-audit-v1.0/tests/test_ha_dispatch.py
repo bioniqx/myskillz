@@ -1,9 +1,11 @@
 import json
+import os
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -71,6 +73,12 @@ class OcLinesTest(unittest.TestCase):
 
 
 class SlotsTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("HYBRID_OPENCODE_POOL", None)
+
     def _ctx(self):
         state = {
             "batches": {
@@ -101,17 +109,32 @@ class SlotsTest(unittest.TestCase):
 
     def test_free_slots(self):
         self.assertEqual(ha_dispatch.free_slots(self._ctx(), self._merged()),
-                         {"claude": 0, "oc:std": 4, "oc:lite": 2, "oc": 6})
+                         {"claude": 0, "oc:std": 4, "oc:lite": 2, "oc": 4})
+        os.environ["HYBRID_OPENCODE_POOL"] = "8"
+        self.assertEqual(ha_dispatch.free_slots(self._ctx(), self._merged())["oc"], 6)
 
-    def test_free_slots_clamp_each_tier_and_the_shared_pool_to_8(self):
+    def test_free_slots_clamp_each_tier_to_8_and_the_shared_pool_to_the_default_6(self):
         routing = json.loads(json.dumps(ROUTING))
         routing["tiers"]["std"]["max_parallel"] = 64
         routing["tiers"]["lite"]["max_parallel"] = 64
         free = ha_dispatch.free_slots(FakeCtx("/tmp/out", {}, routing=routing), FakeMerged())
-        self.assertEqual((free["oc:std"], free["oc:lite"], free["oc"]), (8, 8, 8))
-        for _ in range(8):
+        self.assertEqual((free["oc:std"], free["oc:lite"], free["oc"]), (8, 8, 6))
+        for _ in range(6):
             self.assertTrue(ha_dispatch.has_slot(free, "oc:lite"))
             ha_dispatch.take_slot(free, "oc:lite")
+        self.assertFalse(ha_dispatch.has_slot(free, "oc:std"))
+
+    def test_free_slots_pool_follows_the_env(self):
+        routing = json.loads(json.dumps(ROUTING))
+        routing["tiers"]["std"]["max_parallel"] = 8
+        os.environ["HYBRID_OPENCODE_POOL"] = "8"
+        free = ha_dispatch.free_slots(FakeCtx("/tmp/out", {}, routing=routing), FakeMerged())
+        self.assertEqual((free["oc:std"], free["oc"]), (8, 8))
+        os.environ["HYBRID_OPENCODE_POOL"] = "2"
+        free = ha_dispatch.free_slots(FakeCtx("/tmp/out", {}, routing=routing), FakeMerged())
+        self.assertEqual(free["oc"], 2)
+        ha_dispatch.take_slot(free, "oc:std")
+        ha_dispatch.take_slot(free, "oc:std")
         self.assertFalse(ha_dispatch.has_slot(free, "oc:std"))
 
     def test_free_slots_never_negative(self):

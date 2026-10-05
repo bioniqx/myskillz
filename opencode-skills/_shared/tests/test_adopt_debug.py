@@ -94,7 +94,7 @@ class TestScanPrintsDispatchRows(unittest.TestCase):
             assert mod.cmd_scan(a) == 2
         assert "scan needs" in err.getvalue()
 
-    def test_scan_dispatch_rows_come_in_waves_of_at_most_8(self):
+    def test_scan_dispatch_rows_come_in_waves_of_6_by_default(self):
         mod = load_debug_tool()
         root = tempfile.mkdtemp(prefix="sdlane_test.")
         self.addCleanup(mod.shutil.rmtree, root, True)
@@ -104,10 +104,10 @@ class TestScanPrintsDispatchRows(unittest.TestCase):
         with redirect_stdout(buf):
             assert mod.main(["scan", "--tasks", tasks, "--dir", root, "--out", root + "/out"]) == 0
         out = buf.getvalue()
-        assert mod.MAX_LANES == 8
+        assert mod.MAX_LANES == 6
         assert out.count("subagent(") == 20
-        assert "WAVE 3 of 3 (4 workers):" in out
-        assert "WAVE 1 of 3 (8 workers):" in out
+        assert "WAVE 4 of 4 (2 workers):" in out
+        assert "WAVE 1 of 4 (6 workers):" in out
 
     def test_scan_has_no_model_or_api_flags(self):
         mod = load_debug_tool()

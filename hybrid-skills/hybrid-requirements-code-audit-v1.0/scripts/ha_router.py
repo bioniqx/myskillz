@@ -70,6 +70,12 @@ def tier_parallel(spec: dict, default: int = 1) -> int:
     return max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, value))
 
 
+def oc_pool(env: dict = None) -> int:
+    """Opencode lanes in flight across all tiers at once: $HYBRID_OPENCODE_POOL (default 6, at most 8)."""
+    value, _ = hybrid_shared.pool_from_env(env)
+    return value or hybrid_shared.OC_POOL_DEFAULT
+
+
 def _drop_bad_numbers(entry: dict, keys: tuple, where: str, user_path, problems: list) -> None:
     """A tuning key that is not a JSON number is reported and dropped, so the shipped default applies."""
     for key in keys:
@@ -119,6 +125,9 @@ def load_routing(defaults_path: Path, user_path: Path) -> dict:
             _drop_bad_tiers(user_routing, user_path, problems)
             routing = _merge(routing, user_routing)
     shared_tiers, shared_problems = hybrid_shared.load_shared()
+    _, pool_problem = hybrid_shared.pool_from_env()
+    if pool_problem:
+        problems.append(pool_problem)
     routing = hybrid_shared.resolve_tiers(routing, shared_tiers, user_routing)
     sources = routing["model_sources"]
     if "shared" in sources.values() or "none" in sources.values():

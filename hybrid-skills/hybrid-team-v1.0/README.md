@@ -101,7 +101,7 @@ the run state directory.
   uses that file's `model` and `variant` and is shown as `(skill)`; a tier that sets no `variant`
   there runs without one, and the shared variant is never mixed in. Otherwise the tier uses
   `model` and `variant` from its shared env var and is shown as `(shared)`. `max_parallel` comes from
-  the user file, else the env var `HYBRID_OPENCODE_MAX_PARALLEL` (1 to 8), else the shipped defaults (4). The shared env vars are
+  the user file, else the env var `HYBRID_OPENCODE_MAX_PARALLEL` (1 to 8), else the shipped defaults (4). On top of the per-tier caps, all tiers share one pool of opencode lanes, `HYBRID_OPENCODE_POOL` (1 to 8, default 6): free lanes for a tier = min(tier cap - tier in flight, pool - all lanes in flight). The shared env vars are
   reported as unset or invalid only when some tier needs them, and a tier with no model in either
   place is an `OC-ERROR ... kind=config`. The run-mode question shows each tier's source next to its spec.
 
@@ -156,8 +156,8 @@ Everything this skill puts into a shared namespace is prefixed `hybrid`, so it i
 
 - `devteam doctor` - reports whether opencode is on `PATH` and lists each tier's model
   (`oc_available(root: Path, routing: dict) -> bool` is the check it runs internally), whether the
-  per-skill config file parses (and the shared env vars are set and valid, when some tier takes its model from them), and whether `.claude/settings.local.json` has the
-  concurrency/timeout limits hybrid-team needs. A bare `doctor` sends no test prompt; `doctor --ping`
+  per-skill config file parses (and the shared env vars are set and valid, when some tier takes its model from them), and the opencode lane pool size (an invalid `HYBRID_OPENCODE_POOL` is an `OC-ERROR kind=config`), and whether `.claude/settings.local.json` has the
+  concurrency/timeout limits hybrid-team needs (the subagent cap only warns below 12, unset is fine; tool-use concurrency 16). A bare `doctor` sends no test prompt; `doctor --ping`
   pings every tier, and `start` pings each tier without a fresh result in `hybrid` and `opencode`
   mode, so a bad login, quota or model shows up before any lane is dispatched as
   `OC-ERROR ... kind=auth` (or `quota`, `model`). Every problem is printed as an `OC-ERROR` or

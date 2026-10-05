@@ -59,7 +59,9 @@ Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
    expect roughly serial behavior without it. On OpenCode v2, the `subagent`
    tool takes `background: true`: dispatch each DISPATCH row that way, one
    after another with no wait, for real parallelism from one tool call per
-   turn.
+   turn. The agent lane starts 6 background lanes per message by default (up to
+   8 with `PLAN_LANE_WIDTH` or `OC_MAX_LANES`; the api lane keeps 8 threads),
+   and each writer takes up to 4 tasks, because batching beats more workers.
 
 Force a lane with `build --lane api|agent`.
 

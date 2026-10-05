@@ -159,7 +159,7 @@ class ContractsRoutingTest(CliBase):
         lines = out.splitlines()
         ok = [l for l in lines if l.startswith("OK contracts:")]
         self.assertEqual(len(ok), 1, out)
-        self.assertTrue(ok[0].endswith("| 1 writers (cap 20) | 3 opencode groups"), ok[0])
+        self.assertTrue(ok[0].endswith("| 1 writers (cap 12) | 3 opencode groups"), ok[0])
         oc_head = "OPENCODE 3 groups (T01, T02, T03) | run in the BACKGROUND in the SAME message: %s oc-write %s" % (
             self.q, shlex.quote(str(self.plan)))
         self.assertIn(oc_head, lines)
@@ -192,7 +192,7 @@ class ContractsRoutingTest(CliBase):
         self.assertEqual(rc, 0, out + err)
         lines = out.splitlines()
         ok = [l for l in lines if l.startswith("OK contracts:")][0]
-        self.assertTrue(ok.endswith("| 0 writers (cap 20) | 4 opencode groups"), ok)
+        self.assertTrue(ok.endswith("| 0 writers (cap 12) | 4 opencode groups"), ok)
         self.assertFalse([l for l in lines if l.startswith("DISPATCH")], out)
         self.assertNotIn("ID   MODEL   TASKS     BRIEF", lines)
         self.assertTrue(any(l.startswith("OPENCODE 4 groups (T01, T02, T03, T04) |") for l in lines), out)
@@ -244,7 +244,7 @@ class ContractsReportingTest(CliBase):
         info = self.work_json()
         self.assertEqual(set(info["backend"].values()), {"claude"})
         self.assertEqual(sorted(f.name for f in (self.work / "briefs").iterdir()),
-                         ["T01.md", "T02.md", "T03.md", "T04.md"])
+                         ["W01.md", "W02.md"])  # ceil(4 / 3) Claude writers
 
     def test_stale_doctor_entries_fall_back_to_claude_and_report(self):
         self.write_doctor(checked_at=1.0)
@@ -318,7 +318,7 @@ class ContractsSmallPlanTest(CliBase):
                     self.plan.write_text(small_plan(n), encoding="utf-8")
                     rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec, "--preset", preset)
                     self.assertEqual(rc, 0, out + err)
-                    self.assertIn("| 0 writers (cap 20) | %d opencode groups" % n, out)
+                    self.assertIn("| 0 writers (cap 12) | %d opencode groups" % n, out)
                     self.assertTrue(any(l.startswith("OPENCODE %d groups" % n) for l in out.splitlines()), out)
                     self.assertEqual(sorted(self.work_json()["backend"].values()), ["oc:std"] * n)
 
@@ -335,7 +335,7 @@ class ContractsSmallPlanTest(CliBase):
                                        "oc_overflow": "claude"}), encoding="utf-8")
         rc, out, err = self.tool("contracts", self.plan, "--spec", self.spec)
         self.assertEqual(rc, 0, out + err)
-        self.assertEqual(sorted(self.work_json()["backend"].values()), ["claude", "claude", "oc:std"])
+        self.assertEqual(sorted(self.work_json()["backend"].values()), ["claude", "oc:std"])  # the two overflow tasks share one Claude writer
         self.assertFalse([l for l in out.splitlines() if l.startswith("NOTE ") and "queue" in l], out)
 
 

@@ -38,7 +38,7 @@
 - Tests write fixtures only under the system temp dir, never inside the repo. A fixture inside the repo would let `guard.py` and `devteam.py` mistake it for a real run.
 - Before changing any CLI output string, grep `tests/` for that exact string and update the assertions that depend on it in the same task.
 - Commit convention per script change: `test(Txx): RED - <behavior>` first (test fails for the stated reason), then `feat(Txx): GREEN - <behavior>` (test passes). Prompt-only changes use one `docs(Txx): <change>` commit. Stage only the paths the task lists.
-- Never commit anything under `docs/superpowers/`. Never edit files outside `claude-skills/` (not `~/.claude`, not `hybrid/`, not `glm-skills/`).
+- Never commit anything under `docs/`. Never edit files outside `claude-skills/` (not `~/.claude`, not `hybrid/`, not `glm-skills/`).
 - Model tiers (decision D1 in the spec): every lane prompt template and agent frontmatter names its `model` explicitly; everything except dev-team final review, team-leader planning and verification, and audit adjudication runs on `sonnet`.
 - Size targets: each `SKILL.md` at most 14000 bytes; dev-team at most 12000; brainstorming, requirements-code-audit and doc-generator at most 10000 after their slimming tasks. Frontmatter `description` plus `when_to_use` at most 1024 characters. Keep the routing and hard rules at the top of the file, rationale and rare tables in `references/`.
 - Fixes go in the shared function once, not at each caller. Keep changes minimal; do not touch adjacent code.
@@ -4641,7 +4641,7 @@ class SetupTests(PlanCase):
         self.assertEqual(cfg["env"]["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"], "64")
         allow = cfg["permissions"]["allow"]
         self.assertIn("Bash(ls)", allow)
-        self.assertIn("Edit(**/docs/superpowers/plans/**)", allow)
+        self.assertIn("Edit(**/docs/plans/**)", allow)
         self.assertTrue(any(a.startswith("Bash(python3 ") and a.endswith("plan_tool.py *)")
                             for a in allow), allow)
         self.assertTrue(os.path.exists(self.settings() + ".bak"))

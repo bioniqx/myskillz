@@ -1,12 +1,14 @@
 import contextlib
 import importlib.util
 import io
+import os
 import re
 import shlex
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _T16_DT_PATH = (Path(__file__).resolve().parents[2]
@@ -46,6 +48,11 @@ class DebugToolClampTest(unittest.TestCase):
     def test_api_cap_is_eight(self):
         self.assertEqual(DT16.MAX_API, 8)
         self.assertEqual(DT16.clamp(999, 8, DT16.MAX_API), 8)
+
+    def test_agent_lane_width_defaults_to_six_and_caps_at_api_limit(self):
+        for value, want in (("", 6), ("x", 6), ("0", 1), ("3", 3), ("64", 8)):
+            with mock.patch.dict(os.environ, {"OC_MAX_LANES": value}):
+                self.assertEqual(DT16.agent_lanes(), want)
 
 
 class DebugToolParallelDefaultTest(_T16TmpRepo):

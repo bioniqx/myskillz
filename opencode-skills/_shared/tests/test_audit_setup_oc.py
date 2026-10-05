@@ -134,7 +134,7 @@ class AgentLaneBatchSizing(unittest.TestCase):
     def test_caps_batch_count_at_default_lane_width(self):
         self.env()
         groups = audit._agent_groups(list(range(64)), 64)
-        self.assertEqual([len(g) for g in groups], [8] * 8)
+        self.assertEqual([len(g) for g in groups], [11, 11, 11, 11, 10, 10])
 
     def test_honours_oc_max_lanes(self):
         self.env("3")
@@ -147,10 +147,14 @@ class AgentLaneBatchSizing(unittest.TestCase):
         groups = audit._agent_groups(list(range(64)), 64)
         self.assertEqual([len(g) for g in groups], [8] * 8)
 
+    def test_oc_max_lanes_can_raise_the_width_to_eight(self):
+        self.env("8")
+        self.assertEqual(audit._oc_lanes(), 8)
+
     def test_cpu_threads_never_exceeds_eight(self):
         self.env()
         self.assertEqual(audit.cpu_threads(64), 8)
-        self.assertEqual(audit.cpu_threads(), 8)
+        self.assertEqual(audit.cpu_threads(), 6)
         with mock.patch.dict(os.environ, {"AUDIT_THREADS": "32"}):
             self.assertEqual(audit.cpu_threads(), 8)
             self.assertEqual(audit.cpu_threads(3), 3)
@@ -168,7 +172,7 @@ class AgentLaneBatchSizing(unittest.TestCase):
 
     def test_bad_oc_max_lanes_falls_back(self):
         self.env("many")
-        self.assertEqual(audit._oc_lanes(), 8)
+        self.assertEqual(audit._oc_lanes(), 6)
         self.env("0")
         self.assertEqual(audit._oc_lanes(), 1)
 

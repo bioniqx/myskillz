@@ -64,15 +64,15 @@ def backend_running(c, m) -> dict:
 
 def free_slots(c, m) -> dict:
     """Free Claude slots and free opencode slots per tier; key "oc" is the pool shared by all tiers (at most
-    MAX_PARALLEL_LIMIT opencode calls run at once, whatever the tier split)."""
+    ha_router.oc_pool() opencode calls run at once, whatever the tier split)."""
     running = backend_running(c, m)
     free = {"claude": max(0, _cap(c) - running.get("claude", 0))}
-    oc_running = 0
+    in_flight = {}
     for tier, spec in _routing(c).get("tiers", {}).items():
         key = "oc:" + tier
-        oc_running += running.get(key, 0)
+        in_flight[tier] = running.get(key, 0)
         free[key] = max(0, ha_router.tier_parallel(spec) - running.get(key, 0))
-    free["oc"] = max(0, hybrid_shared.MAX_PARALLEL_LIMIT - oc_running)
+    free["oc"] = hybrid_shared.pool_free(ha_router.oc_pool(), in_flight)
     return free
 
 

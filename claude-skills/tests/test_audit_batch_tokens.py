@@ -103,11 +103,28 @@ class BatchTokensTestCase(unittest.TestCase):
         self.assertEqual(sum(sizes), 7)
         self.assertTrue(all(2 <= s <= 3 for s in sizes), sizes)
 
-    def test_generic_agents_batch_count_unchanged(self):
+    def test_generic_agents_prefer_min_three_items_per_batch(self):
         self.init_audit(agents="generic", cap=20)
         self.plan(9)
         names = self.batch_files()
-        self.assertEqual(len(names), 9, names)
+        self.assertEqual(len(names), 3, names)
+        sizes = [self.batch_text(n[:-3]).count("### REQ-") for n in names]
+        self.assertEqual(sizes, [3, 3, 3])
+
+    def test_generic_agents_width_capped_by_soft_width(self):
+        self.init_audit(agents="generic", cap=20)
+        self.plan(60)  # ceil(60/3)=20 > SOFT_WIDTH=12 -> 12 batches of 5
+        self.assertEqual(len(self.batch_files()), 12)
+
+    def test_generic_agents_width_capped_by_live_cap(self):
+        self.init_audit(agents="generic", cap=4)
+        self.plan(40)  # live cap 4 < 12 -> 4 batches of 10
+        self.assertEqual(len(self.batch_files()), 4)
+
+    def test_generic_agents_never_exceed_max_batch(self):
+        self.init_audit(agents="generic", cap=20)
+        self.plan(200)  # 12 batches would hold 17 each > MAX_BATCH=12 -> ceil(200/12)=17 batches
+        self.assertEqual(len(self.batch_files()), 17)
 
 
 class SearchGlobRuleTests(unittest.TestCase):

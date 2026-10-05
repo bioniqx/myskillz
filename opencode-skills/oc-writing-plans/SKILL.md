@@ -54,7 +54,7 @@ file and three or four auto-selected pattern files.
 # R3 - Call 2: write the Contracts file
 
 Count the tasks N from the spec. `N = 1` -> inline path (R7). `N >= 2` ->
-write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
+write `docs/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
 only this:
 
 ````markdown
@@ -135,8 +135,8 @@ the risky ones.
    file and re-run the same command. Treat `WARN spec uncovered` as a missing
    task unless the section is non-functional.
 2. Send each printed MESSAGE verbatim: every call in it runs in the background
-   and all of them go in one message. Then end the turn. At most 8 calls may be
-   in flight: send the next MESSAGE, if any, only after the last writer of the
+   and all of them go in one message. Then end the turn. At most the printed
+   width of calls (default 6, `PLAN_LANE_WIDTH` up to 8) may be in flight: send the next MESSAGE, if any, only after the last writer of the
    previous one reported and its task files exist.
 3. When every writer has reported, run the printed `wait`, `review` and
    `assemble` commands in that order. `review` prints its own DISPATCH table:
@@ -158,7 +158,7 @@ report.
 
 Report, with the numbers from the build output:
 
-"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K in
+"Plan saved to `docs/plans/<file>.md` - N tasks, W waves, up to K in
 parallel. It is self-contained: any agent or engineer can execute it from its
 Execution Protocol. Options: (1) subagent-driven here (recommended), fresh
 worker per task, each wave's `[P]` tasks together; (2) inline here, sequential

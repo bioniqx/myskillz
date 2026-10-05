@@ -3,7 +3,7 @@ name: claude-requirements-code-audit
 description: >-
   Audit whether a codebase implements a requirements/spec document and produce a traceability report plus a
   prioritized fix plan. The requirements file is the only source of truth (no git history, no README/docs).
-  Runs up to 64 parallel read-only investigator subagents, then adversarial verifiers, with scripted merging
+  Runs parallel read-only investigators (cap ≤12), then adversarial verifiers, with scripted merging
   and reporting. Use whenever the user wants to verify, audit, cross-check or trace an implementation against
   a spec, PRD, SRS, user stories or requirements list: "does the code match the requirements", "find gaps
   between spec and code", "requirement traceability", "conformance/compliance check", "what is missing vs the
@@ -63,7 +63,7 @@ In ONE turn, in parallel: `Read` the requirements file(s) **and** run
 No requirements input → stop and ask; pasted text → save it verbatim first (`--spec-text`). `.docx` is extracted by the
 script; `.pdf/.xlsx/.pptx` → extract with the matching skill, save under `.audit/spec/`, add with `A spec --add`.
 `init` builds the ≤30-line repo map, arms the guard, reads the concurrency cap from `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`
-(default 20; designed for 64 — tell the user once how to raise it) and prints NEXT. State the contract in one line
+(default 20; 12+ is enough) and prints NEXT. State the contract in one line
 ("Treating `<file>` as the only source of truth") and proceed. Fewer than ~6 requirements: solo mode is faster.
 
 ### Step 1 — Parse the spec into `.audit/checklist.jsonl` (lead judgment)
@@ -84,8 +84,7 @@ Specs over ~800 words (init says so): `A parse-plan` → dispatch the parser age
 
 ### Step 2 — Plan (one command)
 
-`A plan` validates the checklist, groups by category, sizes batches to the cap (1 item when `N ≤ cap`,
-otherwise about 2-3, max 12), writes `.audit/batches/batch-NN.md` and prints the dispatch list. Plugin/local mode omit the rules block (the agent files carry it).
+`A plan` validates the checklist, groups by category, sizes batches (generic `min(cap, 12, ceil(N/3))`, plugin/local ~3 items each; extras in waves ≤`cap`); writes `.audit/batches/batch-NN.md` and prints the dispatch list. Plugin/local mode omit the rules block (the agent files carry it).
 
 ### Step 3 — Wave A: dispatch everything in ONE message
 

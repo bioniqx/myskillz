@@ -62,6 +62,6 @@ if [ "$in_home" = no ]; then
   [ -f go.mod ] && echo "go_mod: $(grep -E '^(go |module |[[:space:]]+[a-z].* v[0-9])' go.mod 2>/dev/null | cap 20 | tr -s ' \t' ' ' | tr '\n' ';')"
   [ -f Cargo.toml ] && echo "cargo_deps: $(awk '/^\[dependencies\]/{f=1;next} /^\[/{f=0} f&&NF' Cargo.toml 2>/dev/null | cap 20 | tr -d ' ' | tr '\n' ' ')"
   echo "docs: $(ls -d README* CLAUDE.md AGENTS.md docs doc adr 2>/dev/null | tr '\n' ' ')"
-  [ -d docs/superpowers/specs ] && echo "recent_specs: $(ls -1t docs/superpowers/specs 2>/dev/null | cap 4 | tr '\n' ' ')"
+  [ -d docs/specs ] && echo "recent_specs: $(ls -1t docs/specs 2>/dev/null | cap 4 | tr '\n' ' ')"
 fi
 exit 0

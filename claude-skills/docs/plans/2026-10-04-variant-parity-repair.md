@@ -39,7 +39,7 @@
 - Frontmatter `description` stays at most 1024 characters (aim for at most 900); recheck after any frontmatter edit. Never rename a skill, agent or script that an `allowed-tools` entry pins.
 - Tests are hermetic: fixtures live under the system temp dir (resolve with `os.path.realpath`; on macOS `/var` is `/private/var`), never inside the repo. Hybrid tests set or remove every `HYBRID_OPENCODE_*` variable explicitly and point routing, doctor cache, telemetry, `HOME` and `XDG_DATA_HOME` at temp dirs, using the fake opencode already in the folder's `tests/`.
 - The user already has uncommitted edits in these guide files: `CLAUDE.md` (root, untracked), `claude-skills/CLAUDE.md`, `glm-skills/CLAUDE.md`, `hybrid-skills/CLAUDE.md`, `opencode-skills/AGENTS.md`, `opencode-skills/CLAUDE.md` (untracked). Edit them with targeted edits only, preserving the existing "Role in the skillz monorepo" sections, and never stage or commit them: for a task whose Files include one of these, the commit step stages only the task's other files (or is `git status --short` when there are none). The requester commits or stashes those six files before the tasks that edit them (T02, T43, T44, T45, T46, T50) run.
-- Work on a dedicated branch `parity-repair` created from `main`; commit steps stay on that branch. Stage only the files listed in the task, never `.`, `-A` or globs. Never commit anything under `docs/superpowers/`.
+- Work on a dedicated branch `parity-repair` created from `main`; commit steps stay on that branch. Stage only the files listed in the task, never `.`, `-A` or globs. Never commit anything under `docs/`.
 - Commit convention: `test(Txx): RED - <behavior>` then `feat(Txx): GREEN - <behavior>` for behaviour changes; one `docs(Txx): <change>` commit for text-only tasks.
 - Terminal replies to the requester are in Vietnamese; every file, comment and commit message is in English.
 - Never edit files outside this repository (not `~/.claude`). The installed copy under `~/.claude/skills/` is read-only reference.
@@ -7698,8 +7698,8 @@ New:
 Edit 6 - the stale references in Execution Handoff. Old:
 
 ```text
-- Subagent-Driven -> REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`
-- Inline -> REQUIRED SUB-SKILL: `superpowers:executing-plans`
+- Subagent-Driven -> REQUIRED SUB-SKILL: `<external-skill>:subagent-driven-development`
+- Inline -> REQUIRED SUB-SKILL: `<external-skill>:executing-plans`
 ```
 
 New:
@@ -7735,7 +7735,7 @@ and installs the `hybrid-plan-task-writer` agent (sonnet, effort medium, no CLAU
 
 - [ ] **Step 2: Verify the SKILL.md edits**
 
-Run: `grep -ciE 'superpowers|ultracode|identical to writing-plans|never overwritten' hybrid-skills/hybrid-writing-plans-v1.0/SKILL.md`
+Run: `grep -ciE 'ultracode|identical to writing-plans|never overwritten' hybrid-skills/hybrid-writing-plans-v1.0/SKILL.md`
 Expected: `0`
 
 Run: `grep -c 'does not scan for the word opencode' hybrid-skills/hybrid-writing-plans-v1.0/SKILL.md`
@@ -7804,7 +7804,7 @@ New:
 ### Fixed
 - SKILL.md no longer calls Claude-only mode "identical to writing-plans 6.2"; it says the mode follows 6.2's contract rules and linter, which `tests/test_lint_parity.py` compares.
 - SKILL.md Portability Rule no longer claims the linter enforces the absence of the word opencode: it does not scan for it. The opencode writer brief, the Claude writer agent and the reviewer brief now forbid it in a task body, and a reviewer removes any hit.
-- SKILL.md dropped the stale `superpowers:*` hand-off references and the `ultracode` remark, and gained the contract rule about `--allow WORD` for legitimate project vocabulary.
+- SKILL.md dropped the stale external-skill hand-off references and the `ultracode` remark, and gained the contract rule about `--allow WORD` for legitimate project vocabulary.
 - SKILL.md and README now describe `setup` as replacing a stale or placeholder writer agent instead of never touching an existing one.
 - The reviewer brief says to skip re-reading task files whose bodies are already inlined.
 - The v1.1.0 entry below named a path that does not exist (`claude-skills/writing-plans-6.2`); it now names `claude-skills/claude-writing-plans-6.2`.
@@ -14845,14 +14845,14 @@ with:
 Starting block, add the session directory to the sample output. Replace:
 
 ```text
-#    "screen_dir":".../.superpowers/brainstorm/<id>/content",
+#    "screen_dir":".../.brainstorm/brainstorm/<id>/content",
 ```
 
 with:
 
 ```text
-#    "session_dir":".../.superpowers/brainstorm/<id>",
-#    "screen_dir":".../.superpowers/brainstorm/<id>/content",
+#    "session_dir":".../.brainstorm/brainstorm/<id>",
+#    "screen_dir":".../.brainstorm/brainstorm/<id>/content",
 ```
 
 Replace:
@@ -15051,7 +15051,7 @@ with:
 ```text
 partner what you intend and they said yes. Every task, every path.
 The one exception is the visual companion, after the user accepts it:
-its screens go to `screen_dir` under `.superpowers/brainstorm/`.
+its screens go to `screen_dir` under `.brainstorm/brainstorm/`.
 ```
 
 R1, the architectural hand-off name. Replace:
@@ -15203,7 +15203,7 @@ Section 5, the hand-off checks the installed name and passes the right path. Rep
 
 ```text
 Invoke `writing-plans` and pass the committed spec path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose) as its input. No other skill, no code, no scaffolding.
 ```
 
@@ -15213,7 +15213,7 @@ with:
 Invoke `writing-plans` (the name this port installs under); if no skill
 with that exact name is installed, invoke `writing-plans-glm`. Pass the
 spec path as its input: the committed path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), or the untracked path when the commit was skipped. No
 other skill, no code, no scaffolding.
 ```
@@ -16119,14 +16119,14 @@ git commit -m "test(T36): RED - oc brainstorming companion scripts"
 
 Edit `opencode-skills/oc-brainstorming/scripts/oc-server.cjs`.
 
-4a. Delete the constant `SUPERPOWERS_BRAND_IMAGE_URL` (the line `const SUPERPOWERS_BRAND_IMAGE_URL = 'https://primeradiant.com/brand/superpowers-visual-brainstorming-logo.png';`).
+4a. Delete the constant `BRAND_IMAGE_URL` (the line `const BRAND_IMAGE_URL = 'https://example.invalid/brand/logo.png';`).
 
 4b. In the `waitingPage()` template, delete the one `<style>` line that starts with `.brand-logo { display: block; height: 1em;`.
 
-4c. Replace the whole `readSuperpowersVersion` function with:
+4c. Replace the whole `readSkillVersion` function with:
 
 ```js
-function readSuperpowersVersion() {
+function readSkillVersion() {
   // Read the version from this skill's own CHANGELOG heading (for example
   // "# 8.0 (from 7.0) - ..."). No network call and no external manifest lookup:
   // when CHANGELOG.md is missing or has no versioned heading, the brand shows
@@ -16147,10 +16147,10 @@ function readSuperpowersVersion() {
 ```js
 function brandMarkup() {
   // No external assets: no logo image, no remote host reference.
-  const label = SUPERPOWERS_TELEMETRY_DISABLED ? 'Prime Radiant Superpowers' : 'Superpowers';
-  const text = SUPERPOWERS_VERSION ? label + ' v' + SUPERPOWERS_VERSION : label;
+  const label = 'Brainstorming';
+  const text = SKILL_VERSION ? label + ' v' + SKILL_VERSION : label;
 
-  return '<div class="brand"><a href="https://github.com/obra/superpowers"><span class="brand-copy">' + escapeHtmlText(text) + '</span></a></div>';
+  return '<div class="brand"><span class="brand-copy">' + escapeHtmlText(text) + '</span></div>';
 }
 ```
 
@@ -17334,7 +17334,7 @@ only, commit if committing, ask again. Proceed only on approval.
 ```text
 Invoke `oc-writing-plans`; if no skill with that exact name is installed,
 invoke `writing-plans`. Pass the spec path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), committed or not, as its input. No other skill, no
 code, no scaffolding.
 ```
@@ -17543,7 +17543,7 @@ sections, commit if committing, ask again. Proceed only on approval.
 ```text
 Invoke `hybrid-writing-plans` with args `mode=<mode>`, or `writing-plans` (no
 args) if it is not installed. Pass the spec path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), committed or not, as its input. No other skill, no
 code, no scaffolding.
 ```
@@ -17575,7 +17575,7 @@ with:
 ```text
 - Preset `claude` runs every lane on Claude with brainstorming-6.3's lane
   roles, prompts and flow. It still differs in the run-mode question at
-  Step 0, the `hybrid-` names, the `.hybrid-superpowers/` state
+  Step 0, the `hybrid-` names, the `.hybrid-<name>/` state
   directory, the relay rule and the `hybrid-writing-plans` hand-off.
 ```
 

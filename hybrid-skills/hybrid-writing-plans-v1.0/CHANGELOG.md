@@ -5,7 +5,9 @@
 Claude chỉ giữ ~20% việc cần phán đoán cao nhất; phần thực thi do opencode làm.
 
 ### Changed
-- `tiers.<tier>.max_parallel` (và `HYBRID_OPENCODE_MAX_PARALLEL`) bị chặn ở 1..8: nhà cung cấp chỉ cho 8 lời gọi opencode đồng thời. `hp_partition.py` và `hp_write.py` cũng chặn ở 8 khi đọc `max_parallel`. Giới hạn writer Claude (64 agent) không đổi.
+- Opencode: thêm một pool dùng chung cho mọi tier (`HYBRID_OPENCODE_POOL`, 1..8, mặc định 6) ngoài `max_parallel` của từng tier. `hp_write.py` giữ một slot tier rồi một slot pool trong suốt group (kể cả lúc chờ retry); `hp_partition.py` tính sức chứa mỗi tier theo min(`max_parallel`, pool).
+- Writer Claude: `MAX_AGENTS` 64 -> 12, mỗi writer/reviewer ~3 task (`WRITER_MIN_TASKS`, k = min(cap, 12, ceil(N/3))). `setup --apply` chỉ ghi `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=16` khi biến đã đặt và nhỏ hơn 12; chưa đặt thì giữ mặc định 20 (port từ claude-writing-plans 6.2).
+- `tiers.<tier>.max_parallel` (và `HYBRID_OPENCODE_MAX_PARALLEL`) bị chặn ở 1..8: nhà cung cấp chỉ cho 8 lời gọi opencode đồng thời. `hp_partition.py` và `hp_write.py` cũng chặn ở 8 khi đọc `max_parallel`. Giới hạn writer Claude (64 agent) không đổi ở thời điểm đó; nay là 12 (xem dưới).
 - Chế độ `hybrid`: reviewer Claude không còn review mọi task body do opencode viết, chỉ review task rủi ro (tier deep, body dài, consumes >= 3, lint warning), giống chế độ `opencode`. `review_oc.hybrid` mặc định đổi từ `all` sang `risky` (`routing.default.json`, `hp_router._REVIEW_DEFAULTS`). Linter của plan vẫn là oracle; writer tier deep vẫn chạy trên Claude.
 - Muốn review mọi task opencode như trước: đặt `"review_oc": {"hybrid": "all"}` trong `routing.json` của skill.
 - Chế độ `hybrid`: task vượt `max_parallel * oc_group_max` của một tier (mặc định 4 * 3 = 12) không còn chuyển sang writer Claude. `contracts` chia phần vượt thành thêm các group (khoảng `oc_group_max` task mỗi group, ở cả `hybrid` và `opencode`), `oc-write` chạy các group thừa khi có slot trống (semaphore theo tier có sẵn của `hp_write.py`), cùng một lệnh `oc-write`. Khoá mới `oc_overflow` trong `routing.default.json`: `"queue"` (mặc định) hoặc `"claude"` (hành vi cũ, chỉ `hybrid`: task nặng nhất vượt ngưỡng sang Claude). Giá trị sai kiểu/sai giá trị là một config problem nêu file và khoá, dùng `queue`. Chế độ `opencode` luôn xếp hàng; tier không dùng được vẫn chuyển sang Claude (`hybrid`) hoặc bị giữ (`opencode`) như cũ. Chế độ `opencode` trước đây gom phần vượt vào đúng `max_parallel` group lớn hơn `oc_group_max`; nay group bị chặn ở `oc_group_max` task và phần thừa chờ slot.
@@ -15,7 +17,7 @@ Claude chỉ giữ ~20% việc cần phán đoán cao nhất; phần thực thi 
 ### Fixed
 - SKILL.md no longer calls Claude-only mode "identical to writing-plans 6.2"; it says the mode follows 6.2's contract rules and linter, which `tests/test_lint_parity.py` compares.
 - SKILL.md Portability Rule no longer claims the linter enforces the absence of the word opencode: it does not scan for it. The opencode writer brief and the reviewer brief (added by `plan_tool.py`) forbid it in a task body, and a reviewer removes any hit; the Claude writer agent is a byte-identical copy of the original and says nothing about it.
-- SKILL.md dropped the stale `superpowers:*` hand-off references and the `ultracode` remark, and gained the contract rule about `--allow WORD` for legitimate project vocabulary.
+- SKILL.md dropped the stale upstream-skill hand-off references and the `ultracode` remark, and gained the contract rule about `--allow WORD` for legitimate project vocabulary.
 - SKILL.md and README now describe `setup` as replacing a stale or placeholder writer agent instead of never touching an existing one.
 - The reviewer brief says to skip re-reading task files whose bodies are already inlined.
 - The v1.1.0 entry below named a path that does not exist (`claude-skills/writing-plans-6.2`); it now names `claude-skills/claude-writing-plans-6.2`.
@@ -35,7 +37,7 @@ Shared opencode config, run-mode prompt and immediate error reporting.
 - Switch to Claude in preset `hybrid`: a group that still fails after its retries, or fails with `auth`, `quota`, `model` or `config`, records `oc/oc-switched.json` and prints and logs one `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the rest of this run uses Claude sonnet` line. From then on the failed group and every group that had not started (reason `switched`) get a fallback marker with `model` sonnet (Claude Sonnet 5.5) and no opencode spawn, and `wait` prints them as `FALLBACK` lines; groups already running finish and are harvested normally. A new `contracts` run starts unswitched. Preset `opencode` retries too but never switches: after the retries the group is held as before.
 
 ### Changed
-- Đổi tên mọi tên dùng chung namespace sang tiền tố `hybrid` để cài cạnh writing-plans gốc không đụng nhau: agent Claude `plan-task-writer` -> `hybrid-plan-task-writer` (file `agents/hybrid-plan-task-writer.md`, `setup --apply` cài thành `~/.claude/agents/hybrid-plan-task-writer.md`), agent opencode `hp-writer` -> `hybrid-plan-writer`, biến môi trường `HP_*` -> `HYBRID_WRITING_PLANS_*` (ROUTING, DOCTOR_CACHE, OC_BIN, TELEMETRY), thư mục làm việc `<plan-dir>/.work/<plan>/` -> `<plan-dir>/.hybrid-work/<plan>/`. Tên skill và đường dẫn plan `docs/superpowers/plans/` giữ nguyên. Thư mục `.work` cũ không còn được đọc; hai skill không còn dùng chung một file agent.
+- Đổi tên mọi tên dùng chung namespace sang tiền tố `hybrid` để cài cạnh writing-plans gốc không đụng nhau: agent Claude `plan-task-writer` -> `hybrid-plan-task-writer` (file `agents/hybrid-plan-task-writer.md`, `setup --apply` cài thành `~/.claude/agents/hybrid-plan-task-writer.md`), agent opencode `hp-writer` -> `hybrid-plan-writer`, biến môi trường `HP_*` -> `HYBRID_WRITING_PLANS_*` (ROUTING, DOCTOR_CACHE, OC_BIN, TELEMETRY), thư mục làm việc `<plan-dir>/.work/<plan>/` -> `<plan-dir>/.hybrid-work/<plan>/`. Tên skill và đường dẫn plan `docs/plans/` giữ nguyên. Thư mục `.work` cũ không còn được đọc; hai skill không còn dùng chung một file agent.
 - The shared models come only from the env vars `HYBRID_OPENCODE_STD` / `HYBRID_OPENCODE_LITE`, set for example in the `"env"` block of `~/.claude/settings.json` (then restart Claude Code); there is no shared file, path override or fallback, and no shared `max_parallel`: it now comes only from `<skill dir>/routing.json` or `routing.default.json`.
 - The default per-skill user routing file moved out of the user's `~/.config` tree to `<skill dir>/routing.json`, next to `routing.default.json` (for example `~/.claude/skills/hybrid-writing-plans-v1.0/routing.json`); `HYBRID_WRITING_PLANS_ROUTING` still overrides it and the old location is no longer read.
 - `contracts --preset` accepts `claude`, `hybrid`, `opencode` and `max`; any other value prints `OC-ERROR ... kind=config` and exits 1.
@@ -92,7 +94,7 @@ Initial release of `hybrid-writing-plans`, a fork of `writing-plans-6.2`.
 
 ### Unchanged
 - All judgment steps: Phase 0, Contracts, review and assemble stay on Claude.
-- Output files: planning result at `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`.
+- Output files: planning result at `docs/plans/YYYY-MM-DD-<feature>.md`.
 - Task body format, contract format and linter rules.
 - `allowed-tools: Bash(python3 *)`, as in writing-plans-6.2.
 - `assemble`, `check`, `lint-task` and `hook-lint` behave as in writing-plans-6.2.

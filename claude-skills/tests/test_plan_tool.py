@@ -199,7 +199,7 @@ class StaleAgentTests(unittest.TestCase):
         agent_path = os.path.join(home, ".claude", "agents", "claude-plan-task-writer.md")
         with open(agent_path, "w") as f:
             f.write("some agent using __PLAN_TOOL__ hook-lint\n")
-        env = {"HOME": home, "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64"}
+        env = {"HOME": home, "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "12"}
         p = run_tool(["context"], cwd=repo, env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         out = p.stdout.lower()
@@ -519,8 +519,8 @@ class SkillMdContractTests(unittest.TestCase):
     def test_no_ultracode_mention(self):
         self.assertNotIn("ultracode", self.text.lower())
 
-    def test_no_disabled_superpowers_handoff(self):
-        self.assertNotIn("superpowers:", self.text)
+    def test_no_stale_external_handoff(self):
+        self.assertNotIn("subagent-driven-development", self.text)
         self.assertIn("claude-dev-team", self.text)
 
     def test_allow_advice_is_in_phase_1(self):

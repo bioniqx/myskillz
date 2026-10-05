@@ -170,11 +170,11 @@ class TestClaudeLine(unittest.TestCase):
         line = hb_prompts.claude_line(
             "abc123",
             "locate",
-            Path("/repo/.hybrid-superpowers/brainstorm/lanes/abc123.claude.md"),
+            Path("/repo/.hybrid-brainstorm/brainstorm/lanes/abc123.claude.md"),
         )
         assert line == (
             'CLAUDE abc123 — Agent → subagent_type: Explore, model: haiku, '
-            'description: "abc123", prompt: "Read /repo/.hybrid-superpowers/brainstorm/'
+            'description: "abc123", prompt: "Read /repo/.hybrid-brainstorm/brainstorm/'
             'lanes/abc123.claude.md and follow it exactly."'
         )
 
@@ -182,11 +182,11 @@ class TestClaudeLine(unittest.TestCase):
         line = hb_prompts.claude_line(
             "xyz789",
             "research",
-            Path("/repo/.hybrid-superpowers/brainstorm/lanes/xyz789.claude.md"),
+            Path("/repo/.hybrid-brainstorm/brainstorm/lanes/xyz789.claude.md"),
         )
         assert line == (
             'CLAUDE xyz789 — Agent → subagent_type: general-purpose, model: sonnet, '
-            'description: "xyz789", prompt: "Read /repo/.hybrid-superpowers/brainstorm/'
+            'description: "xyz789", prompt: "Read /repo/.hybrid-brainstorm/brainstorm/'
             'lanes/xyz789.claude.md and follow it exactly."'
         )
 
@@ -194,7 +194,7 @@ class TestClaudeLine(unittest.TestCase):
         line = hb_prompts.claude_line(
             "sw1",
             "locate",
-            Path("/repo/.hybrid-superpowers/brainstorm/lanes/sw1.claude.md"),
+            Path("/repo/.hybrid-brainstorm/brainstorm/lanes/sw1.claude.md"),
             "sonnet",
         )
         assert "subagent_type: Explore, model: sonnet, " in line

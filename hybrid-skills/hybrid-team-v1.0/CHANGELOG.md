@@ -2,6 +2,11 @@
 
 All notable changes to `hybrid-team` are documented in this file.
 
+## Unreleased
+
+- opencode lanes share a pool across tiers: free lanes for a tier = min(tier cap - tier in flight, `pool_free`), pool = `$HYBRID_OPENCODE_POOL` (default 6, at most 8); `halve_oc_cap` on throttle still works per tier; `doctor` prints the pool and reports an invalid value.
+- Claude side retuned like dev-team-v3.2: `MAX_SHARDS` 12 -> 4, `HARD_CAP` 64 -> 16, `SOFT_FLOOR` 12; `doctor` no longer demands 64 (cap unset or >= 12 is fine, `--fix` writes 16 only when an existing value is below 12; tool-use concurrency >= 16).
+
 ## 1.2.2
 
 - Text re-synced with dev-team-v3.2 and the router fix: a slice's `backend` pin no longer bypasses the non-offloadable exclusions (SKILL.md, README.md); preset `claude` pins the same models as the original (opus for the final review, PLANNING and VERIFICATION; sonnet for incremental reviews, PLAN ADOPTION, investigators and `Explore`); the SKILL.md title carries the real version.

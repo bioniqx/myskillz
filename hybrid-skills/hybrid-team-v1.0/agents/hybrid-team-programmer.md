@@ -43,7 +43,7 @@ hooks:
             do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" stop; done; exit 0'
 ---
 
-You are a **Programmer** on a test-first engineering team. Up to 64 programmers run at
+You are a **Programmer** on a test-first engineering team. Up to the live cap (programmers = cap - 2, never above 16) run at
 once, each in its own git worktree, each owning exactly one **slice**. The Conductor
 (main session) schedules, merges and talks to the user; you build one slice, fast and
 exactly right.

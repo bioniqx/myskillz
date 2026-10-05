@@ -170,7 +170,7 @@ class RealServerTests(unittest.TestCase):
         # file (wrong server-instance-id) must never be signalled by a
         # second start for the same project dir.
         project_dir = self._new_project_dir("-unrelated")
-        brainstorm_root = os.path.join(project_dir, ".superpowers", "brainstorm")
+        brainstorm_root = os.path.join(project_dir, ".brainstorm", "brainstorm")
         foreign_session = os.path.join(brainstorm_root, "foreign-session")
         foreign_state = os.path.join(foreign_session, "state")
         os.makedirs(foreign_state)
@@ -295,7 +295,7 @@ class FakeNodeTests(unittest.TestCase):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             candidates = []
-            state_root = os.path.join(project_dir, ".superpowers", "brainstorm")
+            state_root = os.path.join(project_dir, ".brainstorm", "brainstorm")
             if os.path.isdir(state_root):
                 for session in os.listdir(state_root):
                     p = os.path.join(state_root, session, "state", "owner-pid")

@@ -4,6 +4,11 @@ Vendored byte-identical into each hybrid skill's scripts/ folder; the canonical
 copy lives in hybrid-brainstorming. Stdlib only, Python 3.8+. The shared models
 come from $HYBRID_OPENCODE_STD and $HYBRID_OPENCODE_LITE (provider/model[#variant];
 LITE defaults to STD). Run it as a script for the config/check/mode commands (see cli()).
+
+Opencode concurrency is bounded twice: each tier (std, lite) runs at most its max_parallel lanes
+(default 4, $HYBRID_OPENCODE_MAX_PARALLEL), AND all tiers together run at most the shared pool
+($HYBRID_OPENCODE_POOL, default 6, at most 8 = the provider's concurrent-call limit). The pool is
+shared across tiers; Claude subagents are not counted in either bound.
 """
 import argparse
 import copy
@@ -20,6 +25,9 @@ STD_ENV = "HYBRID_OPENCODE_STD"
 LITE_ENV = "HYBRID_OPENCODE_LITE"
 MAX_PARALLEL_ENV = "HYBRID_OPENCODE_MAX_PARALLEL"
 MAX_PARALLEL_LIMIT = 8  # concurrent opencode (non-Claude) API calls per tier; Claude subagents are not capped here
+OC_POOL_ENV = "HYBRID_OPENCODE_POOL"
+OC_POOL_DEFAULT = 6  # opencode lanes in flight across ALL tiers at once
+OC_POOL_LIMIT = MAX_PARALLEL_LIMIT
 SHARED_SOURCE = "$%s/$%s" % (STD_ENV, LITE_ENV)
 DOCTOR_TTL_S = 600
 NON_RETRYABLE = ("auth", "quota", "model", "config")
@@ -63,6 +71,26 @@ def max_parallel_from_env(env: dict = None) -> tuple:
     if re.fullmatch(r"[0-9]+", text) and 1 <= int(text) <= MAX_PARALLEL_LIMIT:
         return int(text), ""
     return None, "%s must be an integer from 1 to %d, got %r" % (MAX_PARALLEL_ENV, MAX_PARALLEL_LIMIT, text)
+
+
+def pool_from_env(env: dict = None) -> tuple:
+    """Read the cross-tier opencode pool size from $HYBRID_OPENCODE_POOL; never raises.
+
+    Returns (value, problem): value is an int from 1 to OC_POOL_LIMIT (8), OC_POOL_DEFAULT (6) when the variable
+    is unset, or None when it is invalid; problem is "" unless it is set to something invalid.
+    """
+    env = os.environ if env is None else env
+    text = (env.get(OC_POOL_ENV) or "").strip()
+    if not text:
+        return OC_POOL_DEFAULT, ""
+    if re.fullmatch(r"[0-9]+", text) and 1 <= int(text) <= OC_POOL_LIMIT:
+        return int(text), ""
+    return None, "%s must be an integer from 1 to %d, got %r" % (OC_POOL_ENV, OC_POOL_LIMIT, text)
+
+
+def pool_free(pool: int, in_flight_by_tier: dict) -> int:
+    """Pool slots still free given the opencode lanes in flight per tier (never negative)."""
+    return max(0, pool - sum(in_flight_by_tier.values()))
 
 
 def load_shared(env: dict = None) -> tuple:

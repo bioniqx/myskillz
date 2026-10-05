@@ -1,6 +1,6 @@
-# claude-dev-team v3.2 — event-driven, 64-wide, mọi loại task phát triển phần mềm
+# claude-dev-team v3.2 — event-driven, cap-wide, mọi loại task phát triển phần mềm
 
-Skill Claude Code điều phối tối đa 64 subagent song song (programmer trong git worktree riêng,
+Skill Claude Code điều phối subagent song song tới trần thật (programmer = cap - 2, không bao giờ quá 16; reviewer tối đa 4, ~10 file mỗi người) (programmer trong git worktree riêng,
 reviewer / investigator / leader read-only), tối ưu cho **tốc độ wall-clock (10/10)** với chất
 lượng giữ ở **8/10** bằng gate cơ học (hook + script) thay vì bằng lời dặn.
 
@@ -30,8 +30,7 @@ Lệnh này cài 5 agent (`claude-programmer`, `claude-code-reviewer`, `claude-s
 ```json
 {
   "env": {
-    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
-    "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "64",
+    "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "16",
     "CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS": "1800000",
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1800000"
@@ -50,10 +49,9 @@ Muốn nhanh hơn nữa: gõ `/fast` (Opus fast mode, trừ usage credits) — C
 trên opus nhanh tới 2.5×; các lane programmer đã chạy sonnet/sonnet.
 
 **Giới hạn subagent đồng thời.** Mặc định Claude Code (từ bản 2.1.217) chỉ cho **20** subagent chạy
-cùng lúc và từ chối spawn agent thứ 21 trở đi; dev-team được thiết kế cho 64. `doctor --fix` ghi
-`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64` vào `.claude/settings.local.json` (khối JSON ở trên). Nếu bạn
-không chạy `doctor --fix`, tự thêm biến này vào mục `env` của `~/.claude/settings.json` hoặc
-`.claude/settings.json` rồi khởi động lại Claude Code. Không giả định 64: thiếu biến này thì trần thật là 20.
+cùng lúc và từ chối spawn agent thứ 21 trở đi; trần 20 là đủ cho dev-team (soft ceiling fan-out 12, programmer không bao giờ quá 16). `doctor` chỉ
+cảnh báo khi `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` đặt dưới 12 (`--fix` ghi 16 vào
+`.claude/settings.local.json`). Trần thật lấy từ biến này (mặc định 20); engine không giả định gì hơn.
 
 ## Changelog — đợt tối ưu W1–W4 (9/2026)
 
@@ -85,14 +83,14 @@ riêng trong `selftest.sh` (**247 check**, 183 → 247).
 
 | v3.1 | v3.2 |
 |---|---|
-| Hook `PermissionRequest` đặt trong **frontmatter agent → không bao giờ chạy** (frontmatter chỉ hỗ trợ `PreToolUse`/`PostToolUse`/`Stop`), và schema output cũng sai. "Không treo vì prompt" chỉ là lời hứa | **`permissionMode: dontAsk` cho cả 5 agent** + hook `PreToolUse` trả `permissionDecision: allow` cho đúng tập an toàn: lệnh briefing đã ghim, git read-only, toolchain dự án (`npx/pytest/go/cargo/make…`), thao tác file **trong footprint** (`rm/mv/touch/mkdir/git add`), pipeline `… \| tail`, `cd <con> && …`. Ngoài tập đó → **bị từ chối ngay**, không bao giờ hỏi; agent dùng dạng đã ghim hoặc báo `Blocked`. Không bao giờ pre-approve: cài package (64 lane dùng chung `node_modules`), `python -c`/`node -e`/`bash -c`, redirect ra file, `;`/`&&`, `xargs`/`env`/`tee`/`docker`, `rm -r`, engine ngoài các helper commit. Hook allow được xử lý trước bước permission, nên trong phiên auto mode lệnh đã ghim thường **không phải chờ classifier** (bớt một model call mỗi tool call) |
+| Hook `PermissionRequest` đặt trong **frontmatter agent → không bao giờ chạy** (frontmatter chỉ hỗ trợ `PreToolUse`/`PostToolUse`/`Stop`), và schema output cũng sai. "Không treo vì prompt" chỉ là lời hứa | **`permissionMode: dontAsk` cho cả 5 agent** + hook `PreToolUse` trả `permissionDecision: allow` cho đúng tập an toàn: lệnh briefing đã ghim, git read-only, toolchain dự án (`npx/pytest/go/cargo/make…`), thao tác file **trong footprint** (`rm/mv/touch/mkdir/git add`), pipeline `… \| tail`, `cd <con> && …`. Ngoài tập đó → **bị từ chối ngay**, không bao giờ hỏi; agent dùng dạng đã ghim hoặc báo `Blocked`. Không bao giờ pre-approve: cài package (mọi lane dùng chung `node_modules`), `python -c`/`node -e`/`bash -c`, redirect ra file, `;`/`&&`, `xargs`/`env`/`tee`/`docker`, `rm -r`, engine ngoài các helper commit. Hook allow được xử lý trước bước permission, nên trong phiên auto mode lệnh đã ghim thường **không phải chờ classifier** (bớt một model call mỗi tool call) |
 | Guard read-only chặn claude-team-leader ghi `plan.md` → **PLANNING mode hỏng** | Leader (nhận diện qua `agent_type` của hook input) được ghi `plan.md`; reviewer vẫn bị chặn. Nếu vẫn bị từ chối, leader trả cả plan trong reply để Conductor ghi |
 | Conductor phải gõ `next <ids…>` — đọc thông báo, chép id | **Stop gate tự ghi marker** `.claude/dev-team/slices/<id>.done` (hoặc `.blocked` kèm đúng câu hỏi) → `devteam next` **không cần tham số**: tự gộp mọi lane đã xong, research có report, review, checkpoint. `.blocked` được in một lần dạng `BLOCKED S3: <câu hỏi>`. Marker giả vô hại: integrate kiểm lại toàn bộ |
-| Block dispatch 7 dòng/agent; prompt 3 dòng | **1 dòng/agent**, prompt chỉ là lệnh `claim` (agent file dặn chạy nó đầu tiên) → output token của Conductor khi phóng 64 agent giảm ~50% — đây là critical path thật |
+| Block dispatch 7 dòng/agent; prompt 3 dòng | **1 dòng/agent**, prompt chỉ là lệnh `claim` (agent file dặn chạy nó đầu tiên) → output token của Conductor khi phóng cả wave agent giảm ~50% — đây là critical path thật |
 | "Resume không tốn slot" | Sai theo docs: resume **lấy slot mà không kiểm cap** → engine giữ chỗ cho review `CHANGES_REQUIRED` chưa re-review |
 | Cache subagent mặc định 5 phút (chỉ frontmatter xin 1h) | `doctor --fix` ghi thêm `subagentPromptCacheTtl: "1h"`; cảnh báo nếu `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` (nó vô hiệu hoá routing sonnet/sonnet/opus) |
 | `trivial` → sonnet | thêm `docs` (không `large`) → sonnet |
-| Final review ≤ 8 shard × 12 file | ≤ 12 shard × 10 file |
+| Final review ≤ 8 shard × 12 file | ≤ 4 shard × 10 file |
 | Dự án chưa có git → `init` lỗi | `start` tự `git init` + commit rỗng (greenfield) |
 | Kết thúc phải tự viết tóm tắt | `finish` ghi `.claude/dev-team/summary.md` sẵn cho `gh pr create --body-file` |
 | — | SKILL.md có bảng "Task → hình dạng pipeline" cho mọi loại việc: greenfield, migration/upgrade, codemod, security audit, DB migration, CI/IaC/deploy (apply prod chỉ do Conductor sau khi hỏi), perf, flaky test, UI, docs, thêm/bớt dependency, mở PR |
@@ -145,7 +143,7 @@ Bốn núm độc lập thay vì một thang cứng, để mua tốc độ từn
 `balanced` là mặc định vì hai thứ nó cắt gần như không mất assurance:
 
 - **Gate scope theo file.** `lint_file` / `typecheck_file` chạy đúng trên file vừa sửa: 1 giây
-  thay vì vài phút, nhân với 64 lane. Cùng một kiểm tra, chỉ khác phạm vi.
+  thay vì vài phút, nhân với số lane. Cùng một kiểm tra, chỉ khác phạm vi.
 - **Bỏ lần chạy RED → thay bằng kiểm tra tĩnh.** `commit-red` **từ chối** file test không có
   assertion nào, hoặc có ít test case hơn số acceptance criteria. Đây chính là thứ mà một lần
   chạy RED bị bỏ sẽ để lọt, và nó chạy ở **mọi** profile (kể cả strict).
@@ -259,7 +257,7 @@ lỗ có check hồi quy riêng kèm đúng attack đã tìm ra nó:
 | `claim` lại trên worktree GREEN `reset --hard` đè lên commit đã có | agent mất việc đã làm khi `.slice/` biến mất | giữ lại commit đã nằm trên base, chỉ cảnh báo |
 
 Mỗi bảo đảm mới đều được **mutation test**: cố tình phá từng cơ chế → đúng check tương ứng phải
-đỏ. Chưa chạy bên trong một phiên Claude Code thật — hãy thử trên một task nhỏ trước khi mở 64 luồng.
+đỏ. Chưa chạy bên trong một phiên Claude Code thật — hãy thử trên một task nhỏ trước khi mở nhiều luồng.
 
 ## Dial khi cần chỉnh
 

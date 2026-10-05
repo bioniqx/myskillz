@@ -97,7 +97,7 @@ and Flash lanes need it stated explicitly, not implied.
 | --- | --- | --- |
 | Single fact or API detail | 1-3 | none, or 1 Flash lane at ≤4 calls |
 | Comparison of 2-4 options | 4-8 searches + 2-6 fetches, two parallel batches | 0-2 Flash lanes at ≤5 calls each, only for multi-hop angles |
-| Broad landscape or new domain | 4-8 | 4-16 Flash lanes (waves of ≤8) at ≤5 calls each |
+| Broad landscape or new domain | 4-8 | 4-8 Flash lanes (waves of `lanes=`, default 6, hard max 8) at ≤5 calls each |
 
 Promote one lane to GLM-5.3 only when the comparison is contested and its
 outcome picks the approach.

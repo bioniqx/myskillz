@@ -118,6 +118,24 @@ class TestSharedConfig(unittest.TestCase):
             self.assertIsNone(value, bad)
             self.assertEqual(problem, "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 8, got %r" % bad)
 
+    def test_pool_from_env(self):
+        self.assertEqual((hs.OC_POOL_ENV, hs.OC_POOL_DEFAULT, hs.OC_POOL_LIMIT), ("HYBRID_OPENCODE_POOL", 6, 8))
+        for n in range(1, 9):
+            self.assertEqual(hs.pool_from_env({hs.OC_POOL_ENV: " %d " % n}), (n, ""))
+        self.assertEqual(hs.pool_from_env({}), (6, ""))
+        self.assertEqual(hs.pool_from_env({hs.OC_POOL_ENV: "  "}), (6, ""))
+        for bad in ("0", "9", "x", "-1", "2.5"):
+            value, problem = hs.pool_from_env({hs.OC_POOL_ENV: bad})
+            self.assertIsNone(value, bad)
+            self.assertEqual(problem, "HYBRID_OPENCODE_POOL must be an integer from 1 to 8, got %r" % bad)
+        with mock.patch.dict(os.environ, {hs.OC_POOL_ENV: "3"}):
+            self.assertEqual(hs.pool_from_env(), (3, ""))
+
+    def test_pool_free(self):
+        self.assertEqual(hs.pool_free(6, {}), 6)
+        self.assertEqual(hs.pool_free(6, {"std": 2, "lite": 3}), 1)
+        self.assertEqual(hs.pool_free(6, {"std": 4, "lite": 4}), 0)
+
     def test_invalid_max_parallel_empties_tiers_and_names_the_variable(self):
         problem = "HYBRID_OPENCODE_MAX_PARALLEL must be an integer from 1 to 8, got 'many'"
         tiers, problems = hs.load_shared({hs.STD_ENV: BOTH, hs.MAX_PARALLEL_ENV: "many"})

@@ -738,6 +738,40 @@ class OcWriteTests(HpWriteBase):
         held = [sem.acquire(blocking=False) for _ in range(9)]
         self.assertEqual(held.count(True), 8)
 
+    def test_shared_pool_caps_opencode_groups_across_tiers(self):
+        info = self.info()
+        info["oc"]["tiers"] = {"std": dict(TIER_STD, max_parallel=4), "lite": dict(TIER_STD, max_parallel=4)}
+        self.save_info(info)
+        for i in range(1, 9):
+            Path(self.work, "briefs", "O0%d.oc.md" % i).write_text("oc brief for T01\n", encoding="utf-8")
+        gate, state = threading.Lock(), {"now": 0, "peak": 0}
+
+        def run_once(cmd, cwd, env, out_path, err_path, stall_s, timeout_s):
+            with gate:
+                state["now"] += 1
+                state["peak"] = max(state["peak"], state["now"])
+            time.sleep(0.1)
+            with gate:
+                state["now"] -= 1
+            return {"session": "ses_1", "text": GOOD_T01, "usage": {}, "errors": [], "throttled": False,
+                    "events": 2, "tools": [], "rc": 0, "reason": "", "note": "", "pid": 4242, "duration": 0.1}
+
+        results = []
+        for pool, want in (("2", 2), ("8", 8)):
+            state.update(now=0, peak=0)
+            with mock.patch.dict(os.environ, {hybrid_shared.OC_POOL_ENV: pool}), \
+                    mock.patch.object(hp_write, "run_once", run_once):
+                shared = hp_write.new_shared(self.info())
+                threads = [threading.Thread(target=lambda g=g, t=t: results.append(
+                    hp_write.run_group(self.plan, g, ["T01"], t, shared)))
+                    for g, t in (("O0%d" % i, "std" if i <= 4 else "lite") for i in range(1, 9))]
+                for th in threads:
+                    th.start()
+                for th in threads:
+                    th.join()
+            self.assertEqual(state["peak"], want, "pool %s" % pool)  # tiers 4 + 4: only the pool limits it
+        self.assertEqual({r["reason"] for r in results}, {""})
+
     def test_groups_beyond_max_parallel_queue_for_a_slot_and_still_finish(self):
         info = self.info()
         info["groups"] = {"O01": ["T01"], "O02": ["T02"]}

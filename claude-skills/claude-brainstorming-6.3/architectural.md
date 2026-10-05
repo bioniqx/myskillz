@@ -7,13 +7,13 @@ lane results to `claude-writing-plans-6.2`.
 
 - **Merge (default):** goal and key constraints are clear, no open
   question would change WHICH approaches are viable, and all lanes fit
-  under the subagent cap. Send the design message (§2) as soon as the
+  under min(subagent cap, 12). Send the design message (§2) as soon as the
   lanes that decide the approach set are back; fold later lanes into the
   spec. While decisive T1 lanes are still running, end the turn with one
   status line ("Exploring N code + M web lanes; design follows") — don't
   poll. Budget: 2 human turns.
 - **Split:** the request is too open to design (unknown users, goal, or a
-  constraint that eliminates whole approaches), or lanes exceed the cap
+  constraint that eliminates whole approaches), or lanes exceed min(cap, 12)
   and must run in waves. Send the questions + assumptions right away
   while lanes keep running; the user thinks while machines work. Next
   message is the design. Budget: 3 human turns.
@@ -75,7 +75,7 @@ design. Their results are consumed in the spec turn (§4).
 - **Spec pre-draft** (1 lane) — only when file writes won't raise a
   permission prompt (acceptEdits, auto, or bypass mode). Use a `fork` if
   the harness offers one (it inherits the conversation); otherwise `general-purpose` with `model: "sonnet"` and the design pasted. It writes the spec to
-  `.superpowers/drafts/<topic>-design.md` (never the specs path), does not
+  `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. Rejected design → overwrite later.
 - **Runner-up approach** (1 `sonnet` lane) — only when the top two
   approaches are close; it fleshes out the runner-up's sections so "use B
@@ -87,7 +87,7 @@ Don't start work the user's reply is likely to invalidate wholesale.
 
 1. If a pre-draft lane is still running, stop it (TaskStop) and write the
    spec yourself. Otherwise move the draft to
-   `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
+   `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the
    approved design. Content = the approved design, including Evidence and

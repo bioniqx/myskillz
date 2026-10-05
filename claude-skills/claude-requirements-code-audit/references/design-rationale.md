@@ -7,12 +7,12 @@ This file holds the rationale and the schema examples that used to sit in the ma
 The wall-clock of an audit is dominated by the lead's own output tokens plus the slowest agent in each wave, not by the
 number of agents. So:
 
-- **The lead does judgment only.** Repo map, batch planning, prompt assembly, merging 64 findings files, packing
+- **The lead does judgment only.** Repo map, batch planning, prompt assembly, merging dozens of findings files, packing
   verifier batches, straggler detection, report assembly and the quality gate are all `audit.py`, not tokens.
-- **Workers write files, not chat.** Each agent writes a small JSONL file and replies with one line, so 64 results cost
-  the lead about 64 lines of context and nothing is ever retyped.
-- **One message per wave, batch size 1 when the cap allows.** All Agent calls of a wave go out in a single message;
-  smaller batches shorten the slowest worker. Batch count adapts to the concurrency cap automatically.
+- **Workers write files, not chat.** Each agent writes a small JSONL file and replies with one line, so every result costs
+  the lead about one line of context and nothing is ever retyped.
+- **One message per wave, batches of at least 3 items, width at most 12.** All Agent calls of a wave go out in a single message;
+  each agent has a fixed token overhead, so batching three or more items beats more agents. Batch count adapts to the live concurrency cap automatically.
 - **Tiny, identical delegation prompts.** Every worker gets "read <batch file> and follow it exactly"; the rules live in
   the agent definition, so per-agent prompt tokens are minimal and the system-prompt prefix is shared across the wave
   (prompt cache). In plugin and local mode the batch files do not repeat the rules block.

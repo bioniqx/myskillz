@@ -53,9 +53,11 @@ The interactive OpenCode session model launches every lane. There is no other ro
   row per lane: a v2 `subagent(agent=..., description=..., prompt="Read <brief> and follow it exactly.",
   background=true)` call. The session model emits all rows in one message and the background lanes run
   concurrently. Agent files carry no `model`, `variant`, `effort` or `reasoningEffort` field, so a lane runs
-  on the model of the primary agent that launched it. At most 8 background lanes are in flight per session
-  (the provider allows 8 concurrent API calls); the per-skill scripts enforce it, so larger fan-outs run in
-  waves of at most 8.
+  on the model of the primary agent that launched it. Lane ceiling is 8 (the provider allows 8 concurrent
+  API calls); the default width is 6, leaving headroom for opencode's own 429 retries, hedges and retries
+  (`OC_MAX_LANES` raises it to 8; 0 clamps to 1, non-numeric or empty falls back to 6, above 8 clamps to 8).
+  dev-team keeps 8 with 2 reserved. The per-skill scripts enforce it, so larger fan-outs run in waves of at
+  most the default width.
 - **Result files.** Every lane writes its own result to a file the script names (task file, findings or
   verdict JSONL, report, slice marker). A script command (`status`, `wait`, `next`) reads those files,
   merges them and prints the next rows and a `NEXT:` line. Debug `scan` workers only reply with a

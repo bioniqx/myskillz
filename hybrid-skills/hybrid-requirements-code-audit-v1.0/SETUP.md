@@ -8,7 +8,7 @@ allows; the skill detects the rest.
 
 | Level | What loads | Speed / hardening |
 |---|---|---|
-| **Plugin (recommended)** — `requirements-code-audit` copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json`, this folder next to it | this skill + the plugin's agents `claude-req-audit:claude-rca-investigator/verifier/parser` | 64-way fan-out, tool-restricted workers (no shell); with this fork's guard hook registered (section 5) git-history, docs and writes are blocked structurally and audit-dir writes and this skill's `scripts/audit.py` (every `oc-run` included) need no permission prompt |
+| **Plugin (recommended)** — `requirements-code-audit` copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json`, this folder next to it | this skill + the plugin's agents `claude-req-audit:claude-rca-investigator/verifier/parser` | parallel fan-out up to the live cap, tool-restricted workers (no shell); with this fork's guard hook registered (section 5) git-history, docs and writes are blocked structurally and audit-dir writes and this skill's `scripts/audit.py` (every `oc-run` included) need no permission prompt |
 | **Local agents** — this skill + requirements-code-audit's `agents/*.md` copied into `.claude/agents/` | this skill + agents `claude-rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
 | **Generic** — this folder only (also Cowork / claude.ai upload) | this skill; workers are `general-purpose` subagents on `haiku`/`sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
 
@@ -35,21 +35,21 @@ Project scope instead: copy both folders into `<repo>/.claude/skills/`. Skills-d
 accept the workspace trust dialog and only from the session's primary working directory — launch Claude Code from the
 repo root.
 
-## 2. Raise the concurrency cap to 64
+## 2. Check the concurrency cap (optional)
 
 Claude Code (v2.1.217+) refuses to spawn more than **20** concurrent subagents by default. The skill plans around
-whatever the cap is, but it is designed for 64. Add to `~/.claude/settings.json` (or the project's `.claude/settings.json`):
+whatever the cap is (default 20) and fans out at most 12 Claude investigators at once, so a cap of 12 or more is enough and there is no need for 64. To set it explicitly, add to `~/.claude/settings.json` (or the project's `.claude/settings.json`):
 
 ```json
 {
-  "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64" }
+  "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "20" }
 }
 ```
 
 Restart. `audit.py init` prints the cap it detected. Sessions with `ultracode` effort are exempt from the cap.
 
 opencode batches are background Bash processes, not subagents, so they do not count against this cap. Each routing
-tier runs at most its own `max_parallel` batches at once, and never more than 8 opencode batches run at once across tiers (section 3).
+tier runs at most its own `max_parallel` batches at once, and never more than the shared pool (`HYBRID_OPENCODE_POOL`, default 6, max 8) opencode batches run at once across tiers (section 3).
 
 Optional, subscription plans only: keep worker prompt caches warm for an hour during very long audits by adding
 `experimental:\n  cacheTtl: 1h` to the claude-req-audit plugin's agent files (v2.1.248+). Not needed for normal runs.
@@ -63,7 +63,7 @@ Optional, subscription plans only: keep worker prompt caches warm for an hour du
    {"env": {"HYBRID_OPENCODE_STD": "opencode/muse-spark-1.3-contributor-free#xhigh"}}
    ```
 
-   Exporting them in the shell also works. The slot cap `max_parallel` (default 4 per tier) can be set for all four hybrid skills with the env var `HYBRID_OPENCODE_MAX_PARALLEL` (1 to 8), or per skill in the routing file (below), which wins.
+   Exporting them in the shell also works. The slot cap `max_parallel` (default 4 per tier) can be set for all four hybrid skills with the env var `HYBRID_OPENCODE_MAX_PARALLEL` (1 to 8), and the cross-tier pool with `HYBRID_OPENCODE_POOL` (1 to 8, default 6; `audit.py doctor` prints the effective value), or `max_parallel` per skill in the routing file (below), which wins.
 3. Run the doctor once with `python3 ~/.claude/skills/hybrid-requirements-code-audit-v1.0/scripts/audit.py doctor --ping`. It validates the shared env vars, checks `opencode --version`, confirms that `opencode models` lists each tier's model, sends each tier one tiny prompt through the injected `hybrid-audit-investigator` agent (it must answer `HA-INVESTIGATOR-OK`) and writes the doctor cache that the `opencode:` line of `init` reads. Every unusable tier and every config problem prints as an `OC-ERROR` line; one tier's failure never disables the other. It never creates or edits a config file; its ping logs (`doctor-ping-<tier>.jsonl/.err`) go to the cache folder, never into a repo. It works outside an audit. Run it again after changing the env vars or the routing file, and when `init` shows `opencode: unavailable`, `claude(down: <kind>)` or `held(...)`. A cache entry is valid for the exact `model#variant` it checked and for a limited time. `init` refreshes a missing or stale entry with one ping for the tiers its mode uses (never in mode `claude`), then freezes the result for that audit.
 
 The opencode agents (`hybrid-audit-investigator`, `hybrid-audit-verifier`, `hybrid-audit-parser`) are injected per turn through
@@ -89,7 +89,7 @@ output after an evidence oracle has checked every citation.
 
 - `init --preset claude|hybrid|opencode` overrides the file's `preset` for one audit; SKILL.md asks for it once per audit. `max` is a deprecated alias of `opencode` and prints one `OC-WARN` line. `config.json` keeps the effective preset and a snapshot of the merged routing.
 - A role value of `claude` means Claude; any other value names a tier. `max_roles` is the role table of mode `opencode` (the key keeps its old name).
-- `max_parallel`: opencode batches a tier runs at once (1 to 8; a larger value is clamped to 8, and all tiers together never run more than 8 opencode calls at once, parser and verifier waves included). `oc_batch_max`: items per opencode batch. Batches beyond `max_parallel` wait for a free opencode slot and are dispatched by `status` as slots free up (a waiting batch is never hedged). `oc_overflow` (`"queue"` default, or `"claude"`): with `"claude"`, mode hybrid sends the active items beyond `max_parallel × oc_batch_max` to Claude haiku batches at `plan` time instead of queueing them; mode opencode always queues. An unusable tier still sends everything to Claude in mode hybrid.
+- `max_parallel`: opencode batches a tier runs at once (1 to 8; a larger value is clamped to 8, and all tiers together never run more than the shared pool of opencode calls at once, parser and verifier waves included; `HYBRID_OPENCODE_POOL`, default 6, 1 to 8, so a tier effectively runs `min(max_parallel, pool)`). `oc_batch_max`: items per opencode batch. Batches beyond `max_parallel` wait for a free opencode slot and are dispatched by `status` as slots free up (a waiting batch is never hedged). `oc_overflow` (`"queue"` default, or `"claude"`): with `"claude"`, mode hybrid sends the active items beyond `max_parallel × oc_batch_max` to Claude haiku batches at `plan` time instead of queueing them; mode opencode always queues. An unusable tier still sends everything to Claude in mode hybrid.
 - `stall_s` and `timeout_s` apply to each opencode turn. `max_repairs` caps the repair turns (same session) per batch, so a batch's worst case is `(1 + max_repairs) × timeout_s`.
 - `throttle_cooldown_s`: after a rate-limit failure, the tier's queued batches wait or go to Claude for this many seconds.
 - A tier that fails with `auth`, `quota`, `model` or `config` opens the run's circuit breaker (kept under `.hybrid-audit/`): later units skip that tier without spawning opencode until the next audit.

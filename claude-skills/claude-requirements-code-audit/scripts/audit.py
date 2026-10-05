@@ -46,7 +46,9 @@ STRENGTHS = ("MUST", "SHOULD", "MAY")
 SKIP_TAGS = {"static-limit", "ambiguous"}
 
 DEFAULT_CAP = 20            # Claude Code default concurrent-subagent cap (v2.1.217+)
-TARGET_CAP = 64             # what this skill is designed for (CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64)
+RECOMMENDED_CAP = 12        # advise raising CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS only below this; more is not needed
+SOFT_WIDTH = 12             # soft ceiling on investigator fan-out (generic mode); extra batches go in waves
+MIN_BATCH = 3               # prefer >= this many requirements per investigator (fixed per-agent token overhead)
 MAX_BATCH = 12              # never give one investigator more than this many requirements
 SOLO_BATCH = 8
 VERIFY_MAX_PER_AGENT = 3
@@ -54,7 +56,7 @@ VERIFY_TRIGGER = 4          # dispatch a verifier wave once this many items are 
 HEDGE_MIN_SECONDS = 180     # never hedge (duplicate) a straggler younger than this
 PARSE_WORDS_PER_SECTION = 1500
 PARSE_THRESHOLD_WORDS = 800
-MAX_PARSERS = 16
+MAX_PARSERS = 8
 
 PLUGIN_NAME = "claude-req-audit"
 AGENT_NAMES = {"investigator": "claude-rca-investigator", "verifier": "claude-rca-verifier", "parser": "claude-rca-parser"}
@@ -535,7 +537,7 @@ def cmd_init(a):
     print("  agents    : %s  -> investigator=%s (%s), verifier=%s (%s)" % (
         agents, Ctx(cwd).agent_type("investigator"), MODELS["investigator"], Ctx(cwd).agent_type("verifier"), MODELS["verifier"]))
     print("  cap       : %d concurrent subagents%s" % (
-        cap, "" if cap >= TARGET_CAP else "  (raise to %d: settings.json → \"env\": {\"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS\": \"%d\"} then restart; not blocking)" % (TARGET_CAP, TARGET_CAP)))
+        cap, "" if cap >= RECOMMENDED_CAP else "  (below the recommended %d: settings.json → \"env\": {\"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS\": \"%d\"} then restart; not blocking)" % (RECOMMENDED_CAP, RECOMMENDED_CAP)))
     print("  git       : %s" % ("excluded via " + excl if excl else "not a git checkout (nothing to exclude)"))
     print("  repo map  : %s (%d lines)" % (out / "repo_map.md", len(repo_map.splitlines())))
     print()
@@ -876,7 +878,7 @@ def cmd_plan(a):
     elif lean_agents(c):
         n_batches = math.ceil(n / float(LEAN_BATCH))
     else:
-        n_batches = min(cap, n)
+        n_batches = min(cap, SOFT_WIDTH, math.ceil(n / float(MIN_BATCH)))
         if math.ceil(n / float(n_batches)) > MAX_BATCH:
             n_batches = math.ceil(n / float(MAX_BATCH))
     active.sort(key=lambda r: (r.get("category") or "", r.get("id")))

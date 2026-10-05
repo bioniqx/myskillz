@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## Unreleased
+
+### Changed
+- `bslane.py` enforces a shared cross-tier opencode pool (`lanes/slots/pool.<k>.lock`, size `HYBRID_OPENCODE_POOL`, default 6, at most 8): a lane holds a tier slot and a pool slot while it runs; a full pool is a `busy` fallback like a full tier.
+- Ported the 6.3 Claude-subagent retune: width = min(questions, live cap, 12) instead of up to 64, and the smaller width table in `fanout-playbook.md`, `research-playbook.md`, `architectural.md` and SKILL.md.
+
 ## v1.1.2 (2026-10-04)
 
 ### Fixed
@@ -23,7 +29,7 @@
 ## v1.1.0 (2026-09-29)
 
 ### Renamed (collision-free install beside `brainstorming-6.3`)
-- Every name this skill puts into a shared namespace now carries the `hybrid` prefix: the opencode agent `hb-lane` is `hybrid-brainstorm-lane`; the env vars `HB_*` are `HYBRID_BRAINSTORMING_*` (`ROUTING`, `DOCTOR_CACHE`, `OC_BIN`, and the test-only `FAKE_*`); the project state directory `.superpowers/` is `.hybrid-superpowers/` (same sub-paths: `brainstorm/`, `drafts/`, lanes, token files, still `chmod 600`). The visual-companion server also renames its `BRAINSTORM_*` env vars to `HYBRID_BRAINSTORMING_*`, the `/tmp/brainstorm*` session directory to `/tmp/hybrid-brainstorming*`, the `--brainstorm-server-id` argument, and the `brainstorm-key-*` cookie and `brainstorm-session-key` storage key to `hybrid-brainstorming-*`. The spec output path `docs/superpowers/specs/` is unchanged on purpose. Existing `.superpowers/` data from earlier hybrid runs is not migrated.
+- Every name this skill puts into a shared namespace now carries the `hybrid` prefix: the opencode agent `hb-lane` is `hybrid-brainstorm-lane`; the env vars `HB_*` are `HYBRID_BRAINSTORMING_*` (`ROUTING`, `DOCTOR_CACHE`, `OC_BIN`, and the test-only `FAKE_*`); the project state directory is `.hybrid-brainstorm/` (same sub-paths: `brainstorm/`, `drafts/`, lanes, token files, still `chmod 600`). The visual-companion server also renames its `BRAINSTORM_*` env vars to `HYBRID_BRAINSTORMING_*`, the `/tmp/brainstorm*` session directory to `/tmp/hybrid-brainstorming*`, the `--brainstorm-server-id` argument, and the `brainstorm-key-*` cookie and `brainstorm-session-key` storage key to `hybrid-brainstorming-*`. The spec output path `docs/specs/` is unchanged on purpose. State directories left by earlier hybrid runs are not migrated.
 
 ### Added
 - Shared opencode models from the env vars `HYBRID_OPENCODE_STD` (required) and `HYBRID_OPENCODE_LITE` (optional, defaults to `STD`), each `provider/model[#variant]`, loaded through the vendored `scripts/hybrid_shared.py`. All hybrid skills read them as the default source of model and variant for the tiers `std` and `lite`. Set them in the `env` block of `~/.claude/settings.json` (restart Claude Code) or export them in the shell.
@@ -74,10 +80,10 @@ Initial release of `hybrid-brainstorming`, a fork of `brainstorming-6.3`.
 - Stdlib modules: `oc_run.py` (opencode runner and event parser), `hb_router.py` (role routing and preset logic), `hb_ground.py` (grounding gate), `hb_prompts.py` (lane prompt templates), `hb_config.py` (opencode agent config), `hb_doctor.py` (availability and status).
 - Vendored opencode runner: opencode logic is copied from hybrid-team, not shared at runtime.
 - SKILL.md frontmatter: `name: hybrid-brainstorming`, an opt-in description, and `allowed-tools` extended with the `bslane.py` pin.
-- Lane state files under `.hybrid-superpowers/brainstorm/`: `lanes/<id>.jsonl` (per-lane event log), `lanes/<id>.err` (lane stderr), `lanes/<id>.claude.md` (Claude fallback prompt), `lanes/<id>.out.md` (lane output), `lanes/slots/<tier>.<k>.lock` (slot lock), `lanes/cooldown-<tier>` (throttle cooldown expiry timestamp), `lanes/doctor/doctor-ping-<tier>.out.jsonl`/`.err` and `lanes/doctor/doctor-websearch.out.jsonl`/`.err` (doctor probe streams), and `lanes.jsonl` (aggregate per-lane telemetry).
+- Lane state files under `.hybrid-brainstorm/brainstorm/`: `lanes/<id>.jsonl` (per-lane event log), `lanes/<id>.err` (lane stderr), `lanes/<id>.claude.md` (Claude fallback prompt), `lanes/<id>.out.md` (lane output), `lanes/slots/<tier>.<k>.lock` (slot lock), `lanes/cooldown-<tier>` (throttle cooldown expiry timestamp), `lanes/doctor/doctor-ping-<tier>.out.jsonl`/`.err` and `lanes/doctor/doctor-websearch.out.jsonl`/`.err` (doctor probe streams), and `lanes.jsonl` (aggregate per-lane telemetry).
 
 ### Unchanged
 - Main thread work: classification, T0, synthesis, design, spec, self-review all stay on Claude.
 - Claim verifier and spec pre-draft always run on Claude.
-- Output files: approved design and spec at `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, then `writing-plans`.
+- Output files: approved design and spec at `docs/specs/YYYY-MM-DD-<topic>-design.md`, then `writing-plans`.
 - Lane prompt output shapes and visual companion format.

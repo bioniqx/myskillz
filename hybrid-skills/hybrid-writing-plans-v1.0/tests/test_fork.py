@@ -63,6 +63,13 @@ class WeightTest(unittest.TestCase):
         self.assertEqual([[c["id"] for c in g] for g in self.pt.partition(cs, 1)], [["T01", "T02", "T03"]])
 
     @unittest.skipUnless(SRC.is_dir(), "writing-plans-6.2 not present")
+    def test_agent_sizing_constants_match_6_2(self):
+        old = load(SRC / "scripts" / "plan_tool.py", "wp62_plan_tool_consts")
+        for name in ("MAX_AGENTS", "WRITER_MIN_TASKS", "RECOMMENDED_CAP", "DEFAULT_CAP"):
+            self.assertEqual(getattr(self.pt, name), getattr(old, name), name)
+        self.assertEqual((self.pt.MAX_AGENTS, self.pt.WRITER_MIN_TASKS), (12, 3))
+
+    @unittest.skipUnless(SRC.is_dir(), "writing-plans-6.2 not present")
     def test_partition_matches_6_2(self):
         old = load(SRC / "scripts" / "plan_tool.py", "wp62_plan_tool")
         for k in (1, 2, 3, 4, 7, 10):

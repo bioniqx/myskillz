@@ -96,30 +96,43 @@ class PlanCase(unittest.TestCase):
 
 class PartitionTests(PlanCase):
     def test_tasks_beyond_the_agent_cap_share_writers(self):
-        self.start("".join(contract(n) for n in range(1, 6)), "--agents", "2")
+        self.start("".join(contract(n) for n in range(1, 8)), "--agents", "2")
         with open(os.path.join(self.work, "work.json")) as f:
             groups = json.load(f)["groups"]
         self.assertEqual(sorted(groups), ["W01", "W02"])
         self.assertEqual(sorted(t for ids in groups.values() for t in ids),
-                         ["T01", "T02", "T03", "T04", "T05"])
+                         ["T%02d" % n for n in range(1, 8)])
         for ids in groups.values():
-            self.assertLessEqual(len(ids), 3)
+            self.assertLessEqual(len(ids), 4)
         briefs = sorted(os.listdir(os.path.join(self.work, "briefs")))
         self.assertEqual(briefs, ["W01.md", "W02.md"])
 
-    def test_each_task_gets_its_own_writer_when_the_cap_allows(self):
+    def test_writers_batch_about_three_tasks_each(self):
+        p = self.start("".join(contract(n) for n in range(1, 8)), "--agents", "8")
+        self.assertIn("3 writers", p.stdout)  # ceil(7/3)
+        with open(os.path.join(self.work, "work.json")) as f:
+            info = json.load(f)
+        self.assertEqual(sorted(info["groups"]), ["W01", "W02", "W03"])
+        self.assertEqual(info["agents"], 8)
+
+    def test_three_tasks_share_one_writer(self):
         p = self.start("".join(contract(n) for n in range(1, 4)), "--agents", "8")
-        self.assertIn("3 writers", p.stdout)
+        self.assertIn("1 writers", p.stdout)
         with open(os.path.join(self.work, "work.json")) as f:
             groups = json.load(f)["groups"]
-        self.assertEqual(groups, {"T01": ["T01"], "T02": ["T02"], "T03": ["T03"]})
+        self.assertEqual(groups, {"W01": ["T01", "T02", "T03"]})
+
+    def test_writers_never_exceed_twelve(self):
+        self.start("".join(contract(n) for n in range(1, 41)), "--agents", "64")
+        with open(os.path.join(self.work, "work.json")) as f:
+            self.assertEqual(len(json.load(f)["groups"]), 12)
 
     def test_every_tier_uses_the_sonnet_writer_model(self):
         p = self.start(contract(1) + contract(2, extra="- Tier: deep\n")
                        + contract(3, extra="- Tier: light\n"), "--agents", "8")
         rows = {l.split()[0]: l.split()[1] for l in p.stdout.splitlines()
-                if l[:1] == "T" and l[1:3].isdigit()}
-        self.assertEqual(rows, {"T01": "sonnet", "T02": "sonnet", "T03": "sonnet"})
+                if l[:1] == "W" and l[1:3].isdigit()}
+        self.assertEqual(rows, {"W01": "sonnet"})  # one writer holds the light, std and deep tasks
 
 
 class ReviewPickingTests(PlanCase):
@@ -137,7 +150,15 @@ class ReviewPickingTests(PlanCase):
         self.assertIn("T03(lint warnings)", p.stdout)
         self.assertNotIn("T01(", p.stdout)
         self.assertEqual(sorted(os.listdir(os.path.join(self.work, "review-briefs"))),
-                         ["R01.md", "R02.md"])
+                         ["R01.md"])  # 2 risky tasks fit one reviewer
+
+    def test_reviewers_batch_about_three_tasks_each(self):
+        self.start("".join(contract(n) for n in range(1, 8)), "--agents", "8")
+        self.finish_bodies(range(1, 8))
+        p = self.tool("review", self.plan, "--all")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(sorted(os.listdir(os.path.join(self.work, "review-briefs"))),
+                         ["R01.md", "R02.md", "R03.md"])  # ceil(7/3)
 
     def test_review_all_picks_every_task(self):
         p = self.tool("review", self.plan, "--all")
@@ -215,10 +236,10 @@ class SetupTests(PlanCase):
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         cfg = json.loads(self.read(self.settings()))
         self.assertEqual(cfg["theme"], "dark")
-        self.assertEqual(cfg["env"]["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"], "64")
+        self.assertNotIn("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", cfg.get("env", {}))  # unset = default 20, already enough
         allow = cfg["permissions"]["allow"]
         self.assertIn("Bash(ls)", allow)
-        self.assertIn("Edit(**/docs/superpowers/plans/**)", allow)
+        self.assertIn("Edit(**/docs/plans/**)", allow)
         self.assertTrue(any(a.startswith("Bash(python3 ") and a.endswith("plan_tool.py *)")
                             for a in allow), allow)
         self.assertTrue(os.path.exists(self.settings() + ".bak"))
@@ -226,6 +247,14 @@ class SetupTests(PlanCase):
         self.assertIn("model: sonnet", agent)
         self.assertIn("hook-lint", agent)
         self.assertNotIn("__PLAN_TOOL__", agent)
+
+    def test_apply_keeps_a_cap_of_twelve_or_more_and_raises_a_lower_one(self):
+        for old, want in (("40", "40"), ("12", "12"), ("5", "16")):
+            with open(self.settings(), "w") as f:
+                json.dump({"env": {"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": old}}, f)
+            self.assertEqual(self.tool("setup", "--apply").returncode, 0)
+            cfg = json.loads(self.read(self.settings()))
+            self.assertEqual(cfg["env"]["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"], want, old)
 
     def test_second_apply_is_a_no_op(self):
         self.assertEqual(self.tool("setup", "--apply").returncode, 0)

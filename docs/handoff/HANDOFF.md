@@ -23,8 +23,8 @@
  M opencode-skills/AGENTS.md
 ?? .claude/
 ?? CLAUDE.md
-?? claude-skills/docs/superpowers/plans/2026-10-04-variant-parity-repair.md
-?? claude-skills/docs/superpowers/specs/2026-10-04-variant-parity-repair-design.md
+?? claude-skills/docs/plans/2026-10-04-variant-parity-repair.md
+?? claude-skills/docs/specs/2026-10-04-variant-parity-repair-design.md
 ?? docs/
 ?? opencode-skills/CLAUDE.md
 - Recent commits:
@@ -36,7 +36,7 @@ d54683a commit
 
 ### Model Summary
 - Goal: make glm-skills, hybrid-skills and opencode-skills variants keep the same core as the originals in claude-skills, differing only by harness mechanics; plus port the opencode v2.0.22 `shell` permission key.
-- Spec and plan (untracked, never commit): claude-skills/docs/superpowers/specs/2026-10-04-variant-parity-repair-design.md and .../plans/2026-10-04-variant-parity-repair.md (50 tasks T01–T50).
+- Spec and plan (untracked, never commit): claude-skills/docs/specs/2026-10-04-variant-parity-repair-design.md and .../plans/2026-10-04-variant-parity-repair.md (50 tasks T01–T50).
 - Execution: claude-dev-team-v3.2 with PLAN ADOPTION, profile balanced, in a separate integration worktree on branch parity-repair (scratchpad/skillz-parity), so the user's dirty tree on main stays untouched.
 - Progress at this point: 25/50 slices merged (T01–T09, T11, T12, T16, T18, T20, T22, T24, T26, T30, T32, T34, T36, T39–T42); checkpoints 1–2 pass (vacuous: no gate commands configured).
 - In flight: F1 (hybrid audit stale frozen tests); reviewers r3-1..r3-5 running. Review verdicts so far: r1-3 and r2-4 CHANGES_REQUIRED (1 MAJOR each), r2-1 and r2-5 APPROVED; the engine harvests fix slices on the next `devteam next`.
@@ -54,7 +54,7 @@ d54683a commit
 5. Review reports land in .claude/dev-team/reviews/*.report.md; the engine harvests fix slices itself. Anything UNKNOWN: read the report, then `devteam add-fixes <report>`.
 6. Known caveats to disclose in the final report: vacuous checkpoint gate, only part of the plan tasks got a plan-level review, T39 deviation (quote-aware chain split), lanes branch from main HEAD rather than parity-repair, F1/F2 follow-up slices, selftest FAILs in glm/oc possibly from macOS /var vs /private/var.
 7. After DAG exhausted: final sharded review + checkpoint, then conductor T50: run all suites and the four selftests in the worktree, apply the six guide-file edits by hand on main (uncommitted), record real baselines.
-8. `devteam finish` only when reviews are APPROVED (loop cap 2; leftovers to the user). Never push or merge to main; never commit docs/superpowers or the six user guide files.
+8. `devteam finish` only when reviews are APPROVED (loop cap 2; leftovers to the user). Never push or merge to main; never commit the docs/specs and docs/plans folders or the six user guide files.
 9. Memory note saved: opencode-shell-permission-unported (project memory) — update it once the shell-key port is merged.
 10. Final output: short Vietnamese report (persona Thảo to anh Châu): what passed, failures with exact error lines, deferred tasks and why, branch name parity-repair and commit list.
 

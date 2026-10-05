@@ -2,11 +2,11 @@
 
 ## Why inline by default
 
-Superpowers v5.0.6 (2026-03-24) replaced its spec/plan reviewer subagent
-loop after "regression testing across 5 versions with 5 trials each showed
-identical quality scores regardless of whether the review loop ran"; the
-loop cost ~25 minutes, while self-review "catches 3-5 real bugs per run in
-~30s". Review inline. Factual risk is handled in parallel by the claim
+The upstream skill dropped its spec/plan reviewer subagent loop: its
+regression testing across 5 versions with 5 trials each showed identical
+quality scores regardless of whether the review loop ran; the loop cost
+~25 minutes, while self-review catches 3-5 real bugs per run in ~30s.
+Review inline. Factual risk is handled in parallel by the claim
 verifier dispatched with the design message (`architectural.md` §3).
 
 On GLM this matters more, not less: a reviewer loop is a deep chain, and

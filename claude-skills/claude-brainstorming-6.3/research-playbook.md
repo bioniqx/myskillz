@@ -88,7 +88,7 @@ otherwise — the tier rule in every web-lane prompt is what prevents it.
 | --- | --- | --- |
 | Single fact / API detail | 1-3 | none (T0) or 1 `haiku` lane, ≤4 calls |
 | Comparison of 2-4 options | 4-8 searches + 2-6 fetches (two parallel batches) | 0-2 `sonnet` lanes, ≤6 calls each, only for multi-hop angles |
-| Broad landscape / new domain | 4-8 | 4-16 `sonnet` lanes, ≤6 calls each |
+| Broad landscape / new domain | 4-8 | 4-8 `sonnet` lanes, ≤6 calls each |
 
 Stop a lane when two consecutive searches add no new facts, the question
 is answered with adequate support, or the budget is spent — report

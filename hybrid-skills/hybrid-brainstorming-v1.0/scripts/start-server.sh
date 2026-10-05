@@ -6,7 +6,7 @@
 # Each session gets its own directory to avoid conflicts.
 #
 # Options:
-#   --project-dir <path>  Store session files under <path>/.hybrid-superpowers/brainstorm/
+#   --project-dir <path>  Store session files under <path>/.hybrid-brainstorm/brainstorm/
 #                         instead of /tmp. Files persist after server stops.
 #   --host <bind-host>    Host/interface to bind (default: 127.0.0.1).
 #                         Use 0.0.0.0 in remote/containerized environments.
@@ -130,7 +130,7 @@ umask 077
 # verifies each session's per-start instance id before signalling anything —
 # an unrelated process is never touched.
 if [[ -n "$PROJECT_DIR" ]]; then
-  HYBRID_BRAINSTORMING_ROOT="${PROJECT_DIR}/.hybrid-superpowers/brainstorm"
+  HYBRID_BRAINSTORMING_ROOT="${PROJECT_DIR}/.hybrid-brainstorm/brainstorm"
   if [[ -d "$HYBRID_BRAINSTORMING_ROOT" ]]; then
     for prior in "$HYBRID_BRAINSTORMING_ROOT"/*/; do
       [[ -d "$prior" ]] || continue
@@ -146,11 +146,11 @@ fi
 SESSION_ID="$$-$(date +%s)"
 
 if [[ -n "$PROJECT_DIR" ]]; then
-  SESSION_DIR="${PROJECT_DIR}/.hybrid-superpowers/brainstorm/${SESSION_ID}"
+  SESSION_DIR="${PROJECT_DIR}/.hybrid-brainstorm/brainstorm/${SESSION_ID}"
   # Persist the bound port and key per project so a restart reuses them and an
   # already-open browser tab reconnects to the same URL with a valid cookie.
-  export HYBRID_BRAINSTORMING_PORT_FILE="${PROJECT_DIR}/.hybrid-superpowers/brainstorm/.last-port"
-  export HYBRID_BRAINSTORMING_TOKEN_FILE="${PROJECT_DIR}/.hybrid-superpowers/brainstorm/.last-token"
+  export HYBRID_BRAINSTORMING_PORT_FILE="${PROJECT_DIR}/.hybrid-brainstorm/brainstorm/.last-port"
+  export HYBRID_BRAINSTORMING_TOKEN_FILE="${PROJECT_DIR}/.hybrid-brainstorm/brainstorm/.last-token"
 else
   SESSION_DIR="/tmp/hybrid-brainstorming-${SESSION_ID}"
 fi

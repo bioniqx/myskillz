@@ -65,7 +65,7 @@ status_line = _pick("status_line")
 
 
 def lanes_dir(root: Path) -> Path:
-    d = Path(root) / ".hybrid-superpowers" / "brainstorm" / "lanes"
+    d = Path(root) / ".hybrid-brainstorm" / "brainstorm" / "lanes"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -94,6 +94,28 @@ def release_slot(fh) -> None:
         fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
     finally:
         fh.close()
+
+
+def acquire_slots(lanes: Path, tier: str, max_parallel: int, pool: int, wait_s: float):
+    """Hold one tier slot AND one slot of the shared cross-tier pool, taken in that fixed order.
+
+    Returns (handles, busy): handles are the held slots ([] when busy); busy names what was full ("" or the tier or "pool").
+    wait_s is one budget for both waits.
+    """
+    deadline = time.monotonic() + max(0.0, float(wait_s))
+    tier_fh = acquire_slot(lanes, tier, max_parallel, wait_s)
+    if tier_fh is None:
+        return [], tier
+    pool_fh = acquire_slot(lanes, "pool", pool, max(0.0, deadline - time.monotonic()))
+    if pool_fh is None:
+        release_slot(tier_fh)
+        return [], "pool"
+    return [tier_fh, pool_fh], ""
+
+
+def release_slots(handles) -> None:
+    for fh in reversed(handles):
+        release_slot(fh)
 
 
 def record(root: Path, rec: dict) -> None:
@@ -453,22 +475,27 @@ def run_lane(kind: str, a, root: Path) -> str:
         return fail("cooldown", msg)
     max_parallel = int(tcfg.get("max_parallel", 1))
     wait_s = float(routing.get("slot_wait_s", 60))
-    slot = acquire_slot(lanes, tier, max_parallel, wait_s)
-    if slot is None:
-        msg = "all {} slots of tier {} busy for {:.0f}s".format(max_parallel, tier, wait_s)
+    pool, pool_problem = hybrid_shared.pool_from_env()
+    if pool is None:
+        oc("ERROR", tier, spec, "config", pool_problem)
+        return fail("config", pool_problem)
+    slot, busy = acquire_slots(lanes, tier, max_parallel, pool, wait_s)
+    if not slot:
+        msg = ("all {} slots of tier {} busy for {:.0f}s".format(max_parallel, tier, wait_s) if busy == tier else
+               "all {} shared opencode pool slots busy for {:.0f}s".format(pool, wait_s))
         oc("ERROR", tier, spec, "timeout", msg)
         return fail("busy", msg)
     # The wait may have been long: another lane can have switched the run, tripped the breaker or been throttled.
     if preset == "hybrid" and hybrid_shared.run_switched(lanes):
-        release_slot(slot)
+        release_slots(slot)
         return switched()
     if hybrid_shared.breaker_open(lanes, tier, spec):
-        release_slot(slot)
+        release_slots(slot)
         skipped = hybrid_shared.breaker_skip(lanes, tier, spec)
         return fail("breaker", "tier {} was tripped while this lane waited for a slot; {} lanes skipped so far"
                     .format(tier, skipped))
     if in_cooldown(lanes, tier, time.time()):
-        release_slot(slot)
+        release_slots(slot)
         msg = "tier {} started cooling down while this lane waited for a slot".format(tier)
         oc("ERROR", tier, spec, "throttle", msg)
         return fail("cooldown", msg)
@@ -478,7 +505,7 @@ def run_lane(kind: str, a, root: Path) -> str:
         cmd = build_cmd(os.environ.get("HYBRID_BRAINSTORMING_OC_BIN", "opencode"), AGENT_NAME, rec["model"], rec["variant"], prompt)
         env = dict(os.environ, **config_env(role, prompt))
         env["PWD"] = str(root)
-        while True:  # connection failures retry as fresh runs; the slot stays held (a throttled provider gets less load)
+        while True:  # connection failures retry as fresh runs; the slots stay held (a throttled provider gets less load)
             res = run_once(cmd, root, env, lanes / "{}.jsonl".format(a.id), lanes / "{}.err".format(a.id),
                            int(tcfg.get("stall_s", 90)), int(tcfg.get("timeout_s", 300)))
             reason = res.get("reason") or ""
@@ -493,7 +520,7 @@ def run_lane(kind: str, a, root: Path) -> str:
             if preset == "hybrid" and hybrid_shared.run_switched(lanes):
                 break  # another lane already moved the run to Claude: stop spawning
     finally:
-        release_slot(slot)
+        release_slots(slot)
     rec["duration_s"] = round(float(res.get("duration") or 0.0), 1)
     usage = res.get("usage") or {}
     rec["tokens"] = {k: int(usage.get(k) or 0) for k in TOKEN_KEYS}
@@ -602,7 +629,7 @@ def _doctor_text(ping: bool, root: Path) -> str:
 
 
 def _stats_text(root: Path) -> str:
-    base = Path(root) / ".hybrid-superpowers" / "brainstorm"
+    base = Path(root) / ".hybrid-brainstorm" / "brainstorm"
     path = base / "lanes.jsonl"
     alerts = hybrid_shared.breaker_summary(base / "lanes", TOOL_NAME)  # one OC-ERROR per tripped root cause
     for line in alerts:
@@ -683,7 +710,7 @@ def main(argv: list) -> int:
         except Exception as exc:
             detail = "{}: {}".format(type(exc).__name__, _one_line(exc))
             line = hybrid_shared.oc_line("ERROR", TOOL_NAME, args.id, "", "", "crash", detail)
-            lanes = root / ".hybrid-superpowers" / "brainstorm" / "lanes"
+            lanes = root / ".hybrid-brainstorm" / "brainstorm" / "lanes"
             hybrid_shared.log_line(lanes / OC_LOG_NAME, line)
             preset = getattr(args, "resolved_preset", "") or (
                 hybrid_shared.mode_to_preset(args.preset)[0] if args.preset else "")

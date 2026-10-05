@@ -56,7 +56,7 @@ dispatches may run in that same turn.
 # R3 - Call 2: write the Contracts file
 
 Count the tasks N from the spec. `N <= 1` -> inline path (R7). `N >= 2` ->
-write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
+write `docs/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
 only this:
 
 ````markdown
@@ -145,7 +145,9 @@ to review every task instead of only the risky ones.
    that order. On OpenCode v2 (your subagent tool takes a `background`
    param), dispatch each row instead with `background: true`, one after
    another with no wait, then end the turn; when the last one reports, run
-   the printed `wait`, `review` and `assemble` commands as above. Interactive
+   the printed `wait`, `review` and `assemble` commands as above. On OpenCode
+   each message holds at most 6 rows by default (up to 8 via `OC_MAX_LANES`);
+   send the next MESSAGE after the previous one replied. Interactive
    sessions only: a headless run can exit before background children report.
    Tell the user once that `<TOOL> doctor` shows how to enable the fast lane.
 
@@ -153,7 +155,7 @@ to review every task instead of only the risky ones.
 
 Report, with the numbers from the build output:
 
-"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K
+"Plan saved to `docs/plans/<file>.md` - N tasks, W waves, up to K
 tasks in parallel. It is self-contained: any agent or engineer can execute it
 via its Execution Protocol. Options:
 

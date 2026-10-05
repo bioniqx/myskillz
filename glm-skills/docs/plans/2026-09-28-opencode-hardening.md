@@ -10898,7 +10898,7 @@ def cmd_setup(a):
                 env[k] = v
                 changes.append("env.%s = %s" % (k, v))
         allow = new.setdefault("permissions", {}).setdefault("allow", [])
-        for rule in ("Bash(%s *)" % qtool(), "Edit(**/docs/superpowers/plans/**)"):
+        for rule in ("Bash(%s *)" % qtool(), "Edit(**/docs/plans/**)"):
             if rule not in allow:
                 allow.append(rule)
                 changes.append("permissions.allow += %s" % rule)
@@ -12001,7 +12001,7 @@ class StartServerProjectDirTest(unittest.TestCase):
         if pid_file.exists():
             self.addCleanup(_stop_pid, int(pid_file.read_text().strip()))
         self.assertTrue(os.path.isabs(info["screen_dir"]), info["screen_dir"])
-        expected_root = os.path.realpath(os.path.join(self.tmp, "proj", ".superpowers", "brainstorm"))
+        expected_root = os.path.realpath(os.path.join(self.tmp, "proj", ".brainstorm", "brainstorm"))
         self.assertTrue(
             os.path.realpath(info["screen_dir"]).startswith(expected_root + os.sep),
             info["screen_dir"],
@@ -12247,7 +12247,7 @@ has "$S" '`background: true` and a `timeout`'
 has "$S" 'python3 "$H/oc_harness.py" result "$OUT"'
 has "$S" 'python3 oc_harness.py result OUT_DIR'
 hasnt "$S" 'read `<id>.jsonl`'
-has "$S" '.superpowers/drafts/lanes.json'
+has "$S" '.brainstorm/drafts/lanes.json'
 has "$S" 'Tool-name map, v1:'
 has "$S" 'Tool-name map, v2:'
 has "$A" 'the main session writes the pre-draft'
@@ -12338,14 +12338,14 @@ for d in "$BASE" \
   if [ -n "$d" ] && [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
 done
 [ -n "$H" ] || { echo "brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
-OUT=".superpowers/drafts/lanes"
+OUT=".brainstorm/drafts/lanes"
 mkdir -p "$OUT"
-python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"
+python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"
 python3 "$H/oc_harness.py" result "$OUT"
 ```
 
-Write `.superpowers/drafts/lanes.json` before the call (R0 allows writes
-under `.superpowers/drafts/`). It is a JSON array of lane objects. Each
+Write `.brainstorm/drafts/lanes.json` before the call (R0 allows writes
+under `.brainstorm/drafts/`). It is a JSON array of lane objects. Each
 lane needs `id` (unique string), `agent` (`explorer` or `researcher`, the
 neutral read-only/web agents installed from `opencode/agents/`), `model`
 (`flash` or `pro`), `effort` (`low` for these lanes), `dir` (working
@@ -12386,7 +12386,7 @@ In `brainstorming-glm/architectural.md` §3, replace the `- **Spec pre-draft**` 
   permission prompt (acceptEdits, auto, or bypass mode). Use a `fork` if
   the harness offers one (it inherits the conversation); otherwise
   `general-purpose` with the design pasted. It writes to
-  `.superpowers/drafts/<topic>-design.md` (never the specs path), does not
+  `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
   On OpenCode the lane agents (`explorer`, `researcher`) are `edit: deny`,
   so no lane can write it: the main session writes the pre-draft itself
@@ -12407,7 +12407,7 @@ Replace the §5 body `Invoke \`writing-plans\`. No other skill, no code, no scaf
 
 ```text
 Invoke `writing-plans` and pass the committed spec path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose) as its input. No other skill, no code, no scaffolding.
 ```
 
@@ -12444,7 +12444,7 @@ If the first line of `brainstorming-glm/CHANGELOG.md` already starts with the `9
   kills a foreground shell call after 120 s and orphans web lanes.
 - SKILL.md: results come from `oc_harness.py result <out>` instead of
   the raw `<id>.jsonl`. `lanes.json` and the lane output live under
-  `.superpowers/drafts/`.
+  `.brainstorm/drafts/`.
 - SKILL.md: the scripts dir is resolved by one ordered loop (Base
   directory, `$OPENCODE_CONFIG_DIR/skills`, `.opencode/skills`,
   `~/.config/opencode/skills`, `.agents`, `~/.agents`, `.claude`,

@@ -91,6 +91,7 @@ class FlowBase(unittest.TestCase):
                         PYTHONDONTWRITEBYTECODE="1", HYBRID_OC_RETRY_DELAY_S="0", **MODELS_ENV)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.pop("HYBRID_OPENCODE_MAX_PARALLEL", None)
+        self.env.pop("HYBRID_OPENCODE_POOL", None)
         self.state_dir = self.repo / STATE
 
     def engine(self, *args, check=True, engine=ENGINE, cwd=None):
@@ -649,6 +650,17 @@ class SlotCapTest(FlowBase):
         self.assertEqual(r.stdout.count("=== DISPATCH"), 1, r.stdout)
         self.assertNotIn("SKIPPED", r.stdout)
 
+    def test_next_never_exceeds_the_shared_pool(self):
+        self.set_routing({"tiers": {"std": {"max_parallel": 4}, "lite": {"max_parallel": 4}}})
+        self.init(plan_of(*[docs_slice("D%d" % i) for i in range(1, 5)] +
+                          [chore_slice("C%d" % i) for i in range(1, 5)]))
+        r = self.engine("next", "--no-review")
+        self.assertEqual(r.stdout.count("=== LANE"), 6, r.stdout)   # tiers 4+4, default pool 6
+        self.assertEqual(r.stdout.count("=== LANE C"), 4, r.stdout)
+        self.assertEqual(r.stdout.count("=== LANE D"), 2, r.stdout)
+        self.env["HYBRID_OPENCODE_POOL"] = "3"
+        self.assertIn("no free oc:lite lane slot", self.engine("dispatch", "D3", "D4").stdout)
+
     def test_fail_frees_tier_slot(self):
         self.set_routing({"tiers": {"lite": {"max_parallel": 1}}})
         self.init(plan_of(docs_slice("D1"), docs_slice("D2")))
@@ -664,6 +676,14 @@ class SlotCapTest(FlowBase):
               "slices": {"A": {"status": "inflight"}, "B": {"status": "failed"}, "C": {"status": "inflight"}},
               "backends": {"A": "oc:lite", "B": "oc:lite", "C": "claude"}}
         self.assertEqual(devteam.oc_slots(st, "lite"), 2)
+
+    def test_oc_slots_pool_counts_every_tier(self):
+        st = {"routing": {"tiers": {"std": {"max_parallel": 4}, "lite": {"max_parallel": 4}}},
+              "slices": {k: {"status": "inflight"} for k in "ABCDE"},
+              "backends": {"A": "oc:std", "B": "oc:std", "C": "oc:std", "D": "oc:lite", "E": "oc:lite"}}
+        os.environ.pop("HYBRID_OPENCODE_POOL", None)
+        self.assertEqual(devteam.oc_slots(st, "std"), 1)    # pool 6 - 5 in flight
+        self.assertEqual(devteam.oc_slots(st, "lite"), 1)
 
 
 class LaneBackendTest(FlowBase):

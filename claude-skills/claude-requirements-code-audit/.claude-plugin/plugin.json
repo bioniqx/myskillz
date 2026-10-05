@@ -1,7 +1,7 @@
 {
   "name": "claude-req-audit",
   "version": "2.0.1",
-  "description": "Requirements ↔ code audit: up to 64 parallel read-only investigators, adversarial verification, scripted report. Bundles the skill, three worker agents (claude-rca-investigator, claude-rca-verifier, claude-rca-parser) and the audit guard hooks.",
+  "description": "Requirements ↔ code audit: parallel read-only investigators (width follows the live subagent cap), adversarial verification, scripted report. Bundles the skill, three worker agents (claude-rca-investigator, claude-rca-verifier, claude-rca-parser) and the audit guard hooks.",
   "author": {
     "name": "bioniqx"
   },

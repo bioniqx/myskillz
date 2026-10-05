@@ -102,13 +102,6 @@ const URL_HOST = process.env.BRAINSTORM_URL_HOST || (HOST === '127.0.0.1' ? 'loc
 const SESSION_DIR = process.env.BRAINSTORM_DIR || '/tmp/brainstorm';
 const CONTENT_DIR = path.join(SESSION_DIR, 'content');
 const STATE_DIR = path.join(SESSION_DIR, 'state');
-const SUPERPOWERS_VERSION = readSuperpowersVersion();
-const TELEMETRY_DISABLE_ENV_VARS = [
-  'SUPERPOWERS_DISABLE_TELEMETRY',
-  'DISABLE_TELEMETRY',
-  'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'
-];
-const SUPERPOWERS_TELEMETRY_DISABLED = TELEMETRY_DISABLE_ENV_VARS.some(name => isTruthyEnv(process.env[name]));
 let ownerPid = process.env.BRAINSTORM_OWNER_PID ? Number(process.env.BRAINSTORM_OWNER_PID) : null;
 
 // Per-session secret key. The companion is reachable by any local browser tab
@@ -204,41 +197,9 @@ const helperInjection = '<script>\n' + helperScript + '\n</script>';
 
 // ========== Helper Functions ==========
 
-function readSuperpowersVersion() {
-  // Read the version from this skill's own CHANGELOG heading (e.g. "# 8.0 (from
-  // 7.0) — ..."). No network call, no external manifest lookup: if it can't be
-  // found, the brand shows no version rather than a placeholder like "unknown".
-  try {
-    const changelog = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf-8');
-    const match = changelog.match(/^#\s+([0-9]+(?:\.[0-9]+)*)/m);
-    if (match) return match[1];
-  } catch (e) {
-    // CHANGELOG.md missing or unreadable: omit the version.
-  }
-  return null;
-}
-
-function isTruthyEnv(value) {
-  if (!value) return false;
-  const normalized = String(value).trim().toLowerCase();
-  if (!normalized) return false;
-  return !['0', 'false', 'no', 'off'].includes(normalized);
-}
-
-function escapeHtmlText(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function brandMarkup() {
-  // No external assets: no logo image, no remote host reference.
-  const label = SUPERPOWERS_TELEMETRY_DISABLED ? 'Prime Radiant Superpowers' : 'Superpowers';
-  const text = SUPERPOWERS_VERSION ? label + ' v' + SUPERPOWERS_VERSION : label;
-
-  return '<div class="brand"><a href="https://github.com/obra/superpowers"><span class="brand-copy">' + escapeHtmlText(text) + '</span></a></div>';
+  // Plain text label: no external assets, no links.
+  return '<div class="brand"><span class="brand-copy">Brainstorming</span></div>';
 }
 
 function renderBranding(html) {

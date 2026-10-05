@@ -138,13 +138,14 @@ def write_fallback(plan_path: str, gid: str, task_ids: list, reason: str, errors
 
 
 def new_shared(info: dict) -> dict:
-    """In-process state shared by every group thread: lock, tier semaphores, cooldowns, tripped tiers."""
+    """In-process state shared by every group thread: lock, tier semaphores, the cross-tier pool, cooldowns, tripped tiers."""
     tiers = (info.get("oc") or {}).get("tiers") or {}
     sems = {}
     for name, cfg in tiers.items():
         size = int((cfg or {}).get("max_parallel", 1) or 1)
         sems[name] = threading.BoundedSemaphore(max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, size)))
-    return {"lock": threading.Lock(), "sems": sems, "cooldown": {}, "tripped": {},
+    pool = hybrid_shared.pool_from_env()[0] or hybrid_shared.OC_POOL_DEFAULT  # an invalid value falls back to the default
+    return {"lock": threading.Lock(), "sems": sems, "pool": threading.BoundedSemaphore(pool), "cooldown": {}, "tripped": {},
             "binary": os.environ.get("HYBRID_WRITING_PLANS_OC_BIN", "opencode")}
 
 
@@ -361,7 +362,8 @@ def run_group(plan_path: str, gid: str, task_ids: list, tier_name: str, shared: 
     if reason:
         reason, errs_out = stop_early(reason)
     else:
-        with _semaphore(shared, tier_name, tcfg.get("max_parallel", 1)):
+        # tier slot first, then the shared pool slot (fixed order); both are held through retry sleeps and released together
+        with _semaphore(shared, tier_name, tcfg.get("max_parallel", 1)), shared["pool"]:
             started = time.time()  # a queued group's clock starts when it gets a slot
             reason = blocked()
             if reason:

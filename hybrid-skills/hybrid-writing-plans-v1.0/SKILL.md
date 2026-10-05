@@ -39,7 +39,7 @@ The context ends its opencode block with a `mode:` line (a separate `mode: THORO
 1. **Serial only where divergence is born** (the Contracts). Everything else runs in parallel, one message per wave.
 2. **Never type what the script generates:** Execution Protocol, File Structure, Execution Waves, `[P]`, Depends/Runs-after lines, Interfaces blocks, writer briefs, opencode briefs, fallback briefs. Output tokens are the bottleneck.
 3. **Machines check, models judge.** Structure, placeholders, portability, file ownership, signatures, Run/Expected, `git add` scope and code-block syntax are one script call - never a model re-read. The linter is the oracle for every body, whoever wrote it.
-4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the fan-out to the cap from the context line, and sizes the opencode fan-out to each tier's `max_parallel` (at most 8 concurrent opencode runs per tier, clamped); never dispatch more.
+4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the Claude fan-out as writers = min(live cap, 12, ceil(Claude-routed tasks/3)), batching about 3 tasks per writer because every agent has a fixed token overhead, and sizes the opencode fan-out to each tier's `max_parallel` (at most 8 per tier, clamped) AND a shared pool across all tiers (`HYBRID_OPENCODE_POOL`, default 6, at most 8), so no more than the pool's worth of opencode runs are in flight at once; never dispatch more.
 5. **Keep the cache warm.** Don't change model or effort mid-skill (each change re-reads the whole conversation uncached). Writers get facts from briefs, not from exploring.
 6. **Fix-and-move-on.** After a fix, re-run only the script - no re-review.
 
@@ -75,7 +75,7 @@ Rules:
 - `oc-write` runs once per `contracts` run, always as a background Bash call, in the same message as the Claude `Agent` calls. It lints every body, sends lint repairs back to the same opencode session, prints each OC line as its group finishes and writes a fallback brief for anything it gives up on. It always exits 0; `wait` is what reports the failures to you. A `contracts` re-run keeps every opencode task body that survived (contract unchanged, still lint-clean, for example fixed by a reviewer) and only prints an `OPENCODE` row for groups with a pending or invalidated task; `oc-write` never rewrites a finished body. The run mode is frozen in `work.json`: a re-run without `--preset` keeps it, and a doctor cache that goes stale in the middle of a run never moves a tier to Claude.
 - A `FALLBACK` line from `wait` is one Claude `Agent` call: launch it exactly as printed (subagent type, model, description, prompt), once. Never retry the opencode group in place.
 - `oc-write` retries a group whose opencode run failed on the connection (`spawn`, `stall`, `throttle`, `crash`) itself, up to 3 times, 10, 30 and 60 s apart, as a fresh run (never a `--session` continuation). Each failed try is one `OC-WARN ... kind=<kind> :: retry <n>/3 in <s>s: <detail>` line. Lint-repair turns are separate and unchanged. `timeout`, `context` and the gate kinds (`grounding`, `lint`, `oracle`, `gate`, `empty`, `format`, `recovered`) are not connection problems: no retry, no switch.
-- Overflow queues, it does not move to Claude. A tier runs `max_parallel` groups at once, each of up to `oc_group_max` tasks; `contracts` splits the tasks beyond that into more groups of the same size (in mode hybrid and in mode opencode), and `oc-write` runs them as slots free up, in the same call (`wait` covers them; a `NOTE ... queue for a free slot` line says how many). Only `oc_overflow: "claude"` in `routing.json` (mode hybrid) restores the old split, where the heaviest overflow tasks go to Claude writers. A tier that is unusable, throttled or slow costs nothing extra: an unusable tier's tasks go to Claude (mode hybrid) or are held (mode opencode) at `contracts` time, and failed groups come back as `FALLBACK`.
+- Overflow queues, it does not move to Claude. A tier runs at most min(`max_parallel`, pool) groups at once (the pool is shared by all tiers: `HYBRID_OPENCODE_POOL`, default 6, up to 8), each of up to `oc_group_max` tasks; `contracts` splits the tasks beyond that into more groups of the same size (in mode hybrid and in mode opencode), and `oc-write` runs them as slots free up, in the same call (`wait` covers them; a `NOTE ... queue for a free slot` line says how many). Only `oc_overflow: "claude"` in `routing.json` (mode hybrid) restores the old split, where the heaviest overflow tasks go to Claude writers. A tier that is unusable, throttled or slow costs nothing extra: an unusable tier's tasks go to Claude (mode hybrid) or are held (mode opencode) at `contracts` time, and failed groups come back as `FALLBACK`.
 
 Failure policy:
 
@@ -103,7 +103,7 @@ Read the spec fully and 2-5 pattern files picked from the context (a test, a sim
 
 ### Phase 1 - Contracts (serial, ONE Write)
 
-Write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` containing only:
+Write `docs/plans/YYYY-MM-DD-<feature>.md` containing only:
 
 ````markdown
 # [Feature] Implementation Plan
@@ -148,7 +148,7 @@ Contract rules (quality is locked here):
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently. The tighter the contract, the better a cheap writer does.
 - Legitimate project vocabulary that the placeholder/portability scan would flag (for example a to-do app, or a class named `Task`) needs `--allow WORD` on every `contracts`/`assemble`/`check` call - decide this now, not after `assemble` fails.
 
-Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if you know the real cap is higher than what the script detected; always add `--preset <mode>` with the mode chosen in Step 0). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table for the Claude groups (only when there are any), the `OPENCODE` block for the opencode groups (only when there are any) and the next command.
+Run `TOOL contracts <plan> --spec <spec>` (add `--agents K` only if you know the real cap differs from what the script detected; Claude writers stay <= 12 and ~ceil(tasks/3); always add `--preset <mode>` with the mode chosen in Step 0). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table for the Claude groups (only when there are any), the `OPENCODE` block for the opencode groups (only when there are any) and the next command.
 
 ### Phase 2 - Fan-out writers (ONE message)
 
@@ -185,7 +185,7 @@ Read `task-writer-prompt.md` in this skill dir for the body format. Write the sk
 
 After `OK`, offer (waves/width from the script output):
 
-**"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K tasks in parallel. It is self-contained: any agent or engineer can execute it via its Execution Protocol. Options:**
+**"Plan saved to `docs/plans/<file>.md` - N tasks, W waves, up to K tasks in parallel. It is self-contained: any agent or engineer can execute it via its Execution Protocol. Options:**
 
 **1. Team-driven (recommended)** - mode `hybrid` or `opencode`: the `hybrid-team` skill adopts this plan as authoritative and implements it end to end, low-judgment slices on opencode; mode `claude`: the `dev-team` skill does the same, Claude only.
 
@@ -203,8 +203,8 @@ After `OK`, offer (waves/width from the script output):
 - Inline -> execute the plan yourself here, sequentially, with checkpoints.
 - Hand off -> nothing else; the plan carries everything.
 
-## One-time setup (tell the user when the context shows cap < 64, `opencode: unavailable`, or a stale/placeholder writer agent)
+## One-time setup (tell the user when the context shows cap < 12, `opencode: unavailable`, or a stale/placeholder writer agent)
 
-`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `hybrid-plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn); a stale or placeholder copy is replaced, a current one is left alone. Never run `--apply` without the user's consent.
+`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=16` only when the variable is set and below 12 (unset keeps the default 20; a higher value is never lowered), pre-approves `TOOL` and edits under `docs/plans/`, and installs the `hybrid-plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn); a stale or placeholder copy is replaced, a current one is left alone. Never run `--apply` without the user's consent.
 
 `TOOL doctor --ping` checks the opencode binary and version, validates the shared models (`HYBRID_OPENCODE_STD` / `HYBRID_OPENCODE_LITE`) and the per-skill routing file, confirms each tier's model is listed, sends each tier one tiny ping and writes the doctor cache the context line reads. Failures print as `OC-ERROR` lines and one tier's failure never disables the other; it never creates or edits a config file. Run it once after installing opencode or changing the variables (restart Claude Code first), and again when the context line shows `unavailable` or a `claude(...)` tier; a cache entry past its time limit counts as unusable. The context line itself never spawns opencode. `TOOL stats` summarises the per-tier telemetry (round-1 pass rate, fallbacks, review fix rate). Optional: `/fast` speeds the serial contract phase on Opus.

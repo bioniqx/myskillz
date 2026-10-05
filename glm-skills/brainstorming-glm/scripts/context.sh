@@ -3,8 +3,8 @@
 # Contract: read-only (no git index locks), bounded output (<=~55 lines),
 # fast on huge repos, ALWAYS exits 0 — a non-zero exit cancels the skill.
 cap() { head -n "$1" 2>/dev/null; }
-# Concurrent model calls are limited to 8: print at most 8 so the model is told 8.
-c8() { case "$1" in ''|*[!0-9]*) echo 8 ;; *) if [ "$1" -gt 8 ]; then echo 8; elif [ "$1" -lt 1 ]; then echo 1; else echo "$1"; fi ;; esac; }
+# Concurrent model calls are limited to 8: clamp to 1..8; $2 = value for empty/non-numeric input.
+c8() { case "$1" in ''|*[!0-9]*) echo "${2:-8}" ;; *) if [ "$1" -gt 8 ]; then echo 8; elif [ "$1" -lt 1 ]; then echo 1; else echo "$1"; fi ;; esac; }
 export GIT_OPTIONAL_LOCKS=0
 
 skill_dir=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
@@ -57,7 +57,7 @@ case "$fast$mid$big" in
   *) [ "$route" = glm ] && echo "glm: route is GLM but model slots are unmapped — set ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3-flash (glm-tuning.md §2)" ;;
 esac
 if [ "$harness" = opencode ]; then
-  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-8}") (set OC_MAX_LANES or pass oc_harness run --width N; default and max 8) oc_major=$oc_major"
+  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-6}" 6) (set OC_MAX_LANES or pass oc_harness run --width N; default 6, hard max 8) oc_major=$oc_major"
 else
   echo "caps: subagents=$(c8 "${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-8}") workflow=$(c8 "${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-8}") compact_window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-default}"
 fi
@@ -114,6 +114,6 @@ if [ "$in_home" = no ]; then
   [ -f go.mod ] && echo "go_mod: $(grep -E '^(go |module |[[:space:]]+[a-z].* v[0-9])' go.mod 2>/dev/null | cap 20 | tr -s ' \t' ' ' | tr '\n' ';')"
   [ -f Cargo.toml ] && echo "cargo_deps: $(awk '/^\[dependencies\]/{f=1;next} /^\[/{f=0} f&&NF' Cargo.toml 2>/dev/null | cap 20 | tr -d ' ' | tr '\n' ' ')"
   echo "docs: $(ls -d README* CLAUDE.md AGENTS.md docs doc adr 2>/dev/null | tr '\n' ' ')"
-  [ -d docs/superpowers/specs ] && echo "recent_specs: $(ls -1t docs/superpowers/specs 2>/dev/null | cap 4 | tr '\n' ' ')"
+  [ -d docs/specs ] && echo "recent_specs: $(ls -1t docs/specs 2>/dev/null | cap 4 | tr '\n' ' ')"
 fi
 exit 0

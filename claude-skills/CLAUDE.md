@@ -27,7 +27,7 @@ Skills in this repo:
 | Directory | Skill | What it does |
 |---|---|---|
 | `claude-brainstorming-6.3/` | `claude-brainstorming` | Turns a vague request into an approved design via parallel code+web research lanes, gated by one human approval before any implementation. |
-| `claude-dev-team-v3.2/` | `claude-dev-team` | Event-driven multi-agent implementation pipeline: a deterministic Python scheduler (`devteam.py`) dispatches up to 64 parallel `claude-programmer`/`claude-code-reviewer`/`claude-spot-reviewer`/`claude-investigator`/`claude-team-leader` subagents, each in its own git worktree, gated by hooks (`guard.py`). |
+| `claude-dev-team-v3.2/` | `claude-dev-team` | Event-driven multi-agent implementation pipeline: a deterministic Python scheduler (`devteam.py`) dispatches parallel (live cap, programmers ≤16) `claude-programmer`/`claude-code-reviewer`/`claude-spot-reviewer`/`claude-investigator`/`claude-team-leader` subagents, each in its own git worktree, gated by hooks (`guard.py`). |
 | `claude-requirements-code-audit/` | `claude-requirements-code-audit` | Audits a codebase against a requirements/spec document using parallel investigator + adversarial verifier subagents, driven by `scripts/audit.py`. Ships as a full Claude Code plugin (`.claude-plugin/plugin.json`) with its own agents and `hooks/audit_guard.py`. |
 | `claude-writing-plans-6.2/` | `claude-writing-plans` | Generates a portable, TDD-oriented implementation plan (Markdown checkboxes) from a spec, fanning task-body writing out to parallel subagents via `scripts/plan_tool.py` and a deterministic linter. |
 | `claude-systematic-debugging-6.3/` | `claude-systematic-debugging` | Root-cause-first debugging workflow (FAST / STANDARD / SWARM lanes) with shell helpers (`stress.sh`, `bisect-parallel.sh`, `find-polluter.sh`, `snapshot.sh`) for parallelized repro, bisection, and flake-hunting. |
@@ -122,8 +122,8 @@ Common subdirectories across skills:
    thing that decides what runs next, enforces caps, and merges results.
 2. The orchestrating model (the "Conductor"/"Lead") never does legwork a script or subagent can do:
    each turn is *read what a script/notification printed → make exactly the calls it named → end the
-   turn*. Width (parallel dispatch, up to the `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` cap, designed for
-   64) is the main lever for wall-clock speed, not model cleverness.
+   turn*. Width (parallel dispatch, up to the `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` cap, soft ceiling 12 for
+   most skills; fewer, fuller agents beat many tiny ones) is the main lever for wall-clock speed, not model cleverness.
 3. Workers (subagents) are stateless, scoped to one unit of work, communicate back through a file the
    engine reads (a `.done` marker, a JSONL batch result, a report file) rather than through chat, so
    dispatching dozens of them doesn't blow up the orchestrator's context.

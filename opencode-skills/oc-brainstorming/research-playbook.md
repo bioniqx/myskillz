@@ -97,7 +97,7 @@ and lanes need it stated explicitly, not implied.
 | --- | --- | --- |
 | Single fact or API detail | 1-3 | none, or 1 lane at ≤4 calls |
 | Comparison of 2-4 options | 4-8 searches + 2-6 fetches, two parallel batches | 0-2 lanes at ≤5 calls each, only for multi-hop angles |
-| Broad landscape or new domain | 4-8 | 4-16 lanes in waves of at most 8, ≤5 calls each |
+| Broad landscape or new domain | 4-8 | 4-16 lanes in waves of `lanes=` (default 6, hard max 8), ≤5 calls each |
 
 A contested comparison gets more verification of its load-bearing
 claims, not more lanes.

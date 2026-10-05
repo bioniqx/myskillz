@@ -11,9 +11,9 @@ Goal: cut wall-clock time with width, without letting parallel work corrupt the 
 | `python3 $S/oc_debug_tool.py run -j N` | local jobs, up to 64 | 1 | any N shell commands |
 | `bash $S/*.sh -j N` | local jobs, up to 64 | 1 | reruns, bisect, polluter search |
 | `python3 $S/oc_debug_tool.py experiment -j N` | local jobs, up to 64 (2 worktrees per hypothesis) | 1 | hypotheses, control vs treatment |
-| `python3 $S/oc_debug_tool.py scan`, then one background call per printed row | at most 8 workers at once (waves of 8) | 1 dispatch turn per wave | judgment: read an area, rank suspects |
+| `python3 $S/oc_debug_tool.py scan`, then one background call per printed row | at most 6 workers at once (waves of 6; `OC_MAX_LANES` up to 8) | 1 dispatch turn per wave | judgment: read an area, rank suspects |
 
-**Model turns are the slow layer.** `probe`, `run`, `experiment` and the shell scripts do their parallel work inside one call. `scan` writes one brief per area and prints one background dispatch row each, in waves of at most 8, so the fan-out costs one turn of dispatch calls per wave and the workers of a wave then run concurrently.
+**Model turns are the slow layer.** `probe`, `run`, `experiment` and the shell scripts do their parallel work inside one call. `scan` writes one brief per area and prints one background dispatch row each, in waves of 6 (`OC_MAX_LANES` up to 8), so the fan-out costs one turn of dispatch calls per wave and the workers of a wave then run concurrently.
 
 Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `experiment`.
 
@@ -21,7 +21,7 @@ Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `expe
 
 - CPU-bound (tests, builds): total processes ≤ CPU count. A runner that already uses every core (jest, vitest, `pytest -n auto`, `go test`) counts as one job using all of them — do not multiply it.
 - IO-bound local jobs (network, waiting on services): up to 64 (`-j` is local work, not model calls), each job with its own port / DB / temp dir; respect remote rate limits.
-- `scan` workers: each is a full agent session on the window's model, and the provider allows 8 concurrent API calls, so `scan` prints rows in waves of at most 8 and you send the next wave only after the previous one has replied. Dispatch more than one wave only for a genuinely broad question, since the merge cost grows with the worker count.
+- `scan` workers: each is a full agent session on the window's model, and the provider allows 8 concurrent API calls, so `scan` prints rows in waves of 6 (`OC_MAX_LANES` up to 8; at most 6 agents per bug) and you send the next wave only after the previous one has replied. Dispatch more than one wave only for a genuinely broad question, since the merge cost grows with the worker count.
 - Nested parallelism multiplies: bisect `-j` × stress `-j` ≤ CPUs.
 
 ## 3. Isolation — the quality guard

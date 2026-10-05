@@ -6,8 +6,8 @@ Use a dynamic workflow instead of Agent-tool fan-out when any of these hold:
 - the user asked for a workflow (`ultracode`, "use a workflow") or wants a rerunnable command (`/hybrid-audit-run`);
 - the environment refuses many concurrent Agent calls but allows workflows.
 
-Trade-off: the workflow runtime caps concurrency at **16 agents** (fewer on small CPUs), so a wave of 64 batches runs
-in ~4 rounds — slower per wave than 64 concurrent subagents, but intermediate results never enter the lead's context,
+Trade-off: the workflow runtime caps concurrency at **16 agents** (fewer on small CPUs), so a wave wider than 16 runs
+in rounds (generic-mode waves are at most 12 wide) — about as fast as concurrent subagents, and intermediate results never enter the lead's context,
 the run is pausable/resumable, and the verification pass is codified.
 
 ## How it plugs into the same pipeline

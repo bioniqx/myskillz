@@ -64,7 +64,7 @@ class StartServerProjectDirTest(unittest.TestCase):
         if pid_file.exists():
             self.addCleanup(_stop_pid, int(pid_file.read_text().strip()))
         self.assertTrue(os.path.isabs(info["screen_dir"]), info["screen_dir"])
-        expected_root = os.path.realpath(os.path.join(self.tmp, "proj", ".superpowers", "brainstorm"))
+        expected_root = os.path.realpath(os.path.join(self.tmp, "proj", ".brainstorm", "brainstorm"))
         self.assertTrue(
             os.path.realpath(info["screen_dir"]).startswith(expected_root + os.sep),
             info["screen_dir"],

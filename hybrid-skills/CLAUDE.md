@@ -78,9 +78,9 @@ GLM) and `../opencode-skills/` (opencode-only). Port behaviour changes from the 
     without a collision: skill names (`hybrid-<original>`), Claude agents (`hybrid-team-*`, `hybrid-plan-task-writer`),
     opencode agents (`hybrid-team-programmer`, `hybrid-plan-writer`, `hybrid-brainstorm-lane`, `hybrid-audit-*`), env
     vars (`HYBRID_TEAM_*`, `HYBRID_WRITING_PLANS_*`, `HYBRID_BRAINSTORMING_*`, `HYBRID_AUDIT_*`), project state dirs
-    (`.claude/hybrid-team`, `.hybrid-work`, `.hybrid-audit`, `.hybrid-superpowers`), and git worktree/branch names
+    (`.claude/hybrid-team`, `.hybrid-work`, `.hybrid-audit`, `.hybrid-brainstorm`), and git worktree/branch names
     (`hybrid-oc-<id>`, `hybrid-checkpoint-<n>`, `hybrid-attempt/*`). Script file names inside a skill folder are
-    namespaced by the folder and stay as they are. `docs/superpowers/specs|plans/` stays shared on purpose: it is the
+    namespaced by the folder and stay as they are. `docs/specs|plans/` stays shared on purpose: it is the
     hand-off format between pipeline stages. `install.sh` (next to this file) installs skills and agents.
 
 ## 2. Modes and failure policy
@@ -159,6 +159,10 @@ Make an error reach Claude immediately by combining the parts below:
    - `HYBRID_OPENCODE_MAX_PARALLEL` is optional: an integer from 1 to 8, the slot cap of every tier (opencode
      runs at once per tier; 8 because the non-Claude provider allows 8 concurrent API calls, so a larger value is invalid). Without it the shipped `max_parallel` (4) applies. A tier whose per-skill
      `routing.json` sets `max_parallel` keeps that value, clamped to 8. Applied by `hybrid_shared.resolve_tiers()`.
+   - `HYBRID_OPENCODE_POOL` is optional: an integer from 1 to 8 (default pool 6, per-tier default 4), the number of
+     opencode lanes in flight across **all** tiers at once. The per-tier cap and the pool both bound lanes, so two
+     tiers can no longer reach 16 against the provider's 8 concurrent calls. Claude subagents are not counted. Read by
+     `hybrid_shared.pool_from_env()`; `pool_free(pool, in_flight_by_tier)` is the free-slot helper.
    - Loaded by `hybrid_shared.load_shared()`. A missing or invalid STD, or an invalid MAX_PARALLEL, makes the
      hybrid and opencode modes unavailable, and the preload line says so.
 2. **Per-skill overrides:** `<skill dir>/routing.json`, next to `routing.default.json` (env override

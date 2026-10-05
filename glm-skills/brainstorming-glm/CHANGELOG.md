@@ -1,5 +1,8 @@
 # 9.3-glm (from 9.2) — OpenCode v1/v2 hardening
 
+- Path rename: scratch/session dirs are `.brainstorm/` (was a tool-branded dir), specs go to
+  `docs/specs/`. The visual-companion header is a plain `Brainstorming` label: no version
+  lookup, no telemetry env handling, no outbound link.
 - `/brainstorm` command: when the `!` line arrives raw (`opencode run`
   does not expand it), the model runs `context.sh` itself as its first call.
 - SKILL.md: one OpenCode lane rule. v2 dispatches background `subagent`
@@ -10,8 +13,8 @@
   through `shell` with `background: true` and a `timeout`, because v2
   kills a foreground shell call after 120 s and orphans web lanes.
 - SKILL.md: results come from `oc_harness.py result <out>` instead of
-  the raw `<id>.jsonl`. `lanes.json` lives under `.superpowers/drafts/`,
-  and lane output goes to a fresh dir per run under `.superpowers/drafts/`
+  the raw `<id>.jsonl`. `lanes.json` lives under `.brainstorm/drafts/`,
+  and lane output goes to a fresh dir per run under `.brainstorm/drafts/`
   (`mktemp -d`), so a rerun never reads stale lane results.
 - SKILL.md: the scripts dir is resolved by one ordered loop (Base
   directory, `$OPENCODE_CONFIG_DIR/skills`, `.opencode/skills`,
@@ -158,7 +161,7 @@ screenshot back, while GLM-5.3 is text-only.
 
 R0 gate, the three paths and the one-way ratchet, the turn budgets, the
 research rules and source tiers, `writing-plans` hand-off, spec path
-`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, the visual-companion
+`docs/specs/YYYY-MM-DD-<topic>-design.md`, the visual-companion
 server, helper, and frame template.
 
 ## Setup

@@ -33,7 +33,7 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
 
     def test_gives_exact_run_command(self):
         self.assertIn(
-            'python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"',
+            'python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"',
             self.text,
         )
 
@@ -71,15 +71,15 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
 
     def test_run_command_uses_temp_out_dir(self):
         section = self._opencode_lane_section()
-        self.assertNotIn('OUT=".superpowers/drafts/lanes"', section)
-        self.assertIn('OUT="$(mktemp -d .superpowers/drafts/lanes.XXXXXX)"', section)
-        self.assertIn("mkdir -p .superpowers/drafts", section)
+        self.assertNotIn('OUT=".brainstorm/drafts/lanes"', section)
+        self.assertIn('OUT="$(mktemp -d .brainstorm/drafts/lanes.XXXXXX)"', section)
+        self.assertIn("mkdir -p .brainstorm/drafts", section)
         self.assertIn('--out "$OUT"', section)
 
     def test_run_section_uses_lanes_json_and_result(self):
         section = self._opencode_lane_section()
         self.assertIn(
-            'python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"',
+            'python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"',
             section,
         )
         self.assertIn('python3 "$H/oc_harness.py" result "$OUT"', section)
@@ -87,7 +87,7 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
     def test_changelog_states_fresh_lane_dir_per_run(self):
         changelog = read(os.path.join(os.path.dirname(SKILL_MD), "CHANGELOG.md"))
         entry = changelog.split("# 9.2-glm", 1)[0]
-        self.assertIn("fresh dir per run under `.superpowers/drafts/`", entry)
+        self.assertIn("fresh dir per run under `.brainstorm/drafts/`", entry)
 
     def test_states_task_tool_is_only_fallback(self):
         idx = self.text.find("`task`")
@@ -331,11 +331,11 @@ class TestBrainstormContextHarness(ContextCase):
 
 
 class TestBrainstormContextCaps(ContextCase):
-    def test_opencode_caps_default_width_is_8(self):
+    def test_opencode_caps_default_width_is_6(self):
         root = make_skill(self.plain_root())
         proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
         caps = self.line_starting(proc.stdout, "caps: ")
-        self.assertIn("lanes=8", caps)
+        self.assertIn("lanes=6", caps)
         self.assertIn("--width", caps)
         self.assertNotIn("subagents=", caps)
 
@@ -352,6 +352,14 @@ class TestBrainstormContextCaps(ContextCase):
             root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": "64"}
         )
         self.assertIn("lanes=8", self.line_starting(proc.stdout, "caps: "))
+
+    def test_opencode_caps_oc_max_lanes_edge_values(self):
+        root = make_skill(self.plain_root())
+        for val, want in (("0", "lanes=1"), ("abc", "lanes=6"), ("", "lanes=6"), ("8", "lanes=8")):
+            proc = run_context(
+                root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": val}
+            )
+            self.assertIn(want, self.line_starting(proc.stdout, "caps: "), val)
 
     def test_opencode_caps_prints_oc_major(self):
         root = make_skill(self.plain_root(), oc_major="2\n")

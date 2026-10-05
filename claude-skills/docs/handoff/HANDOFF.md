@@ -86,8 +86,8 @@ RM claude-skills/writing-plans-6.2/agents/plan-task-writer.md -> claude-skills/c
 R  claude-skills/writing-plans-6.2/plan-reviewer-prompt.md -> claude-skills/claude-writing-plans-6.2/plan-reviewer-prompt.md
 RM claude-skills/writing-plans-6.2/scripts/plan_tool.py -> claude-skills/claude-writing-plans-6.2/scripts/plan_tool.py
 R  claude-skills/writing-plans-6.2/task-writer-prompt.md -> claude-skills/claude-writing-plans-6.2/task-writer-prompt.md
- D claude-skills/docs/superpowers/plans/2026-09-29-claude-skills-optimization.md
- D claude-skills/docs/superpowers/specs/2026-09-29-claude-skills-optimization-design.md
+ D claude-skills/docs/plans/2026-09-29-claude-skills-optimization.md
+ D claude-skills/docs/specs/2026-09-29-claude-skills-optimization-design.md
  M claude-skills/tests/test_agent_hooks.py
  M claude-skills/tests/test_audit_guard.py
  M claude-skills/tests/test_audit_misc.py
@@ -107,16 +107,16 @@ R  claude-skills/writing-plans-6.2/task-writer-prompt.md -> claude-skills/claude
  M claude-skills/tests/test_guard_security.py
  M claude-skills/tests/test_plan_lint.py
  M claude-skills/tests/test_plan_tool.py
- D docs/superpowers/plans/2026-09-28-hybrid-brainstorming.md
- D docs/superpowers/plans/2026-09-28-hybrid-requirements-code-audit.md
- D docs/superpowers/plans/2026-09-28-hybrid-team.md
- D docs/superpowers/plans/2026-09-28-hybrid-writing-plans.md
- D docs/superpowers/plans/2026-09-29-hybrid-run-mode-shared-config.md
- D docs/superpowers/specs/2026-09-28-hybrid-brainstorming-design.md
- D docs/superpowers/specs/2026-09-28-hybrid-requirements-code-audit-design.md
- D docs/superpowers/specs/2026-09-28-hybrid-team-design.md
- D docs/superpowers/specs/2026-09-28-hybrid-writing-plans-design.md
- D docs/superpowers/specs/2026-09-29-hybrid-run-mode-shared-config-design.md
+ D docs/plans/2026-09-28-hybrid-brainstorming.md
+ D docs/plans/2026-09-28-hybrid-requirements-code-audit.md
+ D docs/plans/2026-09-28-hybrid-team.md
+ D docs/plans/2026-09-28-hybrid-writing-plans.md
+ D docs/plans/2026-09-29-hybrid-run-mode-shared-config.md
+ D docs/specs/2026-09-28-hybrid-brainstorming-design.md
+ D docs/specs/2026-09-28-hybrid-requirements-code-audit-design.md
+ D docs/specs/2026-09-28-hybrid-team-design.md
+ D docs/specs/2026-09-28-hybrid-writing-plans-design.md
+ D docs/specs/2026-09-29-hybrid-run-mode-shared-config-design.md
  M glm-skills/docs/handoff/HANDOFF.md
  D hybrid/CLAUDE.md
  D hybrid/hybrid-brainstorming-v1.0/CHANGELOG.md
@@ -269,9 +269,9 @@ R  claude-skills/writing-plans-6.2/task-writer-prompt.md -> claude-skills/claude
 ?? claude-skills/claude-requirements-code-audit/references/design-rationale.md
 ?? claude-skills/claude-systematic-debugging-6.3/references/red-flags.md
 ?? claude-skills/docs/handoff/
-?? claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.devteam.json
-?? claude-skills/docs/superpowers/plans/2026-10-02-claude-skills-optimization.md
-?? claude-skills/docs/superpowers/specs/2026-10-02-claude-skills-optimization-design.md
+?? claude-skills/docs/plans/2026-10-02-claude-skills-optimization.devteam.json
+?? claude-skills/docs/plans/2026-10-02-claude-skills-optimization.md
+?? claude-skills/docs/specs/2026-10-02-claude-skills-optimization-design.md
 ?? claude-skills/tests/test_audit_batch_tokens.py
 ?? claude-skills/tests/test_audit_guard_grep.py
 ?? claude-skills/tests/test_audit_verify_brief.py

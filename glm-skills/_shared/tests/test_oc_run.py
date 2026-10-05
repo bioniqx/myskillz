@@ -325,6 +325,19 @@ class RunLanesTest(unittest.TestCase):
         self.assertEqual(results[0]["width"], oc_harness.MAX_PARALLEL)
         self.assertEqual(oc_harness.MAX_PARALLEL, 8)
 
+    def test_default_width_is_6(self):
+        results = oc_harness.run_lanes([lane("a", "one")], self.out, binary=STUB, major=1)
+        self.assertEqual(results[0]["width"], oc_harness.DEFAULT_LANES)
+        self.assertEqual(oc_harness.DEFAULT_LANES, 6)
+
+    def test_env_lanes_clamps(self):
+        for raw, want in (("", 6), ("abc", 6), ("0", 1), ("-3", 1), ("3", 3), ("8", 8), ("20", 8), (None, 6)):
+            with mock.patch.dict(os.environ):
+                os.environ.pop("OC_MAX_LANES", None)
+                if raw is not None:
+                    os.environ["OC_MAX_LANES"] = raw
+                self.assertEqual(oc_harness.env_lanes(), want, raw)
+
     def test_stall_kills_lane(self):
         start = time.monotonic()
         results = oc_harness.run_lanes([lane("z", "stall")], self.out, stall=1, binary=STUB, major=1)

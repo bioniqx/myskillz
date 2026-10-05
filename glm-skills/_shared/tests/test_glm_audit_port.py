@@ -408,7 +408,7 @@ class StubRetriever(object):
 class AgentLaneAndReportTests(AuditCase):
     def test_verify_batches_hold_at_most_three_items(self):
         self.assertEqual(audit.VERIFY_MAX_PER_AGENT, 3)
-        groups = audit._agent_groups(list(range(40)), 4, audit.VERIFY_MAX_PER_AGENT, False)
+        groups = audit._agent_groups(list(range(40)), 4, audit.VERIFY_MAX_PER_AGENT)
         self.assertTrue(all(len(g) <= 3 for g in groups))
 
     def test_replan_clears_stale_findings_and_verify_batches(self):

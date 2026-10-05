@@ -1,11 +1,13 @@
-# Fan-out Playbook — up to 8 concurrent lanes on GLM
+# Fan-out Playbook — up to 6 concurrent lanes on GLM (hard max 8)
 
-Read when planning a wave-based fan-out (more than 8 lanes in total), or when a fan-out fails. Goal: the
+Read when planning a wave-based fan-out (more than `lanes=` lanes in total), or when a fan-out fails. Goal: the
 whole exploration costs one tool round plus background time that overlaps
 the human's reading time.
 
 ## 0. Capacity facts
 
+- Lane width: `lanes=` in Live context (default 6, `OC_MAX_LANES` may raise it to 8). Fewer, fuller
+  lanes beat many tiny ones.
 - Subagents: 8 running at once (the provider's concurrent-call limit). The 9th `Agent` call fails
   with "Concurrent subagent limit reached" and tells you not to retry.
   Never raise `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` above 8.
@@ -34,11 +36,12 @@ put on GLM-5.3, and never run more than 2 of those.
 | --- | --- | --- | --- |
 | Spike | 2-6 (incl. 2-4 web) | 0 | 0-1 |
 | Bounded, small repo | 3-10 | 0-2 | 0 (direct web instead) |
-| Bounded, large or unfamiliar repo | 5-10 | 2-6 | 0-2 |
-| Architectural, single service | 5-10 | 4-12 | 2-6 |
-| Architectural, monorepo | 5-10 | 12-40 | 4-16 |
+| Bounded, large or unfamiliar repo | 5-10 | 2-4 | 0-2 |
+| Architectural, single service | 5-10 | 4-8 | 2-4 |
+| Architectural, monorepo | 5-10 | 8-12 | 4-8 |
+| Broad web landscape | 4-8 | 0 | 4-8 |
 
-Lane counts above 8 run in waves of at most 8 concurrent lanes.
+Lane counts above `lanes=` run in waves of at most `lanes=` concurrent lanes.
 
 Size bands from Live context (`tracked=`): under 1k files small, 1k-20k
 medium, over 20k or several manifests is a monorepo. Published research
@@ -47,7 +50,7 @@ scaling rule: one agent with 3-10 calls for a simple fact, 2-4 agents with
 known failure is spawning dozens of agents for a simple query. Do not.
 
 Wide fan-outs multiply token use and hit quota sooner. Flash's 3× quota
-and ~9× lower price is what makes 20-40 lanes (in waves of 8) affordable — the same
+and ~9× lower price is what makes 12-20 lanes (in waves of `lanes=`) affordable — the same
 fan-out on GLM-5.3 lanes is not. Width must still buy a saved human turn
 or a better decision.
 

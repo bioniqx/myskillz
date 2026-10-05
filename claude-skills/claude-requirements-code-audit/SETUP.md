@@ -4,7 +4,7 @@ The folder works at three levels. Pick the highest one your environment allows; 
 
 | Level | What loads | Speed / hardening |
 |---|---|---|
-| **Plugin (recommended)** — folder copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json` | skill + agents `claude-req-audit:claude-rca-investigator/verifier/parser` + guard hooks | 64-way fan-out, tool-restricted workers (no shell), git-history/docs/writes blocked structurally, zero permission prompts for audit-dir writes and the bundled script |
+| **Plugin (recommended)** — folder copied to `~/.claude/skills/` with its `.claude-plugin/plugin.json` | skill + agents `claude-req-audit:claude-rca-investigator/verifier/parser` + guard hooks | parallel fan-out up to the live cap, tool-restricted workers (no shell), git-history/docs/writes blocked structurally, zero permission prompts for audit-dir writes and the bundled script |
 | **Local agents** — plain skill + `agents/*.md` copied into `.claude/agents/` | skill + agents `claude-rca-*` (with `permissionMode: acceptEdits`) | same speed; hooks only if you add them to settings (below) |
 | **Generic** — SKILL.md + scripts only (also Cowork / claude.ai upload) | skill; workers are `general-purpose` subagents on `sonnet` | same speed where an Agent tool exists; rules are prompt-enforced |
 
@@ -23,19 +23,19 @@ Project scope instead: copy into `<repo>/.claude/skills/claude-requirements-code
 after you accept the workspace trust dialog and only from the session's primary working directory — launch Claude
 Code from the repo root.
 
-## 2. Raise the concurrency cap to 64
+## 2. Check the concurrency cap (optional)
 
 Claude Code (v2.1.217+) refuses to spawn more than **20** concurrent subagents by default. The skill plans around
-whatever the cap is, but it is designed for 64. Add to `~/.claude/settings.json` (or the project's `.claude/settings.json`):
+whatever the cap is (default 20) and fans out at most 12 investigators at once, so a cap of 12 or more is enough and there is no need for 64. To set it explicitly, add to `~/.claude/settings.json` (or the project's `.claude/settings.json`):
 
 ```json
 {
-  "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64" }
+  "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "20" }
 }
 ```
 
 Restart. `audit.py init` prints the cap it detected. Sessions with `ultracode` effort are exempt from the cap.
-Without this setting the cap stays at 20 and the investigator wave is planned around 20 workers at a time; do not assume 64, read the value `audit.py init` prints.
+Without this setting the cap stays at 20; if you set it lower, waves shrink to that value, so read the value `audit.py init` prints.
 
 Optional, subscription plans only: keep worker prompt caches warm for an hour during very long audits by adding
 `experimental:\n  cacheTtl: 1h` to the agent files (v2.1.248+). Not needed for normal runs.

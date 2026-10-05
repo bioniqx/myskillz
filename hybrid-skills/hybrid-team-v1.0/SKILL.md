@@ -15,7 +15,7 @@ allowed-tools:
 
 # Hybrid Team — dev-team's pipeline, split across two backends (v1.2.2)
 
-You are the **Conductor**. This is a fork of dev-team-v3.2: same event-driven, 64-wide,
+You are the **Conductor**. This is a fork of dev-team-v3.2: same event-driven, cap-wide,
 contract-gated pipeline, same mechanical guarantees (test-first, frozen tests, footprints,
 independent review), but every slice is dispatched to one of two backends:
 
@@ -45,7 +45,7 @@ independent review), but every slice is dispatched to one of two backends:
   Run it with Bash `run_in_background: true`, exactly like a Claude `=== DISPATCH` Agent call is
   run with the `Agent` tool — process exit is the completion notification, and the next `devteam
   next` harvests its `.done`/`.blocked` marker. opencode lanes have their own slot cap
-  (`max_parallel` per tier, default 4 each, never above 8, set by `$HYBRID_OPENCODE_MAX_PARALLEL`), independent of the Claude subagent cap, so both
+  (`max_parallel` per tier, default 4 each, never above 8, set by `$HYBRID_OPENCODE_MAX_PARALLEL`) and a shared pool across all tiers (`$HYBRID_OPENCODE_POOL`, default 6, never above 8: the lanes in flight on std and lite together never exceed it), independent of the Claude subagent cap, so both
   kinds of dispatch line from one `next` call can run at once.
 - **Guards** — hooks shipped in the agent files enforce footprint, frozen tests, refactor
   invariants, no history rewriting and read-only roles mechanically, **and pre-approve** every
@@ -58,7 +58,7 @@ independent review), but every slice is dispatched to one of two backends:
   Stop gate plus `integrate` are the enforcement for writes outside the footprint or a touched
   frozen test.
 
-**Optimization order: wall-clock speed 10/10, quality 8/10, up to 64 concurrent dispatches.**
+**Optimization order: wall-clock speed 10/10, quality 8/10, up to the live cap (programmers = cap - 2, never above 16).**
 Every turn you take is on the critical path, so each turn is: read what arrived → **one**
 engine call → launch everything it printed → end the turn. Speed tip to give the user once per
 session: **`/fast`** (Opus fast mode, usage credits) makes you and the opus reviewers/leader up
@@ -209,8 +209,8 @@ final report so the user can overturn one.
 ## Setup (once per repo, ~10 s)
 
 `devteam start <plan.md>` runs `doctor --fix`, `init` and the first `dispatch` in one call —
-use it. `doctor --fix` alone writes `.claude/settings.local.json` (subagent concurrency 64,
-tool-use concurrency 64, subagent stall timeout and Bash timeouts raised so a long gate is not
+use it. `doctor --fix` alone writes `.claude/settings.local.json` (tool-use concurrency 16;
+subagent concurrency only raised if set below 12, the default 20 is fine; subagent stall timeout and Bash timeouts raised so a long gate is not
 killed mid-slice, `subagentPromptCacheTtl: 1h`, `worktree.baseRef: head`, an allow rule for the
 engine), writes `.worktreeinclude` so env files reach every worktree, installs the five Claude
 agents into `.claude/agents/` with hooks pinned to `guard.py`, and adds git excludes. **Env
@@ -247,7 +247,7 @@ every other tier uses the shared env models.
    opencode lanes through their `.done`/`.blocked` marker, reviewers through their report file,
    checkpoints through their log: `next` harvests all of it.
 3. **Tiny prompts.** A dispatch is one line; the briefing is a file the engine wrote. Your output
-   tokens per launch stay near zero — they are on the critical path when you launch 64.
+   tokens per launch stay near zero — they are on the critical path when you launch a full wave.
 4. **Native isolation.** `isolation: worktree` in the hybrid-team-programmer's frontmatter: Claude Code
    creates the worktree, runs every command inside it, and blocks writes to the main checkout.
    `claim` resets the base and links `node_modules`-type dirs. An opencode lane gets its own
@@ -262,7 +262,7 @@ every other tier uses the shared env models.
    invariants, footprints, clean tree — checked by hooks while the agent is still alive (warm
    fix) and again at merge, identically for a Claude programmer or an opencode lane.
 8. **Review overlaps build.** Incremental reviewers run per batch of merged slices; the final
-   review covers only the last delta and is sharded (~10 files each, up to 12).
+   review covers only the last delta and is sharded (~10 files each, up to 4).
 9. **Warm resumes.** `SendMessage` to a finished agent id resumes it with full context and
    worktree: use it for BLOCKING answers, gate rejections, turn-limit partials, re-reviews. An
    opencode lane has no live agent to resume — a failure there escalates to a fresh Claude

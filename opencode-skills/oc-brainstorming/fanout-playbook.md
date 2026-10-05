@@ -1,6 +1,6 @@
 # Fan-out Playbook — wide parallel lanes on OpenCode
 
-Read when planning more than 8 lanes, or when a fan-out fails. Goal: the
+Read when planning more lanes than `lanes=`, or when a fan-out fails. Goal: the
 whole exploration costs one tool round plus background time that overlaps
 the human's reading time.
 
@@ -9,8 +9,8 @@ the human's reading time.
 - Lanes are background `subagent` calls (`background: true`) to the agents
   `oc-explorer` (code), `oc-researcher` (web) and `general`. They run on the
   model selected in this window; no model argument is ever passed.
-- Live context prints `caps: lanes=N` (default and hard max 8; `OC_MAX_LANES` can only
-  lower it). Treat it as the ceiling on lanes in flight, claim verifier and
+- Live context prints `caps: lanes=N` (default 6, hard max 8; `OC_MAX_LANES`
+  raises it up to 8). Treat it as the ceiling on lanes in flight, claim verifier and
   reviewer lanes included, and trust it over this page.
 - Lanes cannot ask the user questions and must not spawn lanes. Flat
   fan-outs keep merging and cost under your control.
@@ -26,11 +26,11 @@ the human's reading time.
 | Spike | 2-6 (incl. 2-4 web) | 0 | 0-1 |
 | Bounded, small repo | 3-10 | 0-2 | 0 (direct web instead) |
 | Bounded, large or unfamiliar repo | 5-10 | 2-6 | 0-2 |
-| Architectural, single service | 5-10 | 4-12 | 2-6 |
-| Architectural, monorepo | 5-10 | 12-40 | 4-16 |
+| Architectural, single service | 5-10 | 4-8 | 2-4 |
+| Architectural, monorepo | 5-10 | 8-12 | 4-8 |
 
-Lane counts are totals, never concurrency: run them in waves of at most 8
-in flight (section 3). Size bands from Live
+Lane counts are totals, never concurrency: run them in waves of `lanes=`
+(default 6, hard max 8) in flight (section 3). Size bands from Live
 context (`tracked=`): under 1k files small, 1k-20k medium, over 20k or
 several manifests is a monorepo. Published research scaling rule: one
 agent with 3-10 calls for a simple fact, 2-4 agents with 10-15 calls for a

@@ -58,6 +58,7 @@ class StatusCliTest(unittest.TestCase):
         self.env = dict(os.environ)
         self.env.pop("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", None)
         self.env.pop("HYBRID_OPENCODE_MAX_PARALLEL", None)
+        self.env.pop("HYBRID_OPENCODE_POOL", None)
         self.env.update({
             "HOME": str(self.home),
             "HYBRID_AUDIT_ROUTING": str(self.routing),
@@ -198,6 +199,14 @@ class StatusCliTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn('audit.py" oc-run %s' % queued, proc.stdout)
         self.assertEqual(self._state(out)["batches"][queued]["backend"], "oc:std")
+
+    def test_pool_env_caps_the_opencode_batches_dispatched_at_once(self):
+        self._doctor_ok()
+        self.env["HYBRID_OPENCODE_POOL"] = "1"
+        _write_json(self.routing, {"tiers": {"std": {"max_parallel": 4}}, "oc_batch_max": 1})
+        out, _ = self._bootstrap("hybrid", n_items=3, cap=4)
+        waves = [meta["wave"] for _, meta in self._oc_batches(out)]
+        self.assertEqual(waves, [1, 2, 2])
 
     def test_queued_batch_is_not_hedged_until_its_own_run_has_started(self):
         self._doctor_ok()

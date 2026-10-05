@@ -162,7 +162,7 @@ class PortabilityScanTests(unittest.TestCase):
         plan = write_plan(self.repo, "#### T01: Demo\n- Files: `demo.py`\n\n")
         para = (
             "Config uses `CLAUDE.md`, `.claude/state`, `import anthropic`, and "
-            "`docs/superpowers/specs/2024-01-01-thing.md`, see https://example.com/Claude for reference.\n\n"
+            "`docs/specs/2024-01-01-thing.md`, see https://example.com/Claude for reference.\n\n"
             "This relies on Claude to plan the steps.\n"
         )
         body = base_body(extra_mid=para)
@@ -172,7 +172,6 @@ class PortabilityScanTests(unittest.TestCase):
         self.assertNotIn("CLAUDE.md", p.stdout)
         self.assertNotIn(".claude/state", p.stdout)
         self.assertNotIn("anthropic", p.stdout.lower())
-        self.assertNotIn("superpowers", p.stdout)
         self.assertIn("'Claude'", p.stdout)
 
     def test_placeholder_inside_python_fence_fails(self):

@@ -1,4 +1,4 @@
-# Parallel Debugging Playbook (up to 64 local jobs, at most 8 model workers, zero extra model turns)
+# Parallel Debugging Playbook (up to 64 local jobs, at most 8 API workers or 6 agent workers, zero extra model turns)
 
 `$S` = the absolute scripts path printed as `S=` by every tool output; paste it literally, shell variables do not survive between tool calls.
 Goal: cut wall-clock time with width, without letting parallel work corrupt the evidence.
@@ -14,7 +14,7 @@ Goal: cut wall-clock time with width, without letting parallel work corrupt the 
 | `python3 $S/debug_tool.py scan -j N` | at most 8 API workers | 1 | judgment: read an area, rank suspects |
 | Subagents dispatched by the harness | harness-dependent, see below | 1 message, N agent turns | last resort |
 
-**Subagents are the slow layer here, not the fast one.** Some harnesses dispatch them one at a time no matter how many you request, which turns a wide fan-out into that many sequential runs. Others run foreground subagents truly in parallel. `scan` sidesteps the question: it opens its own threads. Use subagents only when `scan` reports no API key, and then dispatch the prompts in waves of at most 8 per message.
+**Subagents are the slow layer here, not the fast one.** Some harnesses dispatch them one at a time no matter how many you request, which turns a wide fan-out into that many sequential runs. Others run foreground subagents truly in parallel. `scan` sidesteps the question: it opens its own threads. Use subagents only when `scan` reports no API key, and then dispatch the prompts in waves of 6 per message (`OC_MAX_LANES` up to 8).
 
 Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `experiment`.
 
@@ -22,8 +22,8 @@ Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `expe
 
 - CPU-bound (tests, builds): total processes ≤ CPU count. A runner that already uses every core (jest, vitest, `pytest -n auto`, `go test`) counts as one job using all of them — do not multiply it.
 - IO-bound (network, waiting on services): up to 64, each job with its own port / DB / temp dir; respect remote rate limits.
-- API workers (`scan`) and subagent lanes: at most 8 at once (the provider allows 8 concurrent calls); `-j` above 8 is clamped, and a longer task list runs in waves.
-- Agent-lane workers: one per genuinely independent unit (hypothesis, module, service). Beyond ~8 for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
+- API workers (`scan`): at most 8 at once (the provider allows 8 concurrent calls); `-j` above 8 is clamped, and a longer task list runs in waves.
+- Agent-lane subagents: waves of 6 by default (`OC_MAX_LANES` up to 8), one per genuinely independent unit (hypothesis, module, service). Beyond ~6 for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
 - Nested parallelism multiplies: bisect `-j` × stress `-j` ≤ CPUs.
 
 ## 3. Isolation — the quality guard
@@ -68,7 +68,7 @@ python3 $S/debug_tool.py scan --area packages/api --area packages/worker --area 
 
 Every worker gets the same system prompt and the same shared context, byte for byte, so the provider's prompt cache hits from the second worker onward. Each returns at most 12 lines in a fixed VERDICT shape. Multi-service failure: one worker per service or log source — "did the request arrive, what came in, what went out, first error + timestamp" — then merge on timestamp or request id.
 
-With no API key, `scan` writes the prompts to files and prints the dispatch list; send them as subagents in waves of at most 8 per message, and expect them to be slower.
+With no API key, `scan` writes the prompts to files and prints the dispatch list; send them as subagents in waves of 6 per message (`OC_MAX_LANES` up to 8), and expect them to be slower.
 
 Whatever `scan` returns is a lead. Confirm it with `experiment`.
 

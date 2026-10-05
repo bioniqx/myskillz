@@ -26,9 +26,9 @@ import oc_harness  # vendored by _shared/sync.sh
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 8           # provider limit: concurrent model calls (threads, writers, reviewers)
-DEFAULT_AGENT_CAP = 8
+DEFAULT_AGENT_CAP = 6        # unset env: default lane width (provider ceiling stays MAX_WORKERS = 8)
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
-DEFAULT_LANE_WIDTH = 8    # background lanes one OpenCode dispatch message starts
+DEFAULT_LANE_WIDTH = 6    # background lanes one OpenCode dispatch message starts (up to MAX_WORKERS)
 
 # ---- GLM routing -------------------------------------------------------
 # tier -> (api model id, reasoning effort, agent-lane alias that z.ai maps to it)
@@ -58,7 +58,7 @@ PLACEHOLDERS = [r"implement(ed)? later",
     r"fill in (the )?details", r"add appropriate (error handling|validation)",
     r"handle (the )?edge cases", r"similar to (task\s*|T)\d+", r"same as (task\s*|T)\d+",
     r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
-PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
+PORTABILITY = [r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
     r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
     r"\bOpenCode\b", r"\bZCode\b", r"\bGLM\b", r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b",
     r"\binvoke (the |a )?skill\b"]
@@ -248,14 +248,18 @@ def on_opencode():
 
 
 def lane_width():
-    """Groups one OpenCode dispatch message may start (PLAN_LANE_WIDTH, default 8)."""
-    v = os.environ.get("PLAN_LANE_WIDTH", "").strip()
-    return min(MAX_WORKERS, int(v)) if v.isdigit() and int(v) > 0 else DEFAULT_LANE_WIDTH
+    """Groups one OpenCode dispatch message may start: PLAN_LANE_WIDTH, else OC_MAX_LANES; default 6,
+    ceiling 8, 0 gives 1, non-numeric or empty gives the default."""
+    for e in ("PLAN_LANE_WIDTH", "OC_MAX_LANES"):
+        v = os.environ.get(e, "").strip()
+        if v.isdigit():
+            return max(1, min(MAX_WORKERS, int(v)))
+    return DEFAULT_LANE_WIDTH
 
 
 def writer_group_count(n_tasks, opencode, cap):
     """Writer groups for n_tasks; every group holds at most WRITER_GROUP_MAX tasks.
-    OpenCode: ceil(n / 4), so up to 32 tasks fit the default lane width of 8 in one
+    OpenCode: ceil(n / 4), so up to 24 tasks fit the default lane width of 6 in one
     message; the lane width caps each dispatch message and extra groups go into
     further messages. Elsewhere: one task per writer up to cap, never more than 4 per writer."""
     if n_tasks <= 0:
@@ -1712,8 +1716,8 @@ def cmd_brief(a):
                     break
         dirty = len(sh(["git", "status", "--porcelain"], repo).splitlines())
         out.append("git: branch %s | %d dirty | %d files" % (branch or "-", dirty, len(files)))
-        plans = os.path.join(repo, "docs", "superpowers", "plans")
-        out.append("plan path: docs/superpowers/plans/%s-<feature>.md (%d existing)" % (
+        plans = os.path.join(repo, "docs", "plans")
+        out.append("plan path: docs/plans/%s-<feature>.md (%d existing)" % (
             time.strftime("%Y-%m-%d"),
             len([f for f in os.listdir(plans) if f.endswith(".md")]) if os.path.isdir(plans) else 0))
         found = [f for f in STACK_MARKS if os.path.isfile(os.path.join(repo, f))]
@@ -1931,7 +1935,7 @@ def cmd_setup(a):
                 env[k] = v
                 changes.append("env.%s = %s" % (k, v))
         allow = new.setdefault("permissions", {}).setdefault("allow", [])
-        for rule in ("Bash(%s *)" % qtool(), "Edit(**/docs/superpowers/plans/**)"):
+        for rule in ("Bash(%s *)" % qtool(), "Edit(**/docs/plans/**)"):
             if rule not in allow:
                 allow.append(rule)
                 changes.append("permissions.allow += %s" % rule)

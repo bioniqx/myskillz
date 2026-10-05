@@ -7,7 +7,6 @@ import http.client
 import json
 import os
 import queue
-import re
 import shutil
 import signal
 import socket
@@ -26,7 +25,6 @@ SKILLS_DIR = os.path.dirname(os.path.dirname(TESTS_DIR))
 SCRIPTS_DIR = os.path.join(SKILLS_DIR, 'brainstorming-glm', 'scripts')
 SERVER_JS = os.path.join(SCRIPTS_DIR, 'server.cjs')
 HELPER_JS = os.path.join(SCRIPTS_DIR, 'helper.js')
-CHANGELOG_MD = os.path.join(SKILLS_DIR, 'brainstorming-glm', 'CHANGELOG.md')
 
 STARTUP_TIMEOUT = 10
 
@@ -422,9 +420,9 @@ class BrainstormServerTestCase(unittest.TestCase):
             prev_events = f.read()
         self.assertIn('keep-me', prev_events)
 
-    # ---- W9-11: no external assets; version from CHANGELOG or omitted ----
+    # ---- W9-11: no external assets; plain "Brainstorming" brand label ----
 
-    def test_no_external_host_and_version_from_changelog(self):
+    def test_no_external_host_and_plain_brand_label(self):
         proc, info, q, session_dir, content_dir, state_dir = self.start_server()
         token = _token_from_url(info['url'])
 
@@ -433,13 +431,9 @@ class BrainstormServerTestCase(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertNotIn('primeradiant.com', text)
         self.assertNotIn('src="http', text)
+        self.assertNotIn('github.com', text)
         self.assertNotIn('vunknown', text)
-
-        with open(CHANGELOG_MD, encoding='utf-8') as f:
-            changelog = f.read()
-        m = re.search(r'^#\s+([0-9]+(?:\.[0-9]+)*)', changelog, re.MULTILINE)
-        self.assertIsNotNone(m, 'CHANGELOG.md must start with a versioned heading for this test to be meaningful')
-        self.assertIn('v' + m.group(1), text)
+        self.assertIn('<div class="brand"><span class="brand-copy">Brainstorming</span></div>', text)
 
     # ---- W9-13: helper.js click event text/selected ----
 

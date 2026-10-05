@@ -7,7 +7,7 @@ from typing import List, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import audit  # noqa: E402
-from ha_router import oc_queues_overflow, route, tier_parallel  # noqa: E402
+from ha_router import oc_pool, oc_queues_overflow, route, tier_parallel  # noqa: E402
 
 
 def _order_key(item: dict) -> Tuple[str, str]:
@@ -35,7 +35,7 @@ def split_batches(active: list, routing: dict, doctor: dict, preset: str, cap: i
     if backend in ("claude", "held"):
         return [(backend, b) for b in audit.partition_items(active, cap, solo)]
     tier = backend[len("oc:"):]
-    max_parallel = tier_parallel(routing["tiers"][tier])
+    max_parallel = min(tier_parallel(routing["tiers"][tier]), oc_pool())
     batch_max = max(1, int(routing.get("oc_batch_max", 4)))
     capacity = max_parallel * batch_max
     queue = oc_queues_overflow(routing, preset)

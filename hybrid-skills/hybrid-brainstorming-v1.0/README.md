@@ -60,7 +60,7 @@ The old preset name `max` is still accepted as an alias for `opencode` and print
 | Backend | Runs | Where |
 |---|---|---|
 | Claude | main thread (classify, T0, synthesis, design, spec, self-review), draft lanes (in preset `claude` or `hybrid`), research lanes (in preset `claude`), claim verifier, spec pre-draft | Claude Code background |
-| opencode | Code lanes (roles `locate`, `explore`), web lanes (role `fact`, in preset `hybrid`/`opencode`), research lanes (preset `hybrid`/`opencode`, while `websearch=on`), draft lanes (preset `opencode` only) | `.hybrid-superpowers/brainstorm/lanes/<id>` via `bslane.py` |
+| opencode | Code lanes (roles `locate`, `explore`), web lanes (role `fact`, in preset `hybrid`/`opencode`), research lanes (preset `hybrid`/`opencode`, while `websearch=on`), draft lanes (preset `opencode` only) | `.hybrid-brainstorm/brainstorm/lanes/<id>` via `bslane.py` |
 
 ## Config
 
@@ -79,7 +79,7 @@ The old preset name `max` is still accepted as an alias for `opencode` and print
   `provider/model` is required and `#variant` (the thinking level) is optional. The slot count of a
   tier (`max_parallel`, 1 to 8) comes from the env var `HYBRID_OPENCODE_MAX_PARALLEL` (shared by all
   four hybrid skills; the shipped default is 4). A tier that sets `max_parallel` in the user file below
-  keeps that value. An invalid value is a config problem and makes modes `hybrid` and `opencode` unavailable.
+  keeps that value. All tiers together run at most `HYBRID_OPENCODE_POOL` opencode lanes (1 to 8, default 6; `bslane.py` holds a tier slot and a pool slot per lane). An invalid value is a config problem and makes modes `hybrid` and `opencode` unavailable.
 - **Shipped defaults**: `hybrid-brainstorming-v1.0/routing.default.json`. It carries no model or variant.
 - **User file** (optional): `<skill dir>/routing.json`, next to `routing.default.json` (for example
   `~/.claude/skills/hybrid-brainstorming-v1.0/routing.json`). `doctor` no longer creates it.
@@ -132,8 +132,8 @@ Names this skill puts into shared namespaces, all prefixed `hybrid` so it instal
 
 - opencode agent: `hybrid-brainstorm-lane`
 - Env vars: `HYBRID_BRAINSTORMING_ROUTING`, `HYBRID_BRAINSTORMING_DOCTOR_CACHE`, `HYBRID_BRAINSTORMING_OC_BIN`; the visual companion uses `HYBRID_BRAINSTORMING_*` instead of `BRAINSTORM_*`
-- Project state dir: `.hybrid-superpowers/` (`brainstorm/`, `drafts/`); session dir under `/tmp/hybrid-brainstorming-*`
-- Unchanged on purpose: the spec path `docs/superpowers/specs/` (input of the next pipeline stage)
+- Project state dir: `.hybrid-brainstorm/` (`brainstorm/`, `drafts/`); session dir under `/tmp/hybrid-brainstorming-*`
+- Unchanged on purpose: the spec path `docs/specs/` (input of the next pipeline stage)
 
 ## Environment variables
 
@@ -173,7 +173,7 @@ lane failed on opencode.
 - **Switch (mode `hybrid` only).** When the retries run out, or at once for `auth`, `quota` and
   `model`, the rest of the run moves to Claude Sonnet 5.5. `bslane.py` prints and logs one
   `OC-ERROR ... kind=switch :: opencode <kind>: <detail>; the rest of this run uses Claude sonnet`
-  and records it in `<root>/.hybrid-superpowers/brainstorm/lanes/oc-switched.json`. The failed lane falls
+  and records it in `<root>/.hybrid-brainstorm/brainstorm/lanes/oc-switched.json`. The failed lane falls
   back with `model: sonnet`. Every later call for a role that would run on opencode spawns nothing
   and prints only the `CLAUDE <id> ...` line with `model: sonnet`, without an OC line. Lanes already
   running on opencode finish and are used as usual. Roles that Claude owns anyway, and
@@ -235,9 +235,9 @@ lane failed on opencode.
   reach the main thread.
 - SKILL.md frontmatter changes: `name: hybrid-brainstorming`, an opt-in description, and
   `allowed-tools` that add the `bslane.py` pin.
-- Telemetry: one JSON line per lane appended to `<root>/.hybrid-superpowers/brainstorm/lanes.jsonl`
+- Telemetry: one JSON line per lane appended to `<root>/.hybrid-brainstorm/brainstorm/lanes.jsonl`
   with role, tier, model, variant, duration, tokens, grounded `n/m`, outcome and reason - no cost field.
 - The preset `claude` runs every lane on Claude with brainstorming-6.3's
   lane roles, prompts and flow. It still differs in the run-mode question
-  at Step 0, the `hybrid-` names, the `.hybrid-superpowers/` state
+  at Step 0, the `hybrid-` names, the `.hybrid-brainstorm/` state
   directory, the relay rule and the `hybrid-writing-plans` hand-off.

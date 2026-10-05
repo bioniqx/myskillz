@@ -70,7 +70,7 @@ narrate the exploration; show the design and cite inline.
 | "The fetch failed, let me try curl / gh" | Switch to a registry JSON or raw URL via WebFetch, or drop it. Never retry a denial. |
 | "A blog says so" | Check tier, date, and version. One secondary source is not evidence. |
 | "More sources = more accurate" | Accuracy drops as tool calls grow. Budget; verify only load-bearing claims. |
-| "Spawn 64 because I can" | One lane per question you will act on. Respect the cap. |
+| "Spawn a dozen because I can" | One lane per question you will act on; at most 12 at once, never above the cap. |
 | "A subagent for one search" | A T0 call in the same round is an order of magnitude faster. |
 | "I'll ask to be safe" | A vetoable assumption costs zero turns; a question costs one. |
 | "It grew, but I'm almost done" | Hidden complexity upgrades the path. Stop and say so. |
@@ -79,7 +79,7 @@ narrate the exploration; show the design and cite inline.
 ## Width and model tiering (full text)
 
 4. **Width.** One lane per question whose answer you will cite or act on;
-   never pad. Ceiling 64 concurrent lanes; T1 agents never exceed the
+   never pad. Width = min(live subagent cap, 12); T1 agents never exceed the
    subagent cap in Live context (the harness rejects the next one and
    says not to retry). More lanes than the cap → dispatch the lanes that
    can change the approach set first, then refill in batches as

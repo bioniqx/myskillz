@@ -13,9 +13,10 @@ import hybrid_shared  # noqa: E402
 def _max_parallel(routing: dict, tier: str) -> int:
     settings = (routing.get("tiers") or {}).get(tier) or {}
     try:
-        return max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, int(settings.get("max_parallel", 1))))
+        mp = max(1, min(hybrid_shared.MAX_PARALLEL_LIMIT, int(settings.get("max_parallel", 1))))
     except (TypeError, ValueError):
-        return 1
+        mp = 1
+    return min(mp, hybrid_shared.pool_from_env()[0] or hybrid_shared.OC_POOL_DEFAULT)  # a tier never runs more than the shared pool
 
 
 def _group_max(routing: dict) -> int:
@@ -32,10 +33,10 @@ def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int, n
     order and naming), then opencode groups O01, O02, ... ordered by first task ID across
     tiers, then one "held" group per task that preset opencode could not place. The caller
     reports held groups and does not dispatch them.
-    A tier takes max_parallel groups of up to oc_group_max tasks. Tasks beyond that capacity stay on
+    A tier takes min(max_parallel, pool) groups of up to oc_group_max tasks (pool: $HYBRID_OPENCODE_POOL, default 6). Tasks beyond that capacity stay on
     opencode by default (oc_overflow "queue", always in preset opencode): they are split into more groups
     of about oc_group_max tasks, and oc-write runs the extra groups as slots free up (one semaphore per
-    tier). With oc_overflow "claude" (hybrid only) the heaviest overflow tasks move to claude instead.
+    tier plus one shared pool). With oc_overflow "claude" (hybrid only) the heaviest overflow tasks move to claude instead.
     """
     active = hp_router.effective_preset(routing, preset)
     claude: List[dict] = []
@@ -67,7 +68,7 @@ def route_groups(cs: list, routing: dict, doctor: dict, preset: str, cap: int, n
         for g in plan_tool.partition(tasks, groups):
             oc_groups.append((tier, g))
     claude.sort(key=lambda c: plan_tool.num(c["id"]))
-    parts = plan_tool.partition(claude, max(1, cap))
+    parts = plan_tool.partition(claude, max(1, min(cap, -(-len(claude) // plan_tool.WRITER_MIN_TASKS))))  # ~WRITER_MIN_TASKS per writer
     out = [((g[0]["id"] if len(parts) == len(claude) else "W%02d" % (i + 1)), "claude", g)
            for i, g in enumerate(parts)]
     oc_groups.sort(key=lambda x: plan_tool.num(x[1][0]["id"]))

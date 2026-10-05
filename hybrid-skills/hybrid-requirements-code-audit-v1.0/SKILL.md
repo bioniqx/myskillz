@@ -132,7 +132,7 @@ No requirements input → stop and ask; pasted text → save it verbatim to a fi
 `.docx` is extracted verbatim by the script; `.pdf/.xlsx/.pptx` → extract with the matching skill, save under
 `.hybrid-audit/spec/`, add with `A spec --add`. Flag unclean extractions instead of guessing.
 `init` builds the ≤30-line repo map, prints the `opencode:` line, arms the guard, reads the concurrency cap from
-`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20; tell the user once how to raise it, never block on it) and prints NEXT.
+`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20; 12+ is enough, never block on it) and prints NEXT.
 State the contract in one line ("Treating `<file>` as the only source of truth; not reading git history or other
 docs.") and proceed without waiting for acknowledgement. Tiny audits (fewer than ~6 requirements): solo mode is faster.
 
@@ -162,9 +162,9 @@ parallelised; faithfulness is not.
 
 ### Step 2 — Plan (one command)
 
-`A plan` validates the checklist, routes the investigator role, splits items into opencode batches of up to `oc_batch_max` items (the first `max_parallel` (at most 8, shared by all tiers) start at once, the rest wait for a
+`A plan` validates the checklist, routes the investigator role, splits items into opencode batches of up to `oc_batch_max` items (the first `max_parallel` (at most the shared opencode pool, `$HYBRID_OPENCODE_POOL`, default 6, max 8, shared by all tiers) start at once, the rest wait for a
 free slot; with `oc_overflow: "claude"` in mode hybrid the items beyond `max_parallel × oc_batch_max` go to Claude batches
-instead: size 1 whenever `N ≤ cap`, never more than 12; also the batches of a tier that is unusable),
+instead (generic `min(cap, 12, ceil(N/3))` batches, plugin/local ~3 items each, never more than 12; also the batches of a tier that is unusable),
 writes `.hybrid-audit/batches/batch-NN.md` (plus `batch-NN.oc.md` for opencode batches) and prints the exact dispatch list.
 
 ### Step 3 — Wave A: dispatch everything in ONE message

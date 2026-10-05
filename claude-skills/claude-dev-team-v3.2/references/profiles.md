@@ -28,7 +28,7 @@ so the user can overturn one.
 ## Setup details
 
 `devteam start <plan.md>` runs `doctor --fix`, `init` and the first `dispatch` in one call. `doctor
---fix` alone writes `.claude/settings.local.json` (subagent concurrency 64, tool-use concurrency 64,
+--fix` alone writes `.claude/settings.local.json` (tool-use concurrency 16; subagent concurrency only raised if set below 12 — the default 20 is fine,
 subagent stall timeout and Bash timeouts raised so a long gate is not killed mid-slice,
 `subagentPromptCacheTtl: 1h`, `worktree.baseRef: head`, an allow rule for the engine), writes
 `.worktreeinclude` so env files reach every worktree, installs the five agents into
@@ -45,7 +45,7 @@ for every plan command. Not a git repo yet → `start` initialises one. Requires
 2. **One argument-less engine call per turn.** Programmers report through a Stop-gate marker,
    reviewers through their report file, checkpoints through their log: `next` harvests all of it.
 3. **Tiny prompts.** A dispatch is one line; the briefing is a file the engine wrote. Your output
-   tokens per launch stay near zero: they are on the critical path when you launch 64.
+   tokens per launch stay near zero: they are on the critical path when you launch a full wave.
 4. **Native isolation.** `isolation: worktree` in the programmer's frontmatter: Claude Code creates
    the worktree, runs every command inside it, and blocks writes to the main checkout. `claim`
    resets the base and links `node_modules`-type dirs.
@@ -58,7 +58,7 @@ for every plan command. Not a git repo yet → `start` initialises one. Requires
    footprints, clean tree: checked by hooks while the agent is still alive (warm fix) and again
    at merge.
 8. **Review overlaps build.** Incremental reviewers run per batch of merged slices; the final
-   review covers only the last delta and is sharded (~10 files each, up to 12).
+   review covers only the last delta and is sharded (~10 files each, up to 4).
 9. **Warm resumes.** `SendMessage` to a finished agent id resumes it with full context and
    worktree: use it for BLOCKING answers, gate rejections, turn-limit partials, re-reviews. (A
    resume takes a slot without checking the cap: the engine reserves for it.)

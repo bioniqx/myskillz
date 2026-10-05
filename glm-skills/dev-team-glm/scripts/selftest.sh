@@ -466,12 +466,12 @@ check "probe proposes the FILE-SCOPED lint and test commands that make the balan
 OUT=$(D review-pr HEAD~1..HEAD --shards 2 2>&1)
 check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: code-reviewer"* ]]'
 check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: spot-reviewer"* ]]'
-check "non-Claude caps: every tier <= 8 and monotone, shards <= window, Anthropic keeps 64" 'DEVTEAM_HARNESS=claude python3 - "$S" <<PY
+check "non-Claude caps: every tier <= 8 and monotone, shards <= 4 and <= window, Anthropic keeps 64" 'DEVTEAM_HARNESS=claude python3 - "$S" <<PY
 import sys; sys.path.insert(0, sys.argv[1]); import devteam as d
 t = [d.TIERS[k] for k in ("lite", "pro", "max", "api")]
 assert all(a <= c <= 8 for a, c in t) and t == sorted(t), t
-assert d.hard_cap() == 8 and d.concurrency_limit() == 8 and d.max_shards() == 8
-assert d.shard_count([str(i) for i in range(500)], 12) <= 6
+assert d.hard_cap() == 8 and d.concurrency_limit() == 8 and d.max_shards() == 4
+assert d.shard_count([str(i) for i in range(500)], 12) <= 4
 g = d.new_gov("anthropic", "pro"); assert (g["cap"], g["ceiling"]) == (64, 64), g
 assert d.new_gov("glm", "api")["ceiling"] == 8 and d.reserve_min({"gov": {"cap": 8}, "provider": "glm"}) == 2
 PY'

@@ -1,6 +1,6 @@
 # claude-systematic-debugging (speed-optimized, parallel)
 
-Root-cause-first debugging for Claude Code, rebuilt for minimum wall-clock time: adaptive lanes (FAST / STANDARD / SWARM), one-message parallel tool batches, background jobs, isolated parallel experiments, and scripts that fan out to 64 workers. Not loaded by Claude unless it opens it.
+Root-cause-first debugging for Claude Code, rebuilt for minimum wall-clock time: adaptive lanes (FAST / STANDARD / SWARM), one-message parallel tool batches, background jobs, isolated parallel experiments, and scripts that fan out to up to 64 local shell jobs (bounded by CPUs); agent workers stay at <=6 (hard stop 8). Not loaded by Claude unless it opens it.
 
 ## Install
 Copy the folder to `~/.claude/skills/claude-systematic-debugging/` (personal) or `.claude/skills/claude-systematic-debugging/` (project). Scripts need bash (3.2+ works, macOS default), git, and optionally `timeout`/`gtimeout` for `-t`.
@@ -22,11 +22,10 @@ evals/                           pressure + speed scenarios with pass criteria
 ## Optional settings for maximum parallelism (`~/.claude/settings.json`)
 ```json
 {
-  "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64" },
   "permissions": { "allow": ["Bash(git worktree *)"] }
 }
 ```
-Default is 20 concurrent subagents (extra ones queue). Shell-level parallelism in the scripts is not limited by this setting. Pre-approving the scripts themselves (`Bash(bash /abs/path/scripts/*)`) also pre-approves whatever command you pass after `--`, so only do that in trusted repos or auto mode.
+Agents are capped by `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20; extra launches fail, so dispatch in waves). Shell-level parallelism in the scripts is not limited by this setting. Pre-approving the scripts themselves (`Bash(bash /abs/path/scripts/*)`) also pre-approves whatever command you pass after `--`, so only do that in trusted repos or auto mode.
 
 ## Measured (synthetic repo, 300 commits, culprit at #137, 3 s test)
 | | wall time |

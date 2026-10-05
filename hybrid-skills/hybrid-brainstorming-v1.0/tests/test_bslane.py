@@ -22,9 +22,9 @@ class HelperTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_lanes_dir_is_created_under_hybrid_superpowers(self):
+    def test_lanes_dir_is_created_under_hybrid_brainstorm(self):
         d = bslane.lanes_dir(self.root)
-        self.assertEqual(d, self.root / ".hybrid-superpowers" / "brainstorm" / "lanes")
+        self.assertEqual(d, self.root / ".hybrid-brainstorm" / "brainstorm" / "lanes")
         self.assertTrue(d.is_dir())
 
     def test_acquire_slot_caps_parallel_lanes(self):
@@ -42,6 +42,23 @@ class HelperTests(unittest.TestCase):
         self.assertTrue((lanes / "slots" / "lite.0.lock").exists())
         self.assertTrue((lanes / "slots" / "lite.1.lock").exists())
 
+    def test_acquire_slots_share_one_pool_across_tiers(self):
+        lanes = bslane.lanes_dir(self.root)
+        a, busy_a = bslane.acquire_slots(lanes, "std", 4, 2, 0)
+        b, busy_b = bslane.acquire_slots(lanes, "lite", 4, 2, 0)
+        self.assertEqual((len(a), busy_a, len(b), busy_b), (2, "", 2, ""))
+        c, busy_c = bslane.acquire_slots(lanes, "lite", 4, 2, 0)
+        self.assertEqual((c, busy_c), ([], "pool"))
+        # the busy lane gave its tier slot back: lite.1 is free again (lite.0 is held by b)
+        free = bslane.acquire_slot(lanes, "lite", 2, 0)
+        self.assertIsNotNone(free)
+        bslane.release_slot(free)
+        bslane.release_slots(a)
+        d, busy_d = bslane.acquire_slots(lanes, "std", 4, 2, 0)
+        self.assertEqual((len(d), busy_d), (2, ""))
+        bslane.release_slots(b)
+        bslane.release_slots(d)
+
     def test_record_appends_and_stats_aggregate(self):
         base = {"t": "2026-09-28T00:00:00Z", "role": "locate", "backend": "oc:lite", "tier": "lite",
                 "model": "zai-coding-plan/glm-5.3-flash", "variant": "low"}
@@ -55,7 +72,7 @@ class HelperTests(unittest.TestCase):
                                               "cache_write": 0}))
         bslane.record(self.root, dict(base, id="c", outcome="fallback", reason="busy", grounded=0, total=0,
                                       duration_s=0.0, tokens=zero))
-        path = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes.jsonl"
+        path = self.root / ".hybrid-brainstorm" / "brainstorm" / "lanes.jsonl"
         self.assertEqual(len(path.read_text(encoding="utf-8").splitlines()), 3)
         stats = bslane.lane_stats(path)
         self.assertEqual(len(stats), 1)
@@ -167,7 +184,7 @@ class HeldStatsTests(unittest.TestCase):
             base = {"role": "locate", "tier": "lite", "grounded": 0, "total": 0, "duration_s": 0.0, "tokens": zero}
             bslane.record(root, dict(base, id="h1", outcome="held", reason="auth"))
             bslane.record(root, dict(base, id="h2", outcome="ok", reason=""))
-            stats = bslane.lane_stats(root / ".hybrid-superpowers" / "brainstorm" / "lanes.jsonl")
+            stats = bslane.lane_stats(root / ".hybrid-brainstorm" / "brainstorm" / "lanes.jsonl")
             self.assertEqual((stats[0]["lanes"], stats[0]["fallbacks"]), (2, 1))
             self.assertEqual(stats[0]["reasons"], {"auth": 1})
 
@@ -191,8 +208,8 @@ class LaneCliTests(unittest.TestCase):
         self.routing_path = base / "routing.json"
         self.shared_env = dict(SHARED_MODELS)
         self.doctor_path = base / "doctor.json"
-        self.lanes = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes"
-        self.telemetry = self.root / ".hybrid-superpowers" / "brainstorm" / "lanes.jsonl"
+        self.lanes = self.root / ".hybrid-brainstorm" / "brainstorm" / "lanes"
+        self.telemetry = self.root / ".hybrid-brainstorm" / "brainstorm" / "lanes.jsonl"
         self.write_config()
 
     def tearDown(self):
@@ -311,7 +328,7 @@ class LaneCliTests(unittest.TestCase):
         self.assertRegex(out.strip().splitlines()[0], r"^LANE w1 fact oc:lite OK — grounded \d+/\d+ — \d+s$")
 
     def make_context(self):
-        ctx = self.root / ".hybrid-superpowers" / "drafts" / "ctx.md"
+        ctx = self.root / ".hybrid-brainstorm" / "drafts" / "ctx.md"
         ctx.parent.mkdir(parents=True, exist_ok=True)
         ctx.write_text("Constraints: stdlib only.\nFinding: app.py:2 handler.\n", encoding="utf-8")
         return ctx
@@ -686,6 +703,34 @@ class LaneCliTests(unittest.TestCase):
             fcntl.flock(held.fileno(), fcntl.LOCK_UN)
             held.close()
         self.assertFallback(rc, out, "b1", "busy")
+        self.assertEqual(self.run_calls(), [])
+
+    def test_fallback_busy_when_the_shared_pool_is_full(self):
+        slots = self.lanes / "slots"
+        slots.mkdir(parents=True)
+        held = [open(slots / "pool.{}.lock".format(k), "a+") for k in range(2)]
+        for fh in held:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            self.write_config(slot_wait_s=0)
+            self.shared_env["HYBRID_OPENCODE_POOL"] = "2"
+            rc, out = self.code_lane("p1", script={"events": [ev_text(CODE_OK)]})
+        finally:
+            for fh in held:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+                fh.close()
+        oc_lines = self.assertFallback(rc, out, "p1", "busy")
+        self.assertIn("shared opencode pool slots busy", oc_lines[0])
+        self.assertEqual(self.run_calls(), [])
+        # the lane's tier slot was released, so a lane can run once the pool frees up
+        rc, out = self.code_lane("p2", script={"events": [ev_text(CODE_OK)]})
+        self.assertEqual(rc, 0, out)
+
+    def test_invalid_pool_env_is_a_config_error(self):
+        self.shared_env["HYBRID_OPENCODE_POOL"] = "9"
+        rc, out = self.code_lane("p3", script={"events": [ev_text(CODE_OK)]})
+        oc_lines = self.assertFallback(rc, out, "p3", "config")
+        self.assertIn("HYBRID_OPENCODE_POOL", oc_lines[0])
         self.assertEqual(self.run_calls(), [])
 
     def test_fallback_format(self):

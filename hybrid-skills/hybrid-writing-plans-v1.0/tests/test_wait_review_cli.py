@@ -285,6 +285,20 @@ class ReviewOcTest(CliBase):
         self.assertEqual(info["review_hash"], {})
 
 
+class ReviewerCountTest(CliBase):
+    def test_reviewers_batch_about_three_tasks_each(self):
+        ids = ["T%02d" % i for i in range(1, 8)]
+        self.plan.write_text("\n".join(PLAN.split("#### T01")[0:1] + [
+            "#### %s: Task\n- Depends: —\n- Files: `pkg/%s.py`\n- Spec: L1-2\n" % (t, t.lower()) for t in ids]), encoding="utf-8")
+        self.write_work(tasks=ids, groups={"W01": ids}, backend={"W01": "claude"}, agents=8)
+        for t in ids:
+            self.write_task(t, mark="ok")
+        r = self.run_tool("review", str(self.plan), "--all")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(sorted(p.name for p in (self.work / "review-briefs").iterdir()),
+                         ["R01.md", "R02.md", "R03.md"])  # ceil(7 / 3)
+
+
 class WaitReviewTelemetryTest(CliBase):
     def test_done_review_logs_one_record_per_oc_task_once(self):
         t01 = self.write_task("T01", mark="rev", oc_tier="std")
@@ -456,6 +470,29 @@ class SetupAgentTest(CliBase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertNotIn("write agent", r.stdout)
         self.assertEqual(self.agent_path().read_text(encoding="utf-8"), refreshed)
+
+    def test_apply_writes_a_cap_only_when_set_and_below_12(self):
+        key = "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
+        settings = self.home / ".claude" / "settings.json"
+        r = self.run_tool("setup", "--apply")  # unset = default 20, already enough
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn(key, json.loads(settings.read_text(encoding="utf-8")).get("env", {}))
+        for old, want in (("40", "40"), ("12", "12"), ("5", "16")):
+            settings.write_text(json.dumps({"env": {key: old}}), encoding="utf-8")
+            r = self.run_tool("setup", "--apply")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(json.loads(settings.read_text(encoding="utf-8"))["env"][key], want, old)
+
+    def test_context_hints_a_boost_only_when_the_cap_is_below_12(self):
+        key = "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
+        for cap, hint in ((None, False), ("12", False), ("5", True)):
+            env = dict(self.env)
+            env.pop(key, None)
+            if cap:
+                env[key] = cap
+            out = subprocess.run([sys.executable, TOOL, "context"], env=env, cwd=str(self.root), universal_newlines=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+            self.assertEqual("one-time set to 16" in out, hint, (cap, out))
 
     def test_missing_agent_is_installed(self):
         r = self.run_tool("setup", "--apply")

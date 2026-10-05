@@ -1,4 +1,4 @@
-# Parallel Debugging Playbook (up to 64 concurrent workers)
+# Parallel Debugging Playbook (up to 64 local shell jobs (bounded by CPUs), <=6 agent workers (hard stop 8))
 
 Goal: cut wall-clock time with width without letting parallel work corrupt the evidence.
 `$S` = the absolute scripts path from SKILL.md; start script commands with `S=<that path>;`.
@@ -10,16 +10,16 @@ Sections 1-5 are shared. Each `## Recipe:` section below is self-contained: read
 |---|---|---|---|
 | Several tool calls in one message | keep a batch readable (≈ 5–15 calls) | none | reads, greps, git queries, short commands |
 | Shell processes (`-j`, `xargs -P`, runner workers) | up to 64; CPU-bound → CPU count | none | reruns, bisect, polluter search, suites |
-| Subagents (Agent tool) | 20 at once by default, extra ones queue (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`); nesting depth 3 | ≈ linear | judgment: reading an area, running one hypothesis experiment |
+| Subagents (Agent tool) | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` at once (default 20); extra launches fail, not queue; nesting depth 3 | ≈ linear | judgment: reading an area, running one hypothesis experiment |
 | Dynamic workflow | 16 at a time; only if the user opted in (`ultracode` / "use a workflow") | high | many agents in total across staged passes, adversarial cross-checks |
 
-Volume goes to the shell; only judgment goes to agents. More than 20 subagents *simultaneously* needs `"env": {"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64"}` in settings; otherwise extras queue (correct, not faster).
+Volume goes to the shell; only judgment goes to agents. Past `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) Claude Code fails the extra launch with "Concurrent subagent limit reached" (do not retry it); dispatch in waves instead, and never need more than 6-8 agents for one bug.
 
 ## 2. Width
 
 - CPU-bound (tests, builds): total processes ≤ CPU count. A runner that already uses all cores (jest, vitest, pytest -n auto, go test) counts as one job using every CPU — do not multiply it.
 - IO-bound (network, waiting on services): up to 64, each job with its own port/DB/temp dir; respect remote rate limits.
-- Agents: one per genuinely independent unit (hypothesis, module, service). Beyond ~8 for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
+- Agents: one per genuinely independent unit (hypothesis, module, service). Use at most 6 (hard stop 8) for one bug; beyond that merge cost exceeds the gain.
 - Launch the whole batch in ONE message. One launch per round serializes everything.
 
 ## 3. Isolation (the quality guard)

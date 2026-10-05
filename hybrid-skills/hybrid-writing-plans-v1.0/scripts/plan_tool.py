@@ -12,7 +12,7 @@
   review    PLAN [--all] [--size N] [--agents K] pick risky tasks, write reviewer briefs, print DISPATCH
   assemble  PLAN [--clean]                       full check, render canonical plan, splice task bodies
   check     PLAN [--spec S]                      same as assemble for a plan with inline tasks (<= 3 tasks)
-  setup     [--scope user|project] [--apply]     raise subagent cap to 64, pre-approve tools, install writer agent
+  setup     [--scope user|project] [--apply]     raise subagent cap to 16 (if set and lower than 12), pre-approve tools, install writer agent
 Common: --allow WORD (repeatable) exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
 import argparse, ast, concurrent.futures, hashlib, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, time
@@ -20,7 +20,9 @@ import argparse, ast, concurrent.futures, hashlib, json, os, re, shlex, shutil, 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
-MAX_AGENTS = 64
+MAX_AGENTS = 12  # soft ceiling for agent fan-out
+WRITER_MIN_TASKS = 3  # target tasks per writer/reviewer (fixed per-agent token overhead)
+RECOMMENDED_CAP = 16  # value `setup --apply` writes when the cap is set and below MAX_AGENTS
 DEFAULT_CAP = 20
 ID_RE = r"T\d{2,3}"
 CONTRACT_HEAD = re.compile(r"^####\s+(%s)\s*[:·—-]\s*(.+?)\s*$" % ID_RE)
@@ -38,7 +40,7 @@ PLACEHOLDERS = [r"implement(ed)? later",
     r"fill in (the )?details", r"add appropriate (error handling|validation)",
     r"handle (the )?edge cases", r"similar to (task\s*|T)\d+", r"same as (task\s*|T)\d+",
     r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
-PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
+PORTABILITY = [r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
     r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
     r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b", r"\binvoke (the |a )?skill\b"]
 PH_RE = [re.compile(p) for p in PLACEHOLDERS_CS] + [re.compile(p, re.I) for p in PLACEHOLDERS]
@@ -1012,7 +1014,7 @@ def cmd_contracts(a):
     import hp_router
     from pathlib import Path
     cap, from_env = cap_from_env()
-    k = max(1, min(MAX_AGENTS, a.agents or cap))
+    cap = max(1, min(MAX_AGENTS, a.agents or cap))  # Claude writers: min(cap, ceil(Claude-routed tasks / WRITER_MIN_TASKS)), see hp_partition
     work = default_work(plan_path)
     _, old_info = load_work(plan_path)
     old_hashes = old_info.get("contract_hash", {}) if old_info else {}
@@ -1038,7 +1040,7 @@ def cmd_contracts(a):
         emit_oc("OC-ERROR", "preset", "config", str(e))
         return 1
     doctor = keep_run_tiers(hp_doctor.load_doctor(hp_doctor.doctor_cache_path()), routing, old_info, time.time())
-    routed = hp_partition.route_groups(cs, routing, doctor, preset, k)
+    routed = hp_partition.route_groups(cs, routing, doctor, preset, cap)
     report_opencode_state(preset, routing, doctor, cs)
     claude = [(gid, g) for gid, backend, g in routed if backend == "claude"]
     oc = [(gid, backend, g) for gid, backend, g in routed if backend.startswith("oc:")]
@@ -1062,7 +1064,7 @@ def cmd_contracts(a):
             save(os.path.join(work, "briefs", gid + ".oc.md"), hp_briefs.oc_brief(plan_path, plan, todo, cmap, work, spec, repo, a.allow))
     ordered = sorted(routed, key=lambda r: num(r[2][0]["id"]))
     save(os.path.join(work, "work.json"), json.dumps({
-        "plan": plan_path, "spec": spec, "repo": repo, "allow": a.allow, "agents": k,
+        "plan": plan_path, "spec": spec, "repo": repo, "allow": a.allow, "agents": cap,
         "tasks": [c["id"] for c in cs], "groups": {gid: [c["id"] for c in g] for gid, backend, g in ordered}, "review": [],
         "contract_hash": new_hashes,
         "preset": preset, "backend": {gid: backend for gid, backend, g in ordered},
@@ -1071,7 +1073,7 @@ def cmd_contracts(a):
                "review_oc": hp_router.review_policy(routing, preset)}}, indent=1))
     _, n, width = waves_block(cs)
     agent = "hybrid-plan-task-writer" if agent_installed(repo) else "general-purpose"
-    extra = [] if from_env or a.agents else ["NOTE parallel cap = %d (default); run `%s setup` once to raise it to 64" % (DEFAULT_CAP, qtool())]
+    extra = [] if a.agents or cap >= MAX_AGENTS else ["NOTE parallel cap = %d (default); run `%s setup` once to set it to %d" % (DEFAULT_CAP, qtool(), RECOMMENDED_CAP)]
     extra.append("WORK %s" % work)
     if claude_todo:
         extra += ["DISPATCH %d writers in ONE message | subagent_type=%s | model per row | description 'plan <ID>'" % (len(claude_todo), agent),
@@ -1099,7 +1101,7 @@ def cmd_contracts(a):
         extra.append("THEN run: %s wait %s" % (qtool(), shlex.quote(plan_path)))
     else:
         extra.append("NOTHING dispatched: every group is held")
-    ok = "OK contracts: %d tasks | %d waves | max wave width %d | %d writers (cap %d)" % (len(cs), n, width, len(claude_todo), k)
+    ok = "OK contracts: %d tasks | %d waves | max wave width %d | %d writers (cap %d)" % (len(cs), n, width, len(claude_todo), cap)
     if oc:
         ok += " | %d opencode groups" % len(oc_todo)
     if held:
@@ -1398,8 +1400,8 @@ def cmd_review(a):
         for tid in oc_picked:
             hashes[tid] = hp_telemetry.file_sha(os.path.join(work, "tasks", tid + ".md"))
     info["review_hash"] = hashes
-    k = max(1, min(MAX_AGENTS, a.agents or info.get("agents") or DEFAULT_CAP))
-    size = a.size or max(1, -(-len(picked) // k))  # default: spread over every free slot
+    k = max(1, min(MAX_AGENTS, a.agents or info.get("agents") or DEFAULT_CAP, -(-len(picked) // WRITER_MIN_TASKS)))
+    size = a.size or max(1, -(-len(picked) // k))  # default: ~WRITER_MIN_TASKS reviews per agent
     chunks = [[c for c, _ in picked[i:i + size]] for i in range(0, len(picked), size)]
     while len(chunks) > k:
         chunks = [chunks[i] + (chunks[i + 1] if i + 1 < len(chunks) else []) for i in range(0, len(chunks), 2)]
@@ -1645,9 +1647,9 @@ def cmd_context(a):
         out.append("tool: %s" % qtool())
         cap, env = cap_from_env()
         k = min(MAX_AGENTS, cap)
-        out.append("parallel: subagent cap %d%s -> writers per wave <= %d%s" % (
-            cap, "" if env else " (default; CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS unset)", k,
-            "" if k >= MAX_AGENTS else " | one-time boost to 64: %s setup --apply (then restart)" % qtool()))
+        out.append("parallel: subagent cap %d%s -> writers per wave <= min(%d, ceil(tasks/%d))%s" % (
+            cap, "" if env else " (default; CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS unset)", k, WRITER_MIN_TASKS,
+            "" if cap >= MAX_AGENTS else " | one-time set to %d: %s setup --apply (then restart)" % (RECOMMENDED_CAP, qtool())))
         ag = agent_installed(repo)
         if ag and agent_is_stale(ag):
             out.append("writer agent: hybrid-plan-task-writer at %s is STALE (still has __PLAN_TOOL__ placeholder) - re-run %s setup --apply" % (ag, qtool()))
@@ -1671,9 +1673,9 @@ def cmd_context(a):
                     break
         dirty = len(sh(["git", "status", "--porcelain"], repo).splitlines())
         out.append("git: branch %s | %d dirty | %d files" % (branch or "-", dirty, len(files)))
-        plans = os.path.join(repo, "docs", "superpowers", "plans")
-        specs_dir = os.path.join(repo, "docs", "superpowers", "specs")
-        out.append("plan path: docs/superpowers/plans/%s-<feature>.md (%d existing plans)" % (
+        plans = os.path.join(repo, "docs", "plans")
+        specs_dir = os.path.join(repo, "docs", "specs")
+        out.append("plan path: docs/plans/%s-<feature>.md (%d existing plans)" % (
             time.strftime("%Y-%m-%d"), len([f for f in os.listdir(plans) if f.endswith(".md")]) if os.path.isdir(plans) else 0))
         if not spec and os.path.isdir(specs_dir):
             recent = sorted((os.path.join(specs_dir, f) for f in os.listdir(specs_dir) if f.endswith(".md")), key=os.path.getmtime, reverse=True)[:5]
@@ -1746,12 +1748,12 @@ def cmd_setup(a):
     if a.scope == "user":
         settings = os.path.join(home, ".claude", "settings.json")
         agents = os.path.join(home, ".claude", "agents")
-        edit_rule = "Edit(**/docs/superpowers/plans/**)"
+        edit_rule = "Edit(**/docs/plans/**)"
     else:
         root = repo_root(os.getcwd())
         settings = os.path.join(root, ".claude", "settings.local.json")
         agents = os.path.join(root, ".claude", "agents")
-        edit_rule = "Edit(/docs/superpowers/plans/**)"
+        edit_rule = "Edit(/docs/plans/**)"
     try:
         cur = json.loads(load(settings)) if os.path.exists(settings) else {}
     except ValueError as e:
@@ -1761,9 +1763,9 @@ def cmd_setup(a):
     changes = []
     env = new.setdefault("env", {})
     v = str(env.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", ""))
-    if not (v.isdigit() and int(v) >= MAX_AGENTS):
-        env["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(MAX_AGENTS)
-        changes.append("env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS = %d (was %s)" % (MAX_AGENTS, v or "unset -> 20"))
+    if v and not (v.isdigit() and int(v) >= MAX_AGENTS):  # unset = Claude Code default 20, already enough; never lower a higher value
+        env["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(RECOMMENDED_CAP)
+        changes.append("env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS = %d (was %s)" % (RECOMMENDED_CAP, v or "unset -> 20"))
     allow = new.setdefault("permissions", {}).setdefault("allow", [])
     for rule in ("Bash(%s *)" % qtool(), edit_rule):
         if rule not in allow:

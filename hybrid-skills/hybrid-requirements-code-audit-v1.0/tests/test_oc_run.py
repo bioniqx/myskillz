@@ -444,7 +444,7 @@ class RunOnceTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.root = self.tmp / "repo"
         self.root.mkdir()
-        self.oc_dir = self.root / "docs" / "superpowers" / "plans" / ".work" / "p" / "oc"
+        self.oc_dir = self.root / "docs" / "plans" / ".work" / "p" / "oc"
         self.script = self.tmp / "script.json"
         self.log = self.tmp / "log.jsonl"
         self.env = dict(

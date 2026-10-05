@@ -138,7 +138,7 @@ depends on the engine's output (model lines, stall hint) and guard behavior.
 ## 9. User decisions and assumptions
 
 1. Approved the three-wave design as-is.
-2. Spec and plan files are NOT committed; they stay untracked in `docs/superpowers/` (overrides the skill's mandatory commit; the repo's RED→GREEN commits for script changes are unaffected).
+2. Spec and plan files are NOT committed; they stay untracked in `docs/` (overrides the skill's mandatory commit; the repo's RED→GREEN commits for script changes are unaffected).
 3. Do NOT sync to the installed copies (`~/.claude/skills`, `~/.claude/agents`, settings). Known leftover: the installed `plan-task-writer` still contains the unreplaced `__PLAN_TOOL__` placeholder (verified), so the writing-plans auto-lint hook fails there until the user runs `plan_tool.py setup --apply`. Report this at the end; do not run it.
 4. requirements-code-audit investigators move to Sonnet (instead of Haiku with extra MATCHED verification).
 5. Assumptions: only files under `claude-skills/` change; the sibling `hybrid`, `glm-skills` dirs and the pending deletions in the parent repo are untouched; existing observable CLI output formats stay stable except where a finding requires a change (grep `tests/` for asserted strings first); `frontend-design-Jun18` is trimmed and re-described, not deleted; `effort` and `omitClaudeMd` frontmatter are not relied on for savings (honored-ness unverified).

@@ -8,7 +8,7 @@ adds the shape of the messages.
 
 **Merge (default).** Goal and key constraints are clear, no open question
 would change WHICH approaches are viable, and all lanes fit under the
-`lanes=` ceiling (max 8). Send the design message (§2) as soon as the lanes that
+`lanes=` ceiling (default 6, max 8). Send the design message (§2) as soon as the lanes that
 decide the approach set are back; fold later lanes into the spec. While
 decisive lanes are still running, end the turn with one status line
 ("Exploring N code + M web lanes; design follows") — do not poll. Budget:
@@ -117,7 +117,7 @@ This turn is formatting and targeted edits, not judgment: do not
 re-deliberate the design.
 
 1. Move the pre-draft, if you wrote one, to
-   `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
+   `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the
    approved design. Content = the approved design, including Evidence and
@@ -147,6 +147,6 @@ only, commit if committing, ask again. Proceed only on approval.
 
 Invoke `oc-writing-plans`; if no skill with that exact name is installed,
 invoke `writing-plans`. Pass the spec path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), committed or not, as its input. No other skill, no
 code, no scaffolding.

@@ -47,7 +47,9 @@ STRENGTHS = ("MUST", "SHOULD", "MAY")
 SKIP_TAGS = {"static-limit", "ambiguous"}
 
 DEFAULT_CAP = 20            # Claude Code default concurrent-subagent cap (v2.1.217+)
-TARGET_CAP = 64             # what this skill is designed for (CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64)
+RECOMMENDED_CAP = 12        # advise raising CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS only below this; more is not needed
+SOFT_WIDTH = 12             # soft ceiling on investigator fan-out (generic mode); extra batches go in waves
+MIN_BATCH = 3               # prefer >= this many requirements per investigator (fixed per-agent token overhead)
 MAX_BATCH = 12              # never give one investigator more than this many requirements
 SOLO_BATCH = 8
 VERIFY_MAX_PER_AGENT = 3
@@ -56,7 +58,7 @@ HEDGE_MIN_SECONDS = 180     # never hedge (duplicate) a straggler younger than t
 PARSE_WORDS_PER_SECTION = 1500
 PARSE_THRESHOLD_WORDS = 800             # the original's value: preset claude must equal it
 OFFLOAD_PARSE_THRESHOLD_WORDS = 2500    # only presets that offload parse work use the larger threshold
-MAX_PARSERS = 16
+MAX_PARSERS = 8
 
 PLUGIN_NAME = "claude-req-audit"
 AGENT_NAMES = {"investigator": "claude-rca-investigator", "verifier": "claude-rca-verifier", "parser": "claude-rca-parser"}
@@ -803,7 +805,7 @@ def cmd_init(a):
     print("  agents    : %s  -> investigator=%s (%s), verifier=%s (%s)" % (
         agents, Ctx(cwd).agent_type("investigator"), MODELS["investigator"], Ctx(cwd).agent_type("verifier"), MODELS["verifier"]))
     print("  cap       : %d concurrent subagents%s" % (
-        cap, "" if cap >= TARGET_CAP else "  (raise to %d: settings.json → \"env\": {\"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS\": \"%d\"} then restart; not blocking)" % (TARGET_CAP, TARGET_CAP)))
+        cap, "" if cap >= RECOMMENDED_CAP else "  (below the recommended %d: settings.json → \"env\": {\"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS\": \"%d\"} then restart; not blocking)" % (RECOMMENDED_CAP, RECOMMENDED_CAP)))
     print("  git       : %s" % ("excluded via " + excl if excl else "not a git checkout (nothing to exclude)"))
     print("  repo map  : %s (%d lines)" % (out / "repo_map.md", len(repo_map.splitlines())))
     c = Ctx(cwd)
@@ -969,7 +971,7 @@ def cmd_parse_plan(a):
     if c.cfg.get("agents") != "solo":
         backend = route_for(c, "parser", routing, doctor, preset, now())
     if backend.startswith("oc:"):
-        at_once = ha_router.tier_parallel(routing["tiers"][backend[3:]])
+        at_once = min(ha_router.tier_parallel(routing["tiers"][backend[3:]]), ha_router.oc_pool())
         if len(chunks) > at_once:
             chunks = split_sections(text, at_once)
     lines_out, oc_rows, backends = [], [], {}
@@ -1238,7 +1240,7 @@ def partition_items(active, cap, solo, lean=False):
     elif lean:
         n_batches = math.ceil(n / float(LEAN_BATCH))
     else:
-        n_batches = min(cap, n)
+        n_batches = min(cap, SOFT_WIDTH, math.ceil(n / float(MIN_BATCH)))
         if math.ceil(n / float(n_batches)) > MAX_BATCH:
             n_batches = math.ceil(n / float(MAX_BATCH))
     ordered = sorted(active, key=lambda r: (r.get("category") or "", r.get("id")))
@@ -1335,7 +1337,7 @@ def plan_hybrid(c, a, active, skipped, cap, routing, preset, doctor):
     state_batches, lines, oc_rows, held = {}, [], [], {}
     k_claude = 0
     oc_free = {"oc:" + name: ha_router.tier_parallel(tier) for name, tier in routing["tiers"].items()}
-    oc_free["oc"] = ha_router.hybrid_shared.MAX_PARALLEL_LIMIT
+    oc_free["oc"] = ha_router.oc_pool()
     for i, (backend, items) in enumerate(groups, 1):
         name = "batch-%02d" % i
         path = c.out / "batches" / (name + ".md")
@@ -2656,6 +2658,8 @@ def cmd_doctor(a):
     specs = ", ".join("%s=%s" % (name, hs.model_spec(tier)) for name, tier in shared_tiers.items())
     unset = not (os.environ.get(hs.STD_ENV) or "").strip()
     print("  shared  : %s = %s" % (hs.SHARED_SOURCE, specs or ("not set" if unset else "invalid")))
+    print("  pool    : %d opencode lanes at once across tiers (%s, default %d, max %d)"
+          % (ha_router.oc_pool(), hs.OC_POOL_ENV, hs.OC_POOL_DEFAULT, hs.OC_POOL_LIMIT))
     for name, spec, kind, detail in doctor_problems(routing, data):
         print(hs.oc_line("OC-ERROR", SKILL_NAME, "doctor", name, spec, kind, detail))
     for problem in routing.get("config_problems") or []:

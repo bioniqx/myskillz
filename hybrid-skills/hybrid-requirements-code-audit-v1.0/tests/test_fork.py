@@ -135,11 +135,18 @@ class PartitionItemsTest(unittest.TestCase):
         self.assertEqual(flat, [r["id"] for r in sorted(items, key=lambda r: (r["category"], r["id"]))])
         self.assertEqual([r["id"] for r in items], before)
 
-    def test_one_item_per_batch_when_cap_is_large(self):
+    def test_batches_of_at_least_min_batch_when_cap_is_large(self):
         audit = load_audit()
         batches = audit.partition_items(self.items(30), 64, False)
-        self.assertEqual(len(batches), 30)
-        self.assertTrue(all(len(b) == 1 for b in batches))
+        self.assertEqual(len(batches), 10)
+        self.assertTrue(all(len(b) == audit.MIN_BATCH for b in batches))
+
+    def test_width_is_soft_width_at_most(self):
+        audit = load_audit()
+        batches = audit.partition_items(self.items(100), 64, False)
+        self.assertEqual(len(batches), audit.SOFT_WIDTH)
+        self.assertEqual(max(len(b) for b in batches), 9)
+        self.assertEqual(sum(len(b) for b in batches), 100)
 
     def test_max_batch_limits_batch_size(self):
         audit = load_audit()

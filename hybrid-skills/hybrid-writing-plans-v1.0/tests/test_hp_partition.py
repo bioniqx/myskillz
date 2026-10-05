@@ -71,6 +71,7 @@ class RouteGroupsTest(unittest.TestCase):
         }
         self.env = mock.patch.dict(os.environ, env)
         self.env.start()
+        os.environ.pop(hybrid_shared.OC_POOL_ENV, None)  # the real environment may set the pool
 
     def tearDown(self):
         self.env.stop()
@@ -78,11 +79,17 @@ class RouteGroupsTest(unittest.TestCase):
 
     def test_claude_preset_matches_62_partition(self):
         cs = [C("T01"), C("T02"), C("T03")]
-        got = run_groups(cs, "claude")
-        self.assertEqual(shape(got), [("T01", "claude", ["T01"]), ("T02", "claude", ["T02"]), ("T03", "claude", ["T03"])])
+        got = run_groups(cs, "claude")  # ~3 tasks per writer: three tasks share one
+        self.assertEqual(shape(got), [("W01", "claude", ["T01", "T02", "T03"])])
+        self.assertEqual(shape(run_groups(cs[:1], "claude")), [("T01", "claude", ["T01"])])
         got = run_groups(cs, "claude", cap=1)
         self.assertEqual(shape(got), [("W01", "claude", ["T01", "T02", "T03"])])
         self.assertEqual([g for _, _, g in got], plan_tool.partition(cs, 1))
+        many = [C("T%02d" % i) for i in range(1, 8)]
+        got = run_groups(many, "claude")  # ceil(7 / 3) writers
+        self.assertEqual([g for _, _, g in got], plan_tool.partition(many, 3))
+        self.assertEqual(len(run_groups(many, "claude", cap=2)), 2)
+        self.assertEqual(len(run_groups([C("T%02d" % i) for i in range(1, 41)], "claude", cap=12)), 12)
 
     def test_hybrid_routes_by_tier_and_names_oc_groups_in_id_order(self):
         cs = [C("T01", "light"), C("T02", "deep"), C("T03", "std"), C("T04", "light")]
@@ -109,7 +116,7 @@ class RouteGroupsTest(unittest.TestCase):
     def test_no_doctor_cache_means_all_claude_in_hybrid(self):
         cs = [C("T01", "light"), C("T02", "std")]
         got = run_groups(cs, "hybrid", doctor={})
-        self.assertEqual(shape(got), [("T01", "claude", ["T01"]), ("T02", "claude", ["T02"])])
+        self.assertEqual(shape(got), [("W01", "claude", ["T01", "T02"])])
 
     def test_no_doctor_cache_holds_every_task_in_opencode(self):
         cs = [C("T01", "light"), C("T02", "std")]
@@ -134,7 +141,7 @@ class RouteGroupsTest(unittest.TestCase):
             got = run_groups(cs, "opencode", breaker_dir=breaker_dir)
             self.assertEqual(shape(got), [("T01", "held", ["T01"]), ("T02", "held", ["T02"])])
             got = run_groups(cs, "hybrid", breaker_dir=breaker_dir)
-            self.assertEqual(shape(got), [("T01", "claude", ["T01"]), ("T02", "claude", ["T02"])])
+            self.assertEqual(shape(got), [("W01", "claude", ["T01", "T02"])])
 
     def small_tier(self, **extra):
         routing = copy.deepcopy(ROUTING)
@@ -152,8 +159,7 @@ class RouteGroupsTest(unittest.TestCase):
     def test_overflow_moves_heaviest_to_claude_when_oc_overflow_is_claude(self):
         got = run_groups(self.heavy_tasks(), "hybrid", routing=self.small_tier(oc_overflow="claude"))
         self.assertEqual(shape(got), [
-            ("T03", "claude", ["T03"]),
-            ("T04", "claude", ["T04"]),
+            ("W01", "claude", ["T03", "T04"]),
             ("O01", "oc:std", ["T01", "T02"]),
         ])
 
@@ -168,8 +174,20 @@ class RouteGroupsTest(unittest.TestCase):
         routing["tiers"]["std"]["max_parallel"] = 40
         routing["oc_group_max"] = 1
         got = run_groups([C("T%02d" % i) for i in range(1, 21)], "hybrid", routing=routing)
-        self.assertEqual(hp_partition._max_parallel(routing, "std"), 8)
-        self.assertEqual(len(got), 20)  # one task per group; at most 8 run at once, the rest queue
+        self.assertEqual(hp_partition._max_parallel(routing, "std"), hybrid_shared.OC_POOL_DEFAULT)  # clamped to 8, then to the pool (6)
+        self.assertEqual(len(got), 20)  # one task per group; at most 6 run at once, the rest queue
+        with mock.patch.dict(os.environ, {hybrid_shared.OC_POOL_ENV: "8"}):
+            self.assertEqual(hp_partition._max_parallel(routing, "std"), 8)
+
+    def test_pool_caps_tier_capacity_in_the_overflow_split(self):
+        routing = dict(ROUTING, oc_overflow="claude", oc_group_max=1)
+        cs = [C("T%02d" % i) for i in range(1, 7)]
+        with mock.patch.dict(os.environ, {hybrid_shared.OC_POOL_ENV: "2"}):
+            got = run_groups(cs, "hybrid", routing=routing)
+            self.assertEqual(hp_partition._max_parallel(routing, "lite"), 2)
+        on_oc = [g for _, backend, g in got if backend == "oc:std"]
+        self.assertEqual(len(on_oc), 2)  # min(max_parallel 6, pool 2) groups of oc_group_max 1; the rest moves to claude
+        self.assertEqual(sum(len(g) for _, backend, g in got if backend == "claude"), 4)
 
     def test_hybrid_default_with_more_than_18_std_tasks_sends_all_to_opencode(self):
         cs = [C("T%02d" % i) for i in range(1, 31)]

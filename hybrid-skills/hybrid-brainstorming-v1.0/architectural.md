@@ -7,13 +7,13 @@ lane results to `hybrid-writing-plans`.
 
 - **Merge (default):** goal and key constraints are clear, no open
   question would change WHICH approaches are viable, and all lanes fit
-  under the subagent cap. Send the design message (§2) as soon as the
+  under min(subagent cap, 12). Send the design message (§2) as soon as the
   lanes that decide the approach set are back; fold later lanes into the
   spec. While decisive T1 lanes are still running, end the turn with one
   status line ("Exploring N code + M web lanes; design follows") — don't
   poll. Budget: 2 human turns.
 - **Split:** the request is too open to design (unknown users, goal, or a
-  constraint that eliminates whole approaches), or lanes exceed the cap
+  constraint that eliminates whole approaches), or lanes exceed min(cap, 12)
   and must run in waves. Send the questions + assumptions right away
   while lanes keep running; the user thinks while machines work. Next
   message is the design. Budget: 3 human turns.
@@ -37,7 +37,7 @@ findings + evidence lines]. Return ≤150 words: architecture, 3 components
 with one-line responsibilities, top 3 trade-offs, what it breaks, evidence
 it relies on." Pick and sharpen; don't draft from scratch.
 
-In mode `opencode` only (SKILL.md, Hybrid routing; modes `hybrid` and `claude` keep `draft` on `Agent` lanes, whatever the `opencode:` context line shows), dispatch each lens as a background call to `bslane.py draft --id <id> --lens reuse|best-practice|smallest|runner-up --task <TASK> --context-file <path> --preset opencode` instead of a Claude lane — never in round 1, only once the lanes that decide the approach set are back (the point where §1 would otherwise send the design message straight to Claude lanes); the runner-up lens (§3) dispatches this way too, at the same point, not before. `<path>` is `.hybrid-superpowers/drafts/<id>.context.md`, written first with the constraints, key findings, and evidence lines the lens needs — the Conductor passes only the bracket values plus that file; the script owns the prompt template. Each call prints one of: `LANE <id> draft oc:<tier> OK — ungrounded` followed by the draft (a draft has no ground truth to check against, so it is never marked as grounded); `HELD <id> (<reason>) — <note>` after its OC line (act on it per SKILL.md's exit code 3 rules; mode `opencode` never falls back on its own); or the bare `CLAUDE <id> — Agent → …` line alone when the routing pins `draft` to Claude, launch that lane once.
+In mode `opencode` only (SKILL.md, Hybrid routing; modes `hybrid` and `claude` keep `draft` on `Agent` lanes, whatever the `opencode:` context line shows), dispatch each lens as a background call to `bslane.py draft --id <id> --lens reuse|best-practice|smallest|runner-up --task <TASK> --context-file <path> --preset opencode` instead of a Claude lane — never in round 1, only once the lanes that decide the approach set are back (the point where §1 would otherwise send the design message straight to Claude lanes); the runner-up lens (§3) dispatches this way too, at the same point, not before. `<path>` is `.hybrid-brainstorm/drafts/<id>.context.md`, written first with the constraints, key findings, and evidence lines the lens needs — the Conductor passes only the bracket values plus that file; the script owns the prompt template. Each call prints one of: `LANE <id> draft oc:<tier> OK — ungrounded` followed by the draft (a draft has no ground truth to check against, so it is never marked as grounded); `HELD <id> (<reason>) — <note>` after its OC line (act on it per SKILL.md's exit code 3 rules; mode `opencode` never falls back on its own); or the bare `CLAUDE <id> — Agent → …` line alone when the routing pins `draft` to Claude, launch that lane once.
 
 **Design of the recommended approach:** labeled sections, each scaled to
 its complexity (a few sentences → ≤250 words when nuanced):
@@ -79,7 +79,7 @@ design. Their results are consumed in the spec turn (§4).
   the harness offers one (it inherits the conversation); otherwise
   `general-purpose` with `model: "sonnet"` and the design pasted. It
   writes the spec to
-  `.hybrid-superpowers/drafts/<topic>-design.md` (never the specs path), does not
+  `.hybrid-brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. Rejected design → overwrite later.
 - **Runner-up approach** (1 `sonnet` lane) — only when the top two
   approaches are close; it fleshes out the runner-up's sections so "use B
@@ -91,7 +91,7 @@ Don't start work the user's reply is likely to invalidate wholesale.
 
 1. If a pre-draft lane is still running, stop it (TaskStop) and write the
    spec yourself. Otherwise move the draft to
-   `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
+   `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the
    approved design. Content = the approved design, including Evidence and
@@ -122,6 +122,6 @@ sections, commit if committing, ask again. Proceed only on approval.
 
 Invoke `hybrid-writing-plans` with args `mode=<mode>`, or `writing-plans` (no
 args) if it is not installed. Pass the spec path
-(`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
+(`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), committed or not, as its input. No other skill, no
 code, no scaffolding.

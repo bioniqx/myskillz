@@ -167,7 +167,7 @@ Fix: re-sync `scan`, `fence_mask`, `files_block`, `commit_errors`, `allow_hit`, 
 
 hybrid P2: its tests `test_lint_parity.py`, `test_fork.py`, `test_golden.py` point at the nonexistent
 `claude-skills/writing-plans-6.2` (6 of 10 skipped; CHANGELOG says fixed); `hybrid-skills/CLAUDE.md` sync tests use
-`hybrid/...` instead of `hybrid-skills/...` (always skip); stale `superpowers:*` and "ultracode" handoff text; the
+`hybrid/...` instead of `hybrid-skills/...` (always skip); stale external-skill (`<name>:*`) and "ultracode" handoff text; the
 portability claim "linter enforces no opencode mention" is false (add `opencode` to `PORTABILITY` or drop the claim);
 SKILL says Claude-only mode is "identical to 6.2" which is only true after the port.
 
@@ -273,7 +273,7 @@ Original: `claude-brainstorming-6.3`.
 - P1 hybrid: `research-playbook.md` cites claim verifier at §4 (it is §3); `SKILL.md` says per-tier cap 6 vs 4
   everywhere else; spec pre-draft lane drops `model: "sonnet"`; round-1 wording is the older 8.0 form; README claims
   preset claude reproduces 6.3 exactly and `hybrid-skills/CLAUDE.md` claims a 09-30 resync — update to match reality
-  after the port; 6 tracked runtime files under `scripts/.hybrid-superpowers/.../doctor/` to untrack.
+  after the port; 6 tracked runtime files under `scripts/.hybrid-<name>/.../doctor/` to untrack.
 - P2: glm `CLAUDE.md` says 9.0-glm, CHANGELOG says 9.3-glm; `glm-tuning.md` uses a nonexistent `skills/glm/...` path;
   oc has no CHANGELOG or README.
 

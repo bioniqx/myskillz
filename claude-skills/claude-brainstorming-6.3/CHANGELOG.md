@@ -2,6 +2,9 @@
 
 Version labels: `claude-brainstorming-6.3` is the install folder name (kept so paths stay stable); `9.0` is the skill's internal version.
 
+## Branding
+- The companion page header is a plain `Brainstorming` label (no link, no version lookup, no telemetry-env handling); `<title>` is `Brainstorming`. Session files live under `.brainstorm/`, spec drafts under `.brainstorm/drafts/`, specs under `docs/specs/`.
+
 ## Fix: brainstorm.choice() event
 - `window.brainstorm.choice(value, metadata)` now sends `choice: value`, so `server.cjs` records the event in `state/events` (it drops events without a `choice` key).
 
@@ -73,9 +76,9 @@ Without it the skill reads the real caps from Live context and runs waves.
 - Architectural 3-4 → 2-3 human turns (merged design message by default; send
   once the decisive lanes are back). AskUserQuestion carries the approval item.
 - Spec review: 4 parallel reviewer subagents → 5-lens inline self-review
-  (Superpowers v5.0.6: reviewer loop ~25 min, identical quality over 5 versions ×
+  (upstream skill: reviewer loop ~25 min, identical quality over 5 versions ×
   5 trials). Parallel reviewers only for security/migration/money/public-API.
-- Claim verifier, spec pre-draft (`.superpowers/drafts/`, only when writes won't
+- Claim verifier, spec pre-draft (`.brainstorm/drafts/`, only when writes won't
   prompt), and runner-up approach run during the human's reading time.
 - Worker prompts inlined in SKILL.md with a byte-identical shared prefix.
 

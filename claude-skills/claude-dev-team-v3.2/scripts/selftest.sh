@@ -120,8 +120,13 @@ check "bash-ro denies redirect to file" '[[ "$(hook bash-ro "{\"tool_input\":{\"
 echo "== doctor on installed agents (hook pinning)"
 D doctor --fix >/dev/null 2>&1
 check "doctor pins hooks to guard.py" 'grep -q "guard.py\\\\\" edit\"" "$R/.claude/agents/claude-programmer.md"'
-OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=64 D doctor 2>&1)
-check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
+OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=20 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=16 D doctor 2>&1)
+check "doctor all good after fix (cap 20 / tool concurrency 16)" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
+OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=12 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=16 D doctor 2>&1)
+check "doctor accepts a cap of exactly 12" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
+OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=11 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=16 D doctor 2>&1)
+check "doctor warns below a cap of 12" '[[ "$OUT" == *"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is 11"* ]]'
+check "review shards never exceed 4, programmer slots never exceed 16" 'CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 python3 -c "import sys;sys.path.insert(0,\"$S\");import devteam as d;assert d.shard_count([\"f\"]*100,12)==4 and d.concurrency_limit()==16"'
 
 # ---------------------------------------------------------------- FAST MODE --
 echo "== fast mode: a second repo, --spike (level 4) + start + next"
@@ -767,7 +772,7 @@ check "cd <subdir> && <toolchain> is pre-approved" 'isallow "cd src && npx tsc -
 check "a file operation inside the footprint is pre-approved (rm/touch/mkdir/git add)" 'isallow "rm src/m2.js" && isallow "touch tests/m2.test.js" && isallow "mkdir -p src" && isallow "git add src/m2.js"'
 check "a file operation OUTSIDE the footprint is not" 'issilent "rm src/a.js" && issilent "mv src/m2.js src/z.js" && issilent "touch src/other.js"'
 check "recursive rm is never pre-approved" 'issilent "rm -rf src"'
-check "package installs are never pre-approved (64 lanes share node_modules)" 'issilent "npm install left-pad" && issilent "pip install requests" && issilent "cargo install x" && issilent "npm" && issilent "go get ./..."'
+check "package installs are never pre-approved (lanes share node_modules)" 'issilent "npm install left-pad" && issilent "pip install requests" && issilent "cargo install x" && issilent "npm" && issilent "go get ./..."'
 check "inline interpreters are never pre-approved" 'issilent "python3 -c \"print(1)\"" && issilent "node -e \"1\"" && issilent "bash -c ls"'
 check "an in-tree shell script is pre-approved, one outside is not" 'isallow "bash scripts/test.sh" && issilent "bash /tmp/x.sh" && issilent "sh ../x.sh"'
 check "redirecting to a file is never pre-approved" 'issilent "echo ok > out.txt" && issilent "npx vitest run > log"'

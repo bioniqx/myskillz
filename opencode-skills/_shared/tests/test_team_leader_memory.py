@@ -111,9 +111,11 @@ class LeftoverNames(unittest.TestCase):
                                                             "PYTHONDONTWRITEBYTECODE": "1"})
         self.assertIn("10.0", out.stdout + out.stderr)
 
-    def test_server_disables_telemetry(self):
+    def test_server_brand_is_plain_label_without_links_or_telemetry(self):
         text = (ROOT / "oc-brainstorming" / "scripts" / "oc-server.cjs").read_text(encoding="utf-8")
-        self.assertIn("DISABLE_TELEMETRY", text)
+        self.assertIn('<span class="brand-copy">Brainstorming</span>', text)
+        self.assertNotIn("github.com", text)
+        self.assertNotIn("TELEMETRY", text)
 
 
 if __name__ == "__main__":

@@ -199,38 +199,48 @@ class AgentLaneBatchSizing(unittest.TestCase):
     def test_even_groups_of_nothing_is_empty(self):
         self.assertEqual(audit._even_groups([], 8), [])
 
-    def test_opencode_caps_batch_count_at_default_lane_width(self):
+    def test_caps_batch_count_at_default_lane_width_of_six(self):
         self.env()
-        groups = audit._agent_groups(list(range(64)), 64, 12, True)
-        self.assertEqual([len(g) for g in groups], [8] * 8)
+        self.assertEqual(audit._oc_lanes(), 6)
+        groups = audit._agent_groups(list(range(64)), 64, 12)
+        self.assertEqual(sorted(len(g) for g in groups), [10] * 2 + [11] * 4)
 
     def test_oc_max_lanes_never_exceeds_eight(self):
         self.env("64")
         self.assertEqual(audit._oc_lanes(), 8)
-        groups = audit._agent_groups(list(range(64)), 64, 12, True)
+        groups = audit._agent_groups(list(range(64)), 64, 12)
         self.assertEqual([len(g) for g in groups], [8] * 8)
 
-    def test_opencode_honours_oc_max_lanes(self):
+    def test_honours_oc_max_lanes(self):
         self.env("3")
-        groups = audit._agent_groups(list(range(10)), 64, 12, True)
+        groups = audit._agent_groups(list(range(10)), 64, 12)
         self.assertEqual([len(g) for g in groups], [4, 3, 3])
 
-    def test_bad_oc_max_lanes_falls_back(self):
+    def test_bad_oc_max_lanes_falls_back_to_six(self):
         self.env("many")
-        self.assertEqual(audit._oc_lanes(), 8)
+        self.assertEqual(audit._oc_lanes(), 6)
+        self.env("")
+        self.assertEqual(audit._oc_lanes(), 6)
         self.env("0")
         self.assertEqual(audit._oc_lanes(), 1)
 
-    def test_opencode_fewer_items_than_lanes_gives_one_each(self):
+    def test_batch_count_is_ceil_n_over_three(self):
         self.env()
-        groups = audit._agent_groups(list(range(5)), 64, 12, True)
-        self.assertEqual([len(g) for g in groups], [1] * 5)
+        self.assertEqual([len(g) for g in audit._agent_groups(list(range(5)), 64, 12)], [3, 2])
+        self.assertEqual([len(g) for g in audit._agent_groups(list(range(9)), 64, 12)], [3, 3, 3])
+        self.assertEqual([len(g) for g in audit._agent_groups(list(range(2)), 64, 12)], [2])
 
-    def test_non_opencode_keeps_fixed_chunking(self):
-        groups = audit._agent_groups(list(range(64)), 20, 12, False)
-        self.assertEqual([len(g) for g in groups], [8] * 8)
-        small = audit._agent_groups(list(range(7)), 20, 12, False)
-        self.assertEqual([len(g) for g in small], [1] * 7)
+    def test_cap_limits_batch_count(self):
+        self.env()
+        groups = audit._agent_groups(list(range(20)), 4, 12)
+        self.assertEqual([len(g) for g in groups], [5] * 4)
+
+    def test_batch_never_exceeds_max_per(self):
+        self.env()
+        groups = audit._agent_groups(list(range(64)), 4, 12)
+        self.assertTrue(all(len(g) <= 12 for g in groups))
+        self.assertEqual(sum(groups, []), list(range(64)))
+        self.assertEqual(len(audit._agent_groups(list(range(40)), 4, 3)), 14)
 
     def test_cpu_threads_clamps_to_eight(self):
         self.env()
@@ -246,8 +256,7 @@ class AgentLaneBatchSizing(unittest.TestCase):
         self.assertEqual(audit.Fan(None, 64).threads, 8)
 
     def test_empty_input_gives_no_batches(self):
-        self.assertEqual(audit._agent_groups([], 20, 12, True), [])
-        self.assertEqual(audit._agent_groups([], 20, 12, False), [])
+        self.assertEqual(audit._agent_groups([], 20, 12), [])
 
 
 class SetupAgentLaneText(IsolatedHome):

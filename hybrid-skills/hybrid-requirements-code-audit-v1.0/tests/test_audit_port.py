@@ -98,7 +98,12 @@ class ConstantsMatchOriginalTest(unittest.TestCase):
         items = [{"id": "REQ-%03d" % i, "category": "c"} for i in range(1, 11)]
         lean = audit.partition_items(items, 64, False, True)
         self.assertEqual([len(b) for b in lean], [3, 3, 2, 2])
-        self.assertEqual(len(audit.partition_items(items, 64, False)), 10)
+        self.assertEqual([len(b) for b in audit.partition_items(items, 64, False)], [3, 3, 2, 2])
+
+    def test_batching_constants_follow_the_original(self):
+        for name in ("SOFT_WIDTH", "MIN_BATCH", "MAX_BATCH", "MAX_PARSERS", "RECOMMENDED_CAP"):
+            self.assertEqual(getattr(audit, name), getattr(self.orig, name), name)
+        self.assertFalse(hasattr(audit, "TARGET_CAP"))
 
 
 class VerifyBodyTest(unittest.TestCase):

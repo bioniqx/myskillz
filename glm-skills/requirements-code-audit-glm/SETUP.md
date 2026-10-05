@@ -73,7 +73,7 @@ contract files (`.erb`, `.sol`, `.cshtml`); `.git/` itself is never searched or 
 
 8 by default, and 8 is the ceiling (the provider allows 8 concurrent API calls). Override with `run --threads N`, or
 `AUDIT_THREADS=N`. Lower it if the endpoint rate-limits you (the client already backs off on 429/5xx); values above 8
-are clamped to 8. `OC_MAX_LANES` (OpenCode agent-lane width) is clamped to 8 the same way.
+are clamped to 8. The agent lane is narrower: `OC_MAX_LANES` (agent-lane width) defaults to 6 and is clamped to 8 (0 gives 1, non-numeric or empty gives 6); batching items beats more workers.
 
 ## 5. Permissions
 

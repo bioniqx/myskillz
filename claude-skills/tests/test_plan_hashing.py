@@ -28,6 +28,9 @@ def make_plan(sig_a):
         contract("T01", "First", "src/a.py", sig_a),
         contract("T02", "Second", "src/b.py", "def b() -> None", depends="T01"),
         contract("T03", "Third", "src/c.py", "def c() -> None"),
+        contract("T04", "Fourth", "src/d.py", "def d() -> None"),
+        contract("T05", "Fifth", "src/e.py", "def e() -> None"),
+        contract("T06", "Sixth", "src/f.py", "def f() -> None"),
     ])
 
 
@@ -77,6 +80,9 @@ class PlanHashingTests(unittest.TestCase):
         self.finish("T01", "src/a.py", "def a() -> None")
         self.finish("T02", "src/b.py", "def b() -> None")
         self.finish("T03", "src/c.py", "def c() -> None")
+        self.finish("T04", "src/d.py", "def d() -> None")
+        self.finish("T05", "src/e.py", "def e() -> None")
+        self.finish("T06", "src/f.py", "def f() -> None")
 
     def brief(self, tid):
         return os.path.join("briefs", tid + ".md")
@@ -95,17 +101,17 @@ class PlanHashingTests(unittest.TestCase):
         self.assertTrue(os.path.exists(keep + ".ok"), "unrelated task mark should be kept")
 
     def test_rerun_skips_groups_with_a_fresh_ok_mark(self):
-        for tid in ("T01", "T02", "T03"):
-            self.assertIn(self.brief(tid), self.first.stdout)
-        self.finish("T01", "src/a.py", "def a() -> None")
-        self.finish("T02", "src/b.py", "def b() -> None")
+        for gid in ("W01", "W02"):  # 6 tasks -> ceil(6/3) = 2 writers of 3
+            self.assertIn(self.brief(gid), self.first.stdout)
+        for tid, path, sig in (("T01", "a", "a"), ("T02", "b", "b"), ("T03", "c", "c")):
+            self.finish(tid, "src/%s.py" % path, "def %s() -> None" % sig)
         p = self.contracts()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertNotIn(self.brief("T01"), p.stdout)
-        self.assertNotIn(self.brief("T02"), p.stdout)
-        self.assertIn(self.brief("T03"), p.stdout)
+        self.assertNotIn(self.brief("W01"), p.stdout)
+        self.assertIn(self.brief("W02"), p.stdout)
         self.assertIn("DISPATCH 1 writers", p.stdout)
-        self.finish("T03", "src/c.py", "def c() -> None")
+        for tid, path, sig in (("T04", "d", "d"), ("T05", "e", "e"), ("T06", "f", "f")):
+            self.finish(tid, "src/%s.py" % path, "def %s() -> None" % sig)
         p = self.contracts()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertIn("NOTHING TO DISPATCH", p.stdout)

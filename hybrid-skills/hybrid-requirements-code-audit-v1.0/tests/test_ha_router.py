@@ -67,6 +67,7 @@ class TestLoadRouting(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         os.environ.pop("HYBRID_OPENCODE_MAX_PARALLEL", None)
+        os.environ.pop("HYBRID_OPENCODE_POOL", None)
 
     def unset_shared(self, *names):
         for name in names or SHARED_VARS:
@@ -117,6 +118,17 @@ class TestLoadRouting(unittest.TestCase):
         for raw, want in ((64, 8), (12.5, 8), (8, 8), (3, 3), (0, 1), (-2, 1), ("x", 1), (None, 1)):
             self.assertEqual(ha_router.tier_parallel({"max_parallel": raw}), want, raw)
         self.assertEqual(ha_router.tier_parallel({}), 1)
+
+    def test_oc_pool_defaults_to_6_and_follows_the_env_up_to_8(self):
+        self.assertEqual(ha_router.oc_pool(), 6)
+        for raw, want in (("1", 1), ("8", 8), (" 3 ", 3), ("9", 6), ("0", 6), ("x", 6)):
+            self.assertEqual(ha_router.oc_pool({"HYBRID_OPENCODE_POOL": raw}), want, raw)
+
+    def test_invalid_pool_env_is_a_config_problem(self):
+        os.environ["HYBRID_OPENCODE_POOL"] = "9"
+        self.assertTrue(any("HYBRID_OPENCODE_POOL" in p for p in self.load()["config_problems"]))
+        os.environ["HYBRID_OPENCODE_POOL"] = "8"
+        self.assertFalse(any("HYBRID_OPENCODE_POOL" in p for p in self.load()["config_problems"]))
 
     def test_max_parallel_env_sits_between_the_user_file_and_the_defaults(self):
         os.environ["HYBRID_OPENCODE_MAX_PARALLEL"] = "3"

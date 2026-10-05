@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
+description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 6) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
@@ -35,10 +35,10 @@ one), use it and skip the script. Otherwise run
 ## R0 — The gate
 
 Do not write code, scaffold, run an implementation skill, or touch any
-file outside `.superpowers/drafts/` until you have told your human
+file outside `.brainstorm/drafts/` until you have told your human
 partner what you intend and they said yes. Every task, every path.
 The one exception is the visual companion, after the user accepts it:
-its screens go to `screen_dir` under `.superpowers/brainstorm/`.
+its screens go to `screen_dir` under `.brainstorm/brainstorm/`.
 Parallel work is read-only: exploration, research, drafting, review.
 Ceremony scales with the task; R0 never does.
 
@@ -56,7 +56,7 @@ Nothing downgrades. In doubt, go heavier.
   No doc, no spec.
 - **Bounded** — well-scoped change to a flow that ALREADY EXISTS here
   (flag, small endpoint, field, one-file fix). No existing flow to read =
-  not bounded. Direct calls only, plus 2-6 Flash lanes in a large or
+  not bounded. Direct calls only, plus 2-4 Flash lanes in a large or
   unfamiliar repo. Message: short design (approach, files, testing) +
   Evidence if researched + assumptions + ≤4 forking questions. Explicit
   yes → implement with the normal workflow (TDD applies).
@@ -154,11 +154,11 @@ approves; otherwise ask in plain text.
 ## R7 — Width
 
 One lane per question whose answer you will cite or act on; never pad.
-Ceiling 8 concurrent lanes (the provider allows 8 concurrent API calls),
-and never over the subagent cap in Live context (the harness rejects the
+Concurrent lanes: `lanes=` in Live context (default 6, hard max 8: the
+provider allows 8 concurrent API calls), and never over the subagent cap in Live context (the harness rejects the
 next one and says not to retry). Over the cap → dispatch the lanes that
 can change the approach set first, then refill in batches as completions arrive. Details: `fanout-playbook.md`
-(read when planning >8 lanes or after a fan-out failure).
+(read when planning more lanes than `lanes=` or after a fan-out failure).
 
 ## R8 — Overlap machine work with human wait
 
@@ -297,7 +297,7 @@ next question.
   version; accuracy drops as calls grow. Verify load-bearing claims only.
 - "A sonnet lane will be smarter" → same model as the main thread at ~9×
   Flash's cost. Use Flash. And never a lane for one search.
-- "Spawn 8 because I can" → width must buy a saved human turn or a
+- "Spawn 6 because I can" → width must buy a saved human turn or a
   better decision. One lane per question you will cite or act on; the
   known failure is dozens of lanes for a simple query.
 - "I'll ask to be safe" → a vetoable assumption costs zero turns; a
@@ -350,14 +350,14 @@ for d in "$BASE" \
   if [ -n "$d" ] && [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
 done
 [ -n "$H" ] || { echo "brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
-mkdir -p .superpowers/drafts
-OUT="$(mktemp -d .superpowers/drafts/lanes.XXXXXX)"
-python3 "$H/oc_harness.py" run .superpowers/drafts/lanes.json --out "$OUT"
+mkdir -p .brainstorm/drafts
+OUT="$(mktemp -d .brainstorm/drafts/lanes.XXXXXX)"
+python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"
 python3 "$H/oc_harness.py" result "$OUT"
 ```
 
-Write `.superpowers/drafts/lanes.json` before the call (R0 allows writes
-under `.superpowers/drafts/`). It is a JSON array of lane objects. Each
+Write `.brainstorm/drafts/lanes.json` before the call (R0 allows writes
+under `.brainstorm/drafts/`). It is a JSON array of lane objects. Each
 lane needs `id` (unique string), `agent` (`explorer` or `researcher`, the
 neutral read-only/web agents installed from `opencode/agents/`), `model`
 (`flash` or `pro`), `effort` (`low` for these lanes), `dir` (working

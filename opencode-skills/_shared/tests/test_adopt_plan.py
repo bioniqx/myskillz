@@ -242,10 +242,14 @@ class WriterGroupingTests(unittest.TestCase):
 
     def test_lane_width_default_and_env(self):
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": ""}):
-            self.assertEqual(plan_tool.lane_width(), 8)
+            self.assertEqual(plan_tool.lane_width(), 6)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "3"}):
             self.assertEqual(plan_tool.lane_width(), 3)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "x"}):
+            self.assertEqual(plan_tool.lane_width(), 6)
+        with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "0"}):
+            self.assertEqual(plan_tool.lane_width(), 1)
+        with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "8"}):
             self.assertEqual(plan_tool.lane_width(), 8)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "64"}):
             self.assertEqual(plan_tool.lane_width(), 8)
@@ -266,7 +270,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, True)
         patches = [mock.patch.object(plan_tool, "agent_installed", return_value="/fake/agents"),
-                   mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "8"})]
+                   mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": ""})]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
@@ -335,9 +339,9 @@ class OpenCodeDispatchTests(unittest.TestCase):
         out, work, info = self.contracts(40)
         self.assertEqual(len(info["groups"]), 10)
         self.assertTrue(all(len(v) == 4 for v in info["groups"].values()))
-        self.assertIn("MESSAGE 1 (8 calls", out)
-        self.assertIn("MESSAGE 2 (2 calls", out)
-        self.assertIn("At most 8 calls may be in flight", out)
+        self.assertIn("MESSAGE 1 (6 calls", out)
+        self.assertIn("MESSAGE 2 (4 calls", out)
+        self.assertIn("At most 6 calls may be in flight", out)
         self.assertIn(self.expected("oc-plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
 
     def test_build_prints_dispatch_without_any_key(self):

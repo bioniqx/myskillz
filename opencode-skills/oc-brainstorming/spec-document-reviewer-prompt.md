@@ -2,8 +2,8 @@
 
 ## Why inline by default
 
-Superpowers v5.0.6 (2026-03-24) replaced its spec/plan reviewer subagent
-loop after "regression testing across 5 versions with 5 trials each showed
+A spec/plan reviewer subagent loop was dropped in favour of inline
+self-review after "regression testing across 5 versions with 5 trials each showed
 identical quality scores regardless of whether the review loop ran"; the
 loop cost ~25 minutes, while self-review "catches 3-5 real bugs per run in
 ~30s". Review inline. Factual risk is handled in parallel by the claim
@@ -39,7 +39,7 @@ a public API or contract others depend on — or the user asks for a
 review. Then dispatch lenses 1-4 as four background `subagent` lanes
 (agent `general`) in ONE message; lens 5 stays with the claim verifier. Each reads
 the spec itself — do not paste it. Wait for all four before the review
-gate (all lanes in flight together stay within the `lanes=` ceiling, max 8).
+gate (all lanes in flight together stay within the `lanes=` ceiling, default 6, max 8).
 
 ```
 You are a spec reviewer with exactly one lens: [LENS]. Ignore everything outside it; other reviewers cover the rest.

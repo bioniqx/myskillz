@@ -150,15 +150,22 @@ def batch_key(name):
 
 
 MAX_PARALLEL = 8  # most model calls in flight at once; the provider allows no more
+DEFAULT_LANES = 6  # default wave width: batching beats more workers (fixed per-agent overhead)
+
+
+def _lane_env(name):
+    """Env lane width: 0 -> 1, non-numeric or empty -> DEFAULT_LANES, above MAX_PARALLEL -> MAX_PARALLEL."""
+    try:
+        n = int(os.environ.get(name, "").strip())
+    except ValueError:
+        return DEFAULT_LANES
+    return max(1, min(MAX_PARALLEL, n))
 
 
 def cpu_threads(requested=None):
     if requested:
         return max(1, min(MAX_PARALLEL, int(requested)))
-    env = os.environ.get("AUDIT_THREADS")
-    if env and str(env).strip().isdigit():
-        return max(1, min(MAX_PARALLEL, int(str(env).strip())))
-    return MAX_PARALLEL
+    return _lane_env("AUDIT_THREADS")
 
 
 # --------------------------------------------------------------------------- context object
@@ -1297,7 +1304,7 @@ def cmd_brief(a):
         print("NEXT: spec is large (%d words). Either write checklist.jsonl yourself, or run"
               % words)
         print("      oc_audit.py parse      (%d sections, parsed in waves of at most %d; you review the draft)"
-              % (min(64, max(2, words // 600)), MAX_PARALLEL))
+              % (min(MAX_PARALLEL, max(2, words // 600)), _oc_lanes()))
     else:
         print("NEXT: write %s/checklist.jsonl, then run: oc_audit.py plan" % os.path.basename(out))
     print("      Say in one line: treating <spec> as the only source of truth; not reading")
@@ -1378,7 +1385,7 @@ def split_sections(text, k):
 def parse_batches(spec_text: str) -> list:
     """[(name, section_text)]: one parser lane per spec section, in document order."""
     words = len(re.findall(r"\S+", spec_text))
-    secs = split_sections(spec_text, max(2, min(64, words // 600)))
+    secs = split_sections(spec_text, max(2, min(MAX_PARALLEL, words // 600)))
     return [("parse-%02d" % i, s) for i, s in enumerate(secs, 1)]
 
 
@@ -1418,15 +1425,17 @@ def cmd_parse(a):
     if not text.strip():
         die("no spec text -- re-run brief")
     batches = parse_batches(text)
-    pending = []
+    pending, flight = [], []
     for i, (name, sec) in enumerate(batches, 1):
         out = c.p("parse", name + ".jsonl")
         brief = c.p("batches", name + ".md")
+        sent = c.p("parse", name + ".sent")  # written when the row is printed: the lane is in flight
         body = _parse_brief(c, name, i, len(batches), sec, out)
         if read_text(brief) != body + u"\n":
             # new or changed section: an output written for an older brief is stale
-            if os.path.exists(out):
-                os.remove(out)
+            for stale in (out, sent):
+                if os.path.exists(stale):
+                    os.remove(stale)
             write_text(brief, body)
         if os.path.exists(out):
             _got, bad = read_jsonl(out)
@@ -1434,11 +1443,29 @@ def cmd_parse(a):
                 os.replace(out, out + ".bad")
                 print("FAIL  %s: %d unparseable line(s), first: %s; output kept as %s.bad"
                       % (name, len(bad), bad[0][1], os.path.basename(out)))
-        if not os.path.exists(out):
+                if os.path.exists(sent):
+                    os.remove(sent)  # a failed section is dispatched again
+        if os.path.exists(out):
+            continue
+        if a.redispatch and os.path.exists(sent):
+            os.remove(sent)
+        if os.path.exists(sent):
+            flight.append(name)
+        else:
             pending.append((name, brief))
-    if pending:
+    if pending or flight:
         mk(c.p("parse"))
-        wave, later = pending[:_oc_lanes()], len(pending) - _oc_lanes()
+        free = max(0, _oc_lanes() - len(flight))
+        wave, later = pending[:free], len(pending) - free
+        if flight:
+            print("parse: %d section(s) already dispatched and not yet written: %s"
+                  % (len(flight), ", ".join(flight)))
+            print("       (a lane that was lost: oc_audit.py parse --redispatch)")
+        if not wave:
+            print("NEXT: wait for the in-flight parsers to report, then run oc_audit.py parse")
+            return
+        for name, _brief in wave:
+            write_text(c.p("parse", name + ".sent"), "")
         print("parse: %d section(s), %d rca-parser lane(s) to run, %d in this wave"
               % (len(batches), len(pending), len(wave)))
         print("")
@@ -2065,12 +2092,8 @@ def _print_dispatch(c, wave, batches, agent, role, header):
 
 
 def _oc_lanes():
-    """OpenCode lane width: OC_MAX_LANES, default and ceiling MAX_PARALLEL, never below 1."""
-    try:
-        n = int(os.environ.get("OC_MAX_LANES") or MAX_PARALLEL)
-    except ValueError:
-        n = MAX_PARALLEL
-    return max(1, min(MAX_PARALLEL, n))
+    """OpenCode lane width: OC_MAX_LANES, default DEFAULT_LANES, ceiling MAX_PARALLEL, never below 1."""
+    return _lane_env("OC_MAX_LANES")
 
 
 def _even_groups(items, n):
@@ -2129,7 +2152,7 @@ def cmd_plan(a):
             c.save_state(st)
             print("NEXT: oc_audit.py status")
             return
-    cap = min(MAX_PARALLEL, int(a.cap or c.threads or MAX_PARALLEL))
+    cap = min(MAX_PARALLEL, int(a.cap or c.threads or DEFAULT_LANES))
     ordered = sorted(live, key=lambda r: (r.get("category") or "", r["id"]))
     groups = _agent_groups(ordered, cap)
     size = max([len(g) for g in groups] or [0])
@@ -2501,7 +2524,7 @@ def cmd_status(a):
         _print_dispatch(c, "H", hedges, "oc-rca-investigator", "judge",
                         "DISPATCH hedges (stragglers; whichever lane finishes first is used)")
     if vset:
-        cap = min(MAX_PARALLEL, int(a.cap or c.threads or MAX_PARALLEL))
+        cap = min(MAX_PARALLEL, int(a.cap or c.threads or DEFAULT_LANES))
         idx = len([k for k in (st.get("vbatches") or {})])
         groups = _agent_groups(list(vset), cap)
         held += max(0, len(groups) - free)
@@ -2584,7 +2607,8 @@ def cmd_doctor(a):
     else:
         found = "NOT FOUND -- install OpenCode v2"
     print("opencode    %s" % found)
-    print("lanes       %d per wave (OC_MAX_LANES, at most %d)" % (_oc_lanes(), MAX_PARALLEL))
+    print("lanes       %d per wave (OC_MAX_LANES, default %d, at most %d)"
+          % (_oc_lanes(), DEFAULT_LANES, MAX_PARALLEL))
 
 
 def cmd_setup(a):
@@ -2606,7 +2630,7 @@ def cmd_setup(a):
     print("")
     print("Agents run on the model selected in the OpenCode window; none names a model.")
     print("plan and status print background agent calls, one per batch. A wave has at")
-    print("most OC_MAX_LANES (default and maximum 8) batches.")
+    print("most OC_MAX_LANES (default 6, maximum 8) batches.")
     print("\nVerify with: python3 %s doctor" % os.path.join(here, "oc_audit.py"))
     return 0
 
@@ -2635,6 +2659,8 @@ def main(argv=None):
     p.set_defaults(fn=cmd_spec)
 
     p = sub.add_parser("parse", help="fan out spec sections into a checklist draft")
+    p.add_argument("--redispatch", action="store_true",
+                   help="print rows again for sections already dispatched but never written")
     p.add_argument("--accept", action="store_true")
     p.set_defaults(fn=cmd_parse)
 

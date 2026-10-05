@@ -6,7 +6,7 @@ The Iron Law: no fix until a `ROOT CAUSE: X causes Y because Z` line is backed b
 
 ## How it saves turns
 
-One call per phase, and each call opens its own local threads (`-j` up to 64 or the CPU count; model workers started by `scan` run in waves of at most 8):
+One call per phase, and each call opens its own local threads (`-j` up to 64 or the CPU count; model workers started by `scan` run in waves of 6, `OC_MAX_LANES` up to 8):
 
 | Phase | One call | Without the tool |
 |---|---|---|

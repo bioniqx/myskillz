@@ -28,8 +28,8 @@ dec33c3 test(S5): RED — P1-T05 Vendoring sync and identity test
 
 ### Model Summary
 - Goal: optimize the six GLM skill ports in `skills/glm/` for OpenCode (v1 1.18.x + v2) running GLM-5.3 / GLM-5.3-Flash.
-- The spec is approved and committed (ae7f6c9): `docs/superpowers/specs/2026-09-25-opencode-glm-optimization-design.md`.
-- Plans are committed (39b38a9): `docs/superpowers/plans/2026-09-25-opencode-glm-phase1.md` (T01–T15) and `...-phase2.md` (T01–T09).
+- The spec is approved and committed (ae7f6c9): `docs/specs/2026-09-25-opencode-glm-optimization-design.md`.
+- Plans are committed (39b38a9): `docs/plans/2026-09-25-opencode-glm-phase1.md` (T01–T15) and `...-phase2.md` (T01–T09).
 - Implementation runs through dev-team-v3.2 with the balanced profile. The plan has 24 slices (S1–S15 = Phase 1, S16–S24 = Phase 2) and lives at `~/.claude/.claude/dev-team/plan.md`.
 - 13/24 slices are merged:
   - S1–S5: zai_client, oc_harness render/runner/install, sync + vendoring
@@ -220,7 +220,7 @@ c1e9449 merge(T27): plan_tool.py OpenCode dispatch, agents and grouping
 
 ### Model Summary
 - Task: make every glm-skills port work with OpenCode v1 (1.18.x) and v2 (2.0.x). Pipeline: brainstorming → writing-plans → dev-team-v3.2.
-- Spec: `glm-skills/docs/superpowers/specs/2026-09-28-opencode-hardening-design.md` (commit 3a62013). Plan: `glm-skills/docs/superpowers/plans/2026-09-28-opencode-hardening.md` (36 tasks, commit 2829f1a).
+- Spec: `glm-skills/docs/specs/2026-09-28-opencode-hardening-design.md` (commit 3a62013). Plan: `glm-skills/docs/plans/2026-09-28-opencode-hardening.md` (36 tasks, commit 2829f1a).
 - The dev-team engine runs from the skillz root. Its plan JSON lives at `skillz/.claude/dev-team/plan.md` (T01–T36 are 1:1 with plan tasks; F* slices are fixes from reviews and gates). Profile: balanced.
 - Progress after compaction: 26/43 done. Merged since the last summary: T04, T23, T28, T29, F4, F6.
 - In flight: T12, T05, T24, T32, F7, F3 (cold retry with `test_team_leader_memory.py` added to its footprint), reviews r3-1..r3-3, checkpoint 2.

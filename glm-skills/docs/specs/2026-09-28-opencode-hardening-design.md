@@ -256,7 +256,7 @@ check (D).
 | BR12 | `architectural.md:102-107,119,142` | Pre-draft lane needs a writer but explorer/researcher are `edit: deny`; no TaskStop on OpenCode; hand-off omits the spec path | G | Main session writes the pre-draft on OpenCode; drop TaskStop there; pass the spec path | D |
 | BR13 | `visual-companion.md:73-80` | No OpenCode note | G | v2 `background: true` plus `--foreground` | D |
 | BR14 | `SKILL.md:333` | Lanes read raw `.jsonl` | O | Use `oc_harness result` | D |
-| BR16 | lanes.json location | Scattered scratch files | O | Put it under `.superpowers/drafts/` | D |
+| BR16 | lanes.json location | Scattered scratch files | O | Put it under `.brainstorm/drafts/` | D |
 
 (BR15, `oc_major` in context.sh, is folded into BR11.)
 
@@ -375,7 +375,7 @@ check (D).
   installer only warns about name clashes and stale `*-glm` installs. At the end, the final report
   prints the install command for the user to run; this work does not run it.
 - Skill names stay without the `-glm` suffix (`test_all_skills` enforces this).
-- The spec and plan live under `glm-skills/docs/superpowers/{specs,plans}/`.
+- The spec and plan live under `glm-skills/docs/{specs,plans}/`.
 - The guard stays fail-open.
 - Behaviour changes are recorded in each skill's CHANGELOG/README where one exists, and harness facts in
   `glm-skills/CLAUDE.md`.

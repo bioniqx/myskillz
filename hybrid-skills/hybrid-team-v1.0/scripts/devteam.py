@@ -30,7 +30,7 @@ Conductor commands (run in the integration checkout):
   add-fix --id F1 --title T --files a b --criteria "c1" ["c2"] [--deps S1]
   add-fixes <report.md>     enqueue fix slices from a reviewer report's ```json block
   review-batch [--force] [--shards N]   next incremental review batch → briefing + Agent block
-                            (--shards defaults to auto: ~12 files per reviewer, max 8)
+                            (--shards defaults to auto: ~10 files per reviewer, max 4)
   review-done <rN> --verdict APPROVED|CHANGES_REQUIRED
   verify-brief              write verification briefing for hybrid-team-leader (high-risk plans)
   checkpoint [--result pass|fail] [--note ...]
@@ -108,16 +108,17 @@ ENV_FILES = [".env", ".env.local", ".env.test", ".env.development"]
 # bare names (no trailing slash) so that symlinked dependency dirs are ignored too
 EXCLUDE_LINES = [".claude/worktrees/", ".claude/hybrid-team/", ".claude/agent-memory-local/", ".slice/"] + DEP_DIRS + ENV_FILES
 GIT_READ_PREFIXES = ["git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git grep", "git blame"]
-NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall 64 background agents
+NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall background agents
 LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail", "retry", "bind",
                "add-fix", "add-fixes", "review-batch", "review-done", "verify-brief", "checkpoint",
                "status", "finish", "review-pr"}
 DEFAULT_LIMIT = 20          # Claude Code default concurrent-subagent cap
-HARD_CAP = 64               # this skill's ceiling
+HARD_CAP = 16               # this skill's ceiling (programmers = live cap - reserved, never above this)
+SOFT_FLOOR = 12             # `doctor` warns only when the subagent cap is below this (the default 20 is fine)
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
-MAX_SHARDS = 12             # reviewers per batch — the final review sits on the critical path
+MAX_SHARDS = 4              # reviewers per batch — the final review sits on the critical path
 FILES_PER_SHARD = 10        # auto shard size (smaller shards = shorter critical path, more reviewers)
 NEVER = 10 ** 9             # "not until the end" for review_batch / checkpoint_every
 ENGINE_VERSION = "3.2"
@@ -598,7 +599,7 @@ def crit_path_len(st):
     """Heaviest chain of not-done work starting at each slice (for priority). Each slice counts its
     `size` weight, so the scheduler starts the longest remaining path first (LPT / critical-path
     scheduling) instead of treating a trivial slice and a large one as equal hops. Iterative:
-    a 64-wide plan with a deep chain must never hit Python's recursion limit."""
+    a wide plan with a deep chain must never hit Python's recursion limit."""
     dependents = {sid: [] for sid in st["slices"]}
     for sid, s in st["slices"].items():
         for d in s["deps"]:
@@ -1014,9 +1015,9 @@ def cmd_init(a):
     if added:
         out(f"PERMISSIONS: added {added} Bash allow rules for the plan commands to .claude/settings.local.json "
             f"(no prompts for gate commands; approve once with 'don't ask again' if one still appears)")
-    if concurrency_limit() < HARD_CAP:
-        out(f"NOTE: concurrency limit is {concurrency_limit()} (< {HARD_CAP}). Set env CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 "
-            f"in .claude/settings.json (`doctor --fix`) and restart Claude Code for full width.")
+    if concurrency_limit() < SOFT_FLOOR:
+        out(f"NOTE: concurrency limit is {concurrency_limit()} (< {SOFT_FLOOR}). Set env CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={HARD_CAP} "
+            f"in .claude/settings.json (`doctor --fix`) and restart Claude Code for more width.")
     print_ready(st)
 
 
@@ -1087,7 +1088,7 @@ GATE_KEYS = ("lint", "typecheck", "build")
 def gate_plan(st, pfx):
     """What a hybrid-team-programmer must run as its own gate, given the profile's `gate` dial.
     Returns (text, commands_to_run). `file` scope is the speed trick that keeps quality: a
-    file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x 64."""
+    file-scoped linter/type-checker costs a second, a whole-repo one costs minutes x lanes."""
     c = st["commands"]
     mode = pol(st, "gate")
     if mode == "deferred":
@@ -1462,15 +1463,29 @@ def oc_binary_ok(sd):
     return bool(shutil.which(binary) or Path(binary).is_file())
 
 
-def oc_slots(st: dict, tier: str) -> int:
-    """Free opencode lane slots for `tier`: cap minus in-flight slices dispatched to `oc:<tier>`."""
+def _oc_running(st: dict) -> dict:
+    """In-flight opencode lanes per tier (slices dispatched to `oc:<tier>` and still inflight)."""
+    by_tier = {}
     slices = st.get("slices")
     if slices is None:   # bare state outside a run
-        running = sum(1 for t in (st.get("oc_running") or {}).values() if t == tier)
+        for t in (st.get("oc_running") or {}).values():
+            by_tier[t] = by_tier.get(t, 0) + 1
     else:
-        running = sum(1 for sid, b in (st.get("backends") or {}).items()
-                      if b == "oc:" + tier and (slices.get(sid) or {}).get("status") == "inflight")
-    return max(0, _oc_cap(st, tier) - running)
+        for sid, b in (st.get("backends") or {}).items():
+            if b.startswith("oc:") and (slices.get(sid) or {}).get("status") == "inflight":
+                by_tier[b[3:]] = by_tier.get(b[3:], 0) + 1
+    return by_tier
+
+
+def oc_slots(st: dict, tier: str, extra: dict = None) -> int:
+    """Free opencode lane slots for `tier`: the tier cap minus its in-flight lanes, and never more than
+    the shared pool ($HYBRID_OPENCODE_POOL, all tiers together) has free. `extra` = lanes already
+    picked this round, per tier."""
+    running = _oc_running(st)
+    for t, n in (extra or {}).items():
+        running[t] = running.get(t, 0) + n
+    pool = hybrid_shared.pool_from_env()[0] or hybrid_shared.OC_POOL_DEFAULT   # invalid value: `doctor` reports it
+    return max(0, min(_oc_cap(st, tier) - running.get(tier, 0), hybrid_shared.pool_free(pool, running)))
 
 
 def lane_line(sid, backend):
@@ -1659,7 +1674,7 @@ def dispatch_mode(st, s):
 
 def dispatch_set(st, ready, free):
     """Claude-bound ready slices up to the free Claude slots; opencode-bound ones up to their tier's lanes."""
-    todo, lanes = [], {}
+    todo, lanes = [], {}   # lanes: opencode lanes picked this round, per tier
     for sid in ready:
         s = st["slices"][sid]
         mode = dispatch_mode(st, s)
@@ -1670,9 +1685,8 @@ def dispatch_set(st, ready, free):
             continue
         if backend.startswith("oc:"):
             tier = backend[3:]
-            lanes.setdefault(tier, oc_slots(st, tier))
-            if lanes[tier] > 0:
-                lanes[tier] -= 1
+            if oc_slots(st, tier, lanes) > 0:
+                lanes[tier] = lanes.get(tier, 0) + 1
                 todo.append(sid)
         elif free > 0:
             free -= 1
@@ -1781,7 +1795,7 @@ def stands_in_for_oc(st, s, mode):
 
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
-    tokens for 64 launches sit on the critical path, and the briefing file already holds everything.
+    tokens for a wide launch sit on the critical path, and the briefing file already holds everything.
     The hybrid-team-programmer/hybrid-team-investigator system prompts say 'your prompt is the command — run it first'."""
     sp = q(st["script"])
     for block in blocks:
@@ -2070,7 +2084,7 @@ def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, r
                       f"{sid}: NOT INTEGRATED — uncommitted changes in the integration checkout touch paths "
                       f"this slice also changes: {', '.join(clash)}. Commit or stash them there, then "
                       f"integrate again.", files=clash)
-    # merge (repo hooks and signing off: 64 background agents can't answer prompts)
+    # merge (repo hooks and signing off: background agents can't answer prompts)
     r = sh(["git"] + NO_SIGN + ["merge", "--no-ff", "--no-verify", "--no-edit", "-m", f"merge({sid}): {s['title']}", tip],
            cwd=root, check=False)
     if r.returncode != 0:
@@ -2774,7 +2788,7 @@ def ensure_repo():
 
 
 def cmd_start(a):
-    """doctor --fix + init + dispatch the whole ready set in ONE call — zero-to-64-agents in one turn.
+    """doctor --fix + init + dispatch the whole ready set in ONE call — zero-to-full-wave in one turn.
     Preset hybrid/opencode pings every tier without a fresh doctor entry first; preset claude never
     touches opencode."""
     ensure_repo()
@@ -2889,7 +2903,7 @@ def cmd_probe(a):
     if ci:
         out("CI workflows worth copying the real commands from: " + ", ".join(ci))
     out("`lint_file` / `typecheck_file` matter: in the balanced profile they ARE the per-slice gate, "
-        "and a file-scoped run costs a second where a repo-wide one costs minutes × 64.")
+        "and a file-scoped run costs a second where a repo-wide one costs minutes × lanes.")
 
 
 def cmd_review_pr(a):
@@ -3260,6 +3274,11 @@ def doctor_opencode(root, routing, ping, only=None):
     before = cached_tiers(sd) or {}
     available = oc_available(root, routing)
     print("opencode: OK" if available else "opencode: unavailable (see the OC-ERROR lines)")
+    pool, pool_problem = hybrid_shared.pool_from_env()
+    if pool_problem:
+        report_oc(root, oc_text("OC-ERROR", "doctor", "config", pool_problem, "-", "-"))
+    print("opencode pool: %d lanes shared by all tiers (per-tier max_parallel still applies; $%s)"
+          % (pool or hybrid_shared.OC_POOL_DEFAULT, hybrid_shared.OC_POOL_ENV))
     status = json.loads((sd / "oc_status.json").read_text())
     tiers_cfg = routing.get("tiers") or {}
     for c in status.get("issues") or []:
@@ -3331,15 +3350,15 @@ def cmd_doctor(a):
     st = merged_settings(root)
     env = st.get("env", {}) if isinstance(st.get("env"), dict) else {}
     lim = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS") or env.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
-    if not (str(lim).isdigit() and int(lim) >= HARD_CAP):
-        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim or 'unset (20)'} — need {HARD_CAP} for full width")
+    if str(lim).isdigit() and int(lim) < SOFT_FLOOR:  # unset = Claude Code's default 20, which is fine
+        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim} — below {SOFT_FLOOR} the review shards and programmers queue (unset = default 20 is fine)")
         fixes.setdefault("env", {})["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(HARD_CAP)
     tc = os.environ.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY") or env.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY")
     if not (str(tc).isdigit() and int(tc) >= HARD_CAP):
         problems.append(f"CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY is {tc or 'unset'} — raise to {HARD_CAP} so one message can launch a full wave")
         fixes.setdefault("env", {})["CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY"] = str(HARD_CAP)
     # a background agent that is silent for longer than the stall timeout is killed mid-slice, and a
-    # Bash gate longer than the bash timeout is killed too: both cost a whole retry on 64 lanes.
+    # Bash gate longer than the bash timeout is killed too: both cost a whole retry on every lane.
     for var, want, why in (("CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS", 1800000,
                             "a subagent running a long test suite is aborted after 10 min by default"),
                            ("BASH_DEFAULT_TIMEOUT_MS", 600000,

@@ -44,4 +44,4 @@ Script: `contracts` 70 task < 0.25 s, `assemble` 70 task 0.3 s.
 - `wait` trả về `PENDING` sớm khi mọi task còn lại đều đang `.fail` và không đổi ≥45 giây, thay vì đợi hết `--idle`/`--timeout`.
 - `assemble` chạy `node --check` cho các code block song song giữa các task thay vì tuần tự.
 - Reviewer brief giờ inline sẵn nội dung file đích hiện có (giống writer brief), reviewer không cần đọc thêm.
-- SKILL.md: bỏ nhắc "ultracode", thêm lời khuyên `--allow` ngay ở Phase 1, hand-off trỏ về skill `claude-dev-team` thay vì `superpowers:*` (không còn tồn tại), và mục "One-time speed setup" nêu rõ nó cũng xử lý agent cũ/placeholder.
+- SKILL.md: bỏ nhắc "ultracode", thêm lời khuyên `--allow` ngay ở Phase 1, hand-off trỏ về skill `claude-dev-team` thay vì các skill hand-off cũ (không còn tồn tại), và mục "One-time speed setup" nêu rõ nó cũng xử lý agent cũ/placeholder.

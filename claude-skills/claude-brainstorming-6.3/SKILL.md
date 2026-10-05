@@ -1,6 +1,6 @@
 ---
 name: claude-brainstorming
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 64 parallel lanes across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation."
+description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, parallel lanes (at most 12 at once) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
@@ -33,7 +33,7 @@ Do NOT invoke any implementation skill, write code, scaffold, or take any
 implementation action until you have told your human partner what you
 intend and they have approved it. Every task, every path. Parallel work
 is read-only exploration, research, drafting (only under
-`.superpowers/drafts/`), and review — never implementation. Ceremony
+`.brainstorm/drafts/`), and review — never implementation. Ceremony
 scales with the task; the gate never does.
 </HARD-GATE>
 
@@ -52,8 +52,8 @@ nothing downgrades.
   Anything built is labeled throwaway. No doc, no spec.
 - **Bounded** — well-scoped change to a flow that ALREADY EXISTS in this
   repo (flag, small endpoint, field, one-file fix). No existing flow to
-  read = not bounded. T0 rounds (+ 2-6 T1 lanes only in a large or
-  unfamiliar repo). Message: short design (approach, files, testing) +
+  read = not bounded. T0 rounds (+ 0-2 code lanes in a small repo, 2-4 plus
+  0-2 web lanes in a large or unfamiliar one). Message: short design (approach, files, testing) +
   Evidence lines if researched + assumptions + ≤4 forking questions.
   Explicit yes → implement with the normal workflow (TDD applies).
 - **Architectural** — new projects/subsystems, changes to boundaries or
@@ -108,7 +108,7 @@ Architectural 2-3. Count before sending; over budget → merge messages.
    | T2 | `Workflow` with `parallel()` + `schema` | minutes | only when lanes > subagent cap AND workflow cap > subagent cap AND the user explicitly opted into workflows (ultracode, or asked for a workflow / maximum parallelism) |
 
    Never spawn a subagent for what one T0 call answers.
-4. **Width and models.** One lane per question you will cite or act on; ceiling 64 concurrent lanes, never above the parallel-lane cap shown in Live context. Pass `model` explicitly: `sonnet` for lanes, `haiku` only for locate or single-fact checks, the main model only for synthesis. Details: `lanes.md`; `fanout-playbook.md` when planning more than 8 T1 lanes.
+4. **Width and models.** One lane per question you will cite or act on; width = min(questions, Live-context `subagents=` cap, 12); excess runs in waves. Fewer, fuller lanes beat many tiny ones. Pass `model` explicitly: `sonnet` for lanes, `haiku` only for locate or single-fact checks, the main model only for synthesis. Details: `lanes.md`; `fanout-playbook.md` when planning more than 8 T1 lanes.
 5. **Overlap machine work with human wait.** Each message you send leaves
    useful lanes running (unasked questions → assumptions, claim
    verification, spec pre-draft). Late results while you wait: fold them

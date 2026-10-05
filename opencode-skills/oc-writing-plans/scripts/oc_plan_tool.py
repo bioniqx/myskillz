@@ -26,7 +26,7 @@ TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 8           # provider limit: at most 8 concurrent model calls
 OC_MAJOR = 2              # v2 only
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
-DEFAULT_LANE_WIDTH = 8    # background calls one dispatch message starts (never above MAX_WORKERS)
+DEFAULT_LANE_WIDTH = 6    # background calls one dispatch message starts (batching beats more workers)
 
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 
@@ -48,7 +48,7 @@ PLACEHOLDERS = [r"\bTBD\b", r"\bTODO\b", r"\bFIXME\b", r"\bXXX\b", r"implement(e
     r"write tests for the above", r"\.\.\.\s*(rest|remaining) of", r"your code here"]
 PLACEHOLDERS_CS = PLACEHOLDERS[:4]  # the four uppercase markers: matched case-sensitively
 PLACEHOLDERS = PLACEHOLDERS[4:]  # the phrases: matched in any case
-PORTABILITY = [r"superpowers", r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
+PORTABILITY = [r"\bsub-?skills?\b", r"\bsubagents?\b", r"\bslash commands?\b",
     r"\b(Task|Agent|Edit|Write|Read|Bash) tool\b", r"\bClaude\b", r"\bAnthropic\b",
     r"\bOpenCode\b", r"\bCopilot\b", r"\bCursor (IDE|editor|agent)\b",
     r"\binvoke (the |a )?skill\b"]
@@ -176,9 +176,12 @@ def on_opencode():
 
 
 def lane_width():
-    """Background calls one dispatch message may start (PLAN_LANE_WIDTH, clamped to 1..8, default 8)."""
-    v = os.environ.get("PLAN_LANE_WIDTH", "").strip()
-    return min(MAX_WORKERS, int(v)) if v.isdigit() and int(v) > 0 else DEFAULT_LANE_WIDTH
+    """Calls one dispatch message may start: PLAN_LANE_WIDTH, 0 -> 1, above 8 -> 8, non-numeric or empty -> 6."""
+    try:
+        n = int(os.environ.get("PLAN_LANE_WIDTH", "").strip())
+    except ValueError:
+        return DEFAULT_LANE_WIDTH
+    return max(1, min(MAX_WORKERS, n))
 
 
 def writer_group_count(n_tasks):
@@ -1436,8 +1439,8 @@ def cmd_brief(a):
                     break
         dirty = len(sh(["git", "status", "--porcelain"], repo).splitlines())
         out.append("git: branch %s | %d dirty | %d files" % (branch or "-", dirty, len(files)))
-        plans = os.path.join(repo, "docs", "superpowers", "plans")
-        out.append("plan path: docs/superpowers/plans/%s-<feature>.md (%d existing)" % (
+        plans = os.path.join(repo, "docs", "plans")
+        out.append("plan path: docs/plans/%s-<feature>.md (%d existing)" % (
             time.strftime("%Y-%m-%d"),
             len([f for f in os.listdir(plans) if f.endswith(".md")]) if os.path.isdir(plans) else 0))
         found = [f for f in STACK_MARKS if os.path.isfile(os.path.join(repo, f))]
@@ -1527,7 +1530,7 @@ def cmd_doctor(a):
     print("harness   : %s" % ("opencode" if on_opencode() else "not detected"))
     print("python    : %s" % sys.version.split()[0])
     print("tool      : %s" % qtool())
-    print("lane width: %d (PLAN_LANE_WIDTH can lower it, max %d)" % (lane_width(), MAX_WORKERS))
+    print("lane width: %d (PLAN_LANE_WIDTH, default %d, max %d)" % (lane_width(), DEFAULT_LANE_WIDTH, MAX_WORKERS))
     missing = []
     for name in WRITER_AGENTS:
         where = agent_installed(repo, name)

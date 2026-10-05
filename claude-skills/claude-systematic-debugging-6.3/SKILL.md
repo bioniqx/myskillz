@@ -1,7 +1,7 @@
 ---
 name: claude-systematic-debugging
 description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior. Use BEFORE proposing or making any fix.
-when_to_use: Error or stack trace, failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. Scales from a 2-round fix to parallel fan-out of up to 64 workers.
+when_to_use: Error or stack trace, failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. Scales from a 2-round fix to parallel fan-out of up to 64 local shell jobs (bounded by CPUs), <=6 agent workers (hard stop 8).
 ---
 
 # Systematic Debugging

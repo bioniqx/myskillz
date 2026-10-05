@@ -85,7 +85,7 @@ Do NOT invoke any implementation skill, write code, scaffold, or take any
 implementation action until you have told your human partner what you
 intend and they have approved it. Every task, every path. Parallel work
 is read-only exploration, research, drafting (only under
-`.hybrid-superpowers/drafts/`), and review — never implementation. Ceremony
+`.hybrid-brainstorm/drafts/`), and review — never implementation. Ceremony
 scales with the task; the gate never does.
 </HARD-GATE>
 
@@ -104,8 +104,8 @@ nothing downgrades.
   Anything built is labeled throwaway. No doc, no spec.
 - **Bounded** — well-scoped change to a flow that ALREADY EXISTS in this
   repo (flag, small endpoint, field, one-file fix). No existing flow to
-  read = not bounded. T0 rounds (+ 2-6 T1 lanes only in a large or
-  unfamiliar repo). Message: short design (approach, files, testing) +
+  read = not bounded. T0 rounds (+ 0-2 code lanes in a small repo, 2-4 plus
+  0-2 web lanes in a large or unfamiliar one). Message: short design (approach, files, testing) +
   Evidence lines if researched + assumptions + ≤4 forking questions.
   Explicit yes → implement with the normal workflow (TDD applies).
 - **Architectural** — new projects/subsystems, changes to boundaries or
@@ -161,9 +161,9 @@ Architectural 2-3. Count before sending; over budget → merge messages.
 
    Never spawn a subagent for what one T0 call answers.
 4. **Width.** One lane per question whose answer you will cite or act on;
-   never pad. Ceiling 64 concurrent lanes; T1 agents never exceed the
-   subagent cap in Live context (the harness rejects the next one and
-   says not to retry). More lanes than the cap → dispatch the lanes that
+   never pad. Claude `Agent` width = min(questions, Live-context `subagents=` cap, 12);
+   the harness rejects the next one over the cap and says not to retry. Fewer, fuller
+   lanes beat many tiny ones. More lanes than that → dispatch the lanes that
    can change the approach set first, then refill in batches as
    completions arrive. Details: `fanout-playbook.md` (read when planning
    >8 T1 lanes or after a fan-out failure).
@@ -225,8 +225,10 @@ together, never split across rounds. `draft` never dispatches in round 1:
 it fires later, once the approach-deciding lanes are back — see
 `architectural.md` §2. Never launch more oc lanes for one tier at once than
 that tier's `max_parallel` (the skill's own routing file if it sets one,
-else `$HYBRID_OPENCODE_MAX_PARALLEL`, else the shipped default 4, never above 8) and never more than 8 oc lanes
-across all tiers together (the provider's concurrent-call limit); queue the
+else `$HYBRID_OPENCODE_MAX_PARALLEL`, else the shipped default 4, never above 8) AND never more than the shared
+pool across all tiers together (`$HYBRID_OPENCODE_POOL`, default 6, at most 8 = the provider's concurrent-call
+limit; `bslane.py` enforces both with flock slots, and a lane that finds either full waits `slot_wait_s`, then
+falls back like a busy tier); queue the
 rest and dispatch a replacement the moment a slot frees up (a lane's stdout line signals completion).
 
 Lane ids match `[A-Za-z0-9_-]{1,40}` and must be unique per lane you
@@ -237,7 +239,7 @@ models and variants for every hybrid skill. A tier whose `model` is set in
 `$HYBRID_BRAINSTORMING_ROUTING` (default `<skill dir>/routing.json`) uses
 that file's `model` and `variant` instead (no variant when that file sets
 none). Roles, timeouts and slot waits also live in `$HYBRID_BRAINSTORMING_ROUTING`, merged
-over the shipped defaults. Per-tier caps default to 4 parallel lanes (`max_parallel`, at most 8).
+over the shipped defaults. Per-tier caps default to 4 parallel lanes (`max_parallel`, at most 8); all tiers share one pool (default 6, `$HYBRID_OPENCODE_POOL` up to 8).
 `--preset claude|hybrid|opencode` (the mode) overrides the routing
 file's preset for one call: `hybrid` routes locate/explore/fact/research to
 opencode tiers and keeps draft on Claude; `opencode` also routes draft to an
@@ -431,7 +433,7 @@ narrate the exploration; show the design and cite inline.
 (approaches + design + Evidence + assumptions + questions), with
 claim-verifier / spec pre-draft lanes launched in that same turn and not
 awaited → approval → spec
-`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` + inline self-review
+`docs/specs/YYYY-MM-DD-<topic>-design.md` + inline self-review
 + commit if allowed (one turn) → review gate → hybrid-writing-plans with args
 `mode=<mode>` (writing-plans, no args, if it is not installed).
 
@@ -447,7 +449,7 @@ awaited → approval → spec
 | "The fetch failed, let me try curl / gh" | Switch to a registry JSON or raw URL via WebFetch, or drop it. Never retry a denial. |
 | "A blog says so" | Check tier, date, and version. One secondary source is not evidence. |
 | "More sources = more accurate" | Accuracy drops as tool calls grow. Budget; verify only load-bearing claims. |
-| "Spawn 64 because I can" | One lane per question you will act on. Respect the cap. |
+| "Spawn a dozen because I can" | One lane per question you will act on; at most 12 Claude lanes at once, never above the cap. |
 | "A subagent for one search" | A T0 call in the same round is an order of magnitude faster. |
 | "I'll ask to be safe" | A vetoable assumption costs zero turns; a question costs one. |
 | "It grew, but I'm almost done" | Hidden complexity upgrades the path. Stop and say so. |

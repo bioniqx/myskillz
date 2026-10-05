@@ -218,10 +218,10 @@ class TestBrainstormContext(ContextCase):
         for stale in ("route:", "models:", "subagents="):
             self.assertNotIn(stale, proc.stdout)
 
-    def test_caps_default_width_is_8(self):
+    def test_caps_default_width_is_6(self):
         proc = self.run_context()
         caps = line_starting(self, proc.stdout, "caps: ")
-        self.assertIn("lanes=8", caps)
+        self.assertIn("lanes=6", caps)
         self.assertIn("OC_MAX_LANES", caps)
 
     def test_caps_honours_oc_max_lanes(self):
@@ -231,6 +231,11 @@ class TestBrainstormContext(ContextCase):
     def test_caps_clamps_oc_max_lanes_to_8(self):
         proc = self.run_context({"OC_MAX_LANES": "99"})
         self.assertIn("lanes=8", line_starting(self, proc.stdout, "caps: "))
+
+    def test_caps_zero_is_1_and_non_numeric_is_default(self):
+        for value, want in (("0", "lanes=1"), ("abc", "lanes=6"), ("", "lanes=6"), ("8", "lanes=8")):
+            proc = self.run_context({"OC_MAX_LANES": value})
+            self.assertIn(want, line_starting(self, proc.stdout, "caps: "))
 
     def test_lists_agents_md(self):
         with open(os.path.join(self.proj, "AGENTS.md"), "w") as f:

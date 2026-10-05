@@ -63,6 +63,8 @@ TIERS = {
 }
 DEFAULT_TIER = "std"
 MAX_PARALLEL = 8  # provider limit on concurrent model/API calls: threads, lanes and agents never exceed it
+AGENT_LANES = 6  # default agent-lane width (OC_MAX_LANES may raise it to MAX_PARALLEL); the api lane keeps 8 threads
+MIN_PER_BATCH = 3  # agent-lane batches hold at least this many items when there are enough: batch, not more workers
 VERIFY_MAX_PER_AGENT = 3  # items per verifier batch on the agent lane (the original's value)
 AGENT_ALIAS = {FLASH: "haiku", PRO: "sonnet"}  # agent lane only; never "opus"
 
@@ -2899,25 +2901,26 @@ def _print_dispatch(c, wave, batches, agent, role, header):
         print(_oc_lane_wave(c.p("oc-lanes"), wave, batches, agent, model, effort,
                             os.getcwd()))
         return
-    if len(batches) > MAX_PARALLEL:
+    lanes = _oc_lanes()
+    if len(batches) > lanes:
         print(header + " -- %d batches, at most %d agents at once: dispatch %d per message and wait"
-              " for each wave to finish before the next:" % (len(batches), MAX_PARALLEL, MAX_PARALLEL))
+              " for each wave to finish before the next:" % (len(batches), lanes, lanes))
     else:
         print(header + " -- emit ALL of these in ONE message (they are independent):")
     print("  ZCode: subagents launched together run in parallel.")
     print("  OpenCode v2: background subagent calls run in parallel.")
     for i, (name, p) in enumerate(batches):
-        if i and i % MAX_PARALLEL == 0:
-            print("  -- wave %d (after the previous wave finished) --" % (i // MAX_PARALLEL + 1))
+        if i and i % lanes == 0:
+            print("  -- wave %d (after the previous wave finished) --" % (i // lanes + 1))
         print("  " + _dispatch(agent, p, "rca " + name))
 
 
 def _oc_lanes():
-    """OpenCode lane width: OC_MAX_LANES, default and ceiling 8, never below 1."""
+    """Agent-lane width: OC_MAX_LANES, default 6, ceiling 8, never below 1."""
     try:
-        n = int(os.environ.get("OC_MAX_LANES") or MAX_PARALLEL)
+        n = int(os.environ.get("OC_MAX_LANES") or AGENT_LANES)
     except ValueError:
-        n = MAX_PARALLEL
+        n = AGENT_LANES
     return max(1, min(MAX_PARALLEL, n))
 
 
@@ -2935,17 +2938,16 @@ def _even_groups(items, n):
     return out
 
 
-def _agent_groups(items, cap, max_per, opencode):
-    """Agent-lane batches. OpenCode: at most _oc_lanes() batches, grouped evenly.
-    Elsewhere: fixed chunks of 1..max_per items so at most cap batches (cap <= 8);
-    more batches than that are dispatched in waves of at most 8."""
+def _agent_groups(items, cap, max_per):
+    """Agent-lane batches: min(cap, lane width, ceil(n/MIN_PER_BATCH)) evenly sized groups
+    (fixed per-agent overhead, so batch rather than add workers), but never a batch above
+    max_per items; more batches than lanes are dispatched in waves of the lane width."""
     if not items:
         return []
     cap = max(1, min(MAX_PARALLEL, cap))
-    if opencode:
-        return _even_groups(items, min(len(items), cap, _oc_lanes()))
-    size = 1 if len(items) <= cap else min(max_per, (len(items) + cap - 1) // cap)
-    return [items[i:i + size] for i in range(0, len(items), size)]
+    n = len(items)
+    k = min(cap, _oc_lanes(), -(-n // MIN_PER_BATCH))
+    return _even_groups(items, max(k, -(-n // max_per)))
 
 
 def clear_run_artifacts(c, st):
@@ -2984,7 +2986,7 @@ def cmd_plan(a):
             return
     cap = int(a.cap or c.threads or MAX_PARALLEL)
     ordered = sorted(live, key=lambda r: (r.get("category") or "", r["id"]))
-    groups = _agent_groups(ordered, cap, 12, _on_opencode())
+    groups = _agent_groups(ordered, cap, 12)
     size = max([len(g) for g in groups] or [0])
     retr = Retriever(c)
     mk(c.p("findings"))
@@ -3032,7 +3034,7 @@ def cmd_status(a):
     if vset:
         cap = int(a.cap or c.threads or MAX_PARALLEL)
         idx = len([k for k in (st.get("vbatches") or {})])
-        groups = _agent_groups(list(vset), cap, VERIFY_MAX_PER_AGENT, _on_opencode())
+        groups = _agent_groups(list(vset), cap, VERIFY_MAX_PER_AGENT)
         st.setdefault("vbatches", {})
         vlines = []
         for j, g in enumerate(groups, idx + 1):
@@ -3144,7 +3146,7 @@ def cmd_setup(a):
         print(SETUP_ENV_OPENCODE)
         print("\nOpenCode: agents run on zai-coding-plan/glm-5.3-flash (workers) and")
         print("zai-coding-plan/glm-5.3 (judgment). The api lane holds up to 8 threads.")
-        print("Agent-lane fallback: plan makes at most OC_MAX_LANES (default 8) batches.")
+        print("Agent-lane fallback: plan makes at most OC_MAX_LANES (default 6, up to 8) batches.")
         print("v1 runs them in parallel through oc_harness.py run (one opencode process")
         print("per lane; plan/status print the exact NEXT command).")
         print("v2 dispatches them as background subagent calls that run in parallel.")

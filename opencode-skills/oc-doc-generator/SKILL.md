@@ -2,7 +2,7 @@
 name: oc-doc-generator
 description: >-
   Generate accurate Markdown documentation for an existing codebase: one recon
-  scan, then up to 8 parallel writer subagents, then targeted review. Use when
+  scan, then up to 6 parallel writer subagents, then targeted review. Use when
   the user wants to document a project, write or update a README, API reference,
   architecture overview, setup/onboarding guide, user guide, data model, testing
   or deployment doc, handover documentation, or says "document this repo",
@@ -11,7 +11,7 @@ description: >-
   to produce Markdown docs derived from source code.
 ---
 
-# Doc Generator — 8-lane parallel pipeline
+# Doc Generator — 6-lane parallel pipeline
 
 Codebase in, correct Markdown docs out, in **≤ 4 main-thread turns**. This file is
 self-contained: every brief, template and script you need is below. **Never read any other file of this skill.** (A vendored `scripts/oc_harness.py` may sit in the folder; this skill never runs or reads it.)
@@ -23,8 +23,8 @@ self-contained: every brief, template and script you need is below. **Never read
 | # | Rule | Violation = bug |
 |---|------|-----------------|
 | R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; a changed selection may add one review turn, nothing else may add one. | Adding a turn a batch could absorb |
-| R2 | **One message = all independent calls.** 1 bash + 8 `subagent` calls go in ONE message. | Sending calls one at a time |
-| R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. | 9+ at once, or 1-at-a-time |
+| R2 | **One message = all independent calls.** 1 bash + up to 6 `subagent` calls go in ONE message. | Sending calls one at a time |
+| R3 | **Concurrency = 6 subagents max per wave** (`lanes=` if printed; `OC_MAX_LANES` raises it to 8). More docs → consecutive waves of 6, biggest doc first. Everything in one message together counts toward the wave: speculative Turn-2 writers + Gate-delta writers, or Turn-3 reviewers + the retry, must stay within one wave of 6; extras go to the next message. | 7+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every subagent prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
 | R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. | Any prose between tool calls |
@@ -42,8 +42,8 @@ turn (§8).
 | Turn | Content (single message) |
 |------|--------------------------|
 | 1 | 1 bash: cache check + recon + fact pack |
-| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped + 1 bash (manifest + state scaffold + index + dirs) + ≤ 8 writer `subagent` calls (the ★ set, speculatively, while the Gate waits) |
-| 3 | Delta writers only if the Gate answer changed the set + ≤ 8 reviewer `subagent` calls (HIGH-tier only) + any 1 retry |
+| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped + 1 bash (manifest + state scaffold + index + dirs) + ≤ 6 writer `subagent` calls (the ★ set, speculatively, while the Gate waits) |
+| 3 | Delta writers only if the Gate answer changed the set + ≤ 6 reviewer `subagent` calls (HIGH-tier only) + any 1 retry (delta writers + the speculative Turn-2 writers still running, or reviewers + retry, total ≤ 6; extras wait for the next message) |
 | 4 | 1 bash (mechanical verify + update state) + final summary |
 
 Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work on a cache hit.
@@ -58,8 +58,8 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 | User named specific docs | Use exactly those. Confirm in one clause inside Turn 2 |
 | User said nothing specific, interactive run | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set |
 | Non-interactive run (nobody to answer) | Use the ★ set (§3.1), state it in one line, skip the Gate |
-| > 8 docs selected | Waves of 8, longest/HIGH first |
-| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `agent: "general"`. Ask which packages to document inside the Gate message |
+| > 6 docs selected | Waves of 6, longest/HIGH first |
+| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 6 read-only shards, one per package — same message. Shards run as `agent: "general"`. Ask which packages to document inside the Gate message |
 | No git repo | Recon script auto-falls back to a mtime hash; everything else identical |
 | Requirements/spec docs found | Read-only sources. **Never** write into them. Rename any colliding output |
 | `subagent` tool unavailable | §6 sequential fallback |
@@ -118,7 +118,7 @@ docs already live in `docs/`, else `docs/`.
 
 ---
 
-## 3. TURN 2 — GATE + WRITE WAVE (one message: Gate list or 1 line of intent + 1 bash + ≤ 8 `subagent` calls)
+## 3. TURN 2 — GATE + WRITE WAVE (one message: Gate list or 1 line of intent + 1 bash + ≤ 6 `subagent` calls)
 
 ### 3.0 Gate — select the docs (Turn 2)
 
@@ -159,7 +159,7 @@ Skip the Gate only when the user already named the docs (map each to its title a
 | | QA checklist & bug-report flow | `qa-checklist.md` | QA | LOW | user asks |
 | | FAQ / glossary | `faq.md` | non-tech | LOW | user asks |
 
-Default run = the ★ rows whose condition holds (typically 4–8 docs → one wave).
+Default run = the ★ rows whose condition holds (typically 4–8 docs → one or two waves).
 
 `<output dir>/README.md` is reserved for this index: it is written by the §3.3 bash call, no catalog row and no writer uses it, and the project overview is `overview.md`. A repo-root README refresh is a separate `[update]` row whose target is the repo's own `README.md` (give the repo-root path directly, never a guessed `../README.md`); propose it only when the repo already has a README worth updating.
 
@@ -191,7 +191,7 @@ EOF
 { echo "# Documentation"; echo; echo "_Generated $(date +%Y-%m-%d) from commit <HEAD>._"; echo; echo "## Technical"; for f in <HIGH files>; do echo "- [<title>](./$f)"; done; echo; echo "## Non-technical"; for f in <LOW files>; do echo "- [<title>](./$f)"; done; } > "$D/README.md"
 ```
    `$D/README.md` belongs to this index alone: no writer writes it and it links the overview (`overview.md`).
-3. **≤ 8 writer `subagent` calls** with `agent: "oc-doc-writer"`, one per non-cached doc, **each using this exact template**:
+3. **≤ 6 writer `subagent` calls** with `agent: "oc-doc-writer"`, one per non-cached doc, **each using this exact template**:
 
 ```
 ROLE: Technical writer. Follow the checklist, do not deliberate, no plan step.
@@ -255,7 +255,7 @@ risk=<one clause: what you were least sure about, or "none">
 
 ---
 
-## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, ≤ 8 `subagent` calls)
+## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, ≤ 6 `subagent` calls)
 
 Skip this turn entirely if every doc is LOW or `[cached]`. Reviewer ≠ the writer, fresh context,
 `agent: "oc-doc-reviewer"`.

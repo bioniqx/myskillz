@@ -34,7 +34,7 @@ Conductor commands (run in the integration checkout):
   add-fix --id F1 --title T --files a b --criteria "c1" ["c2"] [--deps S1]
   add-fixes <report.md>     enqueue fix slices from a reviewer report's ```json block
   review-batch [--force] [--shards N]   next incremental review batch → briefing + Agent block
-                            (--shards defaults to auto: ~12 files per reviewer, never above the live window; max 8 off Claude)
+                            (--shards defaults to auto: ~10 files per reviewer, max 4, never above the live window)
   review-done <rN> --verdict APPROVED|CHANGES_REQUIRED
   verify-brief              write verification briefing for team-leader (high-risk plans)
   checkpoint [--result pass|fail] [--note ...]
@@ -120,11 +120,11 @@ LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail"
                "status", "finish", "review-pr", "resume"}
 DEFAULT_LIMIT = 20          # Claude Code default concurrent-subagent cap
 HARD_CAP = 64               # this skill's ceiling on Claude (provider "anthropic")
-NON_CLAUDE_CAP = 8          # every other provider (and OpenCode) allows only 8 concurrent API calls
+NON_CLAUDE_CAP = 8          # every other provider (and OpenCode) allows only 8 concurrent API calls; provider cap, keep in sync: _shared/zai_client.py MAX_PARALLEL
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
-MAX_SHARDS = 12             # reviewers per batch on Claude (min'd with NON_CLAUDE_CAP elsewhere) — the final review sits on the critical path
+MAX_SHARDS = 4              # reviewers per batch (min'd with the hard cap and the live window) — the final review sits on the critical path
 FILES_PER_SHARD = 10        # auto shard size (smaller shards = shorter critical path, more reviewers)
 NEVER = 10 ** 9             # "not until the end" for review_batch / checkpoint_every
 ENGINE_VERSION = "4.0-glm"
@@ -199,8 +199,9 @@ GLM_MODEL_MAP = {"ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3", "ANTHROPIC_DEFAULT_S
                  "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5.3-flash"}
 GLM_HOSTS = ("z.ai", "bigmodel.cn")
 
-# --- concurrency governor (AIMD). Z.ai publishes NO numeric concurrency limit for the GLM Coding Plan:
-# "rate (concurrency) limits are tied to your plan tier ... adjusted dynamically"; off-peak raises them.
+# --- concurrency governor (AIMD). This repo assumes the Z.ai provider allows 8 concurrent API calls
+# (NON_CLAUDE_CAP); Z.ai says rate (concurrency) limits are tied to the plan tier and adjusted dynamically,
+# so the governor still adapts the live window below that cap (and off-peak raises it back).
 # many lanes against that wall = 429/1302 storms, client retries with backoff, stalled lanes. So the engine
 # measures instead of guessing: slow start from a tier-based window, +1 per productive wake-up, halve on a
 # throttle signal read from Claude Code's own transcripts. The numbers below are ENGINEERING STARTING
@@ -1558,7 +1559,7 @@ def cmd_init(a):
     if set(kinds) - {"code"}:
         out("  KINDS: " + ", ".join(f"{k}×{v}" for k, v in sorted(kinds.items())))
     out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; programmer slots {cap} "
-        f"(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={os.environ.get('CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS', 'unset→20')}, "
+        f"(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={os.environ.get('CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS', 'unset→20' if provider == 'anthropic' else 'unset→8 expected')}, "
         f"hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
     out(f"PROVIDER {PROVIDERS[provider]['label']}: " + (
         "lanes on GLM-5.3-Flash (`haiku`), high-risk / large / retried slices, the leader and the full reviewer "
@@ -4048,7 +4049,7 @@ def cmd_doctor(a):
     want_cap = hard_cap_for(provider)
     lim = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS") or env.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
     if not cap_value_ok(lim, want_cap, provider):
-        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim or 'unset (20)'} — need {want_cap} "
+        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim or ('unset (20)' if provider == 'anthropic' else 'unset (8 expected)')} — need {want_cap} "
                         + ("for full width" if provider == "anthropic" else "(the provider allows 8 concurrent calls)"))
         fixes.setdefault("env", {})["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(want_cap)
     tc = os.environ.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY") or env.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY")

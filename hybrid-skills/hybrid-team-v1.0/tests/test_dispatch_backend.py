@@ -106,19 +106,45 @@ class SliceBackendTest(TempHomeCase):
 
 
 class OcSlotsTest(TempHomeCase):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("HYBRID_OPENCODE_POOL", None)
+
     def test_default_cap_when_nothing_runs(self):
-        self.assertEqual(devteam.oc_slots(make_state(), "std"), 6)
+        self.assertEqual(devteam.oc_slots(make_state(), "std"), 6)   # tier cap 6, default pool 6
 
     def test_running_lanes_use_slots_of_their_tier_only(self):
+        os.environ["HYBRID_OPENCODE_POOL"] = "8"
         st = make_state(oc_running={"S1": "std", "S2": "std", "S3": "lite"})
         self.assertEqual(devteam.oc_slots(st, "std"), 4)
         self.assertEqual(devteam.oc_slots(st, "lite"), 5)
+
+    def test_pool_is_shared_across_tiers(self):
+        st = make_state(oc_running={"S1": "std", "S2": "std", "S3": "std", "S4": "lite"})   # 4 of 6 used
+        self.assertEqual(devteam.oc_slots(st, "std"), 2)
+        self.assertEqual(devteam.oc_slots(st, "lite"), 2)
+
+    def test_pool_env_resizes_the_pool(self):
+        os.environ["HYBRID_OPENCODE_POOL"] = "3"
+        st = make_state(oc_running={"S1": "lite"})
+        self.assertEqual(devteam.oc_slots(st, "std"), 2)
+
+    def test_invalid_pool_env_falls_back_to_default(self):
+        os.environ["HYBRID_OPENCODE_POOL"] = "99"
+        self.assertEqual(devteam.oc_slots(make_state(), "std"), 6)
+
+    def test_extra_counts_lanes_picked_this_round(self):
+        self.assertEqual(devteam.oc_slots(make_state(), "std", {"std": 2, "lite": 3}), 1)
 
     def test_live_cap_overrides_configured_cap(self):
         st = make_state(oc_caps={"std": 3}, oc_running={"S1": "std"})
         self.assertEqual(devteam.oc_slots(st, "std"), 2)
 
     def test_configured_cap_never_exceeds_eight(self):
+        os.environ["HYBRID_OPENCODE_POOL"] = "8"
         st = make_state()
         st["routing"]["tiers"]["std"]["max_parallel"] = 40
         self.assertEqual(devteam.oc_slots(st, "std"), 8)
@@ -130,6 +156,7 @@ class OcSlotsTest(TempHomeCase):
         running = dict(("S%d" % i, "std") for i in range(9))
         st = make_state(oc_running=running)
         self.assertEqual(devteam.oc_slots(st, "std"), 0)
+        self.assertEqual(devteam.oc_slots(st, "lite"), 0)
 
 
 class LaneLineTest(unittest.TestCase):

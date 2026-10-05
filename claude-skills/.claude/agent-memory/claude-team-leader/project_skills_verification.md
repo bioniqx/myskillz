@@ -6,7 +6,7 @@ metadata:
 ---
 
 Git root is the parent `skillz/` (not `claude-skills/`); run git/tests from there. The 2026-09-29 optimization run
-(spec `claude-skills/docs/superpowers/specs/2026-09-29-claude-skills-optimization-design.md`) verified with:
+(spec `claude-skills/docs/specs/2026-09-29-claude-skills-optimization-design.md`) verified with:
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s claude-skills/tests -t claude-skills/tests`
 - `bash claude-skills/dev-team-v3.2/scripts/selftest.sh` (250/250 on macOS after K08/F24)
 

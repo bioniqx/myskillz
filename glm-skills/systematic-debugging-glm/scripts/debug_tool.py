@@ -37,6 +37,7 @@ import oc_harness
 WORKER_AGENT = "debug-worker"
 MAXJ = 64  # local CPU jobs (run/probe/experiment)
 MAX_API = 8  # concurrent model/API calls (scan workers, subagent lanes)
+AGENT_LANES = 6  # default agent-lane wave width; OC_MAX_LANES may raise it to MAX_API
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -51,6 +52,12 @@ def cpus():
         return os.cpu_count() or 4
     except Exception:
         return 4
+
+
+def agent_lanes():
+    """Agent-lane wave width: OC_MAX_LANES, default 6, ceiling MAX_API, 0 gives 1, bad value gives 6."""
+    v = os.environ.get("OC_MAX_LANES", "").strip()
+    return max(1, min(MAX_API, int(v))) if v.isdigit() else AGENT_LANES
 
 
 def clamp(j, default, cap=MAXJ):
@@ -899,7 +906,7 @@ def cmd_scan(a):
                   "dir": root} for tid, p in briefs], indent=2) + "\n")
             print("lanes: %s (%d x %s)" % (lanes_file, len(briefs), WORKER_AGENT))
             if mj >= 2:
-                print("Or dispatch them as background subagents, at most %d per message (waves):" % MAX_API)
+                print("Or dispatch them as background subagents, at most %d per message (waves):" % agent_lanes())
                 for tid, p in briefs:
                     print("  " + oc_harness.dispatch_line(WORKER_AGENT, p, "scan " + tid, mj,
                                                           background=True))
@@ -907,13 +914,13 @@ def cmd_scan(a):
             print("NEXT: python3 %s/oc_harness.py run %s" % (SCRIPTS, shlex.quote(str(lanes_file))))
             return 0
         print("Dispatch these %d prompts as %s subagents, at most %d per message, in waves "
-              "(they are independent):" % (len(briefs), WORKER_AGENT, MAX_API))
+              "(they are independent):" % (len(briefs), WORKER_AGENT, agent_lanes()))
         for tid, p in briefs:
             print("  %s: %s" % (WORKER_AGENT, p))
         print("Model for each worker: the cheap/fast tier. Each must answer in the VERDICT shape "
               "written at the top of its file.")
         print("NEXT: dispatch the %d %s subagents above in waves of at most %d, then read their "
-              "VERDICTs." % (len(briefs), WORKER_AGENT, MAX_API))
+              "VERDICTs." % (len(briefs), WORKER_AGENT, agent_lanes()))
         return 0
 
     base = a.base or os.environ.get("ZAI_BASE_URL") or "https://api.z.ai/api/coding/paas/v4"

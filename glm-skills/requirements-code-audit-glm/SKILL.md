@@ -173,7 +173,7 @@ it maps to the same model as `sonnet`, at no gain.
 ## R9 — Fallback lane
 
 No API key → `brief` reports `lane agent` and the pipeline becomes `A plan` → dispatch the printed subagents in
-ONE message (at most 8 at once; when `A plan` prints more batches, dispatch them in waves of 8 and wait for each wave) → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
+ONE message (agent-lane width defaults to 6, up to 8 with `OC_MAX_LANES`; batches hold at least 3 items, and when `A plan` prints more batches than lanes, dispatch them in waves of that width and wait for each wave) → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
 the earlier findings and verifier batches (`A plan --resume` keeps finished batches); each worker lists in
 `searched` the queries it ran, and the gate rejects a MISSING without them. The batch files carry the
 pre-retrieved excerpts, so the workers mostly judge rather than search. ZCode runs subagents launched together

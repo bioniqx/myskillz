@@ -164,18 +164,16 @@ class ContractsPortTests(unittest.TestCase):
         self.assertEqual(agent_path.read_text(encoding="utf-8"), want)
 
     def test_contracts_does_not_redispatch_a_group_that_already_has_ok(self):
-        out = self.contracts()
-        self.assertIn("briefs/T01.md", out)
-        self.assertIn("briefs/T02.md", out)
+        out = self.contracts()  # two tasks share one writer (about 3 per writer)
+        self.assertIn("briefs/W01.md", out)
         for tid in ("T01", "T02"):
             self.write(self.work / "tasks" / (tid + ".md"), "x")
         self.write(self.work / "tasks" / "T01.md.ok", "1")
         out = self.contracts()
-        self.assertNotIn("briefs/T01.md", out)
-        self.assertIn("briefs/T02.md", out)
+        self.assertIn("briefs/W01.md", out)  # one task of the group still lacks its .ok
         self.write(self.work / "tasks" / "T02.md.ok", "1")
         out = self.contracts()
-        self.assertNotIn("briefs/T02.md", out)
+        self.assertNotIn("briefs/W01.md", out)
         self.assertIn("NOTHING TO DISPATCH", out)
 
 

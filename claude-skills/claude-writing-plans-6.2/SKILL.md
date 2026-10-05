@@ -1,6 +1,6 @@
 ---
 name: claude-writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan at maximum speed - contracts locked once, task bodies fanned out to up to 64 parallel writers from script-built briefs, verified by a deterministic linter.
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan at maximum speed - contracts locked once, task bodies fanned out to parallel writers (about one per 3 tasks, at most 12) from script-built briefs, verified by a deterministic linter.
 argument-hint: "[spec-path] [--thorough]"
 allowed-tools: Bash(python3 *)
 compatibility: Claude Code v2.1.217+ recommended (subagent cap setting); python3 3.8+
@@ -27,7 +27,7 @@ If the block above shows a raw command instead of output, run `python3 <this ski
 1. **Serial only where divergence is born** (the Contracts). Everything else runs in parallel, one message per wave.
 2. **Never type what the script generates:** Execution Protocol, File Structure, Execution Waves, `[P]`, Depends/Runs-after lines, Interfaces blocks, writer briefs. Output tokens are the bottleneck.
 3. **Machines check, models judge.** Structure, placeholders, portability, file ownership, signatures, Run/Expected, `git add` scope and code-block syntax are one script call - never a model re-read.
-4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the fan-out to the cap from the context line; never dispatch more.
+4. **Respect the cap.** Running subagents above `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) fail with "Concurrent subagent limit reached". The script sizes the fan-out as writers = min(live cap, 12, ceil(tasks/3)), batching about 3 tasks per writer because every agent has a fixed token overhead; never dispatch more.
 5. **Keep the cache warm.** Don't change model or effort mid-skill (each change re-reads the whole conversation uncached). Writers get facts from briefs, not from exploring.
 6. **Fix-and-move-on.** After a fix, re-run only the script - no re-review.
 
@@ -49,7 +49,7 @@ Read the spec fully and 2-5 pattern files picked from the context (a test, a sim
 
 ## Phase 1 - Contracts (serial, ONE Write)
 
-Write `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` containing only:
+Write `docs/plans/YYYY-MM-DD-<feature>.md` containing only:
 
 ````markdown
 # [Feature] Implementation Plan
@@ -94,7 +94,7 @@ Contract rules (quality is locked here):
 - Right-size: smallest unit with its own test cycle a reviewer could reject independently.
 - Legitimate project vocabulary that the placeholder/portability scan would flag (e.g. a TODO app, a class named `Task`) needs `--allow WORD` on every `contracts`/`assemble`/`check` call - decide this now, not after `assemble` fails.
 
-Run `TOOL contracts <plan> --spec <spec>` (add `--agents 64` only if you know the real cap is higher than what the script detected). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table and the next command.
+Run `TOOL contracts <plan> --spec <spec>` (add `--agents K` only if you know the real cap differs from what the script detected; writers stay <= 12 and ~ceil(tasks/3)). Fix every `ERR` with Edit and re-run until `OK`. Treat `WARN spec uncovered` as a missing task unless the section is non-functional. `OK` prints `WORK`, the `DISPATCH` table and the next command.
 
 ## Phase 2 - Fan-out writers (ONE message)
 
@@ -126,7 +126,7 @@ Read `task-writer-prompt.md` in this skill dir for the body format. Write the sk
 
 After `OK`, offer (waves/width from the script output):
 
-**"Plan saved to `docs/superpowers/plans/<file>.md` - N tasks, W waves, up to K tasks in parallel. It is self-contained: any agent or engineer can execute it via its Execution Protocol. Options:**
+**"Plan saved to `docs/plans/<file>.md` - N tasks, W waves, up to K tasks in parallel. It is self-contained: any agent or engineer can execute it via its Execution Protocol. Options:**
 
 **1. Subagent-Driven here (recommended)** - fresh subagent per task, review between tasks; each wave's `[P]` tasks dispatched together in one message (within the subagent cap).
 
@@ -140,6 +140,6 @@ After `OK`, offer (waves/width from the script output):
 - Inline -> execute the plan yourself here, sequentially, with checkpoints.
 - Hand off -> nothing else; the plan carries everything (claude-dev-team or any other agent/human).
 
-## One-time speed setup (tell the user when the context shows cap < 64, or flags a stale/placeholder writer agent)
+## One-time speed setup (tell the user when the context shows cap < 12 or unset, or flags a stale/placeholder writer agent)
 
-`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64`, pre-approves `TOOL` and edits under `docs/superpowers/plans/`, and installs the `claude-plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn). Never run `--apply` without the user's consent. Optional: `/fast` speeds the serial contract phase on Opus.
+`TOOL setup` (dry run) then `TOOL setup --apply`, then restart Claude Code. It sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=16` only when unset or below 12 (never lowers a higher value), pre-approves `TOOL` and edits under `docs/plans/`, and installs the `claude-plan-task-writer` agent (sonnet, effort medium, no CLAUDE.md load, PostToolUse auto-lint hook that saves each writer a turn). Never run `--apply` without the user's consent. Optional: `/fast` speeds the serial contract phase on Opus.

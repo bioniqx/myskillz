@@ -185,25 +185,25 @@ class TestAuditCli(unittest.TestCase):
             {"id": "REQ-%03d" % i, "status": "MISSING", "confidence": "low",
              "evidence": [], "searched": ["x"], "notes": "nothing found"}])
 
-    def test_status_holds_verifiers_while_eight_pass1_lanes_are_in_flight(self):
-        self._lane_cap_audit(8)
+    def test_status_holds_verifiers_while_six_pass1_lanes_are_in_flight(self):
+        self._lane_cap_audit(6)
         _rc, out = self._main("status")
         self.assertNotIn("DISPATCH", out)
-        self.assertIn("holding 2 row(s): lanes in flight 8 of 8", out)
+        self.assertIn("holding 4 row(s): lanes in flight 6 of 6", out)
         self.assertEqual(self._state()["vbatches"], {})
 
     def test_status_dispatches_at_most_the_free_lanes_then_the_rest_later(self):
         self._lane_cap_audit(3)
         _rc, out = self._main("status")
-        self.assertEqual(len([l for l in out.splitlines() if "oc-rca-verifier" in l]), 5)
-        self.assertEqual(len(self._state()["vbatches"]), 5)
-        self.assertIn("holding 2 row(s): lanes in flight 8 of 8", out)
-        for i in range(1, 4):  # the pass-1 lanes answer: 5 verifiers still out, 3 lanes free
+        self.assertEqual(len([l for l in out.splitlines() if "oc-rca-verifier" in l]), 3)
+        self.assertEqual(len(self._state()["vbatches"]), 3)
+        self.assertIn("holding 3 row(s): lanes in flight 6 of 6", out)
+        for i in range(1, 4):  # the pass-1 lanes answer: 3 verifiers still out, 3 lanes free
             self._answer_missing(i)
         _rc, again = self._main("status")
         self.assertEqual(len([l for l in again.splitlines() if "oc-rca-verifier" in l]), 3)
-        self.assertEqual(len(self._state()["vbatches"]), 8)
-        self.assertIn("holding 2 row(s): lanes in flight 8 of 8", again)
+        self.assertEqual(len(self._state()["vbatches"]), 6)
+        self.assertIn("holding 3 row(s): lanes in flight 6 of 6", again)
 
     def test_status_hedges_only_into_free_lanes(self):
         self._lane_cap_audit(4, age=10 ** 6)
@@ -367,19 +367,46 @@ class TestAuditParse(unittest.TestCase):
         self.assertIn("oc_audit.py parse", out)
         self.assertFalse(os.path.exists(self.draft))
 
-    def test_parser_wave_holds_at_most_eight_rows(self):
+    def _big_spec(self):
         self._spec(u"\n\n".join(u"## s%d\n\n%s" % (i, u"The system must log. " * 300)
-                                 for i in range(12)))
+                                 for i in range(8)))
+
+    def test_parser_wave_holds_at_most_six_rows_by_default(self):
+        self._big_spec()
         row, out = self._parse()
-        self.assertEqual(len(row.call_args_list), 8)
+        self.assertEqual(len(row.call_args_list), 6)
         self.assertIn("more section(s) wait", out)
 
-    def test_second_call_dispatches_only_the_sections_without_an_output_file(self):
+    def test_parser_wave_follows_oc_max_lanes_up_to_eight(self):
+        self._big_spec()
+        with mock.patch.dict(os.environ, {"OC_MAX_LANES": "64"}):
+            row, _out = self._parse()
+        self.assertEqual(len(row.call_args_list), 8)
+
+    def test_second_call_skips_sections_already_dispatched(self):
         self._parse()
         _write_jsonl(self.out1, [])
-        row, _out = self._parse()
-        self.assertEqual(row.call_args_list, self._calls(("parse-02", self.brief2)))
+        row, out = self._parse()
+        row.assert_not_called()
+        self.assertIn("already dispatched and not yet written: parse-02", out)
         self.assertFalse(os.path.exists(self.draft))
+
+    def test_redispatch_prints_the_unfinished_row_again(self):
+        self._parse()
+        _write_jsonl(self.out1, [])
+        buf = io.StringIO()
+        with mock.patch.object(oc_harness, "dispatch_line", side_effect=_fake_row) as row, \
+                contextlib.redirect_stdout(buf):
+            audit.main(["--out", self.out, "parse", "--redispatch"])
+        self.assertEqual(row.call_args_list, self._calls(("parse-02", self.brief2)))
+
+    def test_next_wave_starts_after_the_first_wave_reports(self):
+        self._big_spec()
+        self._parse()
+        for i in range(1, 7):
+            _write_jsonl(os.path.join(self.out, "parse", "parse-%02d.jsonl" % i), [])
+        row, _out = self._parse()
+        self.assertEqual(len(row.call_args_list), 3)
 
     def test_call_after_the_wave_merges_lane_files_into_the_draft(self):
         self._parse()

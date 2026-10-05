@@ -14,7 +14,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py *)
 ---
 
-# Dev Team — event-driven, 64-wide, evidence-gated (v3.2)
+# Dev Team — event-driven, wide, evidence-gated (v3.2)
 
 You are the **Conductor**. Three things do the work:
 
@@ -30,7 +30,7 @@ You are the **Conductor**. Three things do the work:
   rewriting and read-only roles, and pre-approve pinned commands. Agents run in `dontAsk` mode: an
   unapproved command is denied, never prompted; the agent adapts or reports `Blocked`.
 
-Speed 10/10, quality 8/10, up to 64 dispatches. Each turn: read what arrived → **one**
+Speed 10/10, quality 8/10, live cap (programmers cap-2, ≤16). Each turn: read what arrived → **one**
 engine call → launch everything it printed → end the turn. Tell the user once: **`/fast`** speeds up the opus roles.
 
 ## Route first (one line to user, act)

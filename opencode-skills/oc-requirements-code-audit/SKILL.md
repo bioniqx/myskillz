@@ -46,7 +46,7 @@ cover every requirement.
    worker (`oc-rca-investigator`, `oc-rca-verifier` or `oc-rca-parser`) and one brief file. Issuing every row in one turn
    with `background: true` runs them together; you do not wait inside the turn.
    **Never have more than 8 workers in flight** (the provider allows 8 concurrent calls): the scripts already
-   cap every wave at `OC_MAX_LANES` (default and maximum 8; a lower value narrows it), so emit only the rows printed.
+   cap every wave at `OC_MAX_LANES` (default 6, maximum 8; a lower value narrows it), so emit only the rows printed.
 2. **Retrieval is deterministic, not agentic.** ripgrep plus a symbol/route index finds candidate code over six
    independent strategies and pre-loads it into every brief, so a worker mostly judges rather than searches.
    Every query is recorded for the report.
@@ -104,9 +104,10 @@ sentences. One JSON object per line in `.oc-audit/checklist.jsonl`; `brief` prin
    waves entirely and go straight to the report's follow-up lists. Never spend a worker on them.
 
 Spec over ~1800 words: `A parse` writes one brief per spec section and prints one dispatch row per `oc-rca-parser`
-worker, at most 8 per wave. Dispatch the rows together, then run `A parse` again: it prints the next wave until
+worker, at most `OC_MAX_LANES` per wave (default 6, up to 8). Dispatch the rows together, then run `A parse` again:
+it skips sections already dispatched (`A parse --redispatch` re-prints a lost lane's row) and prints the next wave until
 every section has an output file, then collects the checklist JSONL each worker wrote into `checklist.draft.jsonl`. Then **read the draft next to the original** (paraphrase drift,
-missing splits, thin hints are yours to fix) and `A parse --accept`. Parsing is parallelised (8 at a time); faithfulness is not.
+missing splits, thin hints are yours to fix) and `A parse --accept`. Parsing is parallelised (one wave at a time); faithfulness is not.
 
 ## R5 — Step 3: the waves
 

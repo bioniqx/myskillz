@@ -117,8 +117,8 @@ class TierMappingTests(unittest.TestCase):
             f.write(PLAN_TIERS)
         p = run_tool(["contracts", plan], cwd=repo, env={"HOME": home})
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        rows = [l.split() for l in p.stdout.splitlines() if re.match(r"^T\d\d\s", l)]
-        self.assertEqual([r[0] for r in rows], ["T01", "T02", "T03"])
+        rows = [l.split() for l in p.stdout.splitlines() if re.match(r"^W\d\d\s", l)]
+        self.assertEqual([(r[0], r[2]) for r in rows], [("W01", "T01-T03")])
         self.assertEqual({r[1] for r in rows}, {"sonnet"})
 
 

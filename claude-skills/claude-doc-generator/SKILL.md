@@ -21,13 +21,13 @@ Turn 1 (Recon + Load, one message) then Gate (Select; skipped or speculated thro
 ## Speed contract (governs every decision)
 
 1. At most 5 main-thread turns end to end (3 on a full cache hit). Never narrate between phases.
-2. Batch independent calls (bash, Reads, worker launches) into one message.
-3. At most 64 workers per wave, all in one message; more means consecutive waves, longest and HIGH-risk docs first.
+2. Batch independent calls (bash, Reads, launches) into one message.
+3. At most min(live cap, 12) workers per wave, one message; more means consecutive waves, longest and HIGH-risk docs first. Read env `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20) as the live cap; never exceed it (extra launches fail, no retry).
 4. One bash call per shell step; chain with `;`, `&&` and heredocs.
-5. Short dispatch: never paste a brief or the manifest into a worker prompt. A worker prompt is about 5 lines (see Wave 1) and tells the worker to read `.claude/doc-generator/recon.md` and its brief file itself.
+5. Short dispatch: never paste a brief or the manifest into a worker prompt. A worker prompt is about 5 lines (see Wave 1) telling it to read `.claude/doc-generator/recon.md` and its brief itself.
 6. Models: writers, reviewers and the indexer run with `model: sonnet`; recon shards run with `model: haiku`. Set `model` explicitly on every launch.
 7. Never redo work: the manifest cache and per-doc scope diffing skip docs whose inputs are unchanged.
-8. Docs live on disk; each worker returns at most 5 lines. Never paste a doc body into the main thread.
+8. Docs live on disk; each worker returns at most 5 lines. Never paste a doc body here.
 
 **Quality floor:** every HIGH-tier doc (it makes verifiable technical claims) is reviewed against real code this run by a fresh worker, or skipped because its reviewed scope is byte-identical. LOW-tier docs ship on writer self-verification plus the finish checks, which escalate any LOW doc containing code or commands.
 
@@ -39,7 +39,7 @@ Turn 1 (Recon + Load, one message) then Gate (Select; skipped or speculated thro
 
 ## Turn 1: Recon + Load
 
-Send one message: the recon bash call below plus a Read of `references/doc-catalog.md` (manifest format and Gate template). Workers read the briefs, not you.
+Send one message: the recon bash call below plus a Read of `references/doc-catalog.md` (manifest format and Gate template). Workers read the briefs.
 
 The cache check runs inside the same bash call: a cached `HEAD:` equal to the current HEAD prints the manifest and exits (go straight to the Gate). A different HEAD also prints `git diff --name-only <old HEAD>..HEAD`: refresh only affected manifest sections and keep the list for diff-skip.
 
@@ -63,7 +63,7 @@ Small or medium repo (up to about 3000 files), exactly one bash call:
 
 Signatures over bodies in recon.
 
-Large repo or monorepo (over about 3000 files, or workspace manifests): launch up to 16 recon workers with `model: haiku`, one per package or top-level directory, in one message. Each runs the command scoped to its directory and returns a manifest fragment of at most 40 lines. For monorepos, ask which packages to document inside the Gate message.
+Large repo or monorepo (over about 3000 files, or workspace manifests): launch up to 8 recon workers with `model: haiku`, one per package or top-level directory, in one message. Each runs the command scoped to its directory and returns a manifest fragment of at most 40 lines. For monorepos, ask which packages to document inside the Gate message.
 
 Save the manifest to `.claude/doc-generator/recon.md` (format in `references/doc-catalog.md`) before any worker launches: in the Gate turn, or as the first call of the Wave 1 message. Never in its own turn.
 
@@ -75,11 +75,11 @@ Otherwise adapt the catalog from the manifest (no new reading) and send one tigh
 
 In the same turn, compute each candidate doc's scope file list (from the manifest, no reads) and write `.claude/doc-generator/state.json` as `{doc: {path, scope: [...], head: <HEAD>}}`. When background workers are available, also launch the starred-set writers in the background (speculation): on "ok" Wave 1 is already done; otherwise keep the intersecting docs, delete the rest and launch only the delta. Never speculate reviews.
 
-## Wave 1: Write + Index (up to 64 workers, one message)
+## Wave 1: Write + Index (one message, at most min(live cap, 12))
 
 Diff-skip first: a selected doc in `state.json` whose scope has no file changed since its recorded `head`, and which exists, is `[cached]`: skip write and review.
 
-Launch, in one message, each with `model: sonnet`:
+Launch each with `model: sonnet`:
 
 - One writer per remaining doc, with this prompt (the scope list is capped at about 12 files):
 
@@ -89,13 +89,13 @@ Launch, in one message, each with `model: sonnet`:
         Scope (read only these files): <file list>
         Return the 4-line result the brief specifies.
 
-- The indexer, same wave (it needs only titles, paths and purposes, known at selection time): "Read .claude/doc-generator/recon.md. Write <output dir>/README.md linking each of these docs, grouped technical and non-technical: <title, path, purpose list>. Return one line."
+- The indexer, same wave (it needs only titles, paths and purposes): "Read .claude/doc-generator/recon.md. Write <output dir>/README.md linking each of these docs, grouped technical and non-technical: <title, path, purpose list>. Return one line."
 
 The writer brief carries the self-verification rules, the tiering rule (tier by final content: any command, endpoint, signature, schema, config value, code fence or file path means HIGH) and the return format.
 
 ## Wave 2: Review (HIGH only, one message)
 
-Launch together (at most 64, each `model: sonnet`): one fresh reviewer per HIGH-tier doc (never its writer) plus any Wave 1 retries. Reviewer prompt:
+Launch together (at most min(live cap, 12), each `model: sonnet`): one fresh reviewer per HIGH-tier doc (never its writer) plus any Wave 1 retries. Reviewer prompt:
 
     Read .claude/doc-generator/recon.md, then <brief dir>/reviewer-brief.md, and follow the brief.
     Doc under review: <output dir>/<slug>.md

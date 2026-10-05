@@ -1,4 +1,4 @@
-# Fan-out Playbook — up to 64 concurrent lanes
+# Fan-out Playbook — Claude width = min(live cap, 12)
 
 Read when planning more than 8 T1 lanes, or when a fan-out fails. Goal:
 the whole exploration costs one tool round plus background time that
@@ -20,15 +20,18 @@ overlaps the human's reading time.
 - Direct T0 calls (Read/Grep/Glob/WebSearch/WebFetch) are not subagents
   and don't count toward the subagent cap.
 
-To run true 64-wide fan-outs without permission stalls, the user sets in
-`~/.claude/settings.json` (skill `allowed-tools` pre-approve only the
+The cap in Live context (`caps: subagents=`) is the real limit; plan
+Claude width as min(independent questions, that cap minus a reserve for
+other running agents, 12). The soft ceiling of 12 holds even when the cap
+is higher: each agent pays fixed token overhead, so fewer fuller lanes
+beat many tiny ones. Anything over the ceiling runs in waves.
+
+To let background web lanes run without permission stalls, the user adds
+to `~/.claude/settings.json` (skill `allowed-tools` pre-approve only the
 invoking turn; background lanes follow session permission rules):
 
 ```json
-{ "env": { "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
-           "CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS": "64" },
-  "permissions": { "allow": ["WebSearch", "WebFetch"] },
-  "workflowSizeGuideline": "unrestricted" }
+{ "permissions": { "allow": ["WebSearch", "WebFetch"] } }
 ```
 
 Wide fan-outs multiply token use (multi-agent research ≈15× a chat) and
@@ -41,9 +44,14 @@ decision.
 | --- | --- | --- | --- |
 | Spike | 2-6 (incl. 2-4 web) | 0 | 0-1 |
 | Bounded, small repo | 3-10 | 0-2 | 0 (T0 web instead) |
-| Bounded, large repo / unfamiliar flow | 5-10 | 2-6 | 0-2 |
-| Architectural, single service | 5-10 | 4-12 | 2-6 |
-| Architectural, monorepo / many subsystems | 5-10 | 12-40 | 4-16 |
+| Bounded, large repo / unfamiliar flow | 5-10 | 2-4 | 0-2 |
+| Architectural, single service | 5-10 | 4-8 | 2-4 |
+| Architectural, monorepo / many subsystems | 5-10 | 8-12 | 4-8 |
+| Broad web landscape (new domain) | 4-8 | 0-4 | 4-8 |
+
+Lane counts are Claude and opencode lanes together; totals above 12 live
+Claude `Agent` lanes (or above the cap) run in waves. opencode lanes are
+bounded separately (per-tier `max_parallel` AND the shared pool).
 
 Size bands from Live context (`tracked=`): <1k files small, 1k-20k medium,
 >20k or several manifests = monorepo. Anthropic's own research scaling
@@ -77,7 +85,7 @@ Vague boundaries are the main cause of duplicated work between lanes.
 
 ## 3. Dispatch
 
-- One message: all T0 calls + all T1 `Agent` calls (≤ cap) + batched
+- One message: all T0 calls + all T1 `Agent` calls (≤ min(cap, 12)) + batched
   TaskCreate + all opencode-lane calls, dispatched as background
   shell commands (`bslane.py code|web --id <id> --role
   locate|explore|fact|research ...`, one call per lane). Shared prompt
@@ -90,12 +98,14 @@ Vague boundaries are the main cause of duplicated work between lanes.
   judgment and multi-source research; never the most expensive model for
   workers.
 - opencode lanes: never launch more than a tier's `max_parallel`
-  lanes at once, and never more than 8 across all tiers together (see the `opencode:` context line for the routed tier
+  lanes at once AND never more than the shared pool across all tiers
+  together (default 6, `HYBRID_OPENCODE_POOL` up to 8; `bslane.py`
+  holds a tier slot and a pool slot per running lane) (see the `opencode:` context line for the routed tier
   per role); these lanes are plain background shell processes, so they
   do not count toward the subagent cap or the workflow cap. A printed
   fallback line is acted on by launching exactly the named Claude
   lane, once.
-- **Lanes > cap:** waves. Dispatch the highest-value lanes first (the
+- **Claude lanes > min(cap, 12):** waves. Dispatch the highest-value lanes first (the
   ones that can change the approach set), then refill in batches as
   completions arrive (each wake-up costs a main-model turn, so don't
   refill one at a time). Use one `Workflow` instead only when the workflow
@@ -114,7 +124,7 @@ const results = await parallel(lanes.map(l => () =>
 return results.filter(Boolean)
 ```
 
-Schema-shaped results merge mechanically and keep 64 outputs small.
+Schema-shaped results merge mechanically and keep many outputs small.
 
 ## 4. Failure handling
 
