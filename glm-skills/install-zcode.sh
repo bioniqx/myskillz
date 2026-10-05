@@ -123,8 +123,9 @@ for folder in $FOLDERS; do
     run rm -rf "$SKILLS_DIR/$name"
     run mkdir -p "$SKILLS_DIR/$name"
     if [ "$DRY" -eq 0 ]; then
-        tar -C "$src" --exclude=opencode --exclude=.DS_Store --exclude=.idea --exclude=__pycache__ --exclude='*.pyc' -cf - . \
-            | tar -C "$SKILLS_DIR/$name" -xf -
+        # cp, not a tar pipe: macOS tar adds com.apple.provenance xattrs the extracting side cannot write.
+        cp -R "$src/." "$SKILLS_DIR/$name/"
+        find "$SKILLS_DIR/$name" \( -name opencode -o -name .DS_Store -o -name .idea -o -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
     fi
     echo "  $name"
 done
@@ -159,6 +160,6 @@ Done. Restart ZCode, then invoke a skill with \$brainstorming, \$dev-team, \$doc
 \$systematic-debugging or \$writing-plans.
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
   python3 $SKILLS_DIR/writing-plans/scripts/plan_tool.py doctor --ping
-The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8.
+The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (default width 6).
 dev-team needs hook-based guards that ZCode does not have, so its footprint and frozen-test rules are prompt-enforced only.
 MSG

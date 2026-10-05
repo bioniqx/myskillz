@@ -29,8 +29,10 @@ AGENT = (
 COMMAND = "---\ndescription: run debug\n---\n!`python3 {{SKILL_DIR}}/scripts/tool.py doctor`\nLoad the skill with $ARGUMENTS\n"
 
 
-SKILL_NAMES = {"oc-brainstorming", "oc-dev-team", "oc-doc-generator", "oc-requirements-code-audit",
-               "oc-systematic-debugging", "oc-writing-plans"}
+_ROOT = os.path.dirname(INSTALLER)
+# The installer takes every oc-*/ folder that has a SKILL.md, installed under its folder name.
+SKILL_NAMES = {d for d in os.listdir(_ROOT)
+               if d.startswith("oc-") and os.path.isfile(os.path.join(_ROOT, d, "SKILL.md"))}
 
 
 def stub_opencode_env(home, version="2.0.20"):

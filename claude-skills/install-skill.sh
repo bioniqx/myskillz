@@ -10,7 +10,7 @@
 #   BASE/agents/claude-*.md              agents shipped in <skill>/agents/
 # The requirements-audit skill is a plugin (.claude-plugin/): its agents and hooks load from the
 # skill folder itself, so its agents are NOT copied to BASE/agents (that would shadow the plugin).
-# Compatible with bash 3.2 (macOS) and needs only tar.
+# Compatible with bash 3.2 (macOS); needs only cp and find.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -88,8 +88,9 @@ for s in "${skills[@]}"; do
   run rm -rf "$dest"
   run mkdir -p "$dest"
   if [ "$DRY" != 1 ]; then
-    tar -C "$SRC/$s" --exclude='.DS_Store' --exclude='.idea' --exclude='__pycache__' --exclude='*.pyc' -cf - . \
-      | tar -C "$dest" -xf -
+    # cp, not a tar pipe: macOS tar adds com.apple.provenance xattrs the extracting side cannot write.
+    cp -R "$SRC/$s/." "$dest/"
+    find "$dest" \( -name .DS_Store -o -name .idea -o -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
     # Keep scripts executable regardless of how the source tree was checked out.
     find "$dest" \( -path '*/scripts/*' -o -path '*/hooks/*' \) -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod +x {} +
   fi
@@ -118,6 +119,6 @@ Installed. Next steps:
   2. Verify: /agents lists the claude-* agents; the skills appear as /claude-<name>.
   3. Optional, once per repo: python3 $SKILLS_DIR/claude-dev-team-v3.2/scripts/devteam.py doctor --fix
      and python3 $SKILLS_DIR/claude-writing-plans-6.2/scripts/plan_tool.py setup --apply
-     raise the concurrent-subagent cap to 64 (default 20).
+     only matter if your concurrent-subagent cap is below 12 (Claude Code default is 20); they raise it to 16.
   Old un-prefixed copies were deleted (pass --keep-old to keep them).
 EOF

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the six skills into OpenCode v2.
+# Install every oc-* skill into OpenCode v2.
 set -eu
 
 HOME_DIR="${HOME:-}"
@@ -27,16 +27,23 @@ if [ "$MAJOR" != "2" ]; then
     exit 1
 fi
 
-SKILLS="oc-brainstorming oc-dev-team oc-doc-generator oc-requirements-code-audit oc-systematic-debugging oc-writing-plans"
-
-for skill in $SKILLS; do
-    skill_path="$SCRIPT_DIR/$skill"
-    if [ ! -d "$skill_path" ]; then
-        echo "Error: $skill_path not found" >&2
-        exit 1
+# Every oc-*/ folder next to this script that carries a SKILL.md is a skill to install.
+SKILLS=""
+for skill_path in "$SCRIPT_DIR"/oc-*/; do
+    [ -d "$skill_path" ] || continue
+    skill="$(basename "$skill_path")"
+    if [ ! -f "$skill_path/SKILL.md" ]; then
+        echo "WARN: skipping $skill: no SKILL.md" >&2
+        continue
     fi
-    python3 "$HARNESS" install "$skill_path" 2 "$HOME_DIR"
+    SKILLS="$SKILLS $skill"
+    python3 "$HARNESS" install "${skill_path%/}" 2 "$HOME_DIR"
 done
+if [ -z "$SKILLS" ]; then
+    echo "Error: no oc-* skill folder found in $SCRIPT_DIR" >&2
+    exit 1
+fi
+echo "Installed:$SKILLS"
 
 # OpenCode v2 always scans ~/.claude/skills, so a same-named skill there clashes with the install.
 FOREIGN_SKILLS="$HOME_DIR/.claude/skills"

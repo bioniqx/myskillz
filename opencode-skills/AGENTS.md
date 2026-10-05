@@ -25,7 +25,7 @@ All scripts are stdlib-only Python 3 or POSIX shell. There is no build step and 
 - `bash oc-dev-team/scripts/oc-selftest.sh` runs the dev-team engine and hook guards end to end in a throwaway
   repo (exit 0 means all checks pass).
 - `for f in */scripts/*.py; do python3 -m py_compile "$f"; done` syntax-checks every script.
-- `sh install-opencode.sh [--home DIR]` installs all six skills into OpenCode and prints the config snippet.
+- `sh install-opencode.sh [--home DIR]` installs every `oc-*` skill (any folder with a SKILL.md) into OpenCode and prints the config snippet.
 - `python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v` checks
   vendored-copy identity, py_compile and SKILL.md hygiene across all skills.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests` runs the full
