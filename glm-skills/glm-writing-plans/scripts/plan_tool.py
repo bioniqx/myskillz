@@ -31,11 +31,11 @@ WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budge
 DEFAULT_LANE_WIDTH = 6    # background lanes one OpenCode dispatch message starts (up to MAX_WORKERS)
 
 # ---- GLM routing -------------------------------------------------------
-# tier -> (api model id, reasoning effort, agent-lane alias that z.ai maps to it)
+# tier -> (api model id, reasoning effort, agent-lane model id; real ids only, no alias jargon)
 GLM = {
-    "light": ("glm-5.3-flash", "low",  "haiku"),
-    "std":   ("glm-5.3-flash", "high", "haiku"),
-    "deep":  ("glm-5.3",       "max",  "sonnet"),
+    "light": ("glm-5.3-flash", "low",  "glm-5.3-flash"),
+    "std":   ("glm-5.3-flash", "high", "glm-5.3-flash"),
+    "deep":  ("glm-5.3",       "max",  "glm-5.3"),
 }
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
@@ -1038,7 +1038,7 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
 
 
 def row_agent(g, kind, installed, opencode, deep=True):
-    """Agent (OpenCode) or model alias (other harnesses) for one dispatch row."""
+    """Agent (OpenCode) or model id (other harnesses) for one dispatch row."""
     tier = max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
     if not opencode:
         return model_for("deep" if kind == "review" else tier, api=False)[0]
@@ -1297,7 +1297,7 @@ def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
                 "WORK %s" % work,
                 ("DISPATCH %d writers, ALL in ONE message" % len(groups) if len(groups) <= MAX_WORKERS else
                  "DISPATCH %d writers in waves of at most %d (send the next wave after the previous one replied)"
-                 % (len(groups), MAX_WORKERS)) + " | subagent_type=%s | description 'plan <ID>'" % agent,
+                 % (len(groups), MAX_WORKERS)) + " | the `%s` agent | description 'plan <ID>'" % agent,
                 "prompt (verbatim): Read <brief path> and follow it exactly.",
                 "ID   MODEL   TASKS     BRIEF"]
         rows = dispatch_lines(groups, work, "write")
@@ -1496,7 +1496,7 @@ def cmd_review(a):
             + oc_dispatch(groups, work, "review", installed, width)
     else:
         rows = [summary,
-                "DISPATCH %d reviewers in ONE message | subagent_type=general-purpose | model sonnet | description 'review <ID>'" % len(groups),
+                "DISPATCH %d reviewers in ONE message | the `general-purpose` agent | real ids `glm-5.3` / `glm-5.3-flash` where a model must be named | description 'review <ID>'" % len(groups),
                 "prompt (verbatim): Read <brief path> and follow it exactly.",
                 "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
@@ -1877,6 +1877,7 @@ def agent_file(harness, name="glm-plan-task-writer"):
               "model: glm-5.3-flash\n"
               "thoughtLevel: low\n"
               "tools: Read, Write, Edit, Bash\n"
+              "maxTurns: 16\n"
               "---\n\n")
         return fm + AGENT_BODY
     fm = ("---\n"

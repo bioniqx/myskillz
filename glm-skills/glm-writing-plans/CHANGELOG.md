@@ -6,6 +6,8 @@
 
 **Fixes:** (WP5) Bootstrap now respects `$OPENCODE_CONFIG_DIR`, checks locations in project-first order, and exits with a clear error on miss (no `python3 "" brief`).
 
+**ZCode hardening:** the zcode dispatch headers name the `glm-plan-task-writer` agent (or the `general-purpose` fallback) with no `subagent_type=`/model-alias jargon and real ids only where a model must be named; `agent_file("zcode")` gains `maxTurns: 16`; SKILL.md R9 scopes `ANTHROPIC_BASE_URL` to Claude-compatible harnesses; the glm-tuning key list includes the v2 credentials file and the body-cap claim is labeled unverified.
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in OpenCode or ZCode.
 
 ## The structural change: parallelism moved out of the model's turn
