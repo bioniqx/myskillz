@@ -421,15 +421,22 @@ class ZcodeSurfaceTests(unittest.TestCase):
                 out.append(line)
         return out
 
-    def run_context(self, rel_scripts, env_extra=None):
+    def setup_skill(self, rel_scripts):
+        """Copy context.sh into a fake skill dir under HOME; return the script path."""
         scripts = os.path.join(self.home, rel_scripts)
         os.makedirs(scripts)
         shutil.copy(os.path.join(self.SKILL, "scripts", "context.sh"),
                     os.path.join(scripts, "context.sh"))
+        return os.path.join(scripts, "context.sh")
+
+    def run_script(self, script, env_extra=None):
         env = {"HOME": self.home, "PATH": os.environ.get("PATH", "/usr/bin:/bin")}
         env.update(env_extra or {})
-        return subprocess.run(["sh", os.path.join(scripts, "context.sh")],
+        return subprocess.run(["sh", script],
                               capture_output=True, text=True, timeout=60, env=env)
+
+    def run_context(self, rel_scripts, env_extra=None):
+        return self.run_script(self.setup_skill(rel_scripts), env_extra)
 
     def home_files(self):
         found = set()
@@ -454,8 +461,9 @@ class ZcodeSurfaceTests(unittest.TestCase):
         self.assertIn("workflow=8", r.stdout)
 
     def test_context_sh_zcode_run_is_read_only_bounded_and_exits_zero(self):
+        script = self.setup_skill(".zcode/skills/glm-brainstorming/scripts")
         before = self.home_files()
-        r = self.run_context(".zcode/skills/glm-brainstorming/scripts")
+        r = self.run_script(script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertLessEqual(len(r.stdout.splitlines()), 55)
         self.assertEqual(self.home_files() - before, set(),
