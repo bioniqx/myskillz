@@ -4074,7 +4074,9 @@ def cap_value_ok(raw, want, provider):
 
 def cmd_doctor(a):
     root = toplevel()
-    harness = getattr(a, "harness", None) or ("opencode" if is_opencode() else "claude")
+    harness = getattr(a, "harness", None) or ("zcode" if is_zcode() else ("opencode" if is_opencode() else "claude"))
+    if harness == "zcode":
+        return doctor_zcode(a, root)
     if harness == "opencode":
         return doctor_opencode(a, root)
     problems, notes, fixes = [], [], {}
@@ -4657,7 +4659,12 @@ def main(argv=None):
     pr = sp.add_parser("stats"); pr.add_argument("--all", action="store_true"); pr.set_defaults(fn=cmd_stats)
     pr = sp.add_parser("finish"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_finish)
     pr = sp.add_parser("reset"); pr.add_argument("--yes", action="store_true"); pr.set_defaults(fn=cmd_reset)
-    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "opencode", "zcode"]); pr.set_defaults(fn=cmd_doctor)
+    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "opencode", "zcode"])
+    pr.add_argument("--flash", default=ZCODE_FLASH_DEFAULT, metavar="ID",
+                    help="flash model id for the zcode doctor (default glm-5.3-flash)")
+    pr.add_argument("--main", default=ZCODE_MAIN_DEFAULT, metavar="ID",
+                    help="main model id for the zcode doctor (default glm-5.3)")
+    pr.set_defaults(fn=cmd_doctor)
     pr = sp.add_parser("allow"); pr.add_argument("cmds", nargs="+"); pr.set_defaults(fn=cmd_allow)
     pr = sp.add_parser("claim"); pr.add_argument("id"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_claim)
     pr = sp.add_parser("bind"); pr.add_argument("id"); pr.add_argument("worktree"); pr.set_defaults(fn=cmd_bind)
@@ -4699,6 +4706,315 @@ def main(argv=None):
         except OSError:
             pass
         return 1
+    return 0
+
+
+ZCODE_FLASH_DEFAULT = "glm-5.3-flash"
+ZCODE_MAIN_DEFAULT = "glm-5.3"
+_ZCODE_RENDERED_FROM = {"glm-programmer-lite": "glm-programmer",
+                        "glm-programmer-strong": "glm-programmer"}
+_ZCODE_EFFORT_MAP = {"low": "low", "medium": "high", "high": "high", "max": "max"}
+
+
+def _zcode_fm_split(text):
+    """Split an agent file into (frontmatter lines, body); ([], text) if absent."""
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines) or lines[i].strip() != "---":
+        return [], text
+    for j in range(i + 1, len(lines)):
+        if lines[j].strip() == "---":
+            return lines[i + 1:j], "\n".join(lines[j + 1:])
+    return [], text
+
+
+def _zcode_fm_scalar(value):
+    return str(value or "").strip().strip('"').strip("'").strip()
+
+
+def _zcode_fm_bool(value):
+    return _zcode_fm_scalar(value).lower() in ("true", "yes", "1", "on")
+
+
+def _zcode_fm_model(src_model, flash, main):
+    m = _zcode_fm_scalar(src_model).lower()
+    if m in ("haiku", "glm-5.3-flash"):
+        return _zcode_fm_scalar(flash)
+    if m in ("sonnet", "opus", "glm-5.3"):
+        return _zcode_fm_scalar(main)
+    if m:
+        return _zcode_fm_scalar(src_model)
+    return _zcode_fm_scalar(flash)
+
+
+def render_agent_zcode(agents_src, name, flash, main) -> str:
+    """Render the `zcode` agent markdown for `name` from the Claude-format source.
+
+    The five dev-team agent files convert in place; `glm-programmer-lite` (model
+    flash, thoughtLevel low) and `glm-programmer-strong` (model main,
+    thoughtLevel high) render from `glm-programmer.md`. Mapping: `steps: N` to
+    `maxTurns: N`, `omitClaudeMd: true` to `injectAgentsMd: false`, `effort` to
+    `thoughtLevel`, model aliases to the real ids; effort/isolation/memory/
+    omitClaudeMd/hooks/mode/temperature/steps/permissionMode/variant are
+    dropped (a dropped block key swallows its indented lines too);
+    name/description/color/tools/disallowedTools/background/mcpServers - and
+    an existing `maxTurns`, which is how the shipped agent files pin their
+    turn limit (they carry no `steps:` line) - pass through unchanged.
+    """
+    agents_src = Path(agents_src)  # agent_source joins with `/`: it needs a Path, callers may pass a str
+    src_name = _ZCODE_RENDERED_FROM.get(name, name)
+    src = agent_source(agents_src, src_name)
+    if os.path.isfile(src):
+        # agent_source may hand back a path instead of the text; read it either way
+        with open(src, encoding="utf-8") as fh:
+            src = fh.read()
+    fm, body = _zcode_fm_split(src)
+    out = []
+    seen = set()
+    skip_block = False
+    for line in fm:
+        if skip_block:
+            if not line.strip() or line[:1] in (" ", "\t"):
+                continue
+            skip_block = False
+        if not line.strip() or line.lstrip().startswith("#") or line[:1] in (" ", "\t"):
+            out.append(line)
+            continue
+        key, sep, rest = line.partition(":")
+        if not sep:
+            out.append(line)
+            continue
+        key = key.strip()
+        if key == "effort":
+            if name == "glm-programmer-lite":
+                level = "low"
+            elif name == "glm-programmer-strong":
+                level = "high"
+            else:
+                level = _ZCODE_EFFORT_MAP.get(_zcode_fm_scalar(rest).lower(), "high")
+            out.append("thoughtLevel: " + level)
+            seen.add("thoughtLevel")
+        elif key == "steps":
+            out.append("maxTurns: " + _zcode_fm_scalar(rest))
+            seen.add("maxTurns")
+        elif key == "omitClaudeMd":
+            out.append("injectAgentsMd: " + ("false" if _zcode_fm_bool(rest) else "true"))
+            seen.add("injectAgentsMd")
+        elif key == "model":
+            if name == "glm-programmer-lite":
+                model = _zcode_fm_scalar(flash)
+            elif name == "glm-programmer-strong":
+                model = _zcode_fm_scalar(main)
+            else:
+                model = _zcode_fm_model(rest, flash, main)
+            out.append("model: " + model)
+            seen.add("model")
+        elif key == "name":
+            out.append("name: " + name)
+            seen.add("name")
+        elif key in ("description", "color", "tools", "disallowedTools",
+                     "background", "mcpServers", "maxTurns"):
+            out.append(line)
+            seen.add(key)
+        else:
+            skip_block = True
+    if "name" not in seen:
+        out.append("name: " + name)
+    if "model" not in seen:
+        out.append("model: " + (_zcode_fm_scalar(main) if name == "glm-programmer-strong"
+                                else _zcode_fm_scalar(flash)))
+    if "thoughtLevel" not in seen:
+        out.append("thoughtLevel: " + ("low" if name == "glm-programmer-lite" else "high"))
+    return "---\n" + "\n".join(out) + "\n---\n" + body
+
+
+ZCODE_AGENTS = ("glm-programmer", "glm-programmer-lite", "glm-programmer-strong",
+                "glm-code-reviewer", "glm-spot-reviewer", "glm-investigator",
+                "glm-team-leader")
+
+
+def _zcode_write(path, text):
+    """Write a rendered agent file; keep a `.bak` of the previous copy."""
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            old = fh.read()
+        with open(path + ".bak", "w", encoding="utf-8") as bh:
+            bh.write(old)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def _zcode_add_hooks(cfg, hook_cmd):
+    """Add the dev-team hook entries to a parsed user config dict (in place)."""
+    hooks = cfg.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+        cfg["hooks"] = hooks
+    hooks["enabled"] = True
+
+    def ensure(event, entry):
+        entries = hooks.get(event)
+        if not isinstance(entries, list):
+            entries = []
+            hooks[event] = entries
+        for cur in entries:
+            if not isinstance(cur, dict) or cur.get("matcher") != entry.get("matcher"):
+                continue
+            for h in cur.get("hooks") or []:
+                if isinstance(h, dict) and h.get("type") == "process" \
+                        and h.get("command") == hook_cmd:
+                    return
+        entries.append(entry)
+
+    def process_entry(matcher=None):
+        entry = {"hooks": [{"type": "process", "command": hook_cmd}]}
+        if matcher is not None:
+            entry["matcher"] = matcher
+        return entry
+
+    ensure("PreToolUse", process_entry("Write|Edit"))
+    ensure("PreToolUse", process_entry("Bash"))
+    ensure("Stop", process_entry())
+
+
+def _zcode_has_entry(entries, matcher, hook_cmd):
+    for cur in entries:
+        if not isinstance(cur, dict) or cur.get("matcher") != matcher:
+            continue
+        for h in cur.get("hooks") or []:
+            if isinstance(h, dict) and h.get("type") == "process" \
+                    and h.get("command") == hook_cmd:
+                return True
+    return False
+
+
+def _zcode_hooks_present(cfg_path, hook_cmd):
+    """True when the enabled user config already carries all three hook entries."""
+    if not os.path.exists(cfg_path):
+        return False
+    try:
+        with open(cfg_path, encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except ValueError:
+        return False
+    if not isinstance(cfg, dict):
+        return False
+    hooks = cfg.get("hooks")
+    if not isinstance(hooks, dict) or not hooks.get("enabled"):
+        return False
+    for event, matcher in (("PreToolUse", "Write|Edit"), ("PreToolUse", "Bash"), ("Stop", None)):
+        entries = hooks.get(event)
+        if not isinstance(entries, list) or not _zcode_has_entry(entries, matcher, hook_cmd):
+            return False
+    return True
+
+
+def _zcode_merge_hooks(cfg_path, hook_cmd):
+    """Key-preserving merge of the hook entries into the user-level zcode config.
+
+    Existing user keys survive; a changed file is rewritten with a `.bak`
+    kept, and an identical merge is a no-op.
+    """
+    old_text = None
+    cfg = {}
+    if os.path.exists(cfg_path):
+        with open(cfg_path, encoding="utf-8") as fh:
+            old_text = fh.read()
+        try:
+            cfg = json.loads(old_text)
+        except ValueError:
+            cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    _zcode_add_hooks(cfg, hook_cmd)
+    new_text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+    if old_text == new_text:
+        return False
+    os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+    if old_text is not None:
+        with open(cfg_path + ".bak", "w", encoding="utf-8") as bh:
+            bh.write(old_text)
+    with open(cfg_path, "w", encoding="utf-8") as fh:
+        fh.write(new_text)
+    return True
+
+
+def doctor_zcode(a, root):
+    """Check and install the seven `zcode` agents plus the user-level hook config.
+
+    CLI: `doctor --harness zcode [--fix] [--flash ID] [--main ID]` (routed from
+    `cmd_doctor`/`cmd_start`). Agents land in `~/.zcode/agents/`; the
+    PreToolUse (`Write|Edit`, `Bash`) and Stop hooks merge into
+    `~/.zcode/cli/config.json` (`hooks.enabled: true`, `type: process`,
+    absolute `guard.py` path). Unlike the claude doctor nothing is written
+    under the project root: no `.claude/settings.local.json` (`root` exists
+    only for signature parity with the other harness doctors).
+    """
+    fix = bool(getattr(a, "fix", False))
+    flash = _zcode_fm_scalar(getattr(a, "flash", None)) or ZCODE_FLASH_DEFAULT
+    main = _zcode_fm_scalar(getattr(a, "main", None)) or ZCODE_MAIN_DEFAULT
+    home = os.path.expanduser("~")
+    agents_dir = os.path.join(home, ".zcode", "agents")
+    scripts = os.path.dirname(os.path.abspath(__file__))
+    agents_src = os.path.join(os.path.dirname(scripts), "agents")
+    print("harness zcode")
+    missing = []
+    for name in ZCODE_AGENTS:
+        path = os.path.join(agents_dir, name + ".md")
+        want = render_agent_zcode(agents_src, name, flash, main)
+        cur = None
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                cur = fh.read()
+        if cur == want:
+            print("INSTALLED: %s" % name)
+            continue
+        if cur is None:
+            print("MISSING: agent %s not installed" % name)
+        else:
+            print("STALE: agent %s does not match the rendered file" % name)
+        missing.append(name)
+        if fix:
+            _zcode_write(path, want)
+            print("installed %s" % name)
+    cfg_path = os.path.join(home, ".zcode", "cli", "config.json")
+    hook_cmd = "python3 " + os.path.join(scripts, "guard.py") + " zcode"
+    if fix:
+        # always refresh on --fix: a config that drifted (a user key added by
+        # hand, a file rewritten another way) is normalized again here,
+        # key-preserving, .bak kept; the merge itself is a no-op once the
+        # rendered text already matches the file exactly
+        if _zcode_merge_hooks(cfg_path, hook_cmd):
+            print("hooks: merged PreToolUse (Write|Edit, Bash) and Stop into %s" % cfg_path)
+        else:
+            print("hooks: PreToolUse (Write|Edit, Bash) and Stop already configured in %s" % cfg_path)
+    elif _zcode_hooks_present(cfg_path, hook_cmd):
+        print("hooks: PreToolUse (Write|Edit, Bash) and Stop configured in %s" % cfg_path)
+    else:
+        print("MISSING: hooks not configured in %s" % cfg_path)
+        missing.append("hooks")
+    print("hooks: disable by setting hooks.enabled=false in %s" % cfg_path)
+    # smoke-check the in-process guard bridge: a foreign-role PreToolUse event
+    # must answer like the hook itself - by exiting, never by raising
+    try:
+        from guard import guard_zcode    # the sibling scripts dir is on sys.path here
+        guard_zcode({"hook_event_name": "PreToolUse", "tool_name": "Read",
+                     "tool_input": {}, "agent_type": "glm-outside"})
+    except SystemExit:
+        print("guard: zcode bridge answered a foreign-role event")
+    except Exception as exc:
+        print("WARN: guard bridge raised on a foreign-role event: %s" % exc)
+    if missing:
+        if fix:
+            print("DOCTOR fixed: %d problem(s)" % len(missing))
+        else:
+            print("DOCTOR found: %d problem(s)" % len(missing))
+            print("run `doctor --harness zcode --fix`")
+    else:
+        print("DOCTOR: all ZCode agents and hooks installed")
     return 0
 
 
