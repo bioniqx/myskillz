@@ -20,6 +20,8 @@ COMMAND = SKILL_DIR / "opencode" / "commands" / "glm-docs.md"
 STATE = Path(".zcode") / "doc-gen"
 FENCE = "`" * 3
 HUMAN_MARK = "TO" + "DO(human)"
+ZWRITER = SKILL_DIR / "agents" / "zcode" / "glm-doc-writer.md"
+ZREVIEWER = SKILL_DIR / "agents" / "zcode" / "glm-doc-reviewer.md"
 
 
 def read(path):
@@ -172,6 +174,58 @@ class ContentTests(unittest.TestCase):
         for needle in ("Mermaid", "broadly-wrong", "requirements", "completeness"):
             self.assertIn(needle, reviewer)
         self.assertIn("non-interactive", command)
+
+
+class ZcodeAgentFileTests(unittest.TestCase):
+    def test_zcode_agent_files(self):
+        writer, reviewer = read(ZWRITER), read(ZREVIEWER)
+        self.assertIn("model: glm-5.3-flash\n", writer, "zcode writer frontmatter lacks model: glm-5.3-flash")
+        self.assertIn("thoughtLevel: low\n", writer, "zcode writer frontmatter lacks thoughtLevel: low")
+        self.assertIn("model: glm-5.3\n", reviewer, "zcode reviewer frontmatter lacks model: glm-5.3")
+        self.assertNotIn("glm-5.3-flash", reviewer, "zcode reviewer still runs glm-5.3-flash")
+        self.assertIn("thoughtLevel: high\n", reviewer, "zcode reviewer frontmatter lacks thoughtLevel: high")
+        self.assertNotIn("thoughtLevel: low", reviewer, "zcode reviewer still sits at thoughtLevel: low")
+
+
+class ZcodeFactTests(unittest.TestCase):
+    def setUp(self):
+        self.text = read(SKILL)
+
+    def test_recon_row_explore_is_a_zcode_builtin(self):
+        rows = [l for l in self.text.splitlines() if "read-only shards" in l]
+        self.assertTrue(rows, "no large-repo recon row")
+        for row in rows:
+            self.assertIn("`general` on OpenCode", row)
+            if "`Explore` is for the Claude Code harness only" in row:
+                self.fail("recon row still claims Explore is Claude Code only")
+            if "Explore" in row:
+                self.assertIn("ZCode", row, "recon row does not name ZCode for Explore")
+
+    def test_appendix_a_frontmatters_carry_real_models(self):
+        lines = self.text.split("\n")
+        seen = 0
+        for i, line in enumerate(lines):
+            if line.strip().startswith("thoughtLevel:"):
+                seen += 1
+                self.assertTrue(i > 0 and lines[i - 1].strip().startswith("model:"),
+                                "a thoughtLevel line has no model: line above it")
+        self.assertGreater(seen, 0, "no thoughtLevel lines in SKILL.md")
+        self.assertIn("model: glm-5.3-flash\n", self.text,
+                      "Appendix A writer frontmatter lacks model: glm-5.3-flash")
+        self.assertIn("model: glm-5.3\n", self.text,
+                      "Appendix A reviewer frontmatter lacks model: glm-5.3")
+        self.assertIn("thoughtLevel: high\n", self.text,
+                      "Appendix A reviewer frontmatter lacks thoughtLevel: high")
+
+    def test_appendix_a_points_at_the_auto_installed_zcode_agents(self):
+        self.assertIn("agents/zcode/", self.text, "no pointer to the agents/zcode/ files")
+        self.assertIn("auto-installed", self.text, "no auto-installed wording")
+
+    def test_oc_max_lanes_mention_is_scoped_to_opencode(self):
+        mentions = [l for l in self.text.splitlines() if "OC_MAX_LANES" in l]
+        self.assertTrue(mentions, "no OC_MAX_LANES mention in SKILL.md")
+        for line in mentions:
+            self.assertIn("OpenCode", line, "OC_MAX_LANES mention is not scoped to OpenCode")
 
 
 if __name__ == "__main__":

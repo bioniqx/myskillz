@@ -102,7 +102,9 @@ class TestScriptsCompile(unittest.TestCase):
 class TestSkillMdHygiene(unittest.TestCase):
     def test_doc_generator_no_unknown_agents(self):
         """glm-doc-generator SKILL.md names glm-doc-writer/glm-doc-reviewer for OpenCode/ZCode;
-        'general-purpose' and 'Explore' may appear only on lines that name Claude Code."""
+        'general-purpose' and 'Explore' are built-ins on Claude Code and ZCode, so they may
+        appear only on lines that name one of those harnesses (OpenCode's read-only agent is
+        `general`)."""
         skill_md = os.path.join(GLM_ROOT, "glm-doc-generator", "SKILL.md")
         with open(skill_md, encoding="utf-8") as fh:
             content = fh.read()
@@ -115,8 +117,8 @@ class TestSkillMdHygiene(unittest.TestCase):
             if line.strip().startswith("```") or line.strip().startswith("#"):
                 continue
             for name in ("general-purpose", "Explore"):
-                if name in line and "Claude Code" not in line:
-                    self.fail("SKILL.md:%d names '%s' without Claude Code" % (line_num, name))
+                if name in line and "Claude Code" not in line and "ZCode" not in line:
+                    self.fail("SKILL.md:%d names '%s' without Claude Code or ZCode" % (line_num, name))
 
         # Writer (§3 step 3) and reviewer (§4) dispatch lines name both harness choices.
         type_lines = [l for l in lines if "subagent type" in l]
@@ -128,13 +130,15 @@ class TestSkillMdHygiene(unittest.TestCase):
             for needle in ("OpenCode", "ZCode", "Appendix A", "general-purpose", "Claude Code"):
                 self.assertIn(needle, l, "dispatch line lacks %r: %s" % (needle, l))
 
-        # Large-repo recon row: `general` on OpenCode, `Explore` only for Claude Code.
+        # Large-repo recon row: `general` on OpenCode; Explore is a ZCode and Claude Code built-in.
         recon = [l for l in lines if "read-only shards" in l]
         self.assertTrue(recon, "no large-repo recon row")
         for l in recon:
             self.assertIn("`general` on OpenCode", l)
+            if "Claude Code harness only" in l:
+                self.fail("recon row still claims Explore is Claude Code only")
             if "Explore" in l:
-                self.assertIn("Claude Code", l)
+                self.assertIn("ZCode", l, "recon row does not name ZCode for Explore")
 
         # §8: <skill_dir> comes from the 'Base directory for this skill' line, not /glm-docs.
         self.assertIsNone(re.search(r"/glm-docs[^\n]*inject", content, re.IGNORECASE),
