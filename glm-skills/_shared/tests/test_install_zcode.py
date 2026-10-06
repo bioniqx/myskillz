@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -8,7 +9,8 @@ SCRIPT = os.path.join(GLM_ROOT, "install-zcode.sh")
 SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-git-diff-summary", "glm-idea-to-spec", "glm-requirements-code-audit",
           "glm-systematic-debugging", "glm-writing-plans"]
 AGENTS = ["glm-code-reviewer", "glm-debug-worker", "glm-doc-reviewer", "glm-doc-writer", "glm-investigator", "glm-plan-task-writer",
-          "glm-programmer", "glm-rca-investigator", "glm-rca-verifier", "glm-spot-reviewer", "glm-team-leader"]
+          "glm-programmer", "glm-programmer-lite", "glm-programmer-strong", "glm-rca-investigator", "glm-rca-verifier",
+          "glm-spot-reviewer", "glm-team-leader"]
 
 
 def frontmatter(path):
@@ -83,6 +85,63 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming")))
         self.assertFalse(os.path.exists(self.agent("glm-programmer")))
+
+    def test_convert_maps_steps_and_omitclaudemd_end_to_end(self):
+        copy_root = os.path.join(self.home, "tree")
+        shutil.copytree(GLM_ROOT, copy_root,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+        agents_src = os.path.join(copy_root, "glm-doc-generator", "agents", "zcode")
+        os.makedirs(agents_src, exist_ok=True)
+        with open(os.path.join(agents_src, "glm-fixture-agent.md"), "w", encoding="utf-8") as fh:
+            fh.write(
+                "---\n"
+                "name: glm-fixture-agent\n"
+                "description: Fixture agent for the frontmatter mapping.\n"
+                "model: glm-5.3-flash\n"
+                "effort: high\n"
+                "steps: 12\n"
+                "omitClaudeMd: true\n"
+                "permissionMode: acceptEdits\n"
+                "background: true\n"
+                "---\n"
+                "Fixture body.\n"
+            )
+        r = subprocess.run(["sh", os.path.join(copy_root, "install-zcode.sh"), "--home", self.home],
+                           capture_output=True, text=True, timeout=180)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fm = frontmatter(self.agent("glm-fixture-agent"))
+        self.assertIn("maxTurns: 12", fm)
+        self.assertIn("injectAgentsMd: false", fm)
+        self.assertIn("background: true", fm)
+        self.assertIn("thoughtLevel: high", fm)
+        self.assertNotIn("steps:", fm)
+        self.assertNotIn("omitClaudeMd:", fm)
+        self.assertNotIn("permissionMode:", fm)
+        self.assertNotIn("effort:", fm)
+
+    def test_debug_worker_gains_thoughtlevel_low(self):
+        self.assertEqual(self.install().returncode, 0)
+        self.assertIn("thoughtLevel: low", frontmatter(self.agent("glm-debug-worker")))
+
+    def test_devteam_doctor_installs_programmer_lite_and_strong(self):
+        r = self.install("--flash", "acct/Flash", "--main", "acct/Main")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for name in ("glm-programmer-lite", "glm-programmer-strong"):
+            fm = frontmatter(self.agent(name))
+            for key in ("effort:", "hooks:", "isolation:", "memory:", "mode:", "temperature:"):
+                self.assertNotIn("\n" + key, "\n" + fm, (name, key))
+            self.assertIn("\nmodel: ", "\n" + fm, name)
+            self.assertIn("\nthoughtLevel: ", "\n" + fm, name)
+
+    def test_closing_message_claims(self):
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("ZCode does not have", r.stdout)
+        self.assertNotIn("Restart ZCode", r.stdout)
+        self.assertIn("NEW ZCode session", r.stdout)
+        self.assertIn("devteam.py doctor --harness zcode", r.stdout)
+        self.assertIn("~/.zcode/cli/config.json", r.stdout)
+        self.assertIn("truncated when loaded", r.stdout)
 
 
 if __name__ == "__main__":
