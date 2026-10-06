@@ -59,6 +59,7 @@ cd hybrid-skills/<skill> && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discov
 
 Installers: `claude-skills/install-skill.sh`, `hybrid-skills/install.sh`, and
 `sh install-opencode.sh [--home DIR]` in `glm-skills/` and `opencode-skills/`.
+`install-claude-code.sh` at the repo root installs all 13 Claude Code skills at once (9 originals + 4 hybrids).
 
 ## Repo gotchas
 
