@@ -341,6 +341,8 @@ class ZcodeDocSurface(unittest.TestCase):
 
     def test_setup_md_key_paths_include_the_v2_credentials_file(self):
         self.assertIn("credentials.json", self.flat(self.read(self.SETUP_MD)))
+        self.assertIn("~/.zcode/v2/credentials.json", self.flat(self.read(self.SETUP_MD)),
+                      "SETUP.md must name the zcode v2 credentials path, not only the ~/.zcode/*.json glob")
 
     def test_glm_tuning_admits_user_level_zcode_hooks(self):
         tuning = self.flat(self.read(self.TUNING))
