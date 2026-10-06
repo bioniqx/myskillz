@@ -386,5 +386,122 @@ class TestBrainstormContextCaps(ContextCase):
         self.assertLessEqual(len(proc.stdout.splitlines()), 55)
 
 
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+
+class ZcodeSurfaceTests(unittest.TestCase):
+    """The zcode surface: the context.sh harness branch and the harness-scoped skill docs."""
+
+    SKILL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "glm-brainstorming")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = self._tmp.name
+
+    def read(self, *parts):
+        with open(os.path.join(self.SKILL, *parts), encoding="utf-8") as fh:
+            return fh.read()
+
+    @staticmethod
+    def flat(text):
+        return " ".join(text.split())
+
+    @staticmethod
+    def prose_lines(text):
+        out, fence = [], False
+        for line in text.splitlines():
+            if line.lstrip().startswith("```"):
+                fence = not fence
+            elif not fence:
+                out.append(line)
+        return out
+
+    def run_context(self, rel_scripts, env_extra=None):
+        scripts = os.path.join(self.home, rel_scripts)
+        os.makedirs(scripts)
+        shutil.copy(os.path.join(self.SKILL, "scripts", "context.sh"),
+                    os.path.join(scripts, "context.sh"))
+        env = {"HOME": self.home, "PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+        env.update(env_extra or {})
+        return subprocess.run(["sh", os.path.join(scripts, "context.sh")],
+                              capture_output=True, text=True, timeout=60, env=env)
+
+    def home_files(self):
+        found = set()
+        for root, _dirs, files in os.walk(self.home):
+            for name in files:
+                found.add(os.path.join(root, name))
+        return found
+
+    def test_context_sh_detects_zcode_with_width_cap_8(self):
+        r = self.run_context(".zcode/skills/glm-brainstorming/scripts")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("harness: zcode", r.stdout)
+        self.assertIn("caps: lanes=6 (default 6, hard max 8)", r.stdout)
+        self.assertNotIn("subagents=", r.stdout)
+        self.assertNotIn("workflow=", r.stdout)
+
+    def test_context_sh_claude_code_caps_still_printed(self):
+        r = self.run_context("plain/scripts", {"CLAUDECODE": "1"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("harness: claude-code", r.stdout)
+        self.assertIn("subagents=8", r.stdout)
+        self.assertIn("workflow=8", r.stdout)
+
+    def test_context_sh_zcode_run_is_read_only_bounded_and_exits_zero(self):
+        before = self.home_files()
+        r = self.run_context(".zcode/skills/glm-brainstorming/scripts")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLessEqual(len(r.stdout.splitlines()), 55)
+        self.assertEqual(self.home_files() - before, set(),
+                         "context.sh must not write anything under HOME")
+
+    def test_skill_md_zcode_surface(self):
+        text = self.read("SKILL.md")
+        lines = self.prose_lines(text)
+        self.assertIn("~/.zcode/skills/glm-brainstorming", self.flat(text))
+        self.assertTrue(any("TaskCreate" in ln and "TodoWrite" in ln for ln in lines),
+                        "the TaskCreate fallback row must name TodoWrite")
+        self.assertTrue(any("AskUserQuestion" in ln and "ZCode" in ln for ln in lines),
+                        "the AskUserQuestion fallback must cover ZCode (no question tool documented)")
+        self.assertTrue(any("Workflow" in ln and "Claude Code" in ln for ln in lines),
+                        "Workflow facts must be scoped to Claude Code")
+        for ln in lines:
+            if "CLAUDE_CODE_" in ln:
+                self.assertIn("Claude Code", ln, ln)
+            if "todowrite" in ln or "webfetch" in ln:
+                self.assertIn("OpenCode", ln, ln)
+
+    def test_fanout_playbook_scopes_claude_code_facts_and_covers_zcode(self):
+        text = self.read("fanout-playbook.md")
+        for ln in self.prose_lines(text):
+            if "CLAUDE_CODE_" in ln or "Workflow" in ln:
+                self.assertIn("Claude Code", ln, ln)
+        self.assertIn("On ZCode no continue tool is documented", self.flat(text))
+
+    def test_architectural_taskstop_note_covers_zcode(self):
+        self.assertIn("On ZCode no stop tool is documented", self.flat(self.read("architectural.md")))
+
+    def test_visual_companion_platform_notes_gain_zcode(self):
+        self.assertIn("ZCode — no ZCode-specific server behavior is documented",
+                      self.flat(self.read("visual-companion.md")))
+
+    def test_glm_tuning_gains_zcode_runtime_section(self):
+        flat = self.flat(self.read("glm-tuning.md"))
+        self.assertIn("ZCode runtime", flat)
+        self.assertIn("NEW ZCode session", flat)
+        self.assertIn("no `!` preload support", flat)
+
+    def test_changelog_records_the_zcode_surface(self):
+        text = self.read("CHANGELOG.md")
+        self.assertIn("9.4 (from 9.3)", text)
+        self.assertLess(text.find("9.4 (from 9.3)"), text.find("9.3 (from 9.2)"))
+
+
 if __name__ == "__main__":
     unittest.main()
