@@ -53,12 +53,13 @@ KEY_ENV = ("ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
            "ANTHROPIC_AUTH_TOKEN")
 NEVER_ENV = ("ANTHROPIC_API_KEY",)
 KEY_FIELDS = ("ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN",
-              "apiKey", "api_key", "key")
+              "apiKey", "api_key", "key", "api-key")
 KEY_FILES = ("~/.local/share/opencode/auth.json", "~/.config/opencode/auth.json",
              "~/.local/share/opencode/opencode.db",
              "~/.config/opencode/opencode.json", "./opencode.json",
              "~/.claude/settings.json", "~/.claude/settings.local.json",
-             "~/.zcode/settings.json", "~/.zcode/auth.json", "~/.zcode/config.json")
+             "~/.zcode/v2/credentials.json", "~/.zcode/settings.json",
+             "~/.zcode/auth.json", "~/.zcode/config.json")
 
 ZAI_PROVIDERS = ("zai-coding-plan", "zai", "zhipuai-coding-plan", "zhipuai")
 
