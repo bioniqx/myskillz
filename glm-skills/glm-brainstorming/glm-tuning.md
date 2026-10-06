@@ -149,3 +149,17 @@ no `model` param gets the same effort from the agent's own `variant`
 instead (real parallelism per lane — see SKILL.md's harness fallback
 table).
 
+## 7. ZCode runtime
+
+Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
+copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/` and rewrites the bundled agents to
+`~/.zcode/agents/` with real model ids and `thoughtLevel` — ZCode has no `haiku`/`sonnet` aliases, so
+use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills and agents load only in a NEW ZCode
+session, not on a restart. Invoke the skill with `$glm-brainstorming`; there is no `!` preload
+support. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
+characters, and a description over 1024 characters makes ZCode drop the skill — which is why the
+WHEN clause sits at the front of this skill's description. Agents launched together run in parallel
+and cannot spawn nested subagents, so keep the fan-out flat: width cap 8, default 6 (Live context
+prints `harness: zcode` with the lane cap in force). Lane economics (R2) are unchanged: every lane
+Flash, at most 2 GLM-5.3 lanes.
+

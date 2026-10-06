@@ -121,7 +121,9 @@ targeted edits, not judgment.
 
 1. If a pre-draft lane is still running, stop it (TaskStop) and write the
    spec yourself. OpenCode has no TaskStop and no pre-draft lane: skip
-   straight to the move below. Otherwise move the draft to
+   straight to the move below. On ZCode no stop tool is documented: let the
+   lane finish, ignore its output, and write the spec yourself. Otherwise
+   move the draft to
    `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the

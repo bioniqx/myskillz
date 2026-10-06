@@ -10,13 +10,13 @@ the human's reading time.
   lanes beat many tiny ones.
 - Subagents: 8 running at once (the provider's concurrent-call limit). The 9th `Agent` call fails
   with "Concurrent subagent limit reached" and tells you not to retry.
-  Never raise `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` above 8.
-- Workflow runtime: keep `CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS` at 8
+  Never raise Claude Code's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` above 8.
+- Claude Code `Workflow` runtime: keep `CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS` at 8
   (fewer on fewer CPUs). Needs explicit user opt-in. It never beats the
   subagent cap, so prefer plain subagents.
 - Subagents run in the background in interactive sessions; results arrive
   as completion notifications. They have WebSearch/WebFetch but not
-  AskUserQuestion or Workflow. They may nest three levels — do not. Flat
+  AskUserQuestion or Claude Code's `Workflow`. They may nest three levels — do not. Flat
   fan-outs keep merging and cost under your control.
 - Direct Read/Grep/Glob/WebSearch/WebFetch calls are not subagents and do
   not count toward the cap.
@@ -93,9 +93,9 @@ Vague boundaries are the main cause of duplicated work between lanes.
 - **Lanes over the cap → waves.** Dispatch the highest-value lanes first
   (the ones that can change the approach set), then refill in batches as
   completions arrive. Each wake-up costs a main-model turn, so never
-  refill one at a time. Use `Workflow` instead only when the workflow cap
+  refill one at a time. Use Claude Code's `Workflow` instead only when the workflow cap
   exceeds the subagent cap and the user explicitly opted in.
-- **Workflow pattern** (opt-in only; load the `workflow-authoring` skill
+- **Claude Code `Workflow` pattern** (opt-in only; load the `workflow-authoring` skill
   first if available — it is the authoritative script reference):
 
 ```js
@@ -123,6 +123,8 @@ worth more on GLM than on Claude, because Flash is verbose by default.
   assumption.
 - Lane stopped at its turn limit with partial output → continue it with
   `SendMessage`, which keeps its context, instead of spawning a fresh one.
+  On ZCode no continue tool is documented: re-dispatch a fresh Flash lane
+  with the partial output pasted in and the remaining budget stated.
 - Lane returns off-contract prose (common on Flash) → take what is usable.
   Do not re-run it for formatting.
 - Tool-call parse errors from a self-hosted GLM server → a serving-stack

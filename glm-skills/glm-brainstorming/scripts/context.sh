@@ -22,13 +22,14 @@ if [ -n "$CLAUDECODE" ] || [ -n "$CLAUDE_CODE_ENTRYPOINT" ] || [ -n "$CLAUDE_SKI
   harness=claude-code
 elif [ -n "$OPENCODE_TERMINAL" ] || [ -n "$OPENCODE" ] || [ -n "$OPENCODE_BIN" ] || [ -f "$skill_dir/.oc-major" ]; then harness=opencode
 elif case "$skill_dir" in */opencode/*|*/.opencode/*) true ;; *) false ;; esac; then harness=opencode
+elif case "$skill_dir" in */.zcode/*) true ;; *) false ;; esac; then harness=zcode
 elif [ -n "$CODEX_CI" ] || [ -n "$CODEX_HOME" ]; then harness=codex
 elif [ -n "$CLINE_VERSION" ] || [ -n "$ROO_CODE" ]; then harness=cline
 elif [ -n "$GEMINI_CLI" ]; then harness=gemini-cli
 elif [ -n "$GITHUB_COPILOT_CLI" ]; then harness=copilot-cli
 fi
 set -- $oc_line
-if [ "$harness" != claude-code ] && [ "${1:-}" = opencode ]; then
+if [ "$harness" != claude-code ] && [ "$harness" != zcode ] && [ "${1:-}" = opencode ]; then
   harness=$1
   [ -n "${2:-}" ] && oc_major=$2
 fi
@@ -58,6 +59,8 @@ case "$fast$mid$big" in
 esac
 if [ "$harness" = opencode ]; then
   echo "caps: lanes=$(c8 "${OC_MAX_LANES:-6}" 6) (set OC_MAX_LANES or pass oc_harness run --width N; default 6, hard max 8) oc_major=$oc_major"
+elif [ "$harness" = zcode ]; then
+  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-6}" 6) (default 6, hard max 8)"
 else
   echo "caps: subagents=$(c8 "${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-8}") workflow=$(c8 "${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-8}") compact_window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-default}"
 fi
