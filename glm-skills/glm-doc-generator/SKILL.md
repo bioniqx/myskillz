@@ -26,7 +26,7 @@ other file of this skill — there are none.** (Under the OpenCode harness, §8'
 |---|------|-----------------|
 | R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; a changed selection may add one review turn, nothing else may add one. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 6 Tasks go in ONE message. | Sending calls one at a time |
-| R3 | **Concurrency = 6 subagents max per wave** (`OC_MAX_LANES` may raise it, hard max 8). More docs → consecutive waves of 6, biggest doc first. Count what is already running: Turn-2 speculative writers + Gate-delta writers, or Turn-3 reviewers + the retry, together stay within ONE wave of 6; extras go in the next message. | 7+ in flight at once, or 1-at-a-time |
+| R3 | **Concurrency = 6 subagents max per wave** (OpenCode's `OC_MAX_LANES` may raise it, hard max 8). More docs → consecutive waves of 6, biggest doc first. Count what is already running: Turn-2 speculative writers + Gate-delta writers, or Turn-3 reviewers + the retry, together stay within ONE wave of 6; extras go in the next message. | 7+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every Task prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
 | R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. | Any prose between tool calls |
@@ -63,7 +63,7 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 | User said nothing specific, interactive run | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set |
 | Non-interactive run (nobody to answer) | Use the ★ set (§3.1), state it in one line, skip the Gate |
 | > 6 docs selected | Waves of 6, longest/HIGH first |
-| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 6 read-only shards, one per package — same message. Shards run as `general` on OpenCode; `Explore` is for the Claude Code harness only. Ask which packages to document inside the Gate message |
+| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 6 read-only shards, one per package — same message. Shards run as `general` on OpenCode; `Explore` is a ZCode and Claude Code built-in. Ask which packages to document inside the Gate message |
 | No git repo | Recon script auto-falls back to a mtime hash; everything else identical |
 | Requirements/spec docs found | Read-only sources. **Never** write into them. Rename any colliding output |
 | Subagents unavailable in this harness | §6 sequential fallback |
@@ -406,12 +406,15 @@ background children report), so keep the `oc_harness.py` path above for headless
 
 ## Appendix A — optional ZCode subagents (paste once, then reference by name)
 
+Both agents are auto-installed from `agents/zcode/` into `~/.zcode/agents/` by the installer; this appendix documents what lands there - never hand-copy it.
+
 Cuts per-Task prompt size and forces low thinking effort. `~/.zcode/agents/glm-doc-writer.md`:
 
 ```markdown
 ---
 name: glm-doc-writer
 description: Writes one Markdown doc from an inlined fact pack and a scoped file list. Never plans, never deliberates.
+model: glm-5.3-flash
 thoughtLevel: low
 maxTurns: 18
 ---
@@ -427,7 +430,8 @@ ranges. Every technical claim must trace to FACTS or a file you read; anything e
 ---
 name: glm-doc-reviewer
 description: Fact-checks one generated Markdown doc against real source code and fixes it in place.
-thoughtLevel: low
+model: glm-5.3
+thoughtLevel: high
 maxTurns: 22
 ---
 You verify one Markdown file against the code and edit it in place — you never write a report
