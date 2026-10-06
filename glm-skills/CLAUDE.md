@@ -42,7 +42,11 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
 
-# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode frontmatter into ~/.zcode/agents
+# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode
+# frontmatter into ~/.zcode/agents. The agent install and the user-level hook merge into
+# ~/.zcode/cli/config.json are delegated to devteam.py doctor in its zcode harness mode: a
+# key-preserving merge (existing user keys survive, .bak before rewrite, re-run is a no-op) whose
+# hook commands point at the installed skill's absolute guard.py path.
 sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
 
 # Install all eight skills into OpenCode and print the config snippet (for Claude Code, copy a folder by hand)
@@ -95,8 +99,10 @@ Every port applies the same set of model facts; each skill with a tuning surface
   "three tool calls", "four calls"), and each script prints a `NEXT:` line so the model does not
   deliberate about plumbing.
 - **Key discovery.** Scripts read `ZAI_API_KEY` / `GLM_API_KEY` / `ANTHROPIC_AUTH_TOKEN`, and also named
-  key fields in `~/.claude/settings.json`, `~/.config/opencode/*.json` and `~/.zcode/*.json`. They never
-  write tokens or base URLs.
+  key fields in `~/.claude/settings.json`, `~/.config/opencode/*.json` and `~/.zcode/*.json`
+  (`~/.zcode/v2/credentials.json` is the first zcode path; the hyphenated `api-key` field under
+  `account-provider → coding-plan → account → <plan> → <uuid>` is found). They never write tokens or
+  base URLs.
 
 ### Per-skill engines
 
@@ -201,6 +207,39 @@ verified on 2026-09-28 by local probes against a fake provider unless marked oth
   install marker), never `OPENCODE` alone.
 - **Read from the binary, confirmed by `test_oc_contract.py`:** the v2 shell tool's default timeout is
   120000 ms.
+
+### ZCode facts (3.14.4)
+
+All facts were verified against the local 3.14.4 binary unless marked otherwise.
+
+- **Skills.** Skills live at `~/.zcode/skills/<name>/SKILL.md`, invoked as `$<name>`. A frontmatter
+  `description` over 1024 characters makes ZCode drop the whole skill; a body over 100KB is truncated when
+  loaded. Per-turn trigger metadata is the name plus a description excerpt of up to 250 characters, so the
+  WHEN-clause must sit at the front of every description. There is no `!` preload support; unknown
+  frontmatter keys are ignored.
+- **Agents.** Custom subagents live at `~/.zcode/agents/<name>.md`, user level only, no nesting; several
+  launched together in the foreground run in parallel. Frontmatter keys: `name`, `description`, `model`,
+  `thoughtLevel` (honored only together with a specific `model`), `color`, `tools`/`disallowedTools`,
+  `maxTurns`, `injectAgentsMd`, `mcpServers`; no haiku/sonnet/opus aliases exist. The installed agents
+  split lite/strong — lite workers run on `glm-5.3-flash` (the `--flash` default), strong judgment agents
+  on `glm-5.3` (the `--main` default).
+- **Dispatch.** Subagents are dispatched through the `Agent` tool (Task alias) whose input schema is
+  `{description, prompt, subagent_type, run_in_background}` with `subagent_type` omitted defaulting to
+  `general-purpose` — the Claude Code Task shape minus the `model` parameter (binary-verified; the web
+  docs confirm the tool and the `general-purpose` + `Explore` built-ins but do not document the schema).
+  `SendMessage`, `TaskStop`, and Bash `run_in_background` + `timeout` all exist and are
+  Claude-Code-compatible.
+- **Hooks.** A full Claude-Code-compatible hook system — SessionStart, UserPromptSubmit, PreToolUse,
+  PermissionRequest, PostToolUse, PostToolUseFailure, Stop — with no SubagentStop. Hooks are configured at
+  user level only, in `~/.zcode/cli/config.json` (`hooks.enabled: true`); project/workspace-level hooks
+  are ignored. Hook stdin JSON carries snake_case + camelCase fields including `agent_type` (the calling
+  agent's name); exit code 2 blocks; stdout `hookSpecificOutput.permissionDecision` = allow/ask/deny —
+  the exact shapes `guard.py` already prints.
+- **Credentials.** There is no public headless CLI. Credentials live at `~/.zcode/v2/credentials.json`
+  under `account-provider → coding-plan → account → <plan> → <uuid> → api-key` (field name `api-key`,
+  hyphenated; OAuth/JWT fields keep distinct names and are never picked).
+- **Session reload.** Skills, agents and hook config are read at session start; anything installed or
+  reconfigured mid-session — including a fresh hook merge — takes effect only in a new session.
 
 ## Conventions and gotchas
 
