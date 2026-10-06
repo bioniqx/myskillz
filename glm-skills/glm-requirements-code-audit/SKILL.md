@@ -1,15 +1,15 @@
 ---
 name: glm-requirements-code-audit
 description: >-
-  Audit whether a codebase implements a requirements/spec document and produce a traceability report plus a
-  prioritized fix plan. The requirements file is the only source of truth (no git history, no README/docs).
-  A bundled script does the retrieval and fans out up to 8 parallel GLM requests, then an adversarial second
-  pass, then scripted merging and reporting. Use whenever the user wants to verify, audit, cross-check or trace
-  an implementation against a spec, PRD, SRS, user stories or requirements list: "does the code match the
-  requirements", "find gaps between spec and code", "requirement traceability", "conformance/compliance check",
-  "what is missing vs the spec and how do I fix it", "compare my doc to my code", or Vietnamese requests like
-  "kiểm tra code có đúng tài liệu yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
-  Trigger even when the user does not say "audit".
+  Use whenever the user wants to verify, audit, cross-check or trace an implementation against a spec, PRD,
+  SRS, user stories or requirements list — even when the user does not say "audit". Audit whether a codebase
+  implements a requirements/spec document and produce a traceability report plus a prioritized fix plan. The
+  requirements file is the only source of truth (no git history, no README/docs). A bundled script does the
+  retrieval and fans out up to 8 parallel GLM requests, then an adversarial second pass, then scripted
+  merging and reporting. Trigger phrases: "does the code match the requirements", "find gaps between spec
+  and code", "requirement traceability", "conformance/compliance check", "what is missing vs the spec and
+  how do I fix it", "compare my doc to my code", or Vietnamese requests like "kiểm tra code có đúng tài liệu
+  yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
 compatibility: OpenCode and ZCode with GLM-5.3 / GLM-5.3-Flash. Needs python3; ripgrep recommended; no third-party packages.
 metadata:
   version: 9.0
@@ -22,9 +22,15 @@ metadata:
 Checks whether the **code faithfully implements a requirements document**, reports every divergence with
 `path:lines` evidence, and produces a prioritized remediation plan. It never changes the code.
 
-Write `A` for `python3 SKILL_DIR/scripts/audit.py`, where `SKILL_DIR` is the directory holding this file
-(`python` instead of `python3` on Windows). Every command prints a `NEXT:` line — follow it and do not
-deliberate about plumbing.
+Write `A` for the audit script, pinned as your first call of the run:
+`A=python3 <dir>/scripts/audit.py` for the first `<dir>` that has `scripts/audit.py`, trying in order the
+directory holding this file, `$OPENCODE_CONFIG_DIR/skills/glm-requirements-code-audit`,
+`.opencode/skills/glm-requirements-code-audit`, `~/.config/opencode/skills/glm-requirements-code-audit`,
+`.agents/skills/glm-requirements-code-audit`, `~/.agents/skills/glm-requirements-code-audit`,
+`.claude/skills/glm-requirements-code-audit`, `~/.claude/skills/glm-requirements-code-audit`,
+`~/.zcode/skills/glm-requirements-code-audit` (`python` instead of `python3` on Windows). No candidate
+exists → say so and ask for the install dir; never guess a path. Every command prints a `NEXT:` line —
+follow it and do not deliberate about plumbing.
 
 ## R0 — The whole audit is four calls
 
