@@ -574,5 +574,102 @@ class TestRetry(_FakeCase):
         self.assertEqual(sleep.call_count, 1)
 
 
+import json  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import tempfile  # noqa: E402
+import unittest  # noqa: E402
+from unittest import mock  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import zai_client  # noqa: E402
+
+
+class TestZcodeCredentialsKey(unittest.TestCase):
+    """The v2 credentials file: the api-key field under account-provider → coding-plan → account → <plan> → <uuid> → api-key is found; sibling OAuth/JWT fields are never picked; env vars still win."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.home = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def write_credentials(self, api_key):
+        d = os.path.join(self.home, ".zcode", "v2")
+        os.makedirs(d, exist_ok=True)
+        payload = {
+            "account-provider": {
+                "coding-plan": {
+                    "account": {
+                        "contribute": {
+                            "00000000-1111-2222-3333-444444444444": {
+                                "api-key": api_key,
+                                "oauth": "oauth-sibling-not-a-key",
+                                "zcodejwttoken": "jwt-sibling-not-a-key",
+                                "access_token": "access-sibling-not-a-key",
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        with open(os.path.join(d, "credentials.json"), "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+
+    def test_v2_credentials_walk_finds_api_key_and_ignores_siblings(self):
+        self.write_credentials("sk-zcode-plan-key")
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-zcode-plan-key", result,
+                      "zcode v2 credentials api-key not found by find_key()")
+        for sibling in ("oauth-sibling-not-a-key", "jwt-sibling-not-a-key",
+                        "access-sibling-not-a-key"):
+            self.assertNotIn(sibling, result,
+                             "sibling OAuth/JWT field picked instead of api-key: " + sibling)
+
+    def test_env_var_wins_over_zcode_credentials_file(self):
+        self.write_credentials("sk-zcode-file-key")
+        with mock.patch.dict(os.environ, {"HOME": self.home, "ZAI_API_KEY": "sk-env-key"},
+                             clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-env-key", result, "env var must win over the zcode credentials file")
+        self.assertNotIn("sk-zcode-file-key", result, "zcode file key must lose to the env var")
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-zcode-file-key", result,
+                      "without env vars the zcode file key must be found by find_key()")
+
+    def test_v2_credentials_is_the_first_zcode_entry(self):
+        self.write_credentials("sk-zcode-plan-key")
+        with open(os.path.join(self.home, ".zcode", "settings.json"),
+                  "w", encoding="utf-8") as fh:
+            json.dump({"apiKey": "sk-root-zcode-settings-key"}, fh)
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-zcode-plan-key", result,
+                      "the v2 credentials file must win over the root-level zcode files")
+
+    def test_missing_or_corrupt_credentials_json_yields_no_key_and_no_crash(self):
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            self.assertEqual(zai_client.find_key(), (None, None))
+        d = os.path.join(self.home, ".zcode", "v2")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "credentials.json"), "w", encoding="utf-8") as fh:
+            fh.write("{not json at all")
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_vendored_copies_stay_byte_identical_after_sync(self):
+        root = os.path.dirname(os.path.dirname(HERE))
+        with open(os.path.join(root, "_shared", "zai_client.py"), "rb") as fh:
+            shared = fh.read()
+        for skill in ("glm-systematic-debugging", "glm-writing-plans",
+                      "glm-requirements-code-audit"):
+            path = os.path.join(root, skill, "scripts", "zai_client.py")
+            with open(path, "rb") as fh:
+                self.assertEqual(fh.read(), shared,
+                                 "%s vendored copy diverges from _shared" % skill)
+
+
 if __name__ == "__main__":
     unittest.main()
