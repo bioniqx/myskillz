@@ -1301,7 +1301,7 @@ cd "$R"
 
 # zcode dispatch: strong slices pick glm-programmer-strong, lite stays
 # glm-programmer-lite, and the Agent line carries no model: segment.
-if ! DEVTEAM_HARNESS=zcode python3 - "$(cd "$(dirname "$0")" && pwd)" <<'PY'
+if ! DEVTEAM_HARNESS=zcode python3 - "$S" <<'PY'
 import sys
 
 sys.path.insert(0, sys.argv[1])
