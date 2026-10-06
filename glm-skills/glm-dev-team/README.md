@@ -92,6 +92,7 @@ Hook là cấp user: cầu `guard.py zcode` routing theo `agent_type` của payl
 
 - `bash scripts/selftest.sh` — **371 check, 371 pass, 0 fail** (247 check cũ vẫn giữ, phần còn lại là check mới cho v4 và bản vá parity). Dựng
   repo git tạm, đi hết vòng đời; môi trường test cô lập (HOME tạm, không đọc transcript thật).
+- Phần ZCode được kiểm thử bằng `class TestDevteamZcodeCore` (engine/guard chế độ zcode: dispatch bỏ model, chọn strong, provider mặc định glm; guard định tuyến, fail-open, no-op với role lạ) và `class TestDevteamZcodeDoctor` (doctor: cài 7 agent vào `~/.zcode/agents/`, merge hook giữ nguyên key user, re-run no-op, `.bak` khi file đổi, không ghi `.claude/settings.local.json`), tách khỏi `bash scripts/selftest.sh`.
 - **Mutation test**: cố tình phá 13 cơ chế mới (halving, re-queue, leo thang khi retry, effort lite,
   capability, offset transcript, cửa sổ tier, peak, khử trùng request, baseline run mới, relaunch, điều
   kiện tăng, nhận diện hostname) → cả **13/13** đều bị đúng check tương ứng bắt.
@@ -119,6 +120,7 @@ low/high/max chưa có tài liệu chính thức chi tiết → dùng `devteam s
 
 ## Lịch sử ngắn
 
+- **ZCode hardening (2026-10-06)** — thêm chế độ harness `zcode`: `is_zcode()` tự nhận, provider mặc định glm; `doctor --harness zcode [--fix] [--flash ID] [--main ID]` cài 7 agent render đúng frontmatter ZCode vào `~/.zcode/agents/` và merge hook PreToolUse/Stop vào `~/.zcode/cli/config.json` (giữ key user, `.bak`, chạy lại là no-op); dispatch bỏ model và chọn strong.
 - **OpenCode hardening (2026-09-28)** — v1 1.18.x và v2 2.0.x: bootstrap tìm thư mục skill mà không cần `${CLAUDE_SKILL_DIR}`; nhận v2 qua `OPENCODE_TERMINAL`; `resume <id> --note` thay cho SendMessage; stall theo role; checkpoint chạy tách nền; `wait` thoát khi không còn lane; `killpg` qua `lanes/<id>.pgid`; guard chặn `batch`/`question`/`execute` trong lane; báo LANE DOWN cho lane bị signal giết.
 - **v3.2** — `permissionMode: dontAsk` + hook allow-list, Stop gate tự ghi marker (`next` không cần tham số),
   dispatch 1 dòng/agent, vá 7 lỗ allow-list sau review đối kháng.
