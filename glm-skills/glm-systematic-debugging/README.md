@@ -27,7 +27,7 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 | Harness | Path |
 |---|---|
 | OpenCode | `~/.config/opencode/skills/glm-systematic-debugging/` (or `$OPENCODE_CONFIG_DIR/skills/…`, or `.opencode/skills/…` per project; `~/.claude/skills/` and `~/.agents/skills/` are read too). Paste the `setup --harness opencode` provider block (defines the `low`/`high`/`max` variants); `/glm-debug` sets `S`, and agent-lane workers run as `glm-debug-worker` |
-| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; copy `agents/glm-debug-worker.md` to `~/.zcode/agents/` |
+| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and the `glm-debug-worker` agent (frontmatter rewritten, `thoughtLevel: low`) into `~/.zcode/agents/` |
 | Claude-compatible | `~/.claude/skills/glm-systematic-debugging/` |
 
 ```bash
