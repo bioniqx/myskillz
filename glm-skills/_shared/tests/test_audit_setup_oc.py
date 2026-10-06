@@ -107,12 +107,21 @@ class AgentLaneDispatchLine(unittest.TestCase):
     def test_non_opencode_line_names_no_model_alias(self):
         with mock.patch.object(oc_harness, "harness", return_value="zcode"):
             line = audit._dispatch("glm-rca-investigator", "/a/b.md", "rca b")
-        self.assertEqual(line, "subagent_type=glm-rca-investigator  prompt: read /a/b.md and follow it exactly")
+        # S9 contract: the line names the agent, never subagent_type jargon and
+        # never a model alias — real ids only where a model must be named.
+        self.assertEqual(line,
+                         "agent glm-rca-investigator — prompt: read /a/b.md and follow it exactly")
+        self.assertIn("glm-rca-investigator", line)
+        self.assertIn("/a/b.md", line)
+        self.assertNotIn("subagent_type", line)
+        for alias in ("flash", "sonnet", "haiku", "opus", "model:", "model="):
+            self.assertNotIn(alias, line)
 
     def test_source_no_longer_prints_model_alias_dispatch(self):
         with open(os.path.join(SCRIPTS, "audit.py")) as fh:
             src = fh.read()
         self.assertNotIn("model=%s  prompt", src)
+        self.assertNotIn("subagent_type", src)
 
 
 class V1LaneDispatch(unittest.TestCase):
