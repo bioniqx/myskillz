@@ -1,3 +1,18 @@
+# 9.4 (from 9.3) — ZCode surface
+
+- context.sh: new zcode branch in harness detection (skill dir under `*/.zcode/*`); the zcode caps
+  line prints the lane width (default 6, hard max 8) with no CLAUDE_CODE_* caps line, and the
+  oc_harness.py opencode override no longer wins once zcode is detected.
+- SKILL.md: the bootstrap scripts-dir loop gains the `~/.zcode/skills/glm-brainstorming` candidate;
+  the TaskCreate fallback row names `TodoWrite`; the OpenCode tool-name maps (`task`, `todowrite`,
+  `webfetch`) and the Claude Code env/`Workflow` facts are scoped to their harnesses; the
+  AskUserQuestion fallback no longer assumes a question tool (none is documented for ZCode).
+- fanout-playbook.md: Claude Code env/`Workflow` facts scoped to their harness; the `SendMessage`
+  note covers ZCode.
+- architectural.md: the `TaskStop` note covers ZCode.
+- visual-companion.md: platform notes gain a ZCode entry.
+- glm-tuning.md: new ZCode runtime section (§7).
+
 # 9.3 (from 9.2) — OpenCode v1/v2 hardening
 
 - Path rename: scratch/session dirs are `.brainstorm/` (was a tool-branded dir), specs go to

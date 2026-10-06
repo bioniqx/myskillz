@@ -314,11 +314,11 @@ Missing capability → substitute, never stall.
 | Missing | Substitute |
 | --- | --- |
 | Agent / subagents | OpenCode: follow the OpenCode lane rule below. |
-| AskUserQuestion | v2 `question`; otherwise plain text, numbered, approval as question 1. |
+| AskUserQuestion missing (or on ZCode, where no question tool is documented) | ask in plain text: numbered questions in chat, approval ask as item 1 |
 | ToolSearch | Tools are already live; skip it. |
-| Workflow | Run waves of lanes. |
+| Workflow (Claude Code) | Run waves of lanes. |
 | `!` preprocessing (raw `!` above) | Context block already present → use it. Else run `sh <Base directory>/scripts/context.sh` as your first round-1 call. |
-| TaskCreate | v1 `todowrite`; v2 track state in the message per R5. |
+| TaskCreate missing | use TodoWrite for the checklist write; on OpenCode the tool name is `todowrite` |
 
 **OpenCode lane rule** (one rule, picked by `oc_major`):
 
@@ -346,7 +346,7 @@ for d in "$BASE" \
   ~/.config/opencode/skills/glm-brainstorming \
   .agents/skills/glm-brainstorming ~/.agents/skills/glm-brainstorming \
   .claude/skills/glm-brainstorming ~/.claude/skills/glm-brainstorming \
-  .zcode/skills/glm-brainstorming; do
+  .zcode/skills/glm-brainstorming ~/.zcode/skills/glm-brainstorming; do
   if [ -n "$d" ] && [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
 done
 [ -n "$H" ] || { echo "glm-brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
@@ -379,14 +379,15 @@ of the block above): it prints each lane's final FINDINGS/CLAIMS text.
 Never open the raw `<id>.jsonl` stream. `<id>.done` holds the status
 JSON and `<id>.err` the lane error.
 
-Tool-name map, v1: `task` (lane fallback only), `todowrite` (TaskCreate),
-`webfetch` (WebFetch), `bash` (Bash). v1 has no web search tool: use
-`webfetch` on the R10.2 fetch-friendly endpoints. No AskUserQuestion:
-plain-text numbered questions with approval as item 1.
+Tool-name map, OpenCode v1: `task` (lane fallback only), `todowrite`
+(TaskCreate), `webfetch` (WebFetch), `bash` (Bash). OpenCode v1 has no
+web search tool: use OpenCode's `webfetch` on the R10.2 fetch-friendly
+endpoints. No AskUserQuestion: plain-text numbered questions with
+approval as item 1.
 
-Tool-name map, v2: `subagent` (lane), `shell` (Bash), `websearch`
-(WebSearch), `webfetch` (WebFetch), `question` (AskUserQuestion). No
-TaskCreate equivalent: carry state per R5.
+Tool-name map, OpenCode v2: `subagent` (lane), `shell` (Bash), `websearch`
+(WebSearch), OpenCode's `webfetch` (WebFetch), `question`
+(AskUserQuestion). No TaskCreate equivalent: carry state per R5.
 
 ## Visual companion
 
