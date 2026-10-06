@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts")
+SCRIPTS = os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts")
 sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(1, SCRIPTS)
 
@@ -56,10 +56,10 @@ AUDIT_MD = os.path.join(
     os.path.dirname(__file__),
     "..",
     "..",
-    "requirements-code-audit-glm",
+    "glm-requirements-code-audit",
     "opencode",
     "commands",
-    "audit.md",
+    "glm-audit.md",
 )
 
 
@@ -67,11 +67,11 @@ class TestAuditCommand(unittest.TestCase):
     def _render(self):
         with open(AUDIT_MD, "r") as fh:
             text = fh.read()
-        return oc_harness.render_command(text, 1, "/home/user/.config/opencode/skills/requirements-code-audit")
+        return oc_harness.render_command(text, 1, "/home/user/.config/opencode/skills/glm-requirements-code-audit")
 
     def test_body_mentions_loading_the_skill_and_keeps_arguments(self):
         rendered = self._render()
-        self.assertIn("Load the requirements-code-audit skill", rendered)
+        self.assertIn("Load the glm-requirements-code-audit skill", rendered)
         self.assertIn("$ARGUMENTS", rendered)
 
     def test_first_step_is_audit_brief_spec_no_bare_arguments_line(self):
@@ -85,7 +85,7 @@ class TestAuditCommand(unittest.TestCase):
             self.assertNotEqual(
                 stripped,
                 "python3 {}/scripts/audit.py $ARGUMENTS".format(
-                    "/home/user/.config/opencode/skills/requirements-code-audit"
+                    "/home/user/.config/opencode/skills/glm-requirements-code-audit"
                 ),
             )
             self.assertFalse(

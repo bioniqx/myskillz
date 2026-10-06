@@ -31,12 +31,12 @@ class LaneEnvTest(unittest.TestCase):
     def test_lane_env_reaches_the_process(self):
         env_out = os.path.join(self.tmp, "role.txt")
         before = os.environ.get("DEVTEAM_ROLE")
-        lane = {"id": "a", "agent": "programmer", "model": "flash", "dir": self.tmp, "brief": "go",
-                "env": {"DEVTEAM_ROLE": "programmer", "ENV_OUT": env_out}}
+        lane = {"id": "a", "agent": "glm-programmer", "model": "flash", "dir": self.tmp, "brief": "go",
+                "env": {"DEVTEAM_ROLE": "glm-programmer", "ENV_OUT": env_out}}
         rows = oc_harness.run_lanes([lane], os.path.join(self.tmp, "out"), binary=self.binary, major=1)
         self.assertEqual(rows[0]["status"], "OK")
         with open(env_out) as fh:
-            self.assertEqual(fh.read(), "programmer")
+            self.assertEqual(fh.read(), "glm-programmer")
         self.assertEqual(os.environ.get("DEVTEAM_ROLE"), before)
 
 
@@ -51,7 +51,7 @@ class LaneEnvTest(unittest.TestCase):
             seen.update(kwargs)
             raise OSError("stop after capture")
 
-        lane = {"id": "a", "agent": "programmer", "model": "flash", "dir": lane_dir, "brief": "go"}
+        lane = {"id": "a", "agent": "glm-programmer", "model": "flash", "dir": lane_dir, "brief": "go"}
         with mock.patch.dict(os.environ, {"PWD": self.tmp}), \
                 mock.patch("oc_harness.subprocess.Popen", side_effect=popen):
             oc_harness.run_lanes([lane], os.path.join(self.tmp, "out"), binary=self.binary, major=1)
@@ -62,30 +62,30 @@ class PluginInstallTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="oc-plugin-")
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.skill = os.path.join(self.tmp, "dev-team-glm")
+        self.skill = os.path.join(self.tmp, "glm-dev-team")
         os.makedirs(os.path.join(self.skill, "opencode", "plugins"))
         with open(os.path.join(self.skill, "SKILL.md"), "w") as fh:
-            fh.write("---\nname: dev-team\ndescription: test\n---\nbody\n")
+            fh.write("---\nname: glm-dev-team\ndescription: test\n---\nbody\n")
         for major in (1, 2):
-            path = os.path.join(self.skill, "opencode", "plugins", "devteam-guard.v%d.js" % major)
+            path = os.path.join(self.skill, "opencode", "plugins", "glm-devteam-guard.v%d.js" % major)
             with open(path, "w") as fh:
                 fh.write("// v%d\nconst GUARD = '{{SKILL_DIR}}/scripts/guard.py'\n" % major)
         self.home = os.path.join(self.tmp, "home")
         self.plugins = os.path.join(self.home, ".config", "opencode", "plugins")
-        self.skill_dst = os.path.join(self.home, ".config", "opencode", "skills", "dev-team")
+        self.skill_dst = os.path.join(self.home, ".config", "opencode", "skills", "glm-dev-team")
 
     def installed_plugin(self):
-        with open(os.path.join(self.plugins, "devteam-guard.js")) as fh:
+        with open(os.path.join(self.plugins, "glm-devteam-guard.js")) as fh:
             return fh.read()
 
     def test_installs_the_plugin_matching_the_major(self):
         written = oc_harness.install(self.skill, 2, self.home)
-        self.assertIn(os.path.join(self.plugins, "devteam-guard.js"), written)
+        self.assertIn(os.path.join(self.plugins, "glm-devteam-guard.js"), written)
         text = self.installed_plugin()
         self.assertIn("// v2", text)
         self.assertIn(self.skill_dst + "/scripts/guard.py", text)
         self.assertNotIn("{{SKILL_DIR}}", text)
-        self.assertEqual(os.listdir(self.plugins), ["devteam-guard.js"])
+        self.assertEqual(os.listdir(self.plugins), ["glm-devteam-guard.js"])
 
     def test_v1_install_uses_the_v1_source(self):
         oc_harness.install(self.skill, 1, self.home)
@@ -95,15 +95,15 @@ class PluginInstallTest(unittest.TestCase):
         # Real templates put SKILL_DIR inside a double-quoted JS string literal
         # (path.join("{{SKILL_DIR}}", "scripts", "guard.py")); a raw quote or
         # backslash in skill_dst would break that literal if pasted in unescaped.
-        path_v2 = os.path.join(self.skill, "opencode", "plugins", "devteam-guard.v2.js")
+        path_v2 = os.path.join(self.skill, "opencode", "plugins", "glm-devteam-guard.v2.js")
         with open(path_v2, "w") as fh:
             fh.write('const GUARD = "{{SKILL_DIR}}/scripts/guard.py"\n')
         home = os.path.join(self.tmp, 'ho"me')
         oc_harness.install(self.skill, 2, home)
-        plugin_path = os.path.join(home, ".config", "opencode", "plugins", "devteam-guard.js")
+        plugin_path = os.path.join(home, ".config", "opencode", "plugins", "glm-devteam-guard.js")
         with open(plugin_path) as fh:
             text = fh.read()
-        skill_dst = os.path.join(home, ".config", "opencode", "skills", "dev-team")
+        skill_dst = os.path.join(home, ".config", "opencode", "skills", "glm-dev-team")
         self.assertIn(json.dumps(skill_dst)[1:-1] + "/scripts/guard.py", text)
         self.assertNotIn('"' + skill_dst, text)
 

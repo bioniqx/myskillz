@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parents[2] / "dev-team-glm" / "scripts" / "guard.py"
+GUARD = Path(__file__).resolve().parents[2] / "glm-dev-team" / "scripts" / "guard.py"
 
 
 def run_oc(payload):
@@ -36,7 +36,7 @@ class GuardOcTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.wt, ignore_errors=True)
 
-    def oc(self, tool, args, role="programmer"):
+    def oc(self, tool, args, role="glm-programmer"):
         return run_oc({"tool": tool, "args": args, "cwd": str(self.wt), "role": role})
 
     def test_no_role_is_silent_allow(self):
@@ -55,16 +55,16 @@ class GuardOcTest(unittest.TestCase):
     def test_programmer_edit_inside_footprint_allows(self):
         rc, out = self.oc("edit", {"filePath": "src/a.py", "oldString": "a", "newString": "b"})
         self.assertEqual(rc, 0)
-        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
 
     def test_programmer_lite_edit_inside_footprint_allows(self):
         rc, out = self.oc("edit", {"filePath": "src/a.py", "oldString": "a", "newString": "b"},
-                          role="programmer-lite")
+                          role="glm-programmer-lite")
         self.assertEqual(rc, 0)
-        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
 
     def test_programmer_lite_bash_push_denies_as_programmer(self):
-        rc, out = self.oc("bash", {"command": "git push origin main"}, role="programmer-lite")
+        rc, out = self.oc("bash", {"command": "git push origin main"}, role="glm-programmer-lite")
         verdict, reason = decision(out)
         self.assertEqual(verdict, "deny")
         self.assertIn("integration/history commands are the Conductor's", reason)
@@ -100,10 +100,10 @@ class GuardOcTest(unittest.TestCase):
     def test_programmer_bash_read_only_git_allows(self):
         rc, out = self.oc("bash", {"command": "git status"})
         self.assertEqual(rc, 0)
-        self.assertEqual(decision(out), ("allow", "dev-team: pre-approved — read-only git"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: pre-approved — read-only git"))
 
     def test_reviewer_write_source_denies(self):
-        rc, out = self.oc("write", {"filePath": "src/a.py", "content": "x"}, role="code-reviewer")
+        rc, out = self.oc("write", {"filePath": "src/a.py", "content": "x"}, role="glm-code-reviewer")
         self.assertEqual(rc, 0)
         verdict, reason = decision(out)
         self.assertEqual(verdict, "deny")
@@ -111,19 +111,19 @@ class GuardOcTest(unittest.TestCase):
 
     def test_reviewer_write_review_allows(self):
         path = self.wt / ".claude" / "dev-team" / "reviews" / "r.md"
-        rc, out = self.oc("write", {"filePath": str(path), "content": "x"}, role="code-reviewer")
+        rc, out = self.oc("write", {"filePath": str(path), "content": "x"}, role="glm-code-reviewer")
         self.assertEqual(rc, 0)
-        self.assertEqual(decision(out), ("allow", "dev-team: this role's own report / memory file"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: this role's own report / memory file"))
 
     def test_leader_role_becomes_agent_type(self):
         path = str(self.wt / ".claude" / "dev-team" / "plan.md")
-        _, out = self.oc("write", {"filePath": path, "content": "x"}, role="team-leader")
-        self.assertEqual(decision(out), ("allow", "dev-team: the team-leader's plan"))
-        _, out = self.oc("write", {"filePath": path, "content": "x"}, role="spot-reviewer")
+        _, out = self.oc("write", {"filePath": path, "content": "x"}, role="glm-team-leader")
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: the glm-team-leader's plan"))
+        _, out = self.oc("write", {"filePath": path, "content": "x"}, role="glm-spot-reviewer")
         self.assertEqual(decision(out)[0], "deny")
 
     def test_reviewer_bash_rm_denies(self):
-        rc, out = self.oc("bash", {"command": "rm -rf src"}, role="investigator")
+        rc, out = self.oc("bash", {"command": "rm -rf src"}, role="glm-investigator")
         self.assertEqual(rc, 0)
         verdict, reason = decision(out)
         self.assertEqual(verdict, "deny")
@@ -150,7 +150,7 @@ class GuardOcTest(unittest.TestCase):
 
     def test_reviewer_bash_python_eval_denies(self):
         rc, out = self.oc("bash", {"command": "python3 -c 'import os; os.remove(\"a\")'"},
-                           role="code-reviewer")
+                           role="glm-code-reviewer")
         self.assertEqual(rc, 0)
         self.assertEqual(decision(out)[0], "deny")
 
@@ -166,10 +166,10 @@ class GuardOcTest(unittest.TestCase):
             path = unclaimed / ".claude" / "dev-team" / "reviews" / "r.md"
             r = subprocess.run([sys.executable, str(GUARD), "oc"],
                                input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
-                                                  "cwd": str(unclaimed), "role": "code-reviewer"}),
+                                                  "cwd": str(unclaimed), "role": "glm-code-reviewer"}),
                                capture_output=True, text=True)
             self.assertEqual(r.returncode, 0)
-            self.assertEqual(decision(r.stdout), ("allow", "dev-team: this role's own report / memory file"))
+            self.assertEqual(decision(r.stdout), ("allow", "glm-dev-team: this role's own report / memory file"))
         finally:
             shutil.rmtree(unclaimed, ignore_errors=True)
 
@@ -183,9 +183,9 @@ class GuardOcTest(unittest.TestCase):
                                       input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
                                                          "cwd": str(unclaimed), "role": role}),
                                       capture_output=True, text=True)
-            r = oc("team-leader")
-            self.assertEqual(decision(r.stdout), ("allow", "dev-team: the team-leader's plan"))
-            r = oc("spot-reviewer")
+            r = oc("glm-team-leader")
+            self.assertEqual(decision(r.stdout), ("allow", "glm-dev-team: the glm-team-leader's plan"))
+            r = oc("glm-spot-reviewer")
             self.assertEqual(decision(r.stdout)[0], "deny")
         finally:
             shutil.rmtree(unclaimed, ignore_errors=True)
@@ -196,7 +196,7 @@ class GuardOcTest(unittest.TestCase):
             path = unclaimed / "src" / "a.py"
             r = subprocess.run([sys.executable, str(GUARD), "oc"],
                                input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
-                                                  "cwd": str(unclaimed), "role": "code-reviewer"}),
+                                                  "cwd": str(unclaimed), "role": "glm-code-reviewer"}),
                                capture_output=True, text=True)
             self.assertEqual(r.returncode, 0)
             verdict, reason = decision(r.stdout)
@@ -211,7 +211,7 @@ class GuardOcTest(unittest.TestCase):
             path = outside / "docs" / "x.md"
             r = subprocess.run([sys.executable, str(GUARD), "oc"],
                                input=json.dumps({"tool": "write", "args": {"filePath": str(path), "content": "x"},
-                                                  "cwd": str(outside), "role": "programmer"}),
+                                                  "cwd": str(outside), "role": "glm-programmer"}),
                                capture_output=True, text=True)
             self.assertEqual(r.returncode, 0)
             verdict, reason = decision(r.stdout)
@@ -228,12 +228,12 @@ class GuardOcTest(unittest.TestCase):
     def test_programmer_shell_read_only_git_allows(self):
         rc, out = self.oc("shell", {"command": "git status"})
         self.assertEqual(rc, 0)
-        self.assertEqual(decision(out), ("allow", "dev-team: pre-approved — read-only git"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: pre-approved — read-only git"))
 
     def test_v2_path_key_routes_to_edit_checks(self):
         # the real v2.0.16 edit/write schemas name the file `path`, not `filePath`
         rc, out = self.oc("write", {"path": "src/a.py", "content": "x"})
-        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
         rc, out = self.oc("edit", {"path": "docs/x.md", "oldString": "a", "newString": "b"})
         self.assertEqual(decision(out)[0], "deny")
 
@@ -253,7 +253,7 @@ class GuardOcTest(unittest.TestCase):
         self.assertEqual(decision(out)[0], "allow")
 
     def test_code_mode_execute_denied_for_every_role(self):
-        for role in ("programmer", "code-reviewer"):
+        for role in ("glm-programmer", "glm-code-reviewer"):
             with self.subTest(role=role):
                 rc, out = self.oc("execute", {"code": "return 1"}, role=role)
                 self.assertEqual(decision(out)[0], "deny")
@@ -304,7 +304,7 @@ class GuardOcTest(unittest.TestCase):
         rc, out = self.oc("shell", json.dumps({"command": "git push origin main"}))
         self.assertEqual(decision(out)[0], "deny")
         rc, out = self.oc("edit", json.dumps({"filePath": "src/a.py", "oldString": "a", "newString": "b"}))
-        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
 
     def test_unparseable_args_deny_in_lane_mode(self):
         for args in ("{not json", "[1, 2]", ["src/a.py"], 7):
@@ -330,13 +330,13 @@ class GuardOcTest(unittest.TestCase):
 
     def test_batch_and_question_denied_in_lane_mode(self):
         for tool in ("batch", "question"):
-            for role in ("programmer", "code-reviewer"):
+            for role in ("glm-programmer", "glm-code-reviewer"):
                 with self.subTest(tool=tool, role=role):
                     rc, out = self.oc(tool, {}, role=role)
                     self.assertEqual(rc, 0)
                     verdict, reason = decision(out)
                     self.assertEqual(verdict, "deny")
-                    self.assertIn(f"`{tool}` is disabled in dev-team lanes", reason)
+                    self.assertIn(f"`{tool}` is disabled in glm-dev-team lanes", reason)
 
     def test_indented_patch_header_is_checked(self):
         # v2 trims patch lines before applying them, so an indented header is live
@@ -350,14 +350,14 @@ class GuardOcTest(unittest.TestCase):
 
     def test_indented_patch_header_denied_for_read_only_role(self):
         patch = "*** Begin Patch\n    *** Update File: src/a.py\n@@\n-x\n+y\n*** End Patch\n"
-        rc, out = self.oc("patch", {"patchText": patch}, role="code-reviewer")
+        rc, out = self.oc("patch", {"patchText": patch}, role="glm-code-reviewer")
         self.assertEqual(rc, 0)
         verdict, reason = decision(out)
         self.assertEqual(verdict, "deny")
         self.assertIn("This role is read-only", reason)
 
     def test_headerless_patch_denied_for_every_role(self):
-        for role in ("programmer", "code-reviewer"):
+        for role in ("glm-programmer", "glm-code-reviewer"):
             with self.subTest(role=role):
                 rc, out = self.oc("patch", {"patchText": "@@\n-x\n+y\n"}, role=role)
                 self.assertEqual(rc, 0)
@@ -369,7 +369,7 @@ class GuardOcTest(unittest.TestCase):
         for tool, args in (("write", {"content": "x"}),
                            ("edit", {"oldString": "a", "newString": "b"}),
                            ("write", {"filePath": "", "content": "x"})):
-            for role in ("programmer", "code-reviewer"):
+            for role in ("glm-programmer", "glm-code-reviewer"):
                 with self.subTest(tool=tool, args=args, role=role):
                     rc, out = self.oc(tool, args, role=role)
                     self.assertEqual(rc, 0)
@@ -380,7 +380,7 @@ class GuardOcTest(unittest.TestCase):
     def test_edit_ro_mode_without_path_denies(self):
         r = subprocess.run([sys.executable, str(GUARD), "edit-ro"],
                            input=json.dumps({"tool_input": {}, "cwd": str(self.wt),
-                                             "agent_type": "code-reviewer"}),
+                                             "agent_type": "glm-code-reviewer"}),
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0)
         verdict, reason = decision(r.stdout)
@@ -396,10 +396,10 @@ class GuardOcTest(unittest.TestCase):
                 with self.subTest(filePath=fp):
                     rc, out = run_oc({"tool": "edit",
                                       "args": {"filePath": fp, "oldString": "a", "newString": "b"},
-                                      "cwd": str(link), "role": "programmer"})
+                                      "cwd": str(link), "role": "glm-programmer"})
                     self.assertEqual(rc, 0)
                     self.assertEqual(decision(out),
-                                     ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+                                     ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
         finally:
             shutil.rmtree(linkdir, ignore_errors=True)
 

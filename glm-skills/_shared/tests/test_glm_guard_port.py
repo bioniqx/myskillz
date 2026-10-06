@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-GUARD_PATH = str(Path(__file__).resolve().parents[2] / "dev-team-glm" / "scripts" / "guard.py")
+GUARD_PATH = str(Path(__file__).resolve().parents[2] / "glm-dev-team" / "scripts" / "guard.py")
 
 
 def load_guard():

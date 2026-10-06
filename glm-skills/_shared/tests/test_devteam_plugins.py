@@ -9,10 +9,10 @@ import unittest
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_DIR = os.path.abspath(
-    os.path.join(TESTS_DIR, "..", "..", "dev-team-glm", "opencode", "plugins")
+    os.path.join(TESTS_DIR, "..", "..", "glm-dev-team", "opencode", "plugins")
 )
-V1_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v1.js")
-V2_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v2.js")
+V1_PATH = os.path.join(PLUGIN_DIR, "glm-devteam-guard.v1.js")
+V2_PATH = os.path.join(PLUGIN_DIR, "glm-devteam-guard.v2.js")
 
 NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "node not installed")
 
@@ -29,12 +29,12 @@ GUARDED_TOOLS = [
 ]
 UNGUARDED_TOOLS = ["read", "glob", "grep", "todowrite", "webfetch", "skill", "question"]
 DEVTEAM_AGENTS = [
-    "programmer",
-    "programmer-lite",
-    "code-reviewer",
-    "spot-reviewer",
-    "investigator",
-    "team-leader",
+    "glm-programmer",
+    "glm-programmer-lite",
+    "glm-code-reviewer",
+    "glm-spot-reviewer",
+    "glm-investigator",
+    "glm-team-leader",
 ]
 DENY = {
     "hookSpecificOutput": {
@@ -255,7 +255,7 @@ class TestDevteamPlugins(unittest.TestCase):
         self.assertNotIn("Plugin.define", source)
         self.assertNotIn("tool.execute.before", source)
         self.assertNotIn("ctx.directory", source)
-        self.assertIn("id: \"devteam-guard\"", source)
+        self.assertIn("id: \"glm-devteam-guard\"", source)
         self.assertIn("setup:", source)
         self.assertIn("api.tool.hook", source)
 
@@ -273,7 +273,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 },
             )
             result = _run_v1(
-                tmp_dir, skill_dir, "programmer", "bash", {"command": "rm -rf /"}
+                tmp_dir, skill_dir, "glm-programmer", "bash", {"command": "rm -rf /"}
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "DENIED:blocked command")
@@ -283,7 +283,7 @@ class TestDevteamPlugins(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             skill_dir = os.path.join(tmp_dir, "skill")
             _write_guard_stub(skill_dir, {})
-            result = _run_v1(tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"})
+            result = _run_v1(tmp_dir, skill_dir, "glm-programmer", "bash", {"command": "ls"})
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "ALLOWED")
 
@@ -312,7 +312,7 @@ class TestDevteamPlugins(unittest.TestCase):
             record_path = os.path.join(tmp_dir, "record.json")
             _write_recording_stub(skill_dir, {}, record_path)
             result = _run_v1(
-                tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"}
+                tmp_dir, skill_dir, "glm-programmer", "bash", {"command": "ls"}
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "ALLOWED")
@@ -323,7 +323,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 "tool": "bash",
                 "args": {"command": "ls"},
                 "cwd": "/tmp/work",
-                "role": "programmer",
+                "role": "glm-programmer",
             })
 
     @NEEDS_NODE
@@ -335,7 +335,7 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v2(
                 tmp_dir,
                 skill_dir,
-                "code-reviewer",
+                "glm-code-reviewer",
                 "edit",
                 {"filePath": "a.py", "oldString": "x", "newString": "y"},
             )
@@ -349,7 +349,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 "tool": "edit",
                 "args": {"filePath": "a.py", "oldString": "x", "newString": "y"},
                 "cwd": expected_cwd,
-                "role": "code-reviewer",
+                "role": "glm-code-reviewer",
             })
 
     @NEEDS_NODE
@@ -410,7 +410,7 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v2(
                 tmp_dir,
                 skill_dir,
-                "code-reviewer",
+                "glm-code-reviewer",
                 "edit",
                 {"filePath": "a.py", "oldString": "x", "newString": "y"},
             )
@@ -425,7 +425,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 record_path = os.path.join(tmp_dir, "record.json")
                 _write_recording_stub(skill_dir, DENY, record_path)
                 result = _run_v1(
-                    tmp_dir, skill_dir, "programmer", tool, {"filePath": "a.py"}
+                    tmp_dir, skill_dir, "glm-programmer", tool, {"filePath": "a.py"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "ALLOWED")
@@ -440,7 +440,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 skill_dir = os.path.join(tmp_dir, "skill")
                 _write_guard_stub(skill_dir, DENY)
                 result = _run_v1(
-                    tmp_dir, skill_dir, "programmer", tool, {"command": "ls"}
+                    tmp_dir, skill_dir, "glm-programmer", tool, {"command": "ls"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "DENIED:guarded")
@@ -451,7 +451,7 @@ class TestDevteamPlugins(unittest.TestCase):
             skill_dir = os.path.join(tmp_dir, "skill")
             _write_failing_stub(skill_dir)
             result = _run_v1(
-                tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"}, calls=2
+                tmp_dir, skill_dir, "glm-programmer", "bash", {"command": "ls"}, calls=2
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "ALLOWED\nALLOWED")
@@ -471,7 +471,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 record_path = os.path.join(tmp_dir, "record.json")
                 _write_recording_stub(skill_dir, DENY, record_path)
                 result = _run_v2(
-                    tmp_dir, skill_dir, "code-reviewer", tool, {"path": "a.py"}
+                    tmp_dir, skill_dir, "glm-code-reviewer", tool, {"path": "a.py"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "ALLOWED")
@@ -486,7 +486,7 @@ class TestDevteamPlugins(unittest.TestCase):
                 skill_dir = os.path.join(tmp_dir, "skill")
                 _write_guard_stub(skill_dir, DENY)
                 result = _run_v2(
-                    tmp_dir, skill_dir, "code-reviewer", tool, {"command": "ls"}
+                    tmp_dir, skill_dir, "glm-code-reviewer", tool, {"command": "ls"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "DENIED:guarded")
@@ -519,15 +519,15 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v2(
                 tmp_dir,
                 skill_dir,
-                "code-reviewer",
+                "glm-code-reviewer",
                 "shell",
                 {"command": "ls"},
-                agent="programmer",
+                agent="glm-programmer",
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             with open(record_path) as f:
                 record = json.load(f)
-            self.assertEqual(record["stdin"]["role"], "code-reviewer")
+            self.assertEqual(record["stdin"]["role"], "glm-code-reviewer")
 
     @NEEDS_NODE
     def test_v2_ignores_non_devteam_agent(self):
@@ -551,7 +551,7 @@ class TestDevteamPlugins(unittest.TestCase):
             result = _run_v2(
                 tmp_dir,
                 skill_dir,
-                "code-reviewer",
+                "glm-code-reviewer",
                 "edit",
                 {"path": "a.py", "oldString": "x", "newString": "y"},
                 delayed_hook=True,
@@ -565,7 +565,7 @@ class TestDevteamPlugins(unittest.TestCase):
             skill_dir = os.path.join(tmp_dir, "skill")
             _write_failing_stub(skill_dir)
             result = _run_v2(
-                tmp_dir, skill_dir, "code-reviewer", "edit", {"path": "a.py"}, calls=2
+                tmp_dir, skill_dir, "glm-code-reviewer", "edit", {"path": "a.py"}, calls=2
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "ALLOWED\nALLOWED")

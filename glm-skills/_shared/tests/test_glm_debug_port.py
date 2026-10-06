@@ -1,4 +1,4 @@
-"""Behaviour of the ported systematic-debugging scripts and tool (glm variant)."""
+"""Behaviour of the ported glm-systematic-debugging scripts and tool (glm variant)."""
 import glob
 import os
 import shutil
@@ -12,7 +12,7 @@ import json
 import re
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-SCRIPTS = os.path.realpath(os.path.join(HERE, "..", "..", "systematic-debugging-glm", "scripts"))
+SCRIPTS = os.path.realpath(os.path.join(HERE, "..", "..", "glm-systematic-debugging", "scripts"))
 SKILL = os.path.dirname(SCRIPTS)
 TOOL = os.path.join(SCRIPTS, "debug_tool.py")
 LIB = os.path.join(SCRIPTS, "_lib.sh")

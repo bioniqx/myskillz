@@ -1,0 +1,78 @@
+# glm-systematic-debugging 9.0
+
+Root-cause-first debugging, rebuilt for **GLM-5.3 / GLM-5.3-Flash** on **OpenCode** and **ZCode**.
+
+The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` line is backed by evidence observed in this session. Everything else changed to remove model turns.
+
+## What is different from the generic version
+
+The generic skill buys speed by telling the model to put many tool calls in one message and to launch many subagents at once. On this pairing, both assumptions fail:
+
+- GLM-5.3 emits only a couple of tool calls per turn, so a "batch of 12 reads" quietly becomes six round-trips.
+- OpenCode v1 dispatches subagent tasks one at a time, so a wide fan-out becomes that many sequential runs. OpenCode v2's `subagent` tool takes `background: true`, so dispatching workers that way (one call after another, without waiting) gets real parallelism even from a single turn — interactive sessions only, since a headless `opencode run` can exit before background children report. (ZCode does run foreground subagents in parallel.)
+
+So the parallelism moved **out of the model's turn and into the tools**. One call per phase; each call opens its own threads: up to 64 for local jobs, at most 8 for model/API workers.
+
+| Phase | 9.0: one call | Generic version |
+|---|---|---|
+| Evidence | `debug_tool.py probe` | snapshot + N frame reads + M greps + repro + git history, batched by the model |
+| N commands | `debug_tool.py run -j N` | N Bash calls in one message |
+| Hypotheses | `debug_tool.py experiment -j N` | one subagent per hypothesis |
+| Judgment fan-out | `debug_tool.py scan -j 8` | one subagent per area |
+
+Plus: deterministic lane triage printed by `probe` (no model reasoning spent on a routing table), an effort ladder so mechanical work does not run at `reasoning_effort: max`, a byte-identical prompt prefix across all `scan` workers (at most 8 at once) so the provider cache hits from the second worker on, a 5-line state carry against long-horizon drift, and prose rewritten as numbered rules — GLM follows those better than behavior tables.
+
+## Install
+
+| Harness | Path |
+|---|---|
+| OpenCode | `~/.config/opencode/skills/glm-systematic-debugging/` (or `$OPENCODE_CONFIG_DIR/skills/…`, or `.opencode/skills/…` per project; `~/.claude/skills/` and `~/.agents/skills/` are read too). Paste the `setup --harness opencode` provider block (defines the `low`/`high`/`max` variants); `/glm-debug` sets `S`, and agent-lane workers run as `glm-debug-worker` |
+| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; copy `agents/glm-debug-worker.md` to `~/.zcode/agents/` |
+| Claude-compatible | `~/.claude/skills/glm-systematic-debugging/` |
+
+```bash
+export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)
+python3 <skill>/scripts/debug_tool.py doctor --ping
+python3 <skill>/scripts/debug_tool.py setup --harness opencode   # or zcode | claude
+```
+
+Needs bash (3.2+ works), git and python3 (stdlib only). `timeout`/`gtimeout` is optional, for `-t`. Without an API key everything still works except `scan`, which falls back to writing subagent prompts.
+
+## Layout
+
+```
+SKILL.md                         12 numbered rules, loaded on use
+references/glm-tuning.md         model + harness facts, failure modes
+references/parallel-playbook.md  concurrency layers, isolation, recipes
+references/root-cause-tracing.md backward tracing, one-shot instrumentation
+references/defense-in-depth.md   layered guards after the fix
+references/flaky-and-timing.md   condition waits, flake root causes
+scripts/debug_tool.py            probe · run · experiment · scan · doctor · setup
+scripts/snapshot.sh              git, deps, toolchain, CPUs in one call
+scripts/stress.sh                N parallel reruns, Wilson CI, Fisher test vs baseline
+scripts/bisect-parallel.sh       k-ary git bisect in worktrees, log_(J+1) N rounds
+scripts/find-polluter.sh         parallel polluter search, one worktree per worker
+agents/glm-debug-worker.md           subagent definition for the fallback lane
+evals/                           pressure + speed scenarios with pass criteria
+```
+
+## Measured
+
+Verified in this build (2-CPU container; the model-turn column is what actually dominates wall time in practice):
+
+| | measured |
+|---|---|
+| `probe` on a 3-frame traceback | 0.3 s, **one** call — replaces snapshot + 3 frame reads + 2 greps + git history + 3 repro runs |
+| `scan`, 20 tasks, `-j 64` requested, mock latency | **peak concurrency 8** (capped), **1 distinct prompt prefix** (cache hit from worker 2) |
+| `experiment`, 8 hypotheses × 2 arms | 1.4 s, 16 isolated worktrees, 1 CONFIRMED / 7 REFUTED |
+| `run`, 3 × 1 s commands | 1.0 s wall, exit codes preserved |
+| `bisect-parallel.sh -j 5`, 13 commits | 2 rounds, correct culprit |
+| `stress.sh -n 60 -j 8` | 1 s, rate + Wilson CI + failing logs |
+
+Statistics in `stress.sh` were cross-checked against SciPy (`fisher_exact`, Wilson interval).
+
+## Quality guards that did not move
+
+Iron Law; two-sided hypotheses; failed candidate fixes count toward the 3-fix stop even inside a worktree, diagnostic toggles do not; null/undefined/KeyError errors never take the FAST lane; statistical proof for flaky fixes (Fisher p < 0.05, not "it passed a few times"); reversible mitigation allowed during a production incident but never as the fix.
+
+One guard got **stronger**: `experiment` now gives the control arm and the treatment arm a worktree each. Sharing one tree between arms lets build caches and stale compiled files leak across — during this build that silently turned a real root cause into "REFUTED" until the arms were separated. Arms of a hypothesis with `runs` above 1 run one after another, control first, so CPU contention cannot bias a flaky or timing verdict. CONFIRMED means one arm passed every run while the other failed.

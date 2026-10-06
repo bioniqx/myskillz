@@ -1,4 +1,4 @@
-"""Speed optimizations in writing-plans-glm/scripts/plan_tool.py (spec WP11, WP13, WP14)."""
+"""Speed optimizations in glm-writing-plans/scripts/plan_tool.py (spec WP11, WP13, WP14)."""
 import argparse
 import contextlib
 import importlib.util
@@ -12,7 +12,7 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-PLAN_TOOL = os.path.join(ROOT, "writing-plans-glm", "scripts", "plan_tool.py")
+PLAN_TOOL = os.path.join(ROOT, "glm-writing-plans", "scripts", "plan_tool.py")
 CAP_ENV = ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "OPENCODE_MAX_CONCURRENT_SUBAGENTS",
            "ZCODE_MAX_CONCURRENT_SUBAGENTS")
 

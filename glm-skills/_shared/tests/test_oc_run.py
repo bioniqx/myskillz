@@ -242,30 +242,30 @@ class KillGroupTest(unittest.TestCase):
 class LaneStallTest(unittest.TestCase):
     def test_stall_by_role_table(self):
         self.assertEqual(oc_harness.STALL_BY_ROLE, {
-            "programmer": 900, "programmer-lite": 900, "team-leader": 900,
-            "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600,
+            "glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900,
+            "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600,
         })
 
     def test_lane_stall_value_wins(self):
-        self.assertEqual(oc_harness.lane_stall({"stall": 42, "role": "programmer"}), 42)
+        self.assertEqual(oc_harness.lane_stall({"stall": 42, "role": "glm-programmer"}), 42)
         self.assertEqual(oc_harness.lane_stall({"stall": "42"}), 42)
 
     def test_role_defaults(self):
-        for role, seconds in (("programmer", 900), ("programmer-lite", 900), ("team-leader", 900),
-                              ("code-reviewer", 600), ("spot-reviewer", 600), ("investigator", 600)):
+        for role, seconds in (("glm-programmer", 900), ("glm-programmer-lite", 900), ("glm-team-leader", 900),
+                              ("glm-code-reviewer", 600), ("glm-spot-reviewer", 600), ("glm-investigator", 600)):
             with self.subTest(role=role):
                 self.assertEqual(oc_harness.lane_stall({"role": role}), seconds)
 
     def test_role_from_env_then_agent(self):
-        self.assertEqual(oc_harness.lane_stall({"env": {"DEVTEAM_ROLE": "spot-reviewer"}}), 600)
-        self.assertEqual(oc_harness.lane_stall({"agent": "team-leader"}), 900)
+        self.assertEqual(oc_harness.lane_stall({"env": {"DEVTEAM_ROLE": "glm-spot-reviewer"}}), 600)
+        self.assertEqual(oc_harness.lane_stall({"agent": "glm-team-leader"}), 900)
 
     def test_unknown_role_uses_default(self):
         self.assertEqual(oc_harness.lane_stall({"agent": "worker"}), 180)
         self.assertEqual(oc_harness.lane_stall({"agent": "worker"}, default=30), 30)
 
     def test_invalid_stall_falls_through(self):
-        self.assertEqual(oc_harness.lane_stall({"stall": "soon", "role": "investigator"}), 600)
+        self.assertEqual(oc_harness.lane_stall({"stall": "soon", "role": "glm-investigator"}), 600)
         self.assertEqual(oc_harness.lane_stall({"stall": 0}), 180)
         self.assertEqual(oc_harness.lane_stall({"stall": None}, default=7), 7)
 

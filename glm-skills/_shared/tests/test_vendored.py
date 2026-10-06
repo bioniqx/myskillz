@@ -14,8 +14,8 @@ class TestVendored(unittest.TestCase):
         oc_harness_src = os.path.join(shared_dir, 'oc_harness.py')
 
         skills = {
-            'zai_client.py': ['systematic-debugging-glm', 'writing-plans-glm', 'requirements-code-audit-glm'],
-            'oc_harness.py': ['systematic-debugging-glm', 'writing-plans-glm', 'requirements-code-audit-glm', 'brainstorming-glm', 'doc-generator-glm', 'dev-team-glm']
+            'zai_client.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit'],
+            'oc_harness.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit', 'glm-brainstorming', 'glm-doc-generator', 'glm-dev-team']
         }
 
         sync_script = os.path.join(shared_dir, 'sync.sh')

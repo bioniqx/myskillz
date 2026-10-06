@@ -3,7 +3,7 @@ import os
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PLAN_TOOL = os.path.join(HERE, "..", "..", "writing-plans-glm", "scripts", "plan_tool.py")
+PLAN_TOOL = os.path.join(HERE, "..", "..", "glm-writing-plans", "scripts", "plan_tool.py")
 
 
 def _load_plan_tool():

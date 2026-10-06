@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 DEBUG_TOOL = (Path(__file__).resolve().parents[2]
-              / "systematic-debugging-glm" / "scripts" / "debug_tool.py")
+              / "glm-systematic-debugging" / "scripts" / "debug_tool.py")
 
 
 def load_debug_tool():
@@ -336,9 +336,9 @@ class TestScanAgentLane(unittest.TestCase):
         assert (d / "t1.txt").is_file() and (d / "t2.txt").is_file()
         lanes = json.loads((d / "lanes.json").read_text())
         assert [l["id"] for l in lanes] == ["t1", "t2"]
-        assert [l["agent"] for l in lanes] == ["debug-worker", "debug-worker"]
+        assert [l["agent"] for l in lanes] == ["glm-debug-worker", "glm-debug-worker"]
         assert lanes[0]["brief"] == str((d / "t1.txt").resolve())
-        assert "debug-worker" in out
+        assert "glm-debug-worker" in out
         nxt = [l for l in out.splitlines() if l.startswith("NEXT: python3 ")]
         assert nxt and "oc_harness.py run" in nxt[-1]
         assert str(d / "lanes.json") in nxt[-1] or str((d / "lanes.json").resolve()) in nxt[-1]
@@ -357,7 +357,7 @@ class TestScanAgentLane(unittest.TestCase):
         assert rc == 0
         assert (d / "t1.txt").is_file()
         assert not (d / "lanes.json").exists()
-        assert "debug-worker" in out
+        assert "glm-debug-worker" in out
         assert "oc_harness.py run" not in out
 
 

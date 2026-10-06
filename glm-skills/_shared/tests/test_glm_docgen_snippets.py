@@ -1,4 +1,4 @@
-"""Snippet and content tests for the glm doc-generator SKILL.md (T28).
+"""Snippet and content tests for the glm glm-doc-generator SKILL.md (T28).
 
 The bash blocks of SKILL.md are extracted and executed against fixtures under the system
 temp dir; nothing runs inside the repository.
@@ -12,11 +12,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SKILL_DIR = Path(__file__).resolve().parents[2] / "doc-generator-glm"
+SKILL_DIR = Path(__file__).resolve().parents[2] / "glm-doc-generator"
 SKILL = SKILL_DIR / "SKILL.md"
-WRITER = SKILL_DIR / "opencode" / "agents" / "doc-writer.md"
-REVIEWER = SKILL_DIR / "opencode" / "agents" / "doc-reviewer.md"
-COMMAND = SKILL_DIR / "opencode" / "commands" / "docs.md"
+WRITER = SKILL_DIR / "opencode" / "agents" / "glm-doc-writer.md"
+REVIEWER = SKILL_DIR / "opencode" / "agents" / "glm-doc-reviewer.md"
+COMMAND = SKILL_DIR / "opencode" / "commands" / "glm-docs.md"
 STATE = Path(".zcode") / "doc-gen"
 FENCE = "`" * 3
 HUMAN_MARK = "TO" + "DO(human)"

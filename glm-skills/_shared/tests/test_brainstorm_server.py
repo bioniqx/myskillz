@@ -1,4 +1,4 @@
-"""Tests for the brainstorming visual-companion scripts (start-server.sh, server.cjs, helper.js)."""
+"""Tests for the glm-brainstorming visual-companion scripts (start-server.sh, server.cjs, helper.js)."""
 import json
 import os
 import shutil
@@ -9,7 +9,7 @@ import time
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "brainstorming-glm" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "glm-brainstorming" / "scripts"
 START = SCRIPTS / "start-server.sh"
 SERVER = SCRIPTS / "server.cjs"
 HELPER = SCRIPTS / "helper.js"

@@ -30,7 +30,7 @@ AGENT = (
 COMMAND = "---\ndescription: run debug\n---\n!`python3 {{SKILL_DIR}}/scripts/tool.py doctor`\nLoad the skill with $ARGUMENTS\n"
 
 
-def make_skill(root, folder="systematic-debugging-glm", name="systematic-debugging"):
+def make_skill(root, folder="glm-systematic-debugging", name="glm-systematic-debugging"):
     skill = os.path.join(root, folder)
     os.makedirs(os.path.join(skill, "opencode", "agents"))
     os.makedirs(os.path.join(skill, "opencode", "commands"))
@@ -71,13 +71,13 @@ class InstallTests(unittest.TestCase):
         self.root = os.path.join(self.home, ".config", "opencode")
 
     def test_skill_name_strips_glm_suffix(self):
-        other = make_skill(self.tmp, "writing-plans-glm", "writing-plans-glm")
-        self.assertEqual(oc_harness.skill_name(other), "writing-plans")
-        self.assertEqual(oc_harness.skill_name(self.skill), "systematic-debugging")
+        other = make_skill(self.tmp, "glm-writing-plans", "glm-writing-plans")
+        self.assertEqual(oc_harness.skill_name(other), "glm-writing-plans")
+        self.assertEqual(oc_harness.skill_name(self.skill), "glm-systematic-debugging")
 
     def test_install_uses_frontmatter_name_and_writes_marker(self):
         written = oc_harness.install(self.skill, 1, self.home)
-        dst = os.path.join(self.root, "skills", "systematic-debugging")
+        dst = os.path.join(self.root, "skills", "glm-systematic-debugging")
         self.assertIn(dst, written)
         self.assertTrue(os.path.isfile(os.path.join(dst, "SKILL.md")))
         self.assertFalse(os.path.exists(os.path.join(dst, "scripts", "__pycache__")))
@@ -94,7 +94,7 @@ class InstallTests(unittest.TestCase):
         self.assertNotIn("reasoning_effort", text)
         with open(command) as fh:
             text = fh.read()
-        dst = os.path.join(self.root, "skills", "systematic-debugging")
+        dst = os.path.join(self.root, "skills", "glm-systematic-debugging")
         self.assertIn("python3 %s/scripts/tool.py doctor" % dst, text)
         self.assertNotIn("{{SKILL_DIR}}", text)
 
@@ -114,14 +114,14 @@ class CheckTests(unittest.TestCase):
         os.path.expanduser = lambda path: path.replace("~", self.home, 1)
 
     def test_missing_install(self):
-        self.assertEqual(oc_harness.check(self.skill), ["MISSING: systematic-debugging is not installed for OpenCode"])
+        self.assertEqual(oc_harness.check(self.skill), ["MISSING: glm-systematic-debugging is not installed for OpenCode"])
 
     def test_major_mismatch_and_missing_flags(self):
         oc_harness.install(self.skill, 1, self.home)
         Patch(self, detect=lambda binary="opencode": 2,
               check_run_flags=lambda major, binary="opencode": ["--dir"])
         lines = oc_harness.check(self.skill)
-        self.assertEqual(lines[0], "INSTALLED: systematic-debugging (major 1)")
+        self.assertEqual(lines[0], "INSTALLED: glm-systematic-debugging (major 1)")
         self.assertIn("FAIL: installed major 1 != detected major 2, re-run install-opencode.sh", lines)
         self.assertIn("FAIL: opencode run lacks --dir", lines)
 
@@ -202,7 +202,7 @@ class MainTests(unittest.TestCase):
     def test_install_positional_major_and_home(self):
         rc, out = self.run_main(["install", self.skill, "1", self.home])
         self.assertEqual(rc, 0)
-        self.assertIn(os.path.join(self.home, ".config", "opencode", "skills", "systematic-debugging"), out)
+        self.assertIn(os.path.join(self.home, ".config", "opencode", "skills", "glm-systematic-debugging"), out)
         self.assertIn("NEXT:", out)
 
     def test_install_without_opencode_fails(self):
@@ -254,10 +254,10 @@ class MainTests(unittest.TestCase):
         self.assertIn("FAIL: opencode run lacks --agent", out)
 
     def test_check_returns_zero_for_clean_install(self):
-        Patch(self, check=lambda skill_dir, home="": ["INSTALLED: systematic-debugging (major 1)"])
+        Patch(self, check=lambda skill_dir, home="": ["INSTALLED: glm-systematic-debugging (major 1)"])
         rc, out = self.run_main(["check", self.skill])
         self.assertEqual(rc, 0)
-        self.assertIn("INSTALLED: systematic-debugging (major 1)", out)
+        self.assertIn("INSTALLED: glm-systematic-debugging (major 1)", out)
 
     def test_snippet_prints_provider_and_returns_zero(self):
         rc, out = self.run_main(["snippet", "1"])
@@ -308,11 +308,11 @@ class ConfigSnippetV2Tests(unittest.TestCase):
     """
 
     def test_config_snippet_v2_emits_nested_map_permission_shape(self):
-        snippet = oc_harness.config_snippet(2, ["systematic-debugging", "writing-plans"])
+        snippet = oc_harness.config_snippet(2, ["glm-systematic-debugging", "glm-writing-plans"])
         data = _snippet_json(snippet)
         self.assertEqual(data["permission"]["skill"], {
-            "systematic-debugging": "deny",
-            "writing-plans": "deny",
+            "glm-systematic-debugging": "deny",
+            "glm-writing-plans": "deny",
         })
         self.assertNotIn("action", snippet)
         self.assertNotIn("resource", snippet)
@@ -322,11 +322,11 @@ class ConfigSnippetV2Tests(unittest.TestCase):
         self.assertNotIn("permission", _snippet_json(oc_harness.config_snippet(2, [])))
 
     def test_config_snippet_v1_output_unchanged(self):
-        snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
+        snippet = oc_harness.config_snippet(1, ["glm-systematic-debugging", "glm-writing-plans"])
         data = _snippet_json(snippet)
         self.assertEqual(data["permission"]["skill"], {
-            "systematic-debugging": "deny",
-            "writing-plans": "deny",
+            "glm-systematic-debugging": "deny",
+            "glm-writing-plans": "deny",
         })
         self.assertEqual(
             oc_harness.config_snippet(1, ["x"]),
@@ -341,7 +341,7 @@ class InstallFromOwnDestinationTests(unittest.TestCase):
         self.home = os.path.join(self.tmp, "home")
         skills_root = os.path.join(self.home, ".config", "opencode", "skills")
         os.makedirs(skills_root)
-        self.skill_dst = make_skill(skills_root, "systematic-debugging", "systematic-debugging")
+        self.skill_dst = make_skill(skills_root, "glm-systematic-debugging", "glm-systematic-debugging")
 
     def test_install_from_its_own_destination_does_not_delete_it(self):
         written = oc_harness.install(self.skill_dst, 1, self.home)
@@ -360,9 +360,9 @@ class AuditSetupFromInstalledCopyTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.home = os.path.join(self.tmp, "home")
         src = os.path.normpath(os.path.join(
-            os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm"))
+            os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit"))
         self.installed = os.path.join(
-            self.home, ".config", "opencode", "skills", "requirements-code-audit")
+            self.home, ".config", "opencode", "skills", "glm-requirements-code-audit")
         os.makedirs(os.path.dirname(self.installed))
         shutil.copytree(src, self.installed, ignore=shutil.ignore_patterns("__pycache__"))
 
@@ -387,7 +387,7 @@ INSTALLER = os.path.normpath(os.path.join(
 
 
 class InstallerWarningTests(unittest.TestCase):
-    """install-opencode.sh against a temp home: hints, clashes, stale installs."""
+    """install-opencode.sh against a temp home: hints and stale installs."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="oc-installer-")
@@ -419,36 +419,36 @@ class InstallerWarningTests(unittest.TestCase):
         self.assertIn("web-search-prime", out)
         self.assertIn("websearch", out)
 
-    def test_v1_keeps_disable_hint(self):
+    def test_v1_drops_disable_hint_too(self):
+        # Install names carry the glm- prefix, so nothing shadows the
+        # Claude-tuned originals: no disable hint on either major.
         out = self.run_installer(1)
-        self.assertIn("OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1", out)
+        self.assertNotIn("OPENCODE_DISABLE_CLAUDE_CODE_SKILLS", out)
 
     def test_clean_home_prints_no_warnings(self):
         out = self.run_installer(2)
         self.assertNotIn("WARN:", out)
         self.assertNotIn("rm -rf", out)
 
-    def test_lists_clashes_with_claude_skills_without_deleting(self):
-        original = self.make_skill_dir(self.claude_skills, "doc-generator")
-        suffixed = self.make_skill_dir(self.claude_skills, "requirements-code-audit-glm")
+    def test_same_named_claude_dir_is_not_a_clash(self):
+        # A glm- install never shadows anything in ~/.claude/skills: no clash
+        # warnings, nothing deleted.
+        same = self.make_skill_dir(self.claude_skills, "glm-doc-generator")
         out = self.run_installer(2)
-        self.assertIn("WARN: clash: %s" % original, out)
-        self.assertIn("WARN: clash: %s" % suffixed, out)
-        self.assertIn("config-dir copy wins", out)
-        self.assertNotIn("rm -rf", out)
-        self.assertTrue(os.path.isfile(os.path.join(original, "SKILL.md")))
-        self.assertTrue(os.path.isfile(os.path.join(suffixed, "SKILL.md")))
+        self.assertNotIn("WARN:", out)
+        self.assertTrue(os.path.isfile(os.path.join(same, "SKILL.md")))
 
-    def test_lists_stale_glm_installs_and_prints_removal_command(self):
-        writing = self.make_skill_dir(self.config_skills, "writing-plans-glm")
+    def test_lists_stale_old_installs_and_prints_removal_command(self):
+        writing = self.make_skill_dir(self.config_skills, "writing-plans")
         brainstorm = self.make_skill_dir(self.config_skills, "brainstorming-glm")
         out = self.run_installer(2)
         self.assertIn("WARN: stale: %s" % brainstorm, out)
         self.assertIn("WARN: stale: %s" % writing, out)
-        self.assertIn('To remove the stale installs, run: rm -rf "%s" "%s"' % (brainstorm, writing), out)
+        self.assertIn('To remove the stale installs, run: rm -rf "%s" "%s"' % (writing, brainstorm), out)
         self.assertTrue(os.path.isfile(os.path.join(brainstorm, "SKILL.md")))
         self.assertTrue(os.path.isfile(os.path.join(writing, "SKILL.md")))
-        self.assertTrue(os.path.isfile(os.path.join(self.config_skills, "writing-plans", "SKILL.md")))
+        self.assertTrue(os.path.isfile(os.path.join(self.config_skills, "glm-writing-plans", "SKILL.md")))
+        self.assertTrue(os.path.isfile(os.path.join(self.config_skills, "glm-brainstorming", "SKILL.md")))
 
 
 if __name__ == "__main__":

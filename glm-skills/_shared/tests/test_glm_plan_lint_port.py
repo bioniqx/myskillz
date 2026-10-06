@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TOOL = str(ROOT / "writing-plans-glm" / "scripts" / "plan_tool.py")
+TOOL = str(ROOT / "glm-writing-plans" / "scripts" / "plan_tool.py")
 FENCE = "`" * 3
 
 PLAN = """# Demo Implementation Plan

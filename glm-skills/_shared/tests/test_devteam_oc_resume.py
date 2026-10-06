@@ -1,4 +1,4 @@
-"""dev-team on OpenCode: `devteam.py resume <slice id> [--note TEXT]` relaunches a fresh lane in the
+"""glm-dev-team on OpenCode: `devteam.py resume <slice id> [--note TEXT]` relaunches a fresh lane in the
 slice's existing worktree, and the checkpoint runs detached so `wait`/`next` collect it."""
 import contextlib
 import io
@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-SCRIPTS = HERE.parents[1] / "dev-team-glm" / "scripts"
+SCRIPTS = HERE.parents[1] / "glm-dev-team" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
@@ -28,7 +28,7 @@ PLAN = {
 
 
 class RunFixture(unittest.TestCase):
-    """A real git repo with an initialised dev-team run, driven in-process through devteam.main."""
+    """A real git repo with an initialised glm-dev-team run, driven in-process through devteam.main."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -89,7 +89,7 @@ class ResumeTest(RunFixture):
         launch.assert_called_once()
         args, kwargs = launch.call_args
         self.assertEqual(args[2], "S1")
-        self.assertEqual(args[3], "programmer")
+        self.assertEqual(args[3], "glm-programmer")
         self.assertIn("claim S1", args[5])
         self.assertEqual(kwargs.get("note"), "use contract C1")
         self.assertFalse((wt / ".slice" / "stop_blocks").exists())
@@ -161,7 +161,7 @@ class IntegrateMessageTest(RunFixture):
 
     def test_opencode_research_rejection_points_to_retry(self):
         st = {"script": "/x/devteam.py"}
-        msg = ("S2: NOT INTEGRATED — no report at /r/S2.md. SendMessage the investigator to write it "
+        msg = ("S2: NOT INTEGRATED — no report at /r/S2.md. SendMessage the glm-investigator to write it "
                "(read-only slice: the report IS the deliverable), then integrate again.")
         r = devteam.opencode_message(st, "S2", msg)
         self.assertIn("no report at /r/S2.md", r)
@@ -185,7 +185,7 @@ class ResumeHelpersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
                 mock.patch.object(devteam.subprocess, "Popen") as popen:
             popen.return_value.pid = os.getpid()
-            devteam.launch_lane(Path(td), {"provider": "glm"}, "S9", "programmer", "",
+            devteam.launch_lane(Path(td), {"provider": "glm"}, "S9", "glm-programmer", "",
                                 "python3 x claim S9", note="fix the footprint")
             spec = json.loads((devteam.lanes_dir(td) / "S9.lane.json").read_text())
         self.assertEqual(spec["note"], "fix the footprint")
@@ -194,7 +194,7 @@ class ResumeHelpersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
                 mock.patch.object(devteam.subprocess, "Popen") as popen:
             popen.return_value.pid = os.getpid()
-            devteam.launch_lane(Path(td), {"provider": "glm"}, "S8", "programmer", "",
+            devteam.launch_lane(Path(td), {"provider": "glm"}, "S8", "glm-programmer", "",
                                 "python3 x claim S8")
             spec = json.loads((devteam.lanes_dir(td) / "S8.lane.json").read_text())
         self.assertEqual(spec["note"], "")

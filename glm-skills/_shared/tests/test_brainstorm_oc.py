@@ -12,12 +12,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import oc_harness
 
 SKILL_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "..", "brainstorming-glm"
+    os.path.dirname(__file__), "..", "..", "glm-brainstorming"
 )
 SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
-EXPLORER_MD = os.path.join(SKILL_DIR, "opencode", "agents", "explorer.md")
-RESEARCHER_MD = os.path.join(SKILL_DIR, "opencode", "agents", "researcher.md")
-BRAINSTORM_MD = os.path.join(SKILL_DIR, "opencode", "commands", "brainstorm.md")
+EXPLORER_MD = os.path.join(SKILL_DIR, "opencode", "agents", "glm-explorer.md")
+RESEARCHER_MD = os.path.join(SKILL_DIR, "opencode", "agents", "glm-researcher.md")
+BRAINSTORM_MD = os.path.join(SKILL_DIR, "opencode", "commands", "glm-brainstorm.md")
 
 PLACEHOLDERS = ("[TASK", "[ROOT", "[SLICE", "[ONE precise question]")
 
@@ -86,7 +86,7 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
 
     def test_changelog_states_fresh_lane_dir_per_run(self):
         changelog = read(os.path.join(os.path.dirname(SKILL_MD), "CHANGELOG.md"))
-        entry = changelog.split("# 9.2-glm", 1)[0]
+        entry = changelog.split("# 9.2", 1)[0]
         self.assertIn("fresh dir per run under `.brainstorm/drafts/`", entry)
 
     def test_states_task_tool_is_only_fallback(self):
@@ -98,7 +98,7 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
 
     def test_line_2_is_still_name_brainstorming(self):
         lines = self.text.split("\n")
-        self.assertEqual(lines[1], "name: brainstorming")
+        self.assertEqual(lines[1], "name: glm-brainstorming")
 
     def test_allowed_tools_unchanged(self):
         expected = (
@@ -231,7 +231,7 @@ class ContextCase(unittest.TestCase):
         os.makedirs(self.home)
 
     def plain_root(self):
-        return os.path.join(self.tmp, "plain", "brainstorming")
+        return os.path.join(self.tmp, "plain", "glm-brainstorming")
 
     def line_starting(self, out, prefix):
         for line in out.splitlines():
@@ -275,7 +275,7 @@ class TestBrainstormContextHarness(ContextCase):
 
     def test_install_location_without_cli(self):
         root = make_skill(
-            os.path.join(self.home, ".config", "opencode", "skills", "brainstorming")
+            os.path.join(self.home, ".config", "opencode", "skills", "glm-brainstorming")
         )
         proc = run_context(root, self.home)
         self.assertEqual(

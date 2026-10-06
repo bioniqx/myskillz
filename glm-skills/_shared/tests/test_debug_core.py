@@ -12,7 +12,7 @@ from unittest import mock
 from pathlib import Path
 
 _T16_DT_PATH = (Path(__file__).resolve().parents[2]
-                / "systematic-debugging-glm" / "scripts" / "debug_tool.py")
+                / "glm-systematic-debugging" / "scripts" / "debug_tool.py")
 _t16_spec = importlib.util.spec_from_file_location("debug_tool_t16", str(_T16_DT_PATH))
 DT16 = importlib.util.module_from_spec(_t16_spec)
 _t16_spec.loader.exec_module(DT16)

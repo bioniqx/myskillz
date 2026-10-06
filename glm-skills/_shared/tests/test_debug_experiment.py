@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 TOOL = (Path(__file__).resolve().parents[2]
-        / "systematic-debugging-glm" / "scripts" / "debug_tool.py")
+        / "glm-systematic-debugging" / "scripts" / "debug_tool.py")
 
 
 def load_tool():

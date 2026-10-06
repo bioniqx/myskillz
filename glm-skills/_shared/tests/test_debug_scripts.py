@@ -1,4 +1,4 @@
-"""Shell-level checks for systematic-debugging-glm/scripts (bisect-parallel.sh, stress.sh)."""
+"""Shell-level checks for glm-systematic-debugging/scripts (bisect-parallel.sh, stress.sh)."""
 import os
 import shutil
 import subprocess
@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = ROOT / "systematic-debugging-glm" / "scripts"
+SCRIPTS = ROOT / "glm-systematic-debugging" / "scripts"
 BISECT = SCRIPTS / "bisect-parallel.sh"
 STRESS = SCRIPTS / "stress.sh"
 BASH = shutil.which("bash")

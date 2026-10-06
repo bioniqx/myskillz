@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "dev-team-glm", "scripts")
+SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "glm-dev-team", "scripts")
 sys.path.insert(0, SCRIPTS)
 
 import devteam  # noqa: E402
@@ -46,24 +46,24 @@ class HarnessDetectionTest(unittest.TestCase):
 
 
 class LiteLaneAgentTest(unittest.TestCase):
-    """DE7: on OpenCode a programmer-lite slice must run the lite agent at low effort, not programmer."""
+    """DE7: on OpenCode a glm-programmer-lite slice must run the lite agent at low effort, not glm-programmer."""
 
     def test_lite_lane_keeps_lite_agent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             with mock.patch.object(devteam, "terminate_lane_process"), \
                     mock.patch.object(devteam.subprocess, "Popen", return_value=mock.MagicMock(pid=4242)):
-                pid = devteam.launch_lane(root, {"provider": "glm"}, "S1", "programmer-lite", "",
+                pid = devteam.launch_lane(root, {"provider": "glm"}, "S1", "glm-programmer-lite", "",
                                           "python3 x claim S1")
             spec = json.loads((devteam.lanes_dir(root) / "S1.lane.json").read_text())
         self.assertEqual(pid, 4242)
-        self.assertEqual(spec["agent"], "programmer-lite")
+        self.assertEqual(spec["agent"], "glm-programmer-lite")
         self.assertEqual(spec["effort"], "low")
         self.assertTrue(spec["writer"])
 
 
 class ProgrammerLiteInstallTest(unittest.TestCase):
-    """F17: an OpenCode install ships programmer-lite (effort low, programmer body) and doctor checks it."""
+    """F17: an OpenCode install ships glm-programmer-lite (effort low, glm-programmer body) and doctor checks it."""
 
     def test_install_ships_programmer_lite_at_low_effort(self):
         oc = devteam._oc_harness()
@@ -73,15 +73,15 @@ class ProgrammerLiteInstallTest(unittest.TestCase):
                 oc.install(skill_dir, major, home)
                 adir = Path(home) / ".config" / "opencode" / "agents"
                 installed = {p.stem for p in adir.glob("*.md")}
-                self.assertIn("programmer-lite", installed)
+                self.assertIn("glm-programmer-lite", installed)
                 self.assertTrue(set(devteam.OC_AGENT_NAMES) <= installed)
-                lite = (adir / "programmer-lite.md").read_text()
-                prog = (adir / "programmer.md").read_text()
+                lite = (adir / "glm-programmer-lite.md").read_text()
+                prog = (adir / "glm-programmer.md").read_text()
                 self.assertIn(effort_line, lite.split("\n---\n", 1)[0])
                 self.assertEqual(lite.split("\n---\n", 1)[1], prog.split("\n---\n", 1)[1])
 
     def test_doctor_agent_names_include_programmer_lite(self):
-        self.assertIn("programmer-lite", devteam.OC_AGENT_NAMES)
+        self.assertIn("glm-programmer-lite", devteam.OC_AGENT_NAMES)
 
 
 class ConcurrencyCapTest(unittest.TestCase):

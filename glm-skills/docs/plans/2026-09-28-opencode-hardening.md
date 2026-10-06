@@ -32,14 +32,14 @@
 
 ## Global Constraints
 
-- Edit only files under `glm-skills/`. Never edit the originals one level up (`dev-team-v3.2/`, `writing-plans-6.2/`, …). Never write to `~/.config/opencode`, `~/.claude` or `~/.agents`; tests use temp dirs only.
+- Edit only files under `glm-skills/`. Never edit the originals one level up (`glm-dev-team-v3.2/`, `glm-writing-plans-6.2/`, …). Never write to `~/.config/opencode`, `~/.claude` or `~/.agents`; tests use temp dirs only.
 - All paths in this plan are relative to the git root. Every command runs from `glm-skills/` (start with `cd glm-skills`).
 - Unit test command: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p '<test file name>'`. Full suite: the same without `-p`. The full suite must end green (baseline: 276 tests, 11 red from stale fixture paths).
-- dev-team selftest: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`. It must report `passed=` ≥ 324 and `failed=` ≤ 5. The 5 known macOS failures are: GNU `sed -i`, 4× `/private/var` resolve, a bash 3.2 word-split.
+- glm-dev-team selftest: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`. It must report `passed=` ≥ 324 and `failed=` ≤ 5. The 5 known macOS failures are: GNU `sed -i`, 4× `/private/var` resolve, a bash 3.2 word-split.
 - Scripts stay stdlib-only. No new dependencies.
 - The source of truth is `glm-skills/_shared/oc_harness.py` and `glm-skills/_shared/zai_client.py`. A task that changes either file lists the vendored copies in its Files and finishes by running `sh _shared/sync.sh`. The copies must stay byte-identical, and no other task edits a vendored copy.
-  - `oc_harness.py` is vendored into `brainstorming-glm`, `dev-team-glm`, `doc-generator-glm`, `requirements-code-audit-glm`, `systematic-debugging-glm` and `writing-plans-glm`.
-  - `zai_client.py` is vendored into `requirements-code-audit-glm`, `systematic-debugging-glm` and `writing-plans-glm`.
+  - `oc_harness.py` is vendored into `glm-brainstorming`, `glm-dev-team`, `glm-doc-generator`, `glm-requirements-code-audit`, `glm-systematic-debugging` and `glm-writing-plans`.
+  - `zai_client.py` is vendored into `glm-requirements-code-audit`, `glm-systematic-debugging` and `glm-writing-plans`.
 - No unit test may start a real `opencode` against a real provider or call Z.ai. Use `_shared/tests/stub_opencode.py` and `_shared/tests/fakeapi.py`. The real-binary module `test_oc_contract.py` runs only with `OC_CONTRACT=1`.
 - OpenCode facts, all verified 2026-09-28:
   - **Tools.** v2.0.18 tools are `edit, glob, grep, question, read, shell, skill, subagent, webfetch, websearch, write, execute`. The shell input is `{command, workdir, timeout, background}`, write is `{path, content}` and edit is `{path, oldString, newString, replaceAll}`. v1.18.33 tools are `bash, edit, glob, grep, read, skill, task, todowrite, webfetch, write`; its write args are `{filePath, content}`.
@@ -52,9 +52,9 @@
   - **Env.** v2 sets only `OPENCODE_TERMINAL=1` in shell children and never sets `OPENCODE`.
   - **Built-in agent.** OpenCode's built-in general agent is `general`; `general-purpose` and `Explore` do not exist there.
 - SKILL.md frontmatter: `name` never carries the `-glm` suffix, and `description` is ≤ 1024 chars (`test_all_skills.py` enforces both). OpenCode ignores `allowed-tools` and `!` preload blocks.
-- `brainstorming-glm/scripts/context.sh` is a preload: read-only, output ≤ 55 lines, always exit 0.
+- `glm-brainstorming/scripts/context.sh` is a preload: read-only, output ≤ 55 lines, always exit 0.
 - Prompt style: numbered imperative rules (R0, R1, …), every script prints a `NEXT:` line, and prefix blocks shared across a fan-out wave stay byte-identical.
-- The dev-team guard stays fail-open, because the integrate re-check is the real enforcement.
+- The glm-dev-team guard stays fail-open, because the integrate re-check is the real enforcement.
 - `guard.py` and `devteam.py` duplicate `TEST_DIR_NAMES`, `TEST_FILE_PATTERNS` and `STATE_DIRNAME`. Change them together or not at all.
 - Record each behaviour change in that skill's CHANGELOG or README where one exists.
 - Commit messages: `fix(<skill>): …` or `feat(<skill>): …`, where `<skill>` is the folder name without `-glm` (`shared` for `_shared`).
@@ -63,28 +63,28 @@
 
 - `glm-skills/_shared/` — sync.sh (T01), oc_harness.py (T03, T04, T05, T35), zai_client.py (T06)
 - `glm-skills/_shared/tests/` — test_vendored.py (T01), test_devteam_plugins.py (T01, T09), stub_opencode.py (T02), test_stub_opencode.py (T02), test_oc_harness_detect.py (T03), test_oc_run.py (T04), test_oc_render.py (T05), test_zai_client.py (T06), test_guard_oc.py (T07), test_guard_readonly.py (T08), test_devteam_oc_harness.py (T11), test_devteam_oc_lanes.py (T12), test_devteam_oc_resume.py (T13), test_debug_core.py (T16), test_debug_experiment.py (T17), test_adopt_debug.py (T18), test_debug_scripts.py (T19), test_audit_retrieval.py (T21), test_audit_verdicts.py (T22), test_audit_command.py (T23), test_audit_setup_oc.py (T24), test_adopt_audit.py (T25), test_plan_lint.py (T26), test_adopt_plan.py (T27), test_plan_perf.py (T28), test_brainstorm_oc.py (T30), test_brainstorm_server.py (T31), test_oc_install.py (T33), test_all_skills.py (T34), test_oc_contract.py (T35), fake_provider.py (T35)
-- `glm-skills/brainstorming-glm/scripts/` — oc_harness.py (T03, T04, T05, T35), context.sh (T30), start-server.sh (T31), server.cjs (T31), helper.js (T31)
-- `glm-skills/dev-team-glm/scripts/` — oc_harness.py (T03, T04, T05, T35), guard.py (T07, T08), devteam.py (T11, T12, T13), selftest.sh (T14)
-- `glm-skills/doc-generator-glm/scripts/` — oc_harness.py (T03, T04, T05, T35)
-- `glm-skills/requirements-code-audit-glm/scripts/` — oc_harness.py (T03, T04, T05, T35), zai_client.py (T06), audit.py (T21, T22, T23, T24)
-- `glm-skills/systematic-debugging-glm/scripts/` — oc_harness.py (T03, T04, T05, T35), zai_client.py (T06), debug_tool.py (T16, T17, T18), bisect-parallel.sh (T19), stress.sh (T19)
-- `glm-skills/writing-plans-glm/scripts/` — oc_harness.py (T03, T04, T05, T35), zai_client.py (T06), plan_tool.py (T26, T27, T28)
-- `glm-skills/dev-team-glm/opencode/plugins/` — devteam-guard.v1.js (T09), devteam-guard.v2.js (T09)
-- `glm-skills/dev-team-glm/opencode/agents/` — programmer.md (T10), team-leader.md (T10)
-- `glm-skills/dev-team-glm/` — SKILL.md (T15), README.md (T15)
-- `glm-skills/systematic-debugging-glm/` — SKILL.md (T20), README.md (T20)
-- `glm-skills/systematic-debugging-glm/opencode/agents/` — debug-worker.md (T20)
-- `glm-skills/systematic-debugging-glm/opencode/commands/` — debug.md (T20)
-- `glm-skills/systematic-debugging-glm/references/` — glm-tuning.md (T20)
-- `glm-skills/requirements-code-audit-glm/` — SKILL.md (T25), SETUP.md (T25)
-- `glm-skills/requirements-code-audit-glm/opencode/agents/` — rca-investigator.md (T25), rca-verifier.md (T25)
-- `glm-skills/writing-plans-glm/opencode/agents/` — plan-task-writer.md (T27), plan-task-writer-deep.md (T27), plan-reviewer.md (T27)
-- `glm-skills/writing-plans-glm/` — SKILL.md (T29), CHANGELOG.md (T29)
-- `glm-skills/brainstorming-glm/` — SKILL.md (T32), architectural.md (T32), visual-companion.md (T32), CHANGELOG.md (T32)
-- `glm-skills/brainstorming-glm/opencode/agents/` — researcher.md (T32)
+- `glm-skills/glm-brainstorming/scripts/` — oc_harness.py (T03, T04, T05, T35), context.sh (T30), start-server.sh (T31), server.cjs (T31), helper.js (T31)
+- `glm-skills/glm-dev-team/scripts/` — oc_harness.py (T03, T04, T05, T35), guard.py (T07, T08), devteam.py (T11, T12, T13), selftest.sh (T14)
+- `glm-skills/glm-doc-generator/scripts/` — oc_harness.py (T03, T04, T05, T35)
+- `glm-skills/glm-requirements-code-audit/scripts/` — oc_harness.py (T03, T04, T05, T35), zai_client.py (T06), audit.py (T21, T22, T23, T24)
+- `glm-skills/glm-systematic-debugging/scripts/` — oc_harness.py (T03, T04, T05, T35), zai_client.py (T06), debug_tool.py (T16, T17, T18), bisect-parallel.sh (T19), stress.sh (T19)
+- `glm-skills/glm-writing-plans/scripts/` — oc_harness.py (T03, T04, T05, T35), zai_client.py (T06), plan_tool.py (T26, T27, T28)
+- `glm-skills/glm-dev-team/opencode/plugins/` — glm-devteam-guard.v1.js (T09), glm-devteam-guard.v2.js (T09)
+- `glm-skills/glm-dev-team/opencode/agents/` — glm-programmer.md (T10), glm-team-leader.md (T10)
+- `glm-skills/glm-dev-team/` — SKILL.md (T15), README.md (T15)
+- `glm-skills/glm-systematic-debugging/` — SKILL.md (T20), README.md (T20)
+- `glm-skills/glm-systematic-debugging/opencode/agents/` — glm-debug-worker.md (T20)
+- `glm-skills/glm-systematic-debugging/opencode/commands/` — debug.md (T20)
+- `glm-skills/glm-systematic-debugging/references/` — glm-tuning.md (T20)
+- `glm-skills/glm-requirements-code-audit/` — SKILL.md (T25), SETUP.md (T25)
+- `glm-skills/glm-requirements-code-audit/opencode/agents/` — glm-rca-investigator.md (T25), glm-rca-verifier.md (T25)
+- `glm-skills/glm-writing-plans/opencode/agents/` — glm-plan-task-writer.md (T27), glm-plan-task-writer-deep.md (T27), glm-plan-reviewer.md (T27)
+- `glm-skills/glm-writing-plans/` — SKILL.md (T29), CHANGELOG.md (T29)
+- `glm-skills/glm-brainstorming/` — SKILL.md (T32), architectural.md (T32), visual-companion.md (T32), CHANGELOG.md (T32)
+- `glm-skills/glm-brainstorming/opencode/agents/` — glm-researcher.md (T32)
 - `glm-skills/` — install-opencode.sh (T33), CLAUDE.md (T36)
-- `glm-skills/doc-generator-glm/` — SKILL.md (T34)
-- `glm-skills/doc-generator-glm/opencode/commands/` — docs.md (T34, T35)
+- `glm-skills/glm-doc-generator/` — SKILL.md (T34)
+- `glm-skills/glm-doc-generator/opencode/commands/` — docs.md (T34, T35)
 
 ## Contracts
 
@@ -102,184 +102,184 @@
 - Tier: std
 
 #### T03: Shared harness detection, major version and dispatch lines
-- Files: `glm-skills/_shared/oc_harness.py`, `glm-skills/brainstorming-glm/scripts/oc_harness.py`, `glm-skills/dev-team-glm/scripts/oc_harness.py`, `glm-skills/doc-generator-glm/scripts/oc_harness.py`, `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`, `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`, `glm-skills/writing-plans-glm/scripts/oc_harness.py`, `glm-skills/_shared/tests/test_oc_harness_detect.py`
+- Files: `glm-skills/_shared/oc_harness.py`, `glm-skills/glm-brainstorming/scripts/oc_harness.py`, `glm-skills/glm-dev-team/scripts/oc_harness.py`, `glm-skills/glm-doc-generator/scripts/oc_harness.py`, `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`, `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`, `glm-skills/glm-writing-plans/scripts/oc_harness.py`, `glm-skills/_shared/tests/test_oc_harness_detect.py`
 - Produces: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`; CLI `python3 oc_harness.py harness [--script PATH]` printing `<harness> <major>`
 - Consumes: `def detect(binary: str = "opencode") -> int` (existing); `def check_run_flags(major: int, binary: str = "opencode") -> list` (existing)
 - Spec: L72-100, L107-131, L336-368
-- Read: `glm-skills/writing-plans-glm/scripts/plan_tool.py`
+- Read: `glm-skills/glm-writing-plans/scripts/plan_tool.py`
 - Tier: std
 
 #### T04: Run path: brief on stdin, error-event throttles, per-role stall, lifecycle, result
 - Depends: T02
-- Files: `glm-skills/_shared/oc_harness.py`, `glm-skills/brainstorming-glm/scripts/oc_harness.py`, `glm-skills/dev-team-glm/scripts/oc_harness.py`, `glm-skills/doc-generator-glm/scripts/oc_harness.py`, `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`, `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`, `glm-skills/writing-plans-glm/scripts/oc_harness.py`, `glm-skills/_shared/tests/test_oc_run.py`
-- Produces: `def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list` (brief no longer in argv; `_start_lane` writes it to stdin and closes stdin); `def is_throttle_event(event: dict) -> bool`; `STALL_BY_ROLE = {"programmer": 900, "programmer-lite": 900, "team-leader": 900, "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; `def lane_results(out_dir: str) -> list`; CLI `python3 oc_harness.py result OUT_DIR`; pgid file `<out_dir>/<lane id>.pgid`; `def check(skill_dir: str, home: str = "") -> list`
+- Files: `glm-skills/_shared/oc_harness.py`, `glm-skills/glm-brainstorming/scripts/oc_harness.py`, `glm-skills/glm-dev-team/scripts/oc_harness.py`, `glm-skills/glm-doc-generator/scripts/oc_harness.py`, `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`, `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`, `glm-skills/glm-writing-plans/scripts/oc_harness.py`, `glm-skills/_shared/tests/test_oc_run.py`
+- Produces: `def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list` (brief no longer in argv; `_start_lane` writes it to stdin and closes stdin); `def is_throttle_event(event: dict) -> bool`; `STALL_BY_ROLE = {"glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900, "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; `def lane_results(out_dir: str) -> list`; CLI `python3 oc_harness.py result OUT_DIR`; pgid file `<out_dir>/<lane id>.pgid`; `def check(skill_dir: str, home: str = "") -> list`
 - Spec: L72-100, L107-131, L288-298, L336-368
 - Tier: deep
 
 #### T05: Agent rendering and config snippet for v1/v2
-- Files: `glm-skills/_shared/oc_harness.py`, `glm-skills/brainstorming-glm/scripts/oc_harness.py`, `glm-skills/dev-team-glm/scripts/oc_harness.py`, `glm-skills/doc-generator-glm/scripts/oc_harness.py`, `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`, `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`, `glm-skills/writing-plans-glm/scripts/oc_harness.py`, `glm-skills/_shared/tests/test_oc_render.py`
+- Files: `glm-skills/_shared/oc_harness.py`, `glm-skills/glm-brainstorming/scripts/oc_harness.py`, `glm-skills/glm-dev-team/scripts/oc_harness.py`, `glm-skills/glm-doc-generator/scripts/oc_harness.py`, `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`, `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`, `glm-skills/glm-writing-plans/scripts/oc_harness.py`, `glm-skills/_shared/tests/test_oc_render.py`
 - Produces: `def config_snippet(major: int, deny: list) -> str` (adds `variants` low/high/max with `reasoningEffort` for `glm-5.3` and `glm-5.3-flash` under `zai-coding-plan`, plus a websearch provider note and the `web-search-prime` MCP option); `def render_agent(text: str, major: int) -> str` (adds `execute: deny` and an explicit `websearch` permission; keeps `hidden` as today)
 - Spec: L72-100, L107-131, L336-368
 - Tier: std
 
 #### T06: zai_client key discovery
-- Files: `glm-skills/_shared/zai_client.py`, `glm-skills/requirements-code-audit-glm/scripts/zai_client.py`, `glm-skills/systematic-debugging-glm/scripts/zai_client.py`, `glm-skills/writing-plans-glm/scripts/zai_client.py`, `glm-skills/_shared/tests/test_zai_client.py`
+- Files: `glm-skills/_shared/zai_client.py`, `glm-skills/glm-requirements-code-audit/scripts/zai_client.py`, `glm-skills/glm-systematic-debugging/scripts/zai_client.py`, `glm-skills/glm-writing-plans/scripts/zai_client.py`, `glm-skills/_shared/tests/test_zai_client.py`
 - Produces: `def find_key(extra_env: tuple = ()) -> tuple` (never returns `ANTHROPIC_API_KEY`); `def _opencode_db_key(db_path: str) -> str`
 - Spec: L72-100, L107-131
 - Tier: std
 
 #### T07: guard.py oc-mode input hardening
-- Files: `glm-skills/dev-team-glm/scripts/guard.py`, `glm-skills/_shared/tests/test_guard_oc.py`
+- Files: `glm-skills/glm-dev-team/scripts/guard.py`, `glm-skills/_shared/tests/test_guard_oc.py`
 - Spec: L132-151, L336-368
 - Tier: deep
 
 #### T08: guard.py read-only allow-list holes
-- Files: `glm-skills/dev-team-glm/scripts/guard.py`, `glm-skills/_shared/tests/test_guard_readonly.py`
+- Files: `glm-skills/glm-dev-team/scripts/guard.py`, `glm-skills/_shared/tests/test_guard_readonly.py`
 - Spec: L132-151
 - Tier: deep
 
-#### T09: devteam-guard plugins v1/v2
+#### T09: glm-devteam-guard plugins v1/v2
 - Depends: T01
-- Files: `glm-skills/dev-team-glm/opencode/plugins/devteam-guard.v1.js`, `glm-skills/dev-team-glm/opencode/plugins/devteam-guard.v2.js`, `glm-skills/_shared/tests/test_devteam_plugins.py`
-- Produces: plugins spawn `guard.py oc` only for tools `write`, `edit`, `patch`, `apply_patch`, `multiedit`, `shell`, `bash`, `execute`, `batch`; v2 uses `event.agent` as the role when `DEVTEAM_ROLE` is unset and the agent is one of `programmer`, `programmer-lite`, `code-reviewer`, `spot-reviewer`, `investigator`, `team-leader`
+- Files: `glm-skills/glm-dev-team/opencode/plugins/glm-devteam-guard.v1.js`, `glm-skills/glm-dev-team/opencode/plugins/glm-devteam-guard.v2.js`, `glm-skills/_shared/tests/test_devteam_plugins.py`
+- Produces: plugins spawn `guard.py oc` only for tools `write`, `edit`, `patch`, `apply_patch`, `multiedit`, `shell`, `bash`, `execute`, `batch`; v2 uses `event.agent` as the role when `DEVTEAM_ROLE` is unset and the agent is one of `glm-programmer`, `glm-programmer-lite`, `glm-code-reviewer`, `glm-spot-reviewer`, `glm-investigator`, `glm-team-leader`
 - Spec: L132-151, L336-368
 - Tier: std
 
-#### T10: dev-team OpenCode agent files
-- Files: `glm-skills/dev-team-glm/opencode/agents/programmer.md`, `glm-skills/dev-team-glm/opencode/agents/team-leader.md`
+#### T10: glm-dev-team OpenCode agent files
+- Files: `glm-skills/glm-dev-team/opencode/agents/glm-programmer.md`, `glm-skills/glm-dev-team/opencode/agents/glm-team-leader.md`
 - Spec: L132-151
-- Read: `glm-skills/dev-team-glm/scripts/devteam.py`
+- Read: `glm-skills/glm-dev-team/scripts/devteam.py`
 - Tier: light
 
 #### T11: devteam.py harness detection and dispatch routing
 - Depends: T03
-- Files: `glm-skills/dev-team-glm/scripts/devteam.py`, `glm-skills/_shared/tests/test_devteam_oc_harness.py`
+- Files: `glm-skills/glm-dev-team/scripts/devteam.py`, `glm-skills/_shared/tests/test_devteam_oc_harness.py`
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`
 - Spec: L152-172
 - Tier: std
 
 #### T12: devteam.py lane lifecycle
 - Depends: T04
-- Files: `glm-skills/dev-team-glm/scripts/devteam.py`, `glm-skills/_shared/tests/test_devteam_oc_lanes.py`
-- Consumes: `STALL_BY_ROLE = {"programmer": 900, "programmer-lite": 900, "team-leader": 900, "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; pgid file `<out_dir>/<lane id>.pgid`
+- Files: `glm-skills/glm-dev-team/scripts/devteam.py`, `glm-skills/_shared/tests/test_devteam_oc_lanes.py`
+- Consumes: `STALL_BY_ROLE = {"glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900, "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; pgid file `<out_dir>/<lane id>.pgid`
 - Spec: L152-172, L288-298
 - Tier: deep
 
 #### T13: devteam.py detached checkpoint and resume command
-- Files: `glm-skills/dev-team-glm/scripts/devteam.py`, `glm-skills/_shared/tests/test_devteam_oc_resume.py`
+- Files: `glm-skills/glm-dev-team/scripts/devteam.py`, `glm-skills/_shared/tests/test_devteam_oc_resume.py`
 - Produces: CLI `devteam.py resume <slice id> [--note TEXT]` (relaunches a fresh lane in the slice's existing worktree with the note appended to the brief, resets `.slice/stop_blocks`, clears stale `.done`/`.blocked` markers, prints a `NEXT:` line); checkpoint runs detached like `launch_lane` and is collected by `wait`/`next`
 - Spec: L152-172
 - Tier: deep
 
-#### T14: dev-team selftest checks
+#### T14: glm-dev-team selftest checks
 - Depends: T08, T11, T13
-- Files: `glm-skills/dev-team-glm/scripts/selftest.sh`
+- Files: `glm-skills/glm-dev-team/scripts/selftest.sh`
 - Spec: L132-172, L299-335
 - Tier: std
 
-#### T15: dev-team SKILL.md and README for OpenCode
+#### T15: glm-dev-team SKILL.md and README for OpenCode
 - Depends: T13, T11
-- Files: `glm-skills/dev-team-glm/SKILL.md`, `glm-skills/dev-team-glm/README.md`
+- Files: `glm-skills/glm-dev-team/SKILL.md`, `glm-skills/glm-dev-team/README.md`
 - Spec: L72-100, L132-172
-- Read: `glm-skills/systematic-debugging-glm/SKILL.md`
+- Read: `glm-skills/glm-systematic-debugging/SKILL.md`
 - Tier: std
 
 #### T16: debug_tool.py parallel defaults, lane routing, quoting, timing
-- Files: `glm-skills/systematic-debugging-glm/scripts/debug_tool.py`, `glm-skills/_shared/tests/test_debug_core.py`
+- Files: `glm-skills/glm-systematic-debugging/scripts/debug_tool.py`, `glm-skills/_shared/tests/test_debug_core.py`
 - Spec: L173-195
 - Tier: std
 
 #### T17: debug_tool.py experiment worktrees and patch order
-- Files: `glm-skills/systematic-debugging-glm/scripts/debug_tool.py`, `glm-skills/_shared/tests/test_debug_experiment.py`
+- Files: `glm-skills/glm-systematic-debugging/scripts/debug_tool.py`, `glm-skills/_shared/tests/test_debug_experiment.py`
 - Spec: L173-195
 - Tier: deep
 
 #### T18: debug_tool.py OpenCode lanes and scan context
 - Depends: T03, T05
-- Files: `glm-skills/systematic-debugging-glm/scripts/debug_tool.py`, `glm-skills/_shared/tests/test_adopt_debug.py`
+- Files: `glm-skills/glm-systematic-debugging/scripts/debug_tool.py`, `glm-skills/_shared/tests/test_adopt_debug.py`
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`; `def config_snippet(major: int, deny: list) -> str`
 - Spec: L72-100, L173-195
 - Tier: std
 
-#### T19: systematic-debugging shell script fixes
-- Files: `glm-skills/systematic-debugging-glm/scripts/bisect-parallel.sh`, `glm-skills/systematic-debugging-glm/scripts/stress.sh`, `glm-skills/_shared/tests/test_debug_scripts.py`
+#### T19: glm-systematic-debugging shell script fixes
+- Files: `glm-skills/glm-systematic-debugging/scripts/bisect-parallel.sh`, `glm-skills/glm-systematic-debugging/scripts/stress.sh`, `glm-skills/_shared/tests/test_debug_scripts.py`
 - Spec: L173-195
 - Tier: light
 
-#### T20: systematic-debugging docs, agent and command for OpenCode
+#### T20: glm-systematic-debugging docs, agent and command for OpenCode
 - Depends: T17, T18
-- Files: `glm-skills/systematic-debugging-glm/SKILL.md`, `glm-skills/systematic-debugging-glm/opencode/agents/debug-worker.md`, `glm-skills/systematic-debugging-glm/opencode/commands/debug.md`, `glm-skills/systematic-debugging-glm/references/glm-tuning.md`, `glm-skills/systematic-debugging-glm/README.md`
+- Files: `glm-skills/glm-systematic-debugging/SKILL.md`, `glm-skills/glm-systematic-debugging/opencode/agents/glm-debug-worker.md`, `glm-skills/glm-systematic-debugging/opencode/commands/glm-debug.md`, `glm-skills/glm-systematic-debugging/references/glm-tuning.md`, `glm-skills/glm-systematic-debugging/README.md`
 - Spec: L72-100, L173-195
 - Tier: light
 
 #### T21: audit.py retrieval and citation paths
-- Files: `glm-skills/requirements-code-audit-glm/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_retrieval.py`
+- Files: `glm-skills/glm-requirements-code-audit/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_retrieval.py`
 - Spec: L196-220
 - Tier: std
 
 #### T22: audit.py verdict pipeline
-- Files: `glm-skills/requirements-code-audit-glm/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_verdicts.py`
+- Files: `glm-skills/glm-requirements-code-audit/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_verdicts.py`
 - Spec: L196-220
 - Tier: deep
 
 #### T23: audit.py CLI state and resume
-- Files: `glm-skills/requirements-code-audit-glm/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_command.py`
+- Files: `glm-skills/glm-requirements-code-audit/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_command.py`
 - Spec: L196-220
 - Tier: std
 
 #### T24: audit.py OpenCode dispatch and batch sizing
 - Depends: T03, T04
-- Files: `glm-skills/requirements-code-audit-glm/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_setup_oc.py`
+- Files: `glm-skills/glm-requirements-code-audit/scripts/audit.py`, `glm-skills/_shared/tests/test_audit_setup_oc.py`
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`; CLI `python3 oc_harness.py result OUT_DIR`
 - Spec: L72-100, L196-220
 - Tier: std
 
-#### T25: requirements-code-audit docs and OpenCode agents
+#### T25: glm-requirements-code-audit docs and OpenCode agents
 - Depends: T24
-- Files: `glm-skills/requirements-code-audit-glm/SKILL.md`, `glm-skills/requirements-code-audit-glm/SETUP.md`, `glm-skills/requirements-code-audit-glm/opencode/agents/rca-investigator.md`, `glm-skills/requirements-code-audit-glm/opencode/agents/rca-verifier.md`, `glm-skills/_shared/tests/test_adopt_audit.py`
+- Files: `glm-skills/glm-requirements-code-audit/SKILL.md`, `glm-skills/glm-requirements-code-audit/SETUP.md`, `glm-skills/glm-requirements-code-audit/opencode/agents/glm-rca-investigator.md`, `glm-skills/glm-requirements-code-audit/opencode/agents/glm-rca-verifier.md`, `glm-skills/_shared/tests/test_adopt_audit.py`
 - Spec: L196-220
 - Tier: light
 
 #### T26: plan_tool.py linter fixes
-- Files: `glm-skills/writing-plans-glm/scripts/plan_tool.py`, `glm-skills/_shared/tests/test_plan_lint.py`
+- Files: `glm-skills/glm-writing-plans/scripts/plan_tool.py`, `glm-skills/_shared/tests/test_plan_lint.py`
 - Spec: L221-240
 - Tier: std
 
 #### T27: plan_tool.py OpenCode dispatch, agents and grouping
 - Depends: T03
-- Files: `glm-skills/writing-plans-glm/scripts/plan_tool.py`, `glm-skills/writing-plans-glm/opencode/agents/plan-task-writer.md`, `glm-skills/writing-plans-glm/opencode/agents/plan-task-writer-deep.md`, `glm-skills/writing-plans-glm/opencode/agents/plan-reviewer.md`, `glm-skills/_shared/tests/test_adopt_plan.py`
+- Files: `glm-skills/glm-writing-plans/scripts/plan_tool.py`, `glm-skills/glm-writing-plans/opencode/agents/glm-plan-task-writer.md`, `glm-skills/glm-writing-plans/opencode/agents/glm-plan-task-writer-deep.md`, `glm-skills/glm-writing-plans/opencode/agents/glm-plan-reviewer.md`, `glm-skills/_shared/tests/test_adopt_plan.py`
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`
-- Produces: OpenCode agents `plan-task-writer` (flash, `steps: 24`), `plan-task-writer-deep` (glm-5.3, effort max, `steps: 24`), `plan-reviewer` (glm-5.3, effort high); writer groups hold ≤ 4 tasks; group count = ceil(tasks / 4) capped at the lane width (default 8) on OpenCode
+- Produces: OpenCode agents `glm-plan-task-writer` (flash, `steps: 24`), `glm-plan-task-writer-deep` (glm-5.3, effort max, `steps: 24`), `glm-plan-reviewer` (glm-5.3, effort high); writer groups hold ≤ 4 tasks; group count = ceil(tasks / 4) capped at the lane width (default 8) on OpenCode
 - Spec: L72-100, L221-240
 - Tier: std
 
 #### T28: plan_tool.py speed optimizations
-- Files: `glm-skills/writing-plans-glm/scripts/plan_tool.py`, `glm-skills/_shared/tests/test_plan_perf.py`
+- Files: `glm-skills/glm-writing-plans/scripts/plan_tool.py`, `glm-skills/_shared/tests/test_plan_perf.py`
 - Spec: L221-240
 - Tier: std
 
-#### T29: writing-plans SKILL.md bootstrap and CHANGELOG
+#### T29: glm-writing-plans SKILL.md bootstrap and CHANGELOG
 - Depends: T27
-- Files: `glm-skills/writing-plans-glm/SKILL.md`, `glm-skills/writing-plans-glm/CHANGELOG.md`
+- Files: `glm-skills/glm-writing-plans/SKILL.md`, `glm-skills/glm-writing-plans/CHANGELOG.md`
 - Spec: L72-100, L221-240
-- Read: `glm-skills/systematic-debugging-glm/SKILL.md`
+- Read: `glm-skills/glm-systematic-debugging/SKILL.md`
 - Tier: light
 
-#### T30: brainstorming context.sh OpenCode detection
+#### T30: glm-brainstorming context.sh OpenCode detection
 - Depends: T03
-- Files: `glm-skills/brainstorming-glm/scripts/context.sh`, `glm-skills/_shared/tests/test_brainstorm_oc.py`
+- Files: `glm-skills/glm-brainstorming/scripts/context.sh`, `glm-skills/_shared/tests/test_brainstorm_oc.py`
 - Consumes: CLI `python3 oc_harness.py harness [--script PATH]` printing `<harness> <major>`
 - Spec: L241-262
 - Tier: std
 
-#### T31: brainstorming visual-companion scripts
-- Files: `glm-skills/brainstorming-glm/scripts/start-server.sh`, `glm-skills/brainstorming-glm/scripts/server.cjs`, `glm-skills/brainstorming-glm/scripts/helper.js`, `glm-skills/_shared/tests/test_brainstorm_server.py`
+#### T31: glm-brainstorming visual-companion scripts
+- Files: `glm-skills/glm-brainstorming/scripts/start-server.sh`, `glm-skills/glm-brainstorming/scripts/server.cjs`, `glm-skills/glm-brainstorming/scripts/helper.js`, `glm-skills/_shared/tests/test_brainstorm_server.py`
 - Spec: L241-262
 - Tier: std
 
-#### T32: brainstorming SKILL.md, playbooks and researcher agent
+#### T32: glm-brainstorming SKILL.md, playbooks and glm-researcher agent
 - Depends: T04, T30
-- Files: `glm-skills/brainstorming-glm/SKILL.md`, `glm-skills/brainstorming-glm/architectural.md`, `glm-skills/brainstorming-glm/visual-companion.md`, `glm-skills/brainstorming-glm/opencode/agents/researcher.md`, `glm-skills/brainstorming-glm/CHANGELOG.md`
+- Files: `glm-skills/glm-brainstorming/SKILL.md`, `glm-skills/glm-brainstorming/architectural.md`, `glm-skills/glm-brainstorming/visual-companion.md`, `glm-skills/glm-brainstorming/opencode/agents/glm-researcher.md`, `glm-skills/glm-brainstorming/CHANGELOG.md`
 - Consumes: CLI `python3 oc_harness.py result OUT_DIR`
 - Spec: L72-100, L241-262
 - Tier: std
@@ -290,16 +290,16 @@
 - Spec: L107-131
 - Tier: std
 
-#### T34: doc-generator OpenCode agent names and command
-- Files: `glm-skills/doc-generator-glm/SKILL.md`, `glm-skills/doc-generator-glm/opencode/commands/docs.md`, `glm-skills/_shared/tests/test_all_skills.py`
+#### T34: glm-doc-generator OpenCode agent names and command
+- Files: `glm-skills/glm-doc-generator/SKILL.md`, `glm-skills/glm-doc-generator/opencode/commands/glm-docs.md`, `glm-skills/_shared/tests/test_all_skills.py`
 - Spec: L263-272
 - Tier: light
 
 #### T35: Real-binary contract tests and sandbox discovery check
 - Depends: T04, T05, T09, T33
-- Files: `glm-skills/_shared/tests/test_oc_contract.py`, `glm-skills/_shared/tests/fake_provider.py`, `glm-skills/_shared/oc_harness.py`, `glm-skills/brainstorming-glm/scripts/oc_harness.py`, `glm-skills/dev-team-glm/scripts/oc_harness.py`, `glm-skills/doc-generator-glm/scripts/oc_harness.py`, `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`, `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`, `glm-skills/writing-plans-glm/scripts/oc_harness.py`, `glm-skills/doc-generator-glm/opencode/commands/docs.md`
+- Files: `glm-skills/_shared/tests/test_oc_contract.py`, `glm-skills/_shared/tests/fake_provider.py`, `glm-skills/_shared/oc_harness.py`, `glm-skills/glm-brainstorming/scripts/oc_harness.py`, `glm-skills/glm-dev-team/scripts/oc_harness.py`, `glm-skills/glm-doc-generator/scripts/oc_harness.py`, `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`, `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`, `glm-skills/glm-writing-plans/scripts/oc_harness.py`, `glm-skills/glm-doc-generator/opencode/commands/glm-docs.md`
 - Consumes: `def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list`; `def config_snippet(major: int, deny: list) -> str`; `def render_agent(text: str, major: int) -> str`
-- Produces: `OC_CONTRACT=1` opt-in module; `render_agent` stops emitting `hidden` on v2 only if the test proves a hidden agent cannot be dispatched by the `subagent` tool; `/docs` gains a `` !`cmd` `` recon line only if the test proves v2 expands it
+- Produces: `OC_CONTRACT=1` opt-in module; `render_agent` stops emitting `hidden` on v2 only if the test proves a hidden agent cannot be dispatched by the `subagent` tool; `/glm-docs` gains a `` !`cmd` `` recon line only if the test proves v2 expands it
 - Spec: L263-272, L299-368
 - Tier: deep
 
@@ -354,8 +354,8 @@ dest_root="${1:-$(dirname "$script_dir")}"
 zai_client_src="$script_dir/zai_client.py"
 oc_harness_src="$script_dir/oc_harness.py"
 
-zai_skills="systematic-debugging-glm writing-plans-glm requirements-code-audit-glm"
-oc_skills="systematic-debugging-glm writing-plans-glm requirements-code-audit-glm brainstorming-glm doc-generator-glm dev-team-glm"
+zai_skills="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit"
+oc_skills="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit glm-brainstorming glm-doc-generator glm-dev-team"
 
 for skill in $zai_skills; do
     dest="$dest_root/$skill/scripts/zai_client.py"
@@ -398,8 +398,8 @@ class TestVendored(unittest.TestCase):
         oc_harness_src = os.path.join(shared_dir, 'oc_harness.py')
 
         skills = {
-            'zai_client.py': ['systematic-debugging-glm', 'writing-plans-glm', 'requirements-code-audit-glm'],
-            'oc_harness.py': ['systematic-debugging-glm', 'writing-plans-glm', 'requirements-code-audit-glm', 'brainstorming-glm', 'doc-generator-glm', 'dev-team-glm']
+            'zai_client.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit'],
+            'oc_harness.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit', 'glm-brainstorming', 'glm-doc-generator', 'glm-dev-team']
         }
 
         sync_script = os.path.join(shared_dir, 'sync.sh')
@@ -445,13 +445,13 @@ Replace lines 10-12 to resolve plugin directory from test file location:
 ```python
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", "..", ".."))
-PLUGIN_DIR = os.path.join(REPO_ROOT, "glm-skills/dev-team-glm/opencode/plugins")
+PLUGIN_DIR = os.path.join(REPO_ROOT, "glm-skills/glm-dev-team/opencode/plugins")
 ```
 
 - [ ] **Step 6: Run test_devteam_plugins to verify it passes**
 
 Run: `cd /Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_devteam_plugins.py' -v`
-Expected: PASS (or skipped if node is not installed; at minimum no FileNotFoundError about `skills/glm/dev-team-glm`)
+Expected: PASS (or skipped if node is not installed; at minimum no FileNotFoundError about `skills/glm/glm-dev-team`)
 
 - [ ] **Step 7: Run full _shared test suite**
 
@@ -878,12 +878,12 @@ git commit -m "fix(shared): stub_opencode matches real OpenCode v1.18 and v2.0"
 
 **Files:**
 - Modify: `glm-skills/_shared/oc_harness.py`
-- Modify: `glm-skills/brainstorming-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/dev-team-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/doc-generator-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/writing-plans-glm/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-brainstorming/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-dev-team/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-doc-generator/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-writing-plans/scripts/oc_harness.py`
 - Test: `glm-skills/_shared/tests/test_oc_harness_detect.py`
 
 All commands run from `glm-skills/` (`cd glm-skills` first). Only `glm-skills/_shared/oc_harness.py` is edited by hand; the six vendored copies are refreshed by `sh _shared/sync.sh` in Step 17.
@@ -1157,17 +1157,17 @@ Append this class to the end of `_shared/tests/test_oc_harness_detect.py`:
 ```python
 class DispatchLineTest(unittest.TestCase):
     def test_v1_task_call(self):
-        line = oc_harness.dispatch_line("plan-task-writer", "/w/briefs/T01.md", "plan T01", 1)
+        line = oc_harness.dispatch_line("glm-plan-task-writer", "/w/briefs/T01.md", "plan T01", 1)
         self.assertEqual(
             line,
-            'task(subagent_type="plan-task-writer", description="plan T01", '
+            'task(subagent_type="glm-plan-task-writer", description="plan T01", '
             'prompt="Read /w/briefs/T01.md and follow it exactly.")')
 
     def test_v2_background_call(self):
-        line = oc_harness.dispatch_line("plan-task-writer", "/w/briefs/T01.md", "plan T01", 2)
+        line = oc_harness.dispatch_line("glm-plan-task-writer", "/w/briefs/T01.md", "plan T01", 2)
         self.assertEqual(
             line,
-            'subagent(agent="plan-task-writer", description="plan T01", '
+            'subagent(agent="glm-plan-task-writer", description="plan T01", '
             'prompt="Read /w/briefs/T01.md and follow it exactly.", background=true)')
 
     def test_v2_foreground_call(self):
@@ -1304,12 +1304,12 @@ Expected: PASS, "Ran 23 tests" and "OK"
 
 If `_shared/sync.sh` still contains `skills/glm`, its path fix (T01) has not landed yet. Do not run it in that case: the old script runs `mkdir -p` on paths outside the repo before it fails. Copy the file directly instead. The command below makes that choice itself:
 
-Run: `if grep -q 'skills/glm' _shared/sync.sh; then for s in brainstorming-glm dev-team-glm doc-generator-glm requirements-code-audit-glm systematic-debugging-glm writing-plans-glm; do cp _shared/oc_harness.py "$s/scripts/oc_harness.py"; done; else sh _shared/sync.sh; fi && for s in brainstorming-glm dev-team-glm doc-generator-glm requirements-code-audit-glm systematic-debugging-glm writing-plans-glm; do cmp _shared/oc_harness.py "$s/scripts/oc_harness.py" || echo "DIFF $s"; done`
+Run: `if grep -q 'skills/glm' _shared/sync.sh; then for s in glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans; do cp _shared/oc_harness.py "$s/scripts/oc_harness.py"; done; else sh _shared/sync.sh; fi && for s in glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans; do cmp _shared/oc_harness.py "$s/scripts/oc_harness.py" || echo "DIFF $s"; done`
 Expected: no `DIFF` line (every vendored copy is byte-identical to `_shared/oc_harness.py`)
 
 - [ ] **Step 18: Run the vendored copy's CLI and the full suite**
 
-Run: `env -u OPENCODE -u OPENCODE_TERMINAL -u DEVTEAM_HARNESS -u OPENCODE_CONFIG_DIR CLAUDECODE=1 python3 dev-team-glm/scripts/oc_harness.py harness --script /tmp/plain/scripts/tool.py`
+Run: `env -u OPENCODE -u OPENCODE_TERMINAL -u DEVTEAM_HARNESS -u OPENCODE_CONFIG_DIR CLAUDECODE=1 python3 glm-dev-team/scripts/oc_harness.py harness --script /tmp/plain/scripts/tool.py`
 Expected: `claude 0`
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
@@ -1319,7 +1319,7 @@ Expected: no failure or error in `test_oc_harness_detect` or `test_vendored`; th
 
 ```bash
 cd ..
-git add glm-skills/_shared/oc_harness.py glm-skills/brainstorming-glm/scripts/oc_harness.py glm-skills/dev-team-glm/scripts/oc_harness.py glm-skills/doc-generator-glm/scripts/oc_harness.py glm-skills/requirements-code-audit-glm/scripts/oc_harness.py glm-skills/systematic-debugging-glm/scripts/oc_harness.py glm-skills/writing-plans-glm/scripts/oc_harness.py glm-skills/_shared/tests/test_oc_harness_detect.py
+git add glm-skills/_shared/oc_harness.py glm-skills/glm-brainstorming/scripts/oc_harness.py glm-skills/glm-dev-team/scripts/oc_harness.py glm-skills/glm-doc-generator/scripts/oc_harness.py glm-skills/glm-requirements-code-audit/scripts/oc_harness.py glm-skills/glm-systematic-debugging/scripts/oc_harness.py glm-skills/glm-writing-plans/scripts/oc_harness.py glm-skills/_shared/tests/test_oc_harness_detect.py
 git commit -m "feat(shared): harness(), major() and dispatch_line() with a harness CLI subcommand"
 cd glm-skills
 ```
@@ -1334,16 +1334,16 @@ cd glm-skills
 
 **Interfaces:**
 - Consumes: `STUB_OC_VERSION`; `2.`; `--dir`; `--standalone`; `timestamp`; `sessionID`; `step_finish`; `{"type":"error","error":{"type":"provider.rate-limit","status":429}}`; `--dir`; `--standalone`; `#`; `{"type":"error","error":{"name":"APIError","data":{"statusCode":429,"responseBody":"{\"error\":{\"code\":\"1302\"}}"}}}`; `STUB_OC_LOG`; `{"argv": [...], "stdin": "..."}`; `aborted`; `{"type":"aborted"}`
-- Produces: `def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list`; `_start_lane`; `def is_throttle_event(event: dict) -> bool`; `STALL_BY_ROLE = {"programmer": 900, "programmer-lite": 900, "team-leader": 900, "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; `def lane_results(out_dir: str) -> list`; `python3 oc_harness.py result OUT_DIR`; `<out_dir>/<lane id>.pgid`; `def check(skill_dir: str, home: str = "") -> list`
+- Produces: `def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list`; `_start_lane`; `def is_throttle_event(event: dict) -> bool`; `STALL_BY_ROLE = {"glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900, "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; `def lane_results(out_dir: str) -> list`; `python3 oc_harness.py result OUT_DIR`; `<out_dir>/<lane id>.pgid`; `def check(skill_dir: str, home: str = "") -> list`
 
 **Files:**
 - Modify: `glm-skills/_shared/oc_harness.py`
-- Modify: `glm-skills/brainstorming-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/dev-team-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/doc-generator-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/writing-plans-glm/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-brainstorming/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-dev-team/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-doc-generator/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-writing-plans/scripts/oc_harness.py`
 - Test: `glm-skills/_shared/tests/test_oc_run.py`
 
 All commands run from `glm-skills/` (`cd glm-skills` first). Edit only `_shared/oc_harness.py` by hand; the six `scripts/oc_harness.py` copies are regenerated by `sh _shared/sync.sh` in Step 25. Other edits may already have landed in `_shared/oc_harness.py` (harness detection, dispatch rendering, `render_agent`, caching), so locate every edit below by the code it replaces, not by line number. The stub `_shared/tests/stub_opencode.py` already logs one JSON line per run to `$STUB_OC_LOG` in the shape `{"argv": [...], "stdin": "..."}`, emulates v2 when `STUB_OC_VERSION` starts with `2.`, answers the brief `throttle` with a v1 error `{"type":"error","error":{"name":"APIError","data":{"statusCode":429,"responseBody":"{\"error\":{\"code\":\"1302\"}}"}}}` or the v2 error `{"type":"error","error":{"type":"provider.rate-limit","status":429}}`, and answers the brief `aborted` with `{"type":"aborted"}`.
@@ -1754,30 +1754,30 @@ Add this class to `_shared/tests/test_oc_run.py`, directly above `class RunLanes
 class LaneStallTest(unittest.TestCase):
     def test_stall_by_role_table(self):
         self.assertEqual(oc_harness.STALL_BY_ROLE, {
-            "programmer": 900, "programmer-lite": 900, "team-leader": 900,
-            "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600,
+            "glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900,
+            "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600,
         })
 
     def test_lane_stall_value_wins(self):
-        self.assertEqual(oc_harness.lane_stall({"stall": 42, "role": "programmer"}), 42)
+        self.assertEqual(oc_harness.lane_stall({"stall": 42, "role": "glm-programmer"}), 42)
         self.assertEqual(oc_harness.lane_stall({"stall": "42"}), 42)
 
     def test_role_defaults(self):
-        for role, seconds in (("programmer", 900), ("programmer-lite", 900), ("team-leader", 900),
-                              ("code-reviewer", 600), ("spot-reviewer", 600), ("investigator", 600)):
+        for role, seconds in (("glm-programmer", 900), ("glm-programmer-lite", 900), ("glm-team-leader", 900),
+                              ("glm-code-reviewer", 600), ("glm-spot-reviewer", 600), ("glm-investigator", 600)):
             with self.subTest(role=role):
                 self.assertEqual(oc_harness.lane_stall({"role": role}), seconds)
 
     def test_role_from_env_then_agent(self):
-        self.assertEqual(oc_harness.lane_stall({"env": {"DEVTEAM_ROLE": "spot-reviewer"}}), 600)
-        self.assertEqual(oc_harness.lane_stall({"agent": "team-leader"}), 900)
+        self.assertEqual(oc_harness.lane_stall({"env": {"DEVTEAM_ROLE": "glm-spot-reviewer"}}), 600)
+        self.assertEqual(oc_harness.lane_stall({"agent": "glm-team-leader"}), 900)
 
     def test_unknown_role_uses_default(self):
         self.assertEqual(oc_harness.lane_stall({"agent": "worker"}), 180)
         self.assertEqual(oc_harness.lane_stall({"agent": "worker"}, default=30), 30)
 
     def test_invalid_stall_falls_through(self):
-        self.assertEqual(oc_harness.lane_stall({"stall": "soon", "role": "investigator"}), 600)
+        self.assertEqual(oc_harness.lane_stall({"stall": "soon", "role": "glm-investigator"}), 600)
         self.assertEqual(oc_harness.lane_stall({"stall": 0}), 180)
         self.assertEqual(oc_harness.lane_stall({"stall": None}, default=7), 7)
 ```
@@ -1804,7 +1804,7 @@ Expected: FAIL with "AttributeError: module 'oc_harness' has no attribute 'STALL
 In `_shared/oc_harness.py`, directly above `def _read_events(state):`, add:
 
 ```python
-STALL_BY_ROLE = {"programmer": 900, "programmer-lite": 900, "team-leader": 900, "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600}
+STALL_BY_ROLE = {"glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900, "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600}
 
 
 def lane_stall(lane: dict, default: int = 180) -> int:
@@ -2368,7 +2368,7 @@ Expected: PASS, last line `OK`
 
 - [ ] **Step 25: Vendor the harness into every skill**
 
-Run: `sh _shared/sync.sh && for d in brainstorming-glm dev-team-glm doc-generator-glm requirements-code-audit-glm systematic-debugging-glm writing-plans-glm; do cmp _shared/oc_harness.py "$d/scripts/oc_harness.py"; done`
+Run: `sh _shared/sync.sh && for d in glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans; do cmp _shared/oc_harness.py "$d/scripts/oc_harness.py"; done`
 Expected: no output from the `cmp` loop (all six copies byte-identical)
 
 - [ ] **Step 26: Run the full unit suite**
@@ -2376,16 +2376,16 @@ Expected: no output from the `cmp` loop (all six copies byte-identical)
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: PASS, last line `OK`
 
-- [ ] **Step 27: Run the dev-team selftest**
+- [ ] **Step 27: Run the glm-dev-team selftest**
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` 324 or more and `failed=` 5 or fewer (only the known macOS failures: GNU `sed -i`, 4x `/private/var` resolve, one bash 3.2 word-split)
 
 - [ ] **Step 28: Commit**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-git add glm-skills/_shared/oc_harness.py glm-skills/brainstorming-glm/scripts/oc_harness.py glm-skills/dev-team-glm/scripts/oc_harness.py glm-skills/doc-generator-glm/scripts/oc_harness.py glm-skills/requirements-code-audit-glm/scripts/oc_harness.py glm-skills/systematic-debugging-glm/scripts/oc_harness.py glm-skills/writing-plans-glm/scripts/oc_harness.py glm-skills/_shared/tests/test_oc_run.py
+git add glm-skills/_shared/oc_harness.py glm-skills/glm-brainstorming/scripts/oc_harness.py glm-skills/glm-dev-team/scripts/oc_harness.py glm-skills/glm-doc-generator/scripts/oc_harness.py glm-skills/glm-requirements-code-audit/scripts/oc_harness.py glm-skills/glm-systematic-debugging/scripts/oc_harness.py glm-skills/glm-writing-plans/scripts/oc_harness.py glm-skills/_shared/tests/test_oc_run.py
 git commit -m "fix(shared): brief on stdin, error-event throttles, per-role stall, pgid lifecycle, result subcommand, check --home"
 ```
 
@@ -2402,12 +2402,12 @@ git commit -m "fix(shared): brief on stdin, error-event throttles, per-role stal
 
 **Files:**
 - Modify: `glm-skills/_shared/oc_harness.py`
-- Modify: `glm-skills/brainstorming-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/dev-team-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/doc-generator-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/writing-plans-glm/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-brainstorming/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-dev-team/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-doc-generator/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-writing-plans/scripts/oc_harness.py`
 - Test: `glm-skills/_shared/tests/test_oc_render.py`
 
 All commands run from `glm-skills/` (`cd glm-skills`). An earlier task edits `_shared/oc_harness.py` before this one, so find the edit points by the code shown below, not by line numbers. Edit only `_shared/oc_harness.py` by hand. The six vendored copies are refreshed by `sh _shared/sync.sh` in Step 9.
@@ -2488,11 +2488,11 @@ Replace the whole existing `test_config_snippet_contains_provider_and_deny_list`
 
 ```python
     def test_config_snippet_contains_provider_and_deny_list(self):
-        snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
+        snippet = oc_harness.config_snippet(1, ["glm-systematic-debugging", "glm-writing-plans"])
         data = _snippet_json(snippet)
         self.assertIn("zai-coding-plan", data["provider"])
-        self.assertEqual(data["permission"]["skill"]["systematic-debugging"], "deny")
-        self.assertEqual(data["permission"]["skill"]["writing-plans"], "deny")
+        self.assertEqual(data["permission"]["skill"]["glm-systematic-debugging"], "deny")
+        self.assertEqual(data["permission"]["skill"]["glm-writing-plans"], "deny")
         self.assertIn("web-search-prime", data["mcp"])
         self.assertNotIn("permission", _snippet_json(oc_harness.config_snippet(1, [])))
 ```
@@ -2515,7 +2515,7 @@ Then add these two methods directly after it:
 
     def test_config_snippet_carries_websearch_note_and_mcp_option(self):
         for major in (1, 2):
-            snippet = oc_harness.config_snippet(major, ["writing-plans"])
+            snippet = oc_harness.config_snippet(major, ["glm-writing-plans"])
             notes = [ln for ln in snippet.splitlines() if ln.startswith("//")]
             self.assertTrue(notes)
             self.assertTrue(snippet.startswith("//"))
@@ -2585,7 +2585,7 @@ Expected: PASS (`OK`, no failures)
 
 - [ ] **Step 9: Vendor the change and verify the copies are byte-identical**
 
-Run: `sh _shared/sync.sh && for d in brainstorming-glm dev-team-glm doc-generator-glm requirements-code-audit-glm systematic-debugging-glm writing-plans-glm; do cmp _shared/oc_harness.py "$d/scripts/oc_harness.py" || echo "DIFF $d"; done`
+Run: `sh _shared/sync.sh && for d in glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans; do cmp _shared/oc_harness.py "$d/scripts/oc_harness.py" || echo "DIFF $d"; done`
 Expected: no `DIFF` line and no `cmp` output
 
 - [ ] **Step 10: Run the full unit suite**
@@ -2596,7 +2596,7 @@ Expected: PASS, ending in `OK` (no new failures versus the run before this task)
 - [ ] **Step 11: Commit**
 
 ```bash
-git add glm-skills/_shared/oc_harness.py glm-skills/brainstorming-glm/scripts/oc_harness.py glm-skills/dev-team-glm/scripts/oc_harness.py glm-skills/doc-generator-glm/scripts/oc_harness.py glm-skills/requirements-code-audit-glm/scripts/oc_harness.py glm-skills/systematic-debugging-glm/scripts/oc_harness.py glm-skills/writing-plans-glm/scripts/oc_harness.py glm-skills/_shared/tests/test_oc_render.py
+git add glm-skills/_shared/oc_harness.py glm-skills/glm-brainstorming/scripts/oc_harness.py glm-skills/glm-dev-team/scripts/oc_harness.py glm-skills/glm-doc-generator/scripts/oc_harness.py glm-skills/glm-requirements-code-audit/scripts/oc_harness.py glm-skills/glm-systematic-debugging/scripts/oc_harness.py glm-skills/glm-writing-plans/scripts/oc_harness.py glm-skills/_shared/tests/test_oc_render.py
 git commit -m "feat(shared): v2 agents deny execute and set websearch; snippet defines effort variants and websearch note"
 ```
 
@@ -2611,9 +2611,9 @@ git commit -m "feat(shared): v2 agents deny execute and set websearch; snippet d
 
 **Files:**
 - Modify: `glm-skills/_shared/zai_client.py:51-128`
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/zai_client.py`
-- Modify: `glm-skills/systematic-debugging-glm/scripts/zai_client.py`
-- Modify: `glm-skills/writing-plans-glm/scripts/zai_client.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/zai_client.py`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/zai_client.py`
+- Modify: `glm-skills/glm-writing-plans/scripts/zai_client.py`
 - Test: `glm-skills/_shared/tests/test_zai_client.py`
 
 All commands run from `glm-skills/` (`cd glm-skills`). Only `_shared/zai_client.py` is edited by hand; the three `scripts/zai_client.py` copies are overwritten from it in Step 9 and must end byte-identical.
@@ -2996,13 +2996,13 @@ Expected: PASS (`OK`; every test in the file, including the 5 `TestNoAnthropicKe
 These are the `zai_client.py` copies that `sh _shared/sync.sh` makes; copying them directly keeps this step correct whether or not the sync.sh path fix has landed yet.
 
 ```bash
-cp _shared/zai_client.py requirements-code-audit-glm/scripts/zai_client.py
-cp _shared/zai_client.py systematic-debugging-glm/scripts/zai_client.py
-cp _shared/zai_client.py writing-plans-glm/scripts/zai_client.py
+cp _shared/zai_client.py glm-requirements-code-audit/scripts/zai_client.py
+cp _shared/zai_client.py glm-systematic-debugging/scripts/zai_client.py
+cp _shared/zai_client.py glm-writing-plans/scripts/zai_client.py
 ```
 
-Run: `for d in requirements-code-audit-glm systematic-debugging-glm writing-plans-glm; do cmp _shared/zai_client.py "$d/scripts/zai_client.py" && echo "same $d"; done`
-Expected: three lines `same requirements-code-audit-glm`, `same systematic-debugging-glm`, `same writing-plans-glm` and no `differ` output
+Run: `for d in glm-requirements-code-audit glm-systematic-debugging glm-writing-plans; do cmp _shared/zai_client.py "$d/scripts/zai_client.py" && echo "same $d"; done`
+Expected: three lines `same glm-requirements-code-audit`, `same glm-systematic-debugging`, `same glm-writing-plans` and no `differ` output
 
 - [ ] **Step 10: Run the full unit suite**
 
@@ -3013,7 +3013,7 @@ Expected: no failure or error from `test_zai_client.py`; the only red tests, if 
 
 ```bash
 cd ..
-git add glm-skills/_shared/zai_client.py glm-skills/requirements-code-audit-glm/scripts/zai_client.py glm-skills/systematic-debugging-glm/scripts/zai_client.py glm-skills/writing-plans-glm/scripts/zai_client.py glm-skills/_shared/tests/test_zai_client.py
+git add glm-skills/_shared/zai_client.py glm-skills/glm-requirements-code-audit/scripts/zai_client.py glm-skills/glm-systematic-debugging/scripts/zai_client.py glm-skills/glm-writing-plans/scripts/zai_client.py glm-skills/_shared/tests/test_zai_client.py
 git commit -m "fix(shared): never send ANTHROPIC_API_KEY to Z.ai; read OpenCode v2 key from opencode.db read-only"
 ```
 
@@ -3024,7 +3024,7 @@ git commit -m "fix(shared): never send ANTHROPIC_API_KEY to Z.ai; read OpenCode 
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/scripts/guard.py:163-790`
+- Modify: `glm-skills/glm-dev-team/scripts/guard.py:163-790`
 - Test: `glm-skills/_shared/tests/test_guard_oc.py`
 
 This task hardens the `guard.py oc` bridge against the inputs OpenCode really sends. It covers spec rows DG1 (args as a JSON string), DG2 (indented patch headers), DG3 (edit/write with no path), DG6 (symlink `abspath` vs `resolve()` mismatch), DG7 (`batch` / `question` / `execute` in lane mode) and DG11 (deny message names the pinned forms). The guard stays fail-open for internal errors (`main()` is unchanged). The new denies apply only when a role is set, which is lane mode. All commands run from `glm-skills/` (`cd glm-skills` first). Every new test method goes inside `class GuardOcTest`, directly after `test_guard_oc_function_no_role` and before `if __name__ == "__main__":`.
@@ -3044,7 +3044,7 @@ Add these methods to `GuardOcTest` in `_shared/tests/test_guard_oc.py`:
         rc, out = self.oc("shell", json.dumps({"command": "git push origin main"}))
         self.assertEqual(decision(out)[0], "deny")
         rc, out = self.oc("edit", json.dumps({"filePath": "src/a.py", "oldString": "a", "newString": "b"}))
-        self.assertEqual(decision(out), ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+        self.assertEqual(decision(out), ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
 
     def test_unparseable_args_deny_in_lane_mode(self):
         for args in ("{not json", "[1, 2]", ["src/a.py"], 7):
@@ -3070,13 +3070,13 @@ Add these methods to `GuardOcTest` in `_shared/tests/test_guard_oc.py`:
 
     def test_batch_and_question_denied_in_lane_mode(self):
         for tool in ("batch", "question"):
-            for role in ("programmer", "code-reviewer"):
+            for role in ("glm-programmer", "glm-code-reviewer"):
                 with self.subTest(tool=tool, role=role):
                     rc, out = self.oc(tool, {}, role=role)
                     self.assertEqual(rc, 0)
                     verdict, reason = decision(out)
                     self.assertEqual(verdict, "deny")
-                    self.assertIn(f"`{tool}` is disabled in dev-team lanes", reason)
+                    self.assertIn(f"`{tool}` is disabled in glm-dev-team lanes", reason)
 ```
 
 - [ ] **Step 2: Run the new tests to verify they fail**
@@ -3086,15 +3086,15 @@ Expected: FAIL. Each failure reads `AssertionError: '' != 'deny'`, because the g
 
 - [ ] **Step 3: Parse the args and deny the lane-mode tools**
 
-In `dev-team-glm/scripts/guard.py`, insert these definitions directly after the `oc_capture` function and before `def guard_oc(inp):`:
+In `glm-dev-team/scripts/guard.py`, insert these definitions directly after the `oc_capture` function and before `def guard_oc(inp):`:
 
 ```python
 OC_LANE_DENY_TOOLS = {
-    "execute": "OpenCode Code Mode (`execute`) is disabled in dev-team lanes so every tool call "
+    "execute": "OpenCode Code Mode (`execute`) is disabled in glm-dev-team lanes so every tool call "
                "can be checked on its own. Call the tools directly.",
-    "batch": "`batch` is disabled in dev-team lanes so every tool call can be checked on its own. "
+    "batch": "`batch` is disabled in glm-dev-team lanes so every tool call can be checked on its own. "
              "Call the tools one at a time.",
-    "question": "`question` is disabled in dev-team lanes: a headless lane has nobody to answer it, so the "
+    "question": "`question` is disabled in glm-dev-team lanes: a headless lane has nobody to answer it, so the "
                 "run would block. Decide from the brief, or end with `## Status: Blocked` and the question.",
 }
 
@@ -3117,11 +3117,11 @@ In `guard_oc`, replace this block:
 ```python fragment
     tool = (inp.get("tool") or "").lower()
     args = inp.get("args") or {}
-    prog = role == "programmer"
+    prog = role == "glm-programmer"
     cwd = inp.get("cwd") or os.getcwd()
     base = {"cwd": cwd, "agent_type": role}
     if tool == "execute":
-        deny("dev-team: OpenCode Code Mode (`execute`) is disabled in dev-team lanes so every tool call "
+        deny("glm-dev-team: OpenCode Code Mode (`execute`) is disabled in glm-dev-team lanes so every tool call "
              "can be checked on its own. Call the tools directly.")
 ```
 
@@ -3131,13 +3131,13 @@ with:
     tool = (inp.get("tool") or "").lower()
     args = oc_args(inp.get("args"))
     if args is None:
-        deny(f"dev-team: the `{tool}` arguments could not be parsed as a JSON object, so the call cannot "
+        deny(f"glm-dev-team: the `{tool}` arguments could not be parsed as a JSON object, so the call cannot "
              "be checked. Retry it with well-formed arguments.")
-    prog = role == "programmer"
+    prog = role == "glm-programmer"
     cwd = inp.get("cwd") or os.getcwd()
     base = {"cwd": cwd, "agent_type": role}
     if tool in OC_LANE_DENY_TOOLS:
-        deny("dev-team: " + OC_LANE_DENY_TOOLS[tool])
+        deny("glm-dev-team: " + OC_LANE_DENY_TOOLS[tool])
 ```
 
 In the same function, replace the start of the shell branch:
@@ -3155,7 +3155,7 @@ with:
         workdir = args.get("workdir")
         command = args.get("command")
         if not isinstance(command, str) or (workdir is not None and not isinstance(workdir, str)):
-            deny(f"dev-team: `{tool}` needs a string `command` (and a string `workdir` when one is given); "
+            deny(f"glm-dev-team: `{tool}` needs a string `command` (and a string `workdir` when one is given); "
                  "these arguments cannot be checked.")
         if workdir:
 ```
@@ -3184,14 +3184,14 @@ Add these methods to `GuardOcTest`:
 
     def test_indented_patch_header_denied_for_read_only_role(self):
         patch = "*** Begin Patch\n    *** Update File: src/a.py\n@@\n-x\n+y\n*** End Patch\n"
-        rc, out = self.oc("patch", {"patchText": patch}, role="code-reviewer")
+        rc, out = self.oc("patch", {"patchText": patch}, role="glm-code-reviewer")
         self.assertEqual(rc, 0)
         verdict, reason = decision(out)
         self.assertEqual(verdict, "deny")
         self.assertIn("This role is read-only", reason)
 
     def test_headerless_patch_denied_for_every_role(self):
-        for role in ("programmer", "code-reviewer"):
+        for role in ("glm-programmer", "glm-code-reviewer"):
             with self.subTest(role=role):
                 rc, out = self.oc("patch", {"patchText": "@@\n-x\n+y\n"}, role=role)
                 self.assertEqual(rc, 0)
@@ -3203,7 +3203,7 @@ Add these methods to `GuardOcTest`:
         for tool, args in (("write", {"content": "x"}),
                            ("edit", {"oldString": "a", "newString": "b"}),
                            ("write", {"filePath": "", "content": "x"})):
-            for role in ("programmer", "code-reviewer"):
+            for role in ("glm-programmer", "glm-code-reviewer"):
                 with self.subTest(tool=tool, args=args, role=role):
                     rc, out = self.oc(tool, args, role=role)
                     self.assertEqual(rc, 0)
@@ -3214,7 +3214,7 @@ Add these methods to `GuardOcTest`:
     def test_edit_ro_mode_without_path_denies(self):
         r = subprocess.run([sys.executable, str(GUARD), "edit-ro"],
                            input=json.dumps({"tool_input": {}, "cwd": str(self.wt),
-                                             "agent_type": "code-reviewer"}),
+                                             "agent_type": "glm-code-reviewer"}),
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0)
         verdict, reason = decision(r.stdout)
@@ -3225,11 +3225,11 @@ Add these methods to `GuardOcTest`:
 - [ ] **Step 6: Run the new tests to verify they fail**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_guard_oc.py' -k test_indented_patch_header -k test_headerless_patch_denied_for_every_role -k test_edit_without_path_denied_for_every_role -k test_edit_ro_mode_without_path_denies`
-Expected: FAIL with `FAILED (failures=10)`. The programmer indented-header test fails with `AssertionError: 'allow' != 'deny'`. The read-only, headerless-reviewer and no-path cases fail with `AssertionError: '' != 'deny'` or with a `names no file` assertion (not found in the reason `` `` is outside any slice worktree``). The programmer headerless-patch subtest already passes.
+Expected: FAIL with `FAILED (failures=10)`. The glm-programmer indented-header test fails with `AssertionError: 'allow' != 'deny'`. The read-only, headerless-reviewer and no-path cases fail with `AssertionError: '' != 'deny'` or with a `names no file` assertion (not found in the reason `` `` is outside any slice worktree``). The glm-programmer headerless-patch subtest already passes.
 
 - [ ] **Step 7: Check every stripped header and deny a write that names no file**
 
-In `dev-team-glm/scripts/guard.py`, replace the `OC_PATCH_PATH` regex and `oc_patch_paths` function:
+In `glm-dev-team/scripts/guard.py`, replace the `OC_PATCH_PATH` regex and `oc_patch_paths` function:
 
 ```python fragment
 OC_PATCH_PATH = re.compile(r"^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$", re.M)
@@ -3330,10 +3330,10 @@ Add this method to `GuardOcTest`:
                 with self.subTest(filePath=fp):
                     rc, out = run_oc({"tool": "edit",
                                       "args": {"filePath": fp, "oldString": "a", "newString": "b"},
-                                      "cwd": str(link), "role": "programmer"})
+                                      "cwd": str(link), "role": "glm-programmer"})
                     self.assertEqual(rc, 0)
                     self.assertEqual(decision(out),
-                                     ("allow", "dev-team: `src/a.py` is inside the slice footprint"))
+                                     ("allow", "glm-dev-team: `src/a.py` is inside the slice footprint"))
         finally:
             shutil.rmtree(linkdir, ignore_errors=True)
 ```
@@ -3388,16 +3388,16 @@ Add these methods to `GuardOcTest`:
 - [ ] **Step 14: Run the new tests to verify they fail**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_guard_oc.py' -k test_unapproved_shell_deny`
-Expected: FAIL with `FAILED (failures=2)`. Each failure is an `AssertionError` saying the expected text is `not found in 'dev-team: OpenCode has no interactive fallback, so a bash command that isn't explicitly pre-approved is denied instead of silently allowed.'`.
+Expected: FAIL with `FAILED (failures=2)`. Each failure is an `AssertionError` saying the expected text is `not found in 'glm-dev-team: OpenCode has no interactive fallback, so a bash command that isn't explicitly pre-approved is denied instead of silently allowed.'`.
 
 - [ ] **Step 15: Add the pinned forms to the deny message**
 
-In `dev-team-glm/scripts/guard.py`, insert this function directly after `oc_args`:
+In `glm-dev-team/scripts/guard.py`, insert this function directly after `oc_args`:
 
 ```python
 def oc_pinned_hint(cwd, prog):
     """The command forms this lane may run without a prompt, for the unapproved-shell deny message:
-    `.slice/allow` for a programmer, the plan's gate commands for a read-only role."""
+    `.slice/allow` for a glm-programmer, the plan's gate commands for a read-only role."""
     try:
         if prog:
             wt = find_slice_root(cwd)
@@ -3418,7 +3418,7 @@ In the shell branch of `guard_oc`, replace:
 
 ```python fragment
         if not out.strip():
-            deny("dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
+            deny("glm-dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
                  "explicitly pre-approved is denied instead of silently allowed.")
 ```
 
@@ -3426,7 +3426,7 @@ with:
 
 ```python fragment
         if not out.strip():
-            deny("dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
+            deny("glm-dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
                  "explicitly pre-approved is denied instead of silently allowed."
                  + oc_pinned_hint(base["cwd"], prog))
 ```
@@ -3441,9 +3441,9 @@ Expected: PASS. The output ends with `OK`.
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: no failure or error in any `test_guard_oc` or other guard test. The only failures allowed are the pre-existing stale-fixture-path ones that were already red before this task.
 
-- [ ] **Step 18: Run the dev-team selftest**
+- [ ] **Step 18: Run the glm-dev-team selftest**
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` is 324 or more and `failed=` is 5 or fewer. The only failures are the known macOS ones: GNU `sed -i`, 4× `/private/var` resolve, and a bash 3.2 word-split.
 
 - [ ] **Step 19: Commit**
@@ -3452,8 +3452,8 @@ Run the commit from the git root (one level above `glm-skills/`).
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-git add glm-skills/dev-team-glm/scripts/guard.py glm-skills/_shared/tests/test_guard_oc.py
-git commit -m "fix(dev-team): harden guard.py oc input: JSON-string args, stripped patch headers, no-path deny, resolved paths, batch/question deny, pinned forms in deny"
+git add glm-skills/glm-dev-team/scripts/guard.py glm-skills/_shared/tests/test_guard_oc.py
+git commit -m "fix(glm-dev-team): harden guard.py oc input: JSON-string args, stripped patch headers, no-path deny, resolved paths, batch/question deny, pinned forms in deny"
 ```
 
 ---
@@ -3465,7 +3465,7 @@ git commit -m "fix(dev-team): harden guard.py oc input: JSON-string args, stripp
 **Runs after:** T07 (same files)
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/scripts/guard.py`
+- Modify: `glm-skills/glm-dev-team/scripts/guard.py`
 - Test: `glm-skills/_shared/tests/test_guard_readonly.py`
 
 This task covers spec rows DG4 (write/exec forms in the read-only allow-list), DG5 (rewriting formatters for read-only roles) and the `guard.py` half of DG14 (`devteam.py status` / `probe` for read-only roles). An earlier task has already edited `guard.py` (the `guard_oc` bridge). Anchor every edit below on the quoted code, not on line numbers. All commands run from `glm-skills/` (`cd glm-skills` first).
@@ -3484,7 +3484,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parents[2] / "dev-team-glm" / "scripts" / "guard.py"
+GUARD = Path(__file__).resolve().parents[2] / "glm-dev-team" / "scripts" / "guard.py"
 
 
 def load_guard():
@@ -3591,7 +3591,7 @@ Expected: FAIL. The run ends with `FAILED (failures=3)`. The failures are `Asser
 
 - [ ] **Step 3: Add the write/exec form detector to guard.py**
 
-In `dev-team-glm/scripts/guard.py`, insert this block directly after the `def path_args(argv):` function and before `def segment_allowed(`:
+In `glm-dev-team/scripts/guard.py`, insert this block directly after the `def path_args(argv):` function and before `def segment_allowed(`:
 
 ```python
 def _has(rest, *flags):
@@ -3815,7 +3815,7 @@ Expected: FAIL. The run ends with `FAILED (failures=2)`. The failures are `Asser
 
 - [ ] **Step 9: Add the formatter detector**
 
-In `dev-team-glm/scripts/guard.py`, insert this function directly before `def write_exec_form(`:
+In `glm-dev-team/scripts/guard.py`, insert this function directly before `def write_exec_form(`:
 
 ```python
 def rewrites_files(head, rest):
@@ -3877,15 +3877,15 @@ Append to the end of `_shared/tests/test_guard_readonly.py`:
 ```python
 class DevteamStatusProbeTest(GuardCase):
     STATUS = [
-        "python3 dev-team-glm/scripts/devteam.py status",
-        "python3 /opt/skills/dev-team-glm/scripts/devteam.py probe",
+        "python3 glm-dev-team/scripts/devteam.py status",
+        "python3 /opt/skills/glm-dev-team/scripts/devteam.py probe",
         "python devteam.py status",
     ]
     OTHER = [
-        "python3 dev-team-glm/scripts/devteam.py claim S1",
+        "python3 glm-dev-team/scripts/devteam.py claim S1",
         "python3 devteam.py integrate S1",
         "python3 notdevteam.py status",
-        "python3 dev-team-glm/scripts/guard.py oc",
+        "python3 glm-dev-team/scripts/guard.py oc",
     ]
 
     def test_status_and_probe_allowed_for_read_only_roles(self):
@@ -3913,7 +3913,7 @@ In `segment_allowed`, inside the interpreter branch `if head in ("python", "pyth
         if head in ("python", "python3", "node", "ruby", "php", "bash", "sh", "elixir"):
             if readonly and head in ("python", "python3") and len(argv) >= 3 and \
                     (argv[1] == "devteam.py" or argv[1].endswith("/devteam.py")) and argv[2] in ("status", "probe"):
-                return "dev-team engine status/probe (read-only)"
+                return "glm-dev-team engine status/probe (read-only)"
             if any(a in INTERPRETER_EVAL_FLAGS for a in argv[1:]):
                 return None
 ```
@@ -3923,38 +3923,38 @@ In `segment_allowed`, inside the interpreter branch `if head in ("python", "pyth
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_guard_readonly.py'`
 Expected: PASS (`Ran 11 tests`, `OK`)
 
-- [ ] **Step 15: Run the full suite and the dev-team selftest**
+- [ ] **Step 15: Run the full suite and the glm-dev-team selftest**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: no failure or error comes from `test_guard_readonly.py` or any other guard test. Any remaining red is limited to the known stale-fixture baseline.
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` is at least 324 and `failed=` is at most 5 (only the 5 known macOS failures).
 
 - [ ] **Step 16: Commit**
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/scripts/guard.py glm-skills/_shared/tests/test_guard_readonly.py
-git commit -m "fix(dev-team): close read-only allow-list holes (write/exec flags, rewriting formatters, status/probe)"
+git add glm-skills/glm-dev-team/scripts/guard.py glm-skills/_shared/tests/test_guard_readonly.py
+git commit -m "fix(glm-dev-team): close read-only allow-list holes (write/exec flags, rewriting formatters, status/probe)"
 ```
 
 ---
 
-### T09: devteam-guard plugins v1/v2 [P]
+### T09: glm-devteam-guard plugins v1/v2 [P]
 
 **Depends:** T01
 
 **Interfaces:**
 - Consumes: `sh _shared/sync.sh [DEST_ROOT]`; `glm-skills`; `_shared`
-- Produces: `guard.py oc`; `write`; `edit`; `patch`; `apply_patch`; `multiedit`; `shell`; `bash`; `execute`; `batch`; `event.agent`; `DEVTEAM_ROLE`; `programmer`; `programmer-lite`; `code-reviewer`; `spot-reviewer`; `investigator`; `team-leader`
+- Produces: `guard.py oc`; `write`; `edit`; `patch`; `apply_patch`; `multiedit`; `shell`; `bash`; `execute`; `batch`; `event.agent`; `DEVTEAM_ROLE`; `glm-programmer`; `glm-programmer-lite`; `glm-code-reviewer`; `glm-spot-reviewer`; `glm-investigator`; `glm-team-leader`
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/opencode/plugins/devteam-guard.v1.js:1-45`
-- Modify: `glm-skills/dev-team-glm/opencode/plugins/devteam-guard.v2.js:1-49`
+- Modify: `glm-skills/glm-dev-team/opencode/plugins/glm-devteam-guard.v1.js:1-45`
+- Modify: `glm-skills/glm-dev-team/opencode/plugins/glm-devteam-guard.v2.js:1-49`
 - Test: `glm-skills/_shared/tests/test_devteam_plugins.py`
 
-This task fixes DG8, DG9 and DG10 from the spec. Both plugins now spawn `guard.py oc` only for the tools `write`, `edit`, `patch`, `apply_patch`, `multiedit`, `shell`, `bash`, `execute` and `batch`. The spawn is asynchronous. A failing guard still fails open, but the plugin warns loudly only once per lane, because one lane is one OpenCode process. When `DEVTEAM_ROLE` is unset, the v2 plugin falls back to `event.agent` if that names a dev-team role. The v2 plugin also awaits `api.tool.hook(...)`.
+This task fixes DG8, DG9 and DG10 from the spec. Both plugins now spawn `guard.py oc` only for the tools `write`, `edit`, `patch`, `apply_patch`, `multiedit`, `shell`, `bash`, `execute` and `batch`. The spawn is asynchronous. A failing guard still fails open, but the plugin warns loudly only once per lane, because one lane is one OpenCode process. When `DEVTEAM_ROLE` is unset, the v2 plugin falls back to `event.agent` if that names a glm-dev-team role. The v2 plugin also awaits `api.tool.hook(...)`.
 
 All commands run from `glm-skills/` (`cd glm-skills`).
 
@@ -3965,10 +3965,10 @@ In `_shared/tests/test_devteam_plugins.py`, find the block that starts at `TESTS
 ```python
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_DIR = os.path.abspath(
-    os.path.join(TESTS_DIR, "..", "..", "dev-team-glm", "opencode", "plugins")
+    os.path.join(TESTS_DIR, "..", "..", "glm-dev-team", "opencode", "plugins")
 )
-V1_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v1.js")
-V2_PATH = os.path.join(PLUGIN_DIR, "devteam-guard.v2.js")
+V1_PATH = os.path.join(PLUGIN_DIR, "glm-devteam-guard.v1.js")
+V2_PATH = os.path.join(PLUGIN_DIR, "glm-devteam-guard.v2.js")
 
 NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "node not installed")
 
@@ -3985,12 +3985,12 @@ GUARDED_TOOLS = [
 ]
 UNGUARDED_TOOLS = ["read", "glob", "grep", "todowrite", "webfetch", "skill", "question"]
 DEVTEAM_AGENTS = [
-    "programmer",
-    "programmer-lite",
-    "code-reviewer",
-    "spot-reviewer",
-    "investigator",
-    "team-leader",
+    "glm-programmer",
+    "glm-programmer-lite",
+    "glm-code-reviewer",
+    "glm-spot-reviewer",
+    "glm-investigator",
+    "glm-team-leader",
 ]
 DENY = {
     "hookSpecificOutput": {
@@ -4191,7 +4191,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
                 record_path = os.path.join(tmp_dir, "record.json")
                 _write_recording_stub(skill_dir, DENY, record_path)
                 result = _run_v1(
-                    tmp_dir, skill_dir, "programmer", tool, {"filePath": "a.py"}
+                    tmp_dir, skill_dir, "glm-programmer", tool, {"filePath": "a.py"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "ALLOWED")
@@ -4206,7 +4206,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
                 skill_dir = os.path.join(tmp_dir, "skill")
                 _write_guard_stub(skill_dir, DENY)
                 result = _run_v1(
-                    tmp_dir, skill_dir, "programmer", tool, {"command": "ls"}
+                    tmp_dir, skill_dir, "glm-programmer", tool, {"command": "ls"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "DENIED:guarded")
@@ -4217,7 +4217,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
             skill_dir = os.path.join(tmp_dir, "skill")
             _write_failing_stub(skill_dir)
             result = _run_v1(
-                tmp_dir, skill_dir, "programmer", "bash", {"command": "ls"}, calls=2
+                tmp_dir, skill_dir, "glm-programmer", "bash", {"command": "ls"}, calls=2
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "ALLOWED\nALLOWED")
@@ -4237,7 +4237,7 @@ Expected: FAIL. `test_v1_skips_unguarded_tools` fails with `AssertionError: 'DEN
 
 - [ ] **Step 5: Rewrite the v1 plugin**
 
-Replace all of `dev-team-glm/opencode/plugins/devteam-guard.v1.js` with:
+Replace all of `glm-dev-team/opencode/plugins/glm-devteam-guard.v1.js` with:
 
 ```javascript
 // Calls: python3 guard.py oc
@@ -4266,7 +4266,7 @@ function failOpen(reason) {
   if (warnedFailOpen) return;
   warnedFailOpen = true;
   console.error(
-    "devteam-guard: WARNING guard.py oc " + reason +
+    "glm-devteam-guard: WARNING guard.py oc " + reason +
       " — failing open for the rest of this lane; integrate re-checks the footprint"
   );
 }
@@ -4379,7 +4379,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
                 record_path = os.path.join(tmp_dir, "record.json")
                 _write_recording_stub(skill_dir, DENY, record_path)
                 result = _run_v2(
-                    tmp_dir, skill_dir, "code-reviewer", tool, {"path": "a.py"}
+                    tmp_dir, skill_dir, "glm-code-reviewer", tool, {"path": "a.py"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "ALLOWED")
@@ -4394,7 +4394,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
                 skill_dir = os.path.join(tmp_dir, "skill")
                 _write_guard_stub(skill_dir, DENY)
                 result = _run_v2(
-                    tmp_dir, skill_dir, "code-reviewer", tool, {"command": "ls"}
+                    tmp_dir, skill_dir, "glm-code-reviewer", tool, {"command": "ls"}
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "DENIED:guarded")
@@ -4427,15 +4427,15 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
             result = _run_v2(
                 tmp_dir,
                 skill_dir,
-                "code-reviewer",
+                "glm-code-reviewer",
                 "shell",
                 {"command": "ls"},
-                agent="programmer",
+                agent="glm-programmer",
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             with open(record_path) as f:
                 record = json.load(f)
-            self.assertEqual(record["stdin"]["role"], "code-reviewer")
+            self.assertEqual(record["stdin"]["role"], "glm-code-reviewer")
 
     @NEEDS_NODE
     def test_v2_ignores_non_devteam_agent(self):
@@ -4459,7 +4459,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
             result = _run_v2(
                 tmp_dir,
                 skill_dir,
-                "code-reviewer",
+                "glm-code-reviewer",
                 "edit",
                 {"path": "a.py", "oldString": "x", "newString": "y"},
                 delayed_hook=True,
@@ -4473,7 +4473,7 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
             skill_dir = os.path.join(tmp_dir, "skill")
             _write_failing_stub(skill_dir)
             result = _run_v2(
-                tmp_dir, skill_dir, "code-reviewer", "edit", {"path": "a.py"}, calls=2
+                tmp_dir, skill_dir, "glm-code-reviewer", "edit", {"path": "a.py"}, calls=2
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "ALLOWED\nALLOWED")
@@ -4490,11 +4490,11 @@ Insert these methods at the end of `class TestDevteamPlugins`, directly above th
 - [ ] **Step 8: Run the v2 tests to verify they fail**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_devteam_plugins.py' -k test_v2`
-Expected: FAIL. `test_v2_skips_unguarded_tools` fails with `AssertionError: 'DENIED:guarded' != 'ALLOWED'`. `test_v2_uses_event_agent_as_role_when_env_unset` fails with `AssertionError: False is not true : guard not spawned for programmer`. `test_v2_awaits_hook_registration` fails with `AssertionError: 1 != 0` and `plugin did not register an execute.before hook` in stderr. `test_v2_warns_fail_open_once` fails with `AssertionError: 2 != 1`. `test_v2_source_uses_async_spawn_and_awaits_hook` fails with `AssertionError: 'spawnSync' unexpectedly found`. `test_v2_guards_every_write_and_shell_tool`, `test_v2_env_role_wins_over_event_agent`, `test_v2_ignores_non_devteam_agent` and the older v2 tests already pass.
+Expected: FAIL. `test_v2_skips_unguarded_tools` fails with `AssertionError: 'DENIED:guarded' != 'ALLOWED'`. `test_v2_uses_event_agent_as_role_when_env_unset` fails with `AssertionError: False is not true : guard not spawned for glm-programmer`. `test_v2_awaits_hook_registration` fails with `AssertionError: 1 != 0` and `plugin did not register an execute.before hook` in stderr. `test_v2_warns_fail_open_once` fails with `AssertionError: 2 != 1`. `test_v2_source_uses_async_spawn_and_awaits_hook` fails with `AssertionError: 'spawnSync' unexpectedly found`. `test_v2_guards_every_write_and_shell_tool`, `test_v2_env_role_wins_over_event_agent`, `test_v2_ignores_non_devteam_agent` and the older v2 tests already pass.
 
 - [ ] **Step 9: Rewrite the v2 plugin**
 
-Replace all of `dev-team-glm/opencode/plugins/devteam-guard.v2.js` with:
+Replace all of `glm-dev-team/opencode/plugins/glm-devteam-guard.v2.js` with:
 
 ```javascript
 // OpenCode v2 plugin: default export {id, setup(api)}; api.tool.hook("execute.before", fn) fires
@@ -4502,7 +4502,7 @@ Replace all of `dev-team-glm/opencode/plugins/devteam-guard.v2.js` with:
 // inside the hook denies the call. setup() gets no per-call directory from the api, so we use
 // process.cwd() (the lane's cwd) for the guard payload instead. The role comes from DEVTEAM_ROLE;
 // when that is unset (agents started by the subagent tool) event.agent is used if it names a
-// dev-team role. guard.py is spawned asynchronously and only for tools that can write files or
+// glm-dev-team role. guard.py is spawned asynchronously and only for tools that can write files or
 // run commands. A failing guard fails open (integrate re-checks the footprint) and warns loudly
 // once per lane process.
 import { spawn } from "node:child_process";
@@ -4520,12 +4520,12 @@ const GUARDED_TOOLS = new Set([
   "batch",
 ]);
 const DEVTEAM_ROLES = new Set([
-  "programmer",
-  "programmer-lite",
-  "code-reviewer",
-  "spot-reviewer",
-  "investigator",
-  "team-leader",
+  "glm-programmer",
+  "glm-programmer-lite",
+  "glm-code-reviewer",
+  "glm-spot-reviewer",
+  "glm-investigator",
+  "glm-team-leader",
 ]);
 const GUARD_TIMEOUT_MS = 30000;
 
@@ -4535,7 +4535,7 @@ function failOpen(reason) {
   if (warnedFailOpen) return;
   warnedFailOpen = true;
   console.error(
-    "devteam-guard: WARNING guard.py oc " + reason +
+    "glm-devteam-guard: WARNING guard.py oc " + reason +
       " — failing open for the rest of this lane; integrate re-checks the footprint"
   );
 }
@@ -4607,7 +4607,7 @@ function runGuard(payload) {
 }
 
 export default {
-  id: "devteam-guard",
+  id: "glm-devteam-guard",
   setup: async (api) => {
     await api.tool.hook("execute.before", async (event) => {
       const role = resolveRole(event);
@@ -4654,23 +4654,23 @@ Expected: no failure or error comes from `test_devteam_plugins`, and the total o
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/opencode/plugins/devteam-guard.v1.js glm-skills/dev-team-glm/opencode/plugins/devteam-guard.v2.js glm-skills/_shared/tests/test_devteam_plugins.py
-git commit -m "fix(dev-team): guard plugins spawn async only for write/shell tools, warn once on fail-open, v2 falls back to event.agent role"
+git add glm-skills/glm-dev-team/opencode/plugins/glm-devteam-guard.v1.js glm-skills/glm-dev-team/opencode/plugins/glm-devteam-guard.v2.js glm-skills/_shared/tests/test_devteam_plugins.py
+git commit -m "fix(glm-dev-team): guard plugins spawn async only for write/shell tools, warn once on fail-open, v2 falls back to event.agent role"
 ```
 
 ---
 
-### T10: dev-team OpenCode agent files [P]
+### T10: glm-dev-team OpenCode agent files [P]
 
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/opencode/agents/programmer.md`
-- Modify: `glm-skills/dev-team-glm/opencode/agents/team-leader.md`
+- Modify: `glm-skills/glm-dev-team/opencode/agents/glm-programmer.md`
+- Modify: `glm-skills/glm-dev-team/opencode/agents/glm-team-leader.md`
 
-- [ ] **Step 1: Clarify programmer re-runs claim in programmer.md**
+- [ ] **Step 1: Clarify glm-programmer re-runs claim in glm-programmer.md**
 
-In `programmer.md`, lines 20-25 say the dispatch prompt is `python3 <skill>/scripts/devteam.py claim <ID>`. Replace this section to clarify that the prompt **is** the claim output and running it again is the intended behavior:
+In `glm-programmer.md`, lines 20-25 say the dispatch prompt is `python3 <skill>/scripts/devteam.py claim <ID>`. Replace this section to clarify that the prompt **is** the claim output and running it again is the intended behavior:
 
 ```markdown
 Your dispatch prompt **is** the output of `python3 <skill>/scripts/devteam.py claim <ID>` run by
@@ -4678,9 +4678,9 @@ the Conductor. Run it verbatim as your first Bash command (you will re-run it he
 worktree, to bind this branch and print your complete briefing).
 ```
 
-- [ ] **Step 2: Add explicit memory path to team-leader.md**
+- [ ] **Step 2: Add explicit memory path to glm-team-leader.md**
 
-In `team-leader.md`, line 23 mentions `**Memory.**` but never gives the actual path. Replace lines 23-26 to include the explicit path:
+In `glm-team-leader.md`, line 23 mentions `**Memory.**` but never gives the actual path. Replace lines 23-26 to include the explicit path:
 
 ```markdown
 **Memory.** Your memory for this repository lives in `.claude/dev-team/MEMORY.md`.
@@ -4689,9 +4689,9 @@ save what would make the next plan faster: the module/ownership map, exact comma
 conventions, contract hotspots, files that tend to be shared. Keep it curated and short.
 ```
 
-- [ ] **Step 3: Clarify memory context in team-leader MODE PLANNING section**
+- [ ] **Step 3: Clarify memory context in glm-team-leader MODE PLANNING section**
 
-In `team-leader.md`, line 68 mentions memory in the context of the `context` field. At the line explaining `context`, add a note about the memory file being the source of repository conventions:
+In `glm-team-leader.md`, line 68 mentions memory in the context of the `context` field. At the line explaining `context`, add a note about the memory file being the source of repository conventions:
 
 After line 68 (after "representative test file (→ `context`)"), add inline:
 
@@ -4708,8 +4708,8 @@ Check that both agent files remain valid YAML frontmatter and markdown:
 
 ```bash
 cd /Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills
-head -20 dev-team-glm/opencode/agents/programmer.md
-head -30 dev-team-glm/opencode/agents/team-leader.md
+head -20 glm-dev-team/opencode/agents/glm-programmer.md
+head -30 glm-dev-team/opencode/agents/glm-team-leader.md
 ```
 
 Expected: Both files show valid YAML frontmatter followed by markdown body.
@@ -4718,8 +4718,8 @@ Expected: Both files show valid YAML frontmatter followed by markdown body.
 
 ```bash
 cd /Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills
-git add glm-skills/dev-team-glm/opencode/agents/programmer.md glm-skills/dev-team-glm/opencode/agents/team-leader.md
-git commit -m "docs(dev-team): clarify programmer re-runs claim, add memory path to team-leader"
+git add glm-skills/glm-dev-team/opencode/agents/glm-programmer.md glm-skills/glm-dev-team/opencode/agents/glm-team-leader.md
+git commit -m "docs(glm-dev-team): clarify glm-programmer re-runs claim, add memory path to glm-team-leader"
 ```
 
 ---
@@ -4732,10 +4732,10 @@ git commit -m "docs(dev-team): clarify programmer re-runs claim, add memory path
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/scripts/devteam.py`
+- Modify: `glm-skills/glm-dev-team/scripts/devteam.py`
 - Test: `glm-skills/_shared/tests/test_devteam_oc_harness.py`
 
-This task fixes four dev-team defects: DE1 (harness detection), DE7 (lite lane agent), DE8 (Claude-only concurrency cap) and DE9 (OpenCode launch hint). All commands run from `glm-skills/` (`cd glm-skills` first).
+This task fixes four glm-dev-team defects: DE1 (harness detection), DE7 (lite lane agent), DE8 (Claude-only concurrency cap) and DE9 (OpenCode launch hint). All commands run from `glm-skills/` (`cd glm-skills` first).
 
 - [ ] **Step 1: Write the failing test for harness detection (DE1)**
 
@@ -4751,7 +4751,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "dev-team-glm", "scripts")
+SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "glm-dev-team", "scripts")
 sys.path.insert(0, SCRIPTS)
 
 import devteam  # noqa: E402
@@ -4796,7 +4796,7 @@ Expected: FAIL: `test_opencode_detected_through_oc_harness` with `AssertionError
 
 - [ ] **Step 3: Route `is_opencode()` through `oc_harness.harness()`**
 
-In `dev-team-glm/scripts/devteam.py`, replace the whole `def is_opencode() -> bool:` function (just below `MAX_LANE_RUNS = 4`) with:
+In `glm-dev-team/scripts/devteam.py`, replace the whole `def is_opencode() -> bool:` function (just below `MAX_LANE_RUNS = 4`) with:
 
 ```python
 def is_opencode() -> bool:
@@ -4824,18 +4824,18 @@ Append to `_shared/tests/test_devteam_oc_harness.py`:
 
 ```python
 class LiteLaneAgentTest(unittest.TestCase):
-    """DE7: on OpenCode a programmer-lite slice must run the lite agent at low effort, not programmer."""
+    """DE7: on OpenCode a glm-programmer-lite slice must run the lite agent at low effort, not glm-programmer."""
 
     def test_lite_lane_keeps_lite_agent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             with mock.patch.object(devteam, "terminate_lane_process"), \
                     mock.patch.object(devteam.subprocess, "Popen", return_value=mock.MagicMock(pid=4242)):
-                pid = devteam.launch_lane(root, {"provider": "glm"}, "S1", "programmer-lite", "",
+                pid = devteam.launch_lane(root, {"provider": "glm"}, "S1", "glm-programmer-lite", "",
                                           "python3 x claim S1")
             spec = json.loads((devteam.lanes_dir(root) / "S1.lane.json").read_text())
         self.assertEqual(pid, 4242)
-        self.assertEqual(spec["agent"], "programmer-lite")
+        self.assertEqual(spec["agent"], "glm-programmer-lite")
         self.assertEqual(spec["effort"], "low")
         self.assertTrue(spec["writer"])
 ```
@@ -4843,23 +4843,23 @@ class LiteLaneAgentTest(unittest.TestCase):
 - [ ] **Step 6: Run the test to verify it fails**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_devteam_oc_harness.py' -k LiteLaneAgentTest`
-Expected: FAIL with `AssertionError: 'programmer' != 'programmer-lite'`
+Expected: FAIL with `AssertionError: 'glm-programmer' != 'glm-programmer-lite'`
 
-- [ ] **Step 7: Stop mapping programmer-lite onto programmer**
+- [ ] **Step 7: Stop mapping glm-programmer-lite onto glm-programmer**
 
-In `dev-team-glm/scripts/devteam.py`, replace the line
+In `glm-dev-team/scripts/devteam.py`, replace the line
 
 ```python fragment
-OC_AGENTS = {"programmer-lite": "programmer"}          # OpenCode has one programmer agent
+OC_AGENTS = {"glm-programmer-lite": "glm-programmer"}          # OpenCode has one glm-programmer agent
 ```
 
 with
 
 ```python fragment
-OC_AGENTS = {}          # OpenCode ships programmer-lite too: v1 takes its effort from that agent's frontmatter
+OC_AGENTS = {}          # OpenCode ships glm-programmer-lite too: v1 takes its effort from that agent's frontmatter
 ```
 
-Leave `launch_lane` unchanged. Its `"agent": OC_AGENTS.get(agent, agent)` now passes `programmer-lite` through.
+Leave `launch_lane` unchanged. Its `"agent": OC_AGENTS.get(agent, agent)` now passes `glm-programmer-lite` through.
 
 - [ ] **Step 8: Run the test to verify it passes**
 
@@ -4898,7 +4898,7 @@ Expected: FAIL: `test_opencode_is_not_capped_by_claude_limit` with `AssertionErr
 
 - [ ] **Step 11: Apply the cap only on Claude**
 
-In `dev-team-glm/scripts/devteam.py`, replace the whole `def concurrency_limit():` function with:
+In `glm-dev-team/scripts/devteam.py`, replace the whole `def concurrency_limit():` function with:
 
 ```python
 def concurrency_limit():
@@ -4946,7 +4946,7 @@ Expected: FAIL with `AttributeError: module 'devteam' has no attribute 'launch_h
 
 - [ ] **Step 15: Add `launch_hint()` and use it in `start`**
 
-In `dev-team-glm/scripts/devteam.py`, add this function directly after `emit_agent` (before `def lane_worktree`):
+In `glm-dev-team/scripts/devteam.py`, add this function directly after `emit_agent` (before `def lane_worktree`):
 
 ```python
 def launch_hint() -> str:
@@ -4986,15 +4986,15 @@ Expected: PASS (`Ran 9 tests` ... `OK`)
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: this task adds no new failures. In particular, `test_devteam_oc_lanes.py` `HarnessTest.test_is_opencode` still passes.
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` ≥ 324 and `failed=` ≤ 5 (only the 5 known macOS failures)
 
 - [ ] **Step 18: Commit**
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/scripts/devteam.py glm-skills/_shared/tests/test_devteam_oc_harness.py
-git commit -m "fix(dev-team): detect OpenCode v2 via oc_harness, keep the lite lane agent, Claude-only cap, wait hint"
+git add glm-skills/glm-dev-team/scripts/devteam.py glm-skills/_shared/tests/test_devteam_oc_harness.py
+git commit -m "fix(glm-dev-team): detect OpenCode v2 via oc_harness, keep the lite lane agent, Claude-only cap, wait hint"
 ```
 
 ---
@@ -5006,10 +5006,10 @@ git commit -m "fix(dev-team): detect OpenCode v2 via oc_harness, keep the lite l
 **Runs after:** T11 (same files)
 
 **Interfaces:**
-- Consumes: `STALL_BY_ROLE = {"programmer": 900, "programmer-lite": 900, "team-leader": 900, "code-reviewer": 600, "spot-reviewer": 600, "investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; `<out_dir>/<lane id>.pgid`
+- Consumes: `STALL_BY_ROLE = {"glm-programmer": 900, "glm-programmer-lite": 900, "glm-team-leader": 900, "glm-code-reviewer": 600, "glm-spot-reviewer": 600, "glm-investigator": 600}`; `def lane_stall(lane: dict, default: int = 180) -> int`; `<out_dir>/<lane id>.pgid`
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/scripts/devteam.py`
+- Modify: `glm-skills/glm-dev-team/scripts/devteam.py`
 - Test: `glm-skills/_shared/tests/test_devteam_oc_lanes.py`
 
 This task fixes the OpenCode lane lifecycle in `devteam.py` (spec DE2, DE3, DE10, DE13, DE14, DE15). Every command runs from `glm-skills/` (`cd glm-skills` first). T11 edits the same files before this task, so find each edit by the code it names, not by line number. The consumed contract is `oc_harness.STALL_BY_ROLE`, `oc_harness.lane_stall(lane: dict, default: int = 180) -> int`, and the pgid file `<out_dir>/<lane id>.pgid`, which `oc_harness` writes into the lanes dir (the `out_dir` that `cmd_lane_run` passes to `run_lanes`).
@@ -5102,7 +5102,7 @@ Expected: FAIL. `test_terminate_kills_the_recorded_opencode_group` fails with `s
 
 - [ ] **Step 3: Kill the recorded opencode group before the lane-run group**
 
-In `dev-team-glm/scripts/devteam.py`, add this function right above `def terminate_lane_process(d, lane_id):`:
+In `glm-dev-team/scripts/devteam.py`, add this function right above `def terminate_lane_process(d, lane_id):`:
 
 ```python
 def kill_lane_pgid(d, lane_id) -> bool:
@@ -5168,14 +5168,14 @@ Add these methods inside `LaneLifecycleTest`:
 
 ```python fragment
     def test_reviewer_lane_gets_the_reviewer_stall(self):
-        self.write_spec("review-r1", "code-reviewer", False)
+        self.write_spec("review-r1", "glm-code-reviewer", False)
         seen, _ = self.run_lane("review-r1", [self.ok("review-r1")])
-        self.assertEqual(seen[0]["stall"], oc_harness.STALL_BY_ROLE["code-reviewer"])
+        self.assertEqual(seen[0]["stall"], oc_harness.STALL_BY_ROLE["glm-code-reviewer"])
         self.assertEqual(seen[0]["stall"], 600)
 
     def test_programmer_lane_gets_the_programmer_stall(self):
         self.devteam("dispatch", "S1")
-        self.write_spec("S1", "programmer", True)
+        self.write_spec("S1", "glm-programmer", True)
         seen, _ = self.run_lane("S1", [self.ok("S1")])
         self.assertEqual(seen[0]["stall"], 900)
 ```
@@ -5213,7 +5213,7 @@ Add these methods inside `LaneLifecycleTest`:
 
     def test_writer_error_without_commit_blocks_without_reruns(self):
         self.devteam("dispatch", "S1")
-        self.write_spec("S1", "programmer", True)
+        self.write_spec("S1", "glm-programmer", True)
         err = {"status": "ERROR", "exit": 1, "out": str(self.lanes() / "S1.jsonl"),
                "error": {"type": "provider.rate-limit", "message": "429 Too Many Requests"}}
         seen, gates = self.run_lane("S1", [err])
@@ -5277,7 +5277,7 @@ Add these methods inside `LaneLifecycleTest`:
 ```python fragment
     def test_lane_run_clears_stale_results_before_running(self):
         d = self.lanes()
-        self.write_spec("review-r1", "code-reviewer", False)
+        self.write_spec("review-r1", "glm-code-reviewer", False)
         for ext, body in ((".done", '{"status": "FAIL"}'), (".end", "1"), (".pgid", "999999")):
             (d / f"review-r1{ext}").write_text(body)
         self.run_lane("review-r1", [self.ok("review-r1")])
@@ -5340,7 +5340,7 @@ Add these methods inside `LaneLifecycleTest`:
 ```python fragment
     def test_signal_killed_lane_is_reported_down_once(self):
         d = self.lanes()
-        self.write_spec("rev-r7", "code-reviewer", False)
+        self.write_spec("rev-r7", "glm-code-reviewer", False)
         (d / "rev-r7.pid").write_text(str(_reaped_pid()))
         with mock.patch.dict(os.environ, self.env, clear=True):
             st = devteam.load_state(Path(self.repo))
@@ -5353,7 +5353,7 @@ Add these methods inside `LaneLifecycleTest`:
 
     def test_lane_with_a_result_is_not_dead(self):
         d = self.lanes()
-        self.write_spec("rev-r8", "code-reviewer", False)
+        self.write_spec("rev-r8", "glm-code-reviewer", False)
         (d / "rev-r8.pid").write_text(str(_reaped_pid()))
         (d / "rev-r8.done").write_text('{"status": "OK"}')
         self.assertEqual(devteam.dead_lanes(d), [])
@@ -5367,7 +5367,7 @@ Add these methods inside `LaneLifecycleTest`:
 
     def test_wait_reports_a_dead_lane(self):
         d = self.lanes()
-        self.write_spec("rev-r3", "code-reviewer", False)
+        self.write_spec("rev-r3", "glm-code-reviewer", False)
         (d / "rev-r3.pid").write_text(str(_reaped_pid()))
         start = time.monotonic()
         out = self.devteam("wait", "--timeout", "30", DEVTEAM_HARNESS="opencode")
@@ -5377,7 +5377,7 @@ Add these methods inside `LaneLifecycleTest`:
 
     def test_wait_keeps_waiting_while_a_lane_is_alive(self):
         d = self.lanes()
-        self.write_spec("rev-r4", "code-reviewer", False)
+        self.write_spec("rev-r4", "glm-code-reviewer", False)
         alive = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(_killpg_quiet, alive.pid)
         (d / "rev-r4.pid").write_text(str(alive.pid))
@@ -5498,20 +5498,20 @@ def cmd_wait(a):
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_devteam_oc_lanes.py'`
 Expected: PASS (`OK`, every test in the module, including `WaitTest` and `LaneProcessGroupTest`)
 
-- [ ] **Step 21: Run the full suite and the dev-team selftest**
+- [ ] **Step 21: Run the full suite and the glm-dev-team selftest**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: final line `OK`
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` at least 324 and `failed=` at most 5 (only the known macOS failures)
 
 - [ ] **Step 22: Commit**
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/scripts/devteam.py glm-skills/_shared/tests/test_devteam_oc_lanes.py
-git commit -m "fix(dev-team): OpenCode lane lifecycle: kill the opencode pgid, per-role stall, block errored no-commit lanes, report dead lanes, wait returns when idle"
+git add glm-skills/glm-dev-team/scripts/devteam.py glm-skills/_shared/tests/test_devteam_oc_lanes.py
+git commit -m "fix(glm-dev-team): OpenCode lane lifecycle: kill the opencode pgid, per-role stall, block errored no-commit lanes, report dead lanes, wait returns when idle"
 ```
 
 ---
@@ -5526,7 +5526,7 @@ git commit -m "fix(dev-team): OpenCode lane lifecycle: kill the opencode pgid, p
 - Produces: `devteam.py resume <slice id> [--note TEXT]`; `.slice/stop_blocks`; `.done`; `.blocked`; `NEXT:`; `launch_lane`; `wait`; `next`
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/scripts/devteam.py`
+- Modify: `glm-skills/glm-dev-team/scripts/devteam.py`
 - Test: `glm-skills/_shared/tests/test_devteam_oc_resume.py`
 
 T12 edits `devteam.py` before this task (lane launch, stall, harness detection). Every edit below is anchored on code text rather than line numbers: find the quoted anchor in the file as it stands after T12, and keep whatever T12 added around it.
@@ -5536,7 +5536,7 @@ T12 edits `devteam.py` before this task (lane launch, stall, harness detection).
 Create `glm-skills/_shared/tests/test_devteam_oc_resume.py`:
 
 ```python
-"""dev-team on OpenCode: `devteam.py resume <slice id> [--note TEXT]` relaunches a fresh lane in the
+"""glm-dev-team on OpenCode: `devteam.py resume <slice id> [--note TEXT]` relaunches a fresh lane in the
 slice's existing worktree, and the checkpoint runs detached so `wait`/`next` collect it."""
 import contextlib
 import io
@@ -5551,7 +5551,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-SCRIPTS = HERE.parents[1] / "dev-team-glm" / "scripts"
+SCRIPTS = HERE.parents[1] / "glm-dev-team" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
@@ -5566,7 +5566,7 @@ PLAN = {
 
 
 class RunFixture(unittest.TestCase):
-    """A real git repo with an initialised dev-team run, driven in-process through devteam.main."""
+    """A real git repo with an initialised glm-dev-team run, driven in-process through devteam.main."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -5627,7 +5627,7 @@ class ResumeTest(RunFixture):
         launch.assert_called_once()
         args, kwargs = launch.call_args
         self.assertEqual(args[2], "S1")
-        self.assertEqual(args[3], "programmer")
+        self.assertEqual(args[3], "glm-programmer")
         self.assertIn("claim S1", args[5])
         self.assertEqual(kwargs.get("note"), "use contract C1")
         self.assertFalse((wt / ".slice" / "stop_blocks").exists())
@@ -5685,7 +5685,7 @@ class ResumeHelpersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
                 mock.patch.object(devteam.subprocess, "Popen") as popen:
             popen.return_value.pid = os.getpid()
-            devteam.launch_lane(Path(td), {"provider": "glm"}, "S9", "programmer", "",
+            devteam.launch_lane(Path(td), {"provider": "glm"}, "S9", "glm-programmer", "",
                                 "python3 x claim S9", note="fix the footprint")
             spec = json.loads((devteam.lanes_dir(td) / "S9.lane.json").read_text())
         self.assertEqual(spec["note"], "fix the footprint")
@@ -5694,7 +5694,7 @@ class ResumeHelpersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
                 mock.patch.object(devteam.subprocess, "Popen") as popen:
             popen.return_value.pid = os.getpid()
-            devteam.launch_lane(Path(td), {"provider": "glm"}, "S8", "programmer", "",
+            devteam.launch_lane(Path(td), {"provider": "glm"}, "S8", "glm-programmer", "",
                                 "python3 x claim S8")
             spec = json.loads((devteam.lanes_dir(td) / "S8.lane.json").read_text())
         self.assertEqual(spec["note"], "")
@@ -5716,7 +5716,7 @@ Expected: FAIL, ending `FAILED (errors=9)`. The four `ResumeTest` cases error wi
 
 - [ ] **Step 3: Let `launch_lane` carry a resume note into the lane spec**
 
-In `glm-skills/dev-team-glm/scripts/devteam.py`, change the `launch_lane` signature line (anchor: `def launch_lane(root, st, lane_id, agent, model, prompt`) so it takes a keyword `note` that defaults to empty. Add a `"note": note` entry to the `spec` dict it writes to `<lane_id>.lane.json`. Leave everything else in the function exactly as T12 left it:
+In `glm-skills/glm-dev-team/scripts/devteam.py`, change the `launch_lane` signature line (anchor: `def launch_lane(root, st, lane_id, agent, model, prompt`) so it takes a keyword `note` that defaults to empty. Add a `"note": note` entry to the `spec` dict it writes to `<lane_id>.lane.json`. Leave everything else in the function exactly as T12 left it:
 
 ```python fragment
 def launch_lane(root, st, lane_id, agent, model, prompt, note="") -> int:
@@ -6012,25 +6012,25 @@ T12 may have given `cmd_wait` an early "no live lanes" return. If it did, count 
 Run: `cd glm-skills && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_devteam_oc_resume.py'`
 Expected: PASS: `Ran 11 tests` then `OK`
 
-- [ ] **Step 15: Run the full suite and the dev-team selftest**
+- [ ] **Step 15: Run the full suite and the glm-dev-team selftest**
 
 Run: `cd glm-skills && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: all 11 `test_devteam_oc_resume` tests pass, and the run has no failure or error that was not already failing before this task.
 
-Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: the summary reports `passed=` 324 or more and `failed=` 5 or fewer (only the known macOS failures).
 
 - [ ] **Step 16: Commit**
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/scripts/devteam.py glm-skills/_shared/tests/test_devteam_oc_resume.py
-git commit -m "feat(dev-team): resume command relaunches a lane in its worktree; detached OpenCode checkpoint"
+git add glm-skills/glm-dev-team/scripts/devteam.py glm-skills/_shared/tests/test_devteam_oc_resume.py
+git commit -m "feat(glm-dev-team): resume command relaunches a lane in its worktree; detached OpenCode checkpoint"
 ```
 
 ---
 
-### T14: dev-team selftest checks [P]
+### T14: glm-dev-team selftest checks [P]
 
 **Depends:** T08, T11, T13
 
@@ -6038,7 +6038,7 @@ git commit -m "feat(dev-team): resume command relaunches a lane in its worktree;
 - Consumes: `devteam.py resume <slice id> [--note TEXT]`; `.slice/stop_blocks`; `.done`; `.blocked`; `NEXT:`; `launch_lane`; `wait`; `next`
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/scripts/selftest.sh:1159-1164`
+- Modify: `glm-skills/glm-dev-team/scripts/selftest.sh:1159-1164`
 
 All new checks go at the end of the file, after the OpenCode section. The anchor is the line `unset DEVTEAM_HARNESS DEVTEAM_PY`, which closes that section. Insert each block right after that line, or right after the block you added before it. Every block must stay above the final three lines:
 
@@ -6076,7 +6076,7 @@ check "DG5: gofmt -w / go fmt / cargo fmt are not pre-approved" 'ronotallow "gof
 
 - [ ] **Step 2: Run the DG4/DG5 checks**
 
-Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DG[45]:"`
+Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DG[45]:"`
 Expected: 12 lines, all starting with `  ok   DG4:` or `  ok   DG5:`, and no line starting with `  FAIL DG`.
 
 - [ ] **Step 3: Add the DE1 harness-detection checks**
@@ -6097,12 +6097,12 @@ env -u DEVTEAM_HARNESS -u OPENCODE -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT OPENC
 check "DE1: the v2-detected dispatch really launched an OpenCode lane" '[ -f "$RD1/.claude/dev-team/lanes/N1.jsonl" ]'
 RD1C="$(newrepo rde1c)"; cd "$RD1C"; ocplan N1
 D1CL=$(env -u DEVTEAM_HARNESS -u OPENCODE -u OPENCODE_TERMINAL python3 "$S/devteam.py" start plan.md 2>&1)
-check "DE1: with no OpenCode variable the Claude path is kept (Agent line, no lane)" '[[ "$D1CL" == *"Agent → subagent_type: programmer"* ]] && [ ! -e "$RD1C/.claude/dev-team/lanes/N1.jsonl" ]'
+check "DE1: with no OpenCode variable the Claude path is kept (Agent line, no lane)" '[[ "$D1CL" == *"Agent → subagent_type: glm-programmer"* ]] && [ ! -e "$RD1C/.claude/dev-team/lanes/N1.jsonl" ]'
 ```
 
 - [ ] **Step 4: Run the DE1 checks**
 
-Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DE1:"`
+Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DE1:"`
 Expected: 3 lines, all starting with `  ok   DE1:`.
 
 - [ ] **Step 5: Add the DE4 detached-checkpoint checks**
@@ -6127,7 +6127,7 @@ check "DE4: next harvested the checkpoint from its log and nothing stays pending
 
 - [ ] **Step 6: Run the DE4 checks**
 
-Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DE4:"`
+Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DE4:"`
 Expected: 4 lines, all starting with `  ok   DE4:`.
 
 - [ ] **Step 7: Add the DE6 resume checks**
@@ -6171,28 +6171,28 @@ unset DEVTEAM_PY OCLOG6
 
 - [ ] **Step 8: Run the DE6 checks**
 
-Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DE6:"`
+Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh 2>&1 | grep -E "^  (ok  |FAIL) DE6:"`
 Expected: 6 lines, all starting with `  ok   DE6:`.
 
 - [ ] **Step 9: Syntax check and full selftest**
 
-Run: `cd glm-skills && bash -n dev-team-glm/scripts/selftest.sh && echo SYNTAX-OK`
+Run: `cd glm-skills && bash -n glm-dev-team/scripts/selftest.sh && echo SYNTAX-OK`
 Expected: `SYNTAX-OK`
 
-Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh 2>&1 | tail -1`
+Run: `cd glm-skills && env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh 2>&1 | tail -1`
 Expected: `passed=N failed=M` with N ≥ 349 (the 324 baseline plus the 25 new checks) and M ≤ 5. The only failures should be the 5 known macOS ones: GNU `sed -i`, 4× `/private/var` resolve, and the bash 3.2 word-split. No `FAIL` line may carry a `DG4:`, `DG5:`, `DE1:`, `DE4:` or `DE6:` prefix.
 
 - [ ] **Step 10: Commit**
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/scripts/selftest.sh
-git commit -m "feat(dev-team): selftest checks for DG4, DG5, DE1, DE4, DE6 (OpenCode hardening)"
+git add glm-skills/glm-dev-team/scripts/selftest.sh
+git commit -m "feat(glm-dev-team): selftest checks for DG4, DG5, DE1, DE4, DE6 (OpenCode hardening)"
 ```
 
 ---
 
-### T15: dev-team SKILL.md and README for OpenCode [P]
+### T15: glm-dev-team SKILL.md and README for OpenCode [P]
 
 **Depends:** T11, T13
 
@@ -6200,8 +6200,8 @@ git commit -m "feat(dev-team): selftest checks for DG4, DG5, DE1, DE4, DE6 (Open
 - Consumes: `devteam.py resume <slice id> [--note TEXT]`; `.slice/stop_blocks`; `.done`; `.blocked`; `NEXT:`; `launch_lane`; `wait`; `next`
 
 **Files:**
-- Modify: `glm-skills/dev-team-glm/SKILL.md`
-- Modify: `glm-skills/dev-team-glm/README.md`
+- Modify: `glm-skills/glm-dev-team/SKILL.md`
+- Modify: `glm-skills/glm-dev-team/README.md`
 
 This task changes documentation only. The check is a throwaway script in `/tmp` (not committed). It runs the SKILL.md bootstrap snippet in temp dirs and greps both files for the new OpenCode behaviour: DG12, DG15, DE1, DE3, DE4, DE6, DE7, DE8, DE9, DE10, DE13, DE14 and DE15, plus the guard notes DG7, DG8, DG9, DG11 and DG14. All commands run from `glm-skills/` (`cd glm-skills`).
 
@@ -6218,7 +6218,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = pathlib.Path("dev-team-glm").resolve()
+ROOT = pathlib.Path("glm-dev-team").resolve()
 SKILL = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 failures = []
@@ -6287,32 +6287,32 @@ def check_bootstrap():
 
     cwd, home = fresh()
     base = fake_skill(cwd.parent / "base")
-    fake_skill(cwd / ".opencode" / "skills" / "dev-team")
+    fake_skill(cwd / ".opencode" / "skills" / "glm-dev-team")
     expect_found("base dir line first",
                  run(snippet.replace("<base dir>", str(cwd.parent / "base")), cwd, home),
                  base)
 
     cwd, home = fresh()
-    cfg = fake_skill(cwd.parent / "cfg" / "skills" / "dev-team")
-    fake_skill(cwd / ".opencode" / "skills" / "dev-team")
+    cfg = fake_skill(cwd.parent / "cfg" / "skills" / "glm-dev-team")
+    fake_skill(cwd / ".opencode" / "skills" / "glm-dev-team")
     expect_found("OPENCODE_CONFIG_DIR before .opencode",
                  run(snippet, cwd, home, {"OPENCODE_CONFIG_DIR": str(cwd.parent / "cfg")}),
                  cfg)
 
     cwd, home = fresh()
-    local = fake_skill(cwd / ".opencode" / "skills" / "dev-team")
-    fake_skill(home / ".config" / "opencode" / "skills" / "dev-team")
+    local = fake_skill(cwd / ".opencode" / "skills" / "glm-dev-team")
+    fake_skill(home / ".config" / "opencode" / "skills" / "glm-dev-team")
     expect_found(".opencode before ~/.config/opencode", run(snippet, cwd, home), local)
 
     cwd, home = fresh()
-    user_cfg = fake_skill(home / ".config" / "opencode" / "skills" / "dev-team")
-    fake_skill(cwd / ".agents" / "skills" / "dev-team")
-    fake_skill(home / ".claude" / "skills" / "dev-team")
+    user_cfg = fake_skill(home / ".config" / "opencode" / "skills" / "glm-dev-team")
+    fake_skill(cwd / ".agents" / "skills" / "glm-dev-team")
+    fake_skill(home / ".claude" / "skills" / "glm-dev-team")
     expect_found("~/.config/opencode before .agents", run(snippet, cwd, home), user_cfg)
 
     cwd, home = fresh()
-    agents = fake_skill(cwd / ".agents" / "skills" / "dev-team")
-    fake_skill(cwd / ".claude" / "skills" / "dev-team")
+    agents = fake_skill(cwd / ".agents" / "skills" / "glm-dev-team")
+    fake_skill(cwd / ".claude" / "skills" / "glm-dev-team")
     expect_found(".agents before .claude", run(snippet, cwd, home), agents)
 
 
@@ -6340,7 +6340,7 @@ for line in failures:
 if failures:
     print("FAIL: %d problem(s)" % len(failures))
     sys.exit(1)
-print("OK: dev-team SKILL.md and README.md checks pass")
+print("OK: glm-dev-team SKILL.md and README.md checks pass")
 ```
 
 - [ ] **Step 2: Run the check to verify it fails**
@@ -6350,7 +6350,7 @@ Expected: FAIL, exit 1. The first line is `SKILL.md: bootstrap block not found` 
 
 - [ ] **Step 3: Replace the SKILL.md script-path line with the shared bootstrap snippet (DG12)**
 
-In `dev-team-glm/SKILL.md`, replace this exact line (line 20):
+In `glm-dev-team/SKILL.md`, replace this exact line (line 20):
 
 ```text
 You are the **Conductor**. `devteam <cmd>` below means `python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py <cmd>`.
@@ -6364,15 +6364,15 @@ You are the **Conductor**.
 **Bootstrap — put this in front of your FIRST command, once.** If the harness shows a "Base directory for this skill" line, replace `<base dir>` with that path. Otherwise leave it as is. OpenCode never sets `${CLAUDE_SKILL_DIR}`.
 
 ```bash
-D=; for d in "${CLAUDE_SKILL_DIR:-<base dir>}" "$OPENCODE_CONFIG_DIR/skills/dev-team" .opencode/skills/dev-team ~/.config/opencode/skills/dev-team .agents/skills/dev-team ~/.agents/skills/dev-team .claude/skills/dev-team ~/.claude/skills/dev-team ~/.zcode/skills/dev-team; do [ -f "$d/scripts/devteam.py" ] && D=$(cd "$d/scripts" && pwd) && break; done; [ -n "$D" ] || { echo "dev-team: scripts/devteam.py not found in any skills dir; set CLAUDE_SKILL_DIR=<the Base directory for this skill>" >&2; exit 1; }; echo "D=$D"
+D=; for d in "${CLAUDE_SKILL_DIR:-<base dir>}" "$OPENCODE_CONFIG_DIR/skills/glm-dev-team" .opencode/skills/glm-dev-team ~/.config/opencode/skills/glm-dev-team .agents/skills/glm-dev-team ~/.agents/skills/glm-dev-team .claude/skills/glm-dev-team ~/.claude/skills/glm-dev-team ~/.zcode/skills/glm-dev-team; do [ -f "$d/scripts/devteam.py" ] && D=$(cd "$d/scripts" && pwd) && break; done; [ -n "$D" ] || { echo "glm-dev-team: scripts/devteam.py not found in any skills dir; set CLAUDE_SKILL_DIR=<the Base directory for this skill>" >&2; exit 1; }; echo "D=$D"
 ```
 
-The output starts with `D=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path**. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. On a miss the snippet prints `dev-team: scripts/devteam.py not found …` and exits 1. Install the skill first (README, "OpenCode"), and never run `python3 "" …`.
+The output starts with `D=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path**. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. On a miss the snippet prints `glm-dev-team: scripts/devteam.py not found …` and exits 1. Install the skill first (README, "OpenCode"), and never run `python3 "" …`.
 ````
 
 - [ ] **Step 4: Rewrite the OpenCode protocol body (DE1, DE3, DE4, DE6-DE10, DE13-DE15, DG7-DG9, DG11, DG14)**
 
-In `dev-team-glm/SKILL.md`, keep the `#### OpenCode protocol` heading. Replace everything after it, starting at the line that begins `On OpenCode, when` and ending at the item `4. \`LANE DOWN\`` together with its continuation line (the last line before `## Route first`), with:
+In `glm-dev-team/SKILL.md`, keep the `#### OpenCode protocol` heading. Replace everything after it, starting at the line that begins `On OpenCode, when` and ending at the item `4. \`LANE DOWN\`` together with its continuation line (the last line before `## Route first`), with:
 
 ```markdown
 The engine detects OpenCode itself (`oc_harness.harness()`). Any of these marks it: `OPENCODE` or `OPENCODE_TERMINAL` is set (v2 sets only `OPENCODE_TERMINAL=1`), `DEVTEAM_HARNESS=opencode` is set, the skill sits under an OpenCode skills dir, or a `.oc-major` file sits next to the scripts. The Conductor then routes every lane through worktrees:
@@ -6381,15 +6381,15 @@ The engine detects OpenCode itself (`oc_harness.harness()`). Any of these marks 
 | --- | --- |
 | `devteam start <plan.md>` | Starts the run. `doctor --fix` installs the agents, creates git worktrees at `.claude/dev-team/wt/<id>`, checks the plan and prints the ready lanes. Each lane process gets `env DEVTEAM_ROLE=<agent>` and `DEVTEAM_SLICE=<id>`. |
 | `devteam wait [--timeout 100]` | Blocks up to `--timeout` seconds for one of three things: a new lane result, a completion marker in `.claude/dev-team/lanes/`, or a finished checkpoint. It returns at once when no lane is live, and it prints `NEXT: devteam next`. On v2 (your shell tool has a `background` param), run `devteam wait --timeout 3600` with `background: true` and end the turn. Its completion notification is your wake-up; keep only one wait running at a time. On v1, run it in the foreground with the default 100 s, which stays under the 120 s bash-tool limit. |
-| `devteam next` | Reads all lane JSON output and markers (`.done`/`.blocked`), merges results, queues fixes, dispatches ready lanes and retries, and prints the endgame. The stop gate runs after each programmer lane: `lane-run` pipes `{"cwd": <worktree>, "last_assistant_message": <text>}` to `guard.py stop`. Exit 2 means blocked. The lane then re-runs once per block with the gate stderr appended to its brief, and is force-finished after 2 blocks (the counter is the worktree's `.slice/stop_blocks`). If a lane's status is not OK and its HEAD still equals the base, it writes `.blocked` with the lane error instead of burning reruns. The governor reads lane files, not transcripts. It prints `LANE DOWN <id> (<kind>): the lane process ended <error>` in two cases: a lane ends `FAIL`/`STALL`/`TIMEOUT` in `.claude/dev-team/lanes/<id>.done`, or a lane's pid is dead with no `.end` and no marker (killed by a signal). A stuck slice retries cold with `fail <id>`, then `retry <id>`. The worktree is discarded; only the branch `attempt/<id>-N` is kept for salvage. A stuck review or research lane is relaunched with the printed command. That command already starts with `python3`, runs detached and clears the stale `.done`. |
+| `devteam next` | Reads all lane JSON output and markers (`.done`/`.blocked`), merges results, queues fixes, dispatches ready lanes and retries, and prints the endgame. The stop gate runs after each glm-programmer lane: `lane-run` pipes `{"cwd": <worktree>, "last_assistant_message": <text>}` to `guard.py stop`. Exit 2 means blocked. The lane then re-runs once per block with the gate stderr appended to its brief, and is force-finished after 2 blocks (the counter is the worktree's `.slice/stop_blocks`). If a lane's status is not OK and its HEAD still equals the base, it writes `.blocked` with the lane error instead of burning reruns. The governor reads lane files, not transcripts. It prints `LANE DOWN <id> (<kind>): the lane process ended <error>` in two cases: a lane ends `FAIL`/`STALL`/`TIMEOUT` in `.claude/dev-team/lanes/<id>.done`, or a lane's pid is dead with no `.end` and no marker (killed by a signal). A stuck slice retries cold with `fail <id>`, then `retry <id>`. The worktree is discarded; only the branch `attempt/<id>-N` is kept for salvage. A stuck review or research lane is relaunched with the printed command. That command already starts with `python3`, runs detached and clears the stale `.done`. |
 | `devteam resume <id> [--note TEXT]` | Warm fix. It relaunches a fresh lane in the **same** worktree with the note added to the brief, and resets `.slice/stop_blocks`. Use it for the answer to a `BLOCKED` question and for the fix to a `REJECTED` / `NOT READY` / `MERGE ERROR`. |
 | `devteam retry <id> [--files ...]` | Cold retry. It creates a fresh worktree, switches to the stronger model (GLM-5.3) and re-dispatches, optionally with a wider file scope. |
 
-Lanes run `python3 <devteam.py> lane-run <id>` in their worktree. `lane-run` claims the slice, runs through the vendored `oc_harness.run_lanes` and pipes the stop-gate JSON. Stall is per role: about 900 s for programmer and team-leader, 600 s for reviewers, so a long test or build is not killed. A `programmer-lite` slice runs the `programmer-lite` agent (effort low) on v1 and v2. The opencode process group of each lane is written to `lanes/<id>.pgid`, and the engine stops a lane by killing that group, so no orphan keeps editing a recreated worktree. A checkpoint is launched detached the same way as a lane, and `wait` reports when it ends. The Claude 20-agent cap does not apply: the tier ceilings (40/64) are reachable. Markers go to `.claude/dev-team/slices/<id>.done|.blocked` (stop gate only). Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner only).
+Lanes run `python3 <devteam.py> lane-run <id>` in their worktree. `lane-run` claims the slice, runs through the vendored `oc_harness.run_lanes` and pipes the stop-gate JSON. Stall is per role: about 900 s for glm-programmer and glm-team-leader, 600 s for reviewers, so a long test or build is not killed. A `glm-programmer-lite` slice runs the `glm-programmer-lite` agent (effort low) on v1 and v2. The opencode process group of each lane is written to `lanes/<id>.pgid`, and the engine stops a lane by killing that group, so no orphan keeps editing a recreated worktree. A checkpoint is launched detached the same way as a lane, and `wait` reports when it ends. The Claude 20-agent cap does not apply: the tier ceilings (40/64) are reachable. Markers go to `.claude/dev-team/slices/<id>.done|.blocked` (stop gate only). Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner only).
 
-Tools are checked by `guard.py oc` mode: `edit`/`write`/`patch` and `bash` on v1, `edit`/`write`/`shell` on v2. A programmer gets the existing checks. Every other role is read-only, but may still run `devteam status` and `devteam probe`. When `DEVTEAM_ROLE` is unset, the v2 plugin takes the role from the event's `agent` if it names a dev-team role. In lane mode, `batch`, `question` and `execute` are denied, because a headless `question` blocks forever. OpenCode has no interactive fallback. An unapproved command, or a programmer write outside its own slice worktree, is DENIED outright and never left pending on a prompt. The deny message lists the pinned `.slice/allow` forms. Both plugins (v1 and v2) forward calls to `python3 guard.py oc` on stdin and throw `Error(reason)` on deny. Any plugin-side failure still allows the call, because the integrate re-check is the real enforcement. The plugin warns loudly once per lane and records the failure in the lane log.
+Tools are checked by `guard.py oc` mode: `edit`/`write`/`patch` and `bash` on v1, `edit`/`write`/`shell` on v2. A glm-programmer gets the existing checks. Every other role is read-only, but may still run `devteam status` and `devteam probe`. When `DEVTEAM_ROLE` is unset, the v2 plugin takes the role from the event's `agent` if it names a glm-dev-team role. In lane mode, `batch`, `question` and `execute` are denied, because a headless `question` blocks forever. OpenCode has no interactive fallback. An unapproved command, or a glm-programmer write outside its own slice worktree, is DENIED outright and never left pending on a prompt. The deny message lists the pinned `.slice/allow` forms. Both plugins (v1 and v2) forward calls to `python3 guard.py oc` on stdin and throw `Error(reason)` on deny. Any plugin-side failure still allows the call, because the integrate re-check is the real enforcement. The plugin warns loudly once per lane and records the failure in the lane log.
 
-Launch dev-team agents only through the engine's process lane (`devteam next` / `lane-run`), which sets `DEVTEAM_ROLE` and `DEVTEAM_SLICE` per lane. An agent spawned with OpenCode's own `task` (v1) or `subagent` (v2) tool gets neither variable, so never dispatch dev-team roles that way.
+Launch glm-dev-team agents only through the engine's process lane (`devteam next` / `lane-run`), which sets `DEVTEAM_ROLE` and `DEVTEAM_SLICE` per lane. An agent spawned with OpenCode's own `task` (v1) or `subagent` (v2) tool gets neither variable, so never dispatch glm-dev-team roles that way.
 
 **Phases 2-4 on OpenCode.** The Claude Code tool names there map as follows:
 
@@ -6411,7 +6411,7 @@ Launch dev-team agents only through the engine's process lane (`devteam next` / 
 
 - [ ] **Step 5: Point the three `Explore` mentions at `general` on OpenCode**
 
-In `dev-team-glm/SKILL.md`, make these three exact replacements:
+In `glm-dev-team/SKILL.md`, make these three exact replacements:
 
 1. In the "Route first" table, replace `` | A question about the code | `Explore` agents in parallel (one per area), answer. No engine. | `` with `` | A question about the code | `Explore` agents (`general` on OpenCode) in parallel (one per area), answer. No engine. | ``.
 2. In Phase 1, replace `Huge codebase → first `Explore` agents (≤8, one per` with `Huge codebase → first `Explore` agents (`general` on OpenCode; ≤8, one per`.
@@ -6424,28 +6424,28 @@ Expected: FAIL, exit 1. Every problem line starts with `README.md:` and the last
 
 - [ ] **Step 7: Rewrite the README OpenCode section (DG15 split, detection, resume, lifecycle)**
 
-In `dev-team-glm/README.md`, keep the `### OpenCode` heading. Replace everything after it, from the line starting `Trên OpenCode (khi` through item `10. **Chỉ dispatch qua engine:**` (the last line before `## Biến môi trường`), with:
+In `glm-dev-team/README.md`, keep the `### OpenCode` heading. Replace everything after it, from the line starting `Trên OpenCode (khi` through item `10. **Chỉ dispatch qua engine:**` (the last line before `## Biến môi trường`), with:
 
 ```markdown
 Trên OpenCode, engine tự nhận harness qua `oc_harness.harness()` khi có một trong các dấu hiệu sau: `OPENCODE` hoặc `OPENCODE_TERMINAL` được set (v2 chỉ set `OPENCODE_TERMINAL=1`), `DEVTEAM_HARNESS=opencode`, skill nằm trong thư mục skills của OpenCode, hoặc có file `.oc-major` cạnh scripts. Khi đó devteam chạy mỗi lane trong một git worktree riêng qua `oc_harness run`:
 
 1. **Cài đặt:** chạy `python3 devteam.py doctor --harness opencode --fix` (hoặc `sh install-opencode.sh --major 1|2` cho 5 skill GLM còn lại). Lệnh này copy plugin guard (v1 hoặc v2 tùy major version) và các agent vào home OpenCode.
 2. **Bootstrap:** OpenCode không set `${CLAUDE_SKILL_DIR}`, nên SKILL.md mở đầu bằng một vòng `for` tìm `scripts/devteam.py` theo thứ tự: dòng "Base directory for this skill", `$OPENCODE_CONFIG_DIR/skills`, `.opencode/skills`, `~/.config/opencode/skills`, rồi `.agents`, `~/.agents`, `.claude`, `~/.claude`, `~/.zcode`. Không tìm thấy thì báo lỗi rõ ràng và thoát với mã 1, không bao giờ chạy `python3 "" …`.
-3. **Worktree:** với mỗi lane programmer, `lane-run` (không phải `devteam start`) tạo worktree tại `.claude/dev-team/wt/<id>` trên branch `devteam/<id>` từ base của slice, rồi chạy `claim` trong worktree đó và ghi env `DEVTEAM_ROLE`/`DEVTEAM_SLICE`.
+3. **Worktree:** với mỗi lane glm-programmer, `lane-run` (không phải `devteam start`) tạo worktree tại `.claude/dev-team/wt/<id>` trên branch `devteam/<id>` từ base của slice, rồi chạy `claim` trong worktree đó và ghi env `DEVTEAM_ROLE`/`DEVTEAM_SLICE`.
 4. **Vòng lặp:** `devteam wait` chặn tối đa 100 s để đợi kết quả lane, rồi `devteam next` đọc output JSON và dispatch lane mới cùng các retry. `wait` trả về ngay khi không còn lane nào đang chạy. Trên v2, tool shell có `background: true` (không timeout, tự báo khi xong): chạy `devteam wait --timeout 3600` ở nền rồi kết thúc lượt. Thông báo hoàn tất chính là tín hiệu đánh thức, không cần hỏi vòng.
-5. **Stop gate:** sau mỗi programmer lane, `lane-run` (không phải `devteam next`) gọi `guard.py stop` với `{"cwd": <worktree>, "last_assistant_message": <text>}`. Exit 2 nghĩa là bị chặn: lane chạy lại tối đa 2 lần, với stderr của gate thêm vào brief, và bộ đếm nằm ở `.slice/stop_blocks`. Nếu lane lỗi mà HEAD vẫn bằng base, engine ghi `.blocked` kèm lỗi của lane thay vì chạy lại vô ích.
+5. **Stop gate:** sau mỗi glm-programmer lane, `lane-run` (không phải `devteam next`) gọi `guard.py stop` với `{"cwd": <worktree>, "last_assistant_message": <text>}`. Exit 2 nghĩa là bị chặn: lane chạy lại tối đa 2 lần, với stderr của gate thêm vào brief, và bộ đếm nằm ở `.slice/stop_blocks`. Nếu lane lỗi mà HEAD vẫn bằng base, engine ghi `.blocked` kèm lỗi của lane thay vì chạy lại vô ích.
 6. **Markers:** `.done` và `.blocked` ghi vào `.claude/dev-team/slices/<id>.*` (stop gate). Output của lane ghi vào `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner).
-7. **Stall và tiến trình:** stall tính theo role, khoảng 900 s cho programmer/team-leader và 600 s cho reviewer, nên test/build dài không bị giết oan. Process group của opencode được ghi vào `lanes/<id>.pgid`, và engine `killpg` theo file đó nên không để lại process mồ côi. Checkpoint được chạy tách nền giống lane, và `wait` báo khi nó xong. Trần 20 agent của Claude không áp cho OpenCode, nên đạt được trần tier 40/64. Slice `programmer-lite` chạy đúng agent lite (effort low) trên cả v1.
-8. **Tool guards:** plugin v1/v2 pipe JSON (giống hook của Claude) đến `guard.py oc`. Programmer dùng bộ kiểm tra hiện có. Role khác chỉ được đọc, nhưng vẫn chạy được `devteam status`/`devteam probe`. Khi thiếu `DEVTEAM_ROLE`, plugin v2 lấy role từ `agent` của event nếu đó là role dev-team. Trong lane, `batch`, `question` và `execute` bị chặn, vì `question` headless sẽ treo. OpenCode không có prompt tương tác, nên một lệnh chưa được duyệt trước, hoặc một lượt ghi của programmer ra ngoài worktree của chính slice đó, đều bị TỪ CHỐI thẳng chứ không chờ hỏi. Thông báo từ chối liệt kê các dạng `.slice/allow` đã pin. Lỗi phía plugin vẫn cho qua (fail-open, vì bước integrate kiểm tra lại), nhưng plugin cảnh báo rõ một lần mỗi lane và ghi lỗi vào log lane.
+7. **Stall và tiến trình:** stall tính theo role, khoảng 900 s cho glm-programmer/glm-team-leader và 600 s cho reviewer, nên test/build dài không bị giết oan. Process group của opencode được ghi vào `lanes/<id>.pgid`, và engine `killpg` theo file đó nên không để lại process mồ côi. Checkpoint được chạy tách nền giống lane, và `wait` báo khi nó xong. Trần 20 agent của Claude không áp cho OpenCode, nên đạt được trần tier 40/64. Slice `glm-programmer-lite` chạy đúng agent lite (effort low) trên cả v1.
+8. **Tool guards:** plugin v1/v2 pipe JSON (giống hook của Claude) đến `guard.py oc`. Programmer dùng bộ kiểm tra hiện có. Role khác chỉ được đọc, nhưng vẫn chạy được `devteam status`/`devteam probe`. Khi thiếu `DEVTEAM_ROLE`, plugin v2 lấy role từ `agent` của event nếu đó là role glm-dev-team. Trong lane, `batch`, `question` và `execute` bị chặn, vì `question` headless sẽ treo. OpenCode không có prompt tương tác, nên một lệnh chưa được duyệt trước, hoặc một lượt ghi của glm-programmer ra ngoài worktree của chính slice đó, đều bị TỪ CHỐI thẳng chứ không chờ hỏi. Thông báo từ chối liệt kê các dạng `.slice/allow` đã pin. Lỗi phía plugin vẫn cho qua (fail-open, vì bước integrate kiểm tra lại), nhưng plugin cảnh báo rõ một lần mỗi lane và ghi lỗi vào log lane.
 9. **Sửa lỗi và retry:** OpenCode không có SendMessage vì lane là process chạy một lần. Câu trả lời cho `BLOCKED`, hay cách sửa cho `REJECTED` / `NOT READY` / `MERGE ERROR`, đi qua `devteam resume <id> --note "…"`: lệnh này chạy một lane mới trong **cùng** worktree và reset `.slice/stop_blocks`. Chỉ khi resume không cứu được mới dùng `devteam retry <id>`, lệnh tạo worktree mới, nâng lên GLM-5.3 và có thể mở rộng file scope. Engine tự dừng lane cũ.
 10. **Lane chết:** governor đọc file lane (`.claude/dev-team/lanes/<id>.done`) thay vì transcript. Lane kết thúc `FAIL`/`STALL`/`TIMEOUT`, hoặc pid đã chết mà không có `.end` hay marker (bị signal giết), thì engine in `LANE DOWN <id> (<kind>)` kèm cách sửa. Với slice: `fail <id>` rồi `retry <id>` (worktree bị xoá, chỉ giữ branch `attempt/<id>-N` để cứu dữ liệu). Với review/research: chạy lại lệnh engine in ra. Lệnh đó đã có tiền tố `python3`, chạy tách nền và xoá `.done` cũ; dấu `&` trơn sẽ làm tool bash của OpenCode v1 bị treo tới khi lane xong.
 11. **Doctor:** `python3 devteam.py doctor --harness opencode` kiểm tra agent, plugin, config và việc major version có khớp không.
-12. **Chỉ dispatch qua engine:** agent dev-team chỉ được khởi chạy qua lane của engine (`devteam next` / `lane-run`), nơi gán `DEVTEAM_ROLE`/`DEVTEAM_SLICE` cho từng lane. Không bao giờ dispatch role dev-team bằng tool `task` (v1) hay `subagent` (v2) của OpenCode. Agent built-in của OpenCode là `general`; ở đó không có `general-purpose` hay `Explore`.
+12. **Chỉ dispatch qua engine:** agent glm-dev-team chỉ được khởi chạy qua lane của engine (`devteam next` / `lane-run`), nơi gán `DEVTEAM_ROLE`/`DEVTEAM_SLICE` cho từng lane. Không bao giờ dispatch role glm-dev-team bằng tool `task` (v1) hay `subagent` (v2) của OpenCode. Agent built-in của OpenCode là `general`; ở đó không có `general-purpose` hay `Explore`.
 ```
 
 - [ ] **Step 8: Record the change in the README history**
 
-In `dev-team-glm/README.md`, under the `## Lịch sử ngắn` heading, insert this as the first list item (just above the line starting `- **v3.2**`):
+In `glm-dev-team/README.md`, under the `## Lịch sử ngắn` heading, insert this as the first list item (just above the line starting `- **v3.2**`):
 
 ```markdown
 - **OpenCode hardening (2026-09-28)** — v1 1.18.x và v2 2.0.x: bootstrap tìm thư mục skill mà không cần `${CLAUDE_SKILL_DIR}`; nhận v2 qua `OPENCODE_TERMINAL`; `resume <id> --note` thay cho SendMessage; stall theo role; checkpoint chạy tách nền; `wait` thoát khi không còn lane; `killpg` qua `lanes/<id>.pgid`; guard chặn `batch`/`question`/`execute` trong lane; báo LANE DOWN cho lane bị signal giết.
@@ -6454,24 +6454,24 @@ In `dev-team-glm/README.md`, under the `## Lịch sử ngắn` heading, insert t
 - [ ] **Step 9: Run the check to verify it passes**
 
 Run: `python3 /tmp/t15_check.py`
-Expected: PASS, with the single line `OK: dev-team SKILL.md and README.md checks pass` and exit 0.
+Expected: PASS, with the single line `OK: glm-dev-team SKILL.md and README.md checks pass` and exit 0.
 
 - [ ] **Step 10: Run the skill frontmatter tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_all_skills.py'`
-Expected: PASS. No failure or error mentions `dev-team` (the `name: dev-team` frontmatter and the description are unchanged).
+Expected: PASS. No failure or error mentions `glm-dev-team` (the `name: glm-dev-team` frontmatter and the description are unchanged).
 
-- [ ] **Step 11: Run the dev-team selftest**
+- [ ] **Step 11: Run the glm-dev-team selftest**
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` ≥ 324 and `failed=` ≤ 5. The only failures are the 5 known macOS ones.
 
 - [ ] **Step 12: Commit**
 
 ```bash
 cd ..
-git add glm-skills/dev-team-glm/SKILL.md glm-skills/dev-team-glm/README.md
-git commit -m "fix(dev-team): OpenCode v1/v2 bootstrap, resume, lifecycle and guard notes in SKILL.md and README"
+git add glm-skills/glm-dev-team/SKILL.md glm-skills/glm-dev-team/README.md
+git commit -m "fix(glm-dev-team): OpenCode v1/v2 bootstrap, resume, lifecycle and guard notes in SKILL.md and README"
 cd glm-skills
 rm -f /tmp/t15_check.py
 ```
@@ -6483,7 +6483,7 @@ rm -f /tmp/t15_check.py
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/systematic-debugging-glm/scripts/debug_tool.py:53-58`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/debug_tool.py:53-58`
 - Test: `glm-skills/_shared/tests/test_debug_core.py`
 
 This task fixes four defects in `debug_tool.py`:
@@ -6511,7 +6511,7 @@ import unittest
 from pathlib import Path
 
 _T16_DT_PATH = (Path(__file__).resolve().parents[2]
-                / "systematic-debugging-glm" / "scripts" / "debug_tool.py")
+                / "glm-systematic-debugging" / "scripts" / "debug_tool.py")
 _t16_spec = importlib.util.spec_from_file_location("debug_tool_t16", str(_T16_DT_PATH))
 DT16 = importlib.util.module_from_spec(_t16_spec)
 _t16_spec.loader.exec_module(DT16)
@@ -6567,7 +6567,7 @@ Expected: FAIL: `test_zero_means_default` (`AssertionError: 1 != 8`), `test_nega
 
 - [ ] **Step 3: Treat 0 as the default and keep the extra repros serial**
 
-In `systematic-debugging-glm/scripts/debug_tool.py`, replace the whole `clamp` function with:
+In `glm-systematic-debugging/scripts/debug_tool.py`, replace the whole `clamp` function with:
 
 ```python
 def clamp(j, default):
@@ -6748,8 +6748,8 @@ Run these from the git root (one level above `glm-skills/`):
 
 ```bash
 cd ..
-git add glm-skills/systematic-debugging-glm/scripts/debug_tool.py glm-skills/_shared/tests/test_debug_core.py
-git commit -m "fix(systematic-debugging): parallel -j defaults, race word boundary, quoted FAST next, real wall time"
+git add glm-skills/glm-systematic-debugging/scripts/debug_tool.py glm-skills/_shared/tests/test_debug_core.py
+git commit -m "fix(glm-systematic-debugging): parallel -j defaults, race word boundary, quoted FAST next, real wall time"
 ```
 
 ---
@@ -6761,7 +6761,7 @@ git commit -m "fix(systematic-debugging): parallel -j defaults, race word bounda
 **Runs after:** T16 (same files)
 
 **Files:**
-- Modify: `glm-skills/systematic-debugging-glm/scripts/debug_tool.py:496-616`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/debug_tool.py:496-616`
 - Test: `glm-skills/_shared/tests/test_debug_experiment.py`
 
 This task fixes spec rows SD4 and SD5 in `debug_tool.py experiment`. An earlier task edits the same file (clamp, `sh`, routing, NEXT line, wall time), so find each edit below by the quoted code, not by line number. All commands run from `glm-skills/`.
@@ -6785,7 +6785,7 @@ from pathlib import Path
 from unittest import mock
 
 TOOL = (Path(__file__).resolve().parents[2]
-        / "systematic-debugging-glm" / "scripts" / "debug_tool.py")
+        / "glm-systematic-debugging" / "scripts" / "debug_tool.py")
 
 
 def load_tool():
@@ -6883,7 +6883,7 @@ Expected: FAIL with `FAILED (failures=3)`: the first two show `AssertionError: '
 
 - [ ] **Step 3: Copy untracked files, link ignored dependency dirs, and mark a silent control INCONCLUSIVE**
 
-In `glm-skills/systematic-debugging-glm/scripts/debug_tool.py`, replace the whole `def make_worktree(root, path, links, wip_patch):` function with these three functions:
+In `glm-skills/glm-systematic-debugging/scripts/debug_tool.py`, replace the whole `def make_worktree(root, path, links, wip_patch):` function with these three functions:
 
 ```python
 DEFAULT_LINKS = ("node_modules", ".venv", "venv", "vendor/bundle")
@@ -7032,7 +7032,7 @@ Expected: FAIL with `FAILED (failures=3)`. `test_relative_patch_file_resolves_ag
 
 - [ ] **Step 7: Resolve patch_file against the caller's cwd and skip the WIP when the patch contains it**
 
-In `glm-skills/systematic-debugging-glm/scripts/debug_tool.py`, add this function directly above `def cmd_experiment(a):`:
+In `glm-skills/glm-systematic-debugging/scripts/debug_tool.py`, add this function directly above `def cmd_experiment(a):`:
 
 ```python
 def apply_treatment_patch(wt, patch, wip_patch):
@@ -7126,8 +7126,8 @@ Expected: no failure or error in `test_debug_experiment.py`, and no failures bey
 - [ ] **Step 10: Commit**
 
 ```bash
-git add glm-skills/systematic-debugging-glm/scripts/debug_tool.py glm-skills/_shared/tests/test_debug_experiment.py
-git commit -m "fix(systematic-debugging): complete experiment worktrees and fix patch order
+git add glm-skills/glm-systematic-debugging/scripts/debug_tool.py glm-skills/_shared/tests/test_debug_experiment.py
+git commit -m "fix(glm-systematic-debugging): complete experiment worktrees and fix patch order
 
 Copy untracked files and link ignored dependency dirs into every arm; a control
 that does not reproduce is INCONCLUSIVE. Resolve patch_file against the caller's
@@ -7146,7 +7146,7 @@ cwd and apply a patch that already contains the WIP on HEAD."
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`; `def config_snippet(major: int, deny: list) -> str`
 
 **Files:**
-- Modify: `glm-skills/systematic-debugging-glm/scripts/debug_tool.py`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/debug_tool.py`
 - Modify: `glm-skills/_shared/tests/test_adopt_debug.py`
 
 All commands run from `glm-skills/` (`cd glm-skills`). T17 edits the same two files before this task, so anchor every edit on the code shown here (function names and string literals), not on line numbers. This task covers spec rows SD6 (scan context), SD12 (setup snippet), SD13 (named agent, prompts under `<root>/.debug/`), SD14 (`S=` in prompts) and SD16 (`lanes.json` plus `NEXT: ... oc_harness.py run`).
@@ -7223,7 +7223,7 @@ Expected: FAIL, final line `FAILED (failures=1, errors=4)`: three `AttributeErro
 
 - [ ] **Step 3: Implement stopword keywords, one area-scoped grep and capped code windows**
 
-In `systematic-debugging-glm/scripts/debug_tool.py`, insert this block directly above `def build_tasks(a, root):`:
+In `glm-systematic-debugging/scripts/debug_tool.py`, insert this block directly above `def build_tasks(a, root):`:
 
 ```python
 SCAN_STOPWORDS = frozenset(
@@ -7349,9 +7349,9 @@ class TestScanAgentLane(unittest.TestCase):
         assert (d / "t1.txt").is_file() and (d / "t2.txt").is_file()
         lanes = json.loads((d / "lanes.json").read_text())
         assert [l["id"] for l in lanes] == ["t1", "t2"]
-        assert [l["agent"] for l in lanes] == ["debug-worker", "debug-worker"]
+        assert [l["agent"] for l in lanes] == ["glm-debug-worker", "glm-debug-worker"]
         assert lanes[0]["brief"] == str((d / "t1.txt").resolve())
-        assert "debug-worker" in out
+        assert "glm-debug-worker" in out
         nxt = [l for l in out.splitlines() if l.startswith("NEXT: python3 ")]
         assert nxt and "oc_harness.py run" in nxt[-1]
         assert str(d / "lanes.json") in nxt[-1] or str((d / "lanes.json").resolve()) in nxt[-1]
@@ -7370,7 +7370,7 @@ class TestScanAgentLane(unittest.TestCase):
         assert rc == 0
         assert (d / "t1.txt").is_file()
         assert not (d / "lanes.json").exists()
-        assert "debug-worker" in out
+        assert "glm-debug-worker" in out
         assert "oc_harness.py run" not in out
 ```
 
@@ -7381,11 +7381,11 @@ Expected: FAIL, final line `FAILED (errors=3)`, each with `AttributeError: <modu
 
 - [ ] **Step 7: Implement the named-agent lane with `lanes.json` on OpenCode**
 
-In `systematic-debugging-glm/scripts/debug_tool.py`, directly below the line `import zai_client`, add:
+In `glm-systematic-debugging/scripts/debug_tool.py`, directly below the line `import zai_client`, add:
 
 ```python
 import oc_harness
-WORKER_AGENT = "debug-worker"
+WORKER_AGENT = "glm-debug-worker"
 ```
 
 In `cmd_scan`, replace the whole `if not key or a.print_prompts:` block (from that line through its `return 0`) with:
@@ -7501,14 +7501,14 @@ Expected: FAIL, final line `FAILED (failures=1, errors=1)`: an `AssertionError` 
 
 - [ ] **Step 11: Implement setup through the shared snippet**
 
-In `systematic-debugging-glm/scripts/debug_tool.py`, replace the whole `"opencode": """# ~/.config/opencode/opencode.json  (merge these keys)` entry of `SETUP` (through its closing `""",`, the line ending in `instead of a serial DISPATCH table."""`) with:
+In `glm-systematic-debugging/scripts/debug_tool.py`, replace the whole `"opencode": """# ~/.config/opencode/opencode.json  (merge these keys)` entry of `SETUP` (through its closing `""",`, the line ending in `instead of a serial DISPATCH table."""`) with:
 
 ```python fragment
     "opencode": (
         "# export ZAI_API_KEY=<GLM Coding Plan key>\n"
-        "# Skill goes in ~/.config/opencode/skills/systematic-debugging/ (or .opencode/skills/ per project).\n"
+        "# Skill goes in ~/.config/opencode/skills/glm-systematic-debugging/ (or .opencode/skills/ per project).\n"
         "# Agent lane: without a key, `debug_tool.py scan` writes <root>/.debug/scan/lanes.json"
-        " for the debug-worker agent.\n"
+        " for the glm-debug-worker agent.\n"
         "# Run every lane in parallel with: python3 <scripts>/oc_harness.py run"
         " <root>/.debug/scan/lanes.json"),
 ```
@@ -7546,19 +7546,19 @@ Expected: final line `OK`, with no failure in `test_adopt_debug.py`.
 - [ ] **Step 14: Commit**
 
 ```bash
-git add glm-skills/systematic-debugging-glm/scripts/debug_tool.py glm-skills/_shared/tests/test_adopt_debug.py
-git commit -m "fix(systematic-debugging): scan code context, named debug-worker lanes, lanes.json and shared OpenCode setup snippet"
+git add glm-skills/glm-systematic-debugging/scripts/debug_tool.py glm-skills/_shared/tests/test_adopt_debug.py
+git commit -m "fix(glm-systematic-debugging): scan code context, named glm-debug-worker lanes, lanes.json and shared OpenCode setup snippet"
 ```
 
 ---
 
-### T19: systematic-debugging shell script fixes [P]
+### T19: glm-systematic-debugging shell script fixes [P]
 
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/systematic-debugging-glm/scripts/bisect-parallel.sh:32`
-- Modify: `glm-skills/systematic-debugging-glm/scripts/stress.sh:26`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/bisect-parallel.sh:32`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/stress.sh:26`
 - Test: `glm-skills/_shared/tests/test_debug_scripts.py`
 
 This task fixes SD9 and SD10. SD9: `bisect-parallel.sh -t SECONDS` is ignored without a word when neither `timeout` nor `gtimeout` is installed. It must print the same warning `stress.sh` already prints. SD10: `stress.sh -o DIR` on a directory that already holds `rc.*` / `FAIL.*` files from an earlier run counts those old results. The script must refuse (exit 2) and leave the old results alone, not delete them. All commands run from `glm-skills/` (`cd glm-skills` first).
@@ -7568,7 +7568,7 @@ This task fixes SD9 and SD10. SD9: `bisect-parallel.sh -t SECONDS` is ignored wi
 Create `glm-skills/_shared/tests/test_debug_scripts.py` with this content:
 
 ```python
-"""Shell-level checks for systematic-debugging-glm/scripts (bisect-parallel.sh, stress.sh)."""
+"""Shell-level checks for glm-systematic-debugging/scripts (bisect-parallel.sh, stress.sh)."""
 import os
 import shutil
 import subprocess
@@ -7577,7 +7577,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = ROOT / "systematic-debugging-glm" / "scripts"
+SCRIPTS = ROOT / "glm-systematic-debugging" / "scripts"
 BISECT = SCRIPTS / "bisect-parallel.sh"
 STRESS = SCRIPTS / "stress.sh"
 BASH = shutil.which("bash")
@@ -7666,7 +7666,7 @@ Expected: FAIL. `test_t_without_timeout_binary_warns` fails with `AssertionError
 
 - [ ] **Step 3: Add the warning to `bisect-parallel.sh`**
 
-In `glm-skills/systematic-debugging-glm/scripts/bisect-parallel.sh`, find the line that sets `TO`:
+In `glm-skills/glm-systematic-debugging/scripts/bisect-parallel.sh`, find the line that sets `TO`:
 
 ```bash
 TO=$(sd_timeout_bin)
@@ -7735,7 +7735,7 @@ Expected: FAIL. `test_reused_dir_after_pass_is_refused` fails with `AssertionErr
 
 - [ ] **Step 7: Make `stress.sh` refuse an output dir that already holds results**
 
-In `glm-skills/systematic-debugging-glm/scripts/stress.sh`, find the line that creates the output dir:
+In `glm-skills/glm-systematic-debugging/scripts/stress.sh`, find the line that creates the output dir:
 
 ```bash
 [ -z "$OUT" ] && { OUT=$(mktemp -d "${TMPDIR:-/tmp}/stress.XXXXXX"); OWN_OUT=1; }; mkdir -p "$OUT"
@@ -7763,36 +7763,36 @@ Expected: PASS (`Ran 5 tests`, `OK`)
 
 - [ ] **Step 9: Run the full suite and the shell syntax checks**
 
-Run: `cd glm-skills && bash -n systematic-debugging-glm/scripts/bisect-parallel.sh && bash -n systematic-debugging-glm/scripts/stress.sh && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
+Run: `cd glm-skills && bash -n glm-systematic-debugging/scripts/bisect-parallel.sh && bash -n glm-systematic-debugging/scripts/stress.sh && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: no output from `bash -n`. The suite ends with the 5 new tests passing, and every failure it lists was already failing before this task (the known stale-fixture reds).
 
 - [ ] **Step 10: Commit**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-git add glm-skills/systematic-debugging-glm/scripts/bisect-parallel.sh glm-skills/systematic-debugging-glm/scripts/stress.sh glm-skills/_shared/tests/test_debug_scripts.py
-git commit -m "fix(systematic-debugging): warn when bisect -t has no timeout binary; refuse reused stress -o dir"
+git add glm-skills/glm-systematic-debugging/scripts/bisect-parallel.sh glm-skills/glm-systematic-debugging/scripts/stress.sh glm-skills/_shared/tests/test_debug_scripts.py
+git commit -m "fix(glm-systematic-debugging): warn when bisect -t has no timeout binary; refuse reused stress -o dir"
 ```
 
 ---
 
-### T20: systematic-debugging docs, agent and command for OpenCode [P]
+### T20: glm-systematic-debugging docs, agent and command for OpenCode [P]
 
 **Depends:** T17, T18
 
 **Files:**
-- Modify: `glm-skills/systematic-debugging-glm/SKILL.md`
-- Modify: `glm-skills/systematic-debugging-glm/opencode/agents/debug-worker.md`
-- Modify: `glm-skills/systematic-debugging-glm/opencode/commands/debug.md`
-- Modify: `glm-skills/systematic-debugging-glm/references/glm-tuning.md`
-- Modify: `glm-skills/systematic-debugging-glm/README.md`
+- Modify: `glm-skills/glm-systematic-debugging/SKILL.md`
+- Modify: `glm-skills/glm-systematic-debugging/opencode/agents/glm-debug-worker.md`
+- Modify: `glm-skills/glm-systematic-debugging/opencode/commands/glm-debug.md`
+- Modify: `glm-skills/glm-systematic-debugging/references/glm-tuning.md`
+- Modify: `glm-skills/glm-systematic-debugging/README.md`
 
 - [ ] **Step 1: Update SKILL.md bootstrap snippet to include OPENCODE_CONFIG_DIR**
 
 Replace SKILL.md:15-21 (the R0 bootstrap code block) with:
 
 ```bash
-for d in "${CLAUDE_SKILL_DIR:-}" "$OPENCODE_CONFIG_DIR/skills/systematic-debugging" .opencode/skills/systematic-debugging ~/.config/opencode/skills/systematic-debugging .claude/skills/systematic-debugging ~/.claude/skills/systematic-debugging .agents/skills/systematic-debugging ~/.agents/skills/systematic-debugging ~/.zcode/skills/systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
+for d in "${CLAUDE_SKILL_DIR:-}" "$OPENCODE_CONFIG_DIR/skills/glm-systematic-debugging" .opencode/skills/glm-systematic-debugging ~/.config/opencode/skills/glm-systematic-debugging .claude/skills/glm-systematic-debugging ~/.claude/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging ~/.zcode/skills/glm-systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
 ```
 
 Expected: Bootstrap loop now checks OPENCODE_CONFIG_DIR per spec L93-96.
@@ -7827,7 +7827,7 @@ This prints a provider block defining `variants` `low`/`high`/`max` (`reasoningE
 
 Expected: SKILL.md includes setup snippet per spec L80.
 
-- [ ] **Step 4: Update SKILL.md R5 step 4 to name debug-worker agent**
+- [ ] **Step 4: Update SKILL.md R5 step 4 to name glm-debug-worker agent**
 
 Replace SKILL.md:83 (R5 step 4 first sentence) to reference the agent by name. Change from:
 ```
@@ -7836,14 +7836,14 @@ Replace SKILL.md:83 (R5 step 4 first sentence) to reference the agent by name. C
 
 To:
 ```
-4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `debug-worker` agent instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to 64 workers itself, with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `glm-debug-worker` agent instead — dispatch them all in one message. On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `glm-debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report.
 ```
 
-Expected: SKILL.md references the `debug-worker` agent by name (fixes SD13).
+Expected: SKILL.md references the `glm-debug-worker` agent by name (fixes SD13).
 
-- [ ] **Step 5: Fix debug-worker.md placeholder variable**
+- [ ] **Step 5: Fix glm-debug-worker.md placeholder variable**
 
-Replace debug-worker.md:22 from:
+Replace glm-debug-worker.md:22 from:
 ```
 4. For a flaky command, run both arms with the same `-n` and `-j` using `bash <scripts>/stress.sh`, and report the rates, not an impression.
 ```
@@ -7859,14 +7859,14 @@ Expected: `<scripts>` placeholder replaced with `$S` variable (fixes SD14).
 
 Replace debug.md:5-7 from:
 ```
-Load the systematic-debugging skill with the provided arguments:
+Load the glm-systematic-debugging skill with the provided arguments:
 
 $ARGUMENTS
 ```
 
 To:
 ```
-Set the path to the skill scripts directory, then load the systematic-debugging skill:
+Set the path to the skill scripts directory, then load the glm-systematic-debugging skill:
 
 S={{SKILL_DIR}}/scripts
 
@@ -7877,33 +7877,33 @@ Expected: `debug.md` defines `S={{SKILL_DIR}}/scripts` before skill invocation (
 
 - [ ] **Step 7: Verify all files are syntactically correct**
 
-Run: `cd glm-skills && python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ['systematic-debugging-glm/SKILL.md', 'systematic-debugging-glm/opencode/agents/debug-worker.md', 'systematic-debugging-glm/opencode/commands/debug.md']]"`
+Run: `cd glm-skills && python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ['glm-systematic-debugging/SKILL.md', 'glm-systematic-debugging/opencode/agents/glm-debug-worker.md', 'glm-systematic-debugging/opencode/commands/glm-debug.md']]"`
 Expected: No YAML parse errors on frontmatter sections.
 
 - [ ] **Step 8: Verify bootstrap snippet uses correct format**
 
-Run: `cd glm-skills && grep -A 5 'for d in' systematic-debugging-glm/SKILL.md | grep -q 'OPENCODE_CONFIG_DIR' && echo OK`
+Run: `cd glm-skills && grep -A 5 'for d in' glm-systematic-debugging/SKILL.md | grep -q 'OPENCODE_CONFIG_DIR' && echo OK`
 Expected: Output is `OK`
 
-- [ ] **Step 9: Verify debug-worker agent definition is present**
+- [ ] **Step 9: Verify glm-debug-worker agent definition is present**
 
-Run: `cd glm-skills && grep -q 'debug-worker' systematic-debugging-glm/SKILL.md && echo OK`
+Run: `cd glm-skills && grep -q 'glm-debug-worker' glm-systematic-debugging/SKILL.md && echo OK`
 Expected: Output is `OK`
 
 - [ ] **Step 10: Verify S variable is defined in debug command**
 
-Run: `cd glm-skills && grep 'S={{SKILL_DIR}}' systematic-debugging-glm/opencode/commands/debug.md && echo OK`
+Run: `cd glm-skills && grep 'S={{SKILL_DIR}}' glm-systematic-debugging/opencode/commands/glm-debug.md && echo OK`
 Expected: Output includes `S={{SKILL_DIR}}`
 
 - [ ] **Step 11: Commit changes**
 
 ```bash
-git add glm-skills/systematic-debugging-glm/SKILL.md glm-skills/systematic-debugging-glm/opencode/agents/debug-worker.md glm-skills/systematic-debugging-glm/opencode/commands/debug.md glm-skills/systematic-debugging-glm/references/glm-tuning.md glm-skills/systematic-debugging-glm/README.md
-git commit -m "feat(systematic-debugging): OpenCode integration docs updates
+git add glm-skills/glm-systematic-debugging/SKILL.md glm-skills/glm-systematic-debugging/opencode/agents/glm-debug-worker.md glm-skills/glm-systematic-debugging/opencode/commands/glm-debug.md glm-skills/glm-systematic-debugging/references/glm-tuning.md glm-skills/glm-systematic-debugging/README.md
+git commit -m "feat(glm-systematic-debugging): OpenCode integration docs updates
 
 Add OPENCODE_CONFIG_DIR to bootstrap snippet per shared contract.
-Reference debug-worker agent by name in SKILL.md scan documentation.
-Fill S variable placeholder in debug-worker.md stress.sh reference.
+Reference glm-debug-worker agent by name in SKILL.md scan documentation.
+Fill S variable placeholder in glm-debug-worker.md stress.sh reference.
 Add S={{SKILL_DIR}}/scripts to debug.md command definition.
 Include setup snippet for zai-coding-plan variants in SKILL.md.
 Reword test file placeholder in SKILL.md to prevent literal execution.
@@ -7918,7 +7918,7 @@ Fixes SD8, SD12, SD13, SD14, SD15, SD17."
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/audit.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/audit.py`
 - Test: `glm-skills/_shared/tests/test_audit_retrieval.py`
 
 This task fixes three retrieval and citation defects in `audit.py`:
@@ -7946,7 +7946,7 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.normpath(os.path.join(
-    HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+    HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 _spec = importlib.util.spec_from_file_location(
@@ -8013,7 +8013,7 @@ Expected: FAIL with `AssertionError: True is not false : app/security.py` in `te
 
 - [ ] **Step 3: Classify prose by extension plus explicit doc dirs only**
 
-In `requirements-code-audit-glm/scripts/audit.py`, replace the block that runs from `DOC_EXT = set(".md .markdown` through the end of the `DOC_DIRS = re.compile(...)` statement with the following. `RUNTIME_TXT` keeps the `.txt` files that pip, cmake and crawlers load. `DOC_NAME` now matches whole extension-less names only, so `security.py`, `history.py` and `support.go` count as code. `DOC_DIRS` lists explicit documentation trees only, because `blog/`, `site/`, `design/` and `book/` often hold application code.
+In `glm-requirements-code-audit/scripts/audit.py`, replace the block that runs from `DOC_EXT = set(".md .markdown` through the end of the `DOC_DIRS = re.compile(...)` statement with the following. `RUNTIME_TXT` keeps the `.txt` files that pip, cmake and crawlers load. `DOC_NAME` now matches whole extension-less names only, so `security.py`, `history.py` and `support.go` count as code. `DOC_DIRS` lists explicit documentation trees only, because `blog/`, `site/`, `design/` and `book/` often hold application code.
 
 ```python
 DOC_EXT = set(".md .markdown .mdx .rst .adoc .asciidoc .txt .rtf .org .wiki".split())
@@ -8102,7 +8102,7 @@ Expected: FAIL. `test_dotfile_keeps_its_leading_dot` fails with `AssertionError:
 
 - [ ] **Step 7: Strip only the `./` prefix and resolve absolute paths**
 
-In `requirements-code-audit-glm/scripts/audit.py`, add this function directly above `def lint_finding(`:
+In `glm-requirements-code-audit/scripts/audit.py`, add this function directly above `def lint_finding(`:
 
 ```python
 def norm_cite_path(raw, root):
@@ -8227,7 +8227,7 @@ Expected: FAIL with `AssertionError: '*.{yml,yaml}' not found in` in `test_data_
 
 - [ ] **Step 11: Fix the ripgrep globs**
 
-In `Retriever._rg` in `requirements-code-audit-glm/scripts/audit.py`, replace the `if tests_only:` and `if data_only:` blocks with:
+In `Retriever._rg` in `glm-requirements-code-audit/scripts/audit.py`, replace the `if tests_only:` and `if data_only:` blocks with:
 
 ```python fragment
         if tests_only:
@@ -8253,8 +8253,8 @@ Expected: the only failures are the baseline stale-fixture failures (at most 11)
 
 ```bash
 cd ..
-git add glm-skills/requirements-code-audit-glm/scripts/audit.py glm-skills/_shared/tests/test_audit_retrieval.py
-git commit -m "fix(requirements-code-audit): prose by extension and doc dirs only, strip ./ prefix only, fix rg yaml/tests/migrations globs"
+git add glm-skills/glm-requirements-code-audit/scripts/audit.py glm-skills/_shared/tests/test_audit_retrieval.py
+git commit -m "fix(glm-requirements-code-audit): prose by extension and doc dirs only, strip ./ prefix only, fix rg yaml/tests/migrations globs"
 ```
 
 ---
@@ -8266,7 +8266,7 @@ git commit -m "fix(requirements-code-audit): prose by extension and doc dirs onl
 **Runs after:** T21 (same files)
 
 **Files:**
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/audit.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/audit.py`
 - Test: `glm-skills/_shared/tests/test_audit_verdicts.py`
 
 This task fixes the api-lane verdict pipeline in `audit.py`: RA4 (pass-1 errors stamped on a clean pass-2 answer), RA5 (a rejected verdict still wins), RA18 (warm-up runs a whole `judge_one`), RA19 (truncated replies at `finish_reason == length`) and RA20 (`run --resume` re-verifies settled items and overwrites `verdicts.jsonl`). An earlier task edits the same file, so every edit below is anchored on code text, not on line numbers. All commands run from `glm-skills/` (`cd glm-skills`).
@@ -8287,7 +8287,7 @@ import unittest
 from argparse import Namespace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
@@ -8371,7 +8371,7 @@ Expected: FAIL: `test_clean_second_pass_clears_first_pass_errors` fails with `As
 
 - [ ] **Step 3: Clear the errors when pass 2 is accepted**
 
-In `requirements-code-audit-glm/scripts/audit.py`, inside `judge_one`, replace
+In `glm-requirements-code-audit/scripts/audit.py`, inside `judge_one`, replace
 
 ```python fragment
             fix2, errs2, _w = lint_finding(row2, it, retr.root, paths)
@@ -8449,7 +8449,7 @@ class MergedRejectedTest(unittest.TestCase):
         out = _audit_dir(repo, REJECTED)
         self.addCleanup(shutil.rmtree, out, True)
         m = audit.Merged(audit.Ctx(out))
-        self.assertEqual(m.final("REQ-001"), ("MATCHED", "investigator"))
+        self.assertEqual(m.final("REQ-001"), ("MATCHED", "glm-investigator"))
         self.assertNotIn("REQ-001", m.ver)
         self.assertIn("REQ-001", m.ver_rejected)
         self.assertEqual(m.evidence("REQ-001")[0]["path"], "src/app.py")
@@ -8477,7 +8477,7 @@ class CheckGateRejectedTest(unittest.TestCase):
 - [ ] **Step 6: Run the RA5 tests to verify they fail**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_audit_verdicts.py' -k VerifyOneTest -k MergedRejectedTest -k CheckGateRejectedTest`
-Expected: FAIL: `test_rejected_verdict_is_no_verdict` fails with `AssertionError: 'MATCHED' != 'UNSEARCHED'`, `test_rejected_verdict_row_falls_back_to_the_finding` fails with `AssertionError: Tuples differ: ('MISSING', 'verifier') != ('MATCHED', 'investigator')`, `test_gate_fails_on_an_unadjudicated_rejected_verdict` fails with `AssertionError: "rejected the verifier's answer" not found in ...`, and the run ends `FAILED (failures=3)`.
+Expected: FAIL: `test_rejected_verdict_is_no_verdict` fails with `AssertionError: 'MATCHED' != 'UNSEARCHED'`, `test_rejected_verdict_row_falls_back_to_the_finding` fails with `AssertionError: Tuples differ: ('MISSING', 'verifier') != ('MATCHED', 'glm-investigator')`, `test_gate_fails_on_an_unadjudicated_rejected_verdict` fails with `AssertionError: "rejected the verifier's answer" not found in ...`, and the run ends `FAILED (failures=3)`.
 
 - [ ] **Step 7: Drop rejected verdicts in `verify_one`, `Merged`, `queue` and `check`**
 
@@ -8964,8 +8964,8 @@ Expected: no failure or error in `test_audit_verdicts` and no new failure elsewh
 
 ```bash
 cd ..
-git add glm-skills/requirements-code-audit-glm/scripts/audit.py glm-skills/_shared/tests/test_audit_verdicts.py
-git commit -m "fix(requirements-code-audit): verdict pipeline: clean pass 2 clears pass-1 errors, rejected verdict is no verdict, one-call warm-up, length-stop retry, resume keeps settled verdicts"
+git add glm-skills/glm-requirements-code-audit/scripts/audit.py glm-skills/_shared/tests/test_audit_verdicts.py
+git commit -m "fix(glm-requirements-code-audit): verdict pipeline: clean pass 2 clears pass-1 errors, rejected verdict is no verdict, one-call warm-up, length-stop retry, resume keeps settled verdicts"
 ```
 
 ---
@@ -8977,7 +8977,7 @@ git commit -m "fix(requirements-code-audit): verdict pipeline: clean pass 2 clea
 **Runs after:** T22 (same files)
 
 **Files:**
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/audit.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/audit.py`
 - Test: `glm-skills/_shared/tests/test_audit_command.py`
 
 This task fixes five CLI state and resume defects in `audit.py`:
@@ -9006,7 +9006,7 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts")
+SCRIPTS = os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts")
 sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(1, SCRIPTS)
 
@@ -9100,7 +9100,7 @@ Expected: FAIL with "AssertionError: 0 != 1"
 
 - [ ] **Step 3: Return the command's exit code from `main` (RA9)**
 
-In `requirements-code-audit-glm/scripts/audit.py`, find the end of `main` and replace this block:
+In `glm-requirements-code-audit/scripts/audit.py`, find the end of `main` and replace this block:
 
 ```python fragment
     try:
@@ -9548,8 +9548,8 @@ Expected: no failure or error in `test_audit_command.py`, and no test that passe
 
 ```bash
 cd ..
-git add glm-skills/requirements-code-audit-glm/scripts/audit.py glm-skills/_shared/tests/test_audit_command.py
-git commit -m "fix(requirements-code-audit): CLI exit codes, brief archive order, resume keeps finished batches and verdicts, status tracks dispatched verifiers"
+git add glm-skills/glm-requirements-code-audit/scripts/audit.py glm-skills/_shared/tests/test_audit_command.py
+git commit -m "fix(glm-requirements-code-audit): CLI exit codes, brief archive order, resume keeps finished batches and verdicts, status tracks dispatched verifiers"
 ```
 
 ---
@@ -9564,7 +9564,7 @@ git commit -m "fix(requirements-code-audit): CLI exit codes, brief archive order
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`; `python3 oc_harness.py result OUT_DIR`
 
 **Files:**
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/audit.py:2408-2586`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/audit.py:2408-2586`
 - Modify: `glm-skills/_shared/tests/test_audit_setup_oc.py:1-89`
 
 All commands run from `glm-skills/` (`cd glm-skills`). T23 edits `audit.py` and this test file before you, so find each edit by the code quoted below, not only by line number.
@@ -9583,8 +9583,8 @@ class AgentLaneDispatchLine(unittest.TestCase):
     def test_opencode_v2_uses_shared_dispatch_line(self):
         with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
              mock.patch.object(oc_harness, "major", return_value=2):
-            line = audit._dispatch("rca-investigator", "/a/batch-01.md", "rca batch-01")
-        want = oc_harness.dispatch_line("rca-investigator", "/a/batch-01.md", "rca batch-01", 2,
+            line = audit._dispatch("glm-rca-investigator", "/a/batch-01.md", "rca batch-01")
+        want = oc_harness.dispatch_line("glm-rca-investigator", "/a/batch-01.md", "rca batch-01", 2,
                                         background=True)
         self.assertEqual(line, want)
         self.assertNotIn("haiku", line)
@@ -9593,14 +9593,14 @@ class AgentLaneDispatchLine(unittest.TestCase):
     def test_unknown_major_falls_back_to_v1_dialect(self):
         with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
              mock.patch.object(oc_harness, "major", return_value=0):
-            line = audit._dispatch("rca-verifier", "/a/b.md", "rca b")
-        want = oc_harness.dispatch_line("rca-verifier", "/a/b.md", "rca b", 1, background=True)
+            line = audit._dispatch("glm-rca-verifier", "/a/b.md", "rca b")
+        want = oc_harness.dispatch_line("glm-rca-verifier", "/a/b.md", "rca b", 1, background=True)
         self.assertEqual(line, want)
 
     def test_non_opencode_line_names_no_model_alias(self):
         with mock.patch.object(oc_harness, "harness", return_value="zcode"):
-            line = audit._dispatch("rca-investigator", "/a/b.md", "rca b")
-        self.assertEqual(line, "subagent_type=rca-investigator  prompt: read /a/b.md and follow it exactly")
+            line = audit._dispatch("glm-rca-investigator", "/a/b.md", "rca b")
+        self.assertEqual(line, "subagent_type=glm-rca-investigator  prompt: read /a/b.md and follow it exactly")
 
     def test_source_no_longer_prints_model_alias_dispatch(self):
         with open(os.path.join(SCRIPTS, "audit.py")) as fh:
@@ -9638,11 +9638,11 @@ class V1LaneDispatch(unittest.TestCase):
             return json.load(fh)
 
     def test_v1_investigators_write_lanes_json_and_one_next_line(self):
-        out = self.dispatch(1, "rca-investigator", "judge", "A")
+        out = self.dispatch(1, "glm-rca-investigator", "judge", "A")
         lanes = self.load("A")
         self.assertEqual([lane["id"] for lane in lanes], ["batch-01", "batch-02"])
         for lane, (_, p) in zip(lanes, self.batches):
-            self.assertEqual(lane["agent"], "rca-investigator")
+            self.assertEqual(lane["agent"], "glm-rca-investigator")
             self.assertEqual(lane["model"], "flash")
             self.assertEqual(lane["effort"], "high")
             self.assertEqual(lane["brief"], os.path.abspath(p))
@@ -9657,18 +9657,18 @@ class V1LaneDispatch(unittest.TestCase):
         self.assertNotIn("subagent_type=", out)
 
     def test_v1_verifiers_use_verify_tier(self):
-        self.dispatch(1, "rca-verifier", "verify", "V01")
+        self.dispatch(1, "glm-rca-verifier", "verify", "V01")
         lanes = self.load("V01")
         self.assertEqual(len(lanes), 2)
         for lane in lanes:
-            self.assertEqual(lane["agent"], "rca-verifier")
+            self.assertEqual(lane["agent"], "glm-rca-verifier")
             self.assertEqual(lane["model"], "pro")
             self.assertEqual(lane["effort"], "max")
 
     def test_v2_prints_background_subagent_lines_and_writes_no_lanes(self):
-        out = self.dispatch(2, "rca-investigator", "judge", "A")
+        out = self.dispatch(2, "glm-rca-investigator", "judge", "A")
         for name, p in self.batches:
-            want = oc_harness.dispatch_line("rca-investigator", p, "rca " + name, 2,
+            want = oc_harness.dispatch_line("glm-rca-investigator", p, "rca " + name, 2,
                                             background=True)
             self.assertIn("  " + want, out)
         self.assertFalse(os.path.exists(self.lanes_dir))
@@ -9682,7 +9682,7 @@ Expected: FAIL with "AttributeError: module 'audit' has no attribute '_dispatch'
 
 - [ ] **Step 3: Add the harness and dispatch helpers to audit.py**
 
-In `requirements-code-audit-glm/scripts/audit.py`, insert this block directly above `def cmd_plan(a):`. `mk`, `write_text`, `FLASH` and `PRO` already exist in the file.
+In `glm-requirements-code-audit/scripts/audit.py`, insert this block directly above `def cmd_plan(a):`. `mk`, `write_text`, `FLASH` and `PRO` already exist in the file.
 
 ```python
 OC_MODEL = {FLASH: "flash", PRO: "pro"}  # oc_harness run lane model names
@@ -9758,14 +9758,14 @@ In `cmd_plan`, replace this block:
     print("  OpenCode: it dispatches them one at a time; that is an OpenCode limitation,")
     print("  not a plan problem -- the api lane exists precisely to avoid it.")
     for name, p in lines:
-        print("  subagent_type=rca-investigator model=%s  prompt: read %s and follow it exactly"
+        print("  subagent_type=glm-rca-investigator model=%s  prompt: read %s and follow it exactly"
               % (AGENT_ALIAS[c.tcfg["judge"][0]], p))
 ```
 
 with:
 
 ```python fragment
-    _print_dispatch(c, "A", lines, "rca-investigator", "judge", "DISPATCH")
+    _print_dispatch(c, "A", lines, "glm-rca-investigator", "judge", "DISPATCH")
 ```
 
 Keep the `print("")` and `print("NEXT after the workers report: audit.py status")` lines after it.
@@ -9788,7 +9788,7 @@ with:
 In the same `for j, g in enumerate(groups, idx + 1):` loop, replace:
 
 ```python fragment
-            print("  subagent_type=rca-verifier model=%s  prompt: read %s and follow it exactly"
+            print("  subagent_type=glm-rca-verifier model=%s  prompt: read %s and follow it exactly"
                   % (AGENT_ALIAS[c.tcfg["verify"][0]], p))
 ```
 
@@ -9802,7 +9802,7 @@ Then, directly after the loop and before `c.save_state(st)`, insert:
 
 ```python fragment
         print("")
-        _print_dispatch(c, "V%02d" % (idx + 1), vlines, "rca-verifier", "verify",
+        _print_dispatch(c, "V%02d" % (idx + 1), vlines, "glm-rca-verifier", "verify",
                         "DISPATCH verifiers")
 ```
 
@@ -10035,21 +10035,21 @@ Run from the git root (one level above `glm-skills/`):
 
 ```bash
 cd ..
-git add glm-skills/requirements-code-audit-glm/scripts/audit.py glm-skills/_shared/tests/test_audit_setup_oc.py
-git commit -m "fix(requirements-code-audit): v1 agent lane via oc_harness run, v2 background subagent dispatch, batches capped at OC_MAX_LANES"
+git add glm-skills/glm-requirements-code-audit/scripts/audit.py glm-skills/_shared/tests/test_audit_setup_oc.py
+git commit -m "fix(glm-requirements-code-audit): v1 agent lane via oc_harness run, v2 background subagent dispatch, batches capped at OC_MAX_LANES"
 ```
 
 ---
 
-### T25: requirements-code-audit docs and OpenCode agents [P]
+### T25: glm-requirements-code-audit docs and OpenCode agents [P]
 
 **Depends:** T24
 
 **Files:**
-- Modify: `glm-skills/requirements-code-audit-glm/SKILL.md`
-- Modify: `glm-skills/requirements-code-audit-glm/SETUP.md`
-- Modify: `glm-skills/requirements-code-audit-glm/opencode/agents/rca-investigator.md`
-- Modify: `glm-skills/requirements-code-audit-glm/opencode/agents/rca-verifier.md`
+- Modify: `glm-skills/glm-requirements-code-audit/SKILL.md`
+- Modify: `glm-skills/glm-requirements-code-audit/SETUP.md`
+- Modify: `glm-skills/glm-requirements-code-audit/opencode/agents/glm-rca-investigator.md`
+- Modify: `glm-skills/glm-requirements-code-audit/opencode/agents/glm-rca-verifier.md`
 - Modify: `glm-skills/_shared/tests/test_adopt_audit.py`
 
 - [ ] **Step 1: Write test for documentation configuration requirements**
@@ -10059,7 +10059,7 @@ Add the following test class to `glm-skills/_shared/tests/test_adopt_audit.py` a
 ```python
 class DocumentationConfigs(unittest.TestCase):
     def test_skill_md_r3_step_1_has_no_parallel_read(self):
-        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "SKILL.md")
+        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SKILL.md")
         with open(skill_path, 'r') as f:
             content = f.read()
         r3_section = content.split('## R3')[1].split('## R4')[0]
@@ -10067,14 +10067,14 @@ class DocumentationConfigs(unittest.TestCase):
         self.assertIn('run\n`A brief', r3_section, "R3 should have run A brief without parallel Read")
 
     def test_skill_md_finalize_matches_code_behavior(self):
-        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "SKILL.md")
+        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SKILL.md")
         with open(skill_path, 'r') as f:
             content = f.read()
         self.assertIn('an unplanned discrepancy', content)
         self.assertNotIn('a CONFLICT not planned at P0', content, "CONFLICT should not fail gate; doc must align with code behavior")
 
     def test_setup_md_paths_have_glm_suffix(self):
-        setup_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "SETUP.md")
+        setup_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SETUP.md")
         with open(setup_path, 'r') as f:
             lines = f.readlines()
         setup_lines = [line for i, line in enumerate(lines, 1) if i in [10, 12, 28] and 'python3' in line and 'audit' in line]
@@ -10082,28 +10082,28 @@ class DocumentationConfigs(unittest.TestCase):
             self.assertIn('-glm', line, f"Setup paths must include -glm suffix: {line}")
 
     def test_agent_investigator_write_paths(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-investigator.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-investigator.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertIn('write_paths: **/.audit/**', content, "rca-investigator must have session-relative write_paths")
+        self.assertIn('write_paths: **/.audit/**', content, "glm-rca-investigator must have session-relative write_paths")
 
     def test_agent_investigator_steps(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-investigator.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-investigator.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertRegex(content, r'steps:\s*30', "rca-investigator must have steps: 30")
+        self.assertRegex(content, r'steps:\s*30', "glm-rca-investigator must have steps: 30")
 
     def test_agent_verifier_write_paths(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-verifier.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-verifier.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertIn('write_paths: **/.audit/**', content, "rca-verifier must have session-relative write_paths")
+        self.assertIn('write_paths: **/.audit/**', content, "glm-rca-verifier must have session-relative write_paths")
 
     def test_agent_verifier_steps(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-verifier.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-verifier.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertRegex(content, r'steps:\s*25', "rca-verifier must have steps: 25")
+        self.assertRegex(content, r'steps:\s*25', "glm-rca-verifier must have steps: 25")
 ```
 
 - [ ] **Step 2: Run test to verify fixes are needed**
@@ -10113,7 +10113,7 @@ Expected: FAIL with multiple assertion errors about missing configurations and p
 
 - [ ] **Step 3: Fix SKILL.md R3 section to remove parallel Read**
 
-In `glm-skills/requirements-code-audit-glm/SKILL.md`, change line 78-79 from:
+In `glm-skills/glm-requirements-code-audit/SKILL.md`, change line 78-79 from:
 
 ```markdown
 In ONE turn, in parallel: `Read` the requirements file **and** run
@@ -10130,10 +10130,10 @@ Remove the Read instruction since brief outputs the spec verbatim.
 
 - [ ] **Step 4: Fix SKILL.md R6 section finalize to match code behavior**
 
-In `glm-skills/requirements-code-audit-glm/SKILL.md`, change line 136-137 from:
+In `glm-skills/glm-requirements-code-audit/SKILL.md`, change line 136-137 from:
 
 ```markdown
-`A finalize` = report + gate + close. It writes `.audit/requirements-code-audit.md` and `traceability.csv` in
+`A finalize` = report + gate + close. It writes `.audit/glm-requirements-code-audit.md` and `traceability.csv` in
 the spec's language, fails loudly on a single-pass MISSING, an unplanned discrepancy, a citation that does not
 exist or a CONFLICT not planned at P0, and prints the headline numbers.
 ```
@@ -10141,57 +10141,57 @@ exist or a CONFLICT not planned at P0, and prints the headline numbers.
 to:
 
 ```markdown
-`A finalize` = report + gate + close. It writes `.audit/requirements-code-audit.md` and `traceability.csv` in
+`A finalize` = report + gate + close. It writes `.audit/glm-requirements-code-audit.md` and `traceability.csv` in
 the spec's language, fails loudly on a single-pass MISSING, an unplanned discrepancy or a citation that does not
 exist, warns on CONFLICT, and prints the headline numbers.
 ```
 
 - [ ] **Step 5: Fix SETUP.md paths to include -glm suffix**
 
-In `glm-skills/requirements-code-audit-glm/SETUP.md`, line 10 change:
+In `glm-skills/glm-requirements-code-audit/SETUP.md`, line 10 change:
 
 ```bash
-python3 requirements-code-audit/scripts/audit.py setup --harness zcode
+python3 glm-requirements-code-audit/scripts/audit.py setup --harness zcode
 ```
 
 to:
 
 ```bash
-python3 requirements-code-audit-glm/scripts/audit.py setup --harness zcode
+python3 glm-requirements-code-audit/scripts/audit.py setup --harness zcode
 ```
 
 Line 12 change:
 
 ```bash
-python3 requirements-code-audit/scripts/audit.py setup --harness opencode
+python3 glm-requirements-code-audit/scripts/audit.py setup --harness opencode
 ```
 
 to:
 
 ```bash
-python3 requirements-code-audit-glm/scripts/audit.py setup --harness opencode
+python3 glm-requirements-code-audit/scripts/audit.py setup --harness opencode
 ```
 
 Line 28 change:
 
 ```bash fragment
-python3 requirements-code-audit/scripts/oc_harness.py install requirements-code-audit <major>
+python3 glm-requirements-code-audit/scripts/oc_harness.py install glm-requirements-code-audit <major>
 ```
 
 to:
 
 ```bash fragment
-python3 requirements-code-audit-glm/scripts/oc_harness.py install requirements-code-audit-glm <major>
+python3 glm-requirements-code-audit/scripts/oc_harness.py install glm-requirements-code-audit <major>
 ```
 
-- [ ] **Step 6: Fix rca-investigator.md to add write_paths and steps**
+- [ ] **Step 6: Fix glm-rca-investigator.md to add write_paths and steps**
 
-In `glm-skills/requirements-code-audit-glm/opencode/agents/rca-investigator.md`, change the frontmatter to add `steps` and update `write_paths`:
+In `glm-skills/glm-requirements-code-audit/opencode/agents/glm-rca-investigator.md`, change the frontmatter to add `steps` and update `write_paths`:
 
 After the opening `---`, replace lines 3-9:
 
 ```yaml
-description: Read-only code-evidence investigator for the requirements-code-audit skill. Spawn one per batch file; it reads the batch (which already contains pre-retrieved code excerpts), verifies the evidence, writes one JSONL findings file and replies with a single line. Never use it for anything else.
+description: Read-only code-evidence glm-investigator for the glm-requirements-code-audit skill. Spawn one per batch file; it reads the batch (which already contains pre-retrieved code excerpts), verifies the evidence, writes one JSONL findings file and replies with a single line. Never use it for anything else.
 model: flash
 effort: high
 temperature: 0.0
@@ -10204,7 +10204,7 @@ web: false
 with:
 
 ```yaml
-description: Read-only code-evidence investigator for the requirements-code-audit skill. Spawn one per batch file; it reads the batch (which already contains pre-retrieved code excerpts), verifies the evidence, writes one JSONL findings file and replies with a single line. Never use it for anything else.
+description: Read-only code-evidence glm-investigator for the glm-requirements-code-audit skill. Spawn one per batch file; it reads the batch (which already contains pre-retrieved code excerpts), verifies the evidence, writes one JSONL findings file and replies with a single line. Never use it for anything else.
 model: flash
 effort: high
 temperature: 0.0
@@ -10215,14 +10215,14 @@ bash: false
 web: false
 ```
 
-- [ ] **Step 7: Fix rca-verifier.md to update model, add write_paths and steps**
+- [ ] **Step 7: Fix glm-rca-verifier.md to update model, add write_paths and steps**
 
-In `glm-skills/requirements-code-audit-glm/opencode/agents/rca-verifier.md`, change the frontmatter to update model, add `steps` and update `write_paths`:
+In `glm-skills/glm-requirements-code-audit/opencode/agents/glm-rca-verifier.md`, change the frontmatter to update model, add `steps` and update `write_paths`:
 
 After the opening `---`, replace lines 3-9:
 
 ```yaml
-description: Adversarial second-pass verifier for the requirements-code-audit skill. Spawn one per verify batch file; it tries to overturn each preliminary finding (prove MISSING items exist, confirm or refute PARTIAL/CONFLICT), writes one JSONL verdict file and replies with a single line. Never use it for anything else.
+description: Adversarial second-pass verifier for the glm-requirements-code-audit skill. Spawn one per verify batch file; it tries to overturn each preliminary finding (prove MISSING items exist, confirm or refute PARTIAL/CONFLICT), writes one JSONL verdict file and replies with a single line. Never use it for anything else.
 model: pro
 effort: max
 temperature: 0.0
@@ -10235,7 +10235,7 @@ web: false
 with:
 
 ```yaml
-description: Adversarial second-pass verifier for the requirements-code-audit skill. Spawn one per verify batch file; it tries to overturn each preliminary finding (prove MISSING items exist, confirm or refute PARTIAL/CONFLICT), writes one JSONL verdict file and replies with a single line. Never use it for anything else.
+description: Adversarial second-pass verifier for the glm-requirements-code-audit skill. Spawn one per verify batch file; it tries to overturn each preliminary finding (prove MISSING items exist, confirm or refute PARTIAL/CONFLICT), writes one JSONL verdict file and replies with a single line. Never use it for anything else.
 model: pro
 effort: max
 temperature: 0.0
@@ -10254,8 +10254,8 @@ Expected: PASS (all tests pass)
 - [ ] **Step 9: Commit**
 
 ```bash
-cd glm-skills && git add requirements-code-audit-glm/SKILL.md requirements-code-audit-glm/SETUP.md requirements-code-audit-glm/opencode/agents/rca-investigator.md requirements-code-audit-glm/opencode/agents/rca-verifier.md _shared/tests/test_adopt_audit.py
-git commit -m "fix(requirements-code-audit): align docs with code, add agent steps and session-relative write_paths"
+cd glm-skills && git add glm-requirements-code-audit/SKILL.md glm-requirements-code-audit/SETUP.md glm-requirements-code-audit/opencode/agents/glm-rca-investigator.md glm-requirements-code-audit/opencode/agents/glm-rca-verifier.md _shared/tests/test_adopt_audit.py
+git commit -m "fix(glm-requirements-code-audit): align docs with code, add agent steps and session-relative write_paths"
 ```
 
 ---
@@ -10265,7 +10265,7 @@ git commit -m "fix(requirements-code-audit): align docs with code, add agent ste
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/writing-plans-glm/scripts/plan_tool.py:46-696`
+- Modify: `glm-skills/glm-writing-plans/scripts/plan_tool.py:46-696`
 - Create: `glm-skills/_shared/tests/test_plan_lint.py`
 
 Three linter defects are fixed in `plan_tool.py`, one behavior at a time:
@@ -10285,7 +10285,7 @@ import os
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PLAN_TOOL = os.path.join(HERE, "..", "..", "writing-plans-glm", "scripts", "plan_tool.py")
+PLAN_TOOL = os.path.join(HERE, "..", "..", "glm-writing-plans", "scripts", "plan_tool.py")
 
 
 def _load_plan_tool():
@@ -10360,7 +10360,7 @@ Expected: FAIL. `test_hash_comment_inside_fence_is_not_a_heading` and `test_hash
 
 - [ ] **Step 3: Skip fenced blocks in the heading check**
 
-In `writing-plans-glm/scripts/plan_tool.py`, insert this function directly above `def lint_body(c, body, allow, label, repo=None, earlier_files=()):`
+In `glm-writing-plans/scripts/plan_tool.py`, insert this function directly above `def lint_body(c, body, allow, label, repo=None, earlier_files=()):`
 
 ```python
 def heading_outside_fences(body):
@@ -10432,7 +10432,7 @@ Expected: FAIL. `test_bare_known_filenames_are_kept` fails with `AssertionError:
 
 - [ ] **Step 7: Accept bare known file names in `files_block`**
 
-In `writing-plans-glm/scripts/plan_tool.py`, insert this constant directly below the line `TICK = re.compile(r"`([^`\n]+)`")`:
+In `glm-writing-plans/scripts/plan_tool.py`, insert this constant directly below the line `TICK = re.compile(r"`([^`\n]+)`")`:
 
 ```python
 BARE_FILENAMES = {"Makefile", "makefile", "GNUmakefile", "Dockerfile", "Containerfile", "Gemfile",
@@ -10496,7 +10496,7 @@ Expected: FAIL. `test_split_helper_returns_only_add_arguments` errors with `Attr
 
 - [ ] **Step 11: Split shell chains before tokenising `git add`**
 
-In `writing-plans-glm/scripts/plan_tool.py`, insert this regex and function directly above `def heading_outside_fences(body):`
+In `glm-writing-plans/scripts/plan_tool.py`, insert this regex and function directly above `def heading_outside_fences(body):`
 
 ```python
 GIT_ADD = re.compile(r"^\s*git add\s+(.+)$")
@@ -10552,8 +10552,8 @@ The commit runs from the git root because the Files paths are relative to it:
 
 ```bash
 cd ..
-git add glm-skills/writing-plans-glm/scripts/plan_tool.py glm-skills/_shared/tests/test_plan_lint.py
-git commit -m "fix(writing-plans): lint skips fenced headings, keeps bare filenames, splits chained git add"
+git add glm-skills/glm-writing-plans/scripts/plan_tool.py glm-skills/_shared/tests/test_plan_lint.py
+git commit -m "fix(glm-writing-plans): lint skips fenced headings, keeps bare filenames, splits chained git add"
 cd glm-skills
 ```
 
@@ -10567,13 +10567,13 @@ cd glm-skills
 
 **Interfaces:**
 - Consumes: `def harness(script_path: str = "") -> str`; `def major(skill_dir: str = "", binary: str = "opencode") -> int`; `def dispatch_line(agent: str, prompt_path: str, description: str, major: int, background: bool = True) -> str`
-- Produces: `plan-task-writer`; `steps: 24`; `plan-task-writer-deep`; `steps: 24`; `plan-reviewer`
+- Produces: `glm-plan-task-writer`; `steps: 24`; `glm-plan-task-writer-deep`; `steps: 24`; `glm-plan-reviewer`
 
 **Files:**
-- Modify: `glm-skills/writing-plans-glm/scripts/plan_tool.py`
-- Modify: `glm-skills/writing-plans-glm/opencode/agents/plan-task-writer.md:8`
-- Create: `glm-skills/writing-plans-glm/opencode/agents/plan-task-writer-deep.md`
-- Create: `glm-skills/writing-plans-glm/opencode/agents/plan-reviewer.md`
+- Modify: `glm-skills/glm-writing-plans/scripts/plan_tool.py`
+- Modify: `glm-skills/glm-writing-plans/opencode/agents/glm-plan-task-writer.md:8`
+- Create: `glm-skills/glm-writing-plans/opencode/agents/glm-plan-task-writer-deep.md`
+- Create: `glm-skills/glm-writing-plans/opencode/agents/glm-plan-reviewer.md`
 - Test: `glm-skills/_shared/tests/test_adopt_plan.py`
 
 This task fixes WP4, WP6, WP7, WP8, WP9 and WP12. It ships three OpenCode agents and makes every OpenCode dispatch line come from `oc_harness.dispatch_line()`. It also changes writer grouping so no group holds more than 4 tasks. On OpenCode the group count is ceil(tasks / 4), and the lane width (`PLAN_LANE_WIDTH`, default 8) caps how many groups one dispatch message starts. With 32 tasks or fewer, that means at most 8 groups in one message. Beyond that the extra groups go into further messages, 8 at a time. T26 edits `plan_tool.py` before this task. Every edit below is anchored on a function name or a code line, not on line numbers. All commands run from `glm-skills/`.
@@ -10591,7 +10591,7 @@ import io
 Then add these helpers directly below the line `plan_tool = _load_plan_tool()`:
 
 ```python
-AGENTS_DIR = os.path.join(HERE, "..", "..", "writing-plans-glm", "opencode", "agents")
+AGENTS_DIR = os.path.join(HERE, "..", "..", "glm-writing-plans", "opencode", "agents")
 NO_KEY = (None, "https://api.z.ai/api/coding/paas/v4", "openai", "-")
 
 
@@ -10624,12 +10624,12 @@ Add these classes to `_shared/tests/test_adopt_plan.py`, directly above `if __na
 ```python
 class OpenCodeAgentFileTests(unittest.TestCase):
     def test_writer_runs_24_steps_on_flash(self):
-        fm, _ = _frontmatter("plan-task-writer")
+        fm, _ = _frontmatter("glm-plan-task-writer")
         self.assertEqual(fm["model"], "flash")
         self.assertEqual(fm["steps"], "24")
 
     def test_deep_writer_is_glm53_max_24_steps(self):
-        fm, text = _frontmatter("plan-task-writer-deep")
+        fm, text = _frontmatter("glm-plan-task-writer-deep")
         self.assertEqual(fm["model"], "glm-5.3")
         self.assertEqual(fm["effort"], "max")
         self.assertEqual(fm["steps"], "24")
@@ -10638,7 +10638,7 @@ class OpenCodeAgentFileTests(unittest.TestCase):
         self.assertIn("T07 OK", text)
 
     def test_reviewer_is_glm53_high(self):
-        fm, text = _frontmatter("plan-reviewer")
+        fm, text = _frontmatter("glm-plan-reviewer")
         self.assertEqual(fm["model"], "glm-5.3")
         self.assertEqual(fm["effort"], "high")
         self.assertEqual(fm["access"], "write")
@@ -10649,7 +10649,7 @@ class OpenCodeAgentFileTests(unittest.TestCase):
         with mock.patch.object(plan_tool.oc_harness, "major", return_value=2), \
              mock.patch.object(plan_tool.oc_harness, "detect", side_effect=AssertionError("detect() called")), \
              mock.patch.object(plan_tool.oc_harness, "render_agent", side_effect=real) as ren:
-            text = plan_tool.agent_file("opencode", "plan-task-writer-deep")
+            text = plan_tool.agent_file("opencode", "glm-plan-task-writer-deep")
         self.assertEqual(ren.call_args[0][1], 2)
         self.assertIn("mode: subagent", text)
         self.assertIn("zai-coding-plan/glm-5.3", text)
@@ -10677,7 +10677,7 @@ class OpenCodeSetupTests(unittest.TestCase):
     def test_setup_installs_all_three_agents(self):
         self.run_setup(2)
         adir = os.path.join(self.home, ".config", "opencode", "agents")
-        for name in ("plan-task-writer", "plan-task-writer-deep", "plan-reviewer"):
+        for name in ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer"):
             self.assertTrue(os.path.isfile(os.path.join(adir, name + ".md")), name)
 
     def test_v2_setup_drops_background_env_hint(self):
@@ -10690,15 +10690,15 @@ class OpenCodeSetupTests(unittest.TestCase):
 - [ ] **Step 3: Run the agent tests to verify they fail**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_adopt_plan.py' -k OpenCodeAgentFileTests -k OpenCodeSetupTests`
-Expected: FAIL. `test_writer_runs_24_steps_on_flash` fails with `AssertionError: '16' != '24'`. The deep writer and reviewer tests fail with `FileNotFoundError` naming `plan-task-writer-deep.md` and `plan-reviewer.md`. The other tests fail with `AttributeError: module 'plan_tool_under_test' has no attribute 'oc_harness'`.
+Expected: FAIL. `test_writer_runs_24_steps_on_flash` fails with `AssertionError: '16' != '24'`. The deep writer and reviewer tests fail with `FileNotFoundError` naming `glm-plan-task-writer-deep.md` and `glm-plan-reviewer.md`. The other tests fail with `AttributeError: module 'plan_tool_under_test' has no attribute 'oc_harness'`.
 
 - [ ] **Step 4: Raise the writer's step budget to 24**
 
-In `writing-plans-glm/opencode/agents/plan-task-writer.md`, change line 8 from `steps: 16` to `steps: 24`. The whole file then reads:
+In `glm-writing-plans/opencode/agents/glm-plan-task-writer.md`, change line 8 from `steps: 16` to `steps: 24`. The whole file then reads:
 
 ```markdown
 ---
-description: Writes implementation-plan task bodies from a writing-plans brief file. Use only when given a writing-plans brief path.
+description: Writes implementation-plan task bodies from a glm-writing-plans brief file. Use only when given a glm-writing-plans brief path.
 model: flash
 effort: high
 access: write
@@ -10727,11 +10727,11 @@ Respect the tier and the contract signatures exactly, using only what the brief 
 
 - [ ] **Step 5: Create the deep writer agent**
 
-Create `writing-plans-glm/opencode/agents/plan-task-writer-deep.md`:
+Create `glm-writing-plans/opencode/agents/glm-plan-task-writer-deep.md`:
 
 ```markdown
 ---
-description: Writes deep-tier implementation-plan task bodies from a writing-plans brief file. Use only when given a writing-plans brief path whose group holds a deep-tier task.
+description: Writes deep-tier implementation-plan task bodies from a glm-writing-plans brief file. Use only when given a glm-writing-plans brief path whose group holds a deep-tier task.
 model: glm-5.3
 effort: max
 access: write
@@ -10761,11 +10761,11 @@ Respect the tier and the contract signatures exactly, using only what the brief 
 
 - [ ] **Step 6: Create the reviewer agent**
 
-Create `writing-plans-glm/opencode/agents/plan-reviewer.md`:
+Create `glm-writing-plans/opencode/agents/glm-plan-reviewer.md`:
 
 ```markdown
 ---
-description: Reviews implementation-plan task bodies from a writing-plans reviewer brief file. Use only when given a writing-plans review brief path.
+description: Reviews implementation-plan task bodies from a glm-writing-plans reviewer brief file. Use only when given a glm-writing-plans review brief path.
 model: glm-5.3
 effort: high
 access: write
@@ -10790,7 +10790,7 @@ When reviewing a task body, follow these rules exactly:
 
 - [ ] **Step 7: Import the shared harness module and render agents with `major()`**
 
-In `writing-plans-glm/scripts/plan_tool.py`, directly below the line `import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05`, add:
+In `glm-writing-plans/scripts/plan_tool.py`, directly below the line `import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05`, add:
 
 ```python
 import oc_harness  # vendored by _shared/sync.sh
@@ -10799,22 +10799,22 @@ import oc_harness  # vendored by _shared/sync.sh
 Directly below the line `AGENT_BODY = """...` block (the constant that ends with `Never echo the body.` and `"""`), add:
 
 ```python
-WRITER_AGENTS = ("plan-task-writer", "plan-task-writer-deep", "plan-reviewer")
+WRITER_AGENTS = ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer")
 ```
 
 Replace the whole `def agent_file(harness):` function with:
 
 ```python
-def agent_file(harness, name="plan-task-writer"):
+def agent_file(harness, name="glm-plan-task-writer"):
     if harness == "opencode":
         neutral = os.path.join(SKILL_DIR, "opencode", "agents", name + ".md")
         if os.path.exists(neutral):
             return oc_harness.render_agent(load(neutral), oc_harness.major(SKILL_DIR))
-        if name != "plan-task-writer":
+        if name != "glm-plan-task-writer":
             return None
         fm = ("---\n"
-              "description: Writes implementation-plan task bodies from a writing-plans brief file. "
-              "Use only when given a writing-plans brief path.\n"
+              "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
+              "Use only when given a glm-writing-plans brief path.\n"
               "mode: subagent\n"
               "model: zai-coding-plan/glm-5.3-flash\n"
               "temperature: 0.3\n"
@@ -10829,18 +10829,18 @@ def agent_file(harness, name="plan-task-writer"):
         return fm + AGENT_BODY
     if harness == "zcode":
         fm = ("---\n"
-              "name: plan-task-writer\n"
-              "description: Writes implementation-plan task bodies from a writing-plans brief file. "
-              "Use only when given a writing-plans brief path.\n"
+              "name: glm-plan-task-writer\n"
+              "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
+              "Use only when given a glm-writing-plans brief path.\n"
               "model: glm-5.3-flash\n"
               "thinking: low\n"
               "tools: Read, Write, Edit, Bash\n"
               "---\n\n")
         return fm + AGENT_BODY
     fm = ("---\n"
-          "name: plan-task-writer\n"
-          "description: Writes implementation-plan task bodies from a writing-plans brief file. "
-          "Use only when given a writing-plans brief path.\n"
+          "name: glm-plan-task-writer\n"
+          "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
+          "Use only when given a glm-writing-plans brief path.\n"
           "tools: Read, Write, Edit, Bash\n"
           "model: haiku\n"
           "maxTurns: 16\n"
@@ -10857,7 +10857,7 @@ def agent_file(harness, name="plan-task-writer"):
 
 - [ ] **Step 8: Install all three agents in setup and drop the v2 background hint**
 
-In `writing-plans-glm/scripts/plan_tool.py`, replace the whole `def cmd_setup(a):` function with:
+In `glm-writing-plans/scripts/plan_tool.py`, replace the whole `def cmd_setup(a):` function with:
 
 ```python
 def cmd_setup(a):
@@ -10865,9 +10865,9 @@ def cmd_setup(a):
     harness = a.harness if a.harness != "auto" else detect_harness()[0]
     if harness == "unknown":
         harness = "opencode"
-    paths = {"opencode": os.path.join(home, ".config", "opencode", "agents", "plan-task-writer.md"),
-             "zcode": os.path.join(home, ".zcode", "agents", "plan-task-writer.md"),
-             "claude": os.path.join(home, ".claude", "agents", "plan-task-writer.md")}
+    paths = {"opencode": os.path.join(home, ".config", "opencode", "agents", "glm-plan-task-writer.md"),
+             "zcode": os.path.join(home, ".zcode", "agents", "glm-plan-task-writer.md"),
+             "claude": os.path.join(home, ".claude", "agents", "glm-plan-task-writer.md")}
     agent_path = paths[harness]
     targets = [(agent_path, agent_file(harness))]
     if harness == "opencode":
@@ -10982,7 +10982,7 @@ Expected: FAIL. All 5 tests fail with `AttributeError: module 'plan_tool_under_t
 
 - [ ] **Step 12: Implement the grouping helpers**
 
-In `writing-plans-glm/scripts/plan_tool.py`, directly below the line `DEFAULT_AGENT_CAP = 20`, add:
+In `glm-writing-plans/scripts/plan_tool.py`, directly below the line `DEFAULT_AGENT_CAP = 20`, add:
 
 ```python
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
@@ -11081,8 +11081,8 @@ class OpenCodeDispatchTests(unittest.TestCase):
 
     def test_v2_dispatch_uses_writer_agent_and_no_foreign_fallback(self):
         out, work, _ = self.contracts(10)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W03", "plan T09-T10"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W03", "plan T09-T10"), out)
         self.assertNotIn("general-purpose", out)
         self.assertNotIn("subagent_type=", out)
         self.assertNotIn("haiku", out)
@@ -11091,8 +11091,8 @@ class OpenCodeDispatchTests(unittest.TestCase):
     def test_deep_group_goes_to_deep_writer(self):
         out, work, info = self.contracts(5, deep=("T05",))
         self.assertEqual(info["groups"]["W02"], ["T04", "T05"])
-        self.assertIn(self.expected("plan-task-writer-deep", work, "briefs", "W02", "plan T04-T05"), out)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W01", "plan T01-T03"), out)
+        self.assertIn(self.expected("glm-plan-task-writer-deep", work, "briefs", "W02", "plan T04-T05"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W01", "plan T01-T03"), out)
 
     def test_missing_agents_fall_back_to_general(self):
         with mock.patch.object(plan_tool, "agent_installed", return_value=None):
@@ -11103,7 +11103,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
     def test_v1_dispatch_line_rendered_for_major_one(self):
         self.major = 1
         out, work, _ = self.contracts(10)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
 
     def test_forty_tasks_split_into_messages_of_lane_width(self):
         out, work, info = self.contracts(40)
@@ -11111,7 +11111,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
         self.assertTrue(all(len(v) == 4 for v in info["groups"].values()))
         self.assertIn("MESSAGE 1 (8 calls", out)
         self.assertIn("MESSAGE 2 (2 calls", out)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
 
     def test_review_dispatches_plan_reviewer(self):
         _, work, _ = self.contracts(2, deep=("T01",))
@@ -11122,7 +11122,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
             rc = plan_tool.cmd_review(argparse.Namespace(plan=self.plan, all=False, size=None, agents=None))
         out = buf.getvalue()
         self.assertEqual(rc, 0, out)
-        self.assertIn(self.expected("plan-reviewer", work, "review-briefs", "R01", "review T01"), out)
+        self.assertIn(self.expected("glm-plan-reviewer", work, "review-briefs", "R01", "review T01"), out)
         self.assertNotIn("general-purpose", out)
         self.assertNotIn("sonnet", out)
 ```
@@ -11130,11 +11130,11 @@ class OpenCodeDispatchTests(unittest.TestCase):
 - [ ] **Step 15: Run the dispatch tests to verify they fail**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_adopt_plan.py' -k OpenCodeDispatchTests`
-Expected: FAIL. `test_ten_tasks_make_three_groups_of_at_most_four` fails with `AssertionError: 10 != 3`, because every task still gets its own writer. The dispatch tests fail with `AssertionError: '...' not found in '...'`, because the output still says `subagent_type=general-purpose` or `subagent_type=plan-task-writer`.
+Expected: FAIL. `test_ten_tasks_make_three_groups_of_at_most_four` fails with `AssertionError: 10 != 3`, because every task still gets its own writer. The dispatch tests fail with `AssertionError: '...' not found in '...'`, because the output still says `subagent_type=general-purpose` or `subagent_type=glm-plan-task-writer`.
 
 - [ ] **Step 16: Render one agent per row through `dispatch_line()`**
 
-In `writing-plans-glm/scripts/plan_tool.py`, replace the whole `def dispatch_lines(groups, work, kind):` function with:
+In `glm-writing-plans/scripts/plan_tool.py`, replace the whole `def dispatch_lines(groups, work, kind):` function with:
 
 ```python
 def row_agent(g, kind, installed, opencode):
@@ -11145,8 +11145,8 @@ def row_agent(g, kind, installed, opencode):
     if not installed:
         return "general"
     if kind == "review":
-        return "plan-reviewer"
-    return "plan-task-writer-deep" if tier == "deep" else "plan-task-writer"
+        return "glm-plan-reviewer"
+    return "glm-plan-task-writer-deep" if tier == "deep" else "glm-plan-task-writer"
 
 
 def group_span(g):
@@ -11182,7 +11182,7 @@ def oc_dispatch(groups, work, kind, installed, width):
 Replace the whole `def agent_installed(repo):` function with:
 
 ```python
-def agent_installed(repo, name="plan-task-writer"):
+def agent_installed(repo, name="glm-plan-task-writer"):
     home = os.path.expanduser("~")
     for base in (os.path.join(repo, ".opencode", "agents"), os.path.join(home, ".config", "opencode", "agents"),
                  os.path.join(home, ".zcode", "agents"),
@@ -11194,7 +11194,7 @@ def agent_installed(repo, name="plan-task-writer"):
 
 - [ ] **Step 17: Group writers by at most 4 and dispatch per lane width**
 
-In `writing-plans-glm/scripts/plan_tool.py`, replace the whole `def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):` function with:
+In `glm-writing-plans/scripts/plan_tool.py`, replace the whole `def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):` function with:
 
 ```python
 def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
@@ -11230,7 +11230,7 @@ def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
                 "ID   AGENT                 TASKS     BRIEF"]
         rows = dispatch_lines(groups, work, "write", installed, True) + oc_dispatch(groups, work, "write", installed, width)
     else:
-        agent = "plan-task-writer" if installed else "general-purpose"
+        agent = "glm-plan-task-writer" if installed else "general-purpose"
         head = [lane,
                 "WORK %s" % work,
                 "DISPATCH %d writers, ALL in ONE message | subagent_type=%s | description 'plan <ID>'" % (len(groups), agent),
@@ -11246,14 +11246,14 @@ def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
                   % (len(cs), n, wave_width, len(groups)), head + rows + tail)
 ```
 
-- [ ] **Step 18: Dispatch `plan-reviewer` from review on OpenCode**
+- [ ] **Step 18: Dispatch `glm-plan-reviewer` from review on OpenCode**
 
 In `def cmd_review(a):`, replace the statement that starts with `rows = ["REVIEW %d tasks: %s"` and ends with `"ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")` with:
 
 ```python
     summary = "REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked))
     if on_opencode():
-        installed = agent_installed(info.get("repo") or repo_root(plan_path), "plan-reviewer")
+        installed = agent_installed(info.get("repo") or repo_root(plan_path), "glm-plan-reviewer")
         width = max(1, min(MAX_WORKERS, a.agents or lane_width()))
         rows = [summary,
                 "DISPATCH %d reviewers in %d message(s) of at most %d background calls | one agent per row"
@@ -11287,8 +11287,8 @@ Expected: no new failures. The failure count is at most the baseline in Global C
 
 ```bash
 cd ..
-git add glm-skills/writing-plans-glm/scripts/plan_tool.py glm-skills/writing-plans-glm/opencode/agents/plan-task-writer.md glm-skills/writing-plans-glm/opencode/agents/plan-task-writer-deep.md glm-skills/writing-plans-glm/opencode/agents/plan-reviewer.md glm-skills/_shared/tests/test_adopt_plan.py
-git commit -m "feat(writing-plans): OpenCode dispatch_line, deep writer and reviewer agents, writer groups of at most 4"
+git add glm-skills/glm-writing-plans/scripts/plan_tool.py glm-skills/glm-writing-plans/opencode/agents/glm-plan-task-writer.md glm-skills/glm-writing-plans/opencode/agents/glm-plan-task-writer-deep.md glm-skills/glm-writing-plans/opencode/agents/glm-plan-reviewer.md glm-skills/_shared/tests/test_adopt_plan.py
+git commit -m "feat(glm-writing-plans): OpenCode dispatch_line, deep writer and reviewer agents, writer groups of at most 4"
 ```
 
 ---
@@ -11300,7 +11300,7 @@ git commit -m "feat(writing-plans): OpenCode dispatch_line, deep writer and revi
 **Runs after:** T27 (same files)
 
 **Files:**
-- Modify: `glm-skills/writing-plans-glm/scripts/plan_tool.py`
+- Modify: `glm-skills/glm-writing-plans/scripts/plan_tool.py`
 - Test: `glm-skills/_shared/tests/test_plan_perf.py`
 
 This task covers spec items WP11, WP13 and WP14. WP12 (writer group count = ceil(tasks / 4), capped at the lane width) is implemented by T27 through `writer_group_count()`, `lane_width()` and its rewritten `build_agent_lane`, so this task does not touch writer grouping. T26 and T27 edit `plan_tool.py` first, so every Modify step below anchors on a code line quoted verbatim, not on a line number. The harness name `detect_harness()` returns for OpenCode is the literal string `"opencode"`.
@@ -11310,7 +11310,7 @@ This task covers spec items WP11, WP13 and WP14. WP12 (writer group count = ceil
 Create `glm-skills/_shared/tests/test_plan_perf.py`:
 
 ```python
-"""Speed optimizations in writing-plans-glm/scripts/plan_tool.py (spec WP11, WP13, WP14)."""
+"""Speed optimizations in glm-writing-plans/scripts/plan_tool.py (spec WP11, WP13, WP14)."""
 import argparse
 import contextlib
 import importlib.util
@@ -11324,7 +11324,7 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-PLAN_TOOL = os.path.join(ROOT, "writing-plans-glm", "scripts", "plan_tool.py")
+PLAN_TOOL = os.path.join(ROOT, "glm-writing-plans", "scripts", "plan_tool.py")
 CAP_ENV = ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "OPENCODE_MAX_CONCURRENT_SUBAGENTS",
            "ZCODE_MAX_CONCURRENT_SUBAGENTS")
 
@@ -11390,7 +11390,7 @@ Expected: FAIL: `test_low_score_candidate_is_not_read` with `AssertionError: Lis
 
 - [ ] **Step 3: Skip the read when the score cannot pass the cut**
 
-In `glm-skills/writing-plans-glm/scripts/plan_tool.py`, function `pick_patterns`, find these lines:
+In `glm-skills/glm-writing-plans/scripts/plan_tool.py`, function `pick_patterns`, find these lines:
 
 ```python fragment
         hits = sum(1 for t in toks if t in base or t in f.lower())
@@ -11466,7 +11466,7 @@ Expected: FAIL: `test_oc_harness_skips_inlining` and `test_oc_harness_inlines_fi
 
 - [ ] **Step 7: Skip the inline of the file OpenCode already loads**
 
-In `glm-skills/writing-plans-glm/scripts/plan_tool.py`, function `cmd_brief`, find this block inside the `for md in (...)` conventions loop:
+In `glm-skills/glm-writing-plans/scripts/plan_tool.py`, function `cmd_brief`, find this block inside the `for md in (...)` conventions loop:
 
 ```python fragment
             if os.path.isfile(p):
@@ -11534,7 +11534,7 @@ Expected: FAIL with `AttributeError: module 'plan_tool_perf' has no attribute 'r
 
 - [ ] **Step 11: Compare mtimes on resume**
 
-In `glm-skills/writing-plans-glm/scripts/plan_tool.py`, insert this function right after `def lint_one(cs, c, body, allow, repo):` and its two-line body (just above the `# ---- build (API lane)` comment line):
+In `glm-skills/glm-writing-plans/scripts/plan_tool.py`, insert this function right after `def lint_one(cs, c, body, allow, repo):` and its two-line body (just above the `# ---- build (API lane)` comment line):
 
 ```python
 def resume_todo(cs, work, resume):
@@ -11571,40 +11571,40 @@ Expected: no failure or error comes from `test_plan_perf.py` or from any existin
 
 ```bash
 cd ..
-git add glm-skills/writing-plans-glm/scripts/plan_tool.py glm-skills/_shared/tests/test_plan_perf.py
-git commit -m "feat(writing-plans): skip low-score pattern reads, skip in-context conventions, mtime-checked resume"
+git add glm-skills/glm-writing-plans/scripts/plan_tool.py glm-skills/_shared/tests/test_plan_perf.py
+git commit -m "feat(glm-writing-plans): skip low-score pattern reads, skip in-context conventions, mtime-checked resume"
 cd glm-skills
 ```
 
 ---
 
-### T29: writing-plans SKILL.md bootstrap and CHANGELOG [P]
+### T29: glm-writing-plans SKILL.md bootstrap and CHANGELOG [P]
 
 **Depends:** T27
 
 **Interfaces:**
-- Consumes: `plan-task-writer`; `steps: 24`; `plan-task-writer-deep`; `steps: 24`; `plan-reviewer`
+- Consumes: `glm-plan-task-writer`; `steps: 24`; `glm-plan-task-writer-deep`; `steps: 24`; `glm-plan-reviewer`
 
 **Files:**
-- Modify: `glm-skills/writing-plans-glm/SKILL.md:26-34`
-- Modify: `glm-skills/writing-plans-glm/CHANGELOG.md:1-1`
+- Modify: `glm-skills/glm-writing-plans/SKILL.md:26-34`
+- Modify: `glm-skills/glm-writing-plans/CHANGELOG.md:1-1`
 
 - [ ] **Step 1: Replace bootstrap snippet in SKILL.md**
 
 Replace lines 26-34 in SKILL.md. The problematic `ls -d ... | head -1` must be replaced with the shared bootstrap pattern that respects `$OPENCODE_CONFIG_DIR` and checks directories in order without sorting:
 
 ```bash
-for d in "${OPENCODE_CONFIG_DIR:-}/skills/writing-plans" \
-  .opencode/skills/writing-plans \
-  ~/.config/opencode/skills/writing-plans \
-  .agents/skills/writing-plans \
-  ~/.agents/skills/writing-plans \
-  .claude/skills/writing-plans \
-  ~/.claude/skills/writing-plans \
-  ~/.zcode/skills/writing-plans; do
+for d in "${OPENCODE_CONFIG_DIR:-}/skills/glm-writing-plans" \
+  .opencode/skills/glm-writing-plans \
+  ~/.config/opencode/skills/glm-writing-plans \
+  .agents/skills/glm-writing-plans \
+  ~/.agents/skills/glm-writing-plans \
+  .claude/skills/glm-writing-plans \
+  ~/.claude/skills/glm-writing-plans \
+  ~/.zcode/skills/glm-writing-plans; do
   [ -f "$d/scripts/plan_tool.py" ] && T="$d/scripts/plan_tool.py" && break
 done
-[ -z "$T" ] && echo "writing-plans skill not found in any standard location" >&2 && exit 1
+[ -z "$T" ] && echo "glm-writing-plans skill not found in any standard location" >&2 && exit 1
 python3 "$T" brief SPEC
 ```
 
@@ -11615,7 +11615,7 @@ This change:
 - Exits with a clear error message on miss instead of running `python3 "" brief`
 - Uses `[ -z "$T" ]` check instead of `ls` and `head`, eliminating alphabetical sorting
 
-The pattern mirrors `systematic-debugging-glm/SKILL.md:18` for consistency across GLM skills.
+The pattern mirrors `glm-systematic-debugging/SKILL.md:18` for consistency across GLM skills.
 
 - [ ] **Step 2: Update CHANGELOG.md frontmatter**
 
@@ -11630,20 +11630,20 @@ This documents the fix for defect WP5 (shared bootstrap snippet adoption) as spe
 
 - [ ] **Step 3: Verify SKILL.md renders correctly**
 
-Run: `head -40 glm-skills/writing-plans-glm/SKILL.md`
+Run: `head -40 glm-skills/glm-writing-plans/SKILL.md`
 
 Expected: The new bootstrap snippet spans lines 26-34, properly indented, no syntax errors, exits with a message on file miss.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add glm-skills/writing-plans-glm/SKILL.md glm-skills/writing-plans-glm/CHANGELOG.md
-git commit -m "fix(writing-plans): adopt shared bootstrap snippet for OpenCode v1/v2 compatibility (WP5)"
+git add glm-skills/glm-writing-plans/SKILL.md glm-skills/glm-writing-plans/CHANGELOG.md
+git commit -m "fix(glm-writing-plans): adopt shared bootstrap snippet for OpenCode v1/v2 compatibility (WP5)"
 ```
 
 ---
 
-### T30: brainstorming context.sh OpenCode detection [P]
+### T30: glm-brainstorming context.sh OpenCode detection [P]
 
 **Depends:** T03
 
@@ -11651,7 +11651,7 @@ git commit -m "fix(writing-plans): adopt shared bootstrap snippet for OpenCode v
 - Consumes: `python3 oc_harness.py harness [--script PATH]`; `<harness> <major>`
 
 **Files:**
-- Modify: `glm-skills/brainstorming-glm/scripts/context.sh:12-38`
+- Modify: `glm-skills/glm-brainstorming/scripts/context.sh:12-38`
 - Modify: `glm-skills/_shared/tests/test_brainstorm_oc.py`
 
 This task fixes BR1 and BR11 (spec 5.7). `context.sh` is a preload, so it must stay read-only, print at most 55 lines and always exit 0. Detection prefers the vendored CLI `python3 oc_harness.py harness [--script PATH]`, which prints `<harness> <major>`. If that CLI is missing, fails, or prints `unknown`, the script falls back to a POSIX sh mirror of `harness()`: `OPENCODE_TERMINAL` (the only variable v2 sets), `OPENCODE`/`OPENCODE_BIN`, a `.oc-major` file in the skill dir (written by the installer), or a skill dir that sits under an `opencode/` or `.opencode/` directory. All commands run from `glm-skills/`.
@@ -11714,7 +11714,7 @@ class ContextCase(unittest.TestCase):
         os.makedirs(self.home)
 
     def plain_root(self):
-        return os.path.join(self.tmp, "plain", "brainstorming")
+        return os.path.join(self.tmp, "plain", "glm-brainstorming")
 
     def line_starting(self, out, prefix):
         for line in out.splitlines():
@@ -11758,7 +11758,7 @@ class TestBrainstormContextHarness(ContextCase):
 
     def test_install_location_without_cli(self):
         root = make_skill(
-            os.path.join(self.home, ".config", "opencode", "skills", "brainstorming")
+            os.path.join(self.home, ".config", "opencode", "skills", "glm-brainstorming")
         )
         proc = run_context(root, self.home)
         self.assertEqual(
@@ -11797,7 +11797,7 @@ Expected: FAIL. The output ends with `FAILED (failures=5, errors=1)`. The five f
 
 - [ ] **Step 3: Implement OpenCode detection in context.sh**
 
-Make three edits in `brainstorming-glm/scripts/context.sh`. The existing comment line above `harness=unknown` and the non-OpenCode `elif` lines stay as they are.
+Make three edits in `glm-brainstorming/scripts/context.sh`. The existing comment line above `harness=unknown` and the non-OpenCode `elif` lines stay as they are.
 
 First, replace the line `harness=unknown` (line 13) with this block. It asks the vendored CLI first, and the result is applied after the env chain:
 
@@ -11888,7 +11888,7 @@ Expected: FAIL. The output ends with `FAILED (failures=3)`: `AssertionError: 'la
 
 - [ ] **Step 7: Print OpenCode caps in context.sh**
 
-In `brainstorming-glm/scripts/context.sh`, replace the single line that starts with `echo "caps: subagents=` (line 38 before Step 3) with:
+In `glm-brainstorming/scripts/context.sh`, replace the single line that starts with `echo "caps: subagents=` (line 38 before Step 3) with:
 
 ```sh
 if [ "$harness" = opencode ]; then
@@ -11900,7 +11900,7 @@ fi
 
 - [ ] **Step 8: Run both test classes and the shell syntax check**
 
-Run: `sh -n brainstorming-glm/scripts/context.sh && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_brainstorm_oc.py' -k TestBrainstormContext`
+Run: `sh -n glm-brainstorming/scripts/context.sh && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_brainstorm_oc.py' -k TestBrainstormContext`
 Expected: PASS. `sh -n` prints nothing, and the unittest output ends with `Ran 13 tests` and `OK`.
 
 - [ ] **Step 9: Run the full suite**
@@ -11912,20 +11912,20 @@ Expected: the 13 new tests pass, and the suite shows no failures beyond the red 
 
 ```bash
 cd ..
-git add glm-skills/brainstorming-glm/scripts/context.sh glm-skills/_shared/tests/test_brainstorm_oc.py
-git commit -m "fix(brainstorming): detect OpenCode v1/v2 in context.sh and print OpenCode lane caps"
+git add glm-skills/glm-brainstorming/scripts/context.sh glm-skills/_shared/tests/test_brainstorm_oc.py
+git commit -m "fix(glm-brainstorming): detect OpenCode v1/v2 in context.sh and print OpenCode lane caps"
 ```
 
 ---
 
-### T31: brainstorming visual-companion scripts [P]
+### T31: glm-brainstorming visual-companion scripts [P]
 
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/brainstorming-glm/scripts/start-server.sh:74-82`
-- Modify: `glm-skills/brainstorming-glm/scripts/server.cjs:639-645`
-- Modify: `glm-skills/brainstorming-glm/scripts/helper.js:160-164`
+- Modify: `glm-skills/glm-brainstorming/scripts/start-server.sh:74-82`
+- Modify: `glm-skills/glm-brainstorming/scripts/server.cjs:639-645`
+- Modify: `glm-skills/glm-brainstorming/scripts/helper.js:160-164`
 - Test: `glm-skills/_shared/tests/test_brainstorm_server.py`
 
 This task fixes three visual-companion defects: a relative `--project-dir` breaks startup (BR3), SIGTERM/SIGHUP leave a stale `server-info` that still reads as alive (BR5), and `brainstorm.choice()` sends no `choice` key, so the server drops the event (BR7). All commands run from `glm-skills/` (`cd glm-skills` first). The tests need `node` and `bash` on PATH and skip otherwise.
@@ -11935,7 +11935,7 @@ This task fixes three visual-companion defects: a relative `--project-dir` break
 Create `_shared/tests/test_brainstorm_server.py` with this content:
 
 ```python
-"""Tests for the brainstorming visual-companion scripts (start-server.sh, server.cjs, helper.js)."""
+"""Tests for the glm-brainstorming visual-companion scripts (start-server.sh, server.cjs, helper.js)."""
 import json
 import os
 import shutil
@@ -11946,7 +11946,7 @@ import time
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "brainstorming-glm" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "glm-brainstorming" / "scripts"
 START = SCRIPTS / "start-server.sh"
 SERVER = SCRIPTS / "server.cjs"
 HELPER = SCRIPTS / "helper.js"
@@ -12020,7 +12020,7 @@ Expected: FAIL with `AssertionError: 'server-started' not found in '{"error": "S
 
 - [ ] **Step 3: Absolutize `--project-dir` before any `cd`**
 
-In `brainstorming-glm/scripts/start-server.sh`, find the block that ends the idle-timeout validation (`export BRAINSTORM_IDLE_TIMEOUT_MS=...` followed by `fi`). Directly after that `fi` and before `is_windows_like_shell() {`, insert:
+In `glm-brainstorming/scripts/start-server.sh`, find the block that ends the idle-timeout validation (`export BRAINSTORM_IDLE_TIMEOUT_MS=...` followed by `fi`). Directly after that `fi` and before `is_windows_like_shell() {`, insert:
 
 ```bash
 if [[ -n "$PROJECT_DIR" ]]; then
@@ -12087,7 +12087,7 @@ Expected: FAIL with `AssertionError: False is not true : server-stopped not writ
 
 - [ ] **Step 7: Add the signal handlers in `server.cjs`**
 
-In `brainstorming-glm/scripts/server.cjs`, inside `startServer()`, find the line `lifecycleCheck.unref();` and insert directly after it:
+In `glm-brainstorming/scripts/server.cjs`, inside `startServer()`, find the line `lifecycleCheck.unref();` and insert directly after it:
 
 ```javascript
   // SIGTERM/SIGHUP (harness stop, start-server.sh restart, terminal close) must
@@ -12107,7 +12107,7 @@ In `brainstorming-glm/scripts/server.cjs`, inside `startServer()`, find the line
 
 - [ ] **Step 8: Check the syntax of `server.cjs`**
 
-Run: `node --check brainstorming-glm/scripts/server.cjs`
+Run: `node --check glm-brainstorming/scripts/server.cjs`
 Expected: no output, exit status 0
 
 - [ ] **Step 9: Run the test to verify it passes**
@@ -12171,7 +12171,7 @@ Expected: FAIL with `AssertionError: None != 'b'`
 
 - [ ] **Step 12: Send the `choice` key from `brainstorm.choice()`**
 
-In `brainstorming-glm/scripts/helper.js`, inside the `window.brainstorm = { ... }` object, replace the line
+In `glm-brainstorming/scripts/helper.js`, inside the `window.brainstorm = { ... }` object, replace the line
 
 ```javascript fragment
     choice: (value, metadata = {}) => sendEvent({ type: 'choice', value, ...metadata })
@@ -12191,20 +12191,20 @@ Expected: PASS (`Ran 1 test`, `OK`)
 
 - [ ] **Step 14: Run the whole module and check the helper syntax**
 
-Run: `node --check brainstorming-glm/scripts/helper.js && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_brainstorm_server.py'`
+Run: `node --check glm-brainstorming/scripts/helper.js && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_brainstorm_server.py'`
 Expected: PASS (`Ran 4 tests`, `OK`)
 
 - [ ] **Step 15: Commit**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-git add glm-skills/brainstorming-glm/scripts/start-server.sh glm-skills/brainstorming-glm/scripts/server.cjs glm-skills/brainstorming-glm/scripts/helper.js glm-skills/_shared/tests/test_brainstorm_server.py
-git commit -m "fix(brainstorming): absolutize --project-dir, SIGTERM/SIGHUP write server-stopped, choice() sends choice key"
+git add glm-skills/glm-brainstorming/scripts/start-server.sh glm-skills/glm-brainstorming/scripts/server.cjs glm-skills/glm-brainstorming/scripts/helper.js glm-skills/_shared/tests/test_brainstorm_server.py
+git commit -m "fix(glm-brainstorming): absolutize --project-dir, SIGTERM/SIGHUP write server-stopped, choice() sends choice key"
 ```
 
 ---
 
-### T32: brainstorming SKILL.md, playbooks and researcher agent [P]
+### T32: glm-brainstorming SKILL.md, playbooks and glm-researcher agent [P]
 
 **Depends:** T04, T30
 
@@ -12212,11 +12212,11 @@ git commit -m "fix(brainstorming): absolutize --project-dir, SIGTERM/SIGHUP writ
 - Consumes: `python3 oc_harness.py result OUT_DIR`
 
 **Files:**
-- Modify: `glm-skills/brainstorming-glm/SKILL.md`
-- Modify: `glm-skills/brainstorming-glm/architectural.md`
-- Modify: `glm-skills/brainstorming-glm/visual-companion.md:73-80`
-- Modify: `glm-skills/brainstorming-glm/opencode/agents/researcher.md:16`
-- Modify: `glm-skills/brainstorming-glm/CHANGELOG.md`
+- Modify: `glm-skills/glm-brainstorming/SKILL.md`
+- Modify: `glm-skills/glm-brainstorming/architectural.md`
+- Modify: `glm-skills/glm-brainstorming/visual-companion.md:73-80`
+- Modify: `glm-skills/glm-brainstorming/opencode/agents/glm-researcher.md:16`
+- Modify: `glm-skills/glm-brainstorming/CHANGELOG.md`
 
 This task changes documentation only (spec items BR2, BR4, BR6, BR8, BR9 agent side, BR10, BR12, BR13, BR14, BR16). The "test" is a grep-based doc check kept in a temp file outside the repo. All commands run from `glm-skills/` (`cd glm-skills`).
 
@@ -12229,20 +12229,20 @@ cat > /tmp/t32-doc-check.sh <<'EOF'
 fail=0
 has() { grep -qF -- "$2" "$1" || { echo "MISSING in $1: $2"; fail=1; }; }
 hasnt() { if grep -qF -- "$2" "$1"; then echo "STALE in $1: $2"; fail=1; fi; }
-S=brainstorming-glm/SKILL.md
-A=brainstorming-glm/architectural.md
-V=brainstorming-glm/visual-companion.md
-R=brainstorming-glm/opencode/agents/researcher.md
-C=brainstorming-glm/CHANGELOG.md
+S=glm-brainstorming/SKILL.md
+A=glm-brainstorming/architectural.md
+V=glm-brainstorming/visual-companion.md
+R=glm-brainstorming/opencode/agents/glm-researcher.md
+C=glm-brainstorming/CHANGELOG.md
 has "$S" 'Architectural: `architectural.md` in round 1.'
 hasnt "$S" '1. `research-playbook.md`'
 has "$S" 'sh <Base directory>/scripts/context.sh'
 hasnt "$S" 'OpenCode v1: lanes become direct calls'
 has "$S" '**OpenCode lane rule**'
 has "$S" 'never `general-purpose` or `Explore`'
-has "$S" '${OPENCODE_CONFIG_DIR:+$OPENCODE_CONFIG_DIR/skills/brainstorming}'
-has "$S" '.zcode/skills/brainstorming'
-has "$S" 'brainstorming: oc_harness.py not found'
+has "$S" '${OPENCODE_CONFIG_DIR:+$OPENCODE_CONFIG_DIR/skills/glm-brainstorming}'
+has "$S" '.zcode/skills/glm-brainstorming'
+has "$S" 'glm-brainstorming: oc_harness.py not found'
 has "$S" '`background: true` and a `timeout`'
 has "$S" 'python3 "$H/oc_harness.py" result "$OUT"'
 has "$S" 'python3 oc_harness.py result OUT_DIR'
@@ -12263,18 +12263,18 @@ EOF
 - [ ] **Step 2: Run the check to verify it fails**
 
 Run: `sh /tmp/t32-doc-check.sh`
-Expected: FAIL. The last line is `T32 doc check: FAIL`, preceded by lines such as `MISSING in brainstorming-glm/SKILL.md: Architectural: \`architectural.md\` in round 1.` and `STALE in brainstorming-glm/SKILL.md: OpenCode v1: lanes become direct calls`. Exit status 1.
+Expected: FAIL. The last line is `T32 doc check: FAIL`, preceded by lines such as `MISSING in glm-brainstorming/SKILL.md: Architectural: \`architectural.md\` in round 1.` and `STALE in glm-brainstorming/SKILL.md: OpenCode v1: lanes become direct calls`. Exit status 1.
 
 - [ ] **Step 3: Fix the raw `!` fallback text in SKILL.md (BR10)**
 
-In `brainstorming-glm/SKILL.md`, under `## Live context`, replace the paragraph that starts `Trust this block.` and ends `run that script in round 1.` with:
+In `glm-brainstorming/SKILL.md`, under `## Live context`, replace the paragraph that starts `Trust this block.` and ends `run that script in round 1.` with:
 
 ```text
 Trust this block. Never re-run `ls`, `find`, `git status`, or `cat` on
 manifests. Reference files live in `skill_dir`; read by absolute path. A
 raw `!` line above instead of output (OpenCode ignores `!` preloads and
 leaves `${CLAUDE_SKILL_DIR}` empty): if a context block with a `harness:`
-line is already in the conversation (the `/brainstorm` command injects
+line is already in the conversation (the `/glm-brainstorm` command injects
 one), use it and skip the script. Otherwise run
 `sh <Base directory>/scripts/context.sh` as a round-1 call, with the
 "Base directory for this skill" path in place of `<Base directory>`.
@@ -12311,14 +12311,14 @@ Missing capability → substitute, never stall.
 **OpenCode lane rule** (one rule, picked by `oc_major`):
 
 1. v2 → dispatch each lane as a background `subagent` call: `agent:
-   "explorer"` (Code lane) or `"researcher"` (Web lane), a short
+   "glm-explorer"` (Code lane) or `"glm-researcher"` (Web lane), a short
    `description`, `prompt` = the filled R11 template, `background: true`,
    no `model` override (effort comes from the agent's own `variant`).
    Fire them one after another without waiting. Background `subagent`
    unavailable → rule 2.
 2. v1 → run the lanes as processes with `oc_harness.py run` (below).
 3. `task` (v1) or a foreground `subagent` (v2) ONLY as the fallback when
-   rule 1 or 2 fails. Agent `explorer`, `researcher` or `general`, never
+   rule 1 or 2 fails. Agent `glm-explorer`, `glm-researcher` or `general`, never
    `general-purpose` or `Explore`: those do not exist on OpenCode.
 
 Running `oc_harness.py run`. `CLAUDE_SKILL_DIR` is not set on OpenCode.
@@ -12329,15 +12329,15 @@ header shows it, then resolve the scripts directory in this order:
 BASE=""
 H=""
 for d in "$BASE" \
-  "${OPENCODE_CONFIG_DIR:+$OPENCODE_CONFIG_DIR/skills/brainstorming}" \
-  .opencode/skills/brainstorming \
-  ~/.config/opencode/skills/brainstorming \
-  .agents/skills/brainstorming ~/.agents/skills/brainstorming \
-  .claude/skills/brainstorming ~/.claude/skills/brainstorming \
-  .zcode/skills/brainstorming; do
+  "${OPENCODE_CONFIG_DIR:+$OPENCODE_CONFIG_DIR/skills/glm-brainstorming}" \
+  .opencode/skills/glm-brainstorming \
+  ~/.config/opencode/skills/glm-brainstorming \
+  .agents/skills/glm-brainstorming ~/.agents/skills/glm-brainstorming \
+  .claude/skills/glm-brainstorming ~/.claude/skills/glm-brainstorming \
+  .zcode/skills/glm-brainstorming; do
   if [ -n "$d" ] && [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
 done
-[ -n "$H" ] || { echo "brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
+[ -n "$H" ] || { echo "glm-brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
 OUT=".brainstorm/drafts/lanes"
 mkdir -p "$OUT"
 python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"
@@ -12346,7 +12346,7 @@ python3 "$H/oc_harness.py" result "$OUT"
 
 Write `.brainstorm/drafts/lanes.json` before the call (R0 allows writes
 under `.brainstorm/drafts/`). It is a JSON array of lane objects. Each
-lane needs `id` (unique string), `agent` (`explorer` or `researcher`, the
+lane needs `id` (unique string), `agent` (`glm-explorer` or `glm-researcher`, the
 neutral read-only/web agents installed from `opencode/agents/`), `model`
 (`flash` or `pro`), `effort` (`low` for these lanes), `dir` (working
 directory for that lane) and `brief` (the per-lane user message: task,
@@ -12379,7 +12379,7 @@ TaskCreate equivalent: carry state per R5.
 
 - [ ] **Step 6: Fix the OpenCode gaps in architectural.md (BR12)**
 
-In `brainstorming-glm/architectural.md` §3, replace the `- **Spec pre-draft**` bullet (from `- **Spec pre-draft** — one lane` through `A rejected design is overwritten later.`) with:
+In `glm-brainstorming/architectural.md` §3, replace the `- **Spec pre-draft**` bullet (from `- **Spec pre-draft** — one lane` through `A rejected design is overwritten later.`) with:
 
 ```text
 - **Spec pre-draft** — one lane, only when file writes will not raise a
@@ -12388,7 +12388,7 @@ In `brainstorming-glm/architectural.md` §3, replace the `- **Spec pre-draft**` 
   `general-purpose` with the design pasted. It writes to
   `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
-  On OpenCode the lane agents (`explorer`, `researcher`) are `edit: deny`,
+  On OpenCode the lane agents (`glm-explorer`, `glm-researcher`) are `edit: deny`,
   so no lane can write it: the main session writes the pre-draft itself
   to the same path as the last call of the design turn.
 ```
@@ -12403,17 +12403,17 @@ In §4 step 1, replace the first sentence `If a pre-draft lane is still running,
 
 Keep the rest of step 1 (`Otherwise move the draft to` … `if available.`) unchanged.
 
-Replace the §5 body `Invoke \`writing-plans\`. No other skill, no code, no scaffolding.` with:
+Replace the §5 body `Invoke \`glm-writing-plans\`. No other skill, no code, no scaffolding.` with:
 
 ```text
-Invoke `writing-plans` and pass the committed spec path
+Invoke `glm-writing-plans` and pass the committed spec path
 (`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose) as its input. No other skill, no code, no scaffolding.
 ```
 
 - [ ] **Step 7: Add the OpenCode platform note to visual-companion.md (BR13)**
 
-In `brainstorming-glm/visual-companion.md`, in the `Platform notes:` paragraph, insert this text right after the sentence ending `via its background shell mechanism.` and before `Any harness that`:
+In `glm-brainstorming/visual-companion.md`, in the `Platform notes:` paragraph, insert this text right after the sentence ending `via its background shell mechanism.` and before `Any harness that`:
 
 ```text
 OpenCode v2 — add `--foreground` and run it through `shell` with
@@ -12422,9 +12422,9 @@ takes the server with it); read `server-info` next turn. OpenCode v1 —
 run as above (the script backgrounds itself).
 ```
 
-- [ ] **Step 8: Harden the researcher agent against a missing websearch provider (BR9)**
+- [ ] **Step 8: Harden the glm-researcher agent against a missing websearch provider (BR9)**
 
-In `brainstorming-glm/opencode/agents/researcher.md`, replace rule line 16 `3 Web search and web fetch only. Never shell commands or scripts.` with this single line (keep the numbering, the other rules and the frontmatter unchanged; the websearch permission itself is rendered by `oc_harness.py`):
+In `glm-brainstorming/opencode/agents/glm-researcher.md`, replace rule line 16 `3 Web search and web fetch only. Never shell commands or scripts.` with this single line (keep the numbering, the other rules and the frontmatter unchanged; the websearch permission itself is rendered by `oc_harness.py`):
 
 ```text
 3 Web search and web fetch only. Never shell commands or scripts. Web search missing, failing, or asking for input → switch to web fetch on primary URLs (registries, raw READMEs, changelogs); never wait on a prompt.
@@ -12432,11 +12432,11 @@ In `brainstorming-glm/opencode/agents/researcher.md`, replace rule line 16 `3 We
 
 - [ ] **Step 9: Record the changes in CHANGELOG.md**
 
-If the first line of `brainstorming-glm/CHANGELOG.md` already starts with the `9.3-glm` entry heading (added by an earlier task), append the bullets below to that entry. Otherwise insert, at the very top of the file above the `9.2-glm (from 9.1)` heading, a level-1 heading line whose text is `9.3-glm (from 9.2) — OpenCode v1/v2 hardening` (one `#`, a space, then that text), a blank line, then the bullets below, then a blank line:
+If the first line of `glm-brainstorming/CHANGELOG.md` already starts with the `9.3-glm` entry heading (added by an earlier task), append the bullets below to that entry. Otherwise insert, at the very top of the file above the `9.2-glm (from 9.1)` heading, a level-1 heading line whose text is `9.3-glm (from 9.2) — OpenCode v1/v2 hardening` (one `#`, a space, then that text), a blank line, then the bullets below, then a blank line:
 
 ```text
 - SKILL.md: one OpenCode lane rule. v2 dispatches background `subagent`
-  lanes (`explorer`/`researcher`), v1 runs `oc_harness.py run`, and
+  lanes (`glm-explorer`/`glm-researcher`), v1 runs `oc_harness.py run`, and
   `task` is only the fallback. The fallback agent is `general`, never
   `general-purpose` or `Explore`.
 - SKILL.md: `oc_harness.py run` is never a foreground call. On v2 it goes
@@ -12455,10 +12455,10 @@ If the first line of `brainstorming-glm/CHANGELOG.md` already starts with the `9
   runs. R9 is one sentence again.
 - architectural.md: on OpenCode the main session writes the spec
   pre-draft (lane agents are `edit: deny`), TaskStop is skipped, and the
-  hand-off passes the spec path to `writing-plans`.
+  hand-off passes the spec path to `glm-writing-plans`.
 - visual-companion.md: OpenCode note (v2: `--foreground` plus
   `background: true`).
-- researcher agent: falls back to web fetch when web search has no
+- glm-researcher agent: falls back to web fetch when web search has no
   provider, and never waits on an interactive prompt.
 ```
 
@@ -12470,14 +12470,14 @@ Expected: PASS. Single output line `T32 doc check: OK`, exit status 0.
 - [ ] **Step 11: Run the skill frontmatter tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_all_skills.py'`
-Expected: PASS. Output ends with `OK` (SKILL.md `name` is still `brainstorming`, description unchanged).
+Expected: PASS. Output ends with `OK` (SKILL.md `name` is still `glm-brainstorming`, description unchanged).
 
 - [ ] **Step 12: Commit**
 
 ```bash
 cd ..
-git add glm-skills/brainstorming-glm/SKILL.md glm-skills/brainstorming-glm/architectural.md glm-skills/brainstorming-glm/visual-companion.md glm-skills/brainstorming-glm/opencode/agents/researcher.md glm-skills/brainstorming-glm/CHANGELOG.md
-git commit -m "fix(brainstorming): one OpenCode lane rule, background run, result reader, per-version tool map"
+git add glm-skills/glm-brainstorming/SKILL.md glm-skills/glm-brainstorming/architectural.md glm-skills/glm-brainstorming/visual-companion.md glm-skills/glm-brainstorming/opencode/agents/glm-researcher.md glm-skills/glm-brainstorming/CHANGELOG.md
+git commit -m "fix(glm-brainstorming): one OpenCode lane rule, background run, result reader, per-version tool map"
 ```
 
 ---
@@ -12583,8 +12583,8 @@ Add this method to `InstallerWarningTests`:
 
 ```python fragment
     def test_lists_clashes_with_claude_skills_without_deleting(self):
-        original = self.make_skill_dir(self.claude_skills, "doc-generator")
-        suffixed = self.make_skill_dir(self.claude_skills, "requirements-code-audit-glm")
+        original = self.make_skill_dir(self.claude_skills, "glm-doc-generator")
+        suffixed = self.make_skill_dir(self.claude_skills, "glm-requirements-code-audit")
         out = self.run_installer(2)
         self.assertIn("WARN: clash: %s" % original, out)
         self.assertIn("WARN: clash: %s" % suffixed, out)
@@ -12597,7 +12597,7 @@ Add this method to `InstallerWarningTests`:
 - [ ] **Step 6: Run the clash test to verify it fails**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_oc_install.py' -k test_lists_clashes_with_claude_skills_without_deleting`
-Expected: FAIL with `AssertionError: 'WARN: clash: .../home/.claude/skills/doc-generator' not found in ...`
+Expected: FAIL with `AssertionError: 'WARN: clash: .../home/.claude/skills/glm-doc-generator' not found in ...`
 
 - [ ] **Step 7: Warn about clashes with `~/.claude/skills`**
 
@@ -12607,7 +12607,7 @@ In `glm-skills/install-opencode.sh`, append this block after the `if [ "$MAJOR" 
 CLAUDE_SKILLS="$HOME_DIR/.claude/skills"
 CONFIG_SKILLS="$HOME_DIR/.config/opencode/skills"
 
-for folder in $SKILLS dev-team-glm; do
+for folder in $SKILLS glm-dev-team; do
     name="${folder%-glm}"
     for path in "$CLAUDE_SKILLS/$name" "$CLAUDE_SKILLS/$folder"; do
         if [ -e "$path" ] || [ -L "$path" ]; then
@@ -12628,21 +12628,21 @@ Add this method to `InstallerWarningTests`:
 
 ```python fragment
     def test_lists_stale_glm_installs_and_prints_removal_command(self):
-        writing = self.make_skill_dir(self.config_skills, "writing-plans-glm")
-        brainstorm = self.make_skill_dir(self.config_skills, "brainstorming-glm")
+        writing = self.make_skill_dir(self.config_skills, "glm-writing-plans")
+        brainstorm = self.make_skill_dir(self.config_skills, "glm-brainstorming")
         out = self.run_installer(2)
         self.assertIn("WARN: stale: %s" % brainstorm, out)
         self.assertIn("WARN: stale: %s" % writing, out)
         self.assertIn('To remove the stale installs, run: rm -rf "%s" "%s"' % (brainstorm, writing), out)
         self.assertTrue(os.path.isfile(os.path.join(brainstorm, "SKILL.md")))
         self.assertTrue(os.path.isfile(os.path.join(writing, "SKILL.md")))
-        self.assertTrue(os.path.isfile(os.path.join(self.config_skills, "writing-plans", "SKILL.md")))
+        self.assertTrue(os.path.isfile(os.path.join(self.config_skills, "glm-writing-plans", "SKILL.md")))
 ```
 
 - [ ] **Step 10: Run the stale test to verify it fails**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_oc_install.py' -k test_lists_stale_glm_installs_and_prints_removal_command`
-Expected: FAIL with `AssertionError: 'WARN: stale: .../home/.config/opencode/skills/brainstorming-glm' not found in ...`
+Expected: FAIL with `AssertionError: 'WARN: stale: .../home/.config/opencode/skills/glm-brainstorming' not found in ...`
 
 - [ ] **Step 11: Warn about stale `*-glm` folders and print one removal command**
 
@@ -12685,22 +12685,22 @@ git commit -m "fix(shared): install-opencode.sh warns about skill clashes and st
 
 ---
 
-### T34: doc-generator OpenCode agent names and command [P]
+### T34: glm-doc-generator OpenCode agent names and command [P]
 
 **Depends:** —
 
 **Files:**
-- Modify: `glm-skills/doc-generator-glm/SKILL.md`
-- Modify: `glm-skills/doc-generator-glm/opencode/commands/docs.md`
+- Modify: `glm-skills/glm-doc-generator/SKILL.md`
+- Modify: `glm-skills/glm-doc-generator/opencode/commands/glm-docs.md`
 - Modify: `glm-skills/_shared/tests/test_all_skills.py`
 
-- [ ] **Step 1: Write test to reject unknown OpenCode agent names in doc-generator SKILL.md**
+- [ ] **Step 1: Write test to reject unknown OpenCode agent names in glm-doc-generator SKILL.md**
 
 ```python
 def test_doc_generator_no_unknown_agents(self):
-    """doc-generator SKILL.md must not reference 'general-purpose' or 'Explore' agents;
-    only 'doc-writer', 'doc-reviewer', and 'general' are valid on OpenCode v2."""
-    skill_md = os.path.join(GLM_ROOT, "doc-generator-glm", "SKILL.md")
+    """glm-doc-generator SKILL.md must not reference 'general-purpose' or 'Explore' agents;
+    only 'glm-doc-writer', 'glm-doc-reviewer', and 'general' are valid on OpenCode v2."""
+    skill_md = os.path.join(GLM_ROOT, "glm-doc-generator", "SKILL.md")
     with open(skill_md, encoding="utf-8") as fh:
         content = fh.read()
     
@@ -12719,9 +12719,9 @@ def test_doc_generator_no_unknown_agents(self):
 Run: `cd /Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest _shared.tests.test_all_skills.TestSkillMdHygiene.test_doc_generator_no_unknown_agents -v`
 Expected: FAIL with "AssertionError: SKILL.md:219 contains deprecated agent name 'general-purpose'"
 
-- [ ] **Step 3: Replace 'general-purpose' with 'doc-writer' in writer task template**
+- [ ] **Step 3: Replace 'general-purpose' with 'glm-doc-writer' in writer task template**
 
-In `glm-skills/doc-generator-glm/SKILL.md` line 219, change from:
+In `glm-skills/glm-doc-generator/SKILL.md` line 219, change from:
 
 ```markdown
 **≤ 10 writer Tasks**, subagent type `general-purpose`, one per non-cached doc,
@@ -12730,12 +12730,12 @@ In `glm-skills/doc-generator-glm/SKILL.md` line 219, change from:
 to:
 
 ```markdown
-**≤ 10 writer Tasks**, subagent type `doc-writer`, one per non-cached doc,
+**≤ 10 writer Tasks**, subagent type `glm-doc-writer`, one per non-cached doc,
 ```
 
-- [ ] **Step 4: Replace 'general-purpose' with 'doc-reviewer' in reviewer task template**
+- [ ] **Step 4: Replace 'general-purpose' with 'glm-doc-reviewer' in reviewer task template**
 
-In `glm-skills/doc-generator-glm/SKILL.md` line 364, change from:
+In `glm-skills/glm-doc-generator/SKILL.md` line 364, change from:
 
 ```markdown
 subagent type `general-purpose`.
@@ -12744,12 +12744,12 @@ subagent type `general-purpose`.
 to:
 
 ```markdown
-subagent type `doc-reviewer`.
+subagent type `glm-doc-reviewer`.
 ```
 
 - [ ] **Step 5: Replace skill tool command to use skill ID instead of absolute path**
 
-In `glm-skills/doc-generator-glm/opencode/commands/docs.md` line 4, change from:
+In `glm-skills/glm-doc-generator/opencode/commands/glm-docs.md` line 4, change from:
 
 ```markdown
 Load skill {{SKILL_DIR}} with $ARGUMENTS
@@ -12758,12 +12758,12 @@ Load skill {{SKILL_DIR}} with $ARGUMENTS
 to:
 
 ```markdown
-Load skill doc-generator with $ARGUMENTS
+Load skill glm-doc-generator with $ARGUMENTS
 ```
 
 - [ ] **Step 6: Replace sed instruction with edit tool in writer template**
 
-In `glm-skills/doc-generator-glm/SKILL.md` line 168, within the WRITE section instructions for writers, change any reference from:
+In `glm-skills/glm-doc-generator/SKILL.md` line 168, within the WRITE section instructions for writers, change any reference from:
 
 ```
 using sed to modify the doc
@@ -12779,7 +12779,7 @@ using the edit tool to modify the doc
 
 - [ ] **Step 7: Fix stale sync path reference in OpenCode lane section**
 
-In `glm-skills/doc-generator-glm/SKILL.md` lines 310-312, change from:
+In `glm-skills/glm-doc-generator/SKILL.md` lines 310-312, change from:
 
 ```markdown
 `sh skills/glm/_shared/sync.sh`
@@ -12795,7 +12795,7 @@ to:
 
 - [ ] **Step 8: Fix GLM model and effort references for consistency**
 
-In `glm-skills/doc-generator-glm/SKILL.md` line 395 and surrounding context, ensure writer lanes use `model: "flash"` (GLM-5.3-Flash) and reviewer lanes use `model: "pro"` (GLM-5.3). Change any line that says:
+In `glm-skills/glm-doc-generator/SKILL.md` line 395 and surrounding context, ensure writer lanes use `model: "flash"` (GLM-5.3-Flash) and reviewer lanes use `model: "pro"` (GLM-5.3). Change any line that says:
 
 ```
 writers use GLM-5.3
@@ -12815,8 +12815,8 @@ Expected: PASS
 - [ ] **Step 10: Commit**
 
 ```bash
-git add glm-skills/doc-generator-glm/SKILL.md glm-skills/doc-generator-glm/opencode/commands/docs.md glm-skills/_shared/tests/test_all_skills.py
-git commit -m "fix(doc-generator): OpenCode v2 agent names and skill command"
+git add glm-skills/glm-doc-generator/SKILL.md glm-skills/glm-doc-generator/opencode/commands/glm-docs.md glm-skills/_shared/tests/test_all_skills.py
+git commit -m "fix(glm-doc-generator): OpenCode v2 agent names and skill command"
 ```
 
 ---
@@ -12829,24 +12829,24 @@ git commit -m "fix(doc-generator): OpenCode v2 agent names and skill command"
 
 **Interfaces:**
 - Consumes: `def build_run_cmd(lane: dict, major: int, binary: str = "opencode") -> list`; `def config_snippet(major: int, deny: list) -> str`; `def render_agent(text: str, major: int) -> str`
-- Produces: `OC_CONTRACT=1`; `render_agent`; `hidden`; `subagent`; `/docs`; ` !`; ` `
+- Produces: `OC_CONTRACT=1`; `render_agent`; `hidden`; `subagent`; `/glm-docs`; ` !`; ` `
 
 **Files:**
 - Test: `glm-skills/_shared/tests/test_oc_contract.py`
 - Create: `glm-skills/_shared/tests/fake_provider.py`
 - Modify: `glm-skills/_shared/oc_harness.py`
-- Modify: `glm-skills/brainstorming-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/dev-team-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/doc-generator-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/requirements-code-audit-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/systematic-debugging-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/writing-plans-glm/scripts/oc_harness.py`
-- Modify: `glm-skills/doc-generator-glm/opencode/commands/docs.md`
+- Modify: `glm-skills/glm-brainstorming/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-dev-team/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-doc-generator/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-requirements-code-audit/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-systematic-debugging/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-writing-plans/scripts/oc_harness.py`
+- Modify: `glm-skills/glm-doc-generator/opencode/commands/glm-docs.md`
 
 This task adds a stdlib fake OpenAI-compatible provider and an opt-in real-binary contract module. The module drives `opencode` in a sandboxed `HOME`/`XDG_*` tree, with non-localhost network blocked by macOS `sandbox-exec`. Two probe tests then decide two conditional changes:
 
 - `render_agent` stops emitting `hidden` on v2 only if `test_probe_hidden_agent_dispatch` proves that a hidden agent cannot be dispatched by the `subagent` tool.
-- `/docs` gains a `` !`cmd` `` recon line only if `test_probe_command_bang_expansion` proves that v2 expands it.
+- `/glm-docs` gains a `` !`cmd` `` recon line only if `test_probe_command_bang_expansion` proves that v2 expands it.
 
 The fake-provider self-tests always run. Every real-binary test runs only with `OC_CONTRACT=1`. All commands run from `glm-skills/` (`cd glm-skills`).
 
@@ -13315,8 +13315,8 @@ V1_TOOLS = {"bash", "edit", "glob", "grep", "read", "skill", "task", "todowrite"
 V1_ONLY_TOOLS = {"bash", "task", "todowrite", "apply_patch"}
 V2_EVENT_TYPES = {"step_start", "tool_use", "step_finish", "text", "error"}
 V2_HOOK_KEYS = {"tool", "sessionID", "agent", "messageID", "id", "input"}
-SKILLS = {"brainstorming", "dev-team", "doc-generator", "requirements-code-audit",
-          "systematic-debugging", "writing-plans"}
+SKILLS = {"glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-requirements-code-audit",
+          "glm-systematic-debugging", "glm-writing-plans"}
 AGENT_PATHS = ("/agent", "/api/agent")
 COMMAND_PATHS = ("/command", "/api/command")
 SKILL_PATHS = ("/skill", "/api/skill", "/experimental/skill")
@@ -13737,7 +13737,7 @@ class ContractCases:
                          "commands not discovered: %s" % sorted(installed_commands - commands))
         self.assertTrue(SKILLS <= skills, "skills not discovered: %s" % sorted(SKILLS - skills))
         self.assertFalse([n for n in skills if n.endswith("-glm")], sorted(skills))
-        self.assertTrue(os.path.isfile(os.path.join(self.config_dir, "plugins", "devteam-guard.js")))
+        self.assertTrue(os.path.isfile(os.path.join(self.config_dir, "plugins", "glm-devteam-guard.js")))
         lines = self._logs(serve_log).splitlines()
         load_errors = [l for l in lines if re.search(r"(?i)(failed to load|load error|parse error|invalid config)", l)]
         clashes = [l for l in lines if re.search(r"(?i)(clash|duplicate|conflict)", l)]
@@ -13891,7 +13891,7 @@ with
 
 Then copy the source of truth into every skill.
 
-Run: `sh _shared/sync.sh && for d in brainstorming-glm dev-team-glm doc-generator-glm requirements-code-audit-glm systematic-debugging-glm writing-plans-glm; do cmp _shared/oc_harness.py "$d/scripts/oc_harness.py"; done`
+Run: `sh _shared/sync.sh && for d in glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans; do cmp _shared/oc_harness.py "$d/scripts/oc_harness.py"; done`
 Expected: exit 0 with no `cmp` output (all six copies byte-identical)
 
 - [ ] **Step 12: Run the render test to verify it passes**
@@ -13899,23 +13899,23 @@ Expected: exit 0 with no `cmp` output (all six copies byte-identical)
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_oc_contract.py' -k RenderHiddenTest -v`
 Expected: PASS, with `Ran 2 tests` and a final line `OK`
 
-- [ ] **Step 13: Decide the `/docs` recon outcome**
+- [ ] **Step 13: Decide the `/glm-docs` recon outcome**
 
-If `test_probe_command_bang_expansion` failed in Step 7, v2 does not expand `` !`cmd` ``, so `/docs` stays unchanged. Mark the probe as an expected failure by editing its definition in `class V2ContractTest` so it reads as shown below. Then skip to Step 17.
+If `test_probe_command_bang_expansion` failed in Step 7, v2 does not expand `` !`cmd` ``, so `/glm-docs` stays unchanged. Mark the probe as an expected failure by editing its definition in `class V2ContractTest` so it reads as shown below. Then skip to Step 17.
 
 ```python fragment
-    @unittest.expectedFailure  # v2 does not expand !`cmd` in commands; /docs keeps its Turn-1 recon
+    @unittest.expectedFailure  # v2 does not expand !`cmd` in commands; /glm-docs keeps its Turn-1 recon
     def test_probe_command_bang_expansion(self):
 ```
 
 If the probe passed, continue with Step 14.
 
-- [ ] **Step 14: Write the failing `/docs` test (only if the bang probe passed)**
+- [ ] **Step 14: Write the failing `/glm-docs` test (only if the bang probe passed)**
 
 Append this block to `_shared/tests/test_oc_contract.py`, before the `if __name__ == "__main__":` block.
 
 ```python
-DOCS_MD = os.path.join(ROOT, "doc-generator-glm", "opencode", "commands", "docs.md")
+DOCS_MD = os.path.join(ROOT, "glm-doc-generator", "opencode", "commands", "docs.md")
 DOCS_RECON = "!`(git ls-files 2>/dev/null || find . -type f -not -path './.git/*') | head -n 200`"
 
 
@@ -13924,17 +13924,17 @@ class DocsCommandTest(unittest.TestCase):
         with open(DOCS_MD) as fh:
             text = fh.read()
         self.assertIn(DOCS_RECON, text)
-        self.assertIn(DOCS_RECON, oc_harness.render_command(text, 2, "/tmp/doc-generator"))
+        self.assertIn(DOCS_RECON, oc_harness.render_command(text, 2, "/tmp/glm-doc-generator"))
 ```
 
-- [ ] **Step 15: Run the `/docs` test to verify it fails**
+- [ ] **Step 15: Run the `/glm-docs` test to verify it fails**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_oc_contract.py' -k test_docs_command_preexpands_recon`
 Expected: FAIL with "AssertionError: \"!`(git ls-files 2>/dev/null" (the recon line is not in docs.md)
 
-- [ ] **Step 16: Add the recon line to `/docs` and verify it passes**
+- [ ] **Step 16: Add the recon line to `/glm-docs` and verify it passes**
 
-In `doc-generator-glm/opencode/commands/docs.md`, add this line as the new last line of the file. It goes directly after the existing `Load skill ...` line, whatever that line reads after earlier tasks.
+In `glm-doc-generator/opencode/commands/glm-docs.md`, add this line as the new last line of the file. It goes directly after the existing `Load skill ...` line, whatever that line reads after earlier tasks.
 
 ```text
 Pre-expanded file list (use it instead of spending a turn on recon): !`(git ls-files 2>/dev/null || find . -type f -not -path './.git/*') | head -n 200`
@@ -13948,7 +13948,7 @@ Expected: PASS, with `Ran 1 test` and a final line `OK`
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests`
 Expected: the final line is `OK (skipped=24)`, with every existing test still green
 
-Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash dev-team-glm/scripts/selftest.sh`
+Run: `env -u CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS -u BASH_DEFAULT_TIMEOUT_MS -u BASH_MAX_TIMEOUT_MS bash glm-dev-team/scripts/selftest.sh`
 Expected: `passed=` ≥ 324 and `failed=` ≤ 5 (only the 5 known macOS failures)
 
 Run: `OC_CONTRACT=1 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests -p 'test_oc_contract.py' -v`
@@ -13958,7 +13958,7 @@ Expected: PASS. The final line starts with `OK`. It carries `expected failures=N
 
 ```bash
 cd ..
-git add glm-skills/_shared/tests/test_oc_contract.py glm-skills/_shared/tests/fake_provider.py glm-skills/_shared/oc_harness.py glm-skills/brainstorming-glm/scripts/oc_harness.py glm-skills/dev-team-glm/scripts/oc_harness.py glm-skills/doc-generator-glm/scripts/oc_harness.py glm-skills/requirements-code-audit-glm/scripts/oc_harness.py glm-skills/systematic-debugging-glm/scripts/oc_harness.py glm-skills/writing-plans-glm/scripts/oc_harness.py glm-skills/doc-generator-glm/opencode/commands/docs.md
+git add glm-skills/_shared/tests/test_oc_contract.py glm-skills/_shared/tests/fake_provider.py glm-skills/_shared/oc_harness.py glm-skills/glm-brainstorming/scripts/oc_harness.py glm-skills/glm-dev-team/scripts/oc_harness.py glm-skills/glm-doc-generator/scripts/oc_harness.py glm-skills/glm-requirements-code-audit/scripts/oc_harness.py glm-skills/glm-systematic-debugging/scripts/oc_harness.py glm-skills/glm-writing-plans/scripts/oc_harness.py glm-skills/glm-doc-generator/opencode/commands/glm-docs.md
 git commit -m "feat(shared): opt-in real-binary OpenCode contract tests with fake provider and sandbox discovery check"
 ```
 
@@ -13969,7 +13969,7 @@ git commit -m "feat(shared): opt-in real-binary OpenCode contract tests with fak
 **Depends:** T05, T35
 
 **Interfaces:**
-- Consumes: `OC_CONTRACT=1`; `render_agent`; `hidden`; `subagent`; `/docs`; ` !`; ` `
+- Consumes: `OC_CONTRACT=1`; `render_agent`; `hidden`; `subagent`; `/glm-docs`; ` !`; ` `
 
 **Files:**
 - Modify: `glm-skills/CLAUDE.md`
@@ -13978,7 +13978,7 @@ All commands run from `glm-skills/` (`cd glm-skills` first); `git` commands run 
 
 - [ ] **Step 1: Add the OpenCode version facts section to CLAUDE.md**
 
-Insert the block below as a new `###` section at the end of `## Architecture: the shared GLM design`, i.e. after the last `### Per-skill engines` bullet (`doc-generator-glm`) and directly before the `## Conventions and gotchas` heading, with one blank line on each side. The section starts with a level-3 heading (three `#` characters, same level as `Per-skill engines`) reading `OpenCode version facts (v1.18.x and v2.0.x)`, followed by one blank line and the body below. Add only facts listed here; do not add claims about v1 behaviour that are not below.
+Insert the block below as a new `###` section at the end of `## Architecture: the shared GLM design`, i.e. after the last `### Per-skill engines` bullet (`glm-doc-generator`) and directly before the `## Conventions and gotchas` heading, with one blank line on each side. The section starts with a level-3 heading (three `#` characters, same level as `Per-skill engines`) reading `OpenCode version facts (v1.18.x and v2.0.x)`, followed by one blank line and the body below. Add only facts listed here; do not add claims about v1 behaviour that are not below.
 
 ```markdown
 Both lines are supported: v1 stable (latest release v1.18.33) and v2 beta (local 2.0.18). All facts were
@@ -14024,13 +14024,13 @@ verified on 2026-09-28 by local probes against a fake provider unless marked oth
   120000 ms.
 ```
 
-- [ ] **Step 2: Correct the stale dev-team OpenCode facts in the same file**
+- [ ] **Step 2: Correct the stale glm-dev-team OpenCode facts in the same file**
 
-In the `**dev-team on OpenCode:**` and `**Plugin role mapping:**` text under `### Per-skill engines`, make exactly these replacements (the old text may be wrapped across lines; keep the surrounding wording):
+In the `**glm-dev-team on OpenCode:**` and `**Plugin role mapping:**` text under `### Per-skill engines`, make exactly these replacements (the old text may be wrapped across lines; keep the surrounding wording):
 
 1. `(env `DEVTEAM_HARNESS=opencode` or `OPENCODE` set)` → `(`is_opencode()`: `DEVTEAM_HARNESS` decides when set, else `OPENCODE`, else `oc_harness.harness()`, since v2 never sets `OPENCODE`)`.
-2. `are set in env `DEVTEAM_ROLE` per lane.` → `are set in env `DEVTEAM_ROLE` per lane; when it is unset, the v2 plugin uses `event.agent` if it names a dev-team role.`
-3. The plugin path `skills/glm/dev-team-glm/opencode/ plugins/` (split across two lines) → `dev-team-glm/opencode/plugins/`.
+2. `are set in env `DEVTEAM_ROLE` per lane.` → `are set in env `DEVTEAM_ROLE` per lane; when it is unset, the v2 plugin uses `event.agent` if it names a glm-dev-team role.`
+3. The plugin path `skills/glm/glm-dev-team/opencode/ plugins/` (split across two lines) → `glm-dev-team/opencode/plugins/`.
 4. `whose event carries `tool` and `input`` → `whose event carries `{tool, sessionID, agent, messageID, id, input}``.
 5. `on receipt of `edit`, `write`, `patch`/`apply_patch`, or `bash` tools` → `on receipt of `write`, `edit`, `patch`, `apply_patch`, `multiedit`, `shell`, `bash`, `execute` or `batch` tools`.
 

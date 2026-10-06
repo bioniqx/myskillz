@@ -1,4 +1,4 @@
-"""Parity markers: the glm dev-team port must keep the symbols the original gained in the repair.
+"""Parity markers: the glm glm-dev-team port must keep the symbols the original gained in the repair.
 
 A marker is a plain-text token that must appear in the skill's shipped files (scripts, plugins,
 agents, docs; never the tests). If a future change to the original adds a guard or gate, add its
@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 GLM_ROOT = Path(__file__).resolve().parents[2]
-SKILL = GLM_ROOT / "dev-team-glm"
+SKILL = GLM_ROOT / "glm-dev-team"
 ORIGINAL = GLM_ROOT.parent / "claude-skills" / "claude-dev-team-v3.2"
 SUFFIXES = {".py", ".js", ".sh", ".md", ".json"}
 SKIP_DIRS = {"tests", "__pycache__", "docs", ".git"}

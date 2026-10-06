@@ -1,4 +1,4 @@
-"""Black-box tests for brainstorming-glm/scripts/server.cjs, helper.js and
+"""Black-box tests for glm-brainstorming/scripts/server.cjs, helper.js and
 frame-template.html. Each test spawns the real server.cjs as a subprocess
 against a throwaway session directory in the system temp dir (never inside
 the repo/worktree) and talks to it over real HTTP/WebSocket sockets.
@@ -22,7 +22,7 @@ import urllib.parse
 
 TESTS_DIR = os.path.dirname(os.path.realpath(__file__))
 SKILLS_DIR = os.path.dirname(os.path.dirname(TESTS_DIR))
-SCRIPTS_DIR = os.path.join(SKILLS_DIR, 'brainstorming-glm', 'scripts')
+SCRIPTS_DIR = os.path.join(SKILLS_DIR, 'glm-brainstorming', 'scripts')
 SERVER_JS = os.path.join(SCRIPTS_DIR, 'server.cjs')
 HELPER_JS = os.path.join(SCRIPTS_DIR, 'helper.js')
 

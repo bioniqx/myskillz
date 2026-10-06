@@ -11,7 +11,7 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.normpath(os.path.join(
-    HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+    HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 _spec = importlib.util.spec_from_file_location(

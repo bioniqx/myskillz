@@ -183,11 +183,11 @@ class TestOcHarnessRender(unittest.TestCase):
             "load skill with $ARGUMENTS\n"
         )
         rendered = oc_harness.render_command(
-            text, 1, "/home/user/.config/opencode/skills/systematic-debugging"
+            text, 1, "/home/user/.config/opencode/skills/glm-systematic-debugging"
         )
         self.assertIn('description: "Run the debug skill"', rendered)
         self.assertIn(
-            "/home/user/.config/opencode/skills/systematic-debugging/scripts/context.sh",
+            "/home/user/.config/opencode/skills/glm-systematic-debugging/scripts/context.sh",
             rendered,
         )
         self.assertIn("$ARGUMENTS", rendered)
@@ -255,9 +255,9 @@ class TestOcHarnessRender(unittest.TestCase):
     def test_rca_sources_scope_edit_and_deny_task_v1_and_v2(self):
         base = os.path.join(
             os.path.dirname(__file__), "..", "..",
-            "requirements-code-audit-glm", "opencode", "agents",
+            "glm-requirements-code-audit", "opencode", "agents",
         )
-        for fname in ("rca-investigator.md", "rca-verifier.md"):
+        for fname in ("glm-rca-investigator.md", "glm-rca-verifier.md"):
             with open(os.path.join(base, fname)) as fh:
                 text = fh.read()
             fields, _ = oc_harness.parse_frontmatter(text)
@@ -273,11 +273,11 @@ class TestOcHarnessRender(unittest.TestCase):
             self.assertNotIn("edit: allow", v2)
 
     def test_config_snippet_contains_provider_and_deny_list(self):
-        snippet = oc_harness.config_snippet(1, ["systematic-debugging", "writing-plans"])
+        snippet = oc_harness.config_snippet(1, ["glm-systematic-debugging", "glm-writing-plans"])
         data = _snippet_json(snippet)
         self.assertIn("zai-coding-plan", data["provider"])
-        self.assertEqual(data["permission"]["skill"]["systematic-debugging"], "deny")
-        self.assertEqual(data["permission"]["skill"]["writing-plans"], "deny")
+        self.assertEqual(data["permission"]["skill"]["glm-systematic-debugging"], "deny")
+        self.assertEqual(data["permission"]["skill"]["glm-writing-plans"], "deny")
         self.assertIn("web-search-prime", data["mcp"])
         self.assertNotIn("permission", _snippet_json(oc_harness.config_snippet(1, [])))
 
@@ -296,7 +296,7 @@ class TestOcHarnessRender(unittest.TestCase):
 
     def test_config_snippet_carries_websearch_note_and_mcp_option(self):
         for major in (1, 2):
-            snippet = oc_harness.config_snippet(major, ["writing-plans"])
+            snippet = oc_harness.config_snippet(major, ["glm-writing-plans"])
             notes = [ln for ln in snippet.splitlines() if ln.startswith("//")]
             self.assertTrue(notes)
             self.assertTrue(snippet.startswith("//"))

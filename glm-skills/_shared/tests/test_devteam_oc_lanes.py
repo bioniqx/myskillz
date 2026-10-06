@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "dev-team-glm", "scripts")
+SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "glm-dev-team", "scripts")
 sys.path.insert(0, SCRIPTS)
 
 import devteam  # noqa: E402
@@ -35,29 +35,29 @@ class HarnessTest(unittest.TestCase):
 
     def test_claude_line_is_unchanged(self):
         with mock.patch.dict(os.environ, {"DEVTEAM_HARNESS": "claude"}):
-            line = devteam.emit_agent(Path("/r"), {}, "programmer", "opus", "python3 x claim S1", "S1")
-            bare = devteam.emit_agent(Path("/r"), {}, "investigator", "", "Read b.md and follow it exactly.", "S2")
-        self.assertEqual(line, 'Agent → subagent_type: programmer, description: "S1", model: opus, '
+            line = devteam.emit_agent(Path("/r"), {}, "glm-programmer", "opus", "python3 x claim S1", "S1")
+            bare = devteam.emit_agent(Path("/r"), {}, "glm-investigator", "", "Read b.md and follow it exactly.", "S2")
+        self.assertEqual(line, 'Agent → subagent_type: glm-programmer, description: "S1", model: opus, '
                                'prompt: "python3 x claim S1"')
-        self.assertEqual(bare, 'Agent → subagent_type: investigator, description: "S2", '
+        self.assertEqual(bare, 'Agent → subagent_type: glm-investigator, description: "S2", '
                                'prompt: "Read b.md and follow it exactly."')
 
     def test_opencode_launches_a_lane(self):
         st = {"provider": "glm"}
         with mock.patch.dict(os.environ, {"DEVTEAM_HARNESS": "opencode"}), \
                 mock.patch.object(devteam, "launch_lane", return_value=4242) as launch:
-            line = devteam.emit_agent(Path("/r"), st, "code-reviewer", "", "Read r1.md", "review r1")
-        launch.assert_called_once_with(Path("/r"), st, "review-r1", "code-reviewer", "", "Read r1.md")
+            line = devteam.emit_agent(Path("/r"), st, "glm-code-reviewer", "", "Read r1.md", "review r1")
+        launch.assert_called_once_with(Path("/r"), st, "review-r1", "glm-code-reviewer", "", "Read r1.md")
         self.assertIn("LANE review-r1", line)
         self.assertIn("pid 4242", line)
         self.assertNotIn("Agent →", line)
 
     def test_model_aliases_map_to_neutral_models(self):
         st = {"provider": "glm"}
-        self.assertEqual(devteam.oc_model(st, "programmer", ""), "flash")
-        self.assertEqual(devteam.oc_model(st, "code-reviewer", ""), "pro")
-        self.assertEqual(devteam.oc_model(st, "programmer", "opus"), "pro")
-        self.assertEqual(devteam.oc_model(st, "programmer", "sonnet"), "pro")
+        self.assertEqual(devteam.oc_model(st, "glm-programmer", ""), "flash")
+        self.assertEqual(devteam.oc_model(st, "glm-code-reviewer", ""), "pro")
+        self.assertEqual(devteam.oc_model(st, "glm-programmer", "opus"), "pro")
+        self.assertEqual(devteam.oc_model(st, "glm-programmer", "sonnet"), "pro")
 
 
 FAKE_OC = '''#!/usr/bin/env python3
@@ -96,7 +96,7 @@ class RepoCase(unittest.TestCase):
             f.write(FAKE_OC)
         os.chmod(fake, os.stat(fake).st_mode | stat.S_IXUSR)
         self.log = os.path.join(self.tmp, "oc.log")
-        drop = ("OPENCODE", "DEVTEAM_HARNESS", "ANTHROPIC_BASE_URL", "DEVTEAM_GLM_TIER",
+        drop = ("OPENCODE", "OPENCODE_TERMINAL", "DEVTEAM_HARNESS", "ANTHROPIC_BASE_URL", "DEVTEAM_GLM_TIER",
                 "DEVTEAM_MAX_PARALLEL", "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
         self.env = {k: v for k, v in os.environ.items() if k not in drop}
         self.env.update({"DEVTEAM_PROVIDER": "glm", "DEVTEAM_GOVERNOR": "off", "DEVTEAM_PEAK": "off",
@@ -143,7 +143,7 @@ class RepoCase(unittest.TestCase):
 class LaneRunTest(RepoCase):
     def test_claude_dispatch_prints_agent_line(self):
         out = self.devteam("dispatch", "S1")
-        self.assertIn('Agent → subagent_type: programmer, description: "S1"', out)
+        self.assertIn('Agent → subagent_type: glm-programmer, description: "S1"', out)
         self.assertIn("claim S1", out)
         self.assertFalse(self.state("lanes").exists())
 
@@ -161,16 +161,16 @@ class LaneRunTest(RepoCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("CLAIMED S1", calls[0]["brief"])
         self.assertEqual(os.path.realpath(calls[0]["dir"]), os.path.realpath(str(wt)))
-        self.assertEqual((calls[0]["agent"], calls[0]["model"]), ("programmer", "zai-coding-plan/glm-5.3-flash"))
-        self.assertEqual((calls[0]["role"], calls[0]["slice"]), ("programmer", "S1"))
+        self.assertEqual((calls[0]["agent"], calls[0]["model"]), ("glm-programmer", "zai-coding-plan/glm-5.3-flash"))
+        self.assertEqual((calls[0]["role"], calls[0]["slice"]), ("glm-programmer", "S1"))
 
     def test_opencode_gate_block_reruns_lane(self):
         self.devteam("dispatch", "S1", DEVTEAM_HARNESS="opencode", FAKE_OC_REPLY="still working")
         self.assertTrue(self.wait_for(self.state("slices", "S1.done")), self.lane_log())
         calls = self.calls()
         self.assertEqual(len(calls), 3)
-        self.assertNotIn("dev-team gate", calls[0]["brief"])
-        self.assertIn("dev-team gate — you are not done yet", calls[1]["brief"])
+        self.assertNotIn("glm-dev-team gate", calls[0]["brief"])
+        self.assertIn("glm-dev-team gate — you are not done yet", calls[1]["brief"])
         note = json.loads(self.state("slices", "S1.done").read_text())["note"]
         self.assertIn("gave up", note)
         self.assertFalse(self.state("slices", "S1.blocked").exists())
@@ -187,7 +187,7 @@ class LaneRunTest(RepoCase):
         root = Path(self.repo)
         d = devteam.lanes_dir(root)
         d.mkdir(parents=True, exist_ok=True)
-        spec = {"id": "S1", "agent": "programmer", "model": "flash", "prompt": "do it", "writer": True}
+        spec = {"id": "S1", "agent": "glm-programmer", "model": "flash", "prompt": "do it", "writer": True}
         (d / "S1.lane.json").write_text(json.dumps(spec))
         real_run = subprocess.run
 
@@ -227,7 +227,7 @@ class LaneRunTest(RepoCase):
         st = {"provider": "glm"}
         env = dict(self.env, DEVTEAM_OC_BIN="/no/such/opencode-binary-xyz")
         with mock.patch.dict(os.environ, env, clear=True):
-            devteam.launch_lane(Path(self.repo), st, "review-r9", "code-reviewer", "", "read r9.md")
+            devteam.launch_lane(Path(self.repo), st, "review-r9", "glm-code-reviewer", "", "read r9.md")
         done = self.state("lanes", "review-r9.done")
         self.assertTrue(self.wait_for(done))
         data = json.loads(done.read_text())
@@ -239,7 +239,7 @@ class LaneRunTest(RepoCase):
         root = Path(self.repo)
         d = devteam.lanes_dir(root)
         d.mkdir(parents=True, exist_ok=True)
-        spec = {"id": "S1", "agent": "programmer", "model": "flash", "prompt": "do it", "writer": True}
+        spec = {"id": "S1", "agent": "glm-programmer", "model": "flash", "prompt": "do it", "writer": True}
         (d / "S1.lane.json").write_text(json.dumps(spec))
         real_run = subprocess.run
 
@@ -282,10 +282,10 @@ class LaneProcessGroupTest(RepoCase):
         st = {"provider": "glm"}
         env = dict(self.env, FAKE_OC_SLEEP="20")
         with mock.patch.dict(os.environ, env, clear=True):
-            pid1 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "code-reviewer", "", "read r1.md")
+            pid1 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "glm-code-reviewer", "", "read r1.md")
             self.assertTrue(self.wait_for(self.state("lanes", "rev-r1.pid")))
             self.assertTrue(_alive(pid1))
-            pid2 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "code-reviewer", "", "read again")
+            pid2 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "glm-code-reviewer", "", "read again")
         self.addCleanup(self._killpg_safe, pid2)
         self.assertNotEqual(pid1, pid2)
         deadline = time.monotonic() + 10
@@ -308,7 +308,7 @@ class LaneProcessGroupTest(RepoCase):
         (d / "rev-r1.pid").write_text(str(unrelated.pid))
         env = dict(self.env, FAKE_OC_SLEEP="0")
         with mock.patch.dict(os.environ, env, clear=True):
-            pid2 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "code-reviewer", "", "read r1.md")
+            pid2 = devteam.launch_lane(Path(self.repo), st, "rev-r1", "glm-code-reviewer", "", "read r1.md")
         self.addCleanup(self._killpg_safe, pid2)
         self.assertTrue(_alive(unrelated.pid))
         unrelated.terminate()
@@ -342,10 +342,10 @@ class WaitTest(RepoCase):
 class OcEffortTest(unittest.TestCase):
     def test_role_effort_is_a_glm_value(self):
         st = {"provider": "glm"}
-        self.assertEqual(devteam.oc_effort(st, "programmer-lite"), "low")
-        self.assertEqual(devteam.oc_effort(st, "team-leader"), "max")
+        self.assertEqual(devteam.oc_effort(st, "glm-programmer-lite"), "low")
+        self.assertEqual(devteam.oc_effort(st, "glm-team-leader"), "max")
         # the anthropic table's `medium` is not a GLM effort (v2 rejects the `#medium` variant)
-        self.assertEqual(devteam.oc_effort({"provider": "anthropic"}, "programmer"), "high")
+        self.assertEqual(devteam.oc_effort({"provider": "anthropic"}, "glm-programmer"), "high")
 
 
 def _killpg_quiet(pid):
@@ -427,14 +427,14 @@ class LaneLifecycleTest(RepoCase):
         self.assertFalse((d / "rev-r1.pgid").exists())
 
     def test_reviewer_lane_gets_the_reviewer_stall(self):
-        self.write_spec("review-r1", "code-reviewer", False)
+        self.write_spec("review-r1", "glm-code-reviewer", False)
         seen, _ = self.run_lane("review-r1", [self.ok("review-r1")])
-        self.assertEqual(seen[0]["stall"], oc_harness.STALL_BY_ROLE["code-reviewer"])
+        self.assertEqual(seen[0]["stall"], oc_harness.STALL_BY_ROLE["glm-code-reviewer"])
         self.assertEqual(seen[0]["stall"], 600)
 
     def test_programmer_lane_gets_the_programmer_stall(self):
         self.devteam("dispatch", "S1")
-        self.write_spec("S1", "programmer", True)
+        self.write_spec("S1", "glm-programmer", True)
         seen, _ = self.run_lane("S1", [self.ok("S1")])
         self.assertEqual(seen[0]["stall"], 900)
 
@@ -448,7 +448,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_writer_error_without_commit_blocks_without_reruns(self):
         self.devteam("dispatch", "S1")
-        self.write_spec("S1", "programmer", True)
+        self.write_spec("S1", "glm-programmer", True)
         err = {"status": "ERROR", "exit": 1, "out": str(self.lanes() / "S1.jsonl"),
                "error": {"type": "provider.rate-limit", "message": "429 Too Many Requests"}}
         seen, gates = self.run_lane("S1", [err])
@@ -460,7 +460,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_lane_run_clears_stale_results_before_running(self):
         d = self.lanes()
-        self.write_spec("review-r1", "code-reviewer", False)
+        self.write_spec("review-r1", "glm-code-reviewer", False)
         for ext, body in ((".done", '{"status": "FAIL"}'), (".end", "1"), (".pgid", "999999")):
             (d / f"review-r1{ext}").write_text(body)
         self.run_lane("review-r1", [self.ok("review-r1")])
@@ -483,7 +483,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_signal_killed_lane_is_reported_down_once(self):
         d = self.lanes()
-        self.write_spec("rev-r7", "code-reviewer", False)
+        self.write_spec("rev-r7", "glm-code-reviewer", False)
         (d / "rev-r7.pid").write_text(str(_reaped_pid()))
         with mock.patch.dict(os.environ, self.env, clear=True):
             st = devteam.load_state(Path(self.repo))
@@ -496,7 +496,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_signal_killed_lane_drops_its_pid_and_kills_the_orphaned_opencode(self):
         d = self.lanes()
-        self.write_spec("rev-r5", "code-reviewer", False)
+        self.write_spec("rev-r5", "glm-code-reviewer", False)
         (d / "rev-r5.pid").write_text(str(_reaped_pid()))
         oc = subprocess.Popen([self.env["DEVTEAM_OC_BIN"], "run"], env=dict(self.env, FAKE_OC_SLEEP="30"),
                               start_new_session=True)
@@ -510,7 +510,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_relaunched_lane_run_over_a_dead_pid_records_its_own(self):
         d = self.lanes()
-        self.write_spec("rev-r6", "code-reviewer", False)
+        self.write_spec("rev-r6", "glm-code-reviewer", False)
         (d / "rev-r6.pid").write_text(str(_reaped_pid()))
         probe = {}
 
@@ -524,7 +524,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_wait_does_not_report_a_relaunched_running_lane_as_dead(self):
         d = self.lanes()
-        self.write_spec("rev-r2", "code-reviewer", False)
+        self.write_spec("rev-r2", "glm-code-reviewer", False)
         (d / "rev-r2.pid").write_text(str(_reaped_pid()))
         buf = io.StringIO()
 
@@ -540,7 +540,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_lane_with_a_result_is_not_dead(self):
         d = self.lanes()
-        self.write_spec("rev-r8", "code-reviewer", False)
+        self.write_spec("rev-r8", "glm-code-reviewer", False)
         (d / "rev-r8.pid").write_text(str(_reaped_pid()))
         (d / "rev-r8.done").write_text('{"status": "OK"}')
         self.assertEqual(devteam.dead_lanes(d), [])
@@ -554,7 +554,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_wait_reports_a_dead_lane(self):
         d = self.lanes()
-        self.write_spec("rev-r3", "code-reviewer", False)
+        self.write_spec("rev-r3", "glm-code-reviewer", False)
         (d / "rev-r3.pid").write_text(str(_reaped_pid()))
         start = time.monotonic()
         out = self.devteam("wait", "--timeout", "30", DEVTEAM_HARNESS="opencode")
@@ -564,7 +564,7 @@ class LaneLifecycleTest(RepoCase):
 
     def test_wait_keeps_waiting_while_a_lane_is_alive(self):
         d = self.lanes()
-        self.write_spec("rev-r4", "code-reviewer", False)
+        self.write_spec("rev-r4", "glm-code-reviewer", False)
         alive = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(_killpg_quiet, alive.pid)
         (d / "rev-r4.pid").write_text(str(alive.pid))

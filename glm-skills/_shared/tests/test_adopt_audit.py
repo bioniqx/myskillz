@@ -11,7 +11,7 @@ from contextlib import redirect_stdout
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
@@ -241,12 +241,12 @@ class Setup(unittest.TestCase):
         out = self.run_setup("zcode")
         self.assertIn(audit.SETUP_ENV, out)
         self.assertIn("export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic", out)
-        self.assertIn("ZCode: invoke with  $requirements-code-audit <spec file>", out)
+        self.assertIn("ZCode: invoke with  $glm-requirements-code-audit <spec file>", out)
 
 
 class DocumentationConfigs(unittest.TestCase):
     def test_skill_md_r3_step_1_has_no_parallel_read(self):
-        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "SKILL.md")
+        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SKILL.md")
         with open(skill_path, 'r') as f:
             content = f.read()
         r3_section = content.split('## R3')[1].split('## R4')[0]
@@ -254,40 +254,40 @@ class DocumentationConfigs(unittest.TestCase):
         self.assertIn('run\n`A brief', r3_section, "R3 should have run A brief without parallel Read")
 
     def test_skill_md_finalize_matches_code_behavior(self):
-        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "SKILL.md")
+        skill_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SKILL.md")
         with open(skill_path, 'r') as f:
             content = f.read()
         self.assertIn('an unplanned discrepancy', content)
         self.assertNotIn('a CONFLICT not planned at P0', content, "CONFLICT should not fail gate; doc must align with code behavior")
 
-    def test_setup_md_paths_have_glm_suffix(self):
-        setup_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "SETUP.md")
+    def test_setup_md_paths_have_glm_prefix(self):
+        setup_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SETUP.md")
         with open(setup_path, 'r') as f:
             lines = f.readlines()
         setup_lines = [line for i, line in enumerate(lines, 1) if i in [10, 12, 28] and 'python3' in line and 'audit' in line]
         for line in setup_lines:
-            self.assertIn('-glm', line, f"Setup paths must include -glm suffix: {line}")
+            self.assertIn('glm-', line, f"Setup paths must reference the glm- skill: {line}")
 
     def test_agent_investigator_write_paths(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-investigator.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-investigator.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertIn('write_paths: **/.audit/**', content, "rca-investigator must have session-relative write_paths")
+        self.assertIn('write_paths: **/.audit/**', content, "glm-rca-investigator must have session-relative write_paths")
 
     def test_agent_investigator_steps(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-investigator.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-investigator.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertRegex(content, r'steps:\s*30', "rca-investigator must have steps: 30")
+        self.assertRegex(content, r'steps:\s*30', "glm-rca-investigator must have steps: 30")
 
     def test_agent_verifier_write_paths(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-verifier.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-verifier.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertIn('write_paths: **/.audit/**', content, "rca-verifier must have session-relative write_paths")
+        self.assertIn('write_paths: **/.audit/**', content, "glm-rca-verifier must have session-relative write_paths")
 
     def test_agent_verifier_steps(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "requirements-code-audit-glm", "opencode", "agents", "rca-verifier.md")
+        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-verifier.md")
         with open(agent_path, 'r') as f:
             content = f.read()
-        self.assertRegex(content, r'steps:\s*25', "rca-verifier must have steps: 25")
+        self.assertRegex(content, r'steps:\s*25', "glm-rca-verifier must have steps: 25")

@@ -15,8 +15,8 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GLM = os.path.dirname(os.path.dirname(HERE))
-SCRIPTS = os.path.join(GLM, "dev-team-glm", "scripts")
-SKILL_DIR = os.path.join(GLM, "dev-team-glm")
+SCRIPTS = os.path.join(GLM, "glm-dev-team", "scripts")
+SKILL_DIR = os.path.join(GLM, "glm-dev-team")
 STUB = os.path.join(HERE, "stub_opencode.py")
 sys.path.insert(0, SCRIPTS)
 
@@ -226,8 +226,8 @@ class DoctorOpenCodeTest(unittest.TestCase):
         self.assertIn("harness opencode", out)
         self.assertIn("DOCTOR found:", out)
         self.assertIn("MISSING: %s is not installed for OpenCode" % self.name, out)
-        self.assertIn("agent programmer not installed", out)
-        self.assertIn("agent team-leader not installed", out)
+        self.assertIn("agent glm-programmer not installed", out)
+        self.assertIn("agent glm-team-leader not installed", out)
         self.assertIn("guard plugin not installed", out)
         self.assertIn("no opencode.json names the zai-coding-plan provider", out)
         self.assertIn("run `doctor --harness opencode --fix`", out)
@@ -262,7 +262,7 @@ class DoctorOpenCodeTest(unittest.TestCase):
         # STUB_OC_VERSION detects major 1; installing the v2 plugin must not match its template.
         self.install_plugin(2)
         out = self.doctor()
-        self.assertIn("plugin devteam-guard.js does not match the OpenCode v1 template", out)
+        self.assertIn("plugin glm-devteam-guard.js does not match the OpenCode v1 template", out)
         self.assertIn("re-run install-opencode.sh", out)
 
     def test_plugin_v2_install_not_flagged(self):
@@ -289,7 +289,7 @@ class DoctorOpenCodeTest(unittest.TestCase):
                 self.install_plugin(major)
                 shutil.rmtree(os.path.join(self.oc, "skills", self.name))
                 out = self.doctor()
-                self.assertIn("plugin devteam-guard.js: its guard.py path does not resolve", out)
+                self.assertIn("plugin glm-devteam-guard.js: its guard.py path does not resolve", out)
 
     @unittest.skipUnless(shutil.which("node"), "node not installed")
     def test_plugin_load_error(self):

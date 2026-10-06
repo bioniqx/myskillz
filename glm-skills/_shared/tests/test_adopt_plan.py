@@ -13,7 +13,7 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PLAN_TOOL = os.path.join(HERE, "..", "..", "writing-plans-glm", "scripts", "plan_tool.py")
+PLAN_TOOL = os.path.join(HERE, "..", "..", "glm-writing-plans", "scripts", "plan_tool.py")
 
 
 def _load_plan_tool():
@@ -24,7 +24,7 @@ def _load_plan_tool():
 
 
 plan_tool = _load_plan_tool()
-AGENTS_DIR = os.path.join(HERE, "..", "..", "writing-plans-glm", "opencode", "agents")
+AGENTS_DIR = os.path.join(HERE, "..", "..", "glm-writing-plans", "opencode", "agents")
 NO_KEY = (None, "https://api.z.ai/api/coding/paas/v4", "openai", "-")
 
 
@@ -233,7 +233,7 @@ class AgentFileTests(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         os.makedirs(os.path.join(tmp, "opencode", "agents"))
-        with open(os.path.join(tmp, "opencode", "agents", "plan-task-writer.md"), "w") as fh:
+        with open(os.path.join(tmp, "opencode", "agents", "glm-plan-task-writer.md"), "w") as fh:
             fh.write("---\ndescription: writes plan task bodies\nmodel: flash\neffort: high\n"
                      "access: write\nbash: true\nweb: false\nsteps: 16\n---\nBody.\n")
         old = plan_tool.SKILL_DIR
@@ -248,12 +248,12 @@ class AgentFileTests(unittest.TestCase):
 
 class OpenCodeAgentFileTests(unittest.TestCase):
     def test_writer_runs_24_steps_on_flash(self):
-        fm, _ = _frontmatter("plan-task-writer")
+        fm, _ = _frontmatter("glm-plan-task-writer")
         self.assertEqual(fm["model"], "flash")
         self.assertEqual(fm["steps"], "24")
 
     def test_deep_writer_is_glm53_max_24_steps(self):
-        fm, text = _frontmatter("plan-task-writer-deep")
+        fm, text = _frontmatter("glm-plan-task-writer-deep")
         self.assertEqual(fm["model"], "glm-5.3")
         self.assertEqual(fm["effort"], "max")
         self.assertEqual(fm["steps"], "24")
@@ -262,7 +262,7 @@ class OpenCodeAgentFileTests(unittest.TestCase):
         self.assertIn("T07 OK", text)
 
     def test_reviewer_is_glm53_high(self):
-        fm, text = _frontmatter("plan-reviewer")
+        fm, text = _frontmatter("glm-plan-reviewer")
         self.assertEqual(fm["model"], "glm-5.3")
         self.assertEqual(fm["effort"], "high")
         self.assertEqual(fm["access"], "write")
@@ -273,7 +273,7 @@ class OpenCodeAgentFileTests(unittest.TestCase):
         with mock.patch.object(plan_tool.oc_harness, "major", return_value=2), \
              mock.patch.object(plan_tool.oc_harness, "detect", side_effect=AssertionError("detect() called")), \
              mock.patch.object(plan_tool.oc_harness, "render_agent", side_effect=real) as ren:
-            text = plan_tool.agent_file("opencode", "plan-task-writer-deep")
+            text = plan_tool.agent_file("opencode", "glm-plan-task-writer-deep")
         self.assertEqual(ren.call_args[0][1], 2)
         self.assertIn("mode: subagent", text)
         self.assertIn("zai-coding-plan/glm-5.3", text)
@@ -301,7 +301,7 @@ class OpenCodeSetupTests(unittest.TestCase):
     def test_setup_installs_all_three_agents(self):
         self.run_setup(2)
         adir = os.path.join(self.home, ".config", "opencode", "agents")
-        for name in ("plan-task-writer", "plan-task-writer-deep", "plan-reviewer"):
+        for name in ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer"):
             self.assertTrue(os.path.isfile(os.path.join(adir, name + ".md")), name)
 
     def test_v2_setup_drops_background_env_hint(self):
@@ -409,8 +409,8 @@ class OpenCodeDispatchTests(unittest.TestCase):
 
     def test_v2_dispatch_uses_writer_agent_and_no_foreign_fallback(self):
         out, work, _ = self.contracts(10)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W03", "plan T09-T10"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W03", "plan T09-T10"), out)
         self.assertNotIn("general-purpose", out)
         self.assertNotIn("subagent_type=", out)
         self.assertNotIn("haiku", out)
@@ -419,15 +419,15 @@ class OpenCodeDispatchTests(unittest.TestCase):
     def test_deep_group_goes_to_deep_writer(self):
         out, work, info = self.contracts(5, deep=("T05",))
         self.assertEqual(info["groups"]["W02"], ["T04", "T05"])
-        self.assertIn(self.expected("plan-task-writer-deep", work, "briefs", "W02", "plan T04-T05"), out)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W01", "plan T01-T03"), out)
+        self.assertIn(self.expected("glm-plan-task-writer-deep", work, "briefs", "W02", "plan T04-T05"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W01", "plan T01-T03"), out)
 
     def test_deep_group_falls_back_to_writer_when_deep_agent_missing(self):
-        only_writer = lambda repo, name="plan-task-writer": None if name == "plan-task-writer-deep" else "/fake/agents"
+        only_writer = lambda repo, name="glm-plan-task-writer": None if name == "glm-plan-task-writer-deep" else "/fake/agents"
         with mock.patch.object(plan_tool, "agent_installed", side_effect=only_writer):
             out, work, _ = self.contracts(5, deep=("T05",))
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W02", "plan T04-T05"), out)
-        self.assertNotIn("plan-task-writer-deep", out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W02", "plan T04-T05"), out)
+        self.assertNotIn("glm-plan-task-writer-deep", out)
         self.assertNotIn(self.expected("general", work, "briefs", "W02", "plan T04-T05"), out)
 
     def test_missing_agents_fall_back_to_general(self):
@@ -439,7 +439,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
     def test_v1_dispatch_line_rendered_for_major_one(self):
         self.major = 1
         out, work, _ = self.contracts(10)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W01", "plan T01-T04"), out)
 
     def test_forty_tasks_split_into_messages_of_lane_width(self):
         out, work, info = self.contracts(40)
@@ -447,7 +447,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
         self.assertTrue(all(len(v) == 4 for v in info["groups"].values()))
         self.assertIn("MESSAGE 1 (6 calls", out)
         self.assertIn("MESSAGE 2 (4 calls", out)
-        self.assertIn(self.expected("plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
+        self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
 
     def test_review_dispatches_plan_reviewer(self):
         _, work, _ = self.contracts(2, deep=("T01",))
@@ -458,7 +458,7 @@ class OpenCodeDispatchTests(unittest.TestCase):
             rc = plan_tool.cmd_review(argparse.Namespace(plan=self.plan, all=False, size=None, agents=None))
         out = buf.getvalue()
         self.assertEqual(rc, 0, out)
-        self.assertIn(self.expected("plan-reviewer", work, "review-briefs", "R01", "review T01"), out)
+        self.assertIn(self.expected("glm-plan-reviewer", work, "review-briefs", "R01", "review T01"), out)
         self.assertNotIn("general-purpose", out)
         self.assertNotIn("sonnet", out)
 

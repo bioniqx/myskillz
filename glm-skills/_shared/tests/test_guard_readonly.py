@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parents[2] / "dev-team-glm" / "scripts" / "guard.py"
+GUARD = Path(__file__).resolve().parents[2] / "glm-dev-team" / "scripts" / "guard.py"
 
 
 def load_guard():
@@ -270,15 +270,15 @@ class PackageRunnerTest(GuardCase):
 
 class DevteamStatusProbeTest(GuardCase):
     STATUS = [
-        "python3 dev-team-glm/scripts/devteam.py status",
-        "python3 /opt/skills/dev-team-glm/scripts/devteam.py probe",
+        "python3 glm-dev-team/scripts/devteam.py status",
+        "python3 /opt/skills/glm-dev-team/scripts/devteam.py probe",
         "python devteam.py status",
     ]
     OTHER = [
-        "python3 dev-team-glm/scripts/devteam.py claim S1",
+        "python3 glm-dev-team/scripts/devteam.py claim S1",
         "python3 devteam.py integrate S1",
         "python3 notdevteam.py status",
-        "python3 dev-team-glm/scripts/guard.py oc",
+        "python3 glm-dev-team/scripts/guard.py oc",
     ]
 
     def test_status_and_probe_allowed_for_read_only_roles(self):

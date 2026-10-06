@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-DT_PATH = str(Path(__file__).resolve().parents[2] / "dev-team-glm" / "scripts" / "devteam.py")
+DT_PATH = str(Path(__file__).resolve().parents[2] / "glm-dev-team" / "scripts" / "devteam.py")
 FENCE = "`" * 3
 PLAN_TMPL = "# plan\n" + FENCE + "json\n%s\n" + FENCE + "\n"
 

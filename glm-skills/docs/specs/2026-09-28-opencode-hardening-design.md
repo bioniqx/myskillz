@@ -6,8 +6,8 @@ Scope root: `glm-skills/` (edits stay inside this folder)
 
 ## 1. Goal and scope
 
-Make every GLM port (`brainstorming-glm`, `dev-team-glm`, `doc-generator-glm`,
-`requirements-code-audit-glm`, `systematic-debugging-glm`, `writing-plans-glm`) plus `_shared/` and
+Make every GLM port (`glm-brainstorming`, `glm-dev-team`, `glm-doc-generator`,
+`glm-requirements-code-audit`, `glm-systematic-debugging`, `glm-writing-plans`) plus `_shared/` and
 `install-opencode.sh` work correctly on OpenCode v1 stable (1.18.x) and v2 beta (2.0.x). Fix every
 verified CRITICAL/MAJOR defect and every OpenCode gap found by the 2026-09-28 audit, fix cheap MINORs in
 files already being touched, and take the listed optimizations.
@@ -15,7 +15,7 @@ files already being touched, and take the listed optimizations.
 In scope: code, SKILL.md instructions, OpenCode agent/command/plugin files, tests, the installer, each
 skill's CHANGELOG/README, and `glm-skills/CLAUDE.md` harness facts.
 
-Out of scope: resuming lanes via `--session`, a writing-plans `export-slices` subcommand, using the v2
+Out of scope: resuming lanes via `--session`, a glm-writing-plans `export-slices` subcommand, using the v2
 `question` tool for approval gates, the Claude originals one level up, and the user's real
 `~/.config/opencode` (never reinstalled or cleaned by this work).
 
@@ -51,21 +51,21 @@ Out of scope: resuming lanes via `--session`, a writing-plans `export-slices` su
 
   | Slice | Source footprint | Test files |
   | --- | --- | --- |
-  | A. dev-team guard | `guard.py`, `opencode/plugins/*`, `agents/*`, `opencode/agents/*`, `opencode/commands/*` | `test_guard_oc.py`, `test_devteam_plugins.py` |
-  | B. dev-team engine | `devteam.py`, `selftest.sh`, `SKILL.md`, `README.md` | `test_devteam_oc_lanes.py`, `test_devteam_oc_doctor.py` |
-  | C | `systematic-debugging-glm/**` | `test_adopt_debug.py` |
-  | D | `requirements-code-audit-glm/**` | `test_adopt_audit.py`, `test_audit_command.py`, `test_audit_setup_oc.py` |
-  | E | `writing-plans-glm/**` | `test_adopt_plan.py` |
-  | F | `brainstorming-glm/**` | `test_brainstorm_oc.py` |
-  | G | `doc-generator-glm/**`, `install-opencode.sh` | `test_oc_install.py`, `test_all_skills.py` |
+  | A. glm-dev-team guard | `guard.py`, `opencode/plugins/*`, `agents/*`, `opencode/agents/*`, `opencode/commands/*` | `test_guard_oc.py`, `test_devteam_plugins.py` |
+  | B. glm-dev-team engine | `devteam.py`, `selftest.sh`, `SKILL.md`, `README.md` | `test_devteam_oc_lanes.py`, `test_devteam_oc_doctor.py` |
+  | C | `glm-systematic-debugging/**` | `test_adopt_debug.py` |
+  | D | `glm-requirements-code-audit/**` | `test_adopt_audit.py`, `test_audit_command.py`, `test_audit_setup_oc.py` |
+  | E | `glm-writing-plans/**` | `test_adopt_plan.py` |
+  | F | `glm-brainstorming/**` | `test_brainstorm_oc.py` |
+  | G | `glm-doc-generator/**`, `install-opencode.sh` | `test_oc_install.py`, `test_all_skills.py` |
 
   Wave 0 owns `test_oc_run.py`, `test_oc_render.py`, `test_zai_client.py`, `test_vendored.py`,
   `test_oc_env_plugins.py`, the new `test_oc_contract.py`, `stub_opencode.py` and `fakeapi.py`.
-  Slice A's selftest checks (DG4, DG5) are written by slice B, which owns `selftest.sh`. The dev-team
+  Slice A's selftest checks (DG4, DG5) are written by slice B, which owns `selftest.sh`. The glm-dev-team
   `SKILL.md` belongs to slice B because its CLI changes (DE6 `resume`) drive the instructions. DG12
   therefore moves to slice B.
 - **Wave 2 — verification and docs.**
-  - The full unittest suite, the dev-team selftest, and the new real-binary contract tests.
+  - The full unittest suite, the glm-dev-team selftest, and the new real-binary contract tests.
   - A sandbox install plus an `opencode serve` API discovery check.
   - Updates to `glm-skills/CLAUDE.md` and to each skill's CHANGELOG/README.
 
@@ -80,7 +80,7 @@ Out of scope: resuming lanes via `--session`, a writing-plans `export-slices` su
 | Setup snippet | Defines `variants` `low`/`high`/`max` (`reasoningEffort`) for `glm-5.3` and `glm-5.3-flash` under `zai-coding-plan`. Without this, `#max` fails with "Variant unavailable". It also carries a websearch note: v2 needs a provider, and without one a headless lane opens an interactive form that times out. |
 | Throttle detection | Reads **error events only**. v2: `type=error`, `error.type=provider.rate-limit` or `status 429`. v1: `APIError` with `statusCode 429` or a `responseBody` code of `1302` or `1305`. Tool output never counts. |
 | `aborted` event | Recorded as the lane error. |
-| Stall | A per-lane `stall` value, with a default per role: about 900 s for programmer and team-leader, 600 s for reviewers. v2 emits JSON only at step and part boundaries. |
+| Stall | A per-lane `stall` value, with a default per role: about 900 s for glm-programmer and glm-team-leader, 600 s for reviewers. v2 emits JSON only at step and part boundaries. |
 | Lifecycle | A SIGTERM/SIGINT handler kills every lane's process group. The opencode pgid is written to `lanes/<id>.pgid` so callers can `killpg` it. No orphans. |
 | `result <out>` | Prints each lane's final assistant text, so models don't read the raw `.jsonl`. |
 | Caching | Cache `detect()` and `check_run_flags()` per process. Each costs a spawn of the 179 MB binary. |
@@ -89,7 +89,7 @@ Out of scope: resuming lanes via `--session`, a writing-plans `export-slices` su
 | `zai_client` | Never sends `ANTHROPIC_API_KEY` to Z.ai. Looks up v2 credentials in `opencode.db` (v2 has no `auth.json`). It opens the database read-only (`file:…?mode=ro` URI), finds the table and column that hold provider credentials by introspecting the schema, and reads only an entry for `zai-coding-plan` or `zai`. Any error, missing table or unexpected shape skips the lookup silently. Never writes. |
 
 **Shared bootstrap snippet (SKILL.md).** One ordered `for` loop, copied from
-`systematic-debugging-glm/SKILL.md:18`. It looks, in order, at:
+`glm-systematic-debugging/SKILL.md:18`. It looks, in order, at:
 1. the "Base directory for this skill" line;
 2. `$OPENCODE_CONFIG_DIR/skills`;
 3. `.opencode/skills`;
@@ -126,10 +126,10 @@ check (D).
 | SH16 | `zai_client.py:55` | v2 keeps credentials in `opencode.db`, so no key is found | G | Read-only sqlite lookup, fail-soft | U |
 | SH17 | `tests/stub_opencode.py:9,25,62` | Stub doesn't match v2 (version string, `--dir`, unknown flags, event fields `timestamp`/`sessionID`, `step_finish`, `aborted`, error shapes) | O | Two modes matching real v1.18 and v2.0 | U |
 | SH18 | `oc_harness.py` stats | The final v2 text step has no `step_finish`, so token stats are incomplete | m | Tolerate the missing event; count what is present | U |
-| IN1 | `install-opencode.sh:55` | Hints `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS`, which 2.0.18 lacks. v2 always scans `~/.claude/skills`, so `doc-generator` and `requirements-code-audit` clash with the originals; stale `*-glm` installs remain | G | Drop the hint on v2; list clashes and stale `*-glm` folders and print a removal command; never delete. The config-dir copy wins (verified) | U `test_oc_install` |
+| IN1 | `install-opencode.sh:55` | Hints `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS`, which 2.0.18 lacks. v2 always scans `~/.claude/skills`, so `glm-doc-generator` and `glm-requirements-code-audit` clash with the originals; stale `*-glm` installs remain | G | Drop the hint on v2; list clashes and stale `*-glm` folders and print a removal command; never delete. The config-dir copy wins (verified) | U `test_oc_install` |
 | IN2 | installer snippet | No websearch provider, so v2 headless websearch opens a form that times out | G | Print the provider note plus the `web-search-prime` MCP option | D |
 
-### 5.2 dev-team guard, plugins, agents (slice A)
+### 5.2 glm-dev-team guard, plugins, agents (slice A)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -140,16 +140,16 @@ check (D).
 | DG5 | `guard.py:390-394` | Read-only roles run rewriting formatters (`black`, `ruff --fix/format`, `prettier --write`, `gofmt -w`, `go fmt`, `cargo fmt`, `isort`) | M | Deny for read-only roles | U + S |
 | DG6 | `guard.py:167,175` | `abspath` vs `resolve()` symlink mismatch denies an in-footprint edit | m | Resolve both sides | U |
 | DG7 | `guard.py:775` | `batch`, `question` and `execute` are silently allowed in lane mode | G | Deny in lane mode (headless `question` blocks) | U |
-| DG8 | `plugins/devteam-guard.v2.js:12` | No role when `DEVTEAM_ROLE` is unset (agents started by the `subagent` tool) | G | Fall back to `event.agent` when it names a dev-team role | U plugins |
+| DG8 | `plugins/glm-devteam-guard.v2.js:12` | No role when `DEVTEAM_ROLE` is unset (agents started by the `subagent` tool) | G | Fall back to `event.agent` when it names a glm-dev-team role | U plugins |
 | DG9 | both plugins | Fail-open is silent per call | G | Keep fail-open (integrate re-checks); warn loudly once per lane and record it in the lane log | U |
 | DG10 | `v1.js:8`, `v2.js:11-12` | Blocking `spawnSync` (~32 ms) on every tool; `api.tool.hook` not awaited | O | Spawn only for write/shell/patch/execute; async spawn; `await` registration | U + K |
 | DG11 | `guard.py:764` | Deny message omits the pinned `.slice/allow` forms | O | Include them | U |
 | DG12 | `SKILL.md:20` (slice B) | `${CLAUDE_SKILL_DIR}` is never set on OpenCode | G | Shared bootstrap snippet (§4) | D |
-| DG13 | `programmer.md:20` (OpenCode) | Programmer re-runs `claim` though the prompt already is the claim output | O | Say so in the OpenCode agent | D |
-| DG14 | `team-leader.md:23,68,78` + `guard.py` bash-ro | Memory path never given; `devteam.py status/probe` denied to read-only roles | G | Give the path; allow `status`/`probe` in bash-ro | U |
+| DG13 | `glm-programmer.md:20` (OpenCode) | Programmer re-runs `claim` though the prompt already is the claim output | O | Say so in the OpenCode agent | D |
+| DG14 | `glm-team-leader.md:23,68,78` + `guard.py` bash-ro | Memory path never given; `devteam.py status/probe` denied to read-only roles | G | Give the path; allow `status`/`probe` in bash-ro | U |
 | DG15 | `README.md:58` | List items 3 and 4 joined on one line | m | Split them | D |
 
-### 5.3 dev-team engine (slice B)
+### 5.3 glm-dev-team engine (slice B)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -159,7 +159,7 @@ check (D).
 | DE4 | `devteam.py:2653` | Checkpoint relies on `run_in_background`; v1 bash has none, so a >120 s suite is killed and `checkpoint_pending` sticks | G | Detached launch like `launch_lane`, then `wait` | U + S |
 | DE5 | `devteam.py:3033,3080` | `review-pr` and `brief-debug` skip `emit_agent`, so lanes run without `DEVTEAM_ROLE` and are unguarded | G | Route through `emit_agent` | U |
 | DE6 | `devteam.py:2160-2260,2798` | Rejected/BLOCKED says "SendMessage" after the lane exited; slot held forever | G | `resume <id> --note` relaunches a fresh lane in the same worktree and resets `.slice/stop_blocks` | U + S |
-| DE7 | `devteam.py:1785` | v1 runs programmer-lite as programmer (effort high, not low) | G | Map to the lite agent | U |
+| DE7 | `devteam.py:1785` | v1 runs glm-programmer-lite as glm-programmer (effort high, not low) | G | Map to the lite agent | U |
 | DE8 | `devteam.py:406` | The Claude cap of 20 also bounds OpenCode, so the 40/64 ceilings are unreachable | O | Apply the cap only on Claude | U |
 | DE9 | `devteam.py:2894` | Tells OpenCode users to "Launch every Agent call" | m | Point to `wait` | U |
 | DE10 | `devteam.py:2040-2055` | `wait` has no "no live lanes" exit and sleeps the whole timeout | m | Return when nothing is live | U |
@@ -170,7 +170,7 @@ check (D).
 | DE15 | `next`/`wait` | A signal-killed lane is silent | O | Report LANE DOWN when the pid is dead and there is no `.end` or marker | U |
 | DE16 | `devteam.py:1996` | ResourceWarning: unclosed pipe | m | Close it | U |
 
-### 5.4 systematic-debugging (slice C)
+### 5.4 glm-systematic-debugging (slice C)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -186,14 +186,14 @@ check (D).
 | SD10 | `stress.sh:26` | Reusing `-o DIR` counts old results | m | Clear or refuse | shell check |
 | SD11 | `debug_tool.py:67-72` | Timeout kills only bash; test processes survive | m | Kill the process group | U |
 | SD12 | `debug_tool.py:828-847` | Setup provider `zai` vs agent `zai-coding-plan`; no variants; v1-only serial note; mentions an unused `oc_harness run` | G | Use the shared snippet | U |
-| SD13 | `debug_tool.py:729-741`, `SKILL.md:83` | Agent lane never names `debug-worker` (v1 picks `general` at max); prompts in a mkdtemp dir outside the project trigger external_directory prompts | G | Name the agent; write prompts to `<root>/.debug/` | U |
-| SD14 | `opencode/agents/debug-worker.md:22` | `<scripts>` placeholder never filled | G | Put `S=` in the prompts | U |
+| SD13 | `debug_tool.py:729-741`, `SKILL.md:83` | Agent lane never names `glm-debug-worker` (v1 picks `general` at max); prompts in a mkdtemp dir outside the project trigger external_directory prompts | G | Name the agent; write prompts to `<root>/.debug/` | U |
+| SD14 | `opencode/agents/glm-debug-worker.md:22` | `<scripts>` placeholder never filled | G | Put `S=` in the prompts | U |
 | SD15 | `SKILL.md:18` | Ignores the "Base directory" line, `$OPENCODE_CONFIG_DIR` and `--home` installs | G | Shared bootstrap snippet | D |
 | SD16 | `debug_tool.py:729` | Agent lane on OpenCode is serial on v1 | O | Write `lanes.json`; `NEXT: python3 $S/oc_harness.py run` | U |
-| SD17 | `opencode/commands/debug.md:5` | `/debug` re-runs the bootstrap | O | Add `S={{SKILL_DIR}}/scripts` | U render |
+| SD17 | `opencode/commands/glm-debug.md:5` | `/glm-debug` re-runs the bootstrap | O | Add `S={{SKILL_DIR}}/scripts` | U render |
 | SD18 | `debug_tool.py:221` | Greps the altered signature | O | Grep the longest quoted literal | U |
 
-### 5.5 requirements-code-audit (slice D)
+### 5.5 glm-requirements-code-audit (slice D)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -218,7 +218,7 @@ check (D).
 | RA19 | `audit.py:51-59` | `max_tokens` 900-1600 with thinking may truncate | O | Check `finish_reason == length`; retry with a larger cap | U |
 | RA20 | `audit.py:1889,1907` | `--resume` re-verifies settled items and overwrites `verdicts.jsonl` | O | Limit to new ids | U |
 
-### 5.6 writing-plans (slice E)
+### 5.6 glm-writing-plans (slice E)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -228,47 +228,47 @@ check (D).
 | WP4 | `plan_tool.py:1145,1304` | Fallback is `general-purpose`; review is `general-purpose \| model sonnet`; OpenCode needs `general` | M | `dispatch_line()` | U |
 | WP5 | `SKILL.md:27-32` | `ls -d … \| head -1` sorts alphabetically; misses `.agents/skills`; a miss runs `python3 "" brief` | m | Shared bootstrap snippet | D |
 | WP6 | `plan_tool.py:1149` | Prints `subagent_type=` on v2 | G | `dispatch_line()` | U |
-| WP7 | `plan_tool.py:953` | MODEL column says haiku/sonnet; subagent has no model param | G | Ship `plan-task-writer-deep` (glm-5.3, max) and `plan-reviewer`; one agent per row | U render |
-| WP8 | `opencode/agents/plan-task-writer.md:8` | `steps: 16` too few for multi-task groups | G | Raise `steps` to 24 and cap each writer group at 4 tasks | U |
+| WP7 | `plan_tool.py:953` | MODEL column says haiku/sonnet; subagent has no model param | G | Ship `glm-plan-task-writer-deep` (glm-5.3, max) and `glm-plan-reviewer`; one agent per row | U render |
+| WP8 | `opencode/agents/glm-plan-task-writer.md:8` | `steps: 16` too few for multi-task groups | G | Raise `steps` to 24 and cap each writer group at 4 tasks | U |
 | WP9 | `plan_tool.py:1654,1756` | Tells v2 to set `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS`; `detect() or 1` renders v1 frontmatter when opencode is absent | G | Drop the hint on v2; use `major()` | U |
 | WP11 | `plan_tool.py:1467` | `pick_patterns` reads every candidate fully | O | Skip the read when score ≤ 1.5 | U |
 | WP12 | `plan_tool.py:224` | Agent cap 20 on serial v1 | O | Group count = ceil(tasks / 4), capped at the lane width (default 8) on OpenCode | U |
 | WP13 | `plan_tool.py:1548` | Inlines AGENTS.md/CLAUDE.md already in context on OpenCode | O | Skip on OpenCode | U |
 | WP14 | `plan_tool.py:1017` | `--resume` trusts `.ok` without checking it is newer than the body | O | Compare mtimes | U |
 
-(WP10 — dev-team adoption needs a ```json `slices` block — is out of scope; see §1.)
+(WP10 — glm-dev-team adoption needs a ```json `slices` block — is out of scope; see §1.)
 
-### 5.7 brainstorming (slice F)
+### 5.7 glm-brainstorming (slice F)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
 | BR1 | `scripts/context.sh:16` | Detects only `$OPENCODE`/`$OPENCODE_BIN`, so v2 prints `harness: unknown` | M | `OPENCODE_TERMINAL`, `.oc-major`, install location (POSIX sh mirror of `harness()`) | U `test_brainstorm_oc` |
-| BR2 | `SKILL.md:300` vs `307-337` | Contradictory lane rules | M | One rule: v2 → background `subagent` (explorer/researcher); v1 → `oc_harness run`; `task` only as fallback | D |
+| BR2 | `SKILL.md:300` vs `307-337` | Contradictory lane rules | M | One rule: v2 → background `subagent` (glm-explorer/glm-researcher); v1 → `oc_harness run`; `task` only as fallback | D |
 | BR3 | `scripts/start-server.sh:117,151,180` | Relative `--project-dir` never made absolute, so start fails | M | Absolutize before `cd` | shell check |
 | BR4 | `SKILL.md:335-337` | Tool map names `task`/`todowrite`, missing on v2 | m | Per-version map | D |
 | BR5 | `scripts/server.cjs` | No SIGTERM/SIGHUP handler; stale `server-info` reads as alive | m | Handler writes `server-stopped` | `node --check` + U |
 | BR6 | `SKILL.md:157-159` | R9 split by a stray list item | m | Join | D |
 | BR7 | `scripts/helper.js:163` | `brainstorm.choice()` sends no `choice` key, so the event is dropped | m | Send it | U |
 | BR8 | `SKILL.md:320` | Foreground `oc_harness run` hits v2's 120 s shell timeout; web lanes killed and orphaned | G | Pass `timeout`/`background: true`; SH9 handler | D + U |
-| BR9 | researcher agent (v2) | `websearch` needs a provider; headless lanes time out on the form | G | Snippet provider note or `web-search-prime` MCP; render the websearch permission | U render |
+| BR9 | glm-researcher agent (v2) | `websearch` needs a provider; headless lanes time out on the form | G | Snippet provider note or `web-search-prime` MCP; render the websearch permission | U render |
 | BR10 | `SKILL.md:21-25` | Raw `!` line re-run; `${CLAUDE_SKILL_DIR}` empty | G | Skip when the context block is present, else `sh <Base directory>/scripts/context.sh` | D |
 | BR11 | `scripts/context.sh:38` | Prints Claude subagent caps | G | Print `OC_MAX_LANES`/`--width` (default 8) and `oc_major` | U |
-| BR12 | `architectural.md:102-107,119,142` | Pre-draft lane needs a writer but explorer/researcher are `edit: deny`; no TaskStop on OpenCode; hand-off omits the spec path | G | Main session writes the pre-draft on OpenCode; drop TaskStop there; pass the spec path | D |
+| BR12 | `architectural.md:102-107,119,142` | Pre-draft lane needs a writer but glm-explorer/glm-researcher are `edit: deny`; no TaskStop on OpenCode; hand-off omits the spec path | G | Main session writes the pre-draft on OpenCode; drop TaskStop there; pass the spec path | D |
 | BR13 | `visual-companion.md:73-80` | No OpenCode note | G | v2 `background: true` plus `--foreground` | D |
 | BR14 | `SKILL.md:333` | Lanes read raw `.jsonl` | O | Use `oc_harness result` | D |
 | BR16 | lanes.json location | Scattered scratch files | O | Put it under `.brainstorm/drafts/` | D |
 
 (BR15, `oc_major` in context.sh, is folded into BR11.)
 
-### 5.8 doc-generator (slice G)
+### 5.8 glm-doc-generator (slice G)
 
 | ID | File | Defect | Sev | Fix | Test |
 | --- | --- | --- | --- | --- | --- |
-| DOC1 | `opencode/commands/docs.md:4` | v2 skill tool needs the skill ID, not an absolute path | G | Use the ID | U render |
-| DOC2 | `SKILL.md:63,162,219` | `general-purpose` and `Explore` are "Unknown agent" on v2 | M | `doc-writer`/`doc-reviewer`/`general` | U `test_all_skills` |
-| DOC3 | `SKILL.md:168` | Tells the writer to use `sed`, but doc-writer has bash denied | m | Use the edit tool | D |
+| DOC1 | `opencode/commands/glm-docs.md:4` | v2 skill tool needs the skill ID, not an absolute path | G | Use the ID | U render |
+| DOC2 | `SKILL.md:63,162,219` | `general-purpose` and `Explore` are "Unknown agent" on v2 | M | `glm-doc-writer`/`glm-doc-reviewer`/`general` | U `test_all_skills` |
+| DOC3 | `SKILL.md:168` | Tells the writer to use `sed`, but glm-doc-writer has bash denied | m | Use the edit tool | D |
 | DOC4 | `SKILL.md:310-312,395` | Stale sync path; says writers use GLM-5.3 but the agent uses flash | m | Fix both | D |
-| DOC5 | `opencode/commands/docs.md` | `/docs` spends Turn 1 on recon | O | `` !`cmd` `` injection, only if the contract test proves v2 expands it | K |
+| DOC5 | `opencode/commands/glm-docs.md` | `/glm-docs` spends Turn 1 on recon | O | `` !`cmd` `` injection, only if the contract test proves v2 expands it | K |
 
 ## 6. Data flow
 
@@ -282,7 +282,7 @@ check (D).
 5. Each lane's events stream to `lanes/<id>.jsonl`. Throttles and errors are read from error events
    only.
 6. `result` prints the lanes' final text.
-7. dev-team adds the guard plugin, which runs `guard.py oc` on write/shell/patch/execute tools, then the
+7. glm-dev-team adds the guard plugin, which runs `guard.py oc` on write/shell/patch/execute tools, then the
    Stop gate and the integrate re-check.
 
 ## 7. Error handling
@@ -301,9 +301,9 @@ check (D).
 - **Baseline:**
   - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests` runs 276
     tests with 11 red. SH2 and SH1 repair them, which makes the suite green.
-  - `dev-team-glm/scripts/selftest.sh` passes 324 with 5 known macOS failures. It must stay at ≥ 324
+  - `glm-dev-team/scripts/selftest.sh` passes 324 with 5 known macOS failures. It must stay at ≥ 324
     passed and ≤ 5 failed; new checks are added for DG4, DG5, DE1, DE4 and DE6.
-- **Per fix:** a RED test first via the dev-team TDD flow (U/S rows above). Doc-only rows (D) are
+- **Per fix:** a RED test first via the glm-dev-team TDD flow (U/S rows above). Doc-only rows (D) are
   checked by `test_all_skills` hygiene where it applies, and otherwise by review.
 - **New real-binary contract tests** in `_shared/tests/test_oc_contract.py`:
   - They use a stdlib fake OpenAI-compatible provider (SSE + JSON, request log) and a sandboxed
@@ -327,8 +327,8 @@ check (D).
     - a missing variant → `provider.no-route` reported.
 - **Final check:**
   - `sh install-opencode.sh --home <sandbox>`, then `opencode serve` plus `api --server` queries.
-  - These must discover 6 skills (names without `-glm`), 13+ agents (plus the new writing-plans
-    agents), 6 commands, and the `devteam-guard` plugin active.
+  - These must discover 6 skills (names without `-glm`), 13+ agents (plus the new glm-writing-plans
+    agents), 6 commands, and the `glm-devteam-guard` plugin active.
   - They must also show no load errors and no clash warnings beyond the expected ones.
 - **Syntax:** `py_compile` on every script; `bash -n`/`sh -n` (`bisect-parallel.sh` is bash-only);
   `node --check` on `server.cjs`, `helper.js` and both plugins.

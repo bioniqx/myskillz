@@ -9,7 +9,7 @@ import unittest
 from argparse import Namespace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
@@ -132,7 +132,7 @@ class MergedRejectedTest(unittest.TestCase):
         out = _audit_dir(repo, REJECTED)
         self.addCleanup(shutil.rmtree, out, True)
         m = audit.Merged(audit.Ctx(out))
-        self.assertEqual(m.final("REQ-001"), ("MATCHED", "investigator"))
+        self.assertEqual(m.final("REQ-001"), ("MATCHED", "glm-investigator"))
         self.assertNotIn("REQ-001", m.ver)
         self.assertIn("REQ-001", m.ver_rejected)
         self.assertEqual(m.evidence("REQ-001")[0]["path"], "src/app.py")

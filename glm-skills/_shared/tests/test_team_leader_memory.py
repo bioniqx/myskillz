@@ -1,4 +1,4 @@
-"""OpenCode team-leader memory path: guard edit-ro allows it and reset does not delete it."""
+"""OpenCode glm-team-leader memory path: guard edit-ro allows it and reset does not delete it."""
 import json
 import re
 import subprocess
@@ -7,13 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SKILL = Path(__file__).resolve().parents[2] / "dev-team-glm"
+SKILL = Path(__file__).resolve().parents[2] / "glm-dev-team"
 GUARD = SKILL / "scripts" / "guard.py"
-LEADER = SKILL / "opencode" / "agents" / "team-leader.md"
+LEADER = SKILL / "opencode" / "agents" / "glm-team-leader.md"
 
 FRONTMATTER = """---
-name: team-leader
-description: Senior technical lead for the dev-team workflow. PLANNING: deep analysis of a request against the real codebase → an executable, maximally parallel vertical-slice plan (pinned contracts, disjoint footprints, testable acceptance criteria, risk, isolation) written as .claude/dev-team/plan.md with a machine-readable JSON block. PLAN ADOPTION: maps an existing plan onto slices without re-deriving it. Plans any kind of software work — features, bug fixes, refactors, migrations, test backfill, performance, infrastructure/CI, documentation and read-only research — as one DAG of typed slices. VERIFICATION: judges whether delivered code fulfills the user's intent. Reasoning-heavy, read-only; remembers each repository's map across sessions.
+name: glm-team-leader
+description: Senior technical lead for the glm-dev-team workflow. PLANNING: deep analysis of a request against the real codebase → an executable, maximally parallel vertical-slice plan (pinned contracts, disjoint footprints, testable acceptance criteria, risk, isolation) written as .claude/dev-team/plan.md with a machine-readable JSON block. PLAN ADOPTION: maps an existing plan onto slices without re-deriving it. Plans any kind of software work — features, bug fixes, refactors, migrations, test backfill, performance, infrastructure/CI, documentation and read-only research — as one DAG of typed slices. VERIFICATION: judges whether delivered code fulfills the user's intent. Reasoning-heavy, read-only; remembers each repository's map across sessions.
 model: pro
 effort: max
 temperature: 1.0
@@ -49,7 +49,7 @@ class TeamLeaderMemory(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo:
             for rel in set(self.paths):
                 payload = {"tool_name": "Write", "tool_input": {"file_path": f"{repo}/{rel}"},
-                           "agent_type": "team-leader", "cwd": repo}
+                           "agent_type": "glm-team-leader", "cwd": repo}
                 out = subprocess.run([sys.executable, str(GUARD), "edit-ro"], input=json.dumps(payload),
                                      text=True, capture_output=True, timeout=30).stdout
                 self.assertNotIn('"deny"', out, f"guard denies {rel}: {out}")

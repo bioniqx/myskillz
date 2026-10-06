@@ -2,7 +2,7 @@
 
 Verifies: shared modules are vendored byte-identically into each of the six
 skills' scripts/, every .py file in skills/glm compiles, every SKILL.md has
-name == directory (no -glm suffix) and a description <= 1024 chars, and
+name == directory (the glm- prefix) and a description <= 1024 chars, and
 install-opencode.sh installs all six skills and prints the snippet.
 """
 
@@ -23,14 +23,14 @@ GLM_ROOT = os.path.dirname(os.path.dirname(HERE))
 REPO_ROOT = os.path.dirname(os.path.dirname(GLM_ROOT))
 
 PHASE1_SKILLS = [
-    "systematic-debugging-glm",
-    "writing-plans-glm",
-    "requirements-code-audit-glm",
-    "brainstorming-glm",
-    "doc-generator-glm",
+    "glm-systematic-debugging",
+    "glm-writing-plans",
+    "glm-requirements-code-audit",
+    "glm-brainstorming",
+    "glm-doc-generator",
 ]
 
-ALL_SKILLS = PHASE1_SKILLS + ["dev-team-glm"]
+ALL_SKILLS = PHASE1_SKILLS + ["glm-dev-team"]
 
 
 def extract_description(frontmatter):
@@ -99,15 +99,15 @@ class TestScriptsCompile(unittest.TestCase):
 
 class TestSkillMdHygiene(unittest.TestCase):
     def test_doc_generator_no_unknown_agents(self):
-        """doc-generator SKILL.md names doc-writer/doc-reviewer for OpenCode/ZCode;
+        """glm-doc-generator SKILL.md names glm-doc-writer/glm-doc-reviewer for OpenCode/ZCode;
         'general-purpose' and 'Explore' may appear only on lines that name Claude Code."""
-        skill_md = os.path.join(GLM_ROOT, "doc-generator-glm", "SKILL.md")
+        skill_md = os.path.join(GLM_ROOT, "glm-doc-generator", "SKILL.md")
         with open(skill_md, encoding="utf-8") as fh:
             content = fh.read()
         lines = content.split("\n")
 
-        self.assertIn("doc-writer", content)
-        self.assertIn("doc-reviewer", content)
+        self.assertIn("glm-doc-writer", content)
+        self.assertIn("glm-doc-reviewer", content)
 
         for line_num, line in enumerate(lines, 1):
             if line.strip().startswith("```") or line.strip().startswith("#"):
@@ -118,8 +118,8 @@ class TestSkillMdHygiene(unittest.TestCase):
 
         # Writer (§3 step 3) and reviewer (§4) dispatch lines name both harness choices.
         type_lines = [l for l in lines if "subagent type" in l]
-        writer = [l for l in type_lines if "doc-writer" in l]
-        reviewer = [l for l in type_lines if "doc-reviewer" in l]
+        writer = [l for l in type_lines if "glm-doc-writer" in l]
+        reviewer = [l for l in type_lines if "glm-doc-reviewer" in l]
         self.assertTrue(writer, "no writer 'subagent type' line")
         self.assertTrue(reviewer, "no reviewer 'subagent type' line")
         for l in writer + reviewer:
@@ -134,14 +134,14 @@ class TestSkillMdHygiene(unittest.TestCase):
             if "Explore" in l:
                 self.assertIn("Claude Code", l)
 
-        # §8: <skill_dir> comes from the 'Base directory for this skill' line, not /docs.
-        self.assertIsNone(re.search(r"/docs[^\n]*inject", content, re.IGNORECASE),
-                          "SKILL.md claims /docs injects the skill path")
+        # §8: <skill_dir> comes from the 'Base directory for this skill' line, not /glm-docs.
+        self.assertIsNone(re.search(r"/glm-docs[^\n]*inject", content, re.IGNORECASE),
+                          "SKILL.md claims /glm-docs injects the skill path")
         self.assertIn("Base directory for this skill", content)
 
     def test_skill_md_hygiene(self):
         for skill in ALL_SKILLS:
-            expected_name = skill[:-4] if skill.endswith("-glm") else skill
+            expected_name = skill
             skill_md = os.path.join(GLM_ROOT, skill, "SKILL.md")
             with open(skill_md, encoding="utf-8") as fh:
                 content = fh.read()
@@ -178,7 +178,7 @@ class TestInstallOpencodeScript(unittest.TestCase):
                 capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stderr)
             for skill in PHASE1_SKILLS:
-                expected_name = skill[:-4] if skill.endswith("-glm") else skill
+                expected_name = skill
                 dst = os.path.join(home, ".config", "opencode", "skills", expected_name)
                 self.assertTrue(os.path.isdir(dst), "missing installed skill dir %s" % dst)
             self.assertIn('"$schema"', result.stdout)
@@ -193,9 +193,9 @@ class TestInstallOpencodeScript(unittest.TestCase):
                 ["sh", self.script, "--major", "1", "--home", home],
                 capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stderr)
-            dst = os.path.join(home, ".config", "opencode", "skills", "dev-team")
+            dst = os.path.join(home, ".config", "opencode", "skills", "glm-dev-team")
             self.assertTrue(os.path.isdir(dst), "missing installed skill dir %s" % dst)
-            plugin = os.path.join(home, ".config", "opencode", "plugins", "devteam-guard.js")
+            plugin = os.path.join(home, ".config", "opencode", "plugins", "glm-devteam-guard.js")
             self.assertTrue(os.path.isfile(plugin), "missing installed plugin %s" % plugin)
         finally:
             shutil.rmtree(home, ignore_errors=True)
@@ -204,8 +204,8 @@ class TestInstallOpencodeScript(unittest.TestCase):
         """devteam.py doctor --harness opencode runs hermetically (isolated HOME, no shared
         os.environ mutation) and its output actually names the harness and a verdict line,
         not just an exit code."""
-        dev_team_path = os.path.join(GLM_ROOT, "dev-team-glm", "scripts", "devteam.py")
-        self.assertTrue(os.path.exists(dev_team_path), "dev-team-glm script not found at %s" % dev_team_path)
+        dev_team_path = os.path.join(GLM_ROOT, "glm-dev-team", "scripts", "devteam.py")
+        self.assertTrue(os.path.exists(dev_team_path), "glm-dev-team script not found at %s" % dev_team_path)
 
         home = tempfile.mkdtemp()
         try:

@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import oc_harness
 
 GLM = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SKILLS = ["brainstorming-glm", "dev-team-glm", "doc-generator-glm",
-          "requirements-code-audit-glm", "systematic-debugging-glm", "writing-plans-glm"]
+SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator",
+          "glm-requirements-code-audit", "glm-systematic-debugging", "glm-writing-plans"]
 
 
 def _agent(model):

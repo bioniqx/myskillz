@@ -136,8 +136,8 @@ V1_TOOLS = {"bash", "edit", "glob", "grep", "read", "skill", "task", "todowrite"
 V1_ONLY_TOOLS = {"bash", "task", "todowrite", "apply_patch"}
 V2_EVENT_TYPES = {"step_start", "tool_use", "step_finish", "text", "error"}
 V2_HOOK_KEYS = {"tool", "sessionID", "agent", "messageID", "id", "input"}
-SKILLS = {"brainstorming", "dev-team", "doc-generator", "requirements-code-audit",
-          "systematic-debugging", "writing-plans"}
+SKILLS = {"glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-requirements-code-audit",
+          "glm-systematic-debugging", "glm-writing-plans"}
 AGENT_PATHS = ("/agent", "/api/agent")
 COMMAND_PATHS = ("/command", "/api/command")
 SKILL_PATHS = ("/skill", "/api/skill", "/experimental/skill")
@@ -594,7 +594,7 @@ class ContractCases:
                          "commands not discovered: %s" % sorted(installed_commands - commands))
         self.assertTrue(SKILLS <= skills, "skills not discovered: %s" % sorted(SKILLS - skills))
         self.assertFalse([n for n in skills if n.endswith("-glm")], sorted(skills))
-        self.assertTrue(os.path.isfile(os.path.join(self.config_dir, "plugins", "devteam-guard.js")))
+        self.assertTrue(os.path.isfile(os.path.join(self.config_dir, "plugins", "glm-devteam-guard.js")))
         lines = self._logs(serve_log).splitlines()
         load_errors = [l for l in lines if re.search(r"(?i)(failed to load|load error|parse error|invalid config)", l)]
         clashes = [l for l in lines if re.search(r"(?i)(clash|duplicate|conflict)", l)]
@@ -636,7 +636,7 @@ class V2ContractTest(ContractCases, unittest.TestCase):
         self._write_agent("contract-hidden-forced", text)
         self._dispatch("contract-hidden-forced")
 
-    @unittest.expectedFailure  # v2 does not expand !`cmd` in commands; /docs keeps its Turn-1 recon
+    @unittest.expectedFailure  # v2 does not expand !`cmd` in commands; /glm-docs keeps its Turn-1 recon
     def test_probe_command_bang_expansion(self):
         self._write(os.path.join(self.config_dir, "commands", "contract-bang.md"), BANG_COMMAND)
         proc, _ = self._run("/contract-bang")

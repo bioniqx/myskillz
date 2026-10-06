@@ -33,7 +33,7 @@ if [ -z "$MAJOR" ] || [ "$MAJOR" = "0" ]; then
     exit 1
 fi
 
-SKILLS="systematic-debugging-glm writing-plans-glm requirements-code-audit-glm brainstorming-glm doc-generator-glm"
+SKILLS="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit glm-brainstorming glm-doc-generator"
 
 for skill in $SKILLS; do
     skill_path="$SCRIPT_DIR/$skill"
@@ -44,7 +44,7 @@ for skill in $SKILLS; do
     python3 "$HARNESS" install "$skill_path" "$MAJOR" "$HOME_DIR"
 done
 
-DEV_TEAM_PATH="$SCRIPT_DIR/dev-team-glm"
+DEV_TEAM_PATH="$SCRIPT_DIR/glm-dev-team"
 if [ ! -d "$DEV_TEAM_PATH" ]; then
     echo "Error: $DEV_TEAM_PATH not found" >&2
     exit 1
@@ -52,29 +52,23 @@ fi
 python3 "$HARNESS" install "$DEV_TEAM_PATH" "$MAJOR" "$HOME_DIR"
 
 python3 "$HARNESS" snippet "$MAJOR"
-if [ "$MAJOR" = "1" ]; then
-    echo "# Also export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 so OpenCode skips the Claude-tuned originals in ~/.claude/skills"
-fi
 
 CLAUDE_SKILLS="$HOME_DIR/.claude/skills"
 CONFIG_SKILLS="$HOME_DIR/.config/opencode/skills"
 
-for folder in $SKILLS dev-team-glm; do
-    name="${folder%-glm}"
-    for path in "$CLAUDE_SKILLS/$name" "$CLAUDE_SKILLS/$folder"; do
-        if [ -e "$path" ] || [ -L "$path" ]; then
-            echo "WARN: clash: $path carries the same skill name as the installed $name; OpenCode scans ~/.claude/skills too, and $CONFIG_SKILLS/$name is used (the config-dir copy wins). Leave it in place if Claude Code uses it."
-        fi
-    done
-done
-
+# Old installs used the unprefixed skill name (or a *-glm folder). The new
+# installs below carry the glm- prefix, so nothing is shadowed: no clash
+# handling needed. Warn about the stale installs instead.
 STALE=""
-for path in "$CONFIG_SKILLS"/*-glm; do
-    if [ -e "$path" ] || [ -L "$path" ]; then
-        base="${path##*/}"
-        echo "WARN: stale: $path is an old *-glm install; OpenCode loads it next to $CONFIG_SKILLS/${base%-glm}"
-        STALE="$STALE \"$path\""
-    fi
+for folder in $SKILLS glm-dev-team; do
+    for old in "${folder#glm-}" "${folder#glm-}-glm"; do
+        for path in "$CONFIG_SKILLS/$old" "$CLAUDE_SKILLS/$old"; do
+            if [ -e "$path" ] || [ -L "$path" ]; then
+                echo "WARN: stale: $path is an old install of $folder; the new install is $CONFIG_SKILLS/$folder"
+                STALE="$STALE \"$path\""
+            fi
+        done
+    done
 done
 if [ -n "$STALE" ]; then
     echo "To remove the stale installs, run: rm -rf$STALE"

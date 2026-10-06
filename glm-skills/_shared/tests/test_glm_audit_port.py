@@ -1,4 +1,4 @@
-"""Port tests for the requirements-code-audit engine of the GLM edition (T22)."""
+"""Port tests for the glm-requirements-code-audit engine of the GLM edition (T22)."""
 import io
 import json
 import os
@@ -12,7 +12,7 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.realpath(
-    os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+    os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 sys.path.insert(0, SCRIPTS)
 import audit  # noqa: E402
 
@@ -291,7 +291,7 @@ class CheckGateTests(AuditCase):
         self.assertNotIn("Traceback", r.stderr)
         r = self.run_cli("report")
         self.assertEqual(r.returncode, 0, r.stderr)
-        report = self.read_file(os.path.join(self.out, "requirements-code-audit.md"))
+        report = self.read_file(os.path.join(self.out, "glm-requirements-code-audit.md"))
         self.assertIn("(REQ-001)", report)
         self.assertNotIn("R, E, Q", report)
 
@@ -472,7 +472,7 @@ class AgentLaneAndReportTests(AuditCase):
         self.jsonl("findings.jsonl", [finding("REQ-001")])
         r = self.run_cli("report")
         self.assertEqual(r.returncode, 0, r.stderr)
-        report = self.read_file(os.path.join(self.out, "requirements-code-audit.md"))
+        report = self.read_file(os.path.join(self.out, "glm-requirements-code-audit.md"))
         self.assertIn(long_text, report)
         self.assertIn("Unsettled: 1", report)
 

@@ -8,8 +8,8 @@ dest_root="${1:-$(dirname "$script_dir")}"
 zai_client_src="$script_dir/zai_client.py"
 oc_harness_src="$script_dir/oc_harness.py"
 
-zai_skills="systematic-debugging-glm writing-plans-glm requirements-code-audit-glm"
-oc_skills="systematic-debugging-glm writing-plans-glm requirements-code-audit-glm brainstorming-glm doc-generator-glm dev-team-glm"
+zai_skills="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit"
+oc_skills="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit glm-brainstorming glm-doc-generator glm-dev-team"
 
 for skill in $zai_skills; do
     dest="$dest_root/$skill/scripts/zai_client.py"

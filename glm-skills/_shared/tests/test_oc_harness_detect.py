@@ -144,17 +144,17 @@ class MajorTest(unittest.TestCase):
 
 class DispatchLineTest(unittest.TestCase):
     def test_v1_task_call(self):
-        line = oc_harness.dispatch_line("plan-task-writer", "/w/briefs/T01.md", "plan T01", 1)
+        line = oc_harness.dispatch_line("glm-plan-task-writer", "/w/briefs/T01.md", "plan T01", 1)
         self.assertEqual(
             line,
-            'task(subagent_type="plan-task-writer", description="plan T01", '
+            'task(subagent_type="glm-plan-task-writer", description="plan T01", '
             'prompt="Read /w/briefs/T01.md and follow it exactly.")')
 
     def test_v2_background_call(self):
-        line = oc_harness.dispatch_line("plan-task-writer", "/w/briefs/T01.md", "plan T01", 2)
+        line = oc_harness.dispatch_line("glm-plan-task-writer", "/w/briefs/T01.md", "plan T01", 2)
         self.assertEqual(
             line,
-            'subagent(agent="plan-task-writer", description="plan T01", '
+            'subagent(agent="glm-plan-task-writer", description="plan T01", '
             'prompt="Read /w/briefs/T01.md and follow it exactly.", background=true)')
 
     def test_v2_foreground_call(self):

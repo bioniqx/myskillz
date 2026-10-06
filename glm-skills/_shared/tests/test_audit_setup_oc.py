@@ -10,14 +10,14 @@ from contextlib import redirect_stdout
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "scripts"))
+SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts"))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
 import audit  # noqa: E402
 import oc_harness  # noqa: E402
 
-SETUP_MD = os.path.normpath(os.path.join(HERE, "..", "..", "requirements-code-audit-glm", "SETUP.md"))
+SETUP_MD = os.path.normpath(os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "SETUP.md"))
 
 
 class IsolatedHome(unittest.TestCase):
@@ -39,8 +39,8 @@ class OpenCodeAgentInstall(IsolatedHome):
         with mock.patch.object(oc_harness, "detect", return_value=2):
             rc, out = self.run_setup()
         self.assertEqual(rc or 0, 0)
-        inv = os.path.join(self.home, ".config", "opencode", "agents", "rca-investigator.md")
-        ver = os.path.join(self.home, ".config", "opencode", "agents", "rca-verifier.md")
+        inv = os.path.join(self.home, ".config", "opencode", "agents", "glm-rca-investigator.md")
+        ver = os.path.join(self.home, ".config", "opencode", "agents", "glm-rca-verifier.md")
         self.assertTrue(os.path.isfile(inv), out)
         self.assertTrue(os.path.isfile(ver), out)
         with open(inv) as fh:
@@ -90,8 +90,8 @@ class AgentLaneDispatchLine(unittest.TestCase):
     def test_opencode_v2_uses_shared_dispatch_line(self):
         with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
              mock.patch.object(oc_harness, "major", return_value=2):
-            line = audit._dispatch("rca-investigator", "/a/batch-01.md", "rca batch-01")
-        want = oc_harness.dispatch_line("rca-investigator", "/a/batch-01.md", "rca batch-01", 2,
+            line = audit._dispatch("glm-rca-investigator", "/a/batch-01.md", "rca batch-01")
+        want = oc_harness.dispatch_line("glm-rca-investigator", "/a/batch-01.md", "rca batch-01", 2,
                                         background=True)
         self.assertEqual(line, want)
         self.assertNotIn("haiku", line)
@@ -100,14 +100,14 @@ class AgentLaneDispatchLine(unittest.TestCase):
     def test_unknown_major_falls_back_to_v1_dialect(self):
         with mock.patch.object(oc_harness, "harness", return_value="opencode"), \
              mock.patch.object(oc_harness, "major", return_value=0):
-            line = audit._dispatch("rca-verifier", "/a/b.md", "rca b")
-        want = oc_harness.dispatch_line("rca-verifier", "/a/b.md", "rca b", 1, background=True)
+            line = audit._dispatch("glm-rca-verifier", "/a/b.md", "rca b")
+        want = oc_harness.dispatch_line("glm-rca-verifier", "/a/b.md", "rca b", 1, background=True)
         self.assertEqual(line, want)
 
     def test_non_opencode_line_names_no_model_alias(self):
         with mock.patch.object(oc_harness, "harness", return_value="zcode"):
-            line = audit._dispatch("rca-investigator", "/a/b.md", "rca b")
-        self.assertEqual(line, "subagent_type=rca-investigator  prompt: read /a/b.md and follow it exactly")
+            line = audit._dispatch("glm-rca-investigator", "/a/b.md", "rca b")
+        self.assertEqual(line, "subagent_type=glm-rca-investigator  prompt: read /a/b.md and follow it exactly")
 
     def test_source_no_longer_prints_model_alias_dispatch(self):
         with open(os.path.join(SCRIPTS, "audit.py")) as fh:
@@ -145,11 +145,11 @@ class V1LaneDispatch(unittest.TestCase):
             return json.load(fh)
 
     def test_v1_investigators_write_lanes_json_and_one_next_line(self):
-        out = self.dispatch(1, "rca-investigator", "judge", "A")
+        out = self.dispatch(1, "glm-rca-investigator", "judge", "A")
         lanes = self.load("A")
         self.assertEqual([lane["id"] for lane in lanes], ["batch-01", "batch-02"])
         for lane, (_, p) in zip(lanes, self.batches):
-            self.assertEqual(lane["agent"], "rca-investigator")
+            self.assertEqual(lane["agent"], "glm-rca-investigator")
             self.assertEqual(lane["model"], "flash")
             self.assertEqual(lane["effort"], "high")
             self.assertEqual(lane["brief"], os.path.abspath(p))
@@ -164,18 +164,18 @@ class V1LaneDispatch(unittest.TestCase):
         self.assertNotIn("subagent_type=", out)
 
     def test_v1_verifiers_use_verify_tier(self):
-        self.dispatch(1, "rca-verifier", "verify", "V01")
+        self.dispatch(1, "glm-rca-verifier", "verify", "V01")
         lanes = self.load("V01")
         self.assertEqual(len(lanes), 2)
         for lane in lanes:
-            self.assertEqual(lane["agent"], "rca-verifier")
+            self.assertEqual(lane["agent"], "glm-rca-verifier")
             self.assertEqual(lane["model"], "pro")
             self.assertEqual(lane["effort"], "max")
 
     def test_v2_prints_background_subagent_lines_and_writes_no_lanes(self):
-        out = self.dispatch(2, "rca-investigator", "judge", "A")
+        out = self.dispatch(2, "glm-rca-investigator", "judge", "A")
         for name, p in self.batches:
-            want = oc_harness.dispatch_line("rca-investigator", p, "rca " + name, 2,
+            want = oc_harness.dispatch_line("glm-rca-investigator", p, "rca " + name, 2,
                                             background=True)
             self.assertIn("  " + want, out)
         self.assertFalse(os.path.exists(self.lanes_dir))

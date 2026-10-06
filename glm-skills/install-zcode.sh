@@ -1,10 +1,11 @@
 #!/bin/sh
 # Install the six GLM skills into ZCode.
 #
-#   skills  <name>-glm/  ->  <home>/.zcode/skills/<name>/     (the -glm suffix is dropped; ZCode loads SKILL.md `name`)
-#   agents  <skill>/agents/zcode/*.md, systematic-debugging's debug-worker and dev-team's agents
+#   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
+#           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
+#   agents  <skill>/agents/zcode/*.md, glm-systematic-debugging's glm-debug-worker and glm-dev-team's agents
 #           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; a changed file is kept as <name>.md.bak first)
-#           plus plan-task-writer, written by plan_tool.py setup --harness zcode --apply
+#           plus glm-plan-task-writer, written by plan_tool.py setup --harness zcode --apply
 #
 # Usage: sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
 #   --flash / --main  model ids written into the agents (default glm-5.3-flash / glm-5.3; ZCode has no haiku/sonnet aliases,
@@ -29,7 +30,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="$HOME_DIR/.zcode/skills"
 AGENTS_DIR="$HOME_DIR/.zcode/agents"
-FOLDERS="brainstorming-glm dev-team-glm doc-generator-glm requirements-code-audit-glm systematic-debugging-glm writing-plans-glm"
+FOLDERS="glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans"
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 not found" >&2; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "tar not found" >&2; exit 1; }
@@ -119,7 +120,7 @@ run mkdir -p "$SKILLS_DIR"
 for folder in $FOLDERS; do
     src="$SCRIPT_DIR/$folder"
     [ -d "$src" ] || { echo "Error: $src not found" >&2; exit 1; }
-    name="${folder%-glm}"
+    name="$folder"
     run rm -rf "$SKILLS_DIR/$name"
     run mkdir -p "$SKILLS_DIR/$name"
     if [ "$DRY" -eq 0 ]; then
@@ -132,34 +133,37 @@ done
 
 echo "== agents"
 run mkdir -p "$AGENTS_DIR"
-for f in "$SCRIPT_DIR"/requirements-code-audit-glm/agents/zcode/*.md "$SCRIPT_DIR"/doc-generator-glm/agents/zcode/*.md \
-         "$SCRIPT_DIR"/systematic-debugging-glm/agents/debug-worker.md "$SCRIPT_DIR"/dev-team-glm/agents/*.md; do
+for f in "$SCRIPT_DIR"/glm-requirements-code-audit/agents/zcode/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/zcode/*.md \
+         "$SCRIPT_DIR"/glm-systematic-debugging/agents/glm-debug-worker.md "$SCRIPT_DIR"/glm-dev-team/agents/*.md; do
     [ -f "$f" ] && convert "$f" "$AGENTS_DIR/$(basename "$f")"
 done
 if [ "$DRY" -eq 1 ]; then
-    echo "[dry-run] plan-task-writer via plan_tool.py setup --harness zcode --apply"
+    echo "[dry-run] glm-plan-task-writer via plan_tool.py setup --harness zcode --apply"
 else
-    HOME="$HOME_DIR" python3 "$SKILLS_DIR/writing-plans/scripts/plan_tool.py" setup --harness zcode --apply >/dev/null
-    convert "$AGENTS_DIR/plan-task-writer.md" "$AGENTS_DIR/plan-task-writer.md"
+    HOME="$HOME_DIR" python3 "$SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py" setup --harness zcode --apply >/dev/null
+    convert "$AGENTS_DIR/glm-plan-task-writer.md" "$AGENTS_DIR/glm-plan-task-writer.md"
 fi
 
-# A leftover <name>-glm folder carries the same skill name as the one just installed.
+# Leftover installs under the old unprefixed (or *-glm) folder names would
+# load a second skill with a confusingly similar name next to the glm- one.
 STALE=""
 for folder in $FOLDERS; do
-    path="$SKILLS_DIR/$folder"
-    if [ -e "$path" ] || [ -L "$path" ]; then
-        echo "WARN: stale: $path is an old install of ${folder%-glm}; ZCode would load two skills with the same name"
-        STALE="$STALE \"$path\""
-    fi
+    for old in "${folder#glm-}" "${folder#glm-}-glm"; do
+        path="$SKILLS_DIR/$old"
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            echo "WARN: stale: $path is an old install of $folder; the new install is $SKILLS_DIR/$folder"
+            STALE="$STALE \"$path\""
+        fi
+    done
 done
 [ -z "$STALE" ] || echo "To remove the stale installs, run: rm -rf$STALE"
 
 cat <<MSG
 
-Done. Restart ZCode, then invoke a skill with \$brainstorming, \$dev-team, \$doc-generator, \$requirements-code-audit,
-\$systematic-debugging or \$writing-plans.
+Done. Restart ZCode, then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-requirements-code-audit,
+\$glm-systematic-debugging or \$glm-writing-plans.
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
-  python3 $SKILLS_DIR/writing-plans/scripts/plan_tool.py doctor --ping
+  python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping
 The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (default width 6).
-dev-team needs hook-based guards that ZCode does not have, so its footprint and frozen-test rules are prompt-enforced only.
+glm-dev-team needs hook-based guards that ZCode does not have, so its footprint and frozen-test rules are prompt-enforced only.
 MSG

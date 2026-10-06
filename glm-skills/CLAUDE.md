@@ -27,17 +27,17 @@ All scripts are stdlib-only Python 3 or POSIX shell. No build step, no dependenc
 optional for the audit).
 
 ```bash
-# dev-team engine + hook guards: full end-to-end self-test in a throwaway repo (exit 0 = all pass)
-bash dev-team-glm/scripts/selftest.sh
+# glm-dev-team engine + hook guards: full end-to-end self-test in a throwaway repo (exit 0 = all pass)
+bash glm-dev-team/scripts/selftest.sh
 
 # Syntax check every script
 for f in */scripts/*.py; do python3 -m py_compile "$f"; done
 
 # Environment / key / endpoint checks (each script has one; --ping hits the live API)
-python3 systematic-debugging-glm/scripts/debug_tool.py doctor --ping
-python3 requirements-code-audit-glm/scripts/audit.py doctor --ping
-python3 writing-plans-glm/scripts/plan_tool.py doctor --ping
-python3 dev-team-glm/scripts/devteam.py doctor        # --fix writes .claude/settings.local.json + agents
+python3 glm-systematic-debugging/scripts/debug_tool.py doctor --ping
+python3 glm-requirements-code-audit/scripts/audit.py doctor --ping
+python3 glm-writing-plans/scripts/plan_tool.py doctor --ping
+python3 glm-dev-team/scripts/devteam.py doctor        # --fix writes .claude/settings.local.json + agents
 
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
@@ -60,12 +60,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shar
 vendored from it by `sh _shared/sync.sh` — never edit a vendored copy by hand.
 
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
-`selftest.sh` is a second automated suite that covers the dev-team engine end to end. It isolates itself
+`selftest.sh` is a second automated suite that covers the glm-dev-team engine end to end. It isolates itself
 (temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
 engine behaviour gets a check there. It was written for GNU userland and runs on macOS as well; the
 last full run reported 371 pass, 0 fail (the README records the same count). If it goes red on macOS,
 reproduce on Linux before blaming the change.
-`systematic-debugging-glm/evals/` are manual scenarios graded by hand in a fresh session; they are never
+`glm-systematic-debugging/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
 
 ## Architecture: the shared GLM design
@@ -99,29 +99,29 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
 
 ### Per-skill engines
 
-- **dev-team-glm**: `devteam.py` is a deterministic scheduler and integrator. The flow is
+- **glm-dev-team**: `devteam.py` is a deterministic scheduler and integrator. The flow is
   `start <plan.md>` once, then `next` on every wake-up. Programmers work in git worktrees. `guard.py` holds
   the PreToolUse hooks that enforce file footprints, frozen tests and read-only roles. An AIMD
   **governor** sizes concurrency by tier (`DEVTEAM_GLM_TIER`), halves it on 429/1302/1305 errors, and halves
   its ceiling during Z.ai peak hours. Agent definitions live in `agents/` and are installed by `doctor --fix`.
   `README.md` is in Vietnamese.
-  **dev-team on OpenCode:** When running on OpenCode (`is_opencode()`: `DEVTEAM_HARNESS` decides when set,
+  **glm-dev-team on OpenCode:** When running on OpenCode (`is_opencode()`: `DEVTEAM_HARNESS` decides when set,
   else `OPENCODE`, else `oc_harness.harness()`, since v2 never sets `OPENCODE`),
   `devteam.py` dispatches each lane to a separate `oc_harness.run_lanes()` call in its own git worktree
-  under `.claude/dev-team/wt/<lane id>`. The programmer's brief is read from stdout of `devteam.py claim
+  under `.claude/dev-team/wt/<lane id>`. The glm-programmer's brief is read from stdout of `devteam.py claim
   <lane id>`. Tool-call enforcement moves from the PreToolUse hook into plugins (`plugins/<base>.v1.js`
-  and `<base>.v2.js`) that run `python3 guard.py oc` mode; a guard rule enforces programmer edit/bash and
+  and `<base>.v2.js`) that run `python3 guard.py oc` mode; a guard rule enforces glm-programmer edit/bash and
   read-only roles via agent type. Worktrees are created from the slice's recorded base on branch
   `devteam/<lane id>`. Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl` (handled by `oc_harness`);
   completion markers stay in `.claude/dev-team/slices/<id>.done|.blocked` (written by `guard.py stop`). The
-  stop gate blocks after each programmer exits, pipes `{"cwd": worktree, "last_assistant_message":
+  stop gate blocks after each glm-programmer exits, pipes `{"cwd": worktree, "last_assistant_message":
   final_text}` to `guard.py stop`, and re-runs the lane up to 2 times if blocked (appending stderr to the
   brief).
-  **Plugin role mapping:** OpenCode agent names (programmer, code-reviewer, spot-reviewer, investigator,
-  team-leader) are set in env `DEVTEAM_ROLE` per lane; when it is unset, the v2 plugin uses `event.agent` if
-  it names a dev-team role. The plugins (`dev-team-glm/opencode/plugins/`) define v1 and v2 shapes; at install time, `oc_harness.install()` copies the matching major
+  **Plugin role mapping:** OpenCode agent names (glm-programmer, glm-code-reviewer, glm-spot-reviewer, glm-investigator,
+  glm-team-leader) are set in env `DEVTEAM_ROLE` per lane; when it is unset, the v2 plugin uses `event.agent` if
+  it names a glm-dev-team role. The plugins (`glm-dev-team/opencode/plugins/`) define v1 and v2 shapes; at install time, `oc_harness.install()` copies the matching major
   version to `<home>/.config/opencode/plugins/`. v1 plugin exports a `DevteamGuard` hook; v2 exports
-  `export default { id: 'devteam-guard', setup: async (api) => { api.tool.hook('execute.before', async
+  `export default { id: 'glm-devteam-guard', setup: async (api) => { api.tool.hook('execute.before', async
   (event) => {...}) } }` — the real shape the installed v2.0.16 binary validates and calls (verified from
   the binary: `PluginModule.load` requires a default export matching `{id, effect}` or `{id, setup}`, and
   `api.tool.hook` forwards to the Tool service's `execute.before` trigger, whose event carries
@@ -129,24 +129,24 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
   `process.cwd()` instead. Both hooks run before tool execution: on receipt of `write`, `edit`, `patch`,
   `apply_patch`, `multiedit`, `shell`, `bash`, `execute` or `batch` tools, they call `python3
   guard.py oc` with JSON on stdin and throw `Error(reason)` if the decision is `deny`. Guard mode choice:
-  programmer role gets `edit`/`bash` checks; any other role gets read-only (`edit-ro`/`bash-ro`) with
+  glm-programmer role gets `edit`/`bash` checks; any other role gets read-only (`edit-ro`/`bash-ro`) with
   `agent_type` set to the role; no role prints nothing (silent allow). Plugin failures allow calls (same
   fail-open as Python-side guard). v2 `opencode run` has no `--dir` flag; lanes instead run with the lane's
   working directory passed as the subprocess `cwd` and `$PWD` (v2 `--standalone` resolves its project root
   from `$PWD`; v1 keeps `--dir`).
-- **systematic-debugging-glm**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
+- **glm-systematic-debugging**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
   `experiment` (a separate worktree for each control and treatment arm) and `scan` (8 API workers). Helper
   shell scripts: `stress.sh` (Wilson CI and Fisher test), `bisect-parallel.sh` and `find-polluter.sh`.
-- **requirements-code-audit-glm**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
+- **glm-requirements-code-audit**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
-  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. ZCode agents live in `agents/zcode/` (audit, doc-generator); `install-zcode.sh` also rewrites debug-worker and the dev-team agents to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no `effort`/`hooks`/`isolation`) and gets plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
-- **writing-plans-glm**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
+  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. ZCode agents live in `agents/zcode/` (audit, glm-doc-generator); `install-zcode.sh` also rewrites glm-debug-worker and the glm-dev-team agents to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no `effort`/`hooks`/`isolation`) and gets glm-plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
+- **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
-- **brainstorming-glm**: `scripts/context.sh` is injected through `!` preload. It must stay read-only,
+- **glm-brainstorming**: `scripts/context.sh` is injected through `!` preload. It must stay read-only,
   bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. It
   also contains the visual-companion server (`server.cjs`, `start-server.sh`).
-- **doc-generator-glm**: a single self-contained SKILL.md. Its `scripts/` folder holds only the vendored
+- **glm-doc-generator**: a single self-contained SKILL.md. Its `scripts/` folder holds only the vendored
   `oc_harness.py` (installer plumbing); the skill runs no script of its own and states that it must never
   read other files.
 
@@ -200,11 +200,15 @@ verified on 2026-09-28 by local probes against a fake provider unless marked oth
   `compatibility` and `metadata`, and ignores `allowed-tools` and `!` injection. ZCode drops a skill whose
   `description` is longer than 1024 characters and has no `effort`/`permissionMode` fields or model aliases
   (use real GLM ids plus `thoughtLevel`). Check description length after editing.
-- **Installed folder names drop the `-glm` suffix.** Bootstrap path-resolution loops search for
-  `systematic-debugging`, `writing-plans`, `dev-team` and so on across the `.opencode`, `.config/opencode`,
-  `.claude`, `.agents` and `.zcode` skill dirs. Every SKILL.md frontmatter `name` drops the `-glm` suffix
-  (`brainstorming`, `dev-team`, `doc-generator`, `requirements-code-audit`, `systematic-debugging`,
-  `writing-plans`); `test_all_skills.py` enforces this.
-- Version tags: the debugging, audit and writing-plans ports are `9.0-glm` / v9, brainstorming is `9.3-glm`
-  (per its CHANGELOG), and dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
+- **Every installable name carries the `glm-` prefix.** Skill folders, SKILL.md frontmatter
+  `name`, agents, commands and plugins are all `glm-*`, so they install next to the
+  Claude-tuned originals without shadowing them. Bootstrap path-resolution loops search for
+  `glm-systematic-debugging`, `glm-writing-plans`, `glm-dev-team` and so on across the `.opencode`, `.config/opencode`,
+  `.claude`, `.agents` and `.zcode` skill dirs. Every SKILL.md frontmatter `name` equals its
+  folder name (`glm-brainstorming`, `glm-dev-team`, `glm-doc-generator`, `glm-requirements-code-audit`, `glm-systematic-debugging`,
+  `glm-writing-plans`, `glm-idea-to-spec`); `test_all_skills.py` enforces this. Runtime state
+  keeps its old unprefixed paths (`.claude/dev-team/`, `.audit/`, `.brainstorm/`, `devteam/<id>`
+  branches, `devteam.py`/`audit.py` script names); only install identity is prefixed.
+- Version tags: the debugging and audit ports are `9.0` / v9 and glm-writing-plans is v9; glm-brainstorming is `9.3`
+  (per its CHANGELOG), and glm-dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
   one exists.
