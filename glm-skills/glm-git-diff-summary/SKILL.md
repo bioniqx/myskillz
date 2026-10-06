@@ -36,7 +36,7 @@ What the script already did (don't redo): background `git fetch` of only the bas
 ### FAN_OUT (big diffs only)
 
 In **ONE message**, launch one lane per listed chunk (≤64; they run concurrently), then end the turn — every lane goes out together. Syntax per harness:
-- Claude Code / ZCode — `Task` tool: `subagent_type: general-purpose`, `model: haiku` (on the Z.ai coding plan `haiku` = GLM-5.3-Flash; if the harness rejects the alias, use `glm-5.3-flash`), description `diff chunk NNN`.
+- Claude Code / ZCode — `Task` tool: `subagent_type: general-purpose`, description `diff chunk NNN` (ZCode's `Agent` tool takes no `model` parameter; if a model must be named, use the real id `glm-5.3-flash`).
 - OpenCode — `subagent` tool: `agent: "general"`, `description: "diff chunk NNN"`, `background: true`, no `model` or `variant` field (there is no `general-purpose` or model alias on OpenCode; the lane runs on the model selected in the window).
 Prompt (fill path):
 
