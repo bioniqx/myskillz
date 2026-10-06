@@ -116,8 +116,8 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         out = self.zfix()
         self.assertIn("harness zcode", out)
         agents_dir = os.path.join(self.home, ".zcode", "agents")
-        installed = sorted(os.listdir(agents_dir))
-        self.assertEqual(installed, [name + ".md" for name in ZCODE_AGENTS])
+        self.assertEqual(sorted(os.listdir(agents_dir)),
+                         sorted(name + ".md" for name in ZCODE_AGENTS))
         flash_agents = {"glm-programmer", "glm-programmer-lite",
                         "glm-spot-reviewer", "glm-investigator"}
         thought = {"glm-programmer": "high", "glm-programmer-lite": "low",
