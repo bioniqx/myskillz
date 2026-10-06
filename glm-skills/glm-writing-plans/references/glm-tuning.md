@@ -76,8 +76,9 @@ export PLAN_PROTOCOL=anthropic    # optional override: anthropic | openai
 ```
 
 The script also reads keys out of `~/.claude/settings.json`,
-`~/.config/opencode/opencode.json`, `~/.config/opencode/auth.json` and
-`~/.zcode/*.json` when no environment variable is set. `doctor` prints which
+`~/.config/opencode/opencode.json`, `~/.config/opencode/auth.json`,
+`~/.zcode/v2/credentials.json` (v2; its `api-key` field) and `~/.zcode/*.json`
+when no environment variable is set. `doctor` prints which
 source won; `doctor --ping` sends a one-token probe.
 
 The coding endpoint is for coding scenarios only and is not interchangeable
@@ -103,8 +104,8 @@ explicit `model` override. Headless
 runs are `opencode run -m <provider>/<model> --auto "<prompt>"`.
 
 **ZCode.** Skills live in `~/.zcode/skills/<name>/SKILL.md` and are invoked with
-`$glm-writing-plans`. The description is capped at 1024 characters and the body at
-100 KB. Subagents live in `~/.zcode/agents/` (user level only, created from
+`$glm-writing-plans`. The description is capped at 1024 characters; a body-size cap is unverified.
+Subagents live in `~/.zcode/agents/` (user level only, created from
 Settings), cannot spawn further subagents, and run in parallel in the
 foreground. ZCode can import a Claude Code or Codex skill directory directly
 from Settings, by symlink or copy.

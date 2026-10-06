@@ -211,5 +211,10 @@ Never run `--apply` without the user's consent. The fast lane needs one export:
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>
+```
+
+On a Claude-compatible harness, also export the z.ai Anthropic route:
+
+```bash
 export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 ```
