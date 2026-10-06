@@ -1,3 +1,4 @@
+import fnmatch
 import http.server
 import io
 import json
@@ -343,6 +344,17 @@ class ZcodeDocSurface(unittest.TestCase):
         self.assertIn("credentials.json", self.flat(self.read(self.SETUP_MD)))
         self.assertIn("~/.zcode/v2/credentials.json", self.flat(self.read(self.SETUP_MD)),
                       "SETUP.md must name the zcode v2 credentials path, not only the ~/.zcode/*.json glob")
+
+    def test_setup_md_key_sentence_names_only_paths_zai_client_reads(self):
+        flat = self.flat(self.read(self.SETUP_MD))
+        sentence = flat.split("also reads the key from", 1)[1].split("only from", 1)[0]
+        named = re.findall(r"`(~[^`]+)`", sentence)
+        self.assertTrue(named, "no key paths found in the SETUP.md key-source sentence")
+        for path in named:
+            self.assertTrue(
+                path in audit.zai_client.KEY_FILES
+                or any(fnmatch.fnmatchcase(k, path) for k in audit.zai_client.KEY_FILES),
+                "%s is claimed in SETUP.md but zai_client.KEY_FILES never reads it" % path)
 
     def test_glm_tuning_admits_user_level_zcode_hooks(self):
         tuning = self.flat(self.read(self.TUNING))
