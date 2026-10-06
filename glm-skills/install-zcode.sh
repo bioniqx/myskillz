@@ -3,9 +3,12 @@
 #
 #   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
 #           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
-#   agents  <skill>/agents/zcode/*.md, glm-systematic-debugging's glm-debug-worker and glm-dev-team's agents
+#   agents  <skill>/agents/zcode/*.md and glm-systematic-debugging's glm-debug-worker
 #           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; a changed file is kept as <name>.md.bak first)
-#           plus glm-plan-task-writer, written by plan_tool.py setup --harness zcode --apply
+#           glm-dev-team's seven ZCode agents (five file agents plus rendered glm-programmer-lite and
+#           glm-programmer-strong) via devteam.py doctor --harness zcode --fix, which also merges the
+#           guard hooks into ~/.zcode/cli/config.json; plus glm-plan-task-writer, written by
+#           plan_tool.py setup --harness zcode --apply
 #
 # Usage: sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
 #   --flash / --main  model ids written into the agents (default glm-5.3-flash / glm-5.3; ZCode has no haiku/sonnet aliases,
@@ -37,7 +40,7 @@ command -v tar >/dev/null 2>&1 || { echo "tar not found" >&2; exit 1; }
 
 run() { if [ "$DRY" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
-# ZCode silently drops a skill whose description is over 1024 characters or whose body is over 100KB.
+# ZCode drops a skill whose description is over 1024 characters; a body over 100KB is truncated when loaded.
 python3 - "$SCRIPT_DIR" $FOLDERS <<'PY' || exit 1
 import os, re, sys
 root, bad = sys.argv[1], []
@@ -65,13 +68,16 @@ for line in bad:
 sys.exit(1 if bad else 0)
 PY
 
-# convert SRC DEST: rewrite one agent file to ZCode frontmatter (real GLM ids, thoughtLevel, no Claude/OpenCode-only keys).
+# convert SRC DEST [LEVEL]: rewrite one agent file to ZCode frontmatter (real GLM ids, thoughtLevel,
+# steps: N -> maxTurns: N and omitClaudeMd: true -> injectAgentsMd: false instead of dropping them,
+# drop permissionMode and the other Claude/OpenCode-only keys, keep background; LEVEL is a thoughtLevel
+# applied only when the source has neither thoughtLevel nor effort).
 convert() {
     if [ "$DRY" -eq 1 ]; then echo "[dry-run] agent $1 -> $2"; return 0; fi
-    python3 - "$1" "$2" "$FLASH" "$MAIN" <<'PY' || { echo "could not install agent $2" >&2; exit 1; }
+    python3 - "$1" "$2" "$FLASH" "$MAIN" "${3:-}" <<'PY' || { echo "could not install agent $2" >&2; exit 1; }
 import os, re, shutil, sys
-src, dest, flash, main = sys.argv[1:5]
-DROP = {"effort", "isolation", "memory", "omitClaudeMd", "hooks", "mode", "temperature", "steps", "permission", "variant"}
+src, dest, flash, main, level = sys.argv[1:6]
+DROP = {"effort", "isolation", "memory", "hooks", "mode", "temperature", "permission", "permissionMode", "variant"}
 text = open(src, encoding="utf-8").read()
 m = re.match(r"---\n(.*?)\n---\n(.*)", text, re.S)
 if not m:
@@ -93,12 +99,21 @@ for key, lines in blocks:
         has_level = True
     if key in DROP:
         continue
+    if key == "steps":
+        out.append("maxTurns: " + val)
+        continue
+    if key == "omitClaudeMd":
+        out.append("injectAgentsMd: " + ("false" if val == "true" else "true"))
+        continue
     if key == "model":
         val = {"haiku": flash, "sonnet": main, "opus": main, "glm-5.3-flash": flash, "glm-5.3": main}.get(val, val)
         lines = ["model: " + val]
     out.extend(lines)
-if effort and not has_level:
-    out.append("thoughtLevel: " + effort)
+if not has_level:
+    if effort:
+        out.append("thoughtLevel: " + effort)
+    elif level:
+        out.append("thoughtLevel: " + level)
 new = "---\n" + "\n".join(out) + "\n---\n" + m.group(2)
 if os.path.exists(dest):
     if open(dest, encoding="utf-8").read() == new:
@@ -133,15 +148,26 @@ done
 
 echo "== agents"
 run mkdir -p "$AGENTS_DIR"
-for f in "$SCRIPT_DIR"/glm-requirements-code-audit/agents/zcode/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/zcode/*.md \
-         "$SCRIPT_DIR"/glm-systematic-debugging/agents/glm-debug-worker.md "$SCRIPT_DIR"/glm-dev-team/agents/*.md; do
+for f in "$SCRIPT_DIR"/glm-requirements-code-audit/agents/zcode/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/zcode/*.md; do
     [ -f "$f" ] && convert "$f" "$AGENTS_DIR/$(basename "$f")"
 done
+# glm-debug-worker is a mechanical worker; it never pays for max thinking.
+[ -f "$SCRIPT_DIR/glm-systematic-debugging/agents/glm-debug-worker.md" ] && \
+    convert "$SCRIPT_DIR/glm-systematic-debugging/agents/glm-debug-worker.md" "$AGENTS_DIR/glm-debug-worker.md" low
 if [ "$DRY" -eq 1 ]; then
     echo "[dry-run] glm-plan-task-writer via plan_tool.py setup --harness zcode --apply"
+    echo "[dry-run] glm-dev-team zcode agents via devteam.py doctor --harness zcode --fix --flash $FLASH --main $MAIN"
 else
     HOME="$HOME_DIR" python3 "$SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py" setup --harness zcode --apply >/dev/null
     convert "$AGENTS_DIR/glm-plan-task-writer.md" "$AGENTS_DIR/glm-plan-task-writer.md"
+    # The seven glm-dev-team ZCode agents are delegated to the engine's doctor subcommand (cmd_doctor
+    # in devteam.py routes to def doctor_zcode(a, root):), same pattern as the plan_tool.py setup
+    # delegation above: the doctor converts the five file agents (glm-team-leader, glm-code-reviewer,
+    # glm-investigator, glm-spot-reviewer, glm-programmer.md), renders glm-programmer-lite and
+    # glm-programmer-strong via def render_agent_zcode(agents_src, name, flash, main) -> str:,
+    # installs all seven into ~/.zcode/agents/, and merges the guard hooks into
+    # ~/.zcode/cli/config.json. --flash/--main pass through, so a custom plan id reaches the agents.
+    HOME="$HOME_DIR" python3 "$SKILLS_DIR/glm-dev-team/scripts/devteam.py" doctor --harness zcode --fix --flash "$FLASH" --main "$MAIN" >/dev/null
 fi
 
 # Leftover installs under the old unprefixed (or *-glm) folder names would
@@ -160,10 +186,17 @@ done
 
 cat <<MSG
 
-Done. Restart ZCode, then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-git-diff-summary or
+Done. Start a NEW ZCode session to load the installed skills and agents (a restart is not enough), then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-git-diff-summary or
 \$glm-idea-to-spec, \$glm-requirements-code-audit, \$glm-systematic-debugging, \$glm-writing-plans.
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
   python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping
 The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (default width 6).
-glm-dev-team needs hook-based guards that ZCode does not have, so its footprint and frozen-test rules are prompt-enforced only.
+glm-dev-team guards (frozen tests, footprint) are ZCode hooks on Write|Edit and Bash tool events.
+The install above already ran
+  python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
+which installs the seven glm-dev-team agents into ~/.zcode/agents/ and merges the guard hooks
+(type: process, hooks.enabled: true, commands pointing at the installed skill's guard.py) into
+~/.zcode/cli/config.json — a key-preserving merge: .bak before rewrite, a re-run is a no-op, and
+every user key already in the file survives.
+A frontmatter description over 1024 characters makes ZCode drop the whole skill; a body over 100KB is truncated when loaded, not dropped.
 MSG
