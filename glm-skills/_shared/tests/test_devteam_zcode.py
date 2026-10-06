@@ -39,9 +39,13 @@ class TestDevteamZcodeCore(unittest.TestCase):
             self.assertFalse(devteam.is_zcode())
 
     def test_detect_provider_defaults_to_glm_on_zcode(self):
-        with mock.patch.object(devteam, "is_zcode", return_value=True):
+        """Isolated from the ambient env: no DEVTEAM_PROVIDER, no ANTHROPIC_BASE_URL —
+        the zcode default (glm) and the plain fallthrough (anthropic) hold on their own."""
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(devteam, "is_zcode", return_value=True):
             self.assertEqual(devteam.detect_provider(), "glm")
-        with mock.patch.object(devteam, "is_zcode", return_value=False), \
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(devteam, "is_zcode", return_value=False), \
                 mock.patch.object(devteam, "is_opencode", return_value=False):
             self.assertEqual(devteam.detect_provider(), "anthropic")
 
@@ -55,6 +59,8 @@ class TestDevteamZcodeCore(unittest.TestCase):
             for s in strong_cases:
                 line = devteam.dispatch_route({}, s, "zcode")
                 self.assertIn("glm-programmer-strong", line, s)
+                self.assertIn("subagent_type=", line, s)
+                self.assertIn("description=", line, s)
                 self.assertNotIn("model:", line, s)
 
     def test_lite_slices_route_to_programmer_lite_on_zcode(self):
@@ -62,4 +68,6 @@ class TestDevteamZcodeCore(unittest.TestCase):
         with mock.patch.object(devteam, "is_zcode", return_value=True):
             line = devteam.dispatch_route({}, lite, "zcode")
         self.assertIn("glm-programmer-lite", line)
+        self.assertIn("subagent_type=", line)
+        self.assertIn("description=", line)
         self.assertNotIn("model:", line)
