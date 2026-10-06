@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install all seven GLM skills into OpenCode and print the config snippet.
+# Install all eight GLM skills into OpenCode and print the config snippet.
 set -eu
 
 MAJOR=""
@@ -33,7 +33,7 @@ if [ -z "$MAJOR" ] || [ "$MAJOR" = "0" ]; then
     exit 1
 fi
 
-SKILLS="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit glm-brainstorming glm-doc-generator glm-idea-to-spec"
+SKILLS="glm-systematic-debugging glm-writing-plans glm-requirements-code-audit glm-brainstorming glm-doc-generator glm-idea-to-spec glm-git-diff-summary"
 
 for skill in $SKILLS; do
     skill_path="$SCRIPT_DIR/$skill"

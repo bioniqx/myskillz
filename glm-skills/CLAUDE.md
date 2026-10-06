@@ -42,10 +42,10 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
 
-# Install all seven skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode frontmatter into ~/.zcode/agents
+# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode frontmatter into ~/.zcode/agents
 sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
 
-# Install all seven skills into OpenCode and print the config snippet (for Claude Code, copy a folder by hand)
+# Install all eight skills into OpenCode and print the config snippet (for Claude Code, copy a folder by hand)
 sh install-opencode.sh [--major N] [--home DIR]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
@@ -153,6 +153,10 @@ Every port applies the same set of model facts; each skill with a tuning surface
 - **glm-idea-to-spec**: a self-contained SKILL.md plus four reference docs (`evaluation-framework.md`,
   `question-bank.md`, `research-playbook.md`, `spec-template.md` under `references/`); no scripts, no
   agents, no tuning doc — every turn is pure model guidance for research-backed spec writing.
+- **glm-git-diff-summary**: SKILL.md + the read-only `scripts/gather.sh` (merge-base → working-tree diff,
+  background fetch with a per-repo stamp, chunks for Read or an agent fan-out). No API key, no agents or
+  commands, no tuning doc; process identity is glm- scoped (`/tmp/glm-gds.*`, `.git/glm-gds-fetched-*`,
+  `GLM_GDS_*` env vars) so the Claude-tuned original can run on the same machine without interference.
 
 ### OpenCode version facts (v1.18.x and v2.0.x)
 

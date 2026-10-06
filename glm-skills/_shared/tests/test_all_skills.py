@@ -3,7 +3,7 @@
 Verifies: shared modules are vendored byte-identically into each skill's
 scripts/, every .py file in skills/glm compiles, every SKILL.md has
 name == directory (the glm- prefix) and a description <= 1024 chars, and
-install-opencode.sh installs all seven skills and prints the snippet.
+install-opencode.sh installs all eight skills and prints the snippet.
 """
 
 import hashlib
@@ -28,6 +28,7 @@ PHASE1_SKILLS = [
     "glm-requirements-code-audit",
     "glm-brainstorming",
     "glm-doc-generator",
+    "glm-git-diff-summary",
     "glm-idea-to-spec",
 ]
 

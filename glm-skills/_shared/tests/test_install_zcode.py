@@ -5,7 +5,7 @@ import unittest
 
 GLM_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SCRIPT = os.path.join(GLM_ROOT, "install-zcode.sh")
-SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-idea-to-spec", "glm-requirements-code-audit",
+SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-git-diff-summary", "glm-idea-to-spec", "glm-requirements-code-audit",
           "glm-systematic-debugging", "glm-writing-plans"]
 AGENTS = ["glm-code-reviewer", "glm-debug-worker", "glm-doc-reviewer", "glm-doc-writer", "glm-investigator", "glm-plan-task-writer",
           "glm-programmer", "glm-rca-investigator", "glm-rca-verifier", "glm-spot-reviewer", "glm-team-leader"]
