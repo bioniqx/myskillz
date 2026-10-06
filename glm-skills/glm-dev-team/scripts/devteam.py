@@ -1955,11 +1955,6 @@ def dispatch_route(st, s, mode):
     return agent, model, f"{shown} · effort {effort}"
 
 
-def dispatch_model(s, st=None):
-    """Back-compat helper: the per-invocation model override only."""
-    return dispatch_route(st or {"provider": "glm"}, s, s.get("mode") or "slice")[1]
-
-
 OC_AGENTS = {}          # OpenCode ships glm-programmer-lite too: v1 takes its effort from that agent's frontmatter
 OC_MODELS = {"haiku": "flash", "sonnet": "pro", "opus": "pro"}
 WRITER_AGENTS = ("glm-programmer", "glm-programmer-lite")
