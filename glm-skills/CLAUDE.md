@@ -14,7 +14,7 @@ editing the original from here.
 GLM-5.3 / GLM-5.3-Flash ports of the Claude-tuned originals in `../claude-skills/`
 (`claude-brainstorming-6.3`, `claude-dev-team-v3.2`, `claude-doc-generator`,
 `claude-requirements-code-audit`, `claude-systematic-debugging-6.3`, `claude-writing-plans-6.2`). Each
-`*-glm/` folder is a self-contained skill meant to be copied into a harness (Claude Code on the Z.ai
+`glm-*/` folder is a self-contained skill meant to be copied into a harness (Claude Code on the Z.ai
 route, OpenCode, or ZCode). Claude Code does not load skills nested this deep, so nothing here is active in
 this session. The git root is the skillz monorepo root (`../`), not this folder.
 
@@ -42,10 +42,10 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness opencode|zcode|claude
 
-# Install all six skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode frontmatter into ~/.zcode/agents
+# Install all seven skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode frontmatter into ~/.zcode/agents
 sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
 
-# Install all six skills into OpenCode and print the config snippet (for Claude Code, copy a folder by hand)
+# Install all seven skills into OpenCode and print the config snippet (for Claude Code, copy a folder by hand)
 sh install-opencode.sh [--major N] [--home DIR]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
@@ -70,7 +70,8 @@ loaded at runtime.
 
 ## Architecture: the shared GLM design
 
-Every port applies the same set of model facts. Each skill's `glm-tuning.md` gives the details:
+Every port applies the same set of model facts; each skill with a tuning surface documents them in its
+`glm-tuning.md` (glm-idea-to-spec has none):
 
 - **Aliases collapse on Z.ai.** `haiku` maps to `glm-5.3-flash`. Both `sonnet` and `opus` map to `glm-5.3`,
   so a "sonnet" lane is not cheaper. Worker lanes default to Flash and judgment lanes use GLM-5.3. Never
@@ -149,6 +150,9 @@ Every port applies the same set of model facts. Each skill's `glm-tuning.md` giv
 - **glm-doc-generator**: a single self-contained SKILL.md. Its `scripts/` folder holds only the vendored
   `oc_harness.py` (installer plumbing); the skill runs no script of its own and states that it must never
   read other files.
+- **glm-idea-to-spec**: a self-contained SKILL.md plus four reference docs (`evaluation-framework.md`,
+  `question-bank.md`, `research-playbook.md`, `spec-template.md` under `references/`); no scripts, no
+  agents, no tuning doc — every turn is pure model guidance for research-backed spec writing.
 
 ### OpenCode version facts (v1.18.x and v2.0.x)
 

@@ -1012,7 +1012,7 @@ def writer_brief(plan_path, plan, cs_group, cmap, work, spec_path, repo, allow):
     outs = {c["id"]: os.path.join(work, "tasks", c["id"] + ".md") for c in cs_group}
     lint = "; ".join("%s lint-task %s %s" % (qtool(), shlex.quote(plan_path), shlex.quote(outs[t])) for t in ids)
     try:
-        tmpl = load(ref_path("task-writer-prompt.md"))
+        tmpl = load(ref_path("glm-task-writer-prompt.md"))
     except OSError:
         tmpl = "# Writer brief: {TASKS}\n\nWrite each OUT file, then run LINT.\n\nOUT:\n{OUT}\n\nLINT: `{LINT}`\n"
     head = tmpl.replace("{TASKS}", ", ".join(ids)).replace("{LINT}", lint) \

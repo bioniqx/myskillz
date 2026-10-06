@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the six GLM skills into ZCode.
+# Install the seven GLM skills into ZCode.
 #
 #   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
 #           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
@@ -30,7 +30,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="$HOME_DIR/.zcode/skills"
 AGENTS_DIR="$HOME_DIR/.zcode/agents"
-FOLDERS="glm-brainstorming glm-dev-team glm-doc-generator glm-requirements-code-audit glm-systematic-debugging glm-writing-plans"
+FOLDERS="glm-brainstorming glm-dev-team glm-doc-generator glm-idea-to-spec glm-requirements-code-audit glm-systematic-debugging glm-writing-plans"
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 not found" >&2; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "tar not found" >&2; exit 1; }
@@ -160,7 +160,7 @@ done
 
 cat <<MSG
 
-Done. Restart ZCode, then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-requirements-code-audit,
+Done. Restart ZCode, then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-idea-to-spec, \$glm-requirements-code-audit,
 \$glm-systematic-debugging or \$glm-writing-plans.
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
   python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping

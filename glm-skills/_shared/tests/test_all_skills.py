@@ -1,9 +1,9 @@
 """All-skill hygiene checks and the root installer script.
 
-Verifies: shared modules are vendored byte-identically into each of the six
-skills' scripts/, every .py file in skills/glm compiles, every SKILL.md has
+Verifies: shared modules are vendored byte-identically into each skill's
+scripts/, every .py file in skills/glm compiles, every SKILL.md has
 name == directory (the glm- prefix) and a description <= 1024 chars, and
-install-opencode.sh installs all six skills and prints the snippet.
+install-opencode.sh installs all seven skills and prints the snippet.
 """
 
 import hashlib
@@ -28,6 +28,7 @@ PHASE1_SKILLS = [
     "glm-requirements-code-audit",
     "glm-brainstorming",
     "glm-doc-generator",
+    "glm-idea-to-spec",
 ]
 
 ALL_SKILLS = PHASE1_SKILLS + ["glm-dev-team"]
