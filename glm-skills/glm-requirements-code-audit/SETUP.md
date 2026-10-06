@@ -38,7 +38,8 @@ export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY      # for the harness itself
 ```
 
-`audit.py` also reads the key from `~/.zcode/*.json`, `~/.config/opencode/auth.json`,
+`audit.py` also reads the key from `~/.zcode/*.json`, the ZCode v2 credentials file
+`~/.zcode/v2/credentials.json` (its `api-key` field), `~/.config/opencode/auth.json`,
 `~/.config/opencode/opencode.json`, the OpenCode v2 credentials file
 `~/.local/share/opencode/credentials.json` (its `api-key` field) and `~/.claude/settings.json` — only from
 fields whose name says they hold one (`apiKey`, `ANTHROPIC_AUTH_TOKEN`, `token`, `api-key`, …), never by
