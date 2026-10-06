@@ -1,6 +1,6 @@
 ---
 name: glm-idea-to-spec
-description: Turns a raw software idea (app, SaaS, web tool, AI agent, bot, extension, marketplace, game) into a complete, build-ready markdown spec whose purpose is to make money. Researches the latest market, competitor, pricing, tech and legal data on the web with cited sources; interviews the user in rounds to deepen the idea; gives a blunt, evidence-based verdict on whether the idea can earn money and how to make it succeed; then writes a PRD/technical spec detailed enough for any AI coding agent or developer to build without guessing. Use this skill WHENEVER the user describes a product or software idea, says "I have an idea", asks to write a PRD, spec, product doc or build plan, asks whether an idea is good, viable or profitable, wants market or competitor analysis for an app, or wants to plan a software business — even if they never say "document" or "spec".
+description: Use this skill WHENEVER the user describes a product or software idea, says "I have an idea", asks to write a PRD, spec, product doc or build plan, or asks whether an idea is good, viable or profitable. Trigger the same way when they want market or competitor analysis for an app, or want to plan a software business — even if they never say "document" or "spec". Turns a raw software idea (app, SaaS, web tool, AI agent, bot, extension, marketplace, game) into a complete, build-ready markdown spec whose purpose is to make money. Researches the latest market, competitor, pricing, tech and legal data on the web with cited sources; interviews the user in rounds to deepen the idea; gives a blunt, evidence-based verdict on whether the idea can earn money and how to make it succeed; then writes a PRD/technical spec detailed enough for any AI coding agent or developer to build without guessing.
 ---
 
 # Idea → Money-Making Spec
@@ -53,7 +53,7 @@ Report to the user: the 5–8 findings that matter most for making money, each w
 
 Read `references/question-bank.md` and pick the questions with the highest impact on revenue and design.
 
-- Ask 3–4 questions per round (AskUserQuestion supports up to 4 questions with multiple-choice options; there is always a free-text "Other").
+- Ask 3–4 questions per round: via AskUserQuestion where the harness has a question tool, otherwise as plain-text numbered questions in chat answered by number or free text — never assume a question tool is present.
 - Prefix each with research context: "Competitor A charges $19/mo per seat, B charges per use — which fits your customers?"
 - If the user is unsure, propose a sensible default, log it as an `ASSUMPTION` in `decisions.md`, and move on. Never stall.
 - If an answer opens a new unknown (new competitor, channel, integration), research it right away.
