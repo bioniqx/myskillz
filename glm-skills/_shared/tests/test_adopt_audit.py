@@ -2,6 +2,7 @@ import http.server
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -291,3 +292,104 @@ class DocumentationConfigs(unittest.TestCase):
         with open(agent_path, 'r') as f:
             content = f.read()
         self.assertRegex(content, r'steps:\s*25', "glm-rca-verifier must have steps: 25")
+
+
+class ZcodeDocSurface(unittest.TestCase):
+    SKILL_DIR = os.path.normpath(os.path.join(SCRIPTS, ".."))
+    SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
+    TUNING = os.path.join(SKILL_DIR, "references", "glm-tuning.md")
+    SETUP_MD = os.path.join(SKILL_DIR, "SETUP.md")
+
+    def read(self, path):
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+
+    @staticmethod
+    def flat(text):
+        return " ".join(text.split())
+
+    @classmethod
+    def folded_description(cls):
+        with open(cls.SKILL_MD, encoding="utf-8") as fh:
+            text = fh.read()
+        m = re.match(r"---\n(.*?)\n---\n", text, re.S)
+        d = re.search(r"^description:[ \t]*(.*?)(?=^\S|\Z)", m.group(1), re.S | re.M)
+        desc = " ".join(l.strip() for l in d.group(1).splitlines())
+        head, _, rest = desc.partition(" ")
+        if head in (">-", ">", "|-", "|"):
+            desc = rest
+        return desc
+
+    def test_description_when_clause_sits_up_front_under_1024(self):
+        desc = self.folded_description()
+        self.assertLessEqual(len(desc), 1024, "description is %d chars" % len(desc))
+        first = desc.split(". ", 1)[0] + "."
+        self.assertTrue(first.startswith("Use whenever"), "WHEN clause is not up front")
+        self.assertLessEqual(len(first), 250, "WHEN clause is %d chars" % len(first))
+
+    def test_skill_md_has_the_bootstrap_path_loop_with_zcode(self):
+        flat = self.flat(self.read(self.SKILL_MD))
+        self.assertIn("A=", flat)
+        self.assertIn("$OPENCODE_CONFIG_DIR/skills/glm-requirements-code-audit", flat)
+        self.assertIn("~/.zcode/skills/glm-requirements-code-audit", flat)
+
+    def test_glm_tuning_char_count_matches_the_new_description(self):
+        desc = self.folded_description()
+        tuning = self.flat(self.read(self.TUNING))
+        self.assertIn("description measured at %d chars" % len(desc), tuning)
+        self.assertNotIn("description measured at 911 chars", tuning)
+
+    def test_setup_md_key_paths_include_the_v2_credentials_file(self):
+        self.assertIn("credentials.json", self.flat(self.read(self.SETUP_MD)))
+
+    def test_glm_tuning_admits_user_level_zcode_hooks(self):
+        tuning = self.flat(self.read(self.TUNING))
+        self.assertNotIn("no Claude Code hook system", tuning)
+        self.assertIn("user-level hooks", tuning)
+        self.assertIn("~/.zcode/cli/config.json", tuning)
+
+    def test_four_call_turn_budget_is_kept(self):
+        # The api lane stays four lead calls (brief, checklist, run,
+        # queue/adjudicate/finalize): the zcode doc edits must not touch R0.
+        text = self.read(self.SKILL_MD)
+        r0 = self.flat(text.split("## R0", 1)[1].split("## R1", 1)[0])
+        self.assertIn("The whole audit is four calls", r0)
+        for call in ("A brief", "A run", "A queue", "A adjudicate", "A finalize"):
+            self.assertIn(call, r0, call)
+        self.assertIn("Do not invent extra steps between them", r0)
+
+
+class ZcodeAuditBehavior(unittest.TestCase):
+    SKILL_DIR = os.path.normpath(os.path.join(SCRIPTS, ".."))
+
+    @staticmethod
+    def flat(text):
+        return " ".join(text.split())
+
+    def test_zcode_agents_use_camelcase_tool_names(self):
+        agents = os.path.join(self.SKILL_DIR, "agents", "zcode")
+        for name in ("glm-rca-investigator.md", "glm-rca-verifier.md"):
+            with open(os.path.join(agents, name), encoding="utf-8") as fh:
+                fm = fh.read().split("\n---\n")[0]
+            self.assertIn("tools: Read, Grep, Glob, Write", fm, name)
+            self.assertNotIn("tools: read, grep, glob, write", fm, name)
+
+    def test_zcode_dispatch_line_names_agents_with_real_ids(self):
+        with open(os.path.join(SCRIPTS, "audit.py"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("ZCode: dispatch each worker as agent glm-rca-investigator", self.flat(text))
+        self.assertNotIn("subagent_type", text)
+
+    def test_setup_zcode_strips_opencode_and_setup_md_from_the_copy(self):
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home, True)
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, clean_env(HOME=home), clear=True), redirect_stdout(buf):
+            audit.main(["setup", "--harness", "zcode"])
+        skill = os.path.join(home, ".zcode", "skills", "glm-requirements-code-audit")
+        self.assertTrue(os.path.isfile(os.path.join(skill, "SKILL.md")))
+        self.assertTrue(os.path.isfile(os.path.join(skill, "scripts", "audit.py")))
+        self.assertFalse(os.path.exists(os.path.join(skill, "opencode")))
+        self.assertFalse(os.path.exists(os.path.join(skill, "SETUP.md")))
+        self.assertTrue(os.path.isfile(os.path.join(home, ".zcode", "agents", "glm-rca-investigator.md")))
+        self.assertTrue(os.path.isfile(os.path.join(home, ".zcode", "agents", "glm-rca-verifier.md")))

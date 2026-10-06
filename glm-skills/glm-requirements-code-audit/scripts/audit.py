@@ -2871,12 +2871,17 @@ def _oc_script():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "oc_harness.py")
 
 
+ZCODE_DISPATCH = (u"ZCode: dispatch each worker as agent glm-rca-investigator (judge batches) or "
+                  u"glm-rca-verifier (verify batches), all in one message — agents launched together run in "
+                  u"parallel; use real model ids only (glm-5.3-flash / glm-5.3).")
+
+
 def _dispatch(agent, prompt_path, description):
     """One dispatch line for the agent lane. Never names a model alias."""
     if _on_opencode():
         return _oc().dispatch_line(agent, prompt_path, description, _oc_major(),
                                    background=True)
-    return u"subagent_type=%s  prompt: read %s and follow it exactly" % (agent, prompt_path)
+    return u"agent %s — prompt: read %s and follow it exactly" % (agent, prompt_path)
 
 
 def _oc_lane_wave(lanes_dir, name, batches, agent, model, effort, repo):
@@ -2907,7 +2912,7 @@ def _print_dispatch(c, wave, batches, agent, role, header):
               " for each wave to finish before the next:" % (len(batches), lanes, lanes))
     else:
         print(header + " -- emit ALL of these in ONE message (they are independent):")
-    print("  ZCode: subagents launched together run in parallel.")
+    print("  " + ZCODE_DISPATCH)
     print("  OpenCode v2: background subagent calls run in parallel.")
     for i, (name, p) in enumerate(batches):
         if i and i % lanes == 0:
@@ -3165,7 +3170,8 @@ def cmd_setup(a):
         if os.path.abspath(root) != os.path.abspath(sk):
             if os.path.isdir(sk):
                 shutil.rmtree(sk)
-            shutil.copytree(root, sk)
+            shutil.copytree(root, sk,
+                            ignore=shutil.ignore_patterns("opencode", "SETUP.md"))
         mk(ag)
         if os.path.isdir(src):
             for f in sorted(os.listdir(src)):
