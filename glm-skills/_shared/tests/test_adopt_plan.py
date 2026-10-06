@@ -463,5 +463,48 @@ class OpenCodeDispatchTests(unittest.TestCase):
         self.assertNotIn("sonnet", out)
 
 
+class ZcodeAgentAndDispatchTests(unittest.TestCase):
+    """The zcode agent block and the dispatch headers inside plan_tool.py."""
+
+    @staticmethod
+    def _skill_root():
+        import os
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    @classmethod
+    def plan_tool_text(cls):
+        import os
+        with open(os.path.join(cls._skill_root(), "glm-writing-plans", "scripts", "plan_tool.py"),
+                  encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_zcode_agent_block_carries_maxturns_16(self):
+        lines = self.plan_tool_text().split("\n")
+        found = False
+        for i, line in enumerate(lines):
+            if "name: glm-plan-task-writer" in line:
+                window = lines[i + 1:i + 9]
+                if any("thoughtLevel:" in w for w in window):
+                    found = True
+                    self.assertTrue(any("maxTurns: 16" in w for w in window),
+                                    "zcode agent block lacks maxTurns: 16")
+        self.assertTrue(found, "no zcode agent block for glm-plan-task-writer")
+
+    def test_dispatch_headers_carry_no_jargon(self):
+        text = self.plan_tool_text()
+        self.assertNotIn("sonnet", text, "plan_tool.py still names the sonnet alias")
+        self.assertNotIn("subagent_type=", text, "dispatch headers still carry subagent_type= jargon")
+
+    def test_r9_scopes_base_url_to_claude_compatible_harnesses(self):
+        import os
+        with open(os.path.join(self._skill_root(), "glm-writing-plans", "SKILL.md"),
+                  encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("On a Claude-compatible harness, also export the z.ai Anthropic route",
+                      text, "R9 does not scope ANTHROPIC_BASE_URL to Claude-compatible harnesses")
+        self.assertEqual(text.count("export ANTHROPIC_BASE_URL="), 1,
+                         "R9 must export ANTHROPIC_BASE_URL exactly once")
+
+
 if __name__ == "__main__":
     unittest.main()
