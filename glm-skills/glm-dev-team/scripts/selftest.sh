@@ -14,6 +14,11 @@ D() { python3 "$S/devteam.py" "$@"; }
 # transcripts, no peak-hour dependence, and a throwaway HOME so the machine's ~/.claude never leaks in.
 export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_TRANSCRIPTS_DIR="$TMP/no-transcripts"
 unset DEVTEAM_GLM_TIER DEVTEAM_MAX_PARALLEL ANTHROPIC_BASE_URL CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS CLAUDE_CONFIG_DIR
+# Pin the harness: running the suite from inside an OpenCode session leaks OPENCODE /
+# OPENCODE_TERMINAL into the sandbox, is_opencode() flips, and dispatch launches real lanes
+# instead of printing the claim prompts the checks assert. DEVTEAM_HARNESS wins over every
+# ambient marker; the OpenCode/ZCode sections below re-pin it themselves.
+export DEVTEAM_HARNESS=claude
 export HOME="$TMP/home"; mkdir -p "$HOME"
 git config --global user.email t@t; git config --global user.name t
 R="$(mkt)/repo"; mkdir -p "$R"; cd "$R"
@@ -1181,7 +1186,7 @@ printf '{"type":"assistant","text":"working"}\n{"type":"error","error":{"name":"
 GOVOUT=$(DEVTEAM_GOVERNOR=on D next 2>&1)
 check "a 1302 throttle row shrinks the governor window (opencode lanes)" '[[ "$GOVOUT" == *"THROTTLED"* && "$GOVOUT" == *"window"*"→"* ]]'
 export PATH="$OLDPATH"
-unset DEVTEAM_HARNESS DEVTEAM_PY
+export DEVTEAM_HARNESS=claude; unset DEVTEAM_PY
 echo "== OpenCode hardening DG4/DG5: read-only roles cannot write or exec through allow-listed tools"
 roq() { printf '{"cwd":"%s","tool_input":{"command":%s}}' "$RA" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" | python3 "$G" bash-ro; }
 roallow() { [[ "$(roq "$1")" == *"\"allow\""* ]]; }
