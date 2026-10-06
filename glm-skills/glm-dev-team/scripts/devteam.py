@@ -472,12 +472,15 @@ def base_url_of(root=None):
 
 
 def detect_provider(root=None, st=None):
-    """DEVTEAM_PROVIDER wins, then the run state, then the base URL (Z.ai / BigModel → glm)."""
+    """DEVTEAM_PROVIDER wins, then the run state, then the base URL (Z.ai / BigModel → glm);
+    zcode has no base URL, so the default is glm there (the glm route caps lanes at 8)."""
     forced = (os.environ.get("DEVTEAM_PROVIDER") or "").strip().lower()
     if forced in PROVIDERS:
         return forced
     if st and st.get("provider") in PROVIDERS:
         return st["provider"]
+    if is_zcode():
+        return "glm"
     return "glm" if is_glm_url(base_url_of(root)) else "anthropic"
 
 
@@ -1911,7 +1914,11 @@ def do_dispatch(root, st, ids, force=False):
         if cf.exists():
             cf.unlink()
         clear_markers(root, sid)
-        s["route"] = (dispatch_route(st, s, mode)[2] if mode != "research" else "glm-investigator")
+        if mode != "research":
+            route = dispatch_route(st, s, mode)
+            s["route"] = route if isinstance(route, str) else route[2]   # zcode: the Agent line itself
+        else:
+            s["route"] = "glm-investigator"
         write_atomic(state_dir(root) / "briefs" / f"{sid}.md", briefing_text(st, s, mode))
         free -= 1
         blocks.append((sid, s, mode))
@@ -1924,7 +1931,15 @@ def dispatch_route(st, s, mode):
     """(subagent_type, per-invocation model override or "", human label) for one glm-programmer dispatch.
     Cheap first, strong where it pays: every lane starts on the fast model (GLM-5.3-Flash on Z.ai), a
     trivial or small-docs slice on the low-effort lite lane; high-risk, large and RETRIED slices escalate
-    to the strong model (GLM-5.3) — a second attempt means the fast model already missed once."""
+    to the strong model (GLM-5.3) — a second attempt means the fast model already missed once.
+    On zcode the return is the Agent line itself (subagent_type + description, no model:): the Agent
+    tool there takes no per-dispatch model, and strong slices run glm-programmer-strong."""
+    if is_zcode():
+        strong = (s.get("risk") == "high" or s.get("size") == "large"
+                  or int(s.get("attempt") or 1) >= 2)
+        agent = "glm-programmer-strong" if strong else "glm-programmer-lite"
+        description = s.get("title") or s.get("id") or "slice"
+        return "Agent(subagent_type=" + agent + ", description=" + repr(description) + ")"
     prov = provider_of(st)
     cfg = PROVIDERS[prov]
     size = s.get("size") or "small"
@@ -1963,6 +1978,20 @@ def is_opencode() -> bool:
         return _oc_harness().harness(str(Path(__file__).resolve())) == "opencode"
     except Exception:
         return False
+
+
+def is_zcode() -> bool:
+    """True under the zcode harness: a DEVTEAM_HARNESS=zcode override wins,
+    any other DEVTEAM_HARNESS value wins against the detector, the v1
+    OpenCode marker wins against the detector too, and otherwise the
+    vendored harness detector decides by path/env (it returns "zcode"
+    there)."""
+    override = os.environ.get("DEVTEAM_HARNESS", "")
+    if override:
+        return override == "zcode"
+    if os.environ.get("OPENCODE") == "1" and is_opencode():
+        return False
+    return _oc_harness().harness(str(Path(__file__).resolve())) == "zcode"
 
 
 def oc_model(st, agent, model):
@@ -2132,8 +2161,11 @@ def launch_lane(root, st, lane_id, agent, model, prompt, note="") -> int:
 
 def emit_agent(root, st, agent, model, prompt, label) -> str:
     """The launch line for one agent: the Claude Code `Agent →` instruction, or on OpenCode a lane
-    process started right now (the Conductor then only waits)."""
+    process started right now (the Conductor then only waits). On zcode the Agent tool takes no
+    model, so the model segment is dropped there."""
     if not is_opencode():
+        if is_zcode():
+            return f"Agent → subagent_type: {agent}, description: \"{label}\", prompt: \"{prompt}\""
         return (f"Agent → subagent_type: {agent}, description: \"{label}\"" + (f", model: {model}" if model else "")
                 + f", prompt: \"{prompt}\"")
     lane_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", label).strip("-") or "lane"
@@ -2443,7 +2475,14 @@ def print_dispatch(st, blocks, skipped):
                 emit_agent(root, st, "glm-investigator", model, f"Read {brief} and follow it exactly.", sid),
                 "")
             continue
-        agent, model, label = dispatch_route(st, s, mode)
+        route = dispatch_route(st, s, mode)
+        if isinstance(route, str):   # zcode: dispatch_route returns the Agent line; the Agent tool
+            # there takes no model, so only the claim prompt is appended to it
+            out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}",
+                route[:-1] + f", prompt: \"python3 {sp} claim {sid}\")",
+                "")
+            continue
+        agent, model, label = route
         out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}   ({label})",
             emit_agent(root, st, agent, model, f"python3 {sp} claim {sid}", sid),
             "")
@@ -4618,7 +4657,7 @@ def main(argv=None):
     pr = sp.add_parser("stats"); pr.add_argument("--all", action="store_true"); pr.set_defaults(fn=cmd_stats)
     pr = sp.add_parser("finish"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_finish)
     pr = sp.add_parser("reset"); pr.add_argument("--yes", action="store_true"); pr.set_defaults(fn=cmd_reset)
-    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "opencode"]); pr.set_defaults(fn=cmd_doctor)
+    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "opencode", "zcode"]); pr.set_defaults(fn=cmd_doctor)
     pr = sp.add_parser("allow"); pr.add_argument("cmds", nargs="+"); pr.set_defaults(fn=cmd_allow)
     pr = sp.add_parser("claim"); pr.add_argument("id"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_claim)
     pr = sp.add_parser("bind"); pr.add_argument("id"); pr.add_argument("worktree"); pr.set_defaults(fn=cmd_bind)
