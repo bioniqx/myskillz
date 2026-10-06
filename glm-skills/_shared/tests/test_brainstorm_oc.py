@@ -453,6 +453,21 @@ class ZcodeSurfaceTests(unittest.TestCase):
         self.assertNotIn("subagents=", r.stdout)
         self.assertNotIn("workflow=", r.stdout)
 
+    def test_context_sh_zcode_path_arm_outranks_opencode_path_arm(self):
+        r = self.run_context("opencode/x/.zcode/skills/glm-brainstorming/scripts")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("harness: zcode", r.stdout)
+        self.assertIn("caps: lanes=6 (default 6, hard max 8)", r.stdout)
+        self.assertNotIn("harness: opencode", r.stdout)
+
+    def test_context_sh_zcode_outranks_when_home_sits_under_opencode_dir(self):
+        self.home = os.path.join(self._tmp.name, "opencode")
+        os.makedirs(self.home)
+        r = self.run_context(".zcode/skills/glm-brainstorming/scripts")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("harness: zcode", r.stdout)
+        self.assertIn("caps: lanes=6 (default 6, hard max 8)", r.stdout)
+
     def test_context_sh_claude_code_caps_still_printed(self):
         r = self.run_context("plain/scripts", {"CLAUDECODE": "1"})
         self.assertEqual(r.returncode, 0, r.stderr)
