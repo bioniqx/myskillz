@@ -154,11 +154,14 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         hooks = cfg.get("hooks") or {}
         self.assertIn("enabled", hooks)
         self.assertTrue(hooks["enabled"])
-        self.assertEqual(hooks.get("PreToolUse"), [
+        events = hooks.get("events") or {}
+        self.assertEqual(events.get("PreToolUse"), [
             {"matcher": "Write|Edit", "hooks": [{"type": "process", "command": GUARD_CMD}]},
             {"matcher": "Bash", "hooks": [{"type": "process", "command": GUARD_CMD}]},
         ])
-        self.assertEqual(hooks.get("Stop"), [{"hooks": [{"type": "process", "command": GUARD_CMD}]}])
+        self.assertEqual(events.get("Stop"), [{"hooks": [{"type": "process", "command": GUARD_CMD}]}])
+        for key in ("PreToolUse", "Stop"):  # legacy unwrapped keys must not survive a render
+            self.assertNotIn(key, hooks)
 
     def test_changed_files_earn_bak_and_restore_content(self):
         agents_dir = os.path.join(self.home, ".zcode", "agents")

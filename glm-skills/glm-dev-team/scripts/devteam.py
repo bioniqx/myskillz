@@ -4843,18 +4843,28 @@ def _zcode_write(path, text):
 
 
 def _zcode_add_hooks(cfg, hook_cmd):
-    """Add the dev-team hook entries to a parsed user config dict (in place)."""
+    """Add the dev-team hook entries to a parsed user config dict (in place).
+
+    Entries live under ``hooks.events.<Event>`` — the shape the zcode binary
+    parses (its config schema nests the event lists inside an ``events``
+    object, and its reader walks ``hooks.events?.<Event>``). Legacy unwrapped
+    ``hooks.<Event>`` keys from older renders are migrated in and removed.
+    """
     hooks = cfg.get("hooks")
     if not isinstance(hooks, dict):
         hooks = {}
         cfg["hooks"] = hooks
     hooks["enabled"] = True
+    events = hooks.get("events")
+    if not isinstance(events, dict):
+        events = {}
+        hooks["events"] = events
 
     def ensure(event, entry):
-        entries = hooks.get(event)
+        entries = events.get(event)
         if not isinstance(entries, list):
             entries = []
-            hooks[event] = entries
+            events[event] = entries
         for cur in entries:
             if not isinstance(cur, dict) or cur.get("matcher") != entry.get("matcher"):
                 continue
@@ -4870,6 +4880,12 @@ def _zcode_add_hooks(cfg, hook_cmd):
             entry["matcher"] = matcher
         return entry
 
+    for event in ("PreToolUse", "Stop"):
+        legacy = hooks.pop(event, None)
+        if isinstance(legacy, list):
+            for entry in legacy:
+                if isinstance(entry, dict):
+                    ensure(event, entry)
     ensure("PreToolUse", process_entry("Write|Edit"))
     ensure("PreToolUse", process_entry("Bash"))
     ensure("Stop", process_entry())
@@ -4900,8 +4916,11 @@ def _zcode_hooks_present(cfg_path, hook_cmd):
     hooks = cfg.get("hooks")
     if not isinstance(hooks, dict) or not hooks.get("enabled"):
         return False
+    events = hooks.get("events")
+    if not isinstance(events, dict):
+        return False
     for event, matcher in (("PreToolUse", "Write|Edit"), ("PreToolUse", "Bash"), ("Stop", None)):
-        entries = hooks.get(event)
+        entries = events.get(event)
         if not isinstance(entries, list) or not _zcode_has_entry(entries, matcher, hook_cmd):
             return False
     return True
