@@ -1554,6 +1554,51 @@ def guard_oc(inp):
     allow()
 
 
+ZCODE_READ_ONLY_ROLES = (
+    "glm-code-reviewer",
+    "glm-investigator",
+    "glm-spot-reviewer",
+    "glm-team-leader",
+)
+
+
+def guard_zcode(inp):
+    """zcode hook mode: route on agent_type over the shared checks.
+
+    Foreign or missing roles silently allow, so the user-level hooks never
+    affect ordinary sessions - including every other glm-* agent of this
+    repo's other skills, which are not dev-team lanes. Lane roles never
+    defer to the ask flow (a background lane would hang on a prompt nobody
+    answers): a check whose capture comes back empty - the silent allow that
+    would defer to the ask flow - is made an explicit deny instead. A
+    hook_event_name: Stop payload routes to the stop gate only for
+    programmer roles - the Conductor's own Stop always allows. Anything
+    unparsable fails open, as everywhere in this guard.
+    """
+    if not isinstance(inp, dict):
+        return allow()
+    agent = inp.get("agent_type") or inp.get("agentType") or ""
+    event = inp.get("hook_event_name") or inp.get("hookEventName") or ""
+    tool = inp.get("tool_name") or inp.get("toolName") or ""
+    programmer = isinstance(agent, str) and agent.startswith("glm-programmer")
+    read_only = isinstance(agent, str) and agent in ZCODE_READ_ONLY_ROLES
+    if not programmer and not read_only:
+        return allow()
+    if event == "Stop":
+        return guard_stop(inp) if programmer else allow()
+    if tool in ("Write", "Edit"):
+        check = guard_edit if programmer else guard_edit_ro
+    elif tool == "Bash":
+        check = guard_bash if programmer else guard_bash_ro
+    else:
+        return allow()
+    out = oc_capture(check, inp)
+    if not out.strip():
+        deny("zcode lane cannot defer to the ask flow: " + tool)
+    sys.stdout.write(out)
+    allow()
+
+
 def main():
     if len(sys.argv) < 2:
         allow()
@@ -1564,7 +1609,8 @@ def main():
         allow()
     try:
         {"edit": guard_edit, "bash": guard_bash, "stop": guard_stop, "perm": guard_perm,
-         "edit-ro": guard_edit_ro, "bash-ro": guard_bash_ro, "oc": guard_oc}.get(mode, lambda i: allow())(inp)
+         "edit-ro": guard_edit_ro, "bash-ro": guard_bash_ro, "oc": guard_oc,
+         "zcode": guard_zcode}.get(mode, lambda i: allow())(inp)
     except SystemExit:
         raise
     except Exception:
