@@ -123,8 +123,9 @@ worth more on GLM than on Claude, because Flash is verbose by default.
   assumption.
 - Lane stopped at its turn limit with partial output → continue it with
   `SendMessage`, which keeps its context, instead of spawning a fresh one.
-  On ZCode no continue tool is documented: re-dispatch a fresh Flash lane
-  with the partial output pasted in and the remaining budget stated.
+  On ZCode `SendMessage` exists (Claude-Code-compatible): only if the send
+  fails should a fresh Flash lane be re-dispatched as fallback, with the
+  partial output pasted in and the remaining budget stated.
 - Lane returns off-contract prose (common on Flash) → take what is usable.
   Do not re-run it for formatting.
 - Tool-call parse errors from a self-hosted GLM server → a serving-stack
