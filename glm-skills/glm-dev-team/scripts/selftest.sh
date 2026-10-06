@@ -1299,6 +1299,34 @@ OUT=$(D init badtypes.md --force 2>&1)
 check "a plan with wrongly typed slice fields is refused with a message, not a traceback" '[[ "$OUT" != *Traceback* && -n "$OUT" ]]'
 cd "$R"
 
+# zcode dispatch: strong slices pick glm-programmer-strong, lite stays
+# glm-programmer-lite, and the Agent line carries no model: segment.
+if ! DEVTEAM_HARNESS=zcode python3 - "$(cd "$(dirname "$0")" && pwd)" <<'PY'
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import devteam
+
+strong_cases = [
+    {"id": "S1", "title": "risky slice", "risk": "high", "size": "small", "attempt": 1},
+    {"id": "S2", "title": "large slice", "risk": "low", "size": "large", "attempt": 1},
+    {"id": "S3", "title": "retry slice", "risk": "low", "size": "small", "attempt": 2},
+]
+lite = {"id": "S4", "title": "easy slice", "risk": "low", "size": "small", "attempt": 1}
+for s in strong_cases:
+    line = devteam.dispatch_route({}, s, "zcode")
+    assert "glm-programmer-strong" in line, line
+    assert "model:" not in line, line
+line = devteam.dispatch_route({}, lite, "zcode")
+assert "glm-programmer-lite" in line, line
+assert "model:" not in line, line
+PY
+then
+  echo "FAIL: zcode dispatch checks" >&2
+  exit 1
+fi
+echo "zcode dispatch ok"
+
 echo
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
