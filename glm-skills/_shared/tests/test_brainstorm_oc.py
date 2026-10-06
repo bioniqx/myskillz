@@ -505,10 +505,14 @@ class ZcodeSurfaceTests(unittest.TestCase):
         for ln in self.prose_lines(text):
             if "CLAUDE_CODE_" in ln or "Workflow" in ln:
                 self.assertIn("Claude Code", ln, ln)
-        self.assertIn("On ZCode no continue tool is documented", self.flat(text))
+        self.assertIn("SendMessage` exists (Claude-Code-compatible)", self.flat(text))
+        self.assertNotIn("On ZCode no continue tool is documented", self.flat(text))
 
     def test_architectural_taskstop_note_covers_zcode(self):
-        self.assertIn("On ZCode no stop tool is documented", self.flat(self.read("architectural.md")))
+        self.assertIn("TaskStop` exists (Claude-Code-compatible)",
+                      self.flat(self.read("architectural.md")))
+        self.assertNotIn("On ZCode no stop tool is documented",
+                         self.flat(self.read("architectural.md")))
 
     def test_visual_companion_platform_notes_gain_zcode(self):
         self.assertIn("ZCode — no ZCode-specific server behavior is documented",
