@@ -66,6 +66,17 @@ Trên OpenCode, engine tự nhận harness qua `oc_harness.harness()` khi có m�
 11. **Doctor:** `python3 devteam.py doctor --harness opencode` kiểm tra agent, plugin, config và việc major version có khớp không.
 12. **Chỉ dispatch qua engine:** agent glm-dev-team chỉ được khởi chạy qua lane của engine (`devteam next` / `lane-run`), nơi gán `DEVTEAM_ROLE`/`DEVTEAM_SLICE` cho từng lane. Không bao giờ dispatch role glm-dev-team bằng tool `task` (v1) hay `subagent` (v2) của OpenCode. Agent built-in của OpenCode là `general`; ở đó không có `general-purpose` hay `Explore`.
 
+### ZCode
+
+Trên ZCode, engine tự nhận harness qua `is_zcode()`: `DEVTEAM_HARNESS=zcode` thắng trước, nếu không có thì detector theo đường dẫn quyết định (skill nằm trong `~/.zcode/skills`). Provider mặc định là `glm` (trần 8 lời gọi đồng thời). Agent được cài cấp user: `python3 devteam.py doctor --harness zcode --fix` ghi bảy agent vào `~/.zcode/agents/` và merge hook guard vào `~/.zcode/cli/config.json` (`hooks.enabled: true`, `.bak` trước khi ghi, chạy lại là no-op; `start` tự chạy doctor). Mỗi lane chạy qua tool `Agent` của harness:
+
+1. **Dispatch:** tool `Agent` (alias của Task) nhận `subagent_type`, `description`, `prompt`, `run_in_background` — không có tham số `model` theo từng lần gọi. Mọi dòng `Agent →` in ra đều không có `model:`: slice mạnh (`risk: high` / `size: large` / bị retry) chạy `glm-programmer-strong`, còn lại chạy `glm-programmer-lite`; frontmatter của agent tự chọn model thật (`glm-5.3` / `glm-5.3-flash`, không có alias haiku/sonnet/opus). Launch mọi dòng trong MỘT message với `run_in_background: true`, prompt giữ nguyên, rồi kết thúc lượt.
+2. **Đánh thức:** thông báo hoàn tất của lane chính là tín hiệu đánh thức. ZCode không có event SubagentStop và agent zcode không mang hooks, nên không có stop gate nào ghi marker `.done` — bước integrate phía engine là cổng chốt: chạy `devteam next [<id>]` với id của slice vừa xong, engine tự kiểm tra claim, worktree, RED/GREEN và footprint.
+3. **Nhắn tin:** `SendMessage` và `TaskStop` tồn tại (tương thích Claude Code). Trả lời câu hỏi `BLOCKED`, hay gửi cách sửa cho `REJECTED` / `NOT READY` / `MERGE ERROR`, bằng `SendMessage` đến agent đó. `TaskStop` lane bị treo trước, rồi retry lạnh bằng `devteam retry <id>`.
+4. **Cài đặt cần phiên mới:** agent và hook config mới chỉ được nạp trong một phiên ZCode MỚI (không phải khởi động lại app). Sau khi `doctor --fix` cài hoặc thay đổi gì, hãy bảo người dùng mở phiên mới một lần.
+
+Hook là cấp user: cầu `guard.py zcode` routing theo `agent_type` của payload — role programmer chạy bộ kiểm tra edit/bash, role reviewer/leader/investigator chạy bộ chỉ-đọc, còn mọi role lạ được cho qua im lặng, nên hook không bao giờ ảnh hưởng phiên thường.
+
 ## Biến môi trường
 
 | Biến | Tác dụng |

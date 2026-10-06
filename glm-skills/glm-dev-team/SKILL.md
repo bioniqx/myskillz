@@ -87,6 +87,19 @@ Launch glm-dev-team agents only through the engine's process lane (`devteam next
    the built-in `general` agent.
 6. Re-review: a reviewer lane has exited and cannot be messaged. Once the fixes are merged, the next review dispatch that `next` prints is a fresh reviewer lane scoped to the fix commits; never try to message the old one. The loop cap of 2 still applies.
 
+#### ZCode protocol
+
+The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (8-call cap), and `doctor --harness zcode --fix` installs the seven agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool:
+
+| ZCode fact | What the Conductor does |
+| --- | --- |
+| `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` — no per-dispatch `model` | Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`; the agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash` — no haiku/sonnet/opus aliases). |
+| No SubagentStop event, and zcode agent files carry no hooks — no stop gate writes the `.done` marker | The wake-up is the lane completion notification. Run `devteam next [<id>]` with the finished slice's id: the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) is the gate, not a marker. |
+| `SendMessage` and `TaskStop` exist (Claude-Code-compatible) | Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`. |
+| Installed agents and hook config load only in a new session | After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart). |
+
+The hooks are user-level: `guard.py zcode` routes on the payload's `agent_type` — programmer roles run the edit/bash checks, reviewer/leader/investigator roles the read-only checks, and every foreign role silently allows, so ordinary sessions are never affected.
+
 ## Route first (one line to the user, then act)
 
 | The request is… | Route |
