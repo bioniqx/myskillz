@@ -21,8 +21,8 @@ fi
 if [ -n "$CLAUDECODE" ] || [ -n "$CLAUDE_CODE_ENTRYPOINT" ] || [ -n "$CLAUDE_SKILL_DIR" ]; then
   harness=claude-code
 elif [ -n "$OPENCODE_TERMINAL" ] || [ -n "$OPENCODE" ] || [ -n "$OPENCODE_BIN" ] || [ -f "$skill_dir/.oc-major" ]; then harness=opencode
-elif case "$skill_dir" in */opencode/*|*/.opencode/*) true ;; *) false ;; esac; then harness=opencode
 elif case "$skill_dir" in */.zcode/*) true ;; *) false ;; esac; then harness=zcode
+elif case "$skill_dir" in */opencode/*|*/.opencode/*) true ;; *) false ;; esac; then harness=opencode
 elif [ -n "$CODEX_CI" ] || [ -n "$CODEX_HOME" ]; then harness=codex
 elif [ -n "$CLINE_VERSION" ] || [ -n "$ROO_CODE" ]; then harness=cline
 elif [ -n "$GEMINI_CLI" ]; then harness=gemini-cli
