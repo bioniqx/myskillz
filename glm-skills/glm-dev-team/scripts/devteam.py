@@ -4207,8 +4207,6 @@ def cmd_doctor(a):
     written = []   # paths this call wrote, so `start` does not trip on them as "uncommitted changes"
     local = settings_paths(root)["local"]
     cur = load_json(local)
-    if local.exists():
-        shutil.copy(local, local.with_suffix(".json.bak"))
     for k in ("env", "worktree"):
         if k in fixes:
             cur[k] = {**(cur.get(k) or {}), **fixes[k]}
@@ -4227,8 +4225,6 @@ def cmd_doctor(a):
         dst = root / ".claude" / "agents" / f"{name}.md"
         if src.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
-            if dst.exists():
-                shutil.copy(dst, dst.with_suffix(".md.bak"))
             dst.write_text(render_agent(agents_src, name, provider, guard))
             m_, e_ = PROVIDERS[provider]["agents"][name]
             written.append(dst)

@@ -1348,11 +1348,9 @@ def cmd_setup(a):
         print("Re-run with --apply to write these changes.")
         return 0
     if any(c.startswith(("env.", "permissions.")) for c in changes):
-        if os.path.exists(settings):
-            shutil.copy2(settings, settings + ".bak")
         save(settings, json.dumps(new, indent=2) + "\n")
     save(agent_path, agent_text)
-    print("OK written (backup: %s.bak). Restart Claude Code so the env and agent load." % settings)
+    print("OK written. Restart Claude Code so the env and agent load.")
     return 0
 
 

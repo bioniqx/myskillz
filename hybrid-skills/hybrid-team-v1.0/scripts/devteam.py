@@ -3428,8 +3428,6 @@ def cmd_doctor(a):
     written = []
     local = settings_paths(root)["local"]
     cur = load_json(local)
-    if local.exists():
-        shutil.copy(local, local.with_suffix(".json.bak"))
     for k in ("env", "worktree"):
         if k in fixes:
             cur[k] = {**(cur.get(k) or {}), **fixes[k]}
@@ -3448,8 +3446,6 @@ def cmd_doctor(a):
         dst = root / ".claude" / "agents" / f"{name}.md"
         if src.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
-            if dst.exists():
-                shutil.copy(dst, dst.with_suffix(".md.bak"))
             dst.write_text(pin_hooks(src.read_text(), guard))
             out(f"installed {dst} (hooks → {guard})")
             written.append(dst)

@@ -242,7 +242,7 @@ class SetupTests(PlanCase):
         self.assertIn("Edit(**/docs/plans/**)", allow)
         self.assertTrue(any(a.startswith("Bash(python3 ") and a.endswith("plan_tool.py *)")
                             for a in allow), allow)
-        self.assertTrue(os.path.exists(self.settings() + ".bak"))
+        self.assertFalse(os.path.exists(self.settings() + ".bak"))
         agent = self.read(self.agent())
         self.assertIn("model: sonnet", agent)
         self.assertIn("hook-lint", agent)

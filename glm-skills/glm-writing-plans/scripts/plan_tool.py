@@ -1950,8 +1950,6 @@ def cmd_setup(a):
             print("  - " + c)
     if changes and a.apply:
         if new is not None:
-            if os.path.exists(settings):
-                shutil.copy2(settings, settings + ".bak")
             save(settings, json.dumps(new, indent=2) + "\n")
         for path, text in targets:
             save(path, text)

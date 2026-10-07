@@ -723,7 +723,7 @@ check "--fast 0 selects strict even when the plan asks for turbo" 'printf "\140\
 D doctor --fix >/dev/null 2>&1
 printf -- "---\nname: glm-programmer\ndescription: stale v2 copy\n---\nold body\n" > .claude/agents/glm-programmer.md
 check "doctor notices an agent left behind by an older glm-dev-team" 'D doctor 2>&1 | grep -q "differs from the version shipped"'
-check "doctor --fix refreshes it and keeps a .bak" 'D doctor --fix >/dev/null 2>&1; grep -q "permissionMode: dontAsk" .claude/agents/glm-programmer.md && [ -f .claude/agents/glm-programmer.md.bak ]'
+check "doctor --fix refreshes it in place, no .bak" 'D doctor --fix >/dev/null 2>&1; grep -q "permissionMode: dontAsk" .claude/agents/glm-programmer.md && [ ! -e .claude/agents/glm-programmer.md.bak ]'
 
 # =============================================================================================
 # v3.2 — no-relay integration (Stop-gate markers), never-prompt permissions, tighter dispatch
