@@ -63,7 +63,7 @@ TIERS = {
 }
 DEFAULT_TIER = "std"
 MAX_PARALLEL = 8  # provider limit on concurrent model/API calls: threads, lanes and agents never exceed it
-AGENT_LANES = 6  # default agent-lane width (OC_MAX_LANES may raise it to MAX_PARALLEL); the api lane keeps 8 threads
+AGENT_LANES = 8  # default agent-lane width: the provider's full concurrent-call budget (OC_MAX_LANES overrides, clamped to MAX_PARALLEL); the api lane keeps 8 threads
 MIN_PER_BATCH = 3  # agent-lane batches hold at least this many items when there are enough: batch, not more workers
 VERIFY_MAX_PER_AGENT = 3  # items per verifier batch on the agent lane (the original's value)
 AGENT_ALIAS = {FLASH: "haiku", PRO: "sonnet"}  # agent lane only; never "opus"
@@ -2921,7 +2921,7 @@ def _print_dispatch(c, wave, batches, agent, role, header):
 
 
 def _oc_lanes():
-    """Agent-lane width: OC_MAX_LANES, default 6, ceiling 8, never below 1."""
+    """Agent-lane width: OC_MAX_LANES, default 8, ceiling 8, never below 1."""
     try:
         n = int(os.environ.get("OC_MAX_LANES") or AGENT_LANES)
     except ValueError:

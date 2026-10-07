@@ -208,11 +208,11 @@ class AgentLaneBatchSizing(unittest.TestCase):
     def test_even_groups_of_nothing_is_empty(self):
         self.assertEqual(audit._even_groups([], 8), [])
 
-    def test_caps_batch_count_at_default_lane_width_of_six(self):
+    def test_caps_batch_count_at_default_lane_width_of_eight(self):
         self.env()
-        self.assertEqual(audit._oc_lanes(), 6)
+        self.assertEqual(audit._oc_lanes(), 8)
         groups = audit._agent_groups(list(range(64)), 64, 12)
-        self.assertEqual(sorted(len(g) for g in groups), [10] * 2 + [11] * 4)
+        self.assertEqual(sorted(len(g) for g in groups), [8] * 8)
 
     def test_oc_max_lanes_never_exceeds_eight(self):
         self.env("64")
@@ -225,11 +225,11 @@ class AgentLaneBatchSizing(unittest.TestCase):
         groups = audit._agent_groups(list(range(10)), 64, 12)
         self.assertEqual([len(g) for g in groups], [4, 3, 3])
 
-    def test_bad_oc_max_lanes_falls_back_to_six(self):
+    def test_bad_oc_max_lanes_falls_back_to_eight(self):
         self.env("many")
-        self.assertEqual(audit._oc_lanes(), 6)
+        self.assertEqual(audit._oc_lanes(), 8)
         self.env("")
-        self.assertEqual(audit._oc_lanes(), 6)
+        self.assertEqual(audit._oc_lanes(), 8)
         self.env("0")
         self.assertEqual(audit._oc_lanes(), 1)
 

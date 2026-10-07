@@ -58,9 +58,9 @@ case "$fast$mid$big" in
   *) [ "$route" = glm ] && echo "glm: route is GLM but model slots are unmapped — set ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3-flash (glm-tuning.md §2)" ;;
 esac
 if [ "$harness" = opencode ]; then
-  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-6}" 6) (set OC_MAX_LANES or pass oc_harness run --width N; default 6, hard max 8) oc_major=$oc_major"
+  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-8}" 8) (set OC_MAX_LANES or pass oc_harness run --width N; default 8, hard max 8) oc_major=$oc_major"
 elif [ "$harness" = zcode ]; then
-  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-6}" 6) (default 6, hard max 8)"
+  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-8}" 8) (default 8, hard max 8)"
 else
   echo "caps: subagents=$(c8 "${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-8}") workflow=$(c8 "${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-8}") compact_window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-default}"
 fi

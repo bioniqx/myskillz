@@ -49,8 +49,8 @@ class DebugToolClampTest(unittest.TestCase):
         self.assertEqual(DT16.MAX_API, 8)
         self.assertEqual(DT16.clamp(999, 8, DT16.MAX_API), 8)
 
-    def test_agent_lane_width_defaults_to_six_and_caps_at_api_limit(self):
-        for value, want in (("", 6), ("x", 6), ("0", 1), ("3", 3), ("64", 8)):
+    def test_agent_lane_width_defaults_to_eight_and_caps_at_api_limit(self):
+        for value, want in (("", 8), ("x", 8), ("0", 1), ("3", 3), ("64", 8)):
             with mock.patch.dict(os.environ, {"OC_MAX_LANES": value}):
                 self.assertEqual(DT16.agent_lanes(), want)
 

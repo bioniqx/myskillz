@@ -26,9 +26,9 @@ import oc_harness  # vendored by _shared/sync.sh
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 8           # provider limit: concurrent model calls (threads, writers, reviewers)
-DEFAULT_AGENT_CAP = 6        # unset env: default lane width (provider ceiling stays MAX_WORKERS = 8)
+DEFAULT_AGENT_CAP = 8        # unset env: default lane width (equals the provider ceiling MAX_WORKERS = 8)
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
-DEFAULT_LANE_WIDTH = 6    # background lanes one OpenCode dispatch message starts (up to MAX_WORKERS)
+DEFAULT_LANE_WIDTH = 8    # background lanes one OpenCode dispatch message starts (up to MAX_WORKERS)
 
 # ---- GLM routing -------------------------------------------------------
 # tier -> (api model id, reasoning effort, agent-lane model id; real ids only, no alias jargon)
@@ -248,7 +248,7 @@ def on_opencode():
 
 
 def lane_width():
-    """Groups one OpenCode dispatch message may start: PLAN_LANE_WIDTH, else OC_MAX_LANES; default 6,
+    """Groups one OpenCode dispatch message may start: PLAN_LANE_WIDTH, else OC_MAX_LANES; default 8,
     ceiling 8, 0 gives 1, non-numeric or empty gives the default."""
     for e in ("PLAN_LANE_WIDTH", "OC_MAX_LANES"):
         v = os.environ.get(e, "").strip()
@@ -259,7 +259,7 @@ def lane_width():
 
 def writer_group_count(n_tasks, opencode, cap):
     """Writer groups for n_tasks; every group holds at most WRITER_GROUP_MAX tasks.
-    OpenCode: ceil(n / 4), so up to 24 tasks fit the default lane width of 6 in one
+    OpenCode: ceil(n / 4), so up to 32 tasks fit the default lane width of 8 in one
     message; the lane width caps each dispatch message and extra groups go into
     further messages. Elsewhere: one task per writer up to cap, never more than 4 per writer."""
     if n_tasks <= 0:

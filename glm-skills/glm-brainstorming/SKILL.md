@@ -1,6 +1,6 @@
 ---
 name: glm-brainstorming
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 6) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
+description: "You MUST use this before any creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
 allowed-tools:
   - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
@@ -154,8 +154,8 @@ approves; otherwise ask in plain text.
 ## R7 — Width
 
 One lane per question whose answer you will cite or act on; never pad.
-Concurrent lanes: `lanes=` in Live context (default 6, hard max 8: the
-provider allows 8 concurrent API calls), and never over the subagent cap in Live context (the harness rejects the
+Concurrent lanes: `lanes=` in Live context (default 8 — the provider's
+full concurrent-call budget, hard max 8), and never over the subagent cap in Live context (the harness rejects the
 next one and says not to retry). Over the cap → dispatch the lanes that
 can change the approach set first, then refill in batches as completions arrive. Details: `fanout-playbook.md`
 (read when planning more lanes than `lanes=` or after a fan-out failure).

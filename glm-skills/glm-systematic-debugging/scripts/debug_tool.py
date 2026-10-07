@@ -37,7 +37,7 @@ import oc_harness
 WORKER_AGENT = "glm-debug-worker"
 MAXJ = 64  # local CPU jobs (run/probe/experiment)
 MAX_API = 8  # concurrent model/API calls (scan workers, subagent lanes)
-AGENT_LANES = 6  # default agent-lane wave width; OC_MAX_LANES may raise it to MAX_API
+AGENT_LANES = 8  # default agent-lane wave width: the provider's full concurrent-call budget; OC_MAX_LANES overrides, clamped to MAX_API
 BASH = shutil.which("bash") or "/bin/sh"
 try:  # survive `| head`
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -55,7 +55,7 @@ def cpus():
 
 
 def agent_lanes():
-    """Agent-lane wave width: OC_MAX_LANES, default 6, ceiling MAX_API, 0 gives 1, bad value gives 6."""
+    """Agent-lane wave width: OC_MAX_LANES, default 8, ceiling MAX_API, 0 gives 1, bad value gives 8."""
     v = os.environ.get("OC_MAX_LANES", "").strip()
     return max(1, min(MAX_API, int(v))) if v.isdigit() else AGENT_LANES
 

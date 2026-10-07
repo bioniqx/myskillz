@@ -16,7 +16,7 @@ PROVIDER = "zai-coding-plan"
 MODELS = {"flash": "glm-5.3-flash", "pro": "glm-5.3"}
 EFFORTS = ("low", "high", "max")
 MAX_PARALLEL = 8  # the provider allows 8 concurrent API calls; provider cap, keep in sync: _shared/zai_client.py MAX_PARALLEL
-DEFAULT_LANES = 6  # default agent/OpenCode lane width; OC_MAX_LANES may raise it up to MAX_PARALLEL
+DEFAULT_LANES = 8  # default agent/OpenCode lane width: the provider's full concurrent-call budget; OC_MAX_LANES overrides, clamped to MAX_PARALLEL
 
 
 def detect(binary: str = "opencode") -> int:

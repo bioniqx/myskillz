@@ -331,11 +331,11 @@ class TestBrainstormContextHarness(ContextCase):
 
 
 class TestBrainstormContextCaps(ContextCase):
-    def test_opencode_caps_default_width_is_6(self):
+    def test_opencode_caps_default_width_is_8(self):
         root = make_skill(self.plain_root())
         proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
         caps = self.line_starting(proc.stdout, "caps: ")
-        self.assertIn("lanes=6", caps)
+        self.assertIn("lanes=8", caps)
         self.assertIn("--width", caps)
         self.assertNotIn("subagents=", caps)
 
@@ -355,7 +355,7 @@ class TestBrainstormContextCaps(ContextCase):
 
     def test_opencode_caps_oc_max_lanes_edge_values(self):
         root = make_skill(self.plain_root())
-        for val, want in (("0", "lanes=1"), ("abc", "lanes=6"), ("", "lanes=6"), ("8", "lanes=8")):
+        for val, want in (("0", "lanes=1"), ("abc", "lanes=8"), ("", "lanes=8"), ("8", "lanes=8")):
             proc = run_context(
                 root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": val}
             )
@@ -449,7 +449,7 @@ class ZcodeSurfaceTests(unittest.TestCase):
         r = self.run_context(".zcode/skills/glm-brainstorming/scripts")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("harness: zcode", r.stdout)
-        self.assertIn("caps: lanes=6 (default 6, hard max 8)", r.stdout)
+        self.assertIn("caps: lanes=8 (default 8, hard max 8)", r.stdout)
         self.assertNotIn("subagents=", r.stdout)
         self.assertNotIn("workflow=", r.stdout)
 
@@ -457,7 +457,7 @@ class ZcodeSurfaceTests(unittest.TestCase):
         r = self.run_context("opencode/x/.zcode/skills/glm-brainstorming/scripts")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("harness: zcode", r.stdout)
-        self.assertIn("caps: lanes=6 (default 6, hard max 8)", r.stdout)
+        self.assertIn("caps: lanes=8 (default 8, hard max 8)", r.stdout)
         self.assertNotIn("harness: opencode", r.stdout)
 
     def test_context_sh_zcode_outranks_when_home_sits_under_opencode_dir(self):
@@ -466,7 +466,7 @@ class ZcodeSurfaceTests(unittest.TestCase):
         r = self.run_context(".zcode/skills/glm-brainstorming/scripts")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("harness: zcode", r.stdout)
-        self.assertIn("caps: lanes=6 (default 6, hard max 8)", r.stdout)
+        self.assertIn("caps: lanes=8 (default 8, hard max 8)", r.stdout)
 
     def test_context_sh_claude_code_caps_still_printed(self):
         r = self.run_context("plain/scripts", {"CLAUDECODE": "1"})

@@ -327,11 +327,11 @@ class WriterGroupingTests(unittest.TestCase):
 
     def test_lane_width_default_and_env(self):
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": ""}):
-            self.assertEqual(plan_tool.lane_width(), 6)
+            self.assertEqual(plan_tool.lane_width(), 8)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "3"}):
             self.assertEqual(plan_tool.lane_width(), 3)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "x"}):
-            self.assertEqual(plan_tool.lane_width(), 6)
+            self.assertEqual(plan_tool.lane_width(), 8)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "0"}):
             self.assertEqual(plan_tool.lane_width(), 1)
         with mock.patch.dict(os.environ, {"PLAN_LANE_WIDTH": "64"}):
@@ -445,8 +445,8 @@ class OpenCodeDispatchTests(unittest.TestCase):
         out, work, info = self.contracts(40)
         self.assertEqual(len(info["groups"]), 10)
         self.assertTrue(all(len(v) == 4 for v in info["groups"].values()))
-        self.assertIn("MESSAGE 1 (6 calls", out)
-        self.assertIn("MESSAGE 2 (4 calls", out)
+        self.assertIn("MESSAGE 1 (8 calls", out)
+        self.assertIn("MESSAGE 2 (2 calls", out)
         self.assertIn(self.expected("glm-plan-task-writer", work, "briefs", "W10", "plan T37-T40"), out)
 
     def test_review_dispatches_plan_reviewer(self):
