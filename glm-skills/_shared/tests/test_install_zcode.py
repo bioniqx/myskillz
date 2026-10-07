@@ -92,7 +92,7 @@ class InstallZcodeTests(unittest.TestCase):
         copy_root = os.path.join(self.home, "tree")
         shutil.copytree(GLM_ROOT, copy_root,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
-        agents_src = os.path.join(copy_root, "glm-doc-generator", "agents", "zcode")
+        agents_src = os.path.join(copy_root, "glm-doc-generator", "agents")
         os.makedirs(agents_src, exist_ok=True)
         with open(os.path.join(agents_src, "glm-fixture-agent.md"), "w", encoding="utf-8") as fh:
             fh.write(

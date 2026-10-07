@@ -15,9 +15,9 @@ SKILL_DIR = os.path.join(
     os.path.dirname(__file__), "..", "..", "glm-brainstorming"
 )
 SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
-EXPLORER_MD = os.path.join(SKILL_DIR, "opencode", "agents", "glm-explorer.md")
-RESEARCHER_MD = os.path.join(SKILL_DIR, "opencode", "agents", "glm-researcher.md")
-BRAINSTORM_MD = os.path.join(SKILL_DIR, "opencode", "commands", "glm-brainstorm.md")
+EXPLORER_MD = os.path.join(SKILL_DIR, "agents", "glm-explorer.md")
+RESEARCHER_MD = os.path.join(SKILL_DIR, "agents", "glm-researcher.md")
+BRAINSTORM_MD = os.path.join(SKILL_DIR, "commands", "glm-brainstorm.md")
 
 PLACEHOLDERS = ("[TASK", "[ROOT", "[SLICE", "[ONE precise question]")
 

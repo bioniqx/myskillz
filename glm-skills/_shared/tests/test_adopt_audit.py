@@ -381,7 +381,7 @@ class ZcodeAuditBehavior(unittest.TestCase):
         return " ".join(text.split())
 
     def test_zcode_agents_use_camelcase_tool_names(self):
-        agents = os.path.join(self.SKILL_DIR, "agents", "zcode")
+        agents = os.path.join(self.SKILL_DIR, "agents")
         for name in ("glm-rca-investigator.md", "glm-rca-verifier.md"):
             with open(os.path.join(agents, name), encoding="utf-8") as fh:
                 fm = fh.read().split("\n---\n")[0]

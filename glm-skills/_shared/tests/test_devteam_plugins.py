@@ -9,7 +9,7 @@ import unittest
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_DIR = os.path.abspath(
-    os.path.join(TESTS_DIR, "..", "..", "glm-dev-team", "opencode", "plugins")
+    os.path.join(TESTS_DIR, "..", "..", "glm-dev-team", "plugins")
 )
 V1_PATH = os.path.join(PLUGIN_DIR, "glm-devteam-guard.v1.js")
 V2_PATH = os.path.join(PLUGIN_DIR, "glm-devteam-guard.v2.js")

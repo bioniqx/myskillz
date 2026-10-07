@@ -24,7 +24,7 @@ def _load_plan_tool():
 
 
 plan_tool = _load_plan_tool()
-AGENTS_DIR = os.path.join(HERE, "..", "..", "glm-writing-plans", "opencode", "agents")
+AGENTS_DIR = os.path.join(HERE, "..", "..", "glm-writing-plans", "agents")
 NO_KEY = (None, "https://api.z.ai/api/coding/paas/v4", "openai", "-")
 
 
@@ -232,8 +232,8 @@ class AgentFileTests(unittest.TestCase):
     def test_opencode_agent_rendered_from_neutral_source(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
-        os.makedirs(os.path.join(tmp, "opencode", "agents"))
-        with open(os.path.join(tmp, "opencode", "agents", "glm-plan-task-writer.md"), "w") as fh:
+        os.makedirs(os.path.join(tmp, "agents"))
+        with open(os.path.join(tmp, "agents", "glm-plan-task-writer.md"), "w") as fh:
             fh.write("---\ndescription: writes plan task bodies\nmodel: flash\neffort: high\n"
                      "access: write\nbash: true\nweb: false\nsteps: 16\n---\nBody.\n")
         old = plan_tool.SKILL_DIR

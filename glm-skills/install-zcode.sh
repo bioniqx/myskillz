@@ -3,7 +3,8 @@
 #
 #   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
 #           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
-#   agents  <skill>/agents/zcode/*.md and glm-systematic-debugging's glm-debug-worker
+#   agents  <skill>/agents/*.md (glm-requirements-code-audit, glm-doc-generator) and
+#           glm-systematic-debugging's glm-debug-worker
 #           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; existing files are overwritten, no backup)
 #           glm-dev-team's seven ZCode agents (five file agents plus rendered glm-programmer-lite and
 #           glm-programmer-strong) via devteam.py doctor --harness zcode --fix, which also merges the
@@ -146,7 +147,7 @@ done
 
 echo "== agents"
 run mkdir -p "$AGENTS_DIR"
-for f in "$SCRIPT_DIR"/glm-requirements-code-audit/agents/zcode/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/zcode/*.md; do
+for f in "$SCRIPT_DIR"/glm-requirements-code-audit/agents/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/*.md; do
     [ -f "$f" ] && convert "$f" "$AGENTS_DIR/$(basename "$f")"
 done
 # glm-debug-worker is a mechanical worker; it never pays for max thinking.

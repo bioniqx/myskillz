@@ -792,6 +792,9 @@ def install(skill_dir: str, major: int, home: str = "") -> list:
     written = [skill_dst]
     for kind in ("agents", "commands"):
         src = os.path.join(skill_dir, "opencode", kind)
+        if kind == "agents" and not os.path.isdir(src):
+            # the flattened layout keeps the neutral OpenCode-dialect agents in <skill>/agents/
+            src = os.path.join(skill_dir, kind)
         if not os.path.isdir(src):
             continue
         dst = os.path.join(root, kind)
@@ -810,6 +813,8 @@ def install(skill_dir: str, major: int, home: str = "") -> list:
                 fh.write(text)
             written.append(path)
     plugins_src = os.path.join(skill_dir, "opencode", "plugins")
+    if not os.path.isdir(plugins_src):
+        plugins_src = os.path.join(skill_dir, "plugins")
     suffix = ".v%d.js" % major
     if os.path.isdir(plugins_src):
         plugins_dst = os.path.join(root, "plugins")

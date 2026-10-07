@@ -1849,7 +1849,7 @@ WRITER_AGENTS = ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-
 
 def agent_file(harness, name="glm-plan-task-writer"):
     if harness == "opencode":
-        neutral = os.path.join(SKILL_DIR, "opencode", "agents", name + ".md")
+        neutral = os.path.join(SKILL_DIR, "agents", name + ".md")
         if os.path.exists(neutral):
             return oc_harness.render_agent(load(neutral), oc_harness.major(SKILL_DIR))
         if name != "glm-plan-task-writer":

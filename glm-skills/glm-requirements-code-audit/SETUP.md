@@ -19,7 +19,7 @@ For ZCode, by hand instead:
 
 | Harness | Skill | Agents (fallback lane) |
 |---|---|---|
-| ZCode | `~/.zcode/skills/glm-requirements-code-audit/` | `~/.zcode/agents/glm-rca-*.md` from `agents/zcode/` |
+| ZCode | `~/.zcode/skills/glm-requirements-code-audit/` | `~/.zcode/agents/glm-rca-*.md` from `agents/` |
 
 OpenCode's `~/.config/opencode/agents/glm-rca-*.md` are rendered from the neutral sources in `opencode/agents/`
 (model id, `mode: all` on v1 so `opencode run --agent` actually uses the agent instead of falling back to

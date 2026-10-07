@@ -9,7 +9,7 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[2] / "glm-dev-team"
 GUARD = SKILL / "scripts" / "guard.py"
-LEADER = SKILL / "opencode" / "agents" / "glm-team-leader.md"
+LEADER = SKILL / "agents" / "glm-team-leader.md"
 
 FRONTMATTER = """---
 name: glm-team-leader

@@ -20,8 +20,8 @@ COMMAND = SKILL_DIR / "opencode" / "commands" / "glm-docs.md"
 STATE = Path(".zcode") / "doc-gen"
 FENCE = "`" * 3
 HUMAN_MARK = "TO" + "DO(human)"
-ZWRITER = SKILL_DIR / "agents" / "zcode" / "glm-doc-writer.md"
-ZREVIEWER = SKILL_DIR / "agents" / "zcode" / "glm-doc-reviewer.md"
+ZWRITER = SKILL_DIR / "agents" / "glm-doc-writer.md"
+ZREVIEWER = SKILL_DIR / "agents" / "glm-doc-reviewer.md"
 
 
 def read(path):
@@ -218,7 +218,7 @@ class ZcodeFactTests(unittest.TestCase):
                       "Appendix A reviewer frontmatter lacks thoughtLevel: high")
 
     def test_appendix_a_points_at_the_auto_installed_zcode_agents(self):
-        self.assertIn("agents/zcode/", self.text, "no pointer to the agents/zcode/ files")
+        self.assertIn("agents/", self.text, "no pointer to the agents/ files")
         self.assertIn("auto-installed", self.text, "no auto-installed wording")
 
     def test_oc_max_lanes_mention_is_scoped_to_opencode(self):

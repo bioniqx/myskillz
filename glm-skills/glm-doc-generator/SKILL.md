@@ -406,7 +406,7 @@ background children report), so keep the `oc_harness.py` path above for headless
 
 ## Appendix A — optional ZCode subagents (paste once, then reference by name)
 
-Both agents are auto-installed from `agents/zcode/` into `~/.zcode/agents/` by the installer; this appendix documents what lands there - never hand-copy it.
+Both agents are auto-installed from `agents/` into `~/.zcode/agents/` by the installer; this appendix documents what lands there - never hand-copy it.
 
 Cuts per-Task prompt size and forces low thinking effort. `~/.zcode/agents/glm-doc-writer.md`:
 

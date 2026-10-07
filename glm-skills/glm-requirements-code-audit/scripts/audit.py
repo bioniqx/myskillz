@@ -3159,7 +3159,7 @@ def cmd_setup(a):
         return 0
     sk = os.path.join(home, ".zcode", "skills", "glm-requirements-code-audit")
     ag = os.path.join(home, ".zcode", "agents")
-    src = os.path.join(root, "agents", "zcode")
+    src = os.path.join(root, "agents")
     print("harness   %s" % h)
     print("skill  ->  %s" % sk)
     print("agents ->  %s  (from %s)" % (ag, os.path.relpath(src, root)))

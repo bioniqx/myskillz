@@ -3976,7 +3976,9 @@ def oc_plugin_problems(home, major, skill_dir):
     if "{{SKILL_DIR}}" in text or not m or not Path(json.loads(f'"{m.group(1)}"'), "scripts", "guard.py").exists():
         problems.append(f"plugin {p.name}: its guard.py path does not resolve (every tool call would fail open)")
     if major:
-        src = Path(skill_dir) / "opencode" / "plugins" / f"{p.stem}.v{major}.js"
+        src = Path(skill_dir) / "plugins" / f"{p.stem}.v{major}.js"
+        if not src.exists():
+            src = Path(skill_dir) / "opencode" / "plugins" / f"{p.stem}.v{major}.js"
         skill_dst = str(Path(home) / ".config" / "opencode" / "skills" / _oc_harness().skill_name(str(skill_dir)))
         if src.exists() and text != src.read_text().replace("{{SKILL_DIR}}", json.dumps(skill_dst)[1:-1]):
             problems.append(f"plugin {p.name} does not match the OpenCode v{major} template — "
@@ -4731,9 +4733,9 @@ def _zcode_fm_bool(value):
 
 def _zcode_fm_model(src_model, flash, main):
     m = _zcode_fm_scalar(src_model).lower()
-    if m in ("haiku", "glm-5.3-flash"):
+    if m in ("haiku", "flash", "glm-5.3-flash"):
         return _zcode_fm_scalar(flash)
-    if m in ("sonnet", "opus", "glm-5.3"):
+    if m in ("sonnet", "opus", "pro", "glm-5.3"):
         return _zcode_fm_scalar(main)
     if m:
         return _zcode_fm_scalar(src_model)

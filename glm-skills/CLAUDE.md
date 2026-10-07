@@ -147,7 +147,7 @@ Every port applies the same set of model facts; each skill with a tuning surface
 - **glm-requirements-code-audit**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
-  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. ZCode agents live in `agents/zcode/` (audit, glm-doc-generator); `install-zcode.sh` also rewrites glm-debug-worker and the glm-dev-team agents to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no `effort`/`hooks`/`isolation`) and gets glm-plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
+  `opencode/agents/` holds the fallback-lane agents in OpenCode frontmatter. ZCode agents live in `agents/` (audit, glm-doc-generator); `install-zcode.sh` also rewrites glm-debug-worker and the glm-dev-team agents to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no `effort`/`hooks`/`isolation`) and gets glm-plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
 - **glm-brainstorming**: `scripts/context.sh` is injected through `!` preload. It must stay read-only,
