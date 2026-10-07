@@ -58,14 +58,16 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertIn("thoughtLevel: max", frontmatter(self.agent("glm-team-leader")))
         self.assertIn("thoughtLevel: low", frontmatter(self.agent("glm-plan-task-writer")))
 
-    def test_rerun_is_idempotent_and_keeps_changed_agents(self):
+    def test_rerun_is_idempotent_and_replaces_changed_agents(self):
         self.assertEqual(self.install().returncode, 0)
         self.assertEqual(self.install().returncode, 0)
         self.assertEqual([f for f in os.listdir(os.path.dirname(self.agent("x"))) if f.endswith(".bak")], [])
         with open(self.agent("glm-programmer"), "a", encoding="utf-8") as fh:
             fh.write("my edit\n")
         self.assertEqual(self.install().returncode, 0)
-        self.assertTrue(os.path.isfile(self.agent("glm-programmer") + ".bak"))
+        with open(self.agent("glm-programmer"), encoding="utf-8") as fh:
+            self.assertNotIn("my edit", fh.read())
+        self.assertEqual([f for f in os.listdir(os.path.dirname(self.agent("x"))) if f.endswith(".bak")], [])
 
     def test_stale_old_names_are_warned_about_not_deleted(self):
         for old in ("brainstorming", "brainstorming-glm"):

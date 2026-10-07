@@ -4831,12 +4831,7 @@ ZCODE_AGENTS = ("glm-programmer", "glm-programmer-lite", "glm-programmer-strong"
 
 
 def _zcode_write(path, text):
-    """Write a rendered agent file; keep a `.bak` of the previous copy."""
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
-            old = fh.read()
-        with open(path + ".bak", "w", encoding="utf-8") as bh:
-            bh.write(old)
+    """Overwrite a rendered agent file in place (no backup copy is kept)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(text)
@@ -4929,8 +4924,8 @@ def _zcode_hooks_present(cfg_path, hook_cmd):
 def _zcode_merge_hooks(cfg_path, hook_cmd):
     """Key-preserving merge of the hook entries into the user-level zcode config.
 
-    Existing user keys survive; a changed file is rewritten with a `.bak`
-    kept, and an identical merge is a no-op.
+    Existing user keys survive; a changed file is rewritten in place (no
+    backup copy is kept), and an identical merge is a no-op.
     """
     old_text = None
     cfg = {}
@@ -4948,9 +4943,6 @@ def _zcode_merge_hooks(cfg_path, hook_cmd):
     if old_text == new_text:
         return False
     os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
-    if old_text is not None:
-        with open(cfg_path + ".bak", "w", encoding="utf-8") as bh:
-            bh.write(old_text)
     with open(cfg_path, "w", encoding="utf-8") as fh:
         fh.write(new_text)
     return True
@@ -4999,8 +4991,8 @@ def doctor_zcode(a, root):
     if fix:
         # always refresh on --fix: a config that drifted (a user key added by
         # hand, a file rewritten another way) is normalized again here,
-        # key-preserving, .bak kept; the merge itself is a no-op once the
-        # rendered text already matches the file exactly
+        # key-preserving, overwritten in place; the merge itself is a no-op
+        # once the rendered text already matches the file exactly
         if _zcode_merge_hooks(cfg_path, hook_cmd):
             print("hooks: merged PreToolUse (Write|Edit, Bash) and Stop into %s" % cfg_path)
         else:

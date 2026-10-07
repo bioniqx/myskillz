@@ -163,7 +163,7 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         for key in ("PreToolUse", "Stop"):  # legacy unwrapped keys must not survive a render
             self.assertNotIn(key, hooks)
 
-    def test_changed_files_earn_bak_and_restore_content(self):
+    def test_changed_files_are_replaced_in_place_without_bak(self):
         agents_dir = os.path.join(self.home, ".zcode", "agents")
         cfg_path = os.path.join(self.home, ".zcode", "cli", "config.json")
         self.zfix()
@@ -177,14 +177,13 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         with open(cfg_path, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
         self.zfix()
-        self.assertTrue(os.path.isfile(agent + ".bak"))
         with open(agent, encoding="utf-8") as f:
             self.assertEqual(f.read(), want)
-        with open(agent + ".bak", encoding="utf-8") as f:
-            self.assertTrue(f.read().endswith("my edit\n"))
-        self.assertTrue(os.path.isfile(cfg_path + ".bak"))
         with open(cfg_path, encoding="utf-8") as f:
             self.assertEqual(json.load(f)["userKey"], "keep me")
+        baks = sorted([f for f in os.listdir(agents_dir) if f.endswith(".bak")] +
+                      [f for f in os.listdir(os.path.dirname(cfg_path)) if f.endswith(".bak")])
+        self.assertFalse(baks, baks)
 
     def test_rerun_is_a_noop(self):
         agents_dir = os.path.join(self.home, ".zcode", "agents")

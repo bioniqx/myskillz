@@ -3,7 +3,7 @@
 #
 #   skills  hybrid-*-v*/  ->  <claude dir>/skills/<same folder>/   (rsync, never --delete: keeps your routing.json)
 #   agents  hybrid-*/agents/*.md  ->  <claude dir>/agents/          (names all start with "hybrid-"; __PLAN_TOOL__
-#           is filled in with the installed plan_tool.py; a changed agent is kept as <name>.md.bak first)
+#           is filled in with the installed plan_tool.py; existing files are overwritten, no backup)
 #   models  HYBRID_OPENCODE_STD / _LITE  ->  "env" block of <claude dir>/settings.json (only with --model / --lite)
 #
 # Usage: ./install.sh [--dry-run] [--claude-dir DIR] [--model provider/model#variant] [--lite provider/model#variant]
@@ -50,11 +50,11 @@ done
 run() { if [ "$DRY" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
 # install_agent SRC DEST TOOL: fill __PLAN_TOOL__ exactly as plan_tool.py's qtool() spells it (its setup
-# allow rule must match the hook command), back up a changed DEST, then write it.
+# allow rule must match the hook command), then write it, replacing any previous copy (no backup).
 install_agent() {
   if [ "$DRY" -eq 1 ]; then echo "[dry-run] install agent $1 -> $2"; return 0; fi
   python3 - "$1" "$2" "$3" <<'PY' || die "could not install agent $2"
-import os, shlex, shutil, sys
+import os, shlex, sys
 src, dest, tool = sys.argv[1:4]
 with open(src, encoding="utf-8") as fh:
     text = fh.read().replace("__PLAN_TOOL__", "python3 " + shlex.quote(os.path.abspath(tool)))
@@ -64,8 +64,7 @@ if os.path.exists(dest):
         if fh.read() == text:
             print("  %s (unchanged)" % name)
             sys.exit(0)
-    shutil.copy2(dest, dest + ".bak")
-    print("  %s (updated; previous copy kept as %s.bak)" % (name, name))
+    print("  %s (updated)" % name)
 else:
     print("  %s" % name)
 with open(dest, "w", encoding="utf-8") as fh:

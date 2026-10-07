@@ -4,7 +4,7 @@
 #   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
 #           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
 #   agents  <skill>/agents/zcode/*.md and glm-systematic-debugging's glm-debug-worker
-#           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; a changed file is kept as <name>.md.bak first)
+#           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; existing files are overwritten, no backup)
 #           glm-dev-team's seven ZCode agents (five file agents plus rendered glm-programmer-lite and
 #           glm-programmer-strong) via devteam.py doctor --harness zcode --fix, which also merges the
 #           guard hooks into ~/.zcode/cli/config.json; plus glm-plan-task-writer, written by
@@ -75,7 +75,7 @@ PY
 convert() {
     if [ "$DRY" -eq 1 ]; then echo "[dry-run] agent $1 -> $2"; return 0; fi
     python3 - "$1" "$2" "$FLASH" "$MAIN" "${3:-}" <<'PY' || { echo "could not install agent $2" >&2; exit 1; }
-import os, re, shutil, sys
+import os, re, sys
 src, dest, flash, main, level = sys.argv[1:6]
 DROP = {"effort", "isolation", "memory", "hooks", "mode", "temperature", "permission", "permissionMode", "variant"}
 text = open(src, encoding="utf-8").read()
@@ -119,9 +119,7 @@ if os.path.exists(dest):
     if open(dest, encoding="utf-8").read() == new:
         print("  %s (unchanged)" % os.path.basename(dest))
         sys.exit(0)
-    if os.path.abspath(src) != os.path.abspath(dest):
-        shutil.copy2(dest, dest + ".bak")
-    print("  %s (updated%s)" % (os.path.basename(dest), "" if os.path.abspath(src) == os.path.abspath(dest) else "; previous copy kept as %s.bak" % os.path.basename(dest)))
+    print("  %s (updated)" % os.path.basename(dest))
 else:
     print("  " + os.path.basename(dest))
 with open(dest, "w", encoding="utf-8") as fh:
@@ -196,7 +194,7 @@ The install above already ran
   python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
 which installs the seven glm-dev-team agents into ~/.zcode/agents/ and merges the guard hooks
 (type: process, hooks.enabled: true, commands pointing at the installed skill's guard.py) into
-~/.zcode/cli/config.json — a key-preserving merge: .bak before rewrite, a re-run is a no-op, and
+~/.zcode/cli/config.json — a key-preserving merge that rewrites in place: a re-run is a no-op, and
 every user key already in the file survives.
 A frontmatter description over 1024 characters makes ZCode drop the whole skill; a body over 100KB is truncated when loaded, not dropped.
 MSG

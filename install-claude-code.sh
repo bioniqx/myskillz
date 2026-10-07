@@ -96,12 +96,12 @@ fi
 is_plugin() { [ -f "$SRC_CLAUDE/$1/.claude-plugin/plugin.json" ]; }
 
 # install_agent SRC DEST TOOL: fill __PLAN_TOOL__ with the installed plan_tool.py path
-# (spelled exactly as plan_tool.py's qtool()/setup allow-rule expects), back up a
-# changed DEST as <name>.md.bak first, then write it.
+# (spelled exactly as plan_tool.py's qtool()/setup allow-rule expects), then write it,
+# replacing any previous copy (no backup).
 install_agent() {
   if [ "$DRY" -eq 1 ]; then echo "  [dry-run] agent $1 -> $2"; return 0; fi
   python3 - "$1" "$2" "$3" <<'PY' || die "could not install agent $2"
-import os, shlex, shutil, sys
+import os, shlex, sys
 src, dest, tool = sys.argv[1:4]
 with open(src, encoding="utf-8") as fh:
     text = fh.read().replace("__PLAN_TOOL__", "python3 " + shlex.quote(os.path.abspath(tool)))
@@ -111,8 +111,7 @@ if os.path.exists(dest):
         if fh.read() == text:
             print("  %s (unchanged)" % name)
             sys.exit(0)
-    shutil.copy2(dest, dest + ".bak")
-    print("  %s (updated; previous copy kept as %s.bak)" % (name, name))
+    print("  %s (updated)" % name)
 else:
     print("  %s" % name)
 with open(dest, "w", encoding="utf-8") as fh:
