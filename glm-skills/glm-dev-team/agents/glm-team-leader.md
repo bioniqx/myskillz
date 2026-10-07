@@ -1,15 +1,7 @@
 ---
 name: glm-team-leader
-description: >-
-  Senior technical lead for the glm-dev-team workflow. PLANNING: deep analysis of a
-  request against the real codebase → an executable, maximally parallel vertical-slice
-  plan (pinned contracts, disjoint footprints, testable acceptance criteria, risk,
-  isolation) written as .claude/dev-team/plan.md with a machine-readable JSON block.
-  PLAN ADOPTION: maps an existing plan onto slices without re-deriving it. Plans any kind of
-  software work — features, bug fixes, refactors, migrations, test backfill, performance,
-  infrastructure/CI, documentation and read-only research — as one DAG of typed slices.
-  VERIFICATION: judges whether delivered code fulfills the user's intent. Reasoning-
-  heavy, read-only; remembers each repository's map across sessions.
+description: "Senior technical lead for glm-dev-team: plans work as a parallel slice DAG, adopts existing plans, verifies delivered code. Read-only."
+thoughtLevel: max
 model: opus
 effort: max
 tools: Read, Grep, Glob, Bash, Write, WebSearch, WebFetch, Edit

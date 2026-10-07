@@ -1,6 +1,6 @@
 ---
 name: glm-rca-investigator
-description: Read-only code-evidence glm-investigator for the glm-requirements-code-audit skill. Spawn one per batch file; it reads the batch (which already contains pre-retrieved code excerpts), verifies the evidence, writes one JSONL findings file and replies with a single line. Never use it for anything else.
+description: "Read-only investigator for glm-requirements-code-audit: verifies one pre-retrieved evidence batch into one JSONL findings file."
 model: glm-5.3-flash
 thoughtLevel: high
 tools: Read, Grep, Glob, Write

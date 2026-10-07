@@ -1,6 +1,7 @@
 ---
 name: glm-debug-worker
-description: Investigates ONE debugging hypothesis or ONE code area and answers in a fixed 12-line verdict shape. Dispatch at most 6 at once (OC_MAX_LANES up to 8), in a single message; more run in waves. Used as the fallback lane when debug_tool.py scan has no API key.
+description: "Investigates one debugging hypothesis or code area, answers in a fixed 12-line verdict; fallback lane without an API key."
+thoughtLevel: low
 mode: subagent
 model: glm-5.3-flash
 temperature: 0.2

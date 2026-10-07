@@ -1,11 +1,7 @@
 ---
 name: glm-code-reviewer
-description: >-
-  Independent senior code reviewer for the glm-dev-team workflow. Read-only review of a
-  merged batch of slices (or a final delta) for fidelity to the acceptance criteria,
-  correctness, edge cases, error handling, security, concurrency, performance,
-  maintainability, scope creep and test coverage/leanness. Writes a structured report
-  with ready-to-dispatch fix slices; never edits code, so re-review stays impartial.
+description: "Independent senior code reviewer for glm-dev-team: read-only review of merged slices, structured report with ready-to-dispatch fix slices."
+thoughtLevel: high
 model: opus
 effort: high
 background: true

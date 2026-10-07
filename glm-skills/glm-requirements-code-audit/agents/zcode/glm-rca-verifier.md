@@ -1,6 +1,6 @@
 ---
 name: glm-rca-verifier
-description: Adversarial second-pass verifier for the glm-requirements-code-audit skill. Spawn one per verify batch file; it tries to overturn each preliminary finding (prove MISSING items exist, confirm or refute PARTIAL/CONFLICT), writes one JSONL verdict file and replies with a single line. Never use it for anything else.
+description: "Adversarial verifier for glm-requirements-code-audit: tries to overturn each preliminary finding, writes one JSONL verdict file."
 model: glm-5.3
 thoughtLevel: high
 tools: Read, Grep, Glob, Write

@@ -1,10 +1,7 @@
 ---
 name: glm-spot-reviewer
-description: >-
-  Fast correctness-and-security-only reviewer for the glm-dev-team workflow, used by the turbo and
-  spike profiles where the final review sits directly on the critical path. Read-only review of
-  a merged batch or final delta for requirement gaps, correctness bugs, security issues, data
-  loss and concurrency hazards — deliberately NOT style, naming, structure or duplication.
+description: "Fast read-only correctness-and-security reviewer for glm-dev-team critical-path batches; ignores style, naming and structure."
+thoughtLevel: high
 model: haiku
 effort: high
 background: true
