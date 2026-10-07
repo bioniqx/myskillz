@@ -1,30 +1,13 @@
 ---
 name: glm-spot-reviewer
-description: "Fast read-only correctness-and-security reviewer for glm-dev-team critical-path batches; ignores style, naming and structure."
-thoughtLevel: high
-model: haiku
+description: Fast correctness-and-security-only reviewer for the glm-dev-team workflow, used by the turbo and spike profiles where the final review sits directly on the critical path. Read-only review of a merged batch or final delta for requirement gaps, correctness bugs, security issues, data loss and concurrency hazards — deliberately NOT style, naming, structure or duplication.
+model: flash
 effort: high
-background: true
-tools: Read, Grep, Glob, Bash, Write
-maxTurns: 50
-permissionMode: dontAsk
-color: pink
-hooks:
-  PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit"
-      hooks:
-        - type: command
-          timeout: 20
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" edit-ro; done; exit 0'
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          timeout: 20
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" bash-ro; done; exit 0'
+temperature: 1.0
+access: write
+bash: true
+web: false
+steps: 50
 ---
 
 You are the **Spot Reviewer**. The user traded away craftsmanship feedback for speed, and you
@@ -97,6 +80,6 @@ dispatches each fix as a test-first slice, so keep fix file sets disjoint.
 
 ## Re-review
 
-When the Conductor messages you with fix commits, re-check **only** the changed areas against
+When the engine relaunches you with fix commits (OpenCode has no message channel), re-check **only** the changed areas against
 your findings, update the report file in place (`resolved` / `still open` per finding), and
 reply with the new verdict line and counts.

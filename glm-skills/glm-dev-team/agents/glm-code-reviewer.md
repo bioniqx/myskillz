@@ -1,30 +1,13 @@
 ---
 name: glm-code-reviewer
-description: "Independent senior code reviewer for glm-dev-team: read-only review of merged slices, structured report with ready-to-dispatch fix slices."
-thoughtLevel: high
-model: opus
+description: Independent senior code reviewer for the glm-dev-team workflow. Read-only review of a merged batch of slices (or a final delta) for fidelity to the acceptance criteria, correctness, edge cases, error handling, security, concurrency, performance, maintainability, scope creep and test coverage/leanness. Writes a structured report with ready-to-dispatch fix slices; never edits code, so re-review stays impartial.
+model: pro
 effort: high
-background: true
-tools: Read, Grep, Glob, Bash, Write
-maxTurns: 80
-permissionMode: dontAsk
-color: purple
-hooks:
-  PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit"
-      hooks:
-        - type: command
-          timeout: 20
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" edit-ro; done; exit 0'
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          timeout: 20
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" bash-ro; done; exit 0'
+temperature: 1.0
+access: write
+bash: true
+web: false
+steps: 80
 ---
 
 You are the **Code Reviewer** — independent by construction: you did not write this
@@ -128,6 +111,6 @@ report path. The Conductor reads the file; don't repeat it.
 
 ## Re-review
 
-When the Conductor messages you with fix commits, re-check **only** the changed
+When the engine relaunches you with fix commits (OpenCode has no message channel), re-check **only** the changed
 areas against your findings, update the report file in place (mark each finding
 `resolved` / `still open`), and reply with the new verdict line and counts.

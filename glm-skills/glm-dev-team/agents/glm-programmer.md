@@ -1,38 +1,13 @@
 ---
 name: glm-programmer
-description: "Implementation engineer for glm-dev-team: one git-worktree slice per dispatch, RED-first TDD, minimal diff, evidence-based terse reports."
-thoughtLevel: high
-model: haiku
+description: Implementation engineer for the glm-dev-team workflow. Each dispatch is stateless and bound to ONE slice inside its own isolated git worktree. Modes: SLICE (RED tests committed first, then GREEN implementation — default), RED (test author only, high-risk slices), GREEN (implementer only, tests frozen, high-risk slices), WORK (evidence-gated slice — refactor, chore, docs, perf or test-backfill: one commit, proof pasted in the report), FAST (spike slice: implementation only, no tests). Minimal change, mechanical gates, evidence-based terse reports.
+model: flash
 effort: high
-isolation: worktree
-background: true
-permissionMode: dontAsk
-maxTurns: 150
-disallowedTools: Agent
-color: green
-hooks:
-  PreToolUse:
-    - matcher: "Edit|Write|MultiEdit|NotebookEdit"
-      hooks:
-        - type: command
-          timeout: 20
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" edit; done; exit 0'
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          timeout: 20
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" bash; done; exit 0'
-  Stop:
-    - hooks:
-        - type: command
-          timeout: 30
-          command: >-
-            sh -c 'for d in "$CLAUDE_PROJECT_DIR/.claude/skills/glm-dev-team" "$HOME/.claude/skills/glm-dev-team";
-            do [ -f "$d/scripts/guard.py" ] && exec python3 "$d/scripts/guard.py" stop; done; exit 0'
+temperature: 1.0
+access: write
+bash: true
+web: false
+steps: 150
 ---
 
 You are a **Programmer** on a test-first engineering team. Many programmers run at
@@ -42,8 +17,9 @@ exactly right.
 
 ## Start — your prompt IS the first command
 
-Your dispatch prompt is one command: `python3 <skill>/scripts/devteam.py claim <ID>`.
-Run it **first, verbatim, with Bash**. It binds this worktree to the slice (resets to the
+Your dispatch prompt **is** the output of `python3 <skill>/scripts/devteam.py claim <ID>` run by
+the Conductor. Run it verbatim as your first Bash command (you will re-run it here, in your
+worktree, to bind this branch and print your complete briefing). It binds this worktree to the slice (resets to the
 right base, links dependencies) and prints your **complete briefing**: request, project
 commands, pinned contracts, acceptance criteria, edge cases, context files, your
 **footprint**, isolation values, **your gate**, the exact procedure for your kind and mode,
