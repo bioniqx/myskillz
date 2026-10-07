@@ -72,11 +72,13 @@ Provider + governor (v4):
   routing   GLM: lanes on GLM-5.3-Flash (`haiku` alias, effort high); trivial / small-docs slices on the
             lite lane (effort low); high-risk, large and RETRIED slices, the leader and the full reviewer on
             GLM-5.3 (`opus`). `doctor --fix` maps the aliases and forwards effort (*_SUPPORTED_CAPABILITIES).
-  governor  AIMD window over the fan-out: start/ceiling by DEVTEAM_GLM_TIER (lite 3/8, pro 6/8, max 7/8,
-            api 8/8 — the provider allows 8 concurrent API calls, so no tier goes above 8), slow start on success,
-            halve on a 429/1302/1305/overload signal found in the transcripts, ceiling halved during the
-            Z.ai peak (Mon–Fri 14–18 UTC+8). A spawn the runtime refused is re-queued; a lane that died on
-            an API error is reported with the warm fix. DEVTEAM_MAX_PARALLEL=N pins; DEVTEAM_GOVERNOR=off.
+  governor  AIMD window over the fan-out: default tier api opens the full 8-call window at once (the provider
+            allows 8 concurrent API calls, so no tier goes above 8); DEVTEAM_GLM_TIER=lite|pro|max trades
+            width for gentler rate limits (starts 3/6/7, ceiling 8); +1 per finished lane; halve on a
+            429/1302/1305/overload signal found in the transcripts; DEVTEAM_PEAK=on opts into halving the
+            ceiling during the Z.ai peak (Mon–Fri 14–18 UTC+8). A spawn the runtime refused is re-queued; a
+            lane that died on an API error is reported with the warm fix. DEVTEAM_MAX_PARALLEL=N pins;
+            DEVTEAM_GOVERNOR=off.
 
 Slice kinds (`kind` in the plan) — every kind runs on the same scheduler/worktree/merge machinery:
   code (default) test-first RED -> GREEN        test      write tests for existing behaviour
@@ -207,7 +209,7 @@ GLM_HOSTS = ("z.ai", "bigmodel.cn")
 # throttle signal read from Claude Code's own transcripts. The numbers below are ENGINEERING STARTING
 # POINTS, not Z.ai figures — the governor corrects them within a few wake-ups.
 TIERS = {"lite": (3, 8), "pro": (6, 8), "max": (7, 8), "api": (8, 8)}   # (start, ceiling); ceiling <= NON_CLAUDE_CAP
-DEFAULT_TIER = "pro"
+DEFAULT_TIER = "api"        # full 8-call width from wave one; lower tiers opt-in via --tier / DEVTEAM_GLM_TIER
 PEAK_FACTOR = 0.5            # Z.ai peak: Mon–Fri 14:00–18:00 UTC+8 (full credit rate, lower concurrency)
 GOV_COOLDOWN_S = 90          # one cut per burst: signals inside the window after a cut are the same burst
 GOV_MIN = 1
@@ -509,15 +511,13 @@ def gov_enabled(st):
     return (os.environ.get("DEVTEAM_GOVERNOR") or "on").strip().lower() not in ("0", "off", "false", "no")
 
 
-def zai_peak(t=None):
-    """Z.ai peak window: Monday–Friday 14:00–18:00 UTC+8 (docs.z.ai usage policy / plan FAQ)."""
-    forced = (os.environ.get("DEVTEAM_PEAK") or "").strip().lower()
-    if forced in ("on", "1", "true"):
-        return True
-    if forced in ("off", "0", "false"):
-        return False
-    tm = time.gmtime((t if t is not None else time.time()) + 8 * 3600)
-    return tm.tm_wday < 5 and 14 <= tm.tm_hour < 18
+def zai_peak():
+    """Z.ai peak window: Monday–Friday 14:00–18:00 UTC+8 (docs.z.ai usage policy / plan FAQ).
+
+    Peak halving is opt-in: unset DEVTEAM_PEAK means off (full width all day); DEVTEAM_PEAK=on halves the
+    ceiling during the window to spare credits.
+    """
+    return (os.environ.get("DEVTEAM_PEAK") or "").strip().lower() in ("on", "1", "true")
 
 
 def new_gov(provider, tier):
@@ -969,7 +969,7 @@ def out(*lines):
 PLAN_TEMPLATE = {
     "request": "One paragraph: the real goal and success conditions.",
     "profile": "balanced | strict | turbo | spike   (default balanced)",
-    "glm": {"tier": "lite | pro | max | api   (optional; the governor's first window — env DEVTEAM_GLM_TIER wins)"},
+    "glm": {"tier": "lite | pro | max | api   (optional; default api = full 8-call width; env DEVTEAM_GLM_TIER wins)"},
     "integration_branch": "(optional) defaults to the current branch",
     "commands": {
         "build": "npm run build | none",
@@ -3454,9 +3454,9 @@ def cmd_start(a):
     print_dispatch(st, blocks, skipped)
     out(progress_line(st), launch_hint())
     if provider_of(st) == "glm":
-        out("TIP (GLM): the governor sizes the fan-out to what Z.ai actually serves — set DEVTEAM_GLM_TIER="
-            "lite|pro|max|api for a better first window; off-peak (outside Mon–Fri 14–18 UTC+8) costs half the "
-            "credits and allows more concurrency; `stats` shows measured tokens/effort/errors per role.")
+        out("TIP (GLM): the fan-out opens at the full 8-call width (tier api); DEVTEAM_GLM_TIER=lite|pro|max "
+            "trades width for gentler rate limits; DEVTEAM_PEAK=on opts into Z.ai's peak-hour halving "
+            "(Mon–Fri 14–18 UTC+8) to spare credits; `stats` shows measured tokens/effort/errors per role.")
     else:
         out("TIP: `/fast` (Opus fast mode, usage credits) makes the Conductor and the opus reviewers/leader "
             "up to 2.5x faster; the lanes already ride sonnet.")

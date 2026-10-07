@@ -39,7 +39,10 @@ class RunFixture(unittest.TestCase):
         tx.mkdir()
         self.env = mock.patch.dict(os.environ, {"DEVTEAM_TRANSCRIPTS_DIR": str(tx),
                                                 "DEVTEAM_PROVIDER": "glm",
-                                                "DEVTEAM_GOVERNOR": "off"})
+                                                "DEVTEAM_GOVERNOR": "off",
+                                                # pin the harness: ambient ZCODE_* vars would flip
+                                                # is_zcode() and resume would unpack a zcode line
+                                                "DEVTEAM_HARNESS": "claude"})
         self.env.start()
         self.cwd = os.getcwd()
         os.chdir(self.repo)

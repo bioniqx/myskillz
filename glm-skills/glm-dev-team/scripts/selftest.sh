@@ -471,7 +471,7 @@ check "probe proposes the FILE-SCOPED lint and test commands that make the balan
 OUT=$(D review-pr HEAD~1..HEAD --shards 2 2>&1)
 check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: glm-code-reviewer"* ]]'
 check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: glm-spot-reviewer"* ]]'
-check "non-Claude caps: every tier <= 8 and monotone, shards <= 4 and <= window, Anthropic keeps 64" 'DEVTEAM_HARNESS=claude python3 - "$S" <<PY
+check "non-Claude caps: every tier <= 8 and monotone, default tier api, peak halving opt-in, shards <= 4, Anthropic keeps 64" 'DEVTEAM_HARNESS=claude python3 - "$S" <<PY
 import sys; sys.path.insert(0, sys.argv[1]); import devteam as d
 t = [d.TIERS[k] for k in ("lite", "pro", "max", "api")]
 assert all(a <= c <= 8 for a, c in t) and t == sorted(t), t
@@ -479,6 +479,12 @@ assert d.hard_cap() == 8 and d.concurrency_limit() == 8 and d.max_shards() == 4
 assert d.shard_count([str(i) for i in range(500)], 12) <= 4
 g = d.new_gov("anthropic", "pro"); assert (g["cap"], g["ceiling"]) == (64, 64), g
 assert d.new_gov("glm", "api")["ceiling"] == 8 and d.reserve_min({"gov": {"cap": 8}, "provider": "glm"}) == 2
+assert d.DEFAULT_TIER == "api" and d.new_gov("glm", d.DEFAULT_TIER)["cap"] == 8
+import os
+os.environ.pop("DEVTEAM_PEAK", None)
+assert d.zai_peak() is False
+os.environ["DEVTEAM_PEAK"] = "on"; assert d.zai_peak() is True
+os.environ["DEVTEAM_PEAK"] = "off"; assert d.zai_peak() is False
 PY'
 OUT=$(D brief-debug "tokens leak after refresh" -n 4 2>&1)
 check "brief-debug fans out investigators on distinct angles" '[[ "$(echo "$OUT" | grep -c "subagent_type: glm-investigator")" == 4 ]]'
@@ -825,7 +831,7 @@ cat > plan.md <<'EOF'
 EOF
 OUT=$(D start plan.md 2>&1)
 check "start on a directory that is not a git repo initialises one and dispatches" '[[ "$OUT" == *"GIT: initialised"* && "$OUT" == *"INIT ok: 1 slices"* && "$OUT" == *"DISPATCH G1"* ]] && git -C "$GF" rev-parse --verify HEAD >/dev/null 2>&1'
-check "start prints the GLM tip (tier, off-peak, stats) instead of the Opus /fast tip" '[[ "$OUT" == *"TIP (GLM)"* && "$OUT" != *"/fast"* ]]'
+check "start prints the GLM tip (tier, peak opt-in, stats) instead of the Opus /fast tip" '[[ "$OUT" == *"TIP (GLM)"* && "$OUT" != *"/fast"* ]]'
 cd "$RM"
 check "finish --force writes a PR-ready summary.md" 'D finish --force >/dev/null 2>&1; [ -f .claude/dev-team/summary.md ] && grep -q "M1" .claude/dev-team/summary.md && grep -q "## Diff stat" .claude/dev-team/summary.md'
 
@@ -939,6 +945,8 @@ check "a retried trivial slice leaves the lite lane too" '[[ "$OUT" == *"subagen
 check "the route is recorded for stats" 'python3 -c "import json;s=json.load(open(\"$RRT/.claude/dev-team/state.json\"));assert s[\"slices\"][\"N1\"][\"route\"].startswith(\"glm-5.3 \")"'
 
 echo "== v4 governor: size the fan-out to what the API really serves"
+# The pro-ladder scenario pins DEVTEAM_GLM_TIER=pro on its inits (a wrapper-wide pin would shadow the
+# per-check tier overrides); the api default has its own check below
 RGV="$(newrepo rgv4)"; cd "$RGV"
 python3 - <<'PY' > plan.md
 import json
@@ -948,13 +956,15 @@ print("```json\n"+json.dumps({"request":"g","commands":{"test":"echo ok","lint":
 PY
 TX="$RGV/tx"; mkdir -p "$TX/sess/subagents"
 G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D "$@"; }
-OUT=$(G4 init plan.md 2>&1)
+OUT=$(DEVTEAM_GLM_TIER=pro G4 init plan.md 2>&1)
 check "tier pro starts at a 6-agent window (not 8) with 1 slot reserved on a small window" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6, ceiling 8, tier pro, slow start)"* && "$OUT" == *"5 free of 5 glm-programmer slots"* ]]'
+OUTA=$(DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D init plan.md --force 2>&1)
+check "the default tier is api: the full 8-agent window opens at once, 2 slots reserved for leader/reviewer" '[[ "$OUTA" == *"GOVERNOR: 8 agents (window 8, ceiling 8, tier api, slow start)"* && "$OUTA" == *"6 free of 6 glm-programmer slots"* ]]'
 check "tier lite starts at 3 with no reserve eating the width" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force 2>&1)" == *"3 free of 3 glm-programmer slots"* ]]'
 check "--tier on the command line wins" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force --tier max 2>&1)" == *"tier max"* ]]'
 check "the Z.ai peak window halves the ceiling (lite 8 → 4)" 'DEVTEAM_GLM_TIER=lite G4 init plan.md --force >/dev/null 2>&1; [[ "$(DEVTEAM_PEAK=on G4 status 2>&1)" == *"ceiling 4"*"Z.ai PEAK"* && "$(DEVTEAM_PEAK=off G4 status 2>&1)" == *"ceiling 8"*"off-peak"* ]]'
 check "DEVTEAM_MAX_PARALLEL pins the window" '[[ "$(DEVTEAM_MAX_PARALLEL=2 G4 status 2>&1)" == *"GOVERNOR: 2 agents"*"pinned"* ]]'
-G4 init plan.md --force >/dev/null 2>&1
+DEVTEAM_GLM_TIER=pro G4 init plan.md --force >/dev/null 2>&1
 OUT=$(G4 dispatch Q1 Q2 Q3 Q4 Q5 Q6 Q7 2>&1)
 check "dispatch never exceeds the window" '[ "$(echo "$OUT" | grep -c "^=== DISPATCH")" -eq 5 ]'
 for i in 1 2; do printf '## Verdict: INCONCLUSIVE\n## Findings\n- x\n' > .claude/dev-team/research/Q$i.md; done
@@ -1040,7 +1050,7 @@ printf '{"type":"system","subtype":"api_error","error":{"status":429},"timestamp
 check "a cut during the peak halves the window really in force (ceiling 4 → 2), not the stale 20" '[[ "$(DEVTEAM_PEAK=on G4 next 2>&1)" == *"window 4 → 2"* ]]'
 
 govrepo rgh3
-G4 init plan.md >/dev/null 2>&1; G4 dispatch Q1 >/dev/null 2>&1
+DEVTEAM_GLM_TIER=pro G4 init plan.md >/dev/null 2>&1; G4 dispatch Q1 >/dev/null 2>&1
 printf '## Verdict: INCONCLUSIVE\n## Findings\n- x\n' > .claude/dev-team/research/Q1.md
 OUT=$(G4 next 2>&1)
 check "the window does not grow while it is not being used (1 lane of a 5-lane window)" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6"* ]]'
@@ -1216,7 +1226,8 @@ check "DE1: OPENCODE_TERMINAL=1 with no OPENCODE selects the OpenCode path (no A
 env -u DEVTEAM_HARNESS -u OPENCODE -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT OPENCODE_TERMINAL=1 PATH="$OCBIN:$OLDPATH" python3 "$S/devteam.py" wait --timeout 30 >/dev/null 2>&1
 check "DE1: the v2-detected dispatch really launched an OpenCode lane" '[ -f "$RD1/.claude/dev-team/lanes/N1.jsonl" ]'
 RD1C="$(newrepo rde1c)"; cd "$RD1C"; ocplan N1
-D1CL=$(env -u DEVTEAM_HARNESS -u OPENCODE -u OPENCODE_TERMINAL python3 "$S/devteam.py" start plan.md 2>&1)
+# env -i: ambient ZCODE_* / CLAUDE_CODE_* vars would flip harness() off the Claude path
+D1CL=$(env -i HOME="$HOME" PATH="$PATH" DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_TRANSCRIPTS_DIR="$DEVTEAM_TRANSCRIPTS_DIR" python3 "$S/devteam.py" start plan.md 2>&1)
 check "DE1: with no OpenCode variable the Claude path is kept (Agent line, no lane)" '[[ "$D1CL" == *"Agent → subagent_type: glm-programmer"* ]] && [ ! -e "$RD1C/.claude/dev-team/lanes/N1.jsonl" ]'
 echo "== OpenCode hardening DE4: the checkpoint runs detached and wait/next harvest it"
 RD4="$(newrepo rde4)"; cd "$RD4"; ocplan O1 1

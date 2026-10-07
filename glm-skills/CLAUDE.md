@@ -109,8 +109,8 @@ Every port applies the same set of model facts; each skill with a tuning surface
 - **glm-dev-team**: `devteam.py` is a deterministic scheduler and integrator. The flow is
   `start <plan.md>` once, then `next` on every wake-up. Programmers work in git worktrees. `guard.py` holds
   the PreToolUse hooks that enforce file footprints, frozen tests and read-only roles. An AIMD
-  **governor** sizes concurrency by tier (`DEVTEAM_GLM_TIER`), halves it on 429/1302/1305 errors, and halves
-  its ceiling during Z.ai peak hours. Agent definitions live in `agents/` and are installed by `doctor --fix`.
+  **governor** sizes concurrency by tier (`DEVTEAM_GLM_TIER`, default `api` — the full 8-call window), halves
+  it on 429/1302/1305 errors; peak-hour halving is opt-in via `DEVTEAM_PEAK=on`. Agent definitions live in `agents/` and are installed by `doctor --fix`.
   `README.md` is in Vietnamese.
   **glm-dev-team on OpenCode:** When running on OpenCode (`is_opencode()`: `DEVTEAM_HARNESS` decides when set,
   else `OPENCODE`, else `oc_harness.harness()`, since v2 never sets `OPENCODE`),

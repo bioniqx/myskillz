@@ -58,7 +58,8 @@ a `glm-claude` launcher):
 Why each matters here: the long `API_TIMEOUT_MS` covers always-on
 thinking at effort `max`; the 1M auto-compact window stops Claude Code
 compacting at Claude-sized thresholds and throwing away the round-1
-reads; the two concurrency vars are what pin R7's 8-lane hard max (default width 6) to
+reads; the two concurrency vars are what pin R7's 8-lane hard max (dev-team opens
+the full 8 by default) to
 the provider's concurrent-call limit (defaults are 20 subagents / 16 workflow agents); disabling
 non-essential traffic drops telemetry and update calls that the z.ai
 route cannot serve anyway; and pre-allowing WebSearch/WebFetch stops

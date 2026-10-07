@@ -102,7 +102,10 @@ class RepoCase(unittest.TestCase):
         self.env.update({"DEVTEAM_PROVIDER": "glm", "DEVTEAM_GOVERNOR": "off", "DEVTEAM_PEAK": "off",
                          "DEVTEAM_TRANSCRIPTS_DIR": os.path.join(self.tmp, "none"),
                          "HOME": os.path.join(self.tmp, "home"), "DEVTEAM_OC_BIN": fake,
-                         "FAKE_OC_LOG": self.log})
+                         "FAKE_OC_LOG": self.log,
+                         # pin the harness: ambient ZCODE_* vars (a session inside ZCode) would flip
+                         # is_zcode() and the claude-path assertions would see zcode dispatch lines
+                         "DEVTEAM_HARNESS": "claude"})
         for cmd in (["git", "init", "-q", "-b", "main"], ["git", "config", "user.email", "t@t"],
                     ["git", "config", "user.name", "t"], ["git", "config", "commit.gpgsign", "false"]):
             self.run_ok(cmd)

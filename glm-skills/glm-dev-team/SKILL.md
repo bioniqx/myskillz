@@ -63,7 +63,7 @@ The engine detects OpenCode itself (`oc_harness.harness()`). Any of these marks 
 | `devteam resume <id> [--note TEXT]` | Warm fix. It relaunches a fresh lane in the **same** worktree with the note added to the brief, and resets `.slice/stop_blocks`. Use it for the answer to a `BLOCKED` question and for the fix to a `REJECTED` / `NOT READY` / `MERGE ERROR`. |
 | `devteam retry <id> [--files ...]` | Cold retry. It creates a fresh worktree, switches to the stronger model (GLM-5.3) and re-dispatches, optionally with a wider file scope. |
 
-Lanes run `python3 <devteam.py> lane-run <id>` in their worktree. `lane-run` claims the slice, runs through the vendored `oc_harness.run_lanes` and pipes the stop-gate JSON. Stall is per role: about 900 s for glm-programmer and glm-team-leader, 600 s for reviewers, so a long test or build is not killed. A `glm-programmer-lite` slice runs the `glm-programmer-lite` agent (effort low) on v1 and v2. The opencode process group of each lane is written to `lanes/<id>.pgid`, and the engine stops a lane by killing that group, so no orphan keeps editing a recreated worktree. A checkpoint is launched detached the same way as a lane, and `wait` reports when it ends. The Claude 20-agent cap does not apply, but OpenCode/GLM is hard-capped at 8 concurrent calls: tiers start at lite 3, pro 6, max 7, api 8 (never above 8) and peak hours halve them. Markers go to `.claude/dev-team/slices/<id>.done|.blocked` (stop gate only). Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner only).
+Lanes run `python3 <devteam.py> lane-run <id>` in their worktree. `lane-run` claims the slice, runs through the vendored `oc_harness.run_lanes` and pipes the stop-gate JSON. Stall is per role: about 900 s for glm-programmer and glm-team-leader, 600 s for reviewers, so a long test or build is not killed. A `glm-programmer-lite` slice runs the `glm-programmer-lite` agent (effort low) on v1 and v2. The opencode process group of each lane is written to `lanes/<id>.pgid`, and the engine stops a lane by killing that group, so no orphan keeps editing a recreated worktree. A checkpoint is launched detached the same way as a lane, and `wait` reports when it ends. The Claude 20-agent cap does not apply, but OpenCode/GLM is hard-capped at 8 concurrent calls: the default tier `api` opens all 8 at once (lite/pro/max start at 3/6/7, never above 8); `DEVTEAM_PEAK=on` opts into peak-hour halving. Markers go to `.claude/dev-team/slices/<id>.done|.blocked` (stop gate only). Lane outputs go to `.claude/dev-team/lanes/<id>.jsonl|.err|.done` (runner only).
 
 Tools are checked by `guard.py oc` mode: `edit`/`write`/`patch` and `bash` on v1, `edit`/`write`/`shell` on v2. A glm-programmer gets the existing checks. Every other role is read-only, but may still run `devteam status` and `devteam probe`. When `DEVTEAM_ROLE` is unset, the v2 plugin takes the role from the event's `agent` if it names a glm-dev-team role. In lane mode, `batch`, `question` and `execute` are denied, because a headless `question` blocks forever. OpenCode has no interactive fallback. An unapproved command, or a glm-programmer write outside its own slice worktree, is DENIED outright and never left pending on a prompt. The deny message lists the pinned `.slice/allow` forms. Both plugins (v1 and v2) forward calls to `python3 guard.py oc` on stdin and throw `Error(reason)` on deny. Any plugin-side failure still allows the call, because the integrate re-check is the real enforcement. The plugin warns loudly once per lane and records the failure in the lane log.
 
@@ -163,12 +163,12 @@ in one line what is traded, list every untested slice at the end with an offer t
 - **Governor:** the provider allows only 8 concurrent API calls, so the window never exceeds 8 (leader and
   reviewer slots included; `doctor --fix` sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` and
   `CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY` to 8; Claude models keep the 64 cap), and the engine measures the
-  rest. Window starts from
-  the plan tier (`DEVTEAM_GLM_TIER` or `start --tier lite|pro|max|api`; default `pro`; starts 3/6/7/8, all
-  ceiling 8), grows as lanes
-  finish, halves when a 429 / 1302 / 1305 / overload shows up in the transcripts, and its ceiling halves
-  in the Z.ai peak (Mon–Fri 14:00–18:00 UTC+8, full credit rate). Off-peak costs half the credits — mention
-  it once if a big run starts in the peak. `DEVTEAM_MAX_PARALLEL=N` pins it; `DEVTEAM_GOVERNOR=off` disables.
+  rest. The default tier `api` opens the full 8-call window at once; `DEVTEAM_GLM_TIER` or
+  `start --tier lite|pro|max` trades width for gentler rate limits (starts 3/6/7, all ceiling 8). The window
+  grows as lanes finish and halves when a 429 / 1302 / 1305 / overload shows up in the transcripts.
+  `DEVTEAM_PEAK=on` opts into halving the ceiling during the Z.ai peak (Mon–Fri 14:00–18:00 UTC+8 — full
+  credit rate at lower concurrency; mention the credit trade-off once if a big run starts there).
+  `DEVTEAM_MAX_PARALLEL=N` pins it; `DEVTEAM_GOVERNOR=off` disables.
 - **`devteam stats`** — measured requests, output tokens, cache-hit rate, effort actually sent, API errors
   and wall time per role/model. Use it before changing tier, effort or routing; never guess.
 
@@ -269,7 +269,7 @@ safe/high-risk · Dispatch DAG) + one ```json block the engine executes (`devtea
 ```json
 {"request": "…",
  "profile": "balanced",
- "glm": {"tier": "pro"},
+ "glm": {"tier": "api"},
  "commands": {"build": "…|none", "test": "…", "test_file": "… {files}", "lint": "…|none",
               "lint_file": "… {files}|none", "typecheck": "…|none", "typecheck_file": "…|none",
               "bench": "(perf only)"},
@@ -304,7 +304,8 @@ and keep footprints disjoint. The governor window is a stated limit that only qu
 
 ## Speed dials (in order)
 
-`--tier` matching the user's Z.ai plan · run big fan-outs off-peak · profile `turbo`/`spike` (only when
+`DEVTEAM_PEAK=on` when a big run sits inside Z.ai's peak window (spares credits) · `--tier lite|pro|max` to
+trade width for rate-limit headroom (default `api` is full width) · profile `turbo`/`spike` (only when
 asked) · `review_batch` / `checkpoint_every` up for very large runs · `effort` on a role after `stats`
 shows it is the bottleneck. Past `spike` only two rules remain — independent review and one writer per
 path. If asked to cut those, say plainly what breaks, and don't.

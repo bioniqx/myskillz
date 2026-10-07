@@ -188,7 +188,7 @@ Done. Start a NEW ZCode session to load the installed skills and agents (a resta
 \$glm-idea-to-spec, \$glm-requirements-code-audit, \$glm-systematic-debugging, \$glm-writing-plans.
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
   python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping
-The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (default width 6).
+The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (dev-team opens all 8 by default, tier api).
 glm-dev-team guards (frozen tests, footprint) are ZCode hooks on Write|Edit and Bash tool events.
 The install above already ran
   python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
