@@ -7,7 +7,7 @@ allowed-tools: Read Bash(bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh"*) Bash(git
 
 # claude-git-diff-summary
 
-Goal: diff **merge-base(fresh base) → working tree** (committed + staged + unstaged + untracked), then output **Part 1 Vietnamese description** + **Part 2 English commit message**.
+Goal: diff **merge-base(fresh base) → working tree** (committed + staged + unstaged + untracked), then output **Part 1 change summary — Vietnamese first, English right below** + **Part 2 English commit message**.
 
 ## Context — already gathered (0 tool calls)
 
@@ -46,11 +46,12 @@ Then synthesize from subagent bullets + `INTENT` + `NUMSTAT` only. Never Read ch
 
 ## Output contract (both parts, this order, nothing else)
 
-**Part 1 — Mô tả thay đổi (luôn tiếng Việt)** for PM/QA/manager, non-technical:
+**Part 1 — Mô tả thay đổi (song ngữ: tiếng Việt trước, tiếng Anh ngay dưới)** for PM/QA/manager, non-technical:
 1. One-sentence summary of what the branch delivers, from the player's/operator's side.
 2. Groups named by **user-facing feature** (e.g. "Vòng quay Rush", "Ví tiền") — never file/class/module names.
 3. 1–4 bullets per group: `Trước đây <cũ> → giờ <mới>` or `Thêm/Sửa <người dùng thấy gì> để <lợi ích>`.
 4. **Ảnh hưởng** (only if real): 1–3 lines — what users notice + release risk.
+5. **Then the same summary in English, directly below the Vietnamese block** under the heading `**Change summary (English)**`: translate the one-sentence summary, every group and every bullet — no new facts, no omissions, natural technical English instead of word-for-word.
 
 Sentences ≲25 words, everyday words, user/game as subject; unavoidable jargon explained once. Wording: endpoint/API → "màn hình … lấy dữ liệu từ máy chủ" · cache/Redis → "bộ nhớ tạm để chạy nhanh hơn" · race condition → "hai thao tác cùng lúc gây kết quả sai" · refactor → "dọn lại code cho gọn, cách chạy giữ nguyên" · migration → "đổi cấu trúc dữ liệu đang lưu" · null/NPE → "thiếu dữ liệu nên hệ thống báo lỗi".
 
@@ -58,6 +59,11 @@ Quality bar:
 > **Hũ thưởng (Jackpot)**
 > - Trước đây nổ hũ xong số tiền vẫn hiện số cũ vài giây → giờ về 0 ngay khi trả thưởng.
 > - Thêm hũ nhỏ, người chơi thấy đủ 4 mức thưởng thay vì 3.
+
+> **Change summary (English)**
+> **Jackpot prize**
+> - The jackpot amount used to show the old value for a few seconds after a win → it now resets to 0 as soon as the prize is paid.
+> - Added a mini jackpot tier, players now see all 4 prize tiers instead of 3.
 
 **Part 2 — English commit message**, fenced code block:
 
@@ -77,4 +83,4 @@ type(scope): imperative summary ≤72 chars
 - Extra git/bash calls "to double-check" — the header is authoritative.
 - `git diff main HEAD` (misses uncommitted work, pulls in main's newer commits).
 - Reading FAN_OUT chunks in the main context, or launching subagents across several messages.
-- Part 1 as a dev changelog (files, classes, internals); swapped languages; missing ticket scope; silent stale-base.
+- Part 1 as a dev changelog (files, classes, internals); English block above or instead of the Vietnamese one; missing ticket scope; silent stale-base.
