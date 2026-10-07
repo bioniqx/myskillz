@@ -1,6 +1,6 @@
 # GLM-5.3 tuning — what was verified, what it changed
 
-Verified 2026-09-18 against z.ai's own model pages, the ZCode docs and the OpenCode docs.
+Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 
 ## Model facts this design rests on
 
@@ -20,15 +20,9 @@ Verified 2026-09-18 against z.ai's own model pages, the ZCode docs and the OpenC
 
 | Harness | Fact | Consequence |
 |---|---|---|
-| OpenCode v1 | dispatches subagents **sequentially** (`tasks.pop()` + await; issues #14195 / #29638 open, PR #47107 proposes a parallel task tool); no `background` param | an 8-subagent fan-out is nearly worthless there → the api lane is the fast path |
-| OpenCode v2 | `subagent` tool takes `background: true`; live probe (2026-09-25) ran two background children concurrently — real parallelism even at one call per turn, detectable by a `background` param on your subagent tool; interactive sessions only, since headless `opencode run` can exit before children report | the api lane stays the fast path for this skill's own fan-out, but the agent lane's fallback dispatch is no longer serial here |
-| OpenCode | reads only `name`, `description`, `license`, `compatibility`, `metadata` from skill frontmatter; ignores the rest; no `allowed-tools`, no command injection | no `allowed-tools` field; permissions are configured in the harness, not the skill |
-| OpenCode | finds skills in `.opencode/skills/`, `~/.config/opencode/skills/`, `.claude/skills/`, `~/.claude/skills/`, `.agents/skills/`, `~/.agents/skills/` | drop-in anywhere; `setup --harness opencode` uses the global path |
-| OpenCode | agents in `~/.config/opencode/agents/`, `mode: all` on v1 (a `mode: subagent` agent is silently swapped for the default `build` agent by `opencode run --agent`), `mode: subagent` + `variant: <effort>` on v2 (honored when the agent is dispatched through the `subagent` tool; `opencode run --agent` still gets effort from the `--model <id>#<effort>` suffix, since an explicit `--model` overrides the agent's own model), `model: provider/model-id` | `opencode/agents/*.md` holds neutral sources rendered into that dialect at install time |
 | ZCode | subagents launched **together run in parallel**; they cannot spawn nested subagents | the agent lane is a real fallback here |
 | ZCode | agents at `~/.zcode/agents/<name>.md`; fields `name`, `description`, `model`, `thoughtLevel`, `tools`/`disallowedTools`, `maxTurns`, `injectAgentsMd`, `mcpServers`, `color`. **No `effort`, no `permissionMode`, no haiku/sonnet aliases** | `agents/*.md` uses real GLM ids + `thoughtLevel` |
 | ZCode | skills at `~/.zcode/skills/<name>/SKILL.md`, invoked `$glm-requirements-code-audit`; a description over 1024 chars **drops the skill**; per-turn trigger metadata is a description excerpt of up to 250 chars (the WHEN-clause sits up front); a body over 100KB is truncated when loaded, not dropped | description reordered with the WHEN-clause first; description measured at 920 chars |
-| OpenCode | no hook system | the guard hooks and `.claude-plugin/` were removed. On the api lane the enforcement is structural instead: the retriever cannot return `*.md`, `docs/`, README-like files or anything under `.git/`, and the model has no tools at all |
 | ZCode | user-level hooks exist, merged into `~/.zcode/cli/config.json` | this skill installs none; the api lane's structural enforcement carries the rules here anyway |
 
 ## What changed from the Claude Code edition

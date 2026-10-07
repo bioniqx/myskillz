@@ -123,34 +123,7 @@ UNVERIFIED: the exact ceiling on parallel tool calls per GLM-5.3 turn.
 Public reports observe as few as two in one turn without an explicit
 instruction; R4 is written to hold either way.
 
-## 6. OpenCode harness
-
-Install from the `glm-skills/` folder with `python3 _shared/oc_harness.py install
-glm-brainstorming`, which renders `opencode/agents/glm-explorer.md`
-and `opencode/agents/glm-researcher.md` plus `opencode/commands/glm-brainstorm.md`
-into the detected v1 or v2 dialect and writes `.oc-major` under the installed
-skill folder. Tool-name map: `task` for a lane, `todowrite` for TaskCreate,
-`webfetch` for WebFetch; AskUserQuestion becomes plain-text numbered
-questions with approval as item 1.
-
-OpenCode process lanes: v1 renders agents with `mode: all` (a `mode:
-subagent` agent is silently swapped for the default `build` agent by
-`opencode run --agent`) and forwards frontmatter `reasoningEffort` as
-`reasoning_effort` on the wire. v2 *does* honor agent frontmatter
-`model:`+`variant:` when a lane is dispatched through the `subagent` tool
-directly — but `opencode run --agent` (what `lanes.json` drives here)
-always passes an explicit `--model`, which overrides the agent's own
-model/variant, so `oc_harness.py` instead appends `#<effort>` to that
-`--model` flag (`low|high|max`) when a lane dict carries an `effort`
-field, and that variant suffix is what reaches GLM. On v2 a lane with no
-`effort` field runs at GLM's default `max`; v1 always uses the agent's own
-`reasoningEffort`. In an interactive v2 session, dispatching `glm-explorer`/
-`glm-researcher` directly via the `subagent` tool with `background: true` and
-no `model` param gets the same effort from the agent's own `variant`
-instead (real parallelism per lane — see SKILL.md's harness fallback
-table).
-
-## 7. ZCode runtime
+## 6. ZCode runtime
 
 Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/` and rewrites the bundled agents to

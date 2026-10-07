@@ -35,9 +35,8 @@ What the script already did (don't redo): background `git fetch` of only the bas
 
 ### FAN_OUT (big diffs only)
 
-In **ONE message**, launch one lane per listed chunk (≤64; they run concurrently), then end the turn — every lane goes out together. Syntax per harness:
-- Claude Code / ZCode — `Task` tool: `subagent_type: general-purpose`, description `diff chunk NNN` (ZCode's `Agent` tool takes no `model` parameter; if a model must be named, use the real id `glm-5.3-flash`).
-- OpenCode — `subagent` tool: `agent: "general"`, `description: "diff chunk NNN"`, `background: true`, no `model` or `variant` field (there is no `general-purpose` or model alias on OpenCode; the lane runs on the model selected in the window).
+In **ONE message**, launch one lane per listed chunk (≤64; they run concurrently), then end the turn — every lane goes out together. Syntax:
+- ZCode — `Agent` tool: `subagent_type: general-purpose`, description `diff chunk NNN` (ZCode's `Agent` tool takes no `model` parameter; if a model must be named, use the real id `glm-5.3-flash`).
 Prompt (fill path):
 
 > Read-only. Read `<chunk path>` fully (if the Read is truncated, continue with offset until the end). It is a git diff of one area of a branch. Reply ONLY with ≤10 bullets, ≤150 words, no code, no line numbers:

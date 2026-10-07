@@ -1,6 +1,6 @@
 # glm-systematic-debugging 9.0
 
-Root-cause-first debugging, rebuilt for **GLM-5.3 / GLM-5.3-Flash** on **OpenCode** and **ZCode**.
+Root-cause-first debugging, rebuilt for **GLM-5.3 / GLM-5.3-Flash** on **ZCode**.
 
 The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` line is backed by evidence observed in this session. Everything else changed to remove model turns.
 
@@ -9,7 +9,7 @@ The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` lin
 The generic skill buys speed by telling the model to put many tool calls in one message and to launch many subagents at once. On this pairing, both assumptions fail:
 
 - GLM-5.3 emits only a couple of tool calls per turn, so a "batch of 12 reads" quietly becomes six round-trips.
-- OpenCode v1 dispatches subagent tasks one at a time, so a wide fan-out becomes that many sequential runs. OpenCode v2's `subagent` tool takes `background: true`, so dispatching workers that way (one call after another, without waiting) gets real parallelism even from a single turn — interactive sessions only, since a headless `opencode run` can exit before background children report. (ZCode does run foreground subagents in parallel.)
+- ZCode does run foreground subagents launched together in parallel, but each dispatch is still a model turn, so a wide agent fan-out spends exactly the turns the tools were built to remove.
 
 So the parallelism moved **out of the model's turn and into the tools**. One call per phase; each call opens its own threads: up to 64 for local jobs, at most 8 for model/API workers.
 
@@ -26,14 +26,13 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 
 | Harness | Path |
 |---|---|
-| OpenCode | `~/.config/opencode/skills/glm-systematic-debugging/` (or `$OPENCODE_CONFIG_DIR/skills/…`, or `.opencode/skills/…` per project; `~/.claude/skills/` and `~/.agents/skills/` are read too). Paste the `setup --harness opencode` provider block (defines the `low`/`high`/`max` variants); `/glm-debug` sets `S`, and agent-lane workers run as `glm-debug-worker` |
 | ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and the `glm-debug-worker` agent (frontmatter rewritten, `thoughtLevel: low`) into `~/.zcode/agents/` |
 | Claude-compatible | `~/.claude/skills/glm-systematic-debugging/` |
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)
 python3 <skill>/scripts/debug_tool.py doctor --ping
-python3 <skill>/scripts/debug_tool.py setup --harness opencode   # or zcode | claude
+python3 <skill>/scripts/debug_tool.py setup --harness zcode   # or claude
 ```
 
 Needs bash (3.2+ works), git and python3 (stdlib only). `timeout`/`gtimeout` is optional, for `-t`. Without an API key everything still works except `scan`, which falls back to writing subagent prompts.

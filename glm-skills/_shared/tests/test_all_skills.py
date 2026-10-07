@@ -1,9 +1,9 @@
-"""All-skill hygiene checks and the root installer script.
+"""All-skill hygiene checks and the dev-team doctor.
 
 Verifies: shared modules are vendored byte-identically into each skill's
 scripts/, every .py file in skills/glm compiles, every SKILL.md has
 name == directory (the glm- prefix) and a description <= 1024 chars, and
-install-opencode.sh installs all eight skills and prints the snippet.
+devteam.py doctor reports its harness hermetically.
 """
 
 import hashlib
@@ -101,10 +101,9 @@ class TestScriptsCompile(unittest.TestCase):
 
 class TestSkillMdHygiene(unittest.TestCase):
     def test_doc_generator_no_unknown_agents(self):
-        """glm-doc-generator SKILL.md names glm-doc-writer/glm-doc-reviewer for OpenCode/ZCode;
-        'general-purpose' and 'Explore' are built-ins on Claude Code and ZCode, so they may
-        appear only on lines that name one of those harnesses (OpenCode's read-only agent is
-        `general`)."""
+        """glm-doc-generator SKILL.md names the installed glm-doc-writer/glm-doc-reviewer
+        agents for ZCode; 'general-purpose' and 'Explore' are built-ins on Claude Code and
+        ZCode, so they may appear only on lines that name one of those harnesses."""
         skill_md = os.path.join(GLM_ROOT, "glm-doc-generator", "SKILL.md")
         with open(skill_md, encoding="utf-8") as fh:
             content = fh.read()
@@ -120,30 +119,29 @@ class TestSkillMdHygiene(unittest.TestCase):
                 if name in line and "Claude Code" not in line and "ZCode" not in line:
                     self.fail("SKILL.md:%d names '%s' without Claude Code or ZCode" % (line_num, name))
 
-        # Writer (§3 step 3) and reviewer (§4) dispatch lines name both harness choices.
+        # Writer (§3 step 3) and reviewer (§4) dispatch lines name the installed agent and
+        # the general-purpose fallback.
         type_lines = [l for l in lines if "subagent type" in l]
         writer = [l for l in type_lines if "glm-doc-writer" in l]
         reviewer = [l for l in type_lines if "glm-doc-reviewer" in l]
         self.assertTrue(writer, "no writer 'subagent type' line")
         self.assertTrue(reviewer, "no reviewer 'subagent type' line")
         for l in writer + reviewer:
-            for needle in ("OpenCode", "ZCode", "Appendix A", "general-purpose", "Claude Code"):
+            for needle in ("ZCode", "Appendix A", "general-purpose", "Claude Code"):
                 self.assertIn(needle, l, "dispatch line lacks %r: %s" % (needle, l))
 
-        # Large-repo recon row: `general` on OpenCode; Explore is a ZCode and Claude Code built-in.
+        # Large-repo recon row: Explore is a ZCode and Claude Code built-in.
         recon = [l for l in lines if "read-only shards" in l]
         self.assertTrue(recon, "no large-repo recon row")
         for l in recon:
-            self.assertIn("`general` on OpenCode", l)
+            self.assertIn("Explore", l)
             if "Claude Code harness only" in l:
                 self.fail("recon row still claims Explore is Claude Code only")
-            if "Explore" in l:
-                self.assertIn("ZCode", l, "recon row does not name ZCode for Explore")
+            self.assertIn("ZCode", l, "recon row does not name ZCode for Explore")
 
-        # §8: <skill_dir> comes from the 'Base directory for this skill' line, not /glm-docs.
+        # No stale claim that the /glm-docs command injects the skill path.
         self.assertIsNone(re.search(r"/glm-docs[^\n]*inject", content, re.IGNORECASE),
                           "SKILL.md claims /glm-docs injects the skill path")
-        self.assertIn("Base directory for this skill", content)
 
     def test_skill_md_hygiene(self):
         for skill in ALL_SKILLS:
@@ -168,44 +166,7 @@ class TestSkillMdHygiene(unittest.TestCase):
                                   "%s description is %d chars, max 1024" % (skill_md, len(desc)))
 
 
-class TestInstallOpencodeScript(unittest.TestCase):
-    def setUp(self):
-        self.script = os.path.join(GLM_ROOT, "install-opencode.sh")
-
-    def test_install_opencode_script_exists(self):
-        self.assertTrue(os.path.exists(self.script), "%s does not exist" % self.script)
-        self.assertTrue(os.access(self.script, os.X_OK), "%s is not executable" % self.script)
-
-    def test_install_opencode_installs_and_prints_snippet(self):
-        home = tempfile.mkdtemp()
-        try:
-            result = subprocess.run(
-                ["sh", self.script, "--major", "1", "--home", home],
-                capture_output=True, text=True, timeout=60)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for skill in PHASE1_SKILLS:
-                expected_name = skill
-                dst = os.path.join(home, ".config", "opencode", "skills", expected_name)
-                self.assertTrue(os.path.isdir(dst), "missing installed skill dir %s" % dst)
-            self.assertIn('"$schema"', result.stdout)
-            self.assertIn("opencode.ai/config.json", result.stdout)
-        finally:
-            shutil.rmtree(home, ignore_errors=True)
-
-    def test_install_opencode_installs_dev_team_with_plugin(self):
-        home = tempfile.mkdtemp()
-        try:
-            result = subprocess.run(
-                ["sh", self.script, "--major", "1", "--home", home],
-                capture_output=True, text=True, timeout=60)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            dst = os.path.join(home, ".config", "opencode", "skills", "glm-dev-team")
-            self.assertTrue(os.path.isdir(dst), "missing installed skill dir %s" % dst)
-            plugin = os.path.join(home, ".config", "opencode", "plugins", "glm-devteam-guard.js")
-            self.assertTrue(os.path.isfile(plugin), "missing installed plugin %s" % plugin)
-        finally:
-            shutil.rmtree(home, ignore_errors=True)
-
+class TestDevteamDoctorHarness(unittest.TestCase):
     def test_dev_team_glm_doctor_reports_opencode_content(self):
         """devteam.py doctor --harness opencode runs hermetically (isolated HOME, no shared
         os.environ mutation) and its output actually names the harness and a verdict line,

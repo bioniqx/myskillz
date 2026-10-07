@@ -5,7 +5,7 @@ license: MIT
 metadata:
   version: "9.0"
   models: "glm-5.3, glm-5.3-flash"
-  harness: "opencode, zcode, claude-compatible"
+  harness: "zcode, claude-compatible"
 ---
 
 # Systematic Debugging
@@ -15,12 +15,10 @@ metadata:
 ## R0. Bootstrap — put this in front of your FIRST command, once
 
 ```bash
-for d in "${CLAUDE_SKILL_DIR:-}" "$OPENCODE_CONFIG_DIR/skills/glm-systematic-debugging" .opencode/skills/glm-systematic-debugging ~/.config/opencode/skills/glm-systematic-debugging .claude/skills/glm-systematic-debugging ~/.claude/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging ~/.zcode/skills/glm-systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
+for d in "${CLAUDE_SKILL_DIR:-}" ~/.zcode/skills/glm-systematic-debugging .zcode/skills/glm-systematic-debugging .claude/skills/glm-systematic-debugging ~/.claude/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
 ```
 
 Every tool output starts with `S=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path** into every later command — `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags.
-
-One-time OpenCode setup: `python3 $S/debug_tool.py setup --harness opencode` prints a provider block that defines the `low` / `high` / `max` `reasoningEffort` variants for `glm-5.3` and `glm-5.3-flash` under `zai-coding-plan`. Paste it into your OpenCode provider config. Without it, `#max` fails with "Variant unavailable".
 
 ## R1. One call per phase — do not batch tool calls, batch *inside* one call
 
@@ -83,7 +81,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 1. Intermittent → `bash $S/stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
-4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to at most 8 workers at once itself (`-j` above 8 is clamped), with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `glm-debug-worker` agent instead — dispatch them in waves of 8 per message (the provider's full concurrent-call budget). On OpenCode v2 (your `subagent` tool has a `background` param), instead dispatch each worker with the `glm-debug-worker` agent and `background: true`, one call after another without waiting, then end the turn — interactive sessions only, since a headless `opencode run` can exit before background children report. Beyond ~6 agent workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to at most 8 workers at once itself (`-j` above 8 is clamped), with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `glm-debug-worker` agent instead — dispatch them in waves of 8 per message (the provider's full concurrent-call budget); ZCode runs subagents launched together in parallel. Beyond ~6 agent workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
 
 ## R6. Fix-attempt limit

@@ -24,8 +24,9 @@ present once → get approval. Lower rule number wins a conflict.
 !`sh "${CLAUDE_SKILL_DIR}/scripts/context.sh"`
 
 Trust this block. Never re-run `ls`, `find`, `git status`, or `cat` on
-manifests. Reference files live in `skill_dir`; read by absolute path. A
-raw `!` line above instead of output (OpenCode ignores `!` preloads and
+manifests. Reference files live in `skill_dir` — installed at
+`~/.zcode/skills/glm-brainstorming/`; read by absolute path. A
+raw `!` line above instead of output (ZCode has no `!` preload and
 leaves `${CLAUDE_SKILL_DIR}` empty): if a context block with a `harness:`
 line is already in the conversation (the `/glm-brainstorm` command injects
 one), use it and skip the script. Otherwise run
@@ -308,86 +309,26 @@ next question.
 
 ## Harness fallbacks
 
-Live context prints a `harness:` line (and `oc_major:` on OpenCode).
+Live context prints a `harness:` line.
 Missing capability → substitute, never stall.
 
 | Missing | Substitute |
 | --- | --- |
-| Agent / subagents | OpenCode: follow the OpenCode lane rule below. |
-| AskUserQuestion missing (or on ZCode, where no question tool is documented) | ask in plain text: numbered questions in chat, approval ask as item 1 |
+| Agent / subagents | Run the work yourself in R4 batches; never stall. |
+| AskUserQuestion missing (ZCode has the tool — use it) | ask in plain text: numbered questions in chat, approval ask as item 1 |
 | ToolSearch | Tools are already live; skip it. |
 | Workflow (Claude Code) | Run waves of lanes. |
 | `!` preprocessing (raw `!` above) | Context block already present → use it. Else run `sh <Base directory>/scripts/context.sh` as your first round-1 call. |
-| TaskCreate missing | use TodoWrite for the checklist write; on OpenCode the tool name is `todowrite` |
+| TaskCreate missing | use TodoWrite for the checklist write |
 
-**OpenCode lane rule** (one rule, picked by `oc_major`):
-
-1. v2 → dispatch each lane as a background `subagent` call: `agent:
-   "glm-explorer"` (Code lane) or `"glm-researcher"` (Web lane), a short
-   `description`, `prompt` = the filled R11 template, `background: true`,
-   no `model` override (effort comes from the agent's own `variant`).
-   Fire them one after another without waiting. Background `subagent`
-   unavailable → rule 2.
-2. v1 → run the lanes as processes with `oc_harness.py run` (below).
-3. `task` (v1) or a foreground `subagent` (v2) ONLY as the fallback when
-   rule 1 or 2 fails. Agent `glm-explorer`, `glm-researcher` or `general`,
-   never `general-purpose` or `Explore`: those do not exist on OpenCode.
-
-Running `oc_harness.py run`. `CLAUDE_SKILL_DIR` is not set on OpenCode.
-Put the "Base directory for this skill" path in `BASE` when the skill
-header shows it, then resolve the scripts directory in this order:
-
-```bash
-BASE=""
-H=""
-for d in "$BASE" \
-  "${OPENCODE_CONFIG_DIR:+$OPENCODE_CONFIG_DIR/skills/glm-brainstorming}" \
-  .opencode/skills/glm-brainstorming \
-  ~/.config/opencode/skills/glm-brainstorming \
-  .agents/skills/glm-brainstorming ~/.agents/skills/glm-brainstorming \
-  .claude/skills/glm-brainstorming ~/.claude/skills/glm-brainstorming \
-  .zcode/skills/glm-brainstorming ~/.zcode/skills/glm-brainstorming; do
-  if [ -n "$d" ] && [ -f "$d/scripts/oc_harness.py" ]; then H="$d/scripts"; break; fi
-done
-[ -n "$H" ] || { echo "glm-brainstorming: oc_harness.py not found in any skills dir; run install-opencode.sh"; exit 1; }
-mkdir -p .brainstorm/drafts
-OUT="$(mktemp -d .brainstorm/drafts/lanes.XXXXXX)"
-python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"
-python3 "$H/oc_harness.py" result "$OUT"
-```
-
-Write `.brainstorm/drafts/lanes.json` before the call (R0 allows writes
-under `.brainstorm/drafts/`). It is a JSON array of lane objects. Each
-lane needs `id` (unique string), `agent` (`glm-explorer` or `glm-researcher`, the
-neutral read-only/web agents installed from `opencode/agents/`), `model`
-(`flash` or `pro`), `effort` (`low` for these lanes), `dir` (working
-directory for that lane) and `brief` (the per-lane user message: task,
-root/stack, today's date, this lane's slice or angle, the siblings it
-must stay out of, and its one question; the same fields the Code/Web
-lane templates in R11 fill per lane). The brief goes to each lane on
-stdin.
-
-The run takes minutes, longer than a shell call's default limit: v2 kills
-a foreground shell call after 120 s and orphans the web lanes. On v2 make
-the call through `shell` with `background: true` and a `timeout` that
-covers the slowest lane; on v1 give the `bash` tool a `timeout` that
-covers the slowest lane. Stopping the call stops every lane (the harness
-kills each lane's process group).
-
-Read results with `python3 oc_harness.py result OUT_DIR` (the last line
-of the block above): it prints each lane's final FINDINGS/CLAIMS text.
-Never open the raw `<id>.jsonl` stream. `<id>.done` holds the status
-JSON and `<id>.err` the lane error.
-
-Tool-name map, OpenCode v1: `task` (lane fallback only), `todowrite`
-(TaskCreate), `webfetch` (WebFetch), `bash` (Bash). OpenCode v1 has no
-web search tool: use OpenCode's `webfetch` on the R10.2 fetch-friendly
-endpoints. No AskUserQuestion: plain-text numbered questions with
-approval as item 1.
-
-Tool-name map, OpenCode v2: `subagent` (lane), `shell` (Bash), `websearch`
-(WebSearch), OpenCode's `webfetch` (WebFetch), `question`
-(AskUserQuestion). No TaskCreate equivalent: carry state per R5.
+**ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use
+`subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"` — the installed
+agents already carry the model and effort (Flash, low), so never add a
+`model` parameter. Agents not installed → the built-ins `Explore` (Code) and
+`general-purpose` (Web). Fill the R11 template into the prompt, launch every
+lane of the round in ONE message (ZCode runs subagents launched together in
+parallel), then end the turn. A lane that may outlive the turn goes out with
+`run_in_background: true`; its completion notification is the wake-up.
 
 ## Visual companion
 

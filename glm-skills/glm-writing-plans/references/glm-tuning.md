@@ -53,14 +53,10 @@ Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
    tool round trips. Lint and repair happen in Python. This is the fast path on
    every harness.
 2. **agent** (fallback). The script writes one brief per writer and prints a
-   DISPATCH table. On ZCode, foreground subagents run in parallel and this lane
-   is respectable. On OpenCode v1, the task tool dispatches subagents one at a
-   time unless `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` is set, so
-   expect roughly serial behavior without it. On OpenCode v2, the `subagent`
-   tool takes `background: true`: dispatch each DISPATCH row that way, one
-   after another with no wait, for real parallelism from one tool call per
-   turn. The agent lane starts 6 background lanes per message by default (up to
-   8 with `PLAN_LANE_WIDTH` or `OC_MAX_LANES`; the api lane keeps 8 threads),
+   DISPATCH table. On ZCode, foreground subagents launched together run in
+   parallel and this lane is respectable: dispatch each row as one `Agent`
+   call in a single message. The agent lane starts 6 lanes per message by
+   default (up to 8 with `PLAN_LANE_WIDTH`; the api lane keeps 8 threads),
    and each writer takes up to 4 tasks, because batching beats more workers.
 
 Force a lane with `build --lane api|agent`.
@@ -85,23 +81,6 @@ The coding endpoint is for coding scenarios only and is not interchangeable
 with the general endpoint.
 
 ## Harness notes
-
-**OpenCode.** Skills live in `.opencode/skills/<name>/`,
-`~/.config/opencode/skills/<name>/`, or any `~/.claude/skills/` or
-`~/.agents/skills/` directory. Only `name`, `description`, `license`,
-`compatibility` and `metadata` are read from the frontmatter; everything else is
-ignored, not an error. The skill frontmatter `name` field (with the `glm-`
-prefix) is used for command and agent discovery. There is no `!` command
-injection in skills, which is why call 1 is an explicit shell call; the `/glm-plan`
-command injects the skill directory and argument string, then loads the skill.
-The `glm-plan-task-writer` agent provides the fallback when an API key is not
-available; `oc_harness.py run` starts a subprocess for tool-using agent lanes.
-Subagents live in `~/.config/opencode/agents/`, rendered with `mode: all` on v1 (a `mode: subagent`
-agent is silently swapped for the default `build` agent by `opencode run --agent`) and `mode:
-subagent` on v2. Rendering also writes `reasoningEffort:` into v1 agents and `variant: <effort>` into
-v2 agents, so the `subagent` tool honors an agent's own model and effort when dispatched without an
-explicit `model` override. Headless
-runs are `opencode run -m <provider>/<model> --auto "<prompt>"`.
 
 **ZCode.** Skills live in `~/.zcode/skills/<name>/SKILL.md` and are invoked with
 `$glm-writing-plans`. The description is capped at 1024 characters; a body-size cap is unverified.

@@ -111,6 +111,6 @@ report path. The Conductor reads the file; don't repeat it.
 
 ## Re-review
 
-When the engine relaunches you with fix commits (OpenCode has no message channel), re-check **only** the changed
+When the engine relaunches you with fix commits, re-check **only** the changed
 areas against your findings, update the report file in place (mark each finding
 `resolved` / `still open`), and reply with the new verdict line and counts.

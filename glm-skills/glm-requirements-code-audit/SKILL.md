@@ -10,7 +10,7 @@ description: >-
   and code", "requirement traceability", "conformance/compliance check", "what is missing vs the spec and
   how do I fix it", "compare my doc to my code", or Vietnamese requests like "kiểm tra code có đúng tài liệu
   yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
-compatibility: OpenCode and ZCode with GLM-5.3 / GLM-5.3-Flash. Needs python3; ripgrep recommended; no third-party packages.
+compatibility: ZCode (and Claude-compatible harnesses) with GLM-5.3 / GLM-5.3-Flash. Needs python3; ripgrep recommended; no third-party packages.
 metadata:
   version: 9.0
   models: glm-5.3-flash, glm-5.3
@@ -24,11 +24,11 @@ Checks whether the **code faithfully implements a requirements document**, repor
 
 Write `A` for the audit script, pinned as your first call of the run:
 `A=python3 <dir>/scripts/audit.py` for the first `<dir>` that has `scripts/audit.py`, trying in order the
-directory holding this file, `$OPENCODE_CONFIG_DIR/skills/glm-requirements-code-audit`,
-`.opencode/skills/glm-requirements-code-audit`, `~/.config/opencode/skills/glm-requirements-code-audit`,
+directory holding this file, `~/.zcode/skills/glm-requirements-code-audit`,
+`.zcode/skills/glm-requirements-code-audit`,
 `.agents/skills/glm-requirements-code-audit`, `~/.agents/skills/glm-requirements-code-audit`,
-`.claude/skills/glm-requirements-code-audit`, `~/.claude/skills/glm-requirements-code-audit`,
-`~/.zcode/skills/glm-requirements-code-audit` (`python` instead of `python3` on Windows). No candidate
+`.claude/skills/glm-requirements-code-audit`, `~/.claude/skills/glm-requirements-code-audit`
+(`python` instead of `python3` on Windows). No candidate
 exists → say so and ask for the install dir; never guess a path. Every command prints a `NEXT:` line —
 follow it and do not deliberate about plumbing.
 
@@ -45,9 +45,8 @@ running inside the script.
 ## R1 — Where the speed comes from (do not undo it)
 
 1. **The parallel work is not in your turn.** `audit.py run` opens up to 8 threads, each one request straight
-   at the GLM endpoint. Nothing depends on the harness dispatching anything, so it is equally fast in OpenCode
-   v1 (which dispatches subagents one at a time), OpenCode v2 (whose `subagent` tool can dispatch with
-   `background: true` instead, but that path serves the agent-lane fallback, not this one) and ZCode.
+   at the GLM endpoint. Nothing depends on the harness dispatching anything, so the api lane is equally fast
+   everywhere; the agent lane is the one that needs a harness with parallel subagents.
 2. **Retrieval is deterministic, not agentic.** ripgrep plus a symbol/route index finds candidate code over six
    independent strategies; the model only judges what it is shown. GLM emits few parallel tool calls per turn,
    so a search loop would be the slow, weak part of the audit — this removes it, and records every query for
@@ -183,10 +182,7 @@ ONE message (agent-lane width defaults to 6, up to 8 with `OC_MAX_LANES`; batche
 the earlier findings and verifier batches (`A plan --resume` keeps finished batches); each worker lists in
 `searched` the queries it ran, and the gate rejects a MISSING without them. The batch files carry the
 pre-retrieved excerpts, so the workers mostly judge rather than search. ZCode runs subagents launched together
-in parallel; OpenCode v1 serialises them, which is exactly why the api lane exists there. OpenCode v2's
-`subagent` tool takes `background: true` (a `background` param on your subagent tool is how you detect v2):
-dispatch each worker in turn without waiting, then end the turn — real parallelism even one call per turn, but
-interactive sessions only, since a headless `opencode run` can exit before background children report. No
+in parallel, so one message is real parallelism. No
 Agent tool at all → do the batch files yourself, and give every MISSING two independent search strategies by
 hand.
 

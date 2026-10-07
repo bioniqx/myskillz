@@ -2,7 +2,7 @@
 name: glm-writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 8 concurrent writers by the script itself, verified by a deterministic linter.
 argument-hint: "[spec-path] [--thorough]"
-compatibility: python3 3.8+; OpenCode, ZCode, or any harness with a shell
+compatibility: python3 3.8+; ZCode, Claude Code, or any harness with a shell
 ---
 
 # Writing Plans (v9 - GLM edition)
@@ -24,14 +24,13 @@ defect to explain, not a habit.
 Run this as your FIRST tool call, with the spec path in place of `SPEC`:
 
 ```bash
-for d in "${OPENCODE_CONFIG_DIR:-}/skills/glm-writing-plans" \
-  .opencode/skills/glm-writing-plans \
-  ~/.config/opencode/skills/glm-writing-plans \
+for d in "${CLAUDE_SKILL_DIR:-}/skills/glm-writing-plans" \
+  ~/.zcode/skills/glm-writing-plans \
+  .zcode/skills/glm-writing-plans \
   .agents/skills/glm-writing-plans \
   ~/.agents/skills/glm-writing-plans \
   .claude/skills/glm-writing-plans \
-  ~/.claude/skills/glm-writing-plans \
-  ~/.zcode/skills/glm-writing-plans; do
+  ~/.claude/skills/glm-writing-plans; do
   [ -f "$d/scripts/plan_tool.py" ] && T="$d/scripts/plan_tool.py" && break
 done
 [ -z "$T" ] && echo "glm-writing-plans skill not found in any standard location" >&2 && exit 1
@@ -140,15 +139,11 @@ to review every task instead of only the risky ones.
    section is non-functional: add a contract and re-run.
 4. `LANE agent` in the output means no API key was found, so the script fell
    back to printing a DISPATCH table: dispatch one subagent per row, ALL in a
-   single message, each with the prompt `Read <brief path> and follow it
+   single message (ZCode runs subagents launched together in parallel), each
+   with the prompt `Read <brief path> and follow it
    exactly.`, then run the printed `wait`, `review` and `assemble` commands in
-   that order. On OpenCode v2 (your subagent tool takes a `background`
-   param), dispatch each row instead with `background: true`, one after
-   another with no wait, then end the turn; when the last one reports, run
-   the printed `wait`, `review` and `assemble` commands as above. On OpenCode
-   each message holds at most 6 rows by default (up to 8 via `OC_MAX_LANES`);
-   send the next MESSAGE after the previous one replied. Interactive
-   sessions only: a headless run can exit before background children report.
+   that order. The table holds at most 6 rows per message by default (up to 8
+   via `PLAN_LANE_WIDTH`); send the next MESSAGE after the previous one replied.
    Tell the user once that `<TOOL> doctor` shows how to enable the fast lane.
 
 # R5 - Handoff

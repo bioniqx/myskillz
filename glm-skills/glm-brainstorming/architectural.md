@@ -105,7 +105,7 @@ Claims:
   `general-purpose` with the design pasted. It writes to
   `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
-  On OpenCode the lane agents (`glm-explorer`, `glm-researcher`) are `edit: deny`,
+  The lane agents (`glm-explorer`, `glm-researcher`) are read-only,
   so no lane can write it: the main session writes the pre-draft itself
   to the same path as the last call of the design turn.
 - **Runner-up approach** — one lane, only when the top two approaches are
@@ -119,10 +119,9 @@ Do not start work the user's reply is likely to invalidate wholesale.
 Drop to `reasoning_effort: low` here; this turn is formatting and
 targeted edits, not judgment.
 
-1. If a pre-draft lane is still running, stop it (TaskStop) and write the
-   spec yourself. OpenCode has no TaskStop and no pre-draft lane: skip
-   straight to the move below. On ZCode `TaskStop` exists
-   (Claude-Code-compatible): stop the lane, then write the spec yourself.
+1. If a pre-draft lane is still running, stop it. On ZCode `TaskStop`
+   exists (Claude-Code-compatible): stop the lane, then write the
+   spec yourself. No stop tool → skip straight to the move below.
    Otherwise move the draft to
    `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's

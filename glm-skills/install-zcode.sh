@@ -3,7 +3,7 @@
 #
 #   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
 #           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
-#   agents  <skill>/agents/*.md (glm-requirements-code-audit, glm-doc-generator) and
+#   agents  <skill>/agents/*.md (glm-brainstorming, glm-requirements-code-audit, glm-doc-generator) and
 #           glm-systematic-debugging's glm-debug-worker
 #           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; existing files are overwritten, no backup)
 #           glm-dev-team's seven ZCode agents (five file agents plus rendered glm-programmer-lite and
@@ -71,7 +71,7 @@ PY
 
 # convert SRC DEST [LEVEL]: rewrite one agent file to ZCode frontmatter (real GLM ids, thoughtLevel,
 # steps: N -> maxTurns: N and omitClaudeMd: true -> injectAgentsMd: false instead of dropping them,
-# drop permissionMode and the other Claude/OpenCode-only keys, keep background; LEVEL is a thoughtLevel
+# drop permissionMode and the other Claude-only keys, keep background; LEVEL is a thoughtLevel
 # applied only when the source has neither thoughtLevel nor effort).
 convert() {
     if [ "$DRY" -eq 1 ]; then echo "[dry-run] agent $1 -> $2"; return 0; fi
@@ -107,7 +107,8 @@ for key, lines in blocks:
         out.append("injectAgentsMd: " + ("false" if val == "true" else "true"))
         continue
     if key == "model":
-        val = {"haiku": flash, "sonnet": main, "opus": main, "glm-5.3-flash": flash, "glm-5.3": main}.get(val, val)
+        val = {"haiku": flash, "sonnet": main, "opus": main, "flash": flash, "pro": main,
+               "glm-5.3-flash": flash, "glm-5.3": main}.get(val, val)
         lines = ["model: " + val]
     out.extend(lines)
 if not has_level:
@@ -147,7 +148,7 @@ done
 
 echo "== agents"
 run mkdir -p "$AGENTS_DIR"
-for f in "$SCRIPT_DIR"/glm-requirements-code-audit/agents/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/*.md; do
+for f in "$SCRIPT_DIR"/glm-brainstorming/agents/*.md "$SCRIPT_DIR"/glm-requirements-code-audit/agents/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/*.md; do
     [ -f "$f" ] && convert "$f" "$AGENTS_DIR/$(basename "$f")"
 done
 # glm-debug-worker is a mechanical worker; it never pays for max thinking.

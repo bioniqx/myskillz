@@ -195,11 +195,10 @@ class ZcodeFactTests(unittest.TestCase):
         rows = [l for l in self.text.splitlines() if "read-only shards" in l]
         self.assertTrue(rows, "no large-repo recon row")
         for row in rows:
-            self.assertIn("`general` on OpenCode", row)
+            self.assertIn("Explore", row)
             if "`Explore` is for the Claude Code harness only" in row:
                 self.fail("recon row still claims Explore is Claude Code only")
-            if "Explore" in row:
-                self.assertIn("ZCode", row, "recon row does not name ZCode for Explore")
+            self.assertIn("ZCode", row, "recon row does not name ZCode for Explore")
 
     def test_appendix_a_frontmatters_carry_real_models(self):
         lines = self.text.split("\n")
@@ -220,12 +219,6 @@ class ZcodeFactTests(unittest.TestCase):
     def test_appendix_a_points_at_the_auto_installed_zcode_agents(self):
         self.assertIn("agents/", self.text, "no pointer to the agents/ files")
         self.assertIn("auto-installed", self.text, "no auto-installed wording")
-
-    def test_oc_max_lanes_mention_is_scoped_to_opencode(self):
-        mentions = [l for l in self.text.splitlines() if "OC_MAX_LANES" in l]
-        self.assertTrue(mentions, "no OC_MAX_LANES mention in SKILL.md")
-        for line in mentions:
-            self.assertIn("OpenCode", line, "OC_MAX_LANES mention is not scoped to OpenCode")
 
 
 if __name__ == "__main__":

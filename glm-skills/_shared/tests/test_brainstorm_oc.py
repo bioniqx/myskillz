@@ -31,70 +31,10 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
     def setUp(self):
         self.text = read(SKILL_MD)
 
-    def test_gives_exact_run_command(self):
-        self.assertIn(
-            'python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"',
-            self.text,
-        )
-
-    def test_resolver_checks_for_oc_harness_script(self):
-        self.assertIn("scripts/oc_harness.py", self.text)
-
-    def test_gives_lane_fields(self):
-        for field in ("id", "agent", "model", "dir", "brief"):
-            self.assertIn("`%s`" % field, self.text)
-
-    def _opencode_lane_section(self):
-        start = self.text.find("Running `oc_harness.py run`")
-        self.assertNotEqual(start, -1, "OpenCode run section not found")
-        end = self.text.find("## Visual companion", start)
-        self.assertNotEqual(end, -1, "OpenCode lane section end marker not found")
-        return self.text[start:end]
-
-    def test_states_what_brief_contains(self):
-        section = self._opencode_lane_section()
-        self.assertIn("brief", section.lower())
-        self.assertIn("task", section.lower())
-        self.assertIn("question", section.lower())
-
-    def test_states_where_and_how_lane_output_is_read(self):
-        section = self._opencode_lane_section()
-        self.assertIn('python3 "$H/oc_harness.py" result "$OUT"', section)
-        self.assertIn("python3 oc_harness.py result OUT_DIR", section)
-        self.assertIn(".jsonl", section)
-        self.assertIn("--out", section)
-
-    def test_resolver_guards_empty_h(self):
-        section = self._opencode_lane_section()
-        self.assertIn('[ -n "$H" ]', section)
-        self.assertIn("not found", section.lower())
-
-    def test_run_command_uses_temp_out_dir(self):
-        section = self._opencode_lane_section()
-        self.assertNotIn('OUT=".brainstorm/drafts/lanes"', section)
-        self.assertIn('OUT="$(mktemp -d .brainstorm/drafts/lanes.XXXXXX)"', section)
-        self.assertIn("mkdir -p .brainstorm/drafts", section)
-        self.assertIn('--out "$OUT"', section)
-
-    def test_run_section_uses_lanes_json_and_result(self):
-        section = self._opencode_lane_section()
-        self.assertIn(
-            'python3 "$H/oc_harness.py" run .brainstorm/drafts/lanes.json --out "$OUT"',
-            section,
-        )
-        self.assertIn('python3 "$H/oc_harness.py" result "$OUT"', section)
-
     def test_changelog_states_fresh_lane_dir_per_run(self):
         changelog = read(os.path.join(os.path.dirname(SKILL_MD), "CHANGELOG.md"))
         entry = changelog.split("# 9.2", 1)[0]
         self.assertIn("fresh dir per run under `.brainstorm/drafts/`", entry)
-
-    def test_states_task_tool_is_only_fallback(self):
-        idx = self.text.find("`task`")
-        self.assertNotEqual(idx, -1, "no `task` mention found")
-        window = self.text[max(0, idx - 200):idx + 200]
-        self.assertIn("fallback", window.lower())
-        self.assertIn("unavailable", window.lower())
 
     def test_line_2_is_still_name_brainstorming(self):
         lines = self.text.split("\n")
@@ -491,14 +431,17 @@ class ZcodeSurfaceTests(unittest.TestCase):
         self.assertTrue(any("TaskCreate" in ln and "TodoWrite" in ln for ln in lines),
                         "the TaskCreate fallback row must name TodoWrite")
         self.assertTrue(any("AskUserQuestion" in ln and "ZCode" in ln for ln in lines),
-                        "the AskUserQuestion fallback must cover ZCode (no question tool documented)")
+                        "the AskUserQuestion fallback row must name ZCode")
         self.assertTrue(any("Workflow" in ln and "Claude Code" in ln for ln in lines),
                         "Workflow facts must be scoped to Claude Code")
         for ln in lines:
             if "CLAUDE_CODE_" in ln:
                 self.assertIn("Claude Code", ln, ln)
-            if "todowrite" in ln or "webfetch" in ln:
-                self.assertIn("OpenCode", ln, ln)
+        # ZCode-only surface: no OpenCode harness instructions remain.
+        self.assertNotIn("OpenCode", self.flat(text))
+        self.assertNotIn("oc_harness", self.flat(text))
+        self.assertNotIn("todowrite", self.flat(text))
+        self.assertNotIn("webfetch", self.flat(text))
 
     def test_fanout_playbook_scopes_claude_code_facts_and_covers_zcode(self):
         text = self.read("fanout-playbook.md")

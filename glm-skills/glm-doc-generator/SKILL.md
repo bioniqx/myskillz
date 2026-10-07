@@ -15,8 +15,7 @@ description: >-
 
 Codebase in, correct Markdown docs out, in **≤ 4 main-thread turns**. This file is
 self-contained: every brief, template and script you need is below. **Never read any
-other file of this skill — there are none.** (Under the OpenCode harness, §8's
-`scripts/oc_harness.py` is the one exception: it is executed as a subprocess, never read.)
+other file of this skill — there are none.**
 
 ---
 
@@ -26,7 +25,7 @@ other file of this skill — there are none.** (Under the OpenCode harness, §8'
 |---|------|-----------------|
 | R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; a changed selection may add one review turn, nothing else may add one. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 8 Tasks go in ONE message. | Sending calls one at a time |
-| R3 | **Concurrency = 8 subagents max per wave** (OpenCode's `OC_MAX_LANES` overrides it, clamped to 8). More docs → consecutive waves of 8, biggest doc first. Count what is already running: Turn-2 speculative writers + Gate-delta writers, or Turn-3 reviewers + the retry, together stay within ONE wave of 8; extras go in the next message. | 9+ in flight at once, or 1-at-a-time |
+| R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Count what is already running: Turn-2 speculative writers + Gate-delta writers, or Turn-3 reviewers + the retry, together stay within ONE wave of 8; extras go in the next message. | 9+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every Task prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
 | R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. | Any prose between tool calls |
@@ -35,9 +34,9 @@ other file of this skill — there are none.** (Under the OpenCode harness, §8'
 | R9 | **Subagent returns ≤ 5 lines.** Never the doc body. | Long subagent returns |
 | R10 | **Failure budget: 1 retry per doc, bundled into the next wave (still within its 6 slots, R3).** Never a dedicated retry turn, never a third attempt. | Retry loops |
 
-On OpenCode v2, R2's Tasks are `subagent` tool calls with `agent: "glm-doc-writer"`/`"glm-doc-reviewer"`,
-`background: true`, no `model` override (the installed agent's `variant` already carries R7's
-effort) — fire each without waiting, one per doc, then end the turn (§8).
+On ZCode, R2's Tasks are `Agent` tool calls with `subagent_type: "glm-doc-writer"`/`"glm-doc-reviewer"`,
+`run_in_background: true`, no `model` override (the installed agent's frontmatter already carries R7's
+effort) — fire all of them in ONE message, one per doc, then end the turn.
 
 `<state dir>` is `$DOCGEN_STATE_DIR` when that variable is set, else `.zcode/doc-gen` (the scripts below read it as `S` with `${DOCGEN_STATE_DIR:-.zcode/doc-gen}`). The first line of `<state dir>/recon.md` is `HEAD: <hash>`; the manifest never repeats it.
 
@@ -63,7 +62,7 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 | User said nothing specific, interactive run | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set |
 | Non-interactive run (nobody to answer) | Use the ★ set (§3.1), state it in one line, skip the Gate |
 | > 8 docs selected | Waves of 8, longest/HIGH first |
-| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `general` on OpenCode; `Explore` is a ZCode and Claude Code built-in. Ask which packages to document inside the Gate message |
+| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `Explore`, a ZCode and Claude Code built-in. Ask which packages to document inside the Gate message |
 | No git repo | Recon script auto-falls back to a mtime hash; everything else identical |
 | Requirements/spec docs found | Read-only sources. **Never** write into them. Rename any colliding output |
 | Subagents unavailable in this harness | §6 sequential fallback |
@@ -195,7 +194,7 @@ EOF
 { echo "# Documentation"; echo; echo "_Generated $(date +%Y-%m-%d) from commit <HEAD>._"; echo; echo "## Technical"; for f in <HIGH files>; do echo "- [<title>](./$f)"; done; echo; echo "## Non-technical"; for f in <LOW files>; do echo "- [<title>](./$f)"; done; } > "$D/README.md"
 ```
    `$D/README.md` belongs to this index alone: no writer writes it and it links the overview (`overview.md`).
-3. **≤ 6 writer Tasks**, subagent type `glm-doc-writer` on OpenCode (and on ZCode with Appendix A installed), `general-purpose` on Claude Code and other harnesses, one per non-cached doc, **each using this exact template**:
+3. **≤ 6 writer Tasks**, subagent type `glm-doc-writer` (the installed ZCode agent, Appendix A), `general-purpose` on Claude Code and other harnesses, one per non-cached doc, **each using this exact template**:
 
 ```
 ROLE: Technical writer. Effort: low — follow the checklist, do not deliberate, no plan step.
@@ -262,7 +261,7 @@ risk=<one clause: what you were least sure about, or "none">
 ## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, reviewers + retry ≤ 6 Tasks)
 
 Skip this turn entirely if every doc is LOW or `[cached]`. Reviewer ≠ the writer, fresh context,
-subagent type `glm-doc-reviewer` on OpenCode (and on ZCode with Appendix A installed), `general-purpose` on Claude Code and other harnesses.
+subagent type `glm-doc-reviewer` (the installed ZCode agent, Appendix A), `general-purpose` on Claude Code and other harnesses.
 
 ```
 ROLE: Technical fact-checker with edit rights. Effort: low-to-medium. No report-then-fix —
@@ -330,9 +329,7 @@ Then:
 
 ## 6. FALLBACK — harness without subagents
 
-OpenCode v2's `subagent` tool takes `background: true` — that is real subagent capability
-(§8), not this fallback. This section is for OpenCode v1 (no `background` param, one lane at a
-time) and any harness with no subagent tool at all.
+For a harness with no subagent tool at all.
 
 Same pipeline, sequential, same inlined briefs. Keep: one batched bash per phase, diff-skip,
 self-verify while writing, review HIGH docs only with fresh scoped reads, docs to disk, ≤ 5-line
@@ -349,58 +346,6 @@ reviewing LOW docs · a second review pass "to be sure" · asking the user a que
 already answers · regenerating an unchanged doc · running the project's build/test commands
 just to document them · writing into a requirements/spec file · a plan step inside a writer
 subagent.
-
----
-
-## 8. OPENCODE LANE (harness = opencode)
-
-Once installed, `opencode/agents/glm-doc-writer.md`,
-`opencode/agents/glm-doc-reviewer.md` and `opencode/commands/glm-docs.md` are rendered into this OpenCode
-major's dialect and the `/glm-docs` command is available.
-
-Under the OpenCode harness, Turn 2's writer wave and Turn 3's review wave replace each Task call
-with one lane dict per doc (keys `id`, `agent: "glm-doc-writer"`, `model: "flash"`, `dir`, `brief`),
-the same fact packs and briefs as §3.3 and §4 inlined as `brief`. Write the lanes to a JSON file,
-then run:
-
-```
-python3 <skill_dir>/scripts/oc_harness.py run <lanes.json> --out <out_dir> --width 6
-```
-
-`<skill_dir>` is the absolute path on the `Base directory for this skill: <path>` line OpenCode
-prints when the skill loads. If that line is missing, resolve it with this loop and use the
-printed literal path:
-
-```bash
-for d in "${CLAUDE_SKILL_DIR:-}" .opencode/skills/glm-doc-generator ~/.config/opencode/skills/glm-doc-generator .claude/skills/glm-doc-generator ~/.claude/skills/glm-doc-generator .agents/skills/glm-doc-generator ~/.agents/skills/glm-doc-generator ~/.zcode/skills/glm-doc-generator; do [ -f "$d/scripts/oc_harness.py" ] && S=$(cd "$d" && pwd) && break; done; echo "S=$S"
-```
-
-This runs the whole wave concurrently
-and writes `<out_dir>/<id>.jsonl`, `.err` and `.done` per lane.
-
-Set `model` on every lane — `oc_harness.MODELS` maps `"flash"` to `glm-5.3-flash` and `"pro"` to
-`glm-5.3`; omitting it makes `build_run_cmd` default the lane to `glm-5.3`, silently overriding
-glm-doc-writer's flash. Writer lanes use `model: "flash"`, `effort: "low"`; reviewer lanes use
-`agent: "glm-doc-reviewer"` with `model: "pro"`, `effort: "high"`, same pattern otherwise.
-
-Effort control differs by major: v1 renders agents with `mode: all` (needed because a `mode:
-subagent` agent is silently swapped for the default `build` agent by `opencode run --agent`) and
-forwards frontmatter `reasoningEffort` as `reasoning_effort` on the wire. v2 *does* honor agent
-frontmatter `model:`+`variant:` — but only when a lane is dispatched through the `subagent` tool
-directly; `opencode run --agent` (what this section's `oc_harness.py` shells out to) always passes
-an explicit `--model`, which overrides the agent's own model/variant, so `oc_harness.py` instead
-appends `#<effort>` to that `--model` flag when a lane dict carries an `effort` field, and that
-variant suffix is what reaches GLM. On v2 a lane with no `effort` field runs at GLM's default
-`max`; v1 always uses the agent's own `reasoningEffort`. Once the `run` command
-exits, read each lane's 5-line return from
-`<out_dir>/<id>.jsonl` — never every doc body back — before reporting. Everything else in §§1-7
-(turn budget, decision table, catalog, diff-skip, finish checks) stays identical.
-
-In an interactive v2 session you can skip `oc_harness.py` and dispatch each lane as a `subagent`
-tool call instead: `agent: "glm-doc-writer"`/`"glm-doc-reviewer"`, `background: true`, no `model` param —
-the installed agent's own `variant` supplies the effort. Fire each without waiting, then end the
-turn; this only works in an interactive session (a headless `opencode run` can exit before
-background children report), so keep the `oc_harness.py` path above for headless/CI runs.
 
 ---
 

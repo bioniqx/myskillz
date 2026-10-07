@@ -266,7 +266,8 @@ class DocumentationConfigs(unittest.TestCase):
         setup_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "SETUP.md")
         with open(setup_path, 'r') as f:
             lines = f.readlines()
-        setup_lines = [line for i, line in enumerate(lines, 1) if i in [10, 12, 28] and 'python3' in line and 'audit' in line]
+        setup_lines = [line for line in lines if 'python3' in line and 'audit.py setup' in line]
+        self.assertTrue(setup_lines, "SETUP.md lost its audit.py setup commands")
         for line in setup_lines:
             self.assertIn('glm-', line, f"Setup paths must reference the glm- skill: {line}")
 
@@ -331,8 +332,9 @@ class ZcodeDocSurface(unittest.TestCase):
     def test_skill_md_has_the_bootstrap_path_loop_with_zcode(self):
         flat = self.flat(self.read(self.SKILL_MD))
         self.assertIn("A=", flat)
-        self.assertIn("$OPENCODE_CONFIG_DIR/skills/glm-requirements-code-audit", flat)
         self.assertIn("~/.zcode/skills/glm-requirements-code-audit", flat)
+        self.assertNotIn("OPENCODE_CONFIG_DIR", flat)
+        self.assertNotIn(".opencode/skills", flat)
 
     def test_glm_tuning_char_count_matches_the_new_description(self):
         desc = self.folded_description()

@@ -8,27 +8,18 @@ automatically when no key is found.
 ```bash
 # ZCode
 python3 glm-requirements-code-audit/scripts/audit.py setup --harness zcode
-# OpenCode
-python3 glm-requirements-code-audit/scripts/audit.py setup --harness opencode
 ```
 
 That copies the skill to the harness's skills directory and the matching agent files to its agents directory
-(`--dry-run` prints what it would do).
+(`--dry-run` prints what would happen).
 
-For ZCode, by hand instead:
+By hand instead:
 
 | Harness | Skill | Agents (fallback lane) |
 |---|---|---|
 | ZCode | `~/.zcode/skills/glm-requirements-code-audit/` | `~/.zcode/agents/glm-rca-*.md` from `agents/` |
 
-OpenCode's `~/.config/opencode/agents/glm-rca-*.md` are rendered from the neutral sources in `opencode/agents/`
-(model id, `mode: all` on v1 so `opencode run --agent` actually uses the agent instead of falling back to
-`build`, `mode: subagent` on v2, permissions) — never copy those sources by hand, since the raw files omit the
-fields OpenCode requires. Use `python3 glm-requirements-code-audit/scripts/audit.py setup --harness opencode` or,
-directly, `python3 glm-requirements-code-audit/scripts/oc_harness.py install glm-requirements-code-audit <major>`.
-
-Invoke it in ZCode with `$glm-requirements-code-audit <spec file>`; in OpenCode the agent loads it through its
-`skill` tool by name.
+Invoke it in ZCode with `$glm-requirements-code-audit <spec file>`.
 
 ## 2. Environment
 
@@ -83,8 +74,7 @@ The skill needs to run one script and write under one directory:
 - Bash: `python3 <skill>/scripts/audit.py …`
 - Writes: `<cwd>/.audit/**` only. The codebase is never modified.
 - On the api lane the workers are HTTPS requests, not agents, so no per-agent tool permissions apply.
-- OpenCode: allow the script in your `permission` config if you run in a mode that asks. ZCode: the agent files
-  already deny `edit`/`bash` for the fallback workers.
+- ZCode: the agent files already deny `edit`/`bash` for the fallback workers.
 
 ## 6. Where things go
 
