@@ -3,7 +3,7 @@ name: "glm-code-reviewer"
 description: "Independent senior code reviewer for the glm-dev-team workflow. Read-only review of a merged batch of slices (or a final delta) for fidelity to the acceptance criteria, correctness, edge cases, error handling, security, concurrency, performance, maintainability, scope creep and test coverage/leanness. Writes a structured report with ready-to-dispatch fix slices; never edits code, so re-review stays impartial."
 color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: max
+thoughtLevel: high
 maxTurns: 80
 injectAgentsMd: true
 ---

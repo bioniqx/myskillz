@@ -3,7 +3,7 @@ name: "glm-rca-investigator"
 description: "Read-only investigator for glm-requirements-code-audit: verifies one pre-retrieved evidence batch into one JSONL findings file."
 color: cyan
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: max
+thoughtLevel: high
 maxTurns: 30
 injectAgentsMd: false
 ---

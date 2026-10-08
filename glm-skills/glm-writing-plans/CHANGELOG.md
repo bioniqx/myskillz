@@ -10,6 +10,8 @@
 
 **Post-v9 (2026-10-08):** `setup --harness zcode` no longer renders `glm-plan-task-writer` from an inline template — it copies all three `agents/*.md` (`glm-plan-task-writer`, `glm-plan-task-writer-deep`, `glm-plan-reviewer`) verbatim; the files carry final ZCode frontmatter and are the single source of truth, and `install-zcode.sh` installs them the same plain-copy way.
 
+**thoughtLevel (2026-10-08):** `glm-plan-reviewer` moves `high` → `max` — review dispatches route to the deep lane (`glm-5.3` + `max`), so the reviewer vets deep-tier task bodies at the depth they were written; the writers keep their tier efforts (`std` high, `deep` max).
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn

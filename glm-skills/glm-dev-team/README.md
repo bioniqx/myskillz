@@ -104,6 +104,7 @@ low/high/max chưa có tài liệu chính thức chi tiết → dùng `devteam s
 ## Lịch sử ngắn
 
 - **Agent copy nguyên văn (2026-10-08)** — `doctor --harness zcode` bỏ renderer: bảy file trong `agents/` là bản cuối (frontmatter ZCode, model id thật, `thoughtLevel`), doctor chỉ copy và so sánh byte; bỏ cờ `--flash/--main`; `install-zcode.sh` cũng chỉ copy mọi `agents/*.md` của cả tám skill (không merge hook — hook guard giờ là opt-in qua doctor).
+- **thoughtLevel về lại correct ladder (2026-10-08)** — `glm-code-reviewer`, `glm-investigator`, `glm-spot-reviewer` hạ `max` → `high` đúng bảng định tuyến (chỉ leader chạy `max`); `max` giữ cho lane quyết định trên GLM-5.3.
 - **Chỉ ZCode (2026-10-08)** — xoá toàn bộ hỗ trợ OpenCode: lane runner (`lane-run`/`wait`/`resume`), file pid/pgid, `doctor --harness opencode`, plugin guard, `oc_harness.py` và các bản vendored; hook ZCode và `selftest.sh` gọi thẳng `guard.py stop`.
 - **Tốc độ (2026-10-07)** — tier mặc định `pro` → `api`: cửa sổ mở đủ 8 lời gọi ngay từ đợt đầu; giảm trần giờ cao điểm Z.ai chuyển sang opt-in qua `DEVTEAM_PEAK=on`.
 - **ZCode hardening (2026-10-06)** — thêm chế độ harness `zcode`: `is_zcode()` tự nhận, provider mặc định glm; `doctor --harness zcode [--fix] [--flash ID] [--main ID]` cài 7 agent render đúng frontmatter ZCode vào `~/.zcode/agents/` và merge hook PreToolUse/Stop vào `~/.zcode/cli/config.json` (giữ key user, `.bak`, chạy lại là no-op); dispatch bỏ model và chọn strong.
