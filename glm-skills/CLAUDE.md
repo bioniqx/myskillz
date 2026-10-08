@@ -5,9 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Role in the skillz monorepo
 
 `glm-skills/` holds the **variants for ZCode / GLM**, derived from the original skills in
-`../claude-skills/` (the source of truth). Sibling variants: `../hybrid-skills/` (Claude + opencode cost
-saving) and `../opencode-skills/` (opencode-only). Port behaviour changes from the original rather than
-editing the original from here.
+`../claude-skills/` (the source of truth). Port behaviour changes from the original rather than editing
+the original from here.
 
 ## What this directory is
 
@@ -93,8 +92,8 @@ Every port applies the same set of model facts; each skill with a tuning surface
   "three tool calls", "four calls"), and each script prints a `NEXT:` line so the model does not
   deliberate about plumbing.
 - **Key discovery.** Scripts read `ZAI_API_KEY` / `GLM_API_KEY` / `ANTHROPIC_AUTH_TOKEN`, and also named
-  key fields in `~/.claude/settings.json`, `~/.config/opencode/*.json` and `~/.zcode/*.json`
-  (`~/.zcode/v2/credentials.json` is the first zcode path; the hyphenated `api-key` field under
+  key fields in `~/.claude/settings.json` and `~/.zcode/*.json` (`~/.zcode/v2/credentials.json` is the
+  first zcode path; the hyphenated `api-key` field under
   `account-provider → coding-plan → account → <plan> → <uuid>` is found). They never write tokens or
   base URLs.
 
@@ -115,8 +114,7 @@ Every port applies the same set of model facts; each skill with a tuning surface
   ZCode agents live in `agents/`; `install-zcode.sh` rewrites them — plus glm-debug-worker and the
   glm-dev-team agents — to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no
   `effort`/`hooks`/`isolation`) and gets glm-plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
-  The `opencode/` folders in three skills hold neutral `.md` agent/command sources (kept; not
-  installed by anything).
+  The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
 - **glm-brainstorming**: `scripts/context.sh` is injected through the `!` preload line (or the
@@ -140,9 +138,9 @@ The OpenCode support code is deleted: `_shared/oc_harness.py` and every vendored
 `guard.py oc` bridge and Stop-gate lane caller, the v1/v2 plugin `.js` files, `install-opencode.sh`,
 and the dev-team lane runner (`lane-run`/`wait`/`resume`, lane pid/pgid files). `guard.py stop` stays
 (the ZCode Stop hook routes to it), and the `opencode/` folders of `.md` neutral agent/command
-sources stay on disk untouched. Scripts that shared harness code lost their OpenCode branches
+sources are gone too. Scripts that shared harness code lost their OpenCode branches
 (`detect_harness`, cap logic, agent-lane dispatch all speak zcode/claude only). The verified
-OpenCode v1/v2 facts live in git history and `docs/specs/2026-09-28-opencode-hardening-design.md`.
+OpenCode v1/v2 facts live in git history only.
 
 ### ZCode facts (3.14.4)
 

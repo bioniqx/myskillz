@@ -112,7 +112,7 @@ coding tasks.
   [OpenClaw Z.AI provider notes](https://docs.openclaw.ai/providers/zai) (2026)
 - Trained for brevity, rule-lists beat prose, tool schemas auto-injected
   ahead of your prompt, prefix-based caching, weaker on long-horizon
-  chained tasks — [GLM system-prompt research for opencode](https://gist.github.com/apnea/e9dd7a650bdc3300375fffc54592f48d) (2026-05-12)
+  chained tasks — [GLM system-prompt research](https://gist.github.com/apnea/e9dd7a650bdc3300375fffc54592f48d) (2026-05-12)
 - "GLM-5.3 mis-handles several prompt conventions (e.g. rigid XML-tag
   ceremony, delegation-table adherence, tool-call formatting quirks)" —
   [oh-my-openagent issue #6923](https://github.com/code-yeongyu/oh-my-openagent/issues/6923) (2026)

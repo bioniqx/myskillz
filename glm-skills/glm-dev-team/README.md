@@ -103,9 +103,9 @@ low/high/max chưa có tài liệu chính thức chi tiết → dùng `devteam s
 
 ## Lịch sử ngắn
 
+- **Chỉ ZCode (2026-10-08)** — xoá toàn bộ hỗ trợ OpenCode: lane runner (`lane-run`/`wait`/`resume`), file pid/pgid, `doctor --harness opencode`, plugin guard, `oc_harness.py` và các bản vendored; hook ZCode và `selftest.sh` gọi thẳng `guard.py stop`.
 - **Tốc độ (2026-10-07)** — tier mặc định `pro` → `api`: cửa sổ mở đủ 8 lời gọi ngay từ đợt đầu; giảm trần giờ cao điểm Z.ai chuyển sang opt-in qua `DEVTEAM_PEAK=on`.
 - **ZCode hardening (2026-10-06)** — thêm chế độ harness `zcode`: `is_zcode()` tự nhận, provider mặc định glm; `doctor --harness zcode [--fix] [--flash ID] [--main ID]` cài 7 agent render đúng frontmatter ZCode vào `~/.zcode/agents/` và merge hook PreToolUse/Stop vào `~/.zcode/cli/config.json` (giữ key user, `.bak`, chạy lại là no-op); dispatch bỏ model và chọn strong.
-- **OpenCode hardening (2026-09-28)** — v1 1.18.x và v2 2.0.x: bootstrap tìm thư mục skill mà không cần `${CLAUDE_SKILL_DIR}`; nhận v2 qua `OPENCODE_TERMINAL`; `resume <id> --note` thay cho SendMessage; stall theo role; checkpoint chạy tách nền; `wait` thoát khi không còn lane; `killpg` qua `lanes/<id>.pgid`; guard chặn `batch`/`question`/`execute` trong lane; báo LANE DOWN cho lane bị signal giết.
 - **v3.2** — `permissionMode: dontAsk` + hook allow-list, Stop gate tự ghi marker (`next` không cần tham số),
   dispatch 1 dòng/agent, vá 7 lỗ allow-list sau review đối kháng.
 - **v3.1** — vá 13 lỗ (giả mạo RED, prefix-match permission, `git -C`, verdict fail-closed, fix slice không tin cậy…).

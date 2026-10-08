@@ -78,18 +78,17 @@ class TestFindKey(unittest.TestCase):
         os.environ["Z_AI_API_KEY"] = "z" * 20
         self.assertEqual(zai_client.find_key(), ("z" * 20, "env:Z_AI_API_KEY"))
 
+    def test_file_order(self):
+        self.put(".zcode/auth.json", {"key": "y" * 20})
+        self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
+        self.assertEqual(zai_client.find_key(), ("c" * 20, self.put and
+                         os.path.join(self.home, ".claude", "settings.json")))
+
     def test_extra_env_first(self):
         os.environ["ZAI_API_KEY"] = "z" * 20
         os.environ["MY_KEY"] = "m" * 20
         self.assertEqual(zai_client.find_key(("MY_KEY",)), ("m" * 20, "env:MY_KEY"))
         self.assertEqual(zai_client.find_key(), ("z" * 20, "env:ZAI_API_KEY"))
-
-    def test_file_order(self):
-        self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
-        self.put(".zcode/auth.json", {"key": "y" * 20})
-        auth = self.put(".local/share/opencode/auth.json",
-                        {"zai-coding-plan": {"type": "api", "key": "o" * 20}})
-        self.assertEqual(zai_client.find_key(), ("o" * 20, auth))
 
     def test_field_filter(self):
         self.put(".claude/settings.json",
@@ -98,87 +97,6 @@ class TestFindKey(unittest.TestCase):
                   "apiKey": "short"})
         self.put(".zcode/auth.json", {"key": "has spaces in this key value"})
         self.assertEqual(zai_client.find_key(), (None, None))
-
-    def test_cwd_opencode_json(self):
-        self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
-        with open("opencode.json", "w", encoding="utf-8") as f:
-            json.dump({"provider": {"zai-coding-plan": {"options": {"apiKey": "p" * 20}}}}, f)
-        self.assertEqual(zai_client.find_key(),
-                         ("p" * 20, os.path.join(os.getcwd(), "opencode.json")))
-
-    def test_opencode_auth_scopes_to_zai_provider(self):
-        """openai key comes first in the dict but must never win over zai-coding-plan."""
-        auth = self.put(".local/share/opencode/auth.json",
-                        {"openai": {"type": "api", "key": "o" * 20},
-                         "zai-coding-plan": {"type": "api", "key": "z" * 20}})
-        self.assertEqual(zai_client.find_key(), ("z" * 20, auth))
-
-    def test_opencode_file_with_no_zai_provider_is_skipped(self):
-        self.put(".local/share/opencode/auth.json", {"openai": {"type": "api", "key": "o" * 20}})
-        with open("opencode.json", "w", encoding="utf-8") as f:
-            json.dump({"provider": {"anthropic": {"options": {"apiKey": "a" * 20}}}}, f)
-        self.assertEqual(zai_client.find_key(), (None, None))
-
-    def test_opencode_file_with_no_zai_provider_falls_through(self):
-        self.put(".local/share/opencode/auth.json", {"openai": {"type": "api", "key": "o" * 20}})
-        settings = self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
-        self.assertEqual(zai_client.find_key(), ("c" * 20, settings))
-
-    def test_opencode_rejects_templated_placeholder_values(self):
-        self.put(".local/share/opencode/auth.json",
-                {"zai-coding-plan": {"type": "api", "key": "{env:ZAI_API_KEY}"}})
-        with open("opencode.json", "w", encoding="utf-8") as f:
-            json.dump({"provider": {"zai": {"options": {"apiKey": "{file:/tmp/key}"}}}}, f)
-        self.assertEqual(zai_client.find_key(), (None, None))
-
-    def test_opencode_accepts_all_zai_provider_ids(self):
-        for pid in ("zai-coding-plan", "zai", "zhipuai-coding-plan", "zhipuai"):
-            with tempfile.TemporaryDirectory() as home:
-                with mock.patch.dict(os.environ, {"HOME": home}, clear=True):
-                    p = os.path.join(home, ".local/share/opencode/auth.json")
-                    os.makedirs(os.path.dirname(p), exist_ok=True)
-                    with open(p, "w", encoding="utf-8") as f:
-                        json.dump({pid: {"type": "api", "key": "z" * 20}}, f)
-                    self.assertEqual(zai_client.find_key(), ("z" * 20, p))
-
-    def test_opencode_json_provider_options_scoped(self):
-        with open("opencode.json", "w", encoding="utf-8") as f:
-            json.dump({"provider": {"openai": {"options": {"apiKey": "o" * 20}},
-                                    "zhipuai": {"options": {"apiKey": "z" * 20}}}}, f)
-        self.assertEqual(zai_client.find_key(),
-                         ("z" * 20, os.path.join(os.getcwd(), "opencode.json")))
-
-
-import sqlite3  # noqa: E402
-
-Z = "z" * 20
-O = "o" * 20
-AUTH_DDL = "CREATE TABLE auth (provider_id TEXT PRIMARY KEY, data TEXT)"
-DB_REL = ".local/share/opencode/opencode.db"
-
-
-def make_db(path, script):
-    """Write a sqlite file from (sql, params) pairs; each test owns its schema."""
-    d = os.path.dirname(path)
-    if d:
-        os.makedirs(d, exist_ok=True)
-    con = sqlite3.connect(path)
-    try:
-        for sql, params in script:
-            con.execute(sql, params)
-        con.commit()
-    finally:
-        con.close()
-    return path
-
-
-def auth_rows(*pairs):
-    """An `auth` table with one JSON credential row per (provider id, entry)."""
-    script = [(AUTH_DDL, ())]
-    for pid, entry in pairs:
-        script.append(("INSERT INTO auth VALUES (?, ?)", (pid, json.dumps(entry))))
-    return script
-
 
 class _HomeCase(unittest.TestCase):
     def setUp(self):
@@ -202,9 +120,6 @@ class _HomeCase(unittest.TestCase):
             json.dump(obj, f)
         return p
 
-    def db(self, script, rel=DB_REL):
-        return make_db(os.path.join(self.home, rel), script)
-
 
 class TestNoAnthropicKey(_HomeCase):
     def test_env_anthropic_api_key_never_used(self):
@@ -219,102 +134,10 @@ class TestNoAnthropicKey(_HomeCase):
         self.put(".claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "a" * 20}})
         self.assertEqual(zai_client.find_key(), (None, None))
 
-    def test_does_not_shadow_opencode_auth(self):
-        os.environ["ANTHROPIC_API_KEY"] = "a" * 20
-        auth = self.put(".local/share/opencode/auth.json",
-                        {"zai-coding-plan": {"type": "api", "key": Z}})
-        self.assertEqual(zai_client.find_key(), (Z, auth))
-
     def test_auth_token_still_used(self):
         os.environ["ANTHROPIC_API_KEY"] = "a" * 20
         os.environ["ANTHROPIC_AUTH_TOKEN"] = "t" * 20
         self.assertEqual(zai_client.find_key(), ("t" * 20, "env:ANTHROPIC_AUTH_TOKEN"))
-
-
-class TestOpencodeDbKey(_HomeCase):
-    def test_row_per_provider(self):
-        p = self.db(auth_rows(("openai", {"type": "api", "key": O}),
-                              ("zai-coding-plan", {"type": "api", "key": Z})))
-        self.assertEqual(zai_client._opencode_db_key(p), Z)
-
-    def test_coding_plan_wins_over_zai(self):
-        p = self.db(auth_rows(("zai", {"type": "api", "key": "y" * 20}),
-                              ("zai-coding-plan", {"type": "api", "key": Z})))
-        self.assertEqual(zai_client._opencode_db_key(p), Z)
-
-    def test_plain_secret_column(self):
-        p = self.db([("CREATE TABLE credential (provider TEXT, api_key TEXT)", ()),
-                     ("INSERT INTO credential VALUES (?, ?)", ("openrouter", O)),
-                     ("INSERT INTO credential VALUES (?, ?)", ("zai", Z))])
-        self.assertEqual(zai_client._opencode_db_key(p), Z)
-
-    def test_auth_json_blob_in_kv_table(self):
-        blob = {"openai": {"type": "api", "key": O}, "zai": {"type": "api", "key": Z}}
-        p = self.db([("CREATE TABLE kv (key TEXT PRIMARY KEY, value BLOB)", ()),
-                     ("INSERT INTO kv VALUES (?, ?)",
-                      ("auth", json.dumps(blob).encode("utf-8")))])
-        self.assertEqual(zai_client._opencode_db_key(p), Z)
-
-    def test_other_providers_only(self):
-        p = self.db(auth_rows(("openai", {"type": "api", "key": O}),
-                              ("zhipuai", {"type": "api", "key": Z}),
-                              ("openrouter", {"type": "api", "key": "a" * 20})))
-        self.assertEqual(zai_client._opencode_db_key(p), "")
-
-    def test_templated_value_rejected(self):
-        p = self.db(auth_rows(("zai-coding-plan", {"type": "api", "key": "{env:ZAI_API_KEY}"})))
-        self.assertEqual(zai_client._opencode_db_key(p), "")
-
-    def test_unrelated_table_ignored(self):
-        p = self.db([("CREATE TABLE session (id TEXT, title TEXT)", ()),
-                     ("INSERT INTO session VALUES (?, ?)", ("zai", Z))])
-        self.assertEqual(zai_client._opencode_db_key(p), "")
-
-    def test_missing_file_not_created(self):
-        p = os.path.join(self.home, "nope", "opencode.db")
-        self.assertEqual(zai_client._opencode_db_key(p), "")
-        self.assertFalse(os.path.exists(os.path.dirname(p)))
-
-    def test_not_a_database(self):
-        p = os.path.join(self.home, DB_REL)
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "wb") as f:
-            f.write(b"not a sqlite file " * 64)
-        self.assertEqual(zai_client._opencode_db_key(p), "")
-
-    def test_never_writes(self):
-        p = self.db(auth_rows(("zai-coding-plan", {"type": "api", "key": Z})))
-        with open(p, "rb") as f:
-            before = f.read()
-        mtime = os.stat(p).st_mtime_ns
-        self.assertEqual(zai_client._opencode_db_key(p), Z)
-        with open(p, "rb") as f:
-            self.assertEqual(f.read(), before)
-        self.assertEqual(os.stat(p).st_mtime_ns, mtime)
-        self.assertEqual(os.listdir(os.path.dirname(p)), ["opencode.db"])
-
-    def test_find_key_reads_db(self):
-        p = self.db(auth_rows(("zai-coding-plan", {"type": "api", "key": Z})))
-        self.assertEqual(zai_client.find_key(), (Z, p))
-
-    def test_auth_json_beats_db(self):
-        self.db(auth_rows(("zai-coding-plan", {"type": "api", "key": Z})))
-        auth = self.put(".local/share/opencode/auth.json",
-                        {"zai-coding-plan": {"type": "api", "key": "j" * 20}})
-        self.assertEqual(zai_client.find_key(), ("j" * 20, auth))
-
-    def test_db_beats_claude_settings(self):
-        p = self.db(auth_rows(("zai-coding-plan", {"type": "api", "key": Z})))
-        self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
-        self.assertEqual(zai_client.find_key(), (Z, p))
-
-    def test_broken_db_falls_through(self):
-        p = os.path.join(self.home, DB_REL)
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "wb") as f:
-            f.write(b"garbage" * 200)
-        settings = self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
-        self.assertEqual(zai_client.find_key(), ("c" * 20, settings))
 
 
 class TestGate(unittest.TestCase):

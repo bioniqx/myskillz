@@ -3093,7 +3093,7 @@ def cmd_setup(a):
             if os.path.isdir(sk):
                 shutil.rmtree(sk)
             shutil.copytree(root, sk,
-                            ignore=shutil.ignore_patterns("opencode", "SETUP.md"))
+                            ignore=shutil.ignore_patterns("SETUP.md"))
         mk(ag)
         if os.path.isdir(src):
             for f in sorted(os.listdir(src)):

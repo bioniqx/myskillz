@@ -14,9 +14,6 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[2] / "glm-doc-generator"
 SKILL = SKILL_DIR / "SKILL.md"
-WRITER = SKILL_DIR / "opencode" / "agents" / "glm-doc-writer.md"
-REVIEWER = SKILL_DIR / "opencode" / "agents" / "glm-doc-reviewer.md"
-COMMAND = SKILL_DIR / "opencode" / "commands" / "glm-docs.md"
 STATE = Path(".zcode") / "doc-gen"
 FENCE = "`" * 3
 HUMAN_MARK = "TO" + "DO(human)"
@@ -165,16 +162,6 @@ class ContentTests(unittest.TestCase):
         for line in self.text.splitlines():
             if ".zcode/doc-gen" in line:
                 self.assertIn("DOCGEN_STATE_DIR", line)
-
-    def test_agent_files_and_command(self):
-        writer, reviewer, command = read(WRITER), read(REVIEWER), read(COMMAND)
-        self.assertIn("bash: false", writer)
-        for needle in ("offset and limit", "existing doc", "mismatch"):
-            self.assertIn(needle, writer)
-        for needle in ("Mermaid", "broadly-wrong", "requirements", "completeness"):
-            self.assertIn(needle, reviewer)
-        self.assertIn("non-interactive", command)
-
 
 class ZcodeAgentFileTests(unittest.TestCase):
     def test_zcode_agent_files(self):

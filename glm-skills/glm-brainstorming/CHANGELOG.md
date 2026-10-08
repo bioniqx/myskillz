@@ -1,100 +1,23 @@
-# 9.4 (from 9.3) — ZCode surface
+# 9.5 (from 9.4) — ZCode only
 
-- context.sh: new zcode branch in harness detection (skill dir under `*/.zcode/*`); the zcode caps
-  line prints the lane width (default 6, hard max 8) with no CLAUDE_CODE_* caps line, and the
-  oc_harness.py opencode override no longer wins once zcode is detected.
-- SKILL.md: the bootstrap scripts-dir loop gains the `~/.zcode/skills/glm-brainstorming` candidate;
-  the TaskCreate fallback row names `TodoWrite`; the OpenCode tool-name maps (`task`, `todowrite`,
-  `webfetch`) and the Claude Code env/`Workflow` facts are scoped to their harnesses; the
-  AskUserQuestion fallback no longer assumes a question tool (none is documented for ZCode).
-- fanout-playbook.md: Claude Code env/`Workflow` facts scoped to their harness; the `SendMessage`
-  note covers ZCode.
+OpenCode support removed: the `oc_harness.py` lane machinery, the SKILL.md
+OpenCode lane rule and tool-name maps, the `glm-tuning.md` OpenCode harness
+section, and the `opencode/`-era history entries (9.1-9.3; see git history).
+context.sh resolves the harness on its own, and lanes dispatch through the
+ZCode Agent tool with the installed `glm-explorer`/`glm-researcher` agents.
+
+# 9.4 — ZCode surface
+
+- context.sh: zcode branch in harness detection (skill dir under `*/.zcode/*`);
+  the zcode caps line prints the lane width (default 8, hard max 8) with no
+  CLAUDE_CODE_* caps line.
+- SKILL.md: the bootstrap scripts-dir loop names `~/.zcode/skills/glm-brainstorming`;
+  the TaskCreate fallback row names `TodoWrite`; Claude Code env/`Workflow`
+  facts are scoped to Claude Code; the AskUserQuestion fallback covers ZCode.
+- fanout-playbook.md: the `SendMessage` note covers ZCode.
 - architectural.md: the `TaskStop` note covers ZCode.
 - visual-companion.md: platform notes gain a ZCode entry.
-- glm-tuning.md: new ZCode runtime section (§7).
-
-# 9.3 (from 9.2) — OpenCode v1/v2 hardening
-
-- Path rename: scratch/session dirs are `.brainstorm/` (was a tool-branded dir), specs go to
-  `docs/specs/`. The visual-companion header is a plain `Brainstorming` label: no version
-  lookup, no telemetry env handling, no outbound link.
-- `/glm-brainstorm` command: when the `!` line arrives raw (`opencode run`
-  does not expand it), the model runs `context.sh` itself as its first call.
-- SKILL.md: one OpenCode lane rule. v2 dispatches background `subagent`
-  lanes (`glm-explorer`/`glm-researcher`), v1 runs `oc_harness.py run`, and
-  `task` is only the fallback. The fallback agent is `general`, never
-  `general-purpose` or `Explore`.
-- SKILL.md: `oc_harness.py run` is never a foreground call. On v2 it goes
-  through `shell` with `background: true` and a `timeout`, because v2
-  kills a foreground shell call after 120 s and orphans web lanes.
-- SKILL.md: results come from `oc_harness.py result <out>` instead of
-  the raw `<id>.jsonl`. `lanes.json` lives under `.brainstorm/drafts/`,
-  and lane output goes to a fresh dir per run under `.brainstorm/drafts/`
-  (`mktemp -d`), so a rerun never reads stale lane results.
-- SKILL.md: the scripts dir is resolved by one ordered loop (Base
-  directory, `$OPENCODE_CONFIG_DIR/skills`, `.opencode/skills`,
-  `~/.config/opencode/skills`, `.agents`, `~/.agents`, `.claude`,
-  `~/.claude`, `.zcode`) that exits with a clear message on a miss.
-- SKILL.md: per-version tool-name map (v2 has `subagent`, `shell`,
-  `question`, no `task`/`todowrite`). A raw `!` line is skipped when a
-  context block is present, else `sh <Base directory>/scripts/context.sh`
-  runs. R9 is one sentence again.
-- architectural.md: on OpenCode the main session writes the spec
-  pre-draft (lane agents are `edit: deny`), TaskStop is skipped, and the
-  hand-off passes the spec path to `glm-writing-plans`.
-- visual-companion.md: OpenCode note (v2: `--foreground` plus
-  `background: true`).
-- glm-researcher agent: falls back to web fetch when web search has no
-  provider, and never waits on an interactive prompt.
-- Parity repair against the original glm-brainstorming 6.3: the spec commit is
-  conditional (skipped when the user or a loaded instruction file forbids
-  committing self-initiated files, with the "not committed" review-gate
-  text); the hand-off passes the committed or untracked spec path and
-  checks the installed `glm-writing-plans` name first; R0 allows visual
-  companion screens; round 1 loads deferred tools first; `allowed-tools`
-  gains `start-server.sh`, `stop-server.sh` and `kill -0`; red flag
-  "Spawn 64 because I can"; `glm-tuning.md` states the weaker independence
-  of Flash judgment lanes and fixes the install path.
-- Visual companion scripts, `helper.js`, `frame-template.html`, `context.sh`
-  and `visual-companion.md` re-synced from the original.
-
-# 9.2 (from 9.1) — OpenCode effort correction
-
-Corrects the 9.1 claim that OpenCode process lanes always run at `max`.
-Live end-to-end runs against the real v1.18.32 and v2.0.16 binaries (a mock
-OpenAI-compatible provider logging every request body) showed the actual
-cause was different: a `mode: subagent` agent makes `opencode run --agent`
-on v1 silently fall back to the built-in `build` agent, so the agent's
-`reasoningEffort` frontmatter was never applied. Rendering v1 agents with
-`mode: all` fixes that, and `reasoningEffort` then reaches the wire
-verbatim as `reasoning_effort`. On v2, agent-frontmatter effort (any form)
-is never sent; the only working lever is a `#<effort>` variant suffix on
-the explicit `--model` flag, so `oc_harness.py` now appends it when a lane
-carries an `effort` field. `lanes.json` lane dicts may now carry an
-optional `effort: low|high|max` key for this purpose.
-
-- Correction (2026-09-25, live v2.0.16 probe): the "v2 never sends
-  agent-frontmatter effort" claim above only holds for `opencode run
-  --agent` lanes, whose explicit `--model` overrides the agent; dispatched
-  directly through the `subagent` tool (`background: true` param, real
-  per-lane parallelism), v2 *does* honor the agent's own `model:`+`variant:`.
-
-# 9.1 (from 9.0) — OpenCode layer
-
-Adds an OpenCode installation path alongside Claude Code, unchanged. New
-neutral agent sources `opencode/agents/glm-explorer.md` (read-only, mirrors the
-Code lane rules) and `opencode/agents/glm-researcher.md` (web, mirrors the Web
-lane rules), plus command source `opencode/commands/glm-brainstorm.md` that
-injects `context.sh` output and the skill path, then loads the skill with
-`$ARGUMENTS`. `oc_harness.py install` renders these into the detected v1 or
-v2 dialect. SKILL.md frontmatter `name` changed to `glm-brainstorming` (drop the
-`-glm` suffix, matching the installed directory) and gained a note in the
-harness fallback table: OpenCode's tool names are `task` for a lane,
-`todowrite` for TaskCreate, `webfetch` for WebFetch, and AskUserQuestion
-becomes plain-text numbered questions. `glm-tuning.md` gained a new
-OpenCode harness section covering the install command and the v1 caveat
-that `reasoning_effort` is dropped for `glm-*` process lanes, so every
-OpenCode-side lane runs at `max`.
+- glm-tuning.md: ZCode runtime section.
 
 # 9.0 (from 8.0) — tuned for GLM-5.3 and GLM-5.3-Flash
 

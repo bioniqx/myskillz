@@ -72,8 +72,7 @@ export PLAN_PROTOCOL=anthropic    # optional override: anthropic | openai
 ```
 
 The script also reads keys out of `~/.claude/settings.json`,
-`~/.config/opencode/opencode.json`, `~/.config/opencode/auth.json`,
-`~/.zcode/v2/credentials.json` (v2; its `api-key` field) and `~/.zcode/*.json`
+`~/.zcode/v2/credentials.json` (its `api-key` field) and `~/.zcode/*.json`
 when no environment variable is set. `doctor` prints which
 source won; `doctor --ping` sends a one-token probe.
 

@@ -54,10 +54,7 @@ KEY_ENV = ("ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
 NEVER_ENV = ("ANTHROPIC_API_KEY",)
 KEY_FIELDS = ("ZAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_AUTH_TOKEN",
               "apiKey", "api_key", "key", "api-key")
-KEY_FILES = ("~/.local/share/opencode/auth.json", "~/.config/opencode/auth.json",
-             "~/.local/share/opencode/opencode.db",
-             "~/.config/opencode/opencode.json", "./opencode.json",
-             "~/.claude/settings.json", "~/.claude/settings.local.json",
+KEY_FILES = ("~/.claude/settings.json", "~/.claude/settings.local.json",
              "~/.zcode/v2/credentials.json", "~/.zcode/settings.json",
              "~/.zcode/auth.json", "~/.zcode/config.json")
 
@@ -91,123 +88,6 @@ def _walk_for_key(obj, depth=0):
     return None
 
 
-def _opencode_key(obj):
-    """Key from an OpenCode auth.json/opencode.json shape, scoped to Z.ai provider ids only."""
-    if not isinstance(obj, dict):
-        return None
-    for pid in ZAI_PROVIDERS:
-        entry = obj.get(pid)
-        if isinstance(entry, dict):
-            for f in ("key", "apiKey", "api_key"):
-                if _valid_key(entry.get(f)):
-                    return entry.get(f)
-    providers = obj.get("provider")
-    if isinstance(providers, dict):
-        for pid in ZAI_PROVIDERS:
-            entry = providers.get(pid)
-            options = entry.get("options") if isinstance(entry, dict) else None
-            if isinstance(options, dict):
-                for f in ("apiKey", "api_key", "key"):
-                    if _valid_key(options.get(f)):
-                        return options.get(f)
-    return None
-
-
-DB_PROVIDERS = ("zai-coding-plan", "zai")
-DB_TABLE_HINTS = ("auth", "cred", "provider", "secret", "account", "key")
-DB_SECRET_COLS = ("key", "token", "secret", "cred")
-DB_ROW_LIMIT = 1000
-
-
-def _as_text(v):
-    if isinstance(v, bytes):
-        try:
-            return v.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-    return v if isinstance(v, str) else None
-
-
-def _json_obj(text):
-    t = (text or "").strip()
-    if not t.startswith("{"):
-        return None
-    try:
-        obj = json.loads(t)
-    except ValueError:
-        return None
-    return obj if isinstance(obj, dict) else None
-
-
-def _entry_secret(entry):
-    if isinstance(entry, dict):
-        for f in ("key", "apiKey", "api_key"):
-            if _valid_key(entry.get(f)):
-                return entry.get(f)
-    return None
-
-
-def _db_row_keys(cols, row):
-    """{provider id: key} from one row, for the ids in DB_PROVIDERS only."""
-    texts = [(str(c).lower(), _as_text(v)) for c, v in zip(cols, row)]
-    owner = next((t for _, t in texts if t in DB_PROVIDERS), None)
-    found = {}
-    for col, t in texts:
-        if t is None or t == owner:
-            continue
-        obj = _json_obj(t)
-        if obj is not None:
-            if owner:
-                got = _entry_secret(obj)
-                if got:
-                    found.setdefault(owner, got)
-            for pid in DB_PROVIDERS:
-                got = _entry_secret(obj.get(pid))
-                if got:
-                    found.setdefault(pid, got)
-        elif owner and any(h in col for h in DB_SECRET_COLS) and _valid_key(t):
-            found.setdefault(owner, t)
-    return found
-
-
-def _opencode_db_key(db_path: str) -> str:
-    """Z.ai key from an OpenCode v2 opencode.db, or "".
-
-    Opens the file read-only (file:...?mode=ro), finds credential tables by
-    introspecting the schema and reads only zai-coding-plan / zai entries.
-    Any error, missing table or unexpected shape returns "". Never writes.
-    """
-    try:
-        import sqlite3
-    except ImportError:
-        return ""
-    uri = "file:%s?mode=ro" % urllib.parse.quote(os.path.abspath(db_path))
-    try:
-        con = sqlite3.connect(uri, uri=True, timeout=1)
-    except Exception:
-        return ""
-    found = {}
-    try:
-        names = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-        for name in names:
-            q = '"%s"' % str(name).replace('"', '""')
-            cols = [r[1] for r in con.execute("PRAGMA table_info(%s)" % q)]
-            hay = " ".join([str(name)] + [str(c) for c in cols]).lower()
-            if not any(h in hay for h in DB_TABLE_HINTS):
-                continue
-            for row in con.execute("SELECT * FROM %s LIMIT %d" % (q, DB_ROW_LIMIT)):
-                for pid, key in _db_row_keys(cols, row).items():
-                    found.setdefault(pid, key)
-    except Exception:
-        return ""
-    finally:
-        con.close()
-    for pid in DB_PROVIDERS:
-        if pid in found:
-            return found[pid]
-    return ""
-
-
 def find_key(extra_env: tuple = ()) -> tuple:
     """Return (key, source) or (None, None). Never returns ANTHROPIC_API_KEY."""
     for name in tuple(extra_env) + KEY_ENV:
@@ -217,18 +97,13 @@ def find_key(extra_env: tuple = ()) -> tuple:
         if v:
             return v, "env:" + name
     for p in KEY_FILES:
-        path = os.path.expanduser(p) if p.startswith("~") else os.path.join(os.getcwd(), p[2:])
-        if path.endswith(".db"):
-            got = _opencode_db_key(path)
-            if got:
-                return got, path
-            continue
+        path = os.path.expanduser(p)
         try:
             with open(path, encoding="utf-8") as f:
                 obj = json.load(f)
         except (OSError, ValueError):
             continue
-        got = _opencode_key(obj) if "opencode" in p else _walk_for_key(obj)
+        got = _walk_for_key(obj)
         if got:
             return got, path
     return None, None

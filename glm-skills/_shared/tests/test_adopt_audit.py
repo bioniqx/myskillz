@@ -64,44 +64,16 @@ class KeyDiscovery(IsolatedHome):
             self.assertEqual(audit.discover_key(),
                              ("zai-underscore-0123456789", "env:Z_AI_API_KEY"))
 
-    def test_opencode_data_auth_beats_zcode(self):
-        a = self.put(".local/share/opencode/auth.json",
-                     {"zai-coding-plan": {"type": "api", "key": "opencode-key-0123456789"}})
-        self.put(".zcode/settings.json", {"apiKey": "zcode-key-0123456789abcd"})
-        with self.env():
-            self.assertEqual(audit.discover_key(), ("opencode-key-0123456789", a))
-
     def test_claude_settings_local_is_read(self):
         p = self.put(".claude/settings.local.json",
                      {"env": {"ZAI_API_KEY": "local-key-0123456789abcd"}})
         with self.env():
             self.assertEqual(audit.discover_key(), ("local-key-0123456789abcd", p))
 
-    def test_project_opencode_json_is_read(self):
-        self.put("opencode.json", {"provider": {"zai-coding-plan": {
-            "options": {"apiKey": "project-key-0123456789ab"}}}})
-        with self.env():
-            self.assertEqual(audit.discover_key()[0], "project-key-0123456789ab")
-
     def test_token_field_and_short_values_are_ignored(self):
         self.put(".claude/settings.json", {"token": "token-field-0123456789", "apiKey": "short"})
         with self.env():
             self.assertEqual(audit.discover_key(), (None, None))
-
-    def test_non_zai_provider_in_auth_json_is_skipped_for_zai_coding_plan(self):
-        a = self.put(".local/share/opencode/auth.json", {
-            "openai": {"type": "api", "key": "sk-openai-0123456789ab"},
-            "zai-coding-plan": {"type": "api", "key": "zai-0123456789abcdef"},
-        })
-        with self.env():
-            self.assertEqual(audit.discover_key(), ("zai-0123456789abcdef", a))
-
-    def test_falls_back_to_settings_json_when_auth_json_has_no_zai_provider(self):
-        self.put(".local/share/opencode/auth.json",
-                 {"openai": {"type": "api", "key": "sk-openai-0123456789ab"}})
-        p = self.put(".claude/settings.json", {"env": {"ZAI_API_KEY": "settings-key-0123456789ab"}})
-        with self.env():
-            self.assertEqual(audit.discover_key(), ("settings-key-0123456789ab", p))
 
     def test_discover_key_is_zai_client_find_key(self):
         self.assertIs(audit.discover_key, audit.zai_client.find_key)
@@ -257,31 +229,6 @@ class DocumentationConfigs(unittest.TestCase):
         for line in setup_lines:
             self.assertIn('glm-', line, f"Setup paths must reference the glm- skill: {line}")
 
-    def test_agent_investigator_write_paths(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-investigator.md")
-        with open(agent_path, 'r') as f:
-            content = f.read()
-        self.assertIn('write_paths: **/.audit/**', content, "glm-rca-investigator must have session-relative write_paths")
-
-    def test_agent_investigator_steps(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-investigator.md")
-        with open(agent_path, 'r') as f:
-            content = f.read()
-        self.assertRegex(content, r'steps:\s*30', "glm-rca-investigator must have steps: 30")
-
-    def test_agent_verifier_write_paths(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-verifier.md")
-        with open(agent_path, 'r') as f:
-            content = f.read()
-        self.assertIn('write_paths: **/.audit/**', content, "glm-rca-verifier must have session-relative write_paths")
-
-    def test_agent_verifier_steps(self):
-        agent_path = os.path.join(os.path.dirname(__file__), "..", "..", "glm-requirements-code-audit", "opencode", "agents", "glm-rca-verifier.md")
-        with open(agent_path, 'r') as f:
-            content = f.read()
-        self.assertRegex(content, r'steps:\s*25', "glm-rca-verifier must have steps: 25")
-
-
 class ZcodeDocSurface(unittest.TestCase):
     SKILL_DIR = os.path.normpath(os.path.join(SCRIPTS, ".."))
     SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
@@ -382,7 +329,7 @@ class ZcodeAuditBehavior(unittest.TestCase):
         self.assertIn("ZCode: dispatch each worker as agent glm-rca-investigator", self.flat(text))
         self.assertNotIn("subagent_type", text)
 
-    def test_setup_zcode_strips_opencode_and_setup_md_from_the_copy(self):
+    def test_setup_zcode_copy_carries_no_setup_md(self):
         home = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, home, True)
         buf = io.StringIO()

@@ -114,60 +114,6 @@ class TestFindCredentials(unittest.TestCase):
         self.assertFalse(hasattr(plan_tool, "KEY_FILES"))
 
 
-class TestFindCredentialsOpenCodeAuth(unittest.TestCase):
-    def setUp(self):
-        self.saved = dict(os.environ)
-        self.home = tempfile.mkdtemp()
-        self.cwd = tempfile.mkdtemp()
-        self.old_cwd = os.getcwd()
-        os.chdir(self.cwd)
-        keep = {k: v for k, v in os.environ.items()
-                if k not in plan_tool.KEY_ENV
-                and k not in ("ZAI_BASE_URL", "GLM_BASE_URL", "PLAN_BASE_URL", "ANTHROPIC_BASE_URL")}
-        keep["HOME"] = self.home
-        self.env = mock.patch.dict(os.environ, keep, clear=True)
-        self.env.start()
-
-    def tearDown(self):
-        self.env.stop()
-        os.chdir(self.old_cwd)
-        os.environ.clear()
-        os.environ.update(self.saved)
-        shutil.rmtree(self.home, ignore_errors=True)
-        shutil.rmtree(self.cwd, ignore_errors=True)
-
-    def put(self, rel, obj):
-        p = os.path.join(self.home, rel)
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(obj, f)
-        return p
-
-    def test_zai_coding_plan_entry_wins_over_leading_anthropic_entry(self):
-        auth = self.put(".local/share/opencode/auth.json",
-                        {"anthropic": {"type": "api", "key": "sk-ant-0123456789abcdef"},
-                         "zai-coding-plan": {"type": "api", "key": "z" * 20}})
-        key, base, proto, src = plan_tool.find_credentials()
-        self.assertEqual(key, "z" * 20)
-        self.assertEqual(src, auth)
-
-    def test_non_zai_provider_only_is_not_returned(self):
-        self.put(".local/share/opencode/auth.json",
-                 {"anthropic": {"type": "api", "key": "sk-ant-0123456789abcdef"}})
-        key, base, proto, src = plan_tool.find_credentials()
-        self.assertIsNone(key)
-
-    def test_plan_api_key_env_beats_opencode_auth_file(self):
-        self.put(".local/share/opencode/auth.json",
-                 {"zai-coding-plan": {"type": "api", "key": "z" * 20}})
-        os.environ["PLAN_API_KEY"] = "p" * 20
-        os.environ["ANTHROPIC_BASE_URL"] = "https://example.invalid/should-be-ignored"
-        key, base, proto, src = plan_tool.find_credentials()
-        self.assertEqual(key, "p" * 20)
-        self.assertEqual(src, "env:PLAN_API_KEY")
-        self.assertEqual(base, plan_tool.DEFAULT_BASE)
-
-
 class TestCallModelRetriesThrottle(unittest.TestCase):
     def test_retries_after_1302_then_succeeds(self):
         ThrottleThenOkHandler.calls = 0

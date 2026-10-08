@@ -29,11 +29,6 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
     def setUp(self):
         self.text = read(SKILL_MD)
 
-    def test_changelog_states_fresh_lane_dir_per_run(self):
-        changelog = read(os.path.join(os.path.dirname(SKILL_MD), "CHANGELOG.md"))
-        entry = changelog.split("# 9.2", 1)[0]
-        self.assertIn("fresh dir per run under `.brainstorm/drafts/`", entry)
-
     def test_line_2_is_still_name_brainstorming(self):
         lines = self.text.split("\n")
         self.assertEqual(lines[1], "name: glm-brainstorming")
@@ -366,8 +361,8 @@ class ZcodeSurfaceTests(unittest.TestCase):
 
     def test_changelog_records_the_zcode_surface(self):
         text = self.read("CHANGELOG.md")
-        self.assertIn("9.4 (from 9.3)", text)
-        self.assertLess(text.find("9.4 (from 9.3)"), text.find("9.3 (from 9.2)"))
+        self.assertIn("9.5 (from 9.4)", text)
+        self.assertLess(text.find("9.5 (from 9.4)"), text.find("9.4 — ZCode surface"))
 
 
 if __name__ == "__main__":

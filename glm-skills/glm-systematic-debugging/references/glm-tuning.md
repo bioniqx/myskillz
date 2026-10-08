@@ -22,7 +22,7 @@ Read this when something is slow, when `scan` falls back to the agent lane, or w
 | OpenAI chat completions (default) | `https://api.z.ai/api/coding/paas/v4` | `reasoning_effort` accepted; reply in `choices[0].message.content` |
 | Anthropic messages | `https://api.z.ai/api/anthropic` | auto-detected from `/anthropic` in the base URL |
 
-`scan` finds a key from `ZAI_API_KEY`, `GLM_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or from a named key field in `~/.claude/settings.json`, `~/.config/opencode/opencode.json`, `~/.config/opencode/auth.json`, `~/.zcode/v2/credentials.json` (v2; its `api-key` field), `~/.zcode/*.json`. Override the endpoint with `--base` or `ZAI_BASE_URL`. It retries once on 429/5xx, and retries once without `reasoning_effort` if the gateway rejects that field.
+`scan` finds a key from `ZAI_API_KEY`, `GLM_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or from a named key field in `~/.claude/settings.json`, `~/.zcode/v2/credentials.json` (its `api-key` field) and `~/.zcode/*.json`. Override the endpoint with `--base` or `ZAI_BASE_URL`. It retries once on 429/5xx, and retries once without `reasoning_effort` if the gateway rejects that field.
 
 Tiers: `--tier light` → `glm-5.3-flash` / `low`; `--tier std` (default) → `glm-5.3-flash` / `high`; `--tier deep` → `glm-5.3` / `max`.
 

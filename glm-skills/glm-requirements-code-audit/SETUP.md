@@ -29,10 +29,10 @@ export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY      # for the harness itself
 ```
 
-`audit.py` also reads the key from `~/.zcode/*.json`, the ZCode v2 credentials file
-`~/.zcode/v2/credentials.json` (its `api-key` field), `~/.config/opencode/auth.json`,
-`~/.config/opencode/opencode.json` and `~/.claude/settings.json` — only from fields whose name says they
-hold one (`apiKey`, `ANTHROPIC_AUTH_TOKEN`, `token`, `api-key`, …), never by scanning strings.
+`audit.py` also reads the key from `~/.zcode/*.json` — the v2 credentials file
+`~/.zcode/v2/credentials.json` via its `api-key` field — and from `~/.claude/settings.json`, only from
+fields whose name says they hold one (`apiKey`, `ANTHROPIC_AUTH_TOKEN`, `token`, `api-key`, …), never by
+scanning strings.
 
 The OpenAI-compatible route works too: point `ZAI_BASE_URL` at `https://api.z.ai/api/paas/v4` and the client
 switches to `chat/completions` with a `Bearer` header.

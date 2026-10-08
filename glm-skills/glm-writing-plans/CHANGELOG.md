@@ -4,11 +4,11 @@
 
 **Concurrency:** every model-call fan-out (script threads, writer and reviewer dispatch, `PLAN_MAX_WORKERS`, `PLAN_LANE_WIDTH`, `--workers`, `--agents`, subagent-cap env vars) is capped at 8, the provider limit on concurrent API calls; the 4-task writer group size is unchanged.
 
-**Fixes:** (WP5) Bootstrap now respects `$OPENCODE_CONFIG_DIR`, checks locations in project-first order, and exits with a clear error on miss (no `python3 "" brief`).
+**Fixes:** (WP5) Bootstrap checks the skill locations in a fixed order and exits with a clear error on a miss (no `python3 "" brief`).
 
 **ZCode hardening:** the zcode dispatch headers name the `glm-plan-task-writer` agent (or the `general-purpose` fallback) with no `subagent_type=`/model-alias jargon and real ids only where a model must be named; `agent_file("zcode")` gains `maxTurns: 16`; SKILL.md R9 scopes `ANTHROPIC_BASE_URL` to Claude-compatible harnesses; the glm-tuning key list includes the v2 credentials file and the body-cap claim is labeled unverified.
 
-Target: GLM-5.3 and GLM-5.3-Flash, running in OpenCode or ZCode.
+Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn
 
@@ -17,8 +17,8 @@ facts break that on this target:
 
 1. GLM emits far fewer parallel tool calls per turn than Claude - two is a
    commonly observed ceiling. A 64-call message quietly becomes a trickle.
-2. OpenCode's task tool dispatches subagents one at a time. Background
-   dispatch exists only behind `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`.
+2. Every agent dispatch is a full model turn, so a wide subagent fan-out
+   spends exactly the turns the tools were built to remove.
 
 v9 puts the fan-out inside `plan_tool.py`: one `build` call opens up to 8
 threads and sends one request per task straight to the coding endpoint. No
@@ -37,9 +37,8 @@ without a key, and ZCode's parallel foreground subagents still serve it well.
 `brief` replaces Phase 0 entirely: it prints the repo snapshot, the spec heading
 map, the numbered spec body, the conventions file and three or four
 auto-selected pattern files ranked by recency, test-ness and spec-keyword
-overlap. Neither OpenCode nor ZCode supports `!` command injection in a skill,
-so call 1 is an explicit shell call that also resolves the tool path across all
-six skill directories.
+overlap. No harness injects `!` commands into a skill, so call 1 is an
+explicit shell call that also resolves the tool path across the skill dirs.
 
 ## GLM-specific tuning
 
@@ -57,11 +56,6 @@ six skill directories.
 - Retries handle 429 and 5xx with jittered backoff, and a shared failure budget
   aborts the whole fan-out fast when the endpoint is down instead of every
   worker retrying slowly.
-- OpenCode v2's `subagent` tool takes `background: true`, so the agent-lane
-  DISPATCH table can fan out with real parallelism from one tool call per
-  turn; `render_agent` now writes `variant: <effort>` into v2 agent
-  frontmatter (v1 keeps `reasoningEffort:`) so a background dispatch still
-  runs the agent at its intended model and effort.
 
 ## Quality kept, and slightly raised
 
@@ -75,8 +69,8 @@ six skill directories.
 - Risk-based review still runs (deep tier, long body, many consumers, lint
   warnings), also 8-wide, and a rewritten body is accepted only if it lints at
   least as well as the one it replaces.
-- Portability scan now also rejects the words OpenCode, ZCode and GLM inside a
-  plan.
+- Portability scan now also rejects harness and vendor names (ZCode, GLM, …)
+  inside a plan.
 
 ## New commands
 
@@ -84,7 +78,7 @@ six skill directories.
 - `build` - validate, fan out, lint, repair, review, assemble, clean.
 - `doctor [--ping]` - lane, key source, base URL, protocol, models, concurrency,
   live probe.
-- `setup [--harness opencode|zcode|claude] [--apply]` - installs the fallback
+- `setup [--harness zcode|claude] [--apply]` - installs the fallback
   subagent in the right place for the detected harness.
 
 `contracts`, `wait`, `review`, `assemble`, `check`, `lint-task` and `hook-lint`
@@ -94,13 +88,9 @@ are unchanged in behavior and still drive the agent lane.
 
 1. Unzip into one of:
    - `~/.zcode/skills/glm-writing-plans/`
-   - `~/.config/opencode/skills/glm-writing-plans/` (or `.opencode/skills/` in a project)
-   - `~/.claude/skills/glm-writing-plans/` (read by all three harnesses)
+   - `~/.claude/skills/glm-writing-plans/`
 2. `export ZAI_API_KEY=<key>` and
    `export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic`
 3. `python3 <skill>/scripts/plan_tool.py doctor --ping`
 4. Optional: `python3 <skill>/scripts/plan_tool.py setup --apply` for the
-   agent-lane fallback subagent.
-5. On OpenCode: the skill is discoverable as `glm-writing-plans` (the `name:` field in
-   SKILL.md without the `-glm` suffix). Use `/glm-plan <spec-path>` in any OpenCode
-   session with the zai-coding-plan provider enabled.
+   agent-lane fallback subagent. Invoke the skill with `$glm-writing-plans`.
