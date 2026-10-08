@@ -28,8 +28,6 @@ Conductor commands (run in the integration checkout):
   integrate <ids...>        verify RED/frozen tests, merge, clean up, print newly ready
   fail <id> [--why ...]     mark a dispatch failed (worktree kept for salvage)
   retry <id>                re-queue a failed/conflicted slice (fresh attempt)
-  resume <id> [--note TEXT] OpenCode: relaunch a fresh lane in the slice's existing worktree with the
-                            note appended to its brief (the answer to BLOCKED / REJECTED; commits kept)
   bind <id> <worktree>      record a slice's worktree when `claim` could not (sandboxed FS)
   add-fix --id F1 --title T --files a b --criteria "c1" ["c2"] [--deps S1]
   add-fixes <report.md>     enqueue fix slices from a reviewer report's ```json block
@@ -98,7 +96,6 @@ import os
 import re
 import shlex
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -119,10 +116,10 @@ GIT_READ_PREFIXES = ["git status", "git diff", "git log", "git show", "git rev-p
 NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall every background agent
 LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail", "retry", "bind",
                "add-fix", "add-fixes", "review-batch", "review-done", "verify-brief", "checkpoint",
-               "status", "finish", "review-pr", "resume"}
+               "status", "finish", "review-pr"}
 DEFAULT_LIMIT = 20          # Claude Code default concurrent-subagent cap
 HARD_CAP = 64               # this skill's ceiling on Claude (provider "anthropic")
-NON_CLAUDE_CAP = 8          # every other provider (and OpenCode) allows only 8 concurrent API calls; provider cap, keep in sync: _shared/zai_client.py MAX_PARALLEL
+NON_CLAUDE_CAP = 8          # every non-anthropic provider allows only 8 concurrent API calls; provider cap, keep in sync: _shared/zai_client.py MAX_PARALLEL
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
@@ -440,8 +437,8 @@ def footprints_overlap(a, b):
 
 
 def hard_cap_for(provider):
-    """Concurrent model calls the skill may ever have: 64 on Claude, 8 for any other provider or OpenCode."""
-    return HARD_CAP if provider == "anthropic" and not is_opencode() else NON_CLAUDE_CAP
+    """Concurrent model calls the skill may ever have: 64 on Claude, 8 for any other provider."""
+    return HARD_CAP if provider == "anthropic" else NON_CLAUDE_CAP
 
 
 def hard_cap(st=None):
@@ -453,11 +450,8 @@ def max_shards(st=None):
 
 
 def concurrency_limit(st=None):
-    """Claude Code's concurrent-subagent cap, bounded by hard_cap(). OpenCode lanes are plain processes:
-    only hard_cap() (8, non-Claude) and the governor bound them."""
+    """Claude Code's concurrent-subagent cap, bounded by hard_cap()."""
     cap = hard_cap(st)
-    if is_opencode():
-        return cap
     raw = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "")
     limit = int(raw) if raw.isdigit() else DEFAULT_LIMIT
     return max(1, min(cap, limit))
@@ -750,104 +744,6 @@ def scan_transcripts(root, st):
     return sig
 
 
-def _oc_harness():
-    """The vendored oc_harness.py next to this script."""
-    here = str(Path(__file__).resolve().parent)
-    if here not in sys.path:
-        sys.path.insert(0, here)
-    import oc_harness
-    return oc_harness
-
-
-def _lane_kind(st, name):
-    s = st["slices"].get(name)
-    if s is None:
-        return "review"
-    return "research" if s.get("mode") == "research" else "slice"
-
-
-def lane_signals(root, st) -> dict:
-    """OpenCode counterpart of scan_transcripts: the same signal dict, read from what the lane runner
-    wrote to .claude/dev-team/lanes/ (`<id>.jsonl` events, `<id>.done` results). Throttling = a JSON
-    error event carrying 429/1302/1305; a lane that ended FAIL/STALL/TIMEOUT is reported as down.
-    Incremental (offsets live in the governor state) and tolerant: an odd file or line is skipped."""
-    g = st.setdefault("gov", new_gov(provider_of(st), resolve_tier()))
-    seen = g.setdefault("lanes", {})
-    created = float(st.get("created") or 0)
-    sig = {"throttle": [], "down": [], "spawn_fail": [], "spawned": {}}
-    d = state_dir(root) / "lanes"
-    if not d.is_dir():
-        return sig
-    is_throttle_event = _oc_harness().is_throttle_event
-    for f in sorted(d.glob("*.jsonl")):
-        try:
-            size, mtime = f.stat().st_size, f.stat().st_mtime
-        except OSError:
-            continue
-        rec = seen.setdefault(f.stem, {})
-        if "off" not in rec and mtime + 2 < created:
-            rec["off"] = size                         # a previous run's lane: start at its end
-            continue
-        off = rec.get("off", 0)
-        if size < off:
-            off = 0
-        if size == off:
-            continue
-        try:
-            with f.open("rb") as fh:
-                fh.seek(off)
-                chunk = fh.read(SCAN_MAX_BYTES)
-        except OSError:
-            continue
-        end = chunk.rfind(b"\n")
-        if end < 0:
-            rec["off"] = off + (len(chunk) if len(chunk) >= SCAN_MAX_BYTES else 0)
-            continue
-        rec["off"] = off + end + 1
-        t = time.time()
-        for ln in chunk[:end].split(b"\n"):
-            if b'"error"' not in ln:
-                continue
-            try:
-                event = json.loads(ln.decode("utf-8", "replace"))
-            except ValueError:
-                continue
-            if is_throttle_event(event):
-                sig["throttle"].append(t)
-    for f in sorted(d.glob("*.done")):
-        try:
-            mtime = f.stat().st_mtime
-        except OSError:
-            continue
-        rec = seen.setdefault(f.stem, {})
-        if mtime + 2 < created or rec.get("done") == mtime:
-            continue
-        try:
-            res = json.loads(f.read_text())
-        except (OSError, ValueError):
-            continue
-        if not isinstance(res, dict) or res.get("status") in (None, "OK"):
-            rec["done"] = mtime
-            continue
-        kind = _lane_kind(st, f.stem)
-        if kind == "slice" and not lane_process_finished(d, f.stem):
-            continue                                  # a writer's lane-run may still retry this FAIL — re-check later
-        rec["done"] = mtime
-        text = f"{res.get('status')}: {res.get('error') or res.get('last_event') or 'no error event'}"[:240]
-        sig["down"].append((kind, f.stem, text, str(int(mtime)), mtime))  # (kind, name, text, id, ts) — scan_transcripts' shape
-    for lane_id, pid in dead_lanes(d):
-        sig["down"].append((_lane_kind(st, lane_id), lane_id,
-                            f"DOWN: killed by a signal (pid {pid} gone, no result and no end marker)",
-                            f"pid{pid}", time.time()))
-        write_atomic(d / f"{lane_id}.end", "killed")
-        kill_lane_pgid(d, lane_id)                    # its opencode runs in its own session: no orphan
-        try:
-            (d / f"{lane_id}.pid").unlink()           # a relaunched lane-run then records its own pid
-        except OSError:
-            pass
-    return sig
-
-
 def mark_utilization(st, inflight_n, cap):
     """Grow the window only while it is actually used: a narrow stretch of the DAG must not ratchet the
     window to its ceiling and then launch all of it at once when the plan widens again."""
@@ -863,8 +759,7 @@ def govern(root, st, successes):
     st.setdefault("gov", new_gov(provider_of(st), resolve_tier()))
     g = st["gov"]
     enabled = gov_enabled(st)
-    oc = is_opencode()
-    sig = lane_signals(root, st) if oc else scan_transcripts(root, st)   # always: re-queue / LANE DOWN are correctness
+    sig = scan_transcripts(root, st)   # always: re-queue / LANE DOWN are correctness
     t = time.time()
     bound = max(GOV_MIN, min(gov_ceiling(st), concurrency_limit(st), hard_cap(st)))
     # 1. Agent spawns that failed: the lane never started — put the slice back, untouched
@@ -909,7 +804,7 @@ def govern(root, st, successes):
         g["cap"] = max(GOV_MIN, old // 2)
         g["cut_at"], g["cuts"] = t, int(g.get("cuts") or 0) + 1
         lines.append(f"THROTTLED: {len(fresh)} rate-limit/overload signal(s) from the API → window {old} → {g['cap']} "
-                     + ("(running lanes keep going; the engine launches fewer new lanes until it recovers)" if oc else
+                     + ("(running lanes keep going; the engine launches fewer new lanes until it recovers)" if is_zcode() else
                         "(running lanes keep going; Claude Code retries them)"))
     elif enabled and successes and not fresh and g.get("saturated", True) \
             and t - float(g.get("cut_at") or 0) >= GOV_COOLDOWN_S:
@@ -934,21 +829,10 @@ def govern(root, st, successes):
             if kind == "research" and (state_dir(root) / "research" / f"{name}.md").exists():
                 continue
         elif kind == "review":
-            # on OpenCode `name` is the full lane id (emit_agent prefixes it "review-"); on Claude
-            # Code it is already just the review id, parsed straight out of the transcript prompt.
-            rid = name[len("review-"):] if oc and name.startswith("review-") else name
+            # the review id, parsed straight out of the transcript prompt
+            rid = name
             if rid.split("-")[0] not in open_reviews:
                 continue
-        if oc:
-            lines.append(f"LANE DOWN {name} ({kind}): the lane process ended {text[:120]}"
-                         + (f"\n  → `fail {name}` then `retry {name}` (kept for salvage on branch "
-                            f"`attempt/{name}-{s.get('attempt') or 1}`)"
-                            if kind == "slice" else
-                            # nohup + a redirected, backgrounded python3 detaches the lane from the tool's
-                            # shell and pipes; lane-run clears the stale .done/.end itself before running
-                            f"\n  → relaunch it detached: `nohup python3 {q(str(Path(__file__).resolve()))} "
-                            f"lane-run {name} > {q(str(lanes_dir(root) / (name + '.log')))} 2>&1 &`"))
-            continue
         lines.append(f"LANE DOWN {name} ({kind}): the API failed after retries — {text[:120]}"
                      f"\n  → SendMessage that agent \"continue\" (warm: same context"
                      + (", same worktree); cold alternative: `retry " + name + "`" if kind == "slice" else ")"))
@@ -1955,72 +1839,23 @@ def dispatch_route(st, s, mode):
     return agent, model, f"{shown} · effort {effort}"
 
 
-OC_AGENTS = {}          # OpenCode ships glm-programmer-lite too: v1 takes its effort from that agent's frontmatter
-OC_MODELS = {"haiku": "flash", "sonnet": "pro", "opus": "pro"}
-WRITER_AGENTS = ("glm-programmer", "glm-programmer-lite")
-MAX_LANE_RUNS = 4          # guard.py force-finishes after MAX_STOP_BLOCKS = 2, so 3 runs is the real ceiling
-
-
-def is_opencode() -> bool:
-    """OpenCode path: DEVTEAM_HARNESS decides when set; otherwise v1's OPENCODE marker, or
-    oc_harness.harness() (which also recognises v2, where OPENCODE is never set)."""
-    forced = os.environ.get("DEVTEAM_HARNESS")
-    if forced is not None:
-        return forced == "opencode"
-    if os.environ.get("OPENCODE"):
-        return True
-    try:
-        return _oc_harness().harness(str(Path(__file__).resolve())) == "opencode"
-    except Exception:
-        return False
-
-
 def is_zcode() -> bool:
     """True under the zcode harness: a DEVTEAM_HARNESS=zcode override wins,
-    any other DEVTEAM_HARNESS value wins against the detector, the v1
-    OpenCode marker wins against the detector too, and otherwise the
-    vendored harness detector decides by path/env (it returns "zcode"
-    there)."""
+    any other DEVTEAM_HARNESS value wins against the detector, and otherwise
+    the detector decides by env and path (a ZCODE* env marker, or the skill
+    installed under a .zcode directory)."""
     override = os.environ.get("DEVTEAM_HARNESS", "")
     if override:
         return override == "zcode"
-    if os.environ.get("OPENCODE") == "1" and is_opencode():
-        return False
-    return _oc_harness().harness(str(Path(__file__).resolve())) == "zcode"
-
-
-def oc_model(st, agent, model):
-    """Neutral OpenCode model (`flash` / `pro`) for a Claude alias or the role's default alias."""
-    alias = model or PROVIDERS[provider_of(st)]["agents"].get(agent, ("opus", ""))[0]
-    return OC_MODELS.get(alias, alias)
-
-
-def oc_effort(st, agent):
-    """GLM effort (low|high|max) for the role; a non-GLM value such as `medium` becomes high."""
-    effort = PROVIDERS[provider_of(st)]["agents"].get(agent, ("", "high"))[1]
-    return effort if effort in ("low", "high", "max") else "high"
+    if any(k.startswith(("ZCODE", "Z_CODE")) for k in os.environ):
+        return True
+    script = str(Path(__file__).resolve())
+    paths = [script, os.path.realpath(script)]
+    return any(part == ".zcode" for path in paths for part in path.split(os.sep))
 
 
 def lanes_dir(root):
     return state_dir(Path(root)) / "lanes"
-
-
-def lane_process_finished(d, lane_id):
-    """A writer's `lane-run` retries internally before it exits, so a mid-retry FAIL `.done` is not
-    final. Finished = its end marker was written, or its recorded pid is no longer running."""
-    if (d / f"{lane_id}.end").exists():
-        return True
-    try:
-        pid = int((d / f"{lane_id}.pid").read_text().strip())
-    except (OSError, ValueError):
-        return True
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return True
-    except OSError:
-        return False
-    return False
 
 
 def _pid_alive(pid) -> bool:
@@ -2033,430 +1868,25 @@ def _pid_alive(pid) -> bool:
     return True
 
 
-def lane_pids(d):
-    """[(lane_id, pid)] for every lanes/<id>.pid that parses."""
-    res = []
-    for pf in sorted(Path(d).glob("*.pid")):
-        try:
-            res.append((pf.name[:-len(".pid")], int(pf.read_text().strip())))
-        except (OSError, ValueError):
-            continue
-    return res
-
-
-def live_lanes(d):
-    """Lane ids whose recorded lane-run process is still running."""
-    return [lane_id for lane_id, pid in lane_pids(d) if _pid_alive(pid)]
-
-
-def dead_lanes(d):
-    """[(lane_id, pid)] of lanes killed by a signal: the recorded pid is gone and the lane left no `.end`
-    and no result (`lanes/<id>.done` for a non-writer, `slices/<id>.done|.blocked` for a writer)."""
-    d = Path(d)
-    slices = d.parent / "slices"
-    found = []
-    for lane_id, pid in lane_pids(d):
-        if (d / f"{lane_id}.end").exists() or _pid_alive(pid):
-            continue
-        try:
-            writer = bool(json.loads((d / f"{lane_id}.lane.json").read_text()).get("writer"))
-        except (OSError, ValueError, AttributeError):
-            writer = False
-        if writer:
-            if (slices / f"{lane_id}.done").exists() or (slices / f"{lane_id}.blocked").exists():
-                continue
-        elif (d / f"{lane_id}.done").exists():
-            continue
-        found.append((lane_id, pid))
-    return found
-
-
-def kill_lane_pgid(d, lane_id) -> bool:
-    """Kill the `opencode` process group oc_harness recorded in lanes/<id>.pgid. opencode runs in its
-    own session, so killing the lane-run group alone leaves it editing the recreated worktree. The group
-    is killed only while its leader still runs the OpenCode binary (a reused pgid is left alone); the
-    file is removed either way."""
-    f = Path(d) / f"{lane_id}.pgid"
-    try:
-        pgid = int(f.read_text().strip())
-    except (OSError, ValueError):
-        return False
-    name = os.path.basename(os.environ.get("DEVTEAM_OC_BIN") or "opencode")
-    try:
-        cmdline = subprocess.run(["ps", "-o", "command=", "-p", str(pgid)],
-                                 text=True, capture_output=True).stdout
-    except OSError:
-        cmdline = ""
-    killed = False
-    if pgid > 1 and name and name in cmdline:
-        try:
-            os.killpg(pgid, signal.SIGKILL)
-            killed = True
-        except OSError:
-            pass
-    try:
-        f.unlink()
-    except OSError:
-        pass
-    return killed
-
-
-def terminate_lane_process(d, lane_id):
-    """Kill a previous `lane-run` for this lane id (and its whole process group, so the `opencode`
-    child dies too) if it is still alive, so two runs never share one lane id at once. Only kills
-    it when the recorded pid still names a `devteam.py lane-run <lane_id>` process — a substring
-    check would let lane S1 match S12's process, so a reused pid must match the exact adjacent
-    argv tokens `lane-run <lane_id>`."""
-    kill_lane_pgid(d, lane_id)
-    pid_file = d / f"{lane_id}.pid"
-    try:
-        pid = int(pid_file.read_text().strip())
-    except (OSError, ValueError):
-        return
-    try:
-        cmdline = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
-                                 text=True, capture_output=True).stdout
-    except OSError:
-        return
-    tokens = cmdline.split()
-    try:
-        i = tokens.index("lane-run")
-    except ValueError:
-        return
-    if i + 1 >= len(tokens) or tokens[i + 1] != lane_id:
-        return
-    try:
-        os.killpg(pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError, OSError):
-        pass
-
-
-def launch_lane(root, st, lane_id, agent, model, prompt, note="") -> int:
-    """Start `devteam.py lane-run <lane_id>` as a detached process; return its pid. `note` (from
-    `resume --note`) is stored in the lane spec and appended to a writer's brief by lane-run."""
-    d = lanes_dir(root)
-    d.mkdir(parents=True, exist_ok=True)
-    terminate_lane_process(d, lane_id)
-    for ext in (".done", ".jsonl", ".err", ".end"):
-        try:
-            (d / f"{lane_id}{ext}").unlink()
-        except OSError:
-            pass
-    spec = {"id": lane_id, "agent": OC_AGENTS.get(agent, agent), "model": oc_model(st, agent, model),
-            "effort": oc_effort(st, agent), "prompt": prompt, "writer": agent in WRITER_AGENTS,
-            "note": note}
-    write_atomic(d / f"{lane_id}.lane.json", json.dumps(spec))
-    with open(d / f"{lane_id}.log", "w") as log:
-        proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "lane-run", lane_id],
-                                cwd=str(root), stdin=subprocess.DEVNULL, stdout=log,
-                                stderr=subprocess.STDOUT, start_new_session=True)
-    write_atomic(d / f"{lane_id}.pid", str(proc.pid))
-    return proc.pid
-
-
 def emit_agent(root, st, agent, model, prompt, label) -> str:
-    """The launch line for one agent: the Claude Code `Agent →` instruction, or on OpenCode a lane
-    process started right now (the Conductor then only waits). On zcode the Agent tool takes no
+    """The launch line for one agent: the `Agent →` instruction. On zcode the Agent tool takes no
     model, so the model segment is dropped there."""
-    if not is_opencode():
-        if is_zcode():
-            return f"Agent → subagent_type: {agent}, description: \"{label}\", prompt: \"{prompt}\""
-        return (f"Agent → subagent_type: {agent}, description: \"{label}\"" + (f", model: {model}" if model else "")
-                + f", prompt: \"{prompt}\"")
-    lane_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", label).strip("-") or "lane"
-    pid = launch_lane(root, st, lane_id, agent, model, prompt)
-    return f"LANE {lane_id} → {agent} (pid {pid}) running; `devteam wait` wakes you when a lane finishes"
+    if is_zcode():
+        return f"Agent → subagent_type: {agent}, description: \"{label}\", prompt: \"{prompt}\""
+    return (f"Agent → subagent_type: {agent}, description: \"{label}\"" + (f", model: {model}" if model else "")
+            + f", prompt: \"{prompt}\"")
 
 
 def launch_hint() -> str:
-    """What the Conductor does right after a dispatch: launch the Agent calls (Claude Code), or on
-    OpenCode just wait, because every lane process is already running."""
-    if is_opencode():
-        return (f"Every LANE above is already running — launch nothing. Run `python3 {q(Path(__file__).resolve())} "
-                f"wait` (it returns as soon as a lane finishes), then `next` — no ids needed; repeat until the endgame.")
+    """What the Conductor does right after a dispatch: launch the Agent calls, then end the turn."""
     return ("Launch every Agent call above in ONE message (parallel tool calls), then end the turn. "
             "On each wake-up (completion notification, background result, user answer): `next` — no ids needed.")
-
-
-def lane_worktree(root, st, lane_id):
-    """`<root>/.claude/dev-team/wt/<id>` on branch `devteam/<id>`, created from the slice's base."""
-    wt = state_dir(Path(root)) / "wt" / lane_id
-    if not (wt / ".git").exists():
-        wt.parent.mkdir(parents=True, exist_ok=True)
-        git(["worktree", "prune"], root, check=False)
-        base = slice_state(st, lane_id)["base_sha"]
-        if not base:
-            raise DevteamError(f"{lane_id}: no base_sha recorded — this slice was never dispatched/claimed")
-        git(["worktree", "add", "-f", "-B", f"devteam/{lane_id}", str(wt), base], root)
-    return wt
-
-
-def lane_text(path):
-    """Final assistant text of a lane: the last `text` part in its JSON event stream."""
-    try:
-        lines = Path(path).read_text(errors="replace").splitlines()
-    except OSError:
-        return ""
-    text = ""
-    for ln in lines:
-        try:
-            ev = json.loads(ln)
-        except ValueError:
-            continue
-        part = ev.get("part") if isinstance(ev, dict) else None
-        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
-            text = part["text"]
-    return text
-
-
-def lane_error_marker(d, lane_id, message):
-    """Non-writer lane whose run raised before oc_harness could write its own `.done`: write one
-    ourselves with status ERROR, in the same shape `_finish` uses, so `lane_marks` still sees it."""
-    result = {"id": lane_id, "status": "ERROR", "exit": None, "error": message, "last_event": "",
-              "throttles": 0, "width": 1, "out": str(d / f"{lane_id}.jsonl")}
-    write_atomic(d / f"{lane_id}.done", json.dumps(result, indent=2))
-
-
-def slice_marker_exists(root, sid):
-    return marker_file(root, sid, "done").exists() or marker_file(root, sid, "blocked").exists()
-
-
-def clear_own_pid_file(d, lane_id):
-    """Drop lanes/<id>.pid (and the opencode .pgid) once this process is done with them, but only if the
-    pid file still holds our own pid — a relaunch may already have overwritten it with a newer lane-run's."""
-    pid_file = d / f"{lane_id}.pid"
-    try:
-        if int(pid_file.read_text().strip()) == os.getpid():
-            pid_file.unlink()
-            (d / f"{lane_id}.pgid").unlink()
-    except (OSError, ValueError):
-        pass
-
-
-def slice_blocked_marker(root, wt, sid, note):
-    """Writer lane that ended (raised, or exhausted MAX_LANE_RUNS) without guard.py ever writing a
-    slice marker itself: write slices/<id>.blocked so `devteam wait`/`next` still see it finish."""
-    d = state_dir(root) / "slices"
-    d.mkdir(parents=True, exist_ok=True)
-    branch = git(["rev-parse", "--abbrev-ref", "HEAD"], wt, check=False) if wt else ""
-    write_atomic(d / f"{sid}.blocked", json.dumps({"t": int(time.time()), "worktree": str(wt or ""),
-                                                    "branch": branch, "note": note[:600]}))
-
-
-def lane_error_line(lane_id, r):
-    """One line per lane error: `LANE <id>: <status> <error.type> <message>`. Handles the v2 error
-    event ({type, message}), the v1 one ({name, data.message}) and a plain string."""
-    err = r.get("error")
-    if isinstance(err, dict):
-        data = err.get("data") if isinstance(err.get("data"), dict) else {}
-        etype = str(err.get("type") or err.get("name") or "")
-        msg = str(err.get("message") or data.get("message") or "")
-    else:
-        etype, msg = "", str(err or r.get("last_event") or "no error event")
-    return " ".join(x for x in (f"LANE {lane_id}: {r.get('status')}", etype, msg) if x)[:300]
-
-
-def cmd_lane_run(a):
-    """One OpenCode lane, end to end: worktree + claim for a glm-programmer, `opencode run` through
-    oc_harness, then the guard.py Stop gate (re-run once per block) so `.done`/`.blocked` markers
-    appear exactly as on Claude Code."""
-    root = find_root()
-    d = lanes_dir(root)
-    for ext in (".done", ".end"):
-        try:
-            (d / f"{a.lane_id}{ext}").unlink()
-        except OSError:
-            pass
-    pids = dict(lane_pids(d))
-    if a.lane_id not in pids or not _pid_alive(pids[a.lane_id]):
-        write_atomic(d / f"{a.lane_id}.pid", str(os.getpid()))   # missing or stale (a manual relaunch)
-    spec = json.loads((d / f"{a.lane_id}.lane.json").read_text())
-    here = Path(__file__).resolve().parent
-    if str(here) not in sys.path:
-        sys.path.insert(0, str(here))
-    import oc_harness
-    binary = os.environ.get("DEVTEAM_OC_BIN") or "opencode"
-    lane = {"id": spec["id"], "agent": spec["agent"], "model": spec["model"], "effort": spec.get("effort"),
-            "dir": str(root),
-            "brief": spec["prompt"], "env": {"DEVTEAM_ROLE": spec["agent"], "DEVTEAM_SLICE": spec["id"]}}
-    lane["stall"] = oc_harness.lane_stall(dict(lane, role=spec["agent"]))
-    if not spec.get("writer"):
-        try:
-            r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
-        except (Exception, SystemExit) as e:
-            lane_error_marker(d, spec["id"], f"lane-run failed: {e}")
-            out(f"LANE {spec['id']}: ERROR ({e})")
-            clear_own_pid_file(d, spec["id"])
-            return
-        out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']})")
-        clear_own_pid_file(d, spec["id"])
-        return
-    wt = None
-    try:
-        st = load_state(root)
-        wt = lane_worktree(root, st, spec["id"])
-        lane["dir"] = str(wt)
-        claim = subprocess.run([sys.executable, str(here / "devteam.py"), "claim", spec["id"]],
-                               cwd=str(wt), text=True, capture_output=True)
-        if claim.returncode != 0:
-            raise DevteamError(f"claim {spec['id']} failed: {claim.stderr.strip() or claim.stdout.strip()}")
-        brief, note = resume_brief(claim.stdout, spec.get("note") or ""), ""
-        base = slice_state(st, spec["id"]).get("base_sha") or ""
-        for _ in range(MAX_LANE_RUNS):
-            lane["brief"] = brief + note
-            r = oc_harness.run_lanes([lane], str(d), width=1, binary=binary)[0]
-            if r.get("status") != "OK" and base and git(["rev-parse", "HEAD"], wt, check=False) == base:
-                line = lane_error_line(spec["id"], r)
-                out(line)
-                if not slice_marker_exists(root, spec["id"]):
-                    slice_blocked_marker(root, wt, spec["id"], f"lane-run failed: {line} (no commit on the "
-                                                               "branch, so a rerun would fail the same way)")
-                return
-            payload = json.dumps({"cwd": str(wt), "last_assistant_message": lane_text(r["out"])})
-            gate = subprocess.run([sys.executable, str(here / "guard.py"), "stop"], input=payload,
-                                  text=True, capture_output=True)
-            out(f"LANE {spec['id']}: {r['status']} (exit {r['exit']}), stop gate exit {gate.returncode}")
-            if gate.returncode != 2:
-                if not slice_marker_exists(root, spec["id"]):
-                    slice_blocked_marker(root, wt, spec["id"],
-                                          f"stop gate exited {gate.returncode} without writing a slice marker")
-                return
-            note = "\n\n" + gate.stderr
-        if not slice_marker_exists(root, spec["id"]):
-            slice_blocked_marker(root, wt, spec["id"],
-                                  "lane-run exhausted its retries without the stop gate ever finishing the slice")
-    except (Exception, SystemExit) as e:
-        if not slice_marker_exists(root, spec["id"]):
-            slice_blocked_marker(root, wt, spec["id"], f"lane-run failed: {e}")
-        out(f"LANE {spec['id']}: ERROR ({e})")
-    finally:
-        clear_own_pid_file(d, spec["id"])
-        write_atomic(d / f"{spec['id']}.end", str(int(time.time())))
-
-
-def lane_marks(root):
-    """{path: mtime} of every completion signal: slice markers, plus lane results of non-writer
-    lanes (a glm-programmer lane is finished only when its Stop gate writes the slice marker)."""
-    sd = state_dir(Path(root))
-    paths = glob.glob(str(sd / "slices" / "*.done")) + glob.glob(str(sd / "slices" / "*.blocked"))
-    for p in glob.glob(str(sd / "lanes" / "*.done")):
-        try:
-            spec = json.loads(Path(p[:-len(".done")] + ".lane.json").read_text())
-        except (OSError, ValueError):
-            spec = {}
-        if not spec.get("writer"):
-            paths.append(p)
-    seen = {}
-    for p in paths:
-        try:
-            seen[p] = os.path.getmtime(p)
-        except OSError:
-            pass
-    return seen
-
-
-def cmd_wait(a):
-    """Block up to --timeout seconds until a lane finishes, then point the Conductor at `next`. On
-    OpenCode it also returns at once when a lane died by a signal, or when no lane is running at all."""
-    root = find_root()
-    try:
-        st = load_state(root)
-    except DevteamError:
-        st = None
-    oc = is_opencode()
-    d = lanes_dir(root)
-    start = lane_marks(root)
-    deadline = time.monotonic() + max(0, a.timeout)
-    found = bool(st and (any(finished_lanes(root, st)) or checkpoint_finished(root, st)))
-    msg = "WAIT: a lane finished"
-    while not found:
-        if oc:
-            dead = dead_lanes(d)
-            if dead:
-                found, msg = True, ("WAIT: lane " + ", ".join(lane_id for lane_id, _ in dead)
-                                    + " died without a result (LANE DOWN)")
-                break
-            if not live_lanes(d) and not checkpoint_running(root, st):
-                found, msg = True, "WAIT: no lane is running"
-                break
-        if time.monotonic() >= deadline:
-            break
-        time.sleep(0.5)
-        cur = lane_marks(root)
-        found = any(start.get(k) != v for k, v in cur.items())
-    out(msg if found else f"WAIT: nothing finished in {a.timeout}s (lanes keep running)",
-        "NEXT: devteam next")
-
-
-def resume_brief(brief, note):
-    """The claim briefing plus the Conductor's `resume --note` text (unchanged when there is none)."""
-    note = (note or "").strip()
-    if not note:
-        return brief
-    return (brief.rstrip("\n") + "\n\n## Resume note from the Conductor\n"
-            "You are resuming this slice in its existing worktree: your earlier commits are kept. "
-            "Act on this note first, then finish the procedure above.\n" + note + "\n")
-
-
-def resume_hint(st, sid):
-    """What to do instead of SendMessage on OpenCode, where the lane process has already exited."""
-    return (f"  → OpenCode: the {sid} lane has exited; answer with "
-            f"`python3 {q(st['script'])} resume {sid} --note \"<the answer or the fix>\"` "
-            "(fresh lane, same worktree, commits kept); `retry " + sid + "` is the cold alternative.")
-
-
-def opencode_message(st, sid, msg):
-    """Rewrite an integrate result for OpenCode, where the lane has exited and SendMessage cannot reach it.
-    A research slice has no worktree to resume, so its glm-investigator is relaunched with `retry`."""
-    if "SendMessage the glm-investigator" in msg:
-        return msg.replace("SendMessage the glm-investigator to", f"`retry {sid}` so a fresh glm-investigator can")
-    return msg.replace("SendMessage the agent", f"`resume {sid} --note …` asking the lane") + "\n" + resume_hint(st, sid)
-
-
-def cmd_resume(a):
-    """`devteam.py resume <slice id> [--note TEXT]`: OpenCode's answer to BLOCKED / REJECTED. The lane
-    process has exited, so a fresh lane is launched in the slice's existing worktree (its commits are
-    kept) with the note appended to the brief. The Stop-gate counter `.slice/stop_blocks` is reset
-    and the stale `.done`/`.blocked` markers are cleared first, so `wait`/`next` only see the new run."""
-    root = find_root()
-    st = load_state(root)
-    sid = a.id
-    s = slice_state(st, sid)
-    if not is_opencode():
-        raise DevteamError(f"`resume` relaunches an OpenCode lane; on Claude Code the {sid} agent is still "
-                           f"reachable — SendMessage it the note (warm context), or `retry {sid}` (cold)")
-    if s["status"] != "inflight":
-        raise DevteamError(f"{sid} is {s['status']} — only an in-flight slice can be resumed "
-                           f"(`retry {sid}` re-queues a failed or conflicted one)")
-    if s.get("mode") == "research":
-        raise DevteamError(f"{sid} is a research slice with no worktree — `retry {sid}` relaunches it")
-    wt = state_dir(root) / "wt" / sid
-    if not (wt / ".git").exists():
-        raise DevteamError(f"{sid}: no worktree at {wt} — nothing to resume; `retry {sid}` starts a fresh attempt")
-    note = (a.note or "").strip()
-    try:
-        (wt / ".slice" / "stop_blocks").unlink()     # guard.py's Stop-gate block counter starts over
-    except OSError:
-        pass
-    clear_markers(root, sid)
-    s["rejected"] = None
-    s["dispatched"] = now()                           # older LANE DOWN signals belong to the previous run
-    s["history"].append({"t": now(), "event": "resume", "note": note[:200]})
-    save_state(root, st)
-    agent, model, label = dispatch_route(st, s, s["mode"])
-    sp = q(st["script"])
-    pid = launch_lane(root, st, sid, agent, model, f"python3 {sp} claim {sid}", note=note)
-    out(f"RESUMED {sid} → {agent} lane (pid {pid}, {label}) in {wt}"
-        + (" with your note appended to the brief" if note else "")
-        + "; stop-gate counter reset, stale .done/.blocked markers cleared",
-        f"NEXT: python3 {sp} wait")
 
 
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
     tokens for every launch sit on the critical path, and the briefing file already holds everything.
-    The glm-programmer/glm-investigator system prompts say 'your prompt is the command — run it first'.
-    On OpenCode `emit_agent` starts each lane itself and prints a LANE line instead."""
+    The glm-programmer/glm-investigator system prompts say 'your prompt is the command — run it first'."""
     sp = q(st["script"])
     root = Path(st["root"])
     for sid, s, mode in blocks:
@@ -2501,8 +1931,6 @@ def do_integrate(root, st, ids, remove=True):
     for sid in ids:
         try:
             r = integrate_one(root, st, sid, remove=remove)
-            if "SendMessage" in r and is_opencode():
-                r = opencode_message(st, sid, r)
             results.append(r)
         except DevteamError as e:
             results.append(f"{sid}: ERROR — {e}")
@@ -3135,16 +2563,6 @@ def cmd_checkpoint(a):
     else:
         cmd = cmd_value(st["commands"], "test") or "echo 'no test command configured'"
     full = " — FULL GATE (test && lint && typecheck && build)" if pol(st, "gate") != "full" else ""
-    if is_opencode():
-        # OpenCode v1's bash tool has no background mode and kills a >120 s suite, which left
-        # checkpoint_pending stuck: run it detached like a lane, and let `wait`/`next` collect it
-        pid = launch_checkpoint(root, n, wt, cmd, log)
-        st["checkpoint_pending"]["pid"] = pid
-        save_state(root, st)
-        out(f"CHECKPOINT {n} on snapshot {sha[:9]}{full}: running detached (pid {pid}), log {log}",
-            "Nothing to report afterwards: `wait` wakes you when it ends and the next `next` reads its exit code.",
-            f"NEXT: python3 {q(st['script'])} wait")
-        return
     out(f"CHECKPOINT {n} on snapshot {sha[:9]}{full}: run in the BACKGROUND (Bash run_in_background: true):",
         f"  cd {q(wt)} && ({cmd}) > {q(log)} 2>&1; echo \"EXIT=$?\" >> {q(log)}; tail -5 {q(log)}",
         "Nothing to report afterwards: the next `next` reads the exit code out of that log itself.")
@@ -3253,7 +2671,7 @@ def harvest_checkpoint(root, st):
                               "note": note, "log": str(log)})
     st["merges_since_checkpoint"] = len(st["merges"]) - pending.get("merges_at", len(st["merges"]))
     remove_worktree(root, pending.get("wt"))
-    for ext in (".done", ".pid", ".end"):           # the detached run's markers (OpenCode)
+    for ext in (".done", ".pid", ".end"):           # a detached run's leftover markers
         try:
             (lanes_dir(root) / f"checkpoint-{pending['n']}{ext}").unlink()
         except OSError:
@@ -3268,54 +2686,10 @@ def harvest_checkpoint(root, st):
     return lines
 
 
-def launch_checkpoint(root, n, wt, cmd, log) -> int:
-    """Run the checkpoint command detached (own session, stdin closed) like `launch_lane`, so no tool
-    timeout can kill it. The shell appends EXIT=<code> to the log, then writes lanes/checkpoint-<n>.done,
-    which `wait` sees through lane_marks and `next` collects through harvest_checkpoint."""
-    d = lanes_dir(root)
-    d.mkdir(parents=True, exist_ok=True)
-    done, tmp = d / f"checkpoint-{n}.done", d / f"checkpoint-{n}.done.tmp"
-    for p in (done, tmp):
-        try:
-            p.unlink()
-        except OSError:
-            pass
-    log.parent.mkdir(parents=True, exist_ok=True)
-    script = (f"({cmd}) > {q(log)} 2>&1; rc=$?; echo \"EXIT=$rc\" >> {q(log)}; "
-              f"echo \"$rc\" > {q(tmp)} && mv {q(tmp)} {q(done)}")
-    try:
-        proc = subprocess.Popen(["sh", "-c", script], cwd=str(wt), stdin=subprocess.DEVNULL,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                start_new_session=True)
-    except OSError as e:
-        raise DevteamError(f"could not start checkpoint {n}: {e}")
-    write_atomic(d / f"checkpoint-{n}.pid", str(proc.pid))
-    return proc.pid
-
-
-def checkpoint_finished(root, st):
-    """True when the pending checkpoint's log already carries its EXIT=<code> line."""
-    pending = (st or {}).get("checkpoint_pending")
-    if not isinstance(pending, dict):
-        return False
-    if checkpoint_killed(pending):
-        return True
-    log = state_dir(root) / "logs" / f"checkpoint-{pending['n']}.log"
-    try:
-        return bool(EXIT_RE.search(log.read_text(errors="replace")))
-    except OSError:
-        return False
-
-
 def checkpoint_killed(pending):
     """A detached checkpoint (it records a pid) whose process is gone: a signal kill never writes EXIT=."""
     pid = pending.get("pid")
     return isinstance(pid, int) and not _pid_alive(pid)
-
-
-def checkpoint_running(root, st):
-    """A checkpoint is pending and has not written its exit code yet (it counts as a live lane)."""
-    return isinstance((st or {}).get("checkpoint_pending"), dict) and not checkpoint_finished(root, st)
 
 
 def cmd_next(a):
@@ -3348,7 +2722,6 @@ def cmd_next(a):
     for sid, note in blocked:
         clear_markers(root, sid)     # printed once; a still-blocked agent writes it again on its next stop
         out(f"BLOCKED {sid}: {note or '(no note in the report: read the last message of that agent)'}",
-            resume_hint(st, sid) if is_opencode() else
             f"  → SendMessage the {sid} agent the answer (plan/contracts) and it resumes in its worktree; "
             f"if only the user can answer, ask now and keep everything else running.")
     if blocked:
@@ -3961,107 +3334,6 @@ OC_AGENT_NAMES = ("glm-programmer", "glm-programmer-lite", "glm-code-reviewer", 
 OC_GUARD_PATH_RE = re.compile(r'path\.join\(\s*"([^"]+)"\s*,\s*"scripts"\s*,\s*"guard\.py"\s*\)')
 
 
-def oc_plugin_problems(home, major, skill_dir):
-    """The installed guard plugin: present, guard.py path resolved, matches what install() would
-    write for the detected major (else the wrong dialect is installed), loads."""
-    pdir = Path(home) / ".config" / "opencode" / "plugins"
-    found = [p for p in sorted(pdir.glob("*.js")) if "guard.py" in p.read_text(errors="replace")] \
-        if pdir.is_dir() else []
-    if not found:
-        return [f"guard plugin not installed in {pdir} (OpenCode tool calls would run unchecked)"]
-    p = found[0]
-    text = p.read_text(errors="replace")
-    problems = []
-    m = OC_GUARD_PATH_RE.search(text)
-    if "{{SKILL_DIR}}" in text or not m or not Path(json.loads(f'"{m.group(1)}"'), "scripts", "guard.py").exists():
-        problems.append(f"plugin {p.name}: its guard.py path does not resolve (every tool call would fail open)")
-    if major:
-        src = Path(skill_dir) / "plugins" / f"{p.stem}.v{major}.js"
-        if not src.exists():
-            src = Path(skill_dir) / "opencode" / "plugins" / f"{p.stem}.v{major}.js"
-        skill_dst = str(Path(home) / ".config" / "opencode" / "skills" / _oc_harness().skill_name(str(skill_dir)))
-        if src.exists() and text != src.read_text().replace("{{SKILL_DIR}}", json.dumps(skill_dst)[1:-1]):
-            problems.append(f"plugin {p.name} does not match the OpenCode v{major} template — "
-                            "re-run install-opencode.sh")
-    node = shutil.which("node")
-    if node:
-        import tempfile
-        with tempfile.TemporaryDirectory() as td:
-            probe = Path(td) / "plugin.mjs"
-            probe.write_text(text)
-            r = sh([node, "--check", str(probe)], check=False)
-        if r.returncode != 0:
-            err = [ln for ln in (r.stderr or r.stdout).splitlines() if ln.strip()]
-            why = next((ln for ln in err if "Error" in ln), err[0] if err else "node --check failed")
-            problems.append(f"plugin {p.name} fails to load: {why.strip()[:160]}")
-    return problems
-
-
-def doctor_opencode(a, root):
-    """`doctor --harness opencode`: OpenCode binary, installed skill and major, agents, guard plugin,
-    provider config and git excludes. `--fix` re-installs through oc_harness.install for the detected
-    major; the provider config is never written (it holds the user's own settings)."""
-    oc = _oc_harness()
-    home = str(Path.home())
-    skill_dir = Path(__file__).resolve().parent.parent
-    problems, notes, reinstall = [], [], False
-    gv = git(["--version"]).split()[-1]
-    notes.append(f"git {gv}, python {sys.version.split()[0]}, root {root}, harness opencode")
-    if git(["status", "--porcelain", "--untracked-files=no"], root):
-        problems.append("uncommitted tracked changes in the integration checkout (commit/stash before a run)")
-    major = oc.detect()
-    if not major:
-        problems.append("opencode not found on PATH — install OpenCode 1.18.x or v2 first (not auto-fixed)")
-    else:
-        notes.append(f"opencode v{major}, provider {oc.PROVIDER}")
-        for ln in oc.check(str(skill_dir)):
-            if ln.startswith(("FAIL", "MISSING")):
-                problems.append(ln)
-                reinstall = True
-            else:
-                notes.append(ln)
-    adir = Path(home) / ".config" / "opencode" / "agents"
-    for name in OC_AGENT_NAMES:
-        if not (adir / f"{name}.md").exists():
-            problems.append(f"agent {name} not installed in {adir}")
-            reinstall = True
-    plugin = oc_plugin_problems(home, major, skill_dir)
-    problems += plugin
-    reinstall = reinstall or bool(plugin)
-    cfgs = [Path(home) / ".config" / "opencode" / n for n in ("opencode.json", "opencode.jsonc")] \
-        + [root / "opencode.json", root / "opencode.jsonc"]
-    if not any(p.exists() and oc.PROVIDER in p.read_text(errors="replace") for p in cfgs):
-        snippet = f"python3 {q(Path(__file__).resolve().parent / 'oc_harness.py')} snippet {major or 1}"
-        problems.append(f"no opencode.json names the {oc.PROVIDER} provider — merge the output of `{snippet}` "
-                        "into ~/.config/opencode/opencode.json (not auto-fixed)")
-    excl = common_dir(root) / "info" / "exclude"
-    have_excl = excl.read_text() if excl.exists() else ""
-    fix_excl = any(ln not in have_excl for ln in EXCLUDE_LINES)
-    if fix_excl:
-        problems.append("git info/exclude lacks glm-dev-team entries (.claude/dev-team/, .slice/, dep dirs)")
-    notes.append(f"governor tier {resolve_tier()} (start/ceiling {TIERS[resolve_tier()]}); lane signals from "
-                 f"{state_dir(root) / 'lanes'}")
-    out(*[f"- {n}" for n in notes])
-    if not problems:
-        out("DOCTOR: all good")
-        return
-    out("DOCTOR found:", *[f"  ✗ {p}" for p in problems])
-    if not a.fix:
-        out("run `doctor --harness opencode --fix` to install the glm-dev-team agents, guard plugin and skill "
-            "for the detected OpenCode major and update git excludes")
-        return
-    if reinstall and major:
-        for path in oc.install(str(skill_dir), major, home):
-            out(f"installed {path}")
-    elif reinstall:
-        out("opencode not found — install it, then run `doctor --harness opencode --fix` again")
-    if fix_excl:
-        ensure_excludes(root)
-        out("updated git info/exclude")
-    if reinstall and major:
-        out("RESTART OpenCode so it loads the new agents and plugin.")
-
-
 def cap_value_ok(raw, want, provider):
     """Claude: at least `want` (more width is harmless). Any other provider: at most `want` (never above 8)."""
     if not str(raw).isdigit() or int(raw) < 1:
@@ -4071,11 +3343,9 @@ def cap_value_ok(raw, want, provider):
 
 def cmd_doctor(a):
     root = toplevel()
-    harness = getattr(a, "harness", None) or ("zcode" if is_zcode() else ("opencode" if is_opencode() else "claude"))
+    harness = getattr(a, "harness", None) or ("zcode" if is_zcode() else "claude")
     if harness == "zcode":
         return doctor_zcode(a, root)
-    if harness == "opencode":
-        return doctor_opencode(a, root)
     problems, notes, fixes = [], [], {}
     gv = git(["--version"]).split()[-1]
     notes.append(f"git {gv}, python {sys.version.split()[0]}, root {root}")
@@ -4637,7 +3907,6 @@ def main(argv=None):
     pr.add_argument("--no-review", action="store_true"); pr.add_argument("--shards", type=int, default=0); pr.set_defaults(fn=cmd_next)
     pr = sp.add_parser("fail"); pr.add_argument("id"); pr.add_argument("--why"); pr.set_defaults(fn=cmd_fail)
     pr = sp.add_parser("retry"); pr.add_argument("id"); pr.add_argument("--note"); pr.add_argument("--files", nargs="*"); pr.set_defaults(fn=cmd_retry)
-    pr = sp.add_parser("resume"); pr.add_argument("id"); pr.add_argument("--note", default=""); pr.set_defaults(fn=cmd_resume)
     pr = sp.add_parser("add-fix"); pr.add_argument("--id"); pr.add_argument("--title", required=True); pr.add_argument("--goal")
     pr.add_argument("--files", nargs="+", required=True); pr.add_argument("--criteria", nargs="+", required=True)
     pr.add_argument("--deps", nargs="*"); pr.add_argument("--context", nargs="*"); pr.add_argument("--risk", default="low", choices=["low", "high"])
@@ -4652,7 +3921,7 @@ def main(argv=None):
     pr = sp.add_parser("stats"); pr.add_argument("--all", action="store_true"); pr.set_defaults(fn=cmd_stats)
     pr = sp.add_parser("finish"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_finish)
     pr = sp.add_parser("reset"); pr.add_argument("--yes", action="store_true"); pr.set_defaults(fn=cmd_reset)
-    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "opencode", "zcode"])
+    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "zcode"])
     pr.add_argument("--flash", default=ZCODE_FLASH_DEFAULT, metavar="ID",
                     help="flash model id for the zcode doctor (default glm-5.3-flash)")
     pr.add_argument("--main", default=ZCODE_MAIN_DEFAULT, metavar="ID",
@@ -4670,8 +3939,6 @@ def main(argv=None):
     pr.add_argument("--request"); pr.add_argument("--test"); pr.add_argument("--spot", action="store_true"); pr.set_defaults(fn=cmd_review_pr)
     pr = sp.add_parser("brief-debug"); pr.add_argument("symptom"); pr.add_argument("-n", type=int, default=4)
     pr.add_argument("--context"); pr.set_defaults(fn=cmd_brief_debug)
-    pr = sp.add_parser("lane-run"); pr.add_argument("lane_id"); pr.set_defaults(fn=cmd_lane_run)
-    pr = sp.add_parser("wait"); pr.add_argument("--timeout", type=int, default=100); pr.set_defaults(fn=cmd_wait)
 
     a = p.parse_args(argv)
     try:

@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import shutil
@@ -9,7 +8,6 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import oc_harness
 
 SKILL_DIR = os.path.join(
     os.path.dirname(__file__), "..", "..", "glm-brainstorming"
@@ -59,61 +57,38 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
         self.assertIn('!`sh "${CLAUDE_SKILL_DIR}/scripts/context.sh"`', self.text)
 
 
-class TestBrainstormOcAgentBodies(unittest.TestCase):
+def body_of(path):
+    text = read(path)
+    m = re.match(r"^---\n.*?\n---\n(.*)$", text, re.S)
+    assert m, "no frontmatter in " + str(path)
+    return m.group(1)
+
+
+class TestBrainstormLaneAgentBodies(unittest.TestCase):
     def test_explorer_body_has_no_placeholders(self):
-        text = read(EXPLORER_MD)
-        _, body = oc_harness.parse_frontmatter(text)
+        body = body_of(EXPLORER_MD)
         for placeholder in PLACEHOLDERS:
             self.assertNotIn(placeholder, body)
 
     def test_explorer_body_keeps_output_labels(self):
-        text = read(EXPLORER_MD)
-        _, body = oc_harness.parse_frontmatter(text)
+        body = body_of(EXPLORER_MD)
         self.assertIn("FINDINGS:", body)
         self.assertIn("PATTERNS:", body)
         self.assertIn("RISKS:", body)
         self.assertIn("UNKNOWN:", body)
 
     def test_researcher_body_has_no_placeholders(self):
-        text = read(RESEARCHER_MD)
-        _, body = oc_harness.parse_frontmatter(text)
+        body = body_of(RESEARCHER_MD)
         for placeholder in PLACEHOLDERS:
             self.assertNotIn(placeholder, body)
 
     def test_researcher_body_keeps_output_labels(self):
-        text = read(RESEARCHER_MD)
-        _, body = oc_harness.parse_frontmatter(text)
+        body = body_of(RESEARCHER_MD)
         self.assertIn("ANSWER:", body)
         self.assertIn("CLAIMS:", body)
         self.assertIn("CONFLICTS:", body)
         self.assertIn("VERSION_NOTES:", body)
         self.assertIn("UNVERIFIED:", body)
-
-
-class TestBrainstormOcRenderedDescriptions(unittest.TestCase):
-    def test_explorer_rendered_description_starts_with_letter(self):
-        rendered = oc_harness.render_agent(read(EXPLORER_MD), 2)
-        match = re.search(r'description: (".*")', rendered)
-        self.assertIsNotNone(match)
-        value = json.loads(match.group(1))
-        self.assertRegex(value, r"^[A-Za-z]")
-        self.assertFalse(value.startswith('\\"'))
-
-    def test_researcher_rendered_description_starts_with_letter(self):
-        rendered = oc_harness.render_agent(read(RESEARCHER_MD), 2)
-        match = re.search(r'description: (".*")', rendered)
-        self.assertIsNotNone(match)
-        value = json.loads(match.group(1))
-        self.assertRegex(value, r"^[A-Za-z]")
-        self.assertFalse(value.startswith('\\"'))
-
-    def test_brainstorm_command_rendered_description_starts_with_letter(self):
-        rendered = oc_harness.render_command(read(BRAINSTORM_MD), 2, "/tmp/skill")
-        match = re.search(r'description: (".*")', rendered)
-        self.assertIsNotNone(match)
-        value = json.loads(match.group(1))
-        self.assertRegex(value, r"^[A-Za-z]")
-        self.assertFalse(value.startswith('\\"'))
 
 
 class TestBrainstormCommandFallback(unittest.TestCase):
@@ -128,25 +103,10 @@ class TestBrainstormCommandFallback(unittest.TestCase):
 
 CONTEXT_SH = os.path.join(SKILL_DIR, "scripts", "context.sh")
 
-FAKE_CLI = (
-    "import sys\n"
-    "with open(__file__ + '.args', 'w') as f:\n"
-    "    f.write(' '.join(sys.argv[1:]))\n"
-    "sys.stdout.write(%r)\n"
-    "sys.exit(%d)\n"
-)
-
-
-def make_skill(root, cli_output=None, cli_exit=0, oc_major=None):
+def make_skill(root):
     scripts = os.path.join(root, "scripts")
     os.makedirs(scripts)
     shutil.copy(CONTEXT_SH, os.path.join(scripts, "context.sh"))
-    if cli_output is not None:
-        with open(os.path.join(scripts, "oc_harness.py"), "w") as f:
-            f.write(FAKE_CLI % (cli_output, cli_exit))
-    if oc_major is not None:
-        with open(os.path.join(root, ".oc-major"), "w") as f:
-            f.write(oc_major)
     return root
 
 
@@ -181,74 +141,23 @@ class ContextCase(unittest.TestCase):
 
 
 class TestBrainstormContextHarness(ContextCase):
-    def test_cli_result_sets_harness_and_major(self):
-        root = make_skill(self.plain_root(), cli_output="opencode 2\n")
+    def test_zcode_install_location_is_detected(self):
+        root = make_skill(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming"))
         proc = run_context(root, self.home)
         self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "),
-            "harness: opencode oc_major=2",
+            self.line_starting(proc.stdout, "harness: "), "harness: zcode"
         )
 
-    def test_cli_receives_harness_subcommand_and_script(self):
-        root = make_skill(self.plain_root(), cli_output="opencode 2\n")
-        run_context(root, self.home)
-        with open(os.path.join(root, "scripts", "oc_harness.py.args")) as f:
-            args = f.read()
-        self.assertTrue(args.startswith("harness --script "), args)
-        self.assertTrue(args.endswith("/scripts/context.sh"), args)
-
-    def test_opencode_terminal_env_without_cli(self):
+    def test_copilot_cli_env_marks_the_harness(self):
         root = make_skill(self.plain_root())
-        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
-        self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "),
-            "harness: opencode oc_major=unknown",
-        )
-
-    def test_oc_major_file_without_cli(self):
-        root = make_skill(self.plain_root(), oc_major="1\n")
-        proc = run_context(root, self.home)
-        self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "),
-            "harness: opencode oc_major=1",
-        )
-
-    def test_install_location_without_cli(self):
-        root = make_skill(
-            os.path.join(self.home, ".config", "opencode", "skills", "glm-brainstorming")
-        )
-        proc = run_context(root, self.home)
-        self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "),
-            "harness: opencode oc_major=unknown",
-        )
-
-    def test_failing_cli_falls_back_to_sh_mirror(self):
-        root = make_skill(self.plain_root(), cli_output="", cli_exit=1)
-        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
-        self.assertEqual(proc.returncode, 0)
-        self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "),
-            "harness: opencode oc_major=unknown",
-        )
-
-    def test_cli_unknown_without_signals_stays_unknown(self):
-        root = make_skill(self.plain_root(), cli_output="unknown 0\n")
-        proc = run_context(root, self.home)
-        self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "), "harness: unknown"
-        )
-
-    def test_cli_claude_answer_keeps_sh_chain_result(self):
-        root = make_skill(self.plain_root(), cli_output="claude 0\n")
         proc = run_context(root, self.home, {"GITHUB_COPILOT_CLI": "1"})
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(
             self.line_starting(proc.stdout, "harness: "), "harness: copilot-cli"
         )
 
-    def test_cli_claude_answer_without_signals_stays_unknown(self):
-        root = make_skill(self.plain_root(), cli_output="claude 0\n")
+    def test_no_signal_stays_unknown(self):
+        root = make_skill(self.plain_root())
         proc = run_context(root, self.home)
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(
@@ -262,8 +171,8 @@ class TestBrainstormContextHarness(ContextCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stderr, "")
 
-    def test_claude_code_env_wins_over_cli(self):
-        root = make_skill(self.plain_root(), cli_output="opencode 2\n")
+    def test_claude_code_env_marks_the_harness(self):
+        root = make_skill(self.plain_root())
         proc = run_context(root, self.home, {"CLAUDECODE": "1"})
         self.assertEqual(
             self.line_starting(proc.stdout, "harness: "), "harness: claude-code"
@@ -271,40 +180,28 @@ class TestBrainstormContextHarness(ContextCase):
 
 
 class TestBrainstormContextCaps(ContextCase):
-    def test_opencode_caps_default_width_is_8(self):
-        root = make_skill(self.plain_root())
-        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
+    def test_zcode_caps_default_width_is_8(self):
+        root = make_skill(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming"))
+        proc = run_context(root, self.home)
         caps = self.line_starting(proc.stdout, "caps: ")
         self.assertIn("lanes=8", caps)
-        self.assertIn("--width", caps)
         self.assertNotIn("subagents=", caps)
 
-    def test_opencode_caps_honours_oc_max_lanes(self):
-        root = make_skill(self.plain_root())
-        proc = run_context(
-            root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": "4"}
-        )
+    def test_zcode_caps_honour_oc_max_lanes(self):
+        root = make_skill(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming"))
+        proc = run_context(root, self.home, {"OC_MAX_LANES": "4"})
         self.assertIn("lanes=4", self.line_starting(proc.stdout, "caps: "))
 
-    def test_opencode_caps_clamps_oc_max_lanes_to_8(self):
-        root = make_skill(self.plain_root(), oc_major="2\n")
-        proc = run_context(
-            root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": "64"}
-        )
+    def test_zcode_caps_clamp_to_8(self):
+        root = make_skill(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming"))
+        proc = run_context(root, self.home, {"OC_MAX_LANES": "64"})
         self.assertIn("lanes=8", self.line_starting(proc.stdout, "caps: "))
 
-    def test_opencode_caps_oc_max_lanes_edge_values(self):
-        root = make_skill(self.plain_root())
+    def test_zcode_caps_edge_values(self):
+        root = make_skill(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming"))
         for val, want in (("0", "lanes=1"), ("abc", "lanes=8"), ("", "lanes=8"), ("8", "lanes=8")):
-            proc = run_context(
-                root, self.home, {"OPENCODE_TERMINAL": "1", "OC_MAX_LANES": val}
-            )
+            proc = run_context(root, self.home, {"OC_MAX_LANES": val})
             self.assertIn(want, self.line_starting(proc.stdout, "caps: "), val)
-
-    def test_opencode_caps_prints_oc_major(self):
-        root = make_skill(self.plain_root(), oc_major="2\n")
-        proc = run_context(root, self.home)
-        self.assertIn("oc_major=2", self.line_starting(proc.stdout, "caps: "))
 
     def test_claude_caps_default_8(self):
         root = make_skill(self.plain_root())
@@ -319,9 +216,9 @@ class TestBrainstormContextCaps(ContextCase):
         self.assertIn("subagents=8", caps)
         self.assertIn("workflow=8", caps)
 
-    def test_opencode_output_is_bounded_and_exits_zero(self):
-        root = make_skill(self.plain_root(), oc_major="2\n")
-        proc = run_context(root, self.home, {"OPENCODE_TERMINAL": "1"})
+    def test_output_is_bounded_and_exits_zero(self):
+        root = make_skill(self.plain_root())
+        proc = run_context(root, self.home)
         self.assertEqual(proc.returncode, 0)
         self.assertLessEqual(len(proc.stdout.splitlines()), 55)
 

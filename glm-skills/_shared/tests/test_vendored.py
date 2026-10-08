@@ -11,11 +11,9 @@ class TestVendored(unittest.TestCase):
         shared_dir = os.path.join(repo_root, 'glm-skills/_shared')
 
         zai_client_src = os.path.join(shared_dir, 'zai_client.py')
-        oc_harness_src = os.path.join(shared_dir, 'oc_harness.py')
 
         skills = {
             'zai_client.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit'],
-            'oc_harness.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit', 'glm-brainstorming', 'glm-doc-generator', 'glm-dev-team']
         }
 
         sync_script = os.path.join(shared_dir, 'sync.sh')
@@ -23,11 +21,7 @@ class TestVendored(unittest.TestCase):
         self.assertEqual(result.returncode, 0, f"sync.sh failed: {result.stderr}")
 
         for filename, skill_list in skills.items():
-            if filename == 'zai_client.py':
-                src = zai_client_src
-            else:
-                src = oc_harness_src
-
+            src = zai_client_src
             with open(src, 'rb') as f:
                 src_bytes = f.read()
             src_hash = hashlib.sha256(src_bytes).hexdigest()
@@ -41,7 +35,7 @@ class TestVendored(unittest.TestCase):
                 self.assertEqual(src_hash, dest_hash, f"{filename} in {skill} differs from canonical")
 
         lines = result.stdout.strip().split('\n')
-        expected_count = len(skills['zai_client.py']) + len(skills['oc_harness.py'])
+        expected_count = len(skills['zai_client.py'])
         self.assertEqual(len([l for l in lines if l.startswith('synced ')]), expected_count)
 
 

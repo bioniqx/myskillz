@@ -13,8 +13,7 @@ from unittest import mock
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 PLAN_TOOL = os.path.join(ROOT, "glm-writing-plans", "scripts", "plan_tool.py")
-CAP_ENV = ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "OPENCODE_MAX_CONCURRENT_SUBAGENTS",
-           "ZCODE_MAX_CONCURRENT_SUBAGENTS")
+CAP_ENV = ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "ZCODE_MAX_CONCURRENT_SUBAGENTS")
 
 
 def load_plan_tool():
@@ -87,21 +86,7 @@ class BriefConventionsTest(TmpDirCase):
         self.assertNotIn("brief partial", out.getvalue())
         return out.getvalue()
 
-    def test_oc_harness_skips_inlining(self):
-        text = self.run_brief("opencode")
-        self.assertNotIn("MARKER-RULE-42", text)
-        self.assertIn("conventions AGENTS.md (2 lines) - already in the agent context", text)
-
-    def test_oc_harness_inlines_files_it_does_not_load(self):
-        # OpenCode loads only the first root match of AGENTS.md / CLAUDE.md, never .claude/CLAUDE.md
-        write(os.path.join(self.tmp, "CLAUDE.md"), "MARKER-CLAUDE-7 root rule\n")
-        write(os.path.join(self.tmp, ".claude", "CLAUDE.md"), "MARKER-NESTED-9 nested rule\n")
-        text = self.run_brief("opencode")
-        self.assertNotIn("MARKER-RULE-42", text)
-        self.assertIn("MARKER-CLAUDE-7", text)
-        self.assertIn("MARKER-NESTED-9", text)
-
-    def test_other_harness_still_inlines(self):
+    def test_brief_inlines_conventions(self):
         text = self.run_brief("unknown")
         self.assertIn("MARKER-RULE-42", text)
 

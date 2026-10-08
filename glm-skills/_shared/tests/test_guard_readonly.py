@@ -43,10 +43,6 @@ class GuardCase(unittest.TestCase):
         return decision(run_guard("bash-ro", {"cwd": self.cwd, "agent_type": "reviewer",
                                               "tool_input": {"command": cmd}}))
 
-    def oc_shell(self, cmd, role="reviewer"):
-        return decision(run_guard("oc", {"tool": "shell", "args": {"command": cmd},
-                                         "cwd": self.cwd, "role": role}))
-
     def preapproved(self, cmd, readonly=False):
         return guard.bash_allow_reason(cmd, None, footprint=[], pinned=[], readonly=readonly)
 
@@ -96,9 +92,9 @@ class ReadOnlyWriteExecFormsTest(GuardCase):
         bad = [c for c in WRITE_EXEC_FORMS if self.preapproved(c) is not None]
         self.assertEqual(bad, [])
 
-    def test_oc_bridge_denies_them(self):
+    def test_read_only_mode_denies_write_forms(self):
         cmds = ["git diff --output=x.patch", "uniq in.txt out.txt", "rg --pre=cat foo"]
-        bad = [c for c in cmds if self.oc_shell(c) != "deny"]
+        bad = [c for c in cmds if self.bash_ro(c) != "deny"]
         self.assertEqual(bad, [])
 
     def test_read_only_forms_stay_allowed(self):
@@ -278,7 +274,7 @@ class DevteamStatusProbeTest(GuardCase):
         "python3 glm-dev-team/scripts/devteam.py claim S1",
         "python3 devteam.py integrate S1",
         "python3 notdevteam.py status",
-        "python3 glm-dev-team/scripts/guard.py oc",
+        "python3 glm-dev-team/scripts/guard.py bash-ro",
     ]
 
     def test_status_and_probe_allowed_for_read_only_roles(self):

@@ -33,7 +33,6 @@ SKILL = SCRIPTS.parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 import zai_client
-import oc_harness
 WORKER_AGENT = "glm-debug-worker"
 MAXJ = 64  # local CPU jobs (run/probe/experiment)
 MAX_API = 8  # concurrent model/API calls (scan workers, subagent lanes)
@@ -898,21 +897,6 @@ def cmd_scan(a):
             briefs.append((t["id"], str(p.resolve())))
         print("S=%s" % SCRIPTS)
         print("no API key found -- agent lane." if not key else "prompt files written.")
-        if oc_harness.harness(str(Path(__file__).resolve())) == "opencode":
-            mj = oc_harness.major(str(SKILL))
-            lanes_file = d / "lanes.json"
-            lanes_file.write_text(json.dumps(
-                [{"id": tid, "agent": WORKER_AGENT, "brief": p, "model": model, "effort": effort,
-                  "dir": root} for tid, p in briefs], indent=2) + "\n")
-            print("lanes: %s (%d x %s)" % (lanes_file, len(briefs), WORKER_AGENT))
-            if mj >= 2:
-                print("Or dispatch them as background subagents, at most %d per message (waves):" % agent_lanes())
-                for tid, p in briefs:
-                    print("  " + oc_harness.dispatch_line(WORKER_AGENT, p, "scan " + tid, mj,
-                                                          background=True))
-            print("Each worker answers in the VERDICT shape written at the top of its file.")
-            print("NEXT: python3 %s/oc_harness.py run %s" % (SCRIPTS, shlex.quote(str(lanes_file))))
-            return 0
         print("Dispatch these %d prompts as %s subagents, at most %d per message, in waves "
               "(they are independent):" % (len(briefs), WORKER_AGENT, agent_lanes()))
         for tid, p in briefs:
@@ -957,8 +941,6 @@ def cmd_scan(a):
 
 def detect_harness():
     h = []
-    if os.environ.get("OPENCODE") or Path(".opencode").exists() or (Path.home() / ".config/opencode").exists():
-        h.append("opencode")
     if (Path.home() / ".zcode").exists() or os.environ.get("ZCODE"):
         h.append("zcode")
     if os.environ.get("CLAUDE_SKILL_DIR") or (Path.home() / ".claude").exists():
@@ -1008,13 +990,6 @@ def cmd_doctor(a):
 
 
 SETUP = {
-    "opencode": (
-        "# export ZAI_API_KEY=<GLM Coding Plan key>\n"
-        "# Skill goes in ~/.config/opencode/skills/glm-systematic-debugging/ (or .opencode/skills/ per project).\n"
-        "# Agent lane: without a key, `debug_tool.py scan` writes <root>/.debug/scan/lanes.json"
-        " for the glm-debug-worker agent.\n"
-        "# Run every lane in parallel with: python3 <scripts>/oc_harness.py run"
-        " <root>/.debug/scan/lanes.json"),
     "zcode": """# ZCode
 # Settings -> Model Settings -> Z.ai account or API key; thinking effort is per-model in the UI.
 # Skill:  ~/.zcode/skills/glm-systematic-debugging/SKILL.md
@@ -1038,11 +1013,6 @@ Run `sh install-zcode.sh` from the glm-skills checkout instead of copying the fi
 
 
 def cmd_setup(a):
-    if a.harness == "opencode":
-        mj = getattr(a, "major", None) or oc_harness.major(str(SKILL))
-        print(oc_harness.config_snippet(mj, []))
-        print(SETUP["opencode"])
-        return 0
     print(SETUP[a.harness])
     return 0
 
@@ -1112,8 +1082,6 @@ def main(argv=None):
 
     q = sp.add_parser("setup", help="print harness config")
     q.add_argument("--harness", choices=list(SETUP), required=True)
-    q.add_argument("--major", type=int, choices=[1, 2],
-                   help="OpenCode major version (default: detected)")
     q.set_defaults(fn=cmd_setup)
 
     a = p.parse_args(argv)

@@ -15,7 +15,6 @@ SUFFIXES = {".py", ".js", ".sh", ".md", ".json"}
 SKIP_DIRS = {"tests", "__pycache__", "docs", ".git"}
 
 MARKERS = ("finish_gate_problems", "validate_slice_types", "salvage_worktree")
-SHELL_KEY = re.compile(r"""["']shell["']|\bshell\s*:""")
 
 
 def corpus(base):
@@ -45,9 +44,6 @@ class ParityMarkerTests(unittest.TestCase):
         for marker in MARKERS:
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
-
-    def test_port_names_the_shell_permission_key(self):
-        self.assertRegex(corpus(SKILL), SHELL_KEY)
 
 
 if __name__ == "__main__":

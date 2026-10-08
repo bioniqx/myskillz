@@ -19,10 +19,6 @@
                     test/lint commands are `allow`ed so a reviewer can gather evidence without a prompt.
   guard.py perm     PermissionRequest (settings.json only, optional): same allow-list as `bash`, in the
                     PermissionRequest output schema. Not needed when the PreToolUse hooks are installed.
-  guard.py oc       OpenCode plugin bridge: {"tool", "args", "cwd", "role"} on stdin. edit/write/multiedit/
-                    patch map to tool_input.file_path, bash to tool_input.command. Role glm-programmer ->
-                    edit/bash, any other role -> edit-ro/bash-ro with agent_type = role, no role -> silent
-                    allow.
 
 Fail-open by design: any internal error allows the action (the integrator re-checks at merge time).
 Deny/allow = JSON on stdout (exit 0). Stop-block = exit 2 with the reason on stderr.
@@ -50,7 +46,7 @@ STATE_DIRNAME = ".claude/dev-team"
 
 def deny_json(reason):
     """The hookSpecificOutput JSON for a deny, without exiting — `deny()` prints-and-exits with it;
-    `guard_oc` also needs it as a string to compare across candidate paths before choosing one."""
+    The read-only checks also need it as a string to compare across candidate paths before choosing one."""
     return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                               "permissionDecision": "deny",
                                               "permissionDecisionReason": reason}})
@@ -1063,6 +1059,7 @@ def notes_of(last):
     return (m.group(1).strip() if m else last[-400:]).strip()
 
 
+
 def guard_stop(inp):
     cwd = inp.get("cwd") or os.getcwd()
     wt = find_slice_root(cwd)
@@ -1165,7 +1162,6 @@ def guard_stop(inp):
         block(blocks_file, blocks, problems)
     write_marker(wt, sd, sid, "done", notes_of(last))
     allow()
-
 
 def block(blocks_file, blocks, problems):
     try:
@@ -1444,15 +1440,6 @@ def oc_capture(check, inp):
     return buf.getvalue()
 
 
-OC_LANE_DENY_TOOLS = {
-    "execute": "OpenCode Code Mode (`execute`) is disabled in glm-dev-team lanes so every tool call "
-               "can be checked on its own. Call the tools directly.",
-    "batch": "`batch` is disabled in glm-dev-team lanes so every tool call can be checked on its own. "
-             "Call the tools one at a time.",
-    "question": "`question` is disabled in glm-dev-team lanes: a headless lane has nobody to answer it, so the "
-                "run would block. Decide from the brief, or end with `## Status: Blocked` and the question.",
-}
-
 
 def oc_args(raw):
     """The tool args as a dict, or None when they cannot be read. v2 may hand them over as a JSON
@@ -1484,74 +1471,6 @@ def oc_pinned_hint(cwd, prog):
     if not forms:
         return f" No commands are pinned for this lane ({src} is empty)."
     return f" Pinned forms from {src}: " + ", ".join(f"`{f}`" for f in forms) + "."
-
-
-def guard_oc(inp):
-    """OpenCode plugin bridge: {"tool", "args", "cwd", "role"} -> the existing check for that role.
-
-    OC has no interactive human to fall through to, so anything a Claude-side check leaves silent
-    (its "defer to the normal ask-flow" signal) is made an explicit deny here instead — except the
-    one silence that check already means as a real allow (a footprint-free edit inside the agent's
-    own claimed worktree)."""
-    role = (inp.get("role") or "").strip()
-    if not role:
-        allow()
-    tool = (inp.get("tool") or "").lower()
-    args = oc_args(inp.get("args"))
-    if args is None:
-        deny(f"glm-dev-team: the `{tool}` arguments could not be parsed as a JSON object, so the call cannot "
-             "be checked. Retry it with well-formed arguments.")
-    prog = role in ("glm-programmer", "glm-programmer-lite")
-    cwd = inp.get("cwd") or os.getcwd()
-    base = {"cwd": cwd, "agent_type": role}
-    if tool in OC_LANE_DENY_TOOLS:
-        deny("glm-dev-team: " + OC_LANE_DENY_TOOLS[tool])
-    if tool in ("bash", "shell"):
-        workdir = args.get("workdir")
-        command = args.get("command")
-        if not isinstance(command, str) or (workdir is not None and not isinstance(workdir, str)):
-            deny(f"glm-dev-team: `{tool}` needs a string `command` (and a string `workdir` when one is given); "
-                 "these arguments cannot be checked.")
-        if workdir:
-            wd = workdir if os.path.isabs(workdir) else os.path.abspath(os.path.join(cwd, workdir))
-            if prog and find_slice_root(wd) != find_slice_root(cwd):
-                deny(f"`workdir` {workdir} is outside your slice worktree; run commands from the worktree.")
-            base["cwd"] = wd
-        check = guard_bash if prog else guard_bash_ro
-        out = oc_capture(check, dict(base, tool_input={"command": command}))
-        if not out.strip():
-            deny("glm-dev-team: OpenCode has no interactive fallback, so a bash command that isn't "
-                 "explicitly pre-approved is denied instead of silently allowed."
-                 + oc_pinned_hint(base["cwd"], prog))
-        sys.stdout.write(out)
-        sys.exit(0)
-    if tool in ("edit", "write", "multiedit"):
-        p0 = args.get("filePath") or args.get("path") or ""  # v1 filePath, v2 path
-        if not isinstance(p0, str) or not p0.strip():
-            deny(f"`{tool}` names no file (no `filePath` / `path`), so it cannot be checked. "
-                 "Retry it naming the file it writes.")
-        paths = [p0]
-    elif tool in ("patch", "apply_patch"):
-        paths = oc_patch_paths(args.get("patchText"))
-        if not paths:
-            deny(f"`{tool}` names no file (no `*** Add/Update/Delete File:` header), so it cannot be checked "
-                 "against your footprint. Rewrite it with a header naming each file it touches.")
-    else:
-        allow()
-    check = guard_edit if prog else guard_edit_ro
-    out = ""
-    for p in paths:
-        ap = p if os.path.isabs(p) else os.path.abspath(os.path.join(cwd, p))
-        if prog and find_slice_root(os.path.dirname(ap)) is None:
-            out = deny_json(f"`{p}` is outside any slice worktree. OpenCode has no interactive "
-                            "fallback for an unclaimed path.")
-            break
-        out = oc_capture(check, dict(base, tool_input={"file_path": p}))
-        if '"permissionDecision": "deny"' in out:
-            break
-    if out:
-        sys.stdout.write(out)
-    allow()
 
 
 ZCODE_READ_ONLY_ROLES = (
@@ -1609,7 +1528,7 @@ def main():
         allow()
     try:
         {"edit": guard_edit, "bash": guard_bash, "stop": guard_stop, "perm": guard_perm,
-         "edit-ro": guard_edit_ro, "bash-ro": guard_bash_ro, "oc": guard_oc,
+         "edit-ro": guard_edit_ro, "bash-ro": guard_bash_ro,
          "zcode": guard_zcode}.get(mode, lambda i: allow())(inp)
     except SystemExit:
         raise

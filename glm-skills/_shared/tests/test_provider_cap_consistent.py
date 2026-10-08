@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.dirname(HERE))
 import zai_client  # noqa: E402
 
 PY_CONSTANTS = (
-    ("_shared/oc_harness.py", "MAX_PARALLEL"),
     ("glm-requirements-code-audit/scripts/audit.py", "MAX_PARALLEL"),
     ("glm-writing-plans/scripts/plan_tool.py", "MAX_WORKERS"),
     ("glm-systematic-debugging/scripts/debug_tool.py", "MAX_API"),

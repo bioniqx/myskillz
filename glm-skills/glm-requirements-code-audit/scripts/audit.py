@@ -12,7 +12,7 @@ Lanes
             one request per requirement. True 8-way concurrency in every
             harness, because no harness is asked to dispatch anything.
   agent  -- automatic fallback with no key: writes batch files for subagents
-            (ZCode runs them in parallel; OpenCode serialises them).
+            (ZCode runs them in parallel).
   solo   -- no key, no Agent tool: the lead does the batches by hand.
 """
 
@@ -681,8 +681,8 @@ def derive_keywords(text, extra="", limit=8):
 class Retriever(object):
     """Deterministic, multi-strategy evidence retrieval.
 
-    Why this exists: GLM-5.3 emits very few parallel tool calls per turn and the
-    harnesses serialise subagents, so an agentic search loop is the slow, weak
+    Why this exists: GLM-5.3 emits very few parallel tool calls per turn and every
+    dispatch is a model turn, so an agentic search loop is the slow, weak
     part of an audit. Doing retrieval here makes it parallel, repeatable,
     auditable (every query is recorded) and structurally unable to read prose
     docs or git history.
@@ -2845,32 +2845,6 @@ def _plan_resume(c):
     return kept, settled, (max(nums) + 1 if nums else 1)
 
 
-OC_MODEL = {FLASH: "flash", PRO: "pro"}  # oc_harness run lane model names
-
-
-def _oc():
-    try:
-        import oc_harness  # vendored next to this script by _shared/sync.sh
-    except ImportError:
-        return None
-    return oc_harness
-
-
-def _on_opencode():
-    oc = _oc()
-    return bool(oc) and oc.harness(os.path.abspath(__file__)) == "opencode"
-
-
-def _oc_major():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    m = _oc().major(skill_dir=root)
-    return m if m >= 2 else 1
-
-
-def _oc_script():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "oc_harness.py")
-
-
 ZCODE_DISPATCH = (u"ZCode: dispatch each worker as agent glm-rca-investigator (judge batches) or "
                   u"glm-rca-verifier (verify batches), all in one message — agents launched together run in "
                   u"parallel; use real model ids only (glm-5.3-flash / glm-5.3).")
@@ -2878,34 +2852,11 @@ ZCODE_DISPATCH = (u"ZCode: dispatch each worker as agent glm-rca-investigator (j
 
 def _dispatch(agent, prompt_path, description):
     """One dispatch line for the agent lane. Never names a model alias."""
-    if _on_opencode():
-        return _oc().dispatch_line(agent, prompt_path, description, _oc_major(),
-                                   background=True)
     return u"agent %s — prompt: read %s and follow it exactly" % (agent, prompt_path)
 
 
-def _oc_lane_wave(lanes_dir, name, batches, agent, model, effort, repo):
-    """Write lanes_dir/wave-<name>.json (one lane per batch); return the NEXT line."""
-    lanes_dir = os.path.abspath(lanes_dir)
-    mk(lanes_dir)
-    lanes = [{"id": b, "agent": agent, "model": OC_MODEL.get(model, model),
-              "effort": effort, "dir": os.path.abspath(repo), "brief": os.path.abspath(p)}
-             for b, p in batches]
-    path = os.path.join(lanes_dir, "wave-%s.json" % name)
-    write_text(path, json.dumps(lanes, indent=2, ensure_ascii=False) + u"\n")
-    return u"NEXT: python3 %s run %s --out %s" % (_oc_script(), path,
-                                                   os.path.join(lanes_dir, name))
-
-
 def _print_dispatch(c, wave, batches, agent, role, header):
-    """OpenCode v1: one oc_harness run command for the whole wave (parallel lanes).
-    Everywhere else: one dispatch line per batch."""
-    if _on_opencode() and _oc_major() == 1:
-        model, effort = c.tcfg[role][0], c.tcfg[role][1]
-        print(header + " -- OpenCode v1: one opencode process per lane, all in parallel:")
-        print(_oc_lane_wave(c.p("oc-lanes"), wave, batches, agent, model, effort,
-                            os.getcwd()))
-        return
+    """One dispatch line per batch; more batches than the lane width -> waves."""
     lanes = _oc_lanes()
     if len(batches) > lanes:
         print(header + " -- %d batches, at most %d agents at once: dispatch %d per message and wait"
@@ -2913,7 +2864,6 @@ def _print_dispatch(c, wave, batches, agent, role, header):
     else:
         print(header + " -- emit ALL of these in ONE message (they are independent):")
     print("  " + ZCODE_DISPATCH)
-    print("  OpenCode v2: background subagent calls run in parallel.")
     for i, (name, p) in enumerate(batches):
         if i and i % lanes == 0:
             print("  -- wave %d (after the previous wave finished) --" % (i // lanes + 1))
@@ -3123,40 +3073,12 @@ SETUP_ENV = u"""export ZAI_API_KEY=<your GLM Coding Plan key>
 export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY"""
 
-SETUP_ENV_OPENCODE = (u"export ZAI_API_KEY=<your GLM Coding Plan key>\n"
-                      u"# the api lane calls https://api.z.ai/api/coding/paas/v4"
-                      u" (override with ZAI_BASE_URL)")
-
 
 def cmd_setup(a):
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.dirname(here)
     home = os.path.expanduser("~")
     h = a.harness
-    if h != "zcode":
-        import oc_harness  # vendored next to this script by _shared/sync.sh
-        major = oc_harness.detect()
-        print("harness   opencode (major %s)" % (major or "not found"))
-        if a.dry_run:
-            print("(dry run -- nothing written)")
-        elif not major:
-            print("opencode not found: install it, then re-run setup")
-            return 1
-        else:
-            for path in oc_harness.install(root, major):
-                print("  installed %s" % path)
-        print("")
-        print("Environment (the api lane needs only the key; OpenCode's own")
-        print("zai-coding-plan login also works, audit.py reads its auth.json):")
-        print(SETUP_ENV_OPENCODE)
-        print("\nOpenCode: agents run on zai-coding-plan/glm-5.3-flash (workers) and")
-        print("zai-coding-plan/glm-5.3 (judgment). The api lane holds up to 8 threads.")
-        print("Agent-lane fallback: plan makes at most OC_MAX_LANES (default 6, up to 8) batches.")
-        print("v1 runs them in parallel through oc_harness.py run (one opencode process")
-        print("per lane; plan/status print the exact NEXT command).")
-        print("v2 dispatches them as background subagent calls that run in parallel.")
-        print("\nVerify with: python3 %s doctor --ping" % os.path.join(here, "audit.py"))
-        return 0
     sk = os.path.join(home, ".zcode", "skills", "glm-requirements-code-audit")
     ag = os.path.join(home, ".zcode", "agents")
     src = os.path.join(root, "agents")
@@ -3206,7 +3128,7 @@ def main(argv=None):
     p.add_argument("--lane", choices=["api", "agent", "solo"], default=None)
     p.add_argument("--tier", choices=list(TIERS), default=None)
     p.add_argument("--threads", type=int, default=None)
-    p.add_argument("--harness", choices=["opencode", "zcode"], default=None)
+    p.add_argument("--harness", choices=["zcode"], default=None)
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_brief)
 
@@ -3276,8 +3198,8 @@ def main(argv=None):
     p.add_argument("--threads", type=int, default=None)
     p.set_defaults(fn=cmd_doctor)
 
-    p = sub.add_parser("setup", help="install skill + agents for a harness")
-    p.add_argument("--harness", choices=["opencode", "zcode"], required=True)
+    p = sub.add_parser("setup", help="install skill + agents into ZCode")
+    p.add_argument("--harness", choices=["zcode"], required=True)
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(fn=cmd_setup)
 

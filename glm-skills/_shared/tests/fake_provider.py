@@ -1,4 +1,4 @@
-"""Stdlib fake OpenAI-compatible chat provider for the OpenCode contract tests.
+"""Stdlib fake OpenAI-compatible chat provider for the client contract tests.
 
 Serves GET <base>/models and POST <base>/chat/completions (SSE when "stream" is true, JSON
 otherwise) and logs every request body. Rules are matched in order against each chat request;

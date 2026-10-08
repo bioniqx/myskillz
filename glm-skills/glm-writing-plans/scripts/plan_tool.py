@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """plan_tool.py v9 GLM - deterministic engine + in-process 8-way fan-out.
-Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on OpenCode and ZCode.
+Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on ZCode.
 
   brief     [SPEC] [--thorough]        repo+spec+patterns in ONE call (replaces Phase 0)
   build     PLAN --spec S [opts]       validate -> fan out writers -> lint+repair -> review -> assemble
@@ -12,7 +12,7 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on OpenCode and ZCod
   lint-task PLAN TASKFILE [--mark ok|rev]
   hook-lint                            PostToolUse hook -> additionalContext
   doctor                               lane / key / model / connectivity report
-  setup     [--apply]                  configure harness (opencode | zcode | claude | auto)
+  setup     [--apply]                  configure harness (zcode | claude | auto)
 Common: --allow WORD exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
 import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
@@ -22,13 +22,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
-import oc_harness  # vendored by _shared/sync.sh
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 8           # provider limit: concurrent model calls (threads, writers, reviewers)
 DEFAULT_AGENT_CAP = 8        # unset env: default lane width (equals the provider ceiling MAX_WORKERS = 8)
 WRITER_GROUP_MAX = 4      # tasks per writer group (fits the 24-step agent budget)
-DEFAULT_LANE_WIDTH = 8    # background lanes one OpenCode dispatch message starts (up to MAX_WORKERS)
+DEFAULT_LANE_WIDTH = 8    # writer groups one dispatch message starts (up to MAX_WORKERS)
 
 # ---- GLM routing -------------------------------------------------------
 # tier -> (api model id, reasoning effort, agent-lane model id; real ids only, no alias jargon)
@@ -176,12 +175,10 @@ def sh(cmd, cwd=None, timeout=8):
 
 # ------------------------------------------------------------------ harness + credentials
 def detect_harness():
-    """('opencode'|'zcode'|'claude'|'unknown', evidence)."""
+    """('zcode'|'claude'|'unknown', evidence)."""
     ev = []
     for k in os.environ:
-        if k.startswith("OPENCODE"):
-            ev.append(("opencode", k))
-        elif k.startswith("ZCODE") or k.startswith("Z_CODE"):
+        if k.startswith("ZCODE") or k.startswith("Z_CODE"):
             ev.append(("zcode", k))
         elif k.startswith("CLAUDE_CODE") or k == "CLAUDECODE":
             ev.append(("claude", k))
@@ -189,16 +186,15 @@ def detect_harness():
         return ev[0][0], ev[0][1]
     home = os.path.expanduser("~")
     for name, path in (("zcode", os.path.join(home, ".zcode")),
-                       ("opencode", os.path.join(home, ".config", "opencode")),
                        ("claude", os.path.join(home, ".claude"))):
         if os.path.isdir(path) and SKILL_DIR.startswith(os.path.realpath(path)):
             return name, path
     for name, path in (("zcode", os.path.join(home, ".zcode")),
-                       ("opencode", os.path.join(home, ".config", "opencode")),
                        ("claude", os.path.join(home, ".claude"))):
         if os.path.isdir(path):
             return name, path
     return "unknown", "-"
+
 
 
 def find_credentials():
@@ -231,42 +227,28 @@ def workers_cap(requested=None):
 
 
 def agent_cap():
-    for e in ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "OPENCODE_MAX_CONCURRENT_SUBAGENTS",
-              "ZCODE_MAX_CONCURRENT_SUBAGENTS"):
+    for e in ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "ZCODE_MAX_CONCURRENT_SUBAGENTS"):
         v = os.environ.get(e, "").strip()
         if v.isdigit() and int(v) > 0:
             return min(MAX_WORKERS, int(v)), e
     return DEFAULT_AGENT_CAP, ""
 
 
-def on_opencode():
-    """True when this script runs under OpenCode (v1 or v2); never raises."""
-    try:
-        return oc_harness.harness(TOOL) == "opencode"
-    except Exception:
-        return False
-
-
 def lane_width():
-    """Groups one OpenCode dispatch message may start: PLAN_LANE_WIDTH, else OC_MAX_LANES; default 8,
-    ceiling 8, 0 gives 1, non-numeric or empty gives the default."""
-    for e in ("PLAN_LANE_WIDTH", "OC_MAX_LANES"):
-        v = os.environ.get(e, "").strip()
-        if v.isdigit():
-            return max(1, min(MAX_WORKERS, int(v)))
+    """Writer groups one dispatch message may start: PLAN_LANE_WIDTH; default 8, ceiling 8,
+    0 gives 1, non-numeric or empty gives the default."""
+    v = os.environ.get("PLAN_LANE_WIDTH", "").strip()
+    if v.isdigit():
+        return max(1, min(MAX_WORKERS, int(v)))
     return DEFAULT_LANE_WIDTH
 
 
-def writer_group_count(n_tasks, opencode, cap):
+def writer_group_count(n_tasks, cap):
     """Writer groups for n_tasks; every group holds at most WRITER_GROUP_MAX tasks.
-    OpenCode: ceil(n / 4), so up to 32 tasks fit the default lane width of 8 in one
-    message; the lane width caps each dispatch message and extra groups go into
-    further messages. Elsewhere: one task per writer up to cap, never more than 4 per writer."""
+    One task per writer up to cap, never more than 4 per writer."""
     if n_tasks <= 0:
         return 0
     need = -(-n_tasks // WRITER_GROUP_MAX)
-    if opencode:
-        return need
     return max(need, min(cap, n_tasks))
 
 
@@ -1037,52 +1019,28 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
     return "\n\n".join(parts) + "\n"
 
 
-def row_agent(g, kind, installed, opencode, deep=True):
-    """Agent (OpenCode) or model id (other harnesses) for one dispatch row."""
+def row_agent(g, kind, deep=True):
+    """Model alias for one dispatch row."""
     tier = max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
-    if not opencode:
-        return model_for("deep" if kind == "review" else tier, api=False)[0]
-    if not installed:
-        return "general"
-    if kind == "review":
-        return "glm-plan-reviewer"
-    return "glm-plan-task-writer-deep" if tier == "deep" and deep else "glm-plan-task-writer"
+    return model_for("deep" if kind == "review" else tier, api=False)[0]
 
 
 def group_span(g):
     return g[0]["id"] if len(g) == 1 else "%s-%s" % (g[0]["id"], g[-1]["id"])
 
 
-def dispatch_lines(groups, work, kind, installed=True, opencode=False, deep=True):
+def dispatch_lines(groups, work, kind, deep=True):
     rows = []
     sub = "review-briefs" if kind == "review" else "briefs"
-    fmt = "%-4s %-21s %-9s %s" if opencode else "%-4s %-7s %-9s %s"
     for gid, g in groups:
-        rows.append(fmt % (gid, row_agent(g, kind, installed, opencode, deep), group_span(g),
-                           os.path.join(work, sub, gid + ".md")))
-    return rows
-
-
-def oc_dispatch(groups, work, kind, installed, width, deep=True):
-    """OpenCode dispatch calls, at most `width` per message, one agent per row, never a model alias."""
-    sub = "review-briefs" if kind == "review" else "briefs"
-    verb = "review" if kind == "review" else "plan"
-    major = oc_harness.major(SKILL_DIR)
-    rows = []
-    for b in range(0, len(groups), width):
-        batch = groups[b:b + width]
-        rows.append("MESSAGE %d (%d calls, ALL in ONE message):" % (b // width + 1, len(batch)))
-        for gid, g in batch:
-            rows.append("  " + oc_harness.dispatch_line(row_agent(g, kind, installed, True, deep),
-                                                        os.path.join(work, sub, gid + ".md"),
-                                                        "%s %s" % (verb, group_span(g)), major))
+        rows.append("%-4s %-7s %-9s %s" % (gid, row_agent(g, kind, deep), group_span(g),
+                                           os.path.join(work, sub, gid + ".md")))
     return rows
 
 
 def agent_installed(repo, name="glm-plan-task-writer"):
     home = os.path.expanduser("~")
-    for base in (os.path.join(repo, ".opencode", "agents"), os.path.join(home, ".config", "opencode", "agents"),
-                 os.path.join(home, ".zcode", "agents"),
+    for base in (os.path.join(home, ".zcode", "agents"),
                  os.path.join(repo, ".claude", "agents"), os.path.join(home, ".claude", "agents")):
         if os.path.isfile(os.path.join(base, name + ".md")):
             return base
@@ -1258,13 +1216,9 @@ def run_review(a, cfg, cs, plan, repo, work, spec, allow, budget, workers, prefi
 
 
 def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
-    opencode = on_opencode()
     cap, capenv = agent_cap()
     width = max(1, min(MAX_WORKERS, a.workers or lane_width()))
-    if opencode:
-        k = writer_group_count(len(cs), True, width)
-    else:
-        k = writer_group_count(len(cs), False, max(1, min(MAX_WORKERS, a.workers or cap)))
+    k = writer_group_count(len(cs), max(1, min(MAX_WORKERS, a.workers or cap)))
     shutil.rmtree(os.path.join(work, "briefs"), ignore_errors=True)
     cmap = {c["id"]: c for c in cs}
     parts = cap_groups(partition(cs, k))
@@ -1274,37 +1228,25 @@ def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
              writer_brief(plan_path, plan, g, cmap, work, spec, repo, a.allow))
     info = json.loads(load(os.path.join(work, "work.json")))
     info["groups"] = {gid: [c["id"] for c in g] for gid, g in groups}
-    info["agents"] = width if opencode else k
+    info["agents"] = k
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
     _, n, wave_width = waves_block(cs)
     installed = agent_installed(repo)
     lane = ("LANE agent (no API key found - script-side fan-out unavailable)" if not key
             else "LANE agent (forced)")
-    if opencode:
-        nmsg = -(-len(groups) // width)
-        head = [lane,
-                "WORK %s" % work,
-                "DISPATCH %d writers in %d message(s) of at most %d background calls | one agent per row"
-                % (len(groups), nmsg, width),
-                "Send each MESSAGE below verbatim; send the next MESSAGE after every writer of the previous one replied.",
-                "ID   AGENT                 TASKS     BRIEF"]
-        deep = bool(agent_installed(repo, "glm-plan-task-writer-deep"))
-        rows = dispatch_lines(groups, work, "write", installed, True, deep) \
-            + oc_dispatch(groups, work, "write", installed, width, deep)
-    else:
-        agent = "glm-plan-task-writer" if installed else "general-purpose"
-        head = [lane,
-                "WORK %s" % work,
-                ("DISPATCH %d writers, ALL in ONE message" % len(groups) if len(groups) <= MAX_WORKERS else
-                 "DISPATCH %d writers in waves of at most %d (send the next wave after the previous one replied)"
-                 % (len(groups), MAX_WORKERS)) + " | the `%s` agent | description 'plan <ID>'" % agent,
-                "prompt (verbatim): Read <brief path> and follow it exactly.",
-                "ID   MODEL   TASKS     BRIEF"]
-        rows = dispatch_lines(groups, work, "write")
+    agent = "glm-plan-task-writer" if installed else "general-purpose"
+    head = [lane,
+            "WORK %s" % work,
+            ("DISPATCH %d writers, ALL in ONE message" % len(groups) if len(groups) <= MAX_WORKERS else
+             "DISPATCH %d writers in waves of at most %d (send the next wave after the previous one replied)"
+             % (len(groups), MAX_WORKERS)) + " | the `%s` agent | description 'plan <ID>'" % agent,
+            "prompt (verbatim): Read <brief path> and follow it exactly.",
+            "ID   MODEL   TASKS     BRIEF"]
+    rows = dispatch_lines(groups, work, "write")
     tail = ["THEN: %s wait %s" % (qtool(), shlex.quote(plan_path)),
             "THEN: %s review %s" % (qtool(), shlex.quote(plan_path)),
             "THEN: %s assemble %s --clean" % (qtool(), shlex.quote(plan_path))]
-    if not capenv and not opencode:
+    if not capenv:
         tail.append("NOTE subagent cap assumed %d; `%s setup --apply` raises it where the harness supports it" % (cap, qtool()))
     return report([], warns, "OK contracts: %d tasks | %d waves | max wave width %d | %d writers"
                   % (len(cs), n, wave_width, len(groups)), head + rows + tail)
@@ -1485,20 +1427,10 @@ def cmd_review(a):
     info["review"] = [c["id"] for c, _ in picked]
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
     summary = "REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked))
-    if on_opencode():
-        installed = agent_installed(info.get("repo") or repo_root(plan_path), "glm-plan-reviewer")
-        width = max(1, min(MAX_WORKERS, a.agents or lane_width()))
-        rows = [summary,
-                "DISPATCH %d reviewers in %d message(s) of at most %d background calls | one agent per row"
-                % (len(groups), -(-len(groups) // width), width),
-                "ID   AGENT                 TASKS     BRIEF"] \
-            + dispatch_lines(groups, work, "review", installed, True) \
-            + oc_dispatch(groups, work, "review", installed, width)
-    else:
-        rows = [summary,
-                "DISPATCH %d reviewers in ONE message | the `general-purpose` agent | real ids `glm-5.3` / `glm-5.3-flash` where a model must be named | description 'review <ID>'" % len(groups),
-                "prompt (verbatim): Read <brief path> and follow it exactly.",
-                "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
+    rows = [summary,
+            "DISPATCH %d reviewers in ONE message | the `general-purpose` agent | real ids `glm-5.3` / `glm-5.3-flash` where a model must be named | description 'review <ID>'" % len(groups),
+            "prompt (verbatim): Read <brief path> and follow it exactly.",
+            "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
     for r in rows:
         print(r)
@@ -1742,15 +1674,11 @@ def cmd_brief(a):
         if tests:
             out.append("test/check cmds: " + " ; ".join(tests))
         conv = []
-        for md in ("AGENTS.md", "CLAUDE.md", ".opencode/AGENTS.md", ".zcode/AGENTS.md", ".claude/CLAUDE.md"):
+        for md in ("AGENTS.md", "CLAUDE.md", ".zcode/AGENTS.md", ".claude/CLAUDE.md"):
             p = os.path.join(repo, md)
             if os.path.isfile(p):
                 conv.append(md)
                 md_lines = load(p).splitlines()
-                if harness == "opencode" and md in ("AGENTS.md", "CLAUDE.md") and conv[0] == md:
-                    out.append("conventions %s (%d lines) - already in the agent context; copy binding rules into Global Constraints"
-                               % (md, len(md_lines)))
-                    continue
                 out.append("conventions %s (%d lines) - copy binding rules into Global Constraints:" % (md, len(md_lines)))
                 out.append("  " + "\n  ".join(md_lines[:60]))
         if not conv:
@@ -1848,27 +1776,6 @@ WRITER_AGENTS = ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-
 
 
 def agent_file(harness, name="glm-plan-task-writer"):
-    if harness == "opencode":
-        neutral = os.path.join(SKILL_DIR, "agents", name + ".md")
-        if os.path.exists(neutral):
-            return oc_harness.render_agent(load(neutral), oc_harness.major(SKILL_DIR))
-        if name != "glm-plan-task-writer":
-            return None
-        fm = ("---\n"
-              "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
-              "Use only when given a glm-writing-plans brief path.\n"
-              "mode: subagent\n"
-              "model: zai-coding-plan/glm-5.3-flash\n"
-              "temperature: 0.3\n"
-              "steps: 24\n"
-              "permission:\n"
-              "  read: allow\n"
-              "  edit: allow\n"
-              "  bash: allow\n"
-              "  task: deny\n"
-              "  webfetch: deny\n"
-              "---\n\n")
-        return fm + AGENT_BODY
     if harness == "zcode":
         fm = ("---\n"
               "name: glm-plan-task-writer\n"
@@ -1902,18 +1809,11 @@ def cmd_setup(a):
     home = os.path.expanduser("~")
     harness = a.harness if a.harness != "auto" else detect_harness()[0]
     if harness == "unknown":
-        harness = "opencode"
-    paths = {"opencode": os.path.join(home, ".config", "opencode", "agents", "glm-plan-task-writer.md"),
-             "zcode": os.path.join(home, ".zcode", "agents", "glm-plan-task-writer.md"),
+        harness = "zcode"
+    paths = {"zcode": os.path.join(home, ".zcode", "agents", "glm-plan-task-writer.md"),
              "claude": os.path.join(home, ".claude", "agents", "glm-plan-task-writer.md")}
     agent_path = paths[harness]
     targets = [(agent_path, agent_file(harness))]
-    if harness == "opencode":
-        adir = os.path.dirname(agent_path)
-        for name in WRITER_AGENTS[1:]:
-            text = agent_file("opencode", name)
-            if text is not None:
-                targets.append((os.path.join(adir, name + ".md"), text))
     changes = []
     for path, text in targets:
         if not os.path.exists(path) or load(path) != text:
@@ -1960,9 +1860,6 @@ def cmd_setup(a):
     print("Fastest lane (recommended) - script-side fan-out, no subagents:")
     print("  export ZAI_API_KEY=<GLM Coding Plan key>")
     print("  export ZAI_BASE_URL=%s" % DEFAULT_BASE)
-    if harness == "opencode" and oc_harness.major(SKILL_DIR) < 2:
-        print("Agent-lane fallback on OpenCode v1 dispatches subagents one at a time;")
-        print("  export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true   # lets them overlap")
     if harness == "zcode":
         print("ZCode runs foreground subagents in parallel; the agent lane works without extra flags.")
     print("Verify with: %s doctor --ping" % qtool())
@@ -2024,7 +1921,7 @@ def main(argv=None):
     p = sub.add_parser("doctor"); p.add_argument("--ping", action="store_true"); p.set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("setup")
-    p.add_argument("--harness", choices=["auto", "opencode", "zcode", "claude"], default="auto")
+    p.add_argument("--harness", choices=["auto", "zcode", "claude"], default="auto")
     p.add_argument("--apply", action="store_true"); p.set_defaults(fn=cmd_setup)
 
     a = ap.parse_args(argv)

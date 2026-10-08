@@ -160,59 +160,16 @@ class TestCmdScanCapsApiWorkersAtEight(unittest.TestCase):
         assert state["peak"] == 8, state
 
 
-class TestCmdSetupMentionsOcHarness(unittest.TestCase):
-    def test_setup_opencode_mentions_oc_harness(self):
+class TestCmdSetupZcode(unittest.TestCase):
+    def test_setup_zcode_prints_the_install_block(self):
         mod = load_debug_tool()
-        a = mod.argparse.Namespace(harness="opencode")
         buf = io.StringIO()
-        with patch.object(mod.oc_harness, "major", lambda *_a, **_k: 2):
-            with redirect_stdout(buf):
-                rc = mod.cmd_setup(a)
-        assert rc == 0
-        assert "oc_harness.py run" in buf.getvalue()
-
-
-class TestCmdSetupUsesSharedSnippet(unittest.TestCase):
-    def test_setup_opencode_prints_shared_snippet_for_detected_major(self):
-        mod = load_debug_tool()
-        seen = {}
-
-        def fake_snippet(major, deny):
-            seen.update(major=major, deny=deny)
-            return "SHARED-SNIPPET"
-
-        a = mod.argparse.Namespace(harness="opencode", major=None)
-        buf = io.StringIO()
-        with patch.object(mod.oc_harness, "major", lambda *_a, **_k: 1), \
-                patch.object(mod.oc_harness, "config_snippet", fake_snippet):
-            with redirect_stdout(buf):
-                rc = mod.cmd_setup(a)
+        with redirect_stdout(buf):
+            rc = mod.cmd_setup(mod.argparse.Namespace(harness="zcode"))
         out = buf.getvalue()
         assert rc == 0
-        assert out.startswith("SHARED-SNIPPET\n")
-        assert seen == {"major": 1, "deny": []}
-        assert '"zai":' not in out
-        assert "one at a time" not in out
-        assert "oc_harness.py run" in out
-
-    def test_major_flag_skips_detection(self):
-        mod = load_debug_tool()
-        seen = {}
-
-        def never(*_a, **_k):
-            raise AssertionError("--major was given, detection must not run")
-
-        def fake_snippet(major, deny):
-            seen["major"] = major
-            return "SHARED-SNIPPET"
-
-        buf = io.StringIO()
-        with patch.object(mod.oc_harness, "major", never), \
-                patch.object(mod.oc_harness, "config_snippet", fake_snippet):
-            with redirect_stdout(buf):
-                rc = mod.main(["setup", "--harness", "opencode", "--major", "2"])
-        assert rc == 0
-        assert seen["major"] == 2
+        assert "install-zcode.sh" in out
+        assert "oc_harness" not in out
 
 
 class TestQuestionKeywords(unittest.TestCase):
@@ -276,7 +233,7 @@ class TestBuildTasksGrepsAreaOnce(unittest.TestCase):
 
 
 class TestScanAgentLane(unittest.TestCase):
-    def _run(self, harness_name, tier="light", model=None, effort=None, seen_root=None):
+    def _run(self, tier="light"):
         mod = load_debug_tool()
         root = tempfile.mkdtemp(prefix="sdlane_test.")
         self.addCleanup(mod.shutil.rmtree, root, True)
@@ -284,81 +241,30 @@ class TestScanAgentLane(unittest.TestCase):
         tasks.write_text(json.dumps([{"id": "t1", "prompt": "p1"}, {"id": "t2", "prompt": "p2"}]))
         a = mod.argparse.Namespace(
             tasks=str(tasks), area=None, question=None, context_file=None, context="shared ctx",
-            tier=tier, model=model, effort=effort, base=None, max_tokens=100,
+            tier=tier, model=None, effort=None, base=None, max_tokens=100,
             print_prompts=False, out=None, jobs=0, dir=root)
-        real_build = mod.build_tasks
-
-        def spy_build(a_, root_):
-            if seen_root is not None:
-                seen_root.append(root_)
-            return real_build(a_, root_)
-
         buf = io.StringIO()
         with patch.object(mod, "find_key", lambda: (None, "none")), \
-                patch.object(mod, "build_tasks", spy_build), \
-                patch.object(mod.oc_harness, "harness", lambda *_a, **_k: harness_name), \
-                patch.object(mod.oc_harness, "major", lambda *_a, **_k: 2):
-            with redirect_stdout(buf):
-                rc = mod.cmd_scan(a)
+                redirect_stdout(buf):
+            rc = mod.cmd_scan(a)
         return mod, rc, buf.getvalue(), Path(root) / ".debug" / "scan"
 
-    def test_lanes_carry_tier_model_and_effort(self):
-        mod, rc, out, d = self._run("opencode", tier="light")
-        assert rc == 0
-        lanes = json.loads((d / "lanes.json").read_text())
-        assert [(l["model"], l["effort"]) for l in lanes] == [("glm-5.3-flash", "low")] * 2
-        mod, rc, out, d = self._run("opencode", tier="deep")
-        lanes = json.loads((d / "lanes.json").read_text())
-        assert [(l["model"], l["effort"]) for l in lanes] == [mod.TIERS["deep"]] * 2
-
-    def test_lanes_honor_model_and_effort_overrides(self):
-        mod, rc, out, d = self._run("opencode", tier="light", model="glm-5.3", effort="max")
-        lanes = json.loads((d / "lanes.json").read_text())
-        assert [(l["model"], l["effort"]) for l in lanes] == [("glm-5.3", "max")] * 2
-
-    def test_lanes_dir_is_the_scan_root(self):
-        seen = []
-        mod, rc, out, d = self._run("opencode", seen_root=seen)
-        lanes = json.loads((d / "lanes.json").read_text())
-        assert len(seen) == 1
-        assert [l["dir"] for l in lanes] == [seen[0]] * 2
-
-    def test_run_cmd_for_light_lane_uses_flash_low_variant_on_v2(self):
-        mod, rc, out, d = self._run("opencode", tier="light")
-        lane = json.loads((d / "lanes.json").read_text())[0]
-        argv = mod.oc_harness.build_run_cmd(lane, 2)
-        i = argv.index("--model")
-        assert argv[i + 1] == "zai-coding-plan/glm-5.3-flash#low"
-
-    def test_opencode_writes_lanes_for_debug_worker_under_project(self):
-        mod, rc, out, d = self._run("opencode")
+    def test_agent_lane_names_the_worker_without_a_lanes_file(self):
+        mod, rc, out, d = self._run()
         assert rc == 0
         assert (d / "t1.txt").is_file() and (d / "t2.txt").is_file()
-        lanes = json.loads((d / "lanes.json").read_text())
-        assert [l["id"] for l in lanes] == ["t1", "t2"]
-        assert [l["agent"] for l in lanes] == ["glm-debug-worker", "glm-debug-worker"]
-        assert lanes[0]["brief"] == str((d / "t1.txt").resolve())
+        assert not (d / "lanes.json").exists()
         assert "glm-debug-worker" in out
-        nxt = [l for l in out.splitlines() if l.startswith("NEXT: python3 ")]
-        assert nxt and "oc_harness.py run" in nxt[-1]
-        assert str(d / "lanes.json") in nxt[-1] or str((d / "lanes.json").resolve()) in nxt[-1]
+        assert "oc_harness" not in out
 
     def test_prompts_carry_scripts_dir_in_a_byte_identical_prefix(self):
-        mod, rc, out, d = self._run("opencode")
+        mod, rc, out, d = self._run()
         t1 = (d / "t1.txt").read_text()
         t2 = (d / "t2.txt").read_text()
         assert t1.startswith(mod.SYS_PROMPT)
         assert ("S=%s" % mod.SCRIPTS) in t1
         assert t1.split("\n---\nTASK: ")[0] == t2.split("\n---\nTASK: ")[0]
         assert t1.endswith("TASK: p1") and t2.endswith("TASK: p2")
-
-    def test_other_harness_names_the_agent_without_lanes_file(self):
-        mod, rc, out, d = self._run("claude")
-        assert rc == 0
-        assert (d / "t1.txt").is_file()
-        assert not (d / "lanes.json").exists()
-        assert "glm-debug-worker" in out
-        assert "oc_harness.py run" not in out
 
 
 if __name__ == "__main__":

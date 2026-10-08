@@ -61,10 +61,10 @@ def extract_description(frontmatter):
 
 class TestVendoredCopies(unittest.TestCase):
     def test_vendored_copies_match_shared(self):
-        """Every skill's scripts/{zai_client,oc_harness}.py that exists matches _shared/."""
+        """Every skill's vendored scripts/zai_client.py matches _shared/."""
         shared_dir = os.path.join(GLM_ROOT, "_shared")
         found_any = False
-        for shared_file in ("zai_client.py", "oc_harness.py"):
+        for shared_file in ("zai_client.py",):
             shared_path = os.path.join(shared_dir, shared_file)
             with open(shared_path, "rb") as fh:
                 shared_hash = hashlib.sha256(fh.read()).hexdigest()
@@ -166,31 +166,6 @@ class TestSkillMdHygiene(unittest.TestCase):
                                   "%s description is %d chars, max 1024" % (skill_md, len(desc)))
 
 
-class TestDevteamDoctorHarness(unittest.TestCase):
-    def test_dev_team_glm_doctor_reports_opencode_content(self):
-        """devteam.py doctor --harness opencode runs hermetically (isolated HOME, no shared
-        os.environ mutation) and its output actually names the harness and a verdict line,
-        not just an exit code."""
-        dev_team_path = os.path.join(GLM_ROOT, "glm-dev-team", "scripts", "devteam.py")
-        self.assertTrue(os.path.exists(dev_team_path), "glm-dev-team script not found at %s" % dev_team_path)
-
-        home = tempfile.mkdtemp()
-        try:
-            env = dict(os.environ)
-            env.pop("DEVTEAM_HARNESS", None)
-            env["HOME"] = home
-            env["OPENCODE"] = "1"
-            result = subprocess.run(
-                [sys.executable, dev_team_path, "doctor", "--harness", "opencode"],
-                capture_output=True, text=True, timeout=60, env=env)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("harness opencode", result.stdout)
-            self.assertIn("governor tier", result.stdout)
-            self.assertTrue(
-                "DOCTOR: all good" in result.stdout or "DOCTOR found:" in result.stdout,
-                "doctor output has no verdict line: %r" % result.stdout)
-        finally:
-            shutil.rmtree(home, ignore_errors=True)
 
 
 if __name__ == "__main__":

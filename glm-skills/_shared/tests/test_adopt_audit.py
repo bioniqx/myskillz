@@ -231,20 +231,6 @@ class Setup(unittest.TestCase):
             audit.main(["setup", "--harness", harness, "--dry-run"])
         return buf.getvalue()
 
-    def test_opencode_env_names_only_the_zai_key(self):
-        out = self.run_setup("opencode")
-        self.assertIn("export ZAI_API_KEY=<your GLM Coding Plan key>", out)
-        self.assertIn("https://api.z.ai/api/coding/paas/v4", out)
-        self.assertNotIn("ANTHROPIC_BASE_URL", out)
-        self.assertNotIn("ANTHROPIC_AUTH_TOKEN", out)
-        self.assertIn("zai-coding-plan/glm-5.3-flash", out)
-
-    def test_zcode_output_is_unchanged(self):
-        out = self.run_setup("zcode")
-        self.assertIn(audit.SETUP_ENV, out)
-        self.assertIn("export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic", out)
-        self.assertIn("ZCode: invoke with  $glm-requirements-code-audit <spec file>", out)
-
 
 class DocumentationConfigs(unittest.TestCase):
     def test_skill_md_r3_step_1_has_no_parallel_read(self):

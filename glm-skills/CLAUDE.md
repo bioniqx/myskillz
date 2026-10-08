@@ -57,8 +57,8 @@ python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skill
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests
 ```
 
-`_shared/*.py` (`zai_client.py`, `oc_harness.py`) is the source of truth; each skill's `scripts/` copy is
-vendored from it by `sh _shared/sync.sh` — never edit a vendored copy by hand.
+`_shared/zai_client.py` is the source of truth; each skill's `scripts/` copy is vendored from it by
+`sh _shared/sync.sh` — never edit a vendored copy by hand.
 
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
 `selftest.sh` is a second automated suite that covers the glm-dev-team engine end to end. It isolates itself
@@ -115,8 +115,8 @@ Every port applies the same set of model facts; each skill with a tuning surface
   ZCode agents live in `agents/`; `install-zcode.sh` rewrites them — plus glm-debug-worker and the
   glm-dev-team agents — to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no
   `effort`/`hooks`/`isolation`) and gets glm-plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
-  The `opencode/` folders in three skills hold legacy neutral agent sources: kept on disk, installed by
-  nothing.
+  The `opencode/` folders in three skills hold neutral `.md` agent/command sources (kept; not
+  installed by anything).
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
 - **glm-brainstorming**: `scripts/context.sh` is injected through the `!` preload line (or the
@@ -124,9 +124,8 @@ Every port applies the same set of model facts; each skill with a tuning surface
   as a round-1 call when the raw `!` line shows. It must stay read-only,
   bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. It
   also contains the visual-companion server (`server.cjs`, `start-server.sh`).
-- **glm-doc-generator**: a single self-contained SKILL.md. Its `scripts/` folder holds only the vendored
-  `oc_harness.py` (legacy installer plumbing, no longer referenced by SKILL.md); the skill runs no script of
-  its own and states that it must never read other files.
+- **glm-doc-generator**: a single self-contained SKILL.md; it runs no script of its own and states that it
+  must never read other files.
 - **glm-idea-to-spec**: a self-contained SKILL.md plus four reference docs (`evaluation-framework.md`,
   `question-bank.md`, `research-playbook.md`, `spec-template.md` under `references/`); no scripts, no
   agents, no tuning doc — every turn is pure model guidance for research-backed spec writing.
@@ -135,15 +134,15 @@ Every port applies the same set of model facts; each skill with a tuning surface
   commands, no tuning doc; process identity is glm- scoped (`/tmp/glm-gds.*`, `.git/glm-gds-fetched-*`,
   `GLM_GDS_*` env vars) so the Claude-tuned original can run on the same machine without interference.
 
-### Legacy OpenCode runtime support (inert)
+### Removed: the OpenCode runtime
 
-The skills are documented and installed for ZCode only, but the shared runtime still carries its
-verified OpenCode code paths (`oc_harness.py` lanes, `guard.py oc` mode, the v1/v2 plugins,
-`is_opencode()` detection, `setup --harness opencode`, `OC_MAX_LANES`). They never trigger on ZCode
-and are kept — code, vendored copies, plugins and the tests that cover them — so no file had to be
-deleted and the suite stays green. Do not extend them; new behaviour targets ZCode first. The facts
-that guided them (OpenCode v1.18.x/v2.0.x tool names, hook shapes, effort routing, 429 behaviour)
-live in git history and `docs/specs/2026-09-28-opencode-hardening-design.md`.
+The OpenCode support code is deleted: `_shared/oc_harness.py` and every vendored copy, the
+`guard.py oc` bridge and Stop-gate lane caller, the v1/v2 plugin `.js` files, `install-opencode.sh`,
+and the dev-team lane runner (`lane-run`/`wait`/`resume`, lane pid/pgid files). `guard.py stop` stays
+(the ZCode Stop hook routes to it), and the `opencode/` folders of `.md` neutral agent/command
+sources stay on disk untouched. Scripts that shared harness code lost their OpenCode branches
+(`detect_harness`, cap logic, agent-lane dispatch all speak zcode/claude only). The verified
+OpenCode v1/v2 facts live in git history and `docs/specs/2026-09-28-opencode-hardening-design.md`.
 
 ### ZCode facts (3.14.4)
 

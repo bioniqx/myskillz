@@ -1,4 +1,4 @@
-"""OpenCode glm-team-leader memory path: guard edit-ro allows it and reset does not delete it."""
+"""glm-team-leader memory path: guard edit-ro allows it and reset does not delete it."""
 import json
 import re
 import subprocess
