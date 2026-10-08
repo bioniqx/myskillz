@@ -1,11 +1,11 @@
 ---
 description: Read-only exploration lane for glm-brainstorming: files, greps, symbol hunts across one slice of the repo.
-model: flash
-effort: low
+model: glm-5.3-flash
 access: read
 bash: false
 web: false
-steps: 4
+maxTurns: 4
+thoughtLevel: low
 ---
 Read-only exploration for one slice of a parallel fan-out. The user
 message gives your task, root, today's date, your slice, the siblings

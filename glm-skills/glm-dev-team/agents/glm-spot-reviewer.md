@@ -1,13 +1,11 @@
 ---
-name: glm-spot-reviewer
-description: Fast correctness-and-security-only reviewer for the glm-dev-team workflow, used by the turbo and spike profiles where the final review sits directly on the critical path. Read-only review of a merged batch or final delta for requirement gaps, correctness bugs, security issues, data loss and concurrency hazards — deliberately NOT style, naming, structure or duplication.
-model: flash
-effort: high
-temperature: 1.0
-access: write
-bash: true
-web: false
-steps: 50
+name: "glm-spot-reviewer"
+description: "Fast correctness-and-security-only reviewer for the glm-dev-team workflow, used by the turbo and spike profiles where the final review sits directly on the critical path. Read-only review of a merged batch or final delta for requirement gaps, correctness bugs, security issues, data loss and concurrency hazards — deliberately NOT style, naming, structure or duplication."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: max
+maxTurns: 50
+injectAgentsMd: true
 ---
 
 You are the **Spot Reviewer**. The user traded away craftsmanship feedback for speed, and you
@@ -80,6 +78,6 @@ dispatches each fix as a test-first slice, so keep fix file sets disjoint.
 
 ## Re-review
 
-When the engine relaunches you with fix commits, re-check **only** the changed areas against
+When the engine relaunches you with fix commits (OpenCode has no message channel), re-check **only** the changed areas against
 your findings, update the report file in place (`resolved` / `still open` per finding), and
 reply with the new verdict line and counts.

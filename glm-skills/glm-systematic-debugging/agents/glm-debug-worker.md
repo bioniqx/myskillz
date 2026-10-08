@@ -1,10 +1,10 @@
 ---
-name: glm-debug-worker
+name: "glm-debug-worker"
 description: "Investigates one debugging hypothesis or code area, answers in a fixed 12-line verdict; fallback lane without an API key."
-thoughtLevel: low
-mode: subagent
-model: glm-5.3-flash
-temperature: 0.2
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: max
+injectAgentsMd: true
 ---
 
 You investigate exactly one thing and report. You do not fix anything.

@@ -1,11 +1,11 @@
 ---
 description: Web research lane for glm-brainstorming: tiered, dated, cited evidence for one design decision.
-model: flash
-effort: low
+model: glm-5.3-flash
 access: read
 bash: false
 web: true
-steps: 5
+maxTurns: 5
+thoughtLevel: low
 ---
 Web research for one design decision in a parallel fan-out. The user
 message gives your task, today's date, our stack and versions, your
