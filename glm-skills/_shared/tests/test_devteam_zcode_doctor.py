@@ -73,44 +73,28 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         os.chdir(self.old)
         shutil.rmtree(self.tmp)
 
-    def zfix(self, flash=None, main=None):
-        ns = argparse.Namespace(fix=True, harness="zcode", flash=flash, main=main)
+    def zfix(self):
+        ns = argparse.Namespace(fix=True, harness="zcode")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             dt.doctor_zcode(ns, self.repo)
         return buf.getvalue()
 
-    def cdoctor(self, fix=False, flash=None, main=None):
-        ns = argparse.Namespace(fix=fix, harness="zcode", flash=flash, main=main)
+    def cdoctor(self, fix=False):
+        ns = argparse.Namespace(fix=fix, harness="zcode")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             dt.cmd_doctor(ns)
         return buf.getvalue()
 
-    def test_render_agent_zcode_converts_frontmatter(self):
-        flash, main = "acct/Flash", "acct/Main"
-        cases = {
-            "glm-programmer": ("model: " + flash, "thoughtLevel: high"),
-            "glm-programmer-lite": ("model: " + flash, "thoughtLevel: low"),
-            "glm-programmer-strong": ("model: " + main, "thoughtLevel: high"),
-            "glm-code-reviewer": ("model: " + main, "thoughtLevel: high"),
-            "glm-spot-reviewer": ("model: " + flash, "thoughtLevel: high"),
-            "glm-investigator": ("model: " + flash, "thoughtLevel: high"),
-            "glm-team-leader": ("model: " + main, "thoughtLevel: max"),
-        }
-        for name, (model_line, tl_line) in cases.items():
-            text = dt.render_agent_zcode(AGENTS_SRC, name, flash, main)
-            self.assertTrue(text.startswith("---\n"), name)
-            fm, body = text.split("\n---\n", 1)
-            self.assertTrue(body.strip(), name)
-            self.assertIn("name: " + name, fm.splitlines(), name)
-            self.assertIn(model_line, fm.splitlines(), name)
-            self.assertIn(tl_line, fm.splitlines(), name)
-            self.assertTrue(fm_keys(fm) <= ALLOWED_KEYS, (name, sorted(fm_keys(fm) - ALLOWED_KEYS)))
-            for bad in BAD_KEYS:
-                self.assertNotIn("\n" + bad, "\n" + fm, (name, bad))
-            for alias in ("haiku", "sonnet", "opus"):
-                self.assertNotIn("\nmodel: " + alias, "\n" + fm, (name, alias))
+    @staticmethod
+    def source_text(name):
+        with open(os.path.join(AGENTS_SRC, name + ".md"), encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_zcode_agent_text_is_the_repo_file_verbatim(self):
+        for name in ZCODE_AGENTS:
+            self.assertEqual(dt.zcode_agent_text(AGENTS_SRC, name), self.source_text(name), name)
 
     def test_fix_installs_seven_agents_with_zcode_frontmatter(self):
         out = self.zfix()
@@ -118,25 +102,15 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         agents_dir = os.path.join(self.home, ".zcode", "agents")
         self.assertEqual(sorted(os.listdir(agents_dir)),
                          sorted(name + ".md" for name in ZCODE_AGENTS))
-        flash_agents = {"glm-programmer", "glm-programmer-lite",
-                        "glm-spot-reviewer", "glm-investigator"}
-        thought = {"glm-programmer": "high", "glm-programmer-lite": "low",
-                   "glm-programmer-strong": "high", "glm-code-reviewer": "high",
-                   "glm-spot-reviewer": "high", "glm-investigator": "high",
-                   "glm-team-leader": "max"}
         for name in ZCODE_AGENTS:
+            with open(os.path.join(agents_dir, name + ".md"), encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), self.source_text(name), name)
             fm = frontmatter(os.path.join(agents_dir, name + ".md"))
             self.assertTrue(fm_keys(fm) <= ALLOWED_KEYS, (name, sorted(fm_keys(fm) - ALLOWED_KEYS)))
-            self.assertNotIn("\nmodel: haiku", "\n" + fm, name)
-            self.assertNotIn("\nmodel: sonnet", "\n" + fm, name)
-            self.assertNotIn("\nmodel: opus", "\n" + fm, name)
+            for alias in ("haiku", "sonnet", "opus"):
+                self.assertNotIn("\nmodel: " + alias, "\n" + fm, (name, alias))
             for bad in BAD_KEYS:
                 self.assertNotIn("\n" + bad, "\n" + fm, (name, bad))
-            model_lines = [ln for ln in fm.splitlines() if ln.startswith("model:")]
-            expected = "glm-5.3-flash" if name in flash_agents else "glm-5.3"
-            self.assertEqual(model_lines, ["model: " + expected], name)
-            tl_lines = [ln for ln in fm.splitlines() if ln.startswith("thoughtLevel:")]
-            self.assertEqual(tl_lines, ["thoughtLevel: " + thought[name]], name)
         self.assertFalse(os.path.exists(os.path.join(self.repo, ".claude", "settings.local.json")))
         self.assertFalse(os.path.exists(os.path.join(self.home, ".claude", "settings.local.json")))
 
@@ -168,7 +142,7 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         cfg_path = os.path.join(self.home, ".zcode", "cli", "config.json")
         self.zfix()
         agent = os.path.join(agents_dir, "glm-programmer.md")
-        want = dt.render_agent_zcode(AGENTS_SRC, "glm-programmer", "glm-5.3-flash", "glm-5.3")
+        want = dt.zcode_agent_text(AGENTS_SRC, "glm-programmer")
         with open(agent, "a", encoding="utf-8") as f:
             f.write("my edit\n")
         with open(cfg_path, encoding="utf-8") as f:
@@ -214,12 +188,13 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         report = self.cdoctor(fix=False)
         self.assertIn("harness zcode", report)
         self.assertNotIn("MISSING:", report)
-        out2 = self.cdoctor(fix=True, flash="acct/Flash", main="acct/Main")
-        self.assertIn("STALE: agent glm-programmer does not match the rendered file", out2)
-        self.assertIn("\nmodel: acct/Flash",
-                      "\n" + frontmatter(os.path.join(agents_dir, "glm-programmer.md")))
-        self.assertIn("\nmodel: acct/Main",
-                      "\n" + frontmatter(os.path.join(agents_dir, "glm-team-leader.md")))
+        agent = os.path.join(agents_dir, "glm-programmer.md")
+        with open(agent, "a", encoding="utf-8") as f:
+            f.write("drift\n")
+        self.assertIn("STALE: agent glm-programmer does not match the source file", self.cdoctor(fix=False))
+        self.cdoctor(fix=True)
+        with open(agent, encoding="utf-8") as f:
+            self.assertEqual(f.read(), self.source_text("glm-programmer"))
 
 
 if __name__ == "__main__":

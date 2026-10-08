@@ -3,7 +3,7 @@ name: "glm-debug-worker"
 description: "Investigates one debugging hypothesis or code area, answers in a fixed 12-line verdict; fallback lane without an API key."
 color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: max
+thoughtLevel: low
 injectAgentsMd: true
 ---
 
@@ -25,4 +25,4 @@ FIX: <at most 10 lines of diff, or n/a>
 NEW LEADS: <at most 2, or n/a>
 ```
 
-Install: run `install-zcode.sh` (ZCode), which rewrites this file to ZCode frontmatter into `~/.zcode/agents/`. Prefer `debug_tool.py scan` with an API key — it opens its own threads (at most 8 at once) and does not queue.
+Install: run `install-zcode.sh` (ZCode), which copies this file, frontmatter already final, into `~/.zcode/agents/`. Prefer `debug_tool.py scan` with an API key — it opens its own threads (at most 8 at once) and does not queue.

@@ -166,11 +166,11 @@ class ContentTests(unittest.TestCase):
 class ZcodeAgentFileTests(unittest.TestCase):
     def test_zcode_agent_files(self):
         writer, reviewer = read(ZWRITER), read(ZREVIEWER)
-        self.assertIn("model: glm-5.3-flash\n", writer, "zcode writer frontmatter lacks model: glm-5.3-flash")
-        self.assertIn("thoughtLevel: low\n", writer, "zcode writer frontmatter lacks thoughtLevel: low")
-        self.assertIn("model: glm-5.3\n", reviewer, "zcode reviewer frontmatter lacks model: glm-5.3")
-        self.assertNotIn("glm-5.3-flash", reviewer, "zcode reviewer still runs glm-5.3-flash")
-        self.assertIn("thoughtLevel: high\n", reviewer, "zcode reviewer frontmatter lacks thoughtLevel: high")
+        for role, text in (("writer", writer), ("reviewer", reviewer)):
+            self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n', text,
+                          "zcode %s frontmatter lacks the real GLM flash model id" % role)
+        self.assertIn("thoughtLevel: high\n", writer, "zcode writer frontmatter lacks thoughtLevel: high")
+        self.assertIn("thoughtLevel: max\n", reviewer, "zcode reviewer frontmatter lacks thoughtLevel: max")
         self.assertNotIn("thoughtLevel: low", reviewer, "zcode reviewer still sits at thoughtLevel: low")
 
 

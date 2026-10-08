@@ -26,7 +26,7 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 
 | Harness | Path |
 |---|---|
-| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and the `glm-debug-worker` agent (frontmatter rewritten, `thoughtLevel: low`) into `~/.zcode/agents/` |
+| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and copies the `glm-debug-worker` agent verbatim (`thoughtLevel: low` is pinned in the file) into `~/.zcode/agents/` |
 | Claude-compatible | `~/.claude/skills/glm-systematic-debugging/` |
 
 ```bash

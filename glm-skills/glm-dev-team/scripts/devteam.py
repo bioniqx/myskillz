@@ -3922,10 +3922,6 @@ def main(argv=None):
     pr = sp.add_parser("finish"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_finish)
     pr = sp.add_parser("reset"); pr.add_argument("--yes", action="store_true"); pr.set_defaults(fn=cmd_reset)
     pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "zcode"])
-    pr.add_argument("--flash", default=ZCODE_FLASH_DEFAULT, metavar="ID",
-                    help="flash model id for the zcode doctor (default glm-5.3-flash)")
-    pr.add_argument("--main", default=ZCODE_MAIN_DEFAULT, metavar="ID",
-                    help="main model id for the zcode doctor (default glm-5.3)")
     pr.set_defaults(fn=cmd_doctor)
     pr = sp.add_parser("allow"); pr.add_argument("cmds", nargs="+"); pr.set_defaults(fn=cmd_allow)
     pr = sp.add_parser("claim"); pr.add_argument("id"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_claim)
@@ -3969,125 +3965,17 @@ def main(argv=None):
     return 0
 
 
-ZCODE_FLASH_DEFAULT = "glm-5.3-flash"
-ZCODE_MAIN_DEFAULT = "glm-5.3"
-_ZCODE_RENDERED_FROM = {"glm-programmer-lite": "glm-programmer",
-                        "glm-programmer-strong": "glm-programmer"}
-_ZCODE_EFFORT_MAP = {"low": "low", "medium": "high", "high": "high", "max": "max"}
+def zcode_agent_text(agents_src, name) -> str:
+    """The installed `zcode` agent markdown for `name`: the skill's agents/<name>.md, verbatim.
 
-
-def _zcode_fm_split(text):
-    """Split an agent file into (frontmatter lines, body); ([], text) if absent."""
-    lines = text.split("\n")
-    i = 0
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    if i >= len(lines) or lines[i].strip() != "---":
-        return [], text
-    for j in range(i + 1, len(lines)):
-        if lines[j].strip() == "---":
-            return lines[i + 1:j], "\n".join(lines[j + 1:])
-    return [], text
-
-
-def _zcode_fm_scalar(value):
-    return str(value or "").strip().strip('"').strip("'").strip()
-
-
-def _zcode_fm_bool(value):
-    return _zcode_fm_scalar(value).lower() in ("true", "yes", "1", "on")
-
-
-def _zcode_fm_model(src_model, flash, main):
-    m = _zcode_fm_scalar(src_model).lower()
-    if m in ("haiku", "flash", "glm-5.3-flash"):
-        return _zcode_fm_scalar(flash)
-    if m in ("sonnet", "opus", "pro", "glm-5.3"):
-        return _zcode_fm_scalar(main)
-    if m:
-        return _zcode_fm_scalar(src_model)
-    return _zcode_fm_scalar(flash)
-
-
-def render_agent_zcode(agents_src, name, flash, main) -> str:
-    """Render the `zcode` agent markdown for `name` from the Claude-format source.
-
-    The five dev-team agent files convert in place; `glm-programmer-lite` (model
-    flash, thoughtLevel low) and `glm-programmer-strong` (model main,
-    thoughtLevel high) render from `glm-programmer.md`. Mapping: `steps: N` to
-    `maxTurns: N`, `omitClaudeMd: true` to `injectAgentsMd: false`, `effort` to
-    `thoughtLevel`, model aliases to the real ids; effort/isolation/memory/
-    omitClaudeMd/hooks/mode/temperature/steps/permissionMode/variant are
-    dropped (a dropped block key swallows its indented lines too);
-    name/description/color/tools/disallowedTools/background/mcpServers - and
-    an existing `maxTurns`, which is how the shipped agent files pin their
-    turn limit (they carry no `steps:` line) - pass through unchanged.
+    The repo files are the single source of truth — each one already carries
+    final ZCode frontmatter (real GLM model ids, thoughtLevel, maxTurns) — so
+    both this doctor and install-zcode.sh install agents by plain copy and
+    nothing rewrites them on the way in.
     """
-    agents_src = Path(agents_src)  # agent_source joins with `/`: it needs a Path, callers may pass a str
-    src_name = _ZCODE_RENDERED_FROM.get(name, name)
-    src = agent_source(agents_src, src_name)
-    if os.path.isfile(src):
-        # agent_source may hand back a path instead of the text; read it either way
-        with open(src, encoding="utf-8") as fh:
-            src = fh.read()
-    fm, body = _zcode_fm_split(src)
-    out = []
-    seen = set()
-    skip_block = False
-    for line in fm:
-        if skip_block:
-            if not line.strip() or line[:1] in (" ", "\t"):
-                continue
-            skip_block = False
-        if not line.strip() or line.lstrip().startswith("#") or line[:1] in (" ", "\t"):
-            out.append(line)
-            continue
-        key, sep, rest = line.partition(":")
-        if not sep:
-            out.append(line)
-            continue
-        key = key.strip()
-        if key == "effort":
-            if name == "glm-programmer-lite":
-                level = "low"
-            elif name == "glm-programmer-strong":
-                level = "high"
-            else:
-                level = _ZCODE_EFFORT_MAP.get(_zcode_fm_scalar(rest).lower(), "high")
-            out.append("thoughtLevel: " + level)
-            seen.add("thoughtLevel")
-        elif key == "steps":
-            out.append("maxTurns: " + _zcode_fm_scalar(rest))
-            seen.add("maxTurns")
-        elif key == "omitClaudeMd":
-            out.append("injectAgentsMd: " + ("false" if _zcode_fm_bool(rest) else "true"))
-            seen.add("injectAgentsMd")
-        elif key == "model":
-            if name == "glm-programmer-lite":
-                model = _zcode_fm_scalar(flash)
-            elif name == "glm-programmer-strong":
-                model = _zcode_fm_scalar(main)
-            else:
-                model = _zcode_fm_model(rest, flash, main)
-            out.append("model: " + model)
-            seen.add("model")
-        elif key == "name":
-            out.append("name: " + name)
-            seen.add("name")
-        elif key in ("description", "color", "tools", "disallowedTools",
-                     "background", "mcpServers", "maxTurns"):
-            out.append(line)
-            seen.add(key)
-        else:
-            skip_block = True
-    if "name" not in seen:
-        out.append("name: " + name)
-    if "model" not in seen:
-        out.append("model: " + (_zcode_fm_scalar(main) if name == "glm-programmer-strong"
-                                else _zcode_fm_scalar(flash)))
-    if "thoughtLevel" not in seen:
-        out.append("thoughtLevel: " + ("low" if name == "glm-programmer-lite" else "high"))
-    return "---\n" + "\n".join(out) + "\n---\n" + body
+    path = Path(agents_src) / (name + ".md")
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
 
 
 ZCODE_AGENTS = ("glm-programmer", "glm-programmer-lite", "glm-programmer-strong",
@@ -4216,17 +4104,17 @@ def _zcode_merge_hooks(cfg_path, hook_cmd):
 def doctor_zcode(a, root):
     """Check and install the seven `zcode` agents plus the user-level hook config.
 
-    CLI: `doctor --harness zcode [--fix] [--flash ID] [--main ID]` (routed from
-    `cmd_doctor`/`cmd_start`). Agents land in `~/.zcode/agents/`; the
-    PreToolUse (`Write|Edit`, `Bash`) and Stop hooks merge into
-    `~/.zcode/cli/config.json` (`hooks.enabled: true`, `type: process`,
-    absolute `guard.py` path). Unlike the claude doctor nothing is written
-    under the project root: no `.claude/settings.local.json` (`root` exists
-    only for signature parity with the other harness doctors).
+    CLI: `doctor --harness zcode [--fix]` (routed from `cmd_doctor`/`cmd_start`).
+    Agents are copied verbatim from the skill's `agents/` files (each already
+    carries final ZCode frontmatter — real GLM model ids, thoughtLevel,
+    maxTurns) into `~/.zcode/agents/`; the PreToolUse (`Write|Edit`, `Bash`)
+    and Stop hooks merge into `~/.zcode/cli/config.json`
+    (`hooks.enabled: true`, `type: process`, absolute `guard.py` path).
+    Unlike the claude doctor nothing is written under the project root: no
+    `.claude/settings.local.json` (`root` exists only for signature parity
+    with the other harness doctors).
     """
     fix = bool(getattr(a, "fix", False))
-    flash = _zcode_fm_scalar(getattr(a, "flash", None)) or ZCODE_FLASH_DEFAULT
-    main = _zcode_fm_scalar(getattr(a, "main", None)) or ZCODE_MAIN_DEFAULT
     home = os.path.expanduser("~")
     agents_dir = os.path.join(home, ".zcode", "agents")
     scripts = os.path.dirname(os.path.abspath(__file__))
@@ -4235,7 +4123,7 @@ def doctor_zcode(a, root):
     missing = []
     for name in ZCODE_AGENTS:
         path = os.path.join(agents_dir, name + ".md")
-        want = render_agent_zcode(agents_src, name, flash, main)
+        want = zcode_agent_text(agents_src, name)
         cur = None
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
@@ -4246,7 +4134,7 @@ def doctor_zcode(a, root):
         if cur is None:
             print("MISSING: agent %s not installed" % name)
         else:
-            print("STALE: agent %s does not match the rendered file" % name)
+            print("STALE: agent %s does not match the source file" % name)
         missing.append(name)
         if fix:
             _zcode_write(path, want)

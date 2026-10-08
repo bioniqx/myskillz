@@ -229,17 +229,18 @@ class ZcodeAgentAndDispatchTests(unittest.TestCase):
                   encoding="utf-8") as fh:
             return fh.read()
 
-    def test_zcode_agent_block_carries_maxturns_16(self):
-        lines = self.plan_tool_text().split("\n")
-        found = False
-        for i, line in enumerate(lines):
-            if "name: glm-plan-task-writer" in line:
-                window = lines[i + 1:i + 9]
-                if any("thoughtLevel:" in w for w in window):
-                    found = True
-                    self.assertTrue(any("maxTurns: 16" in w for w in window),
-                                    "zcode agent block lacks maxTurns: 16")
-        self.assertTrue(found, "no zcode agent block for glm-plan-task-writer")
+    def test_zcode_setup_installs_the_three_repo_agents_verbatim(self):
+        text = self.plan_tool_text()
+        self.assertIn('WRITER_AGENTS = ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer")',
+                      text, "zcode setup must install all three writer agents")
+        self.assertIn('agents_src = ref_path("agents")', text,
+                      "zcode setup must copy the agents/ files verbatim")
+        import os
+        for name in ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer"):
+            with open(os.path.join(AGENTS_DIR, name + ".md"), encoding="utf-8") as fh:
+                fm = fh.read().split("\n---\n")[0]
+            for key in ("model: ", "thoughtLevel:", "maxTurns:"):
+                self.assertIn(key, fm, (name, key))
 
     def test_dispatch_headers_carry_no_jargon(self):
         text = self.plan_tool_text()

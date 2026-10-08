@@ -1,11 +1,11 @@
 ---
-description: Reviews implementation-plan task bodies from a glm-writing-plans reviewer brief file. Use only when given a glm-writing-plans review brief path.
-model: glm-5.3
-effort: high
-access: write
-bash: true
-web: false
-steps: 24
+name: "glm-plan-reviewer"
+description: "Reviews implementation-plan task bodies from a glm-writing-plans reviewer brief file. Use only when given a glm-writing-plans review brief path."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3"
+thoughtLevel: high
+maxTurns: 24
+injectAgentsMd: true
 ---
 
 You review implementation-plan task bodies. Read the reviewer brief named in your task message and

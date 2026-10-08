@@ -320,8 +320,13 @@ class ZcodeAuditBehavior(unittest.TestCase):
         for name in ("glm-rca-investigator.md", "glm-rca-verifier.md"):
             with open(os.path.join(agents, name), encoding="utf-8") as fh:
                 fm = fh.read().split("\n---\n")[0]
-            self.assertIn("tools: Read, Grep, Glob, Write", fm, name)
             self.assertNotIn("tools: read, grep, glob, write", fm, name)
+            # the files carry no tool whitelist; wherever one appears, names stay TitleCase
+            for line in fm.splitlines():
+                if line.startswith(("tools:", "disallowedTools:")):
+                    for tool in (t.strip() for t in line.split(":", 1)[1].split(",")):
+                        if tool:
+                            self.assertEqual(tool, tool.capitalize(), (name, tool))
 
     def test_zcode_dispatch_line_names_agents_with_real_ids(self):
         with open(os.path.join(SCRIPTS, "audit.py"), encoding="utf-8") as fh:

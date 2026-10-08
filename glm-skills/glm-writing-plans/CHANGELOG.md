@@ -8,6 +8,8 @@
 
 **ZCode hardening:** the zcode dispatch headers name the `glm-plan-task-writer` agent (or the `general-purpose` fallback) with no `subagent_type=`/model-alias jargon and real ids only where a model must be named; `agent_file("zcode")` gains `maxTurns: 16`; SKILL.md R9 scopes `ANTHROPIC_BASE_URL` to Claude-compatible harnesses; the glm-tuning key list includes the v2 credentials file and the body-cap claim is labeled unverified.
 
+**Post-v9 (2026-10-08):** `setup --harness zcode` no longer renders `glm-plan-task-writer` from an inline template — it copies all three `agents/*.md` (`glm-plan-task-writer`, `glm-plan-task-writer-deep`, `glm-plan-reviewer`) verbatim; the files carry final ZCode frontmatter and are the single source of truth, and `install-zcode.sh` installs them the same plain-copy way.
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn

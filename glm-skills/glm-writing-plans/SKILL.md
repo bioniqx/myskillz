@@ -201,7 +201,7 @@ editor and git can execute. The linter enforces this and will fail the build.
 # R9 - One-time setup
 
 `<TOOL> doctor` reports the lane, the key, the models and the concurrency.
-`<TOOL> setup --apply` installs the fallback subagent for the detected harness.
+`<TOOL> setup --apply` installs the fallback subagents for the detected harness (on ZCode: all three `agents/*.md`, copied verbatim).
 Never run `--apply` without the user's consent. The fast lane needs one export:
 
 ```bash

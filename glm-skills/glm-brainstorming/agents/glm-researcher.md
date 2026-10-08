@@ -1,11 +1,12 @@
 ---
-description: Web research lane for glm-brainstorming: tiered, dated, cited evidence for one design decision.
-model: glm-5.3-flash
-access: read
-bash: false
-web: true
-maxTurns: 5
+name: "glm-researcher"
+description: "Web research lane for glm-brainstorming: tiered, dated, cited evidence for one design decision."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: low
+maxTurns: 5
+disallowedTools: Write, Edit, Bash
+injectAgentsMd: false
 ---
 Web research for one design decision in a parallel fan-out. The user
 message gives your task, today's date, our stack and versions, your

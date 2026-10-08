@@ -1,11 +1,12 @@
 ---
-description: Read-only exploration lane for glm-brainstorming: files, greps, symbol hunts across one slice of the repo.
-model: glm-5.3-flash
-access: read
-bash: false
-web: false
-maxTurns: 4
+name: "glm-explorer"
+description: "Read-only exploration lane for glm-brainstorming: files, greps, symbol hunts across one slice of the repo."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: low
+maxTurns: 4
+disallowedTools: Write, Edit
+injectAgentsMd: false
 ---
 Read-only exploration for one slice of a parallel fan-out. The user
 message gives your task, root, today's date, your slice, the siblings

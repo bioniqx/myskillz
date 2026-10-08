@@ -11,18 +11,7 @@ SKILL = Path(__file__).resolve().parents[2] / "glm-dev-team"
 GUARD = SKILL / "scripts" / "guard.py"
 LEADER = SKILL / "agents" / "glm-team-leader.md"
 
-FRONTMATTER = """---
-name: glm-team-leader
-description: Senior technical lead for the glm-dev-team workflow. PLANNING: deep analysis of a request against the real codebase → an executable, maximally parallel vertical-slice plan (pinned contracts, disjoint footprints, testable acceptance criteria, risk, isolation) written as .claude/dev-team/plan.md with a machine-readable JSON block. PLAN ADOPTION: maps an existing plan onto slices without re-deriving it. Plans any kind of software work — features, bug fixes, refactors, migrations, test backfill, performance, infrastructure/CI, documentation and read-only research — as one DAG of typed slices. VERIFICATION: judges whether delivered code fulfills the user's intent. Reasoning-heavy, read-only; remembers each repository's map across sessions.
-model: pro
-effort: max
-temperature: 1.0
-access: write
-bash: true
-web: true
-steps: 120
----
-"""
+ZCODE_FM_KEYS = ["name", "description", "color", "model", "thoughtLevel", "maxTurns", "injectAgentsMd"]
 
 MEM_RE = re.compile(r"`?(\.claude/[^\s`]*MEMORY\.md)`?")
 
@@ -61,8 +50,12 @@ class TeamLeaderMemory(unittest.TestCase):
         for rel in self.paths:
             self.assertFalse(rel.startswith(".claude/dev-team/"), f"{rel} is deleted by reset --yes")
 
-    def test_frontmatter_unchanged(self):
-        self.assertTrue(self.text.startswith(FRONTMATTER))
+    def test_frontmatter_is_final_zcode(self):
+        fm = self.text.split("\n---\n")[0]
+        keys = [ln.split(":", 1)[0].strip() for ln in fm.splitlines()
+                if ln[:1] not in ("", " ", "\t") and ":" in ln]
+        self.assertEqual(keys, ZCODE_FM_KEYS)
+        self.assertIn('name: "glm-team-leader"', fm)
 
 
 if __name__ == "__main__":

@@ -1,33 +1,28 @@
 #!/bin/sh
-# Install the eight GLM skills into ZCode.
+# Install the eight GLM skills and all of their subagents into ZCode.
 #
-#   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (installed as-is; the glm- prefix keeps them
+#   skills  glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/     (copied as-is; the glm- prefix keeps them
 #           distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
-#   agents  <skill>/agents/*.md (glm-brainstorming, glm-requirements-code-audit, glm-doc-generator) and
-#           glm-systematic-debugging's glm-debug-worker
-#           ->  <home>/.zcode/agents/   (rewritten to ZCode frontmatter; existing files are overwritten, no backup)
-#           glm-dev-team's seven ZCode agents (five file agents plus rendered glm-programmer-lite and
-#           glm-programmer-strong) via devteam.py doctor --harness zcode --fix, which also merges the
-#           guard hooks into ~/.zcode/cli/config.json; plus glm-plan-task-writer, written by
-#           plan_tool.py setup --harness zcode --apply
+#   agents  <skill>/agents/*.md across all eight skills
+#           ->  <home>/.zcode/agents/   (copied verbatim; existing files are overwritten, no backup)
 #
-# Usage: sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
-#   --flash / --main  model ids written into the agents (default glm-5.3-flash / glm-5.3; ZCode has no haiku/sonnet aliases,
-#                     so use your plan's exact id, e.g. account:zai-individual-coding-plan/GLM-5.3-Flash)
+# The agent files already carry final ZCode frontmatter (real GLM model ids,
+# thoughtLevel, maxTurns), so this script only copies — it never rewrites
+# anything and it does not touch ~/.zcode/cli/config.json. glm-dev-team's
+# guard hooks are opt-in afterwards:
+#   python3 <skills>/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
+#
+# Usage: sh install-zcode.sh [--home DIR] [--dry-run]
 set -eu
 
 HOME_DIR="${HOME:-}"
-FLASH="glm-5.3-flash"
-MAIN="glm-5.3"
 DRY=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --home) [ $# -ge 2 ] || { echo "--home needs a value" >&2; exit 1; }; HOME_DIR="$2"; shift 2 ;;
-        --flash) [ $# -ge 2 ] || { echo "--flash needs a value" >&2; exit 1; }; FLASH="$2"; shift 2 ;;
-        --main) [ $# -ge 2 ] || { echo "--main needs a value" >&2; exit 1; }; MAIN="$2"; shift 2 ;;
         --dry-run) DRY=1; shift ;;
-        *) echo "Usage: $0 [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]" >&2; exit 1 ;;
+        *) echo "Usage: $0 [--home DIR] [--dry-run]" >&2; exit 1 ;;
     esac
 done
 
@@ -37,11 +32,11 @@ AGENTS_DIR="$HOME_DIR/.zcode/agents"
 FOLDERS="glm-brainstorming glm-dev-team glm-doc-generator glm-git-diff-summary glm-idea-to-spec glm-requirements-code-audit glm-systematic-debugging glm-writing-plans"
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 not found" >&2; exit 1; }
-command -v tar >/dev/null 2>&1 || { echo "tar not found" >&2; exit 1; }
 
 run() { if [ "$DRY" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
-# ZCode drops a skill whose description is over 1024 characters; a body over 100KB is truncated when loaded.
+# Read-only pre-flight: ZCode drops a skill whose description is over 1024
+# characters; a body over 100KB is truncated when loaded.
 python3 - "$SCRIPT_DIR" $FOLDERS <<'PY' || exit 1
 import os, re, sys
 root, bad = sys.argv[1], []
@@ -69,66 +64,6 @@ for line in bad:
 sys.exit(1 if bad else 0)
 PY
 
-# convert SRC DEST [LEVEL]: rewrite one agent file to ZCode frontmatter (real GLM ids, thoughtLevel,
-# steps: N -> maxTurns: N and omitClaudeMd: true -> injectAgentsMd: false instead of dropping them,
-# drop permissionMode and the other Claude-only keys, keep background; LEVEL is a thoughtLevel
-# applied only when the source has neither thoughtLevel nor effort).
-convert() {
-    if [ "$DRY" -eq 1 ]; then echo "[dry-run] agent $1 -> $2"; return 0; fi
-    python3 - "$1" "$2" "$FLASH" "$MAIN" "${3:-}" <<'PY' || { echo "could not install agent $2" >&2; exit 1; }
-import os, re, sys
-src, dest, flash, main, level = sys.argv[1:6]
-DROP = {"effort", "isolation", "memory", "hooks", "mode", "temperature", "permission", "permissionMode", "variant"}
-text = open(src, encoding="utf-8").read()
-m = re.match(r"---\n(.*?)\n---\n(.*)", text, re.S)
-if not m:
-    sys.exit("no frontmatter in " + src)
-blocks, cur = [], None  # (key, lines): a key starts at column 0, its continuation lines are indented or blank
-for line in m.group(1).split("\n"):
-    k = re.match(r"([A-Za-z][\w-]*):(.*)", line)
-    if k:
-        cur = [k.group(1), [line]]
-        blocks.append(cur)
-    elif cur:
-        cur[1].append(line)
-out, effort, has_level = [], None, False
-for key, lines in blocks:
-    val = lines[0].split(":", 1)[1].strip().strip("\"'")
-    if key == "effort":
-        effort = val
-    if key == "thoughtLevel":
-        has_level = True
-    if key in DROP:
-        continue
-    if key == "steps":
-        out.append("maxTurns: " + val)
-        continue
-    if key == "omitClaudeMd":
-        out.append("injectAgentsMd: " + ("false" if val == "true" else "true"))
-        continue
-    if key == "model":
-        val = {"haiku": flash, "sonnet": main, "opus": main, "flash": flash, "pro": main,
-               "glm-5.3-flash": flash, "glm-5.3": main}.get(val, val)
-        lines = ["model: " + val]
-    out.extend(lines)
-if not has_level:
-    if effort:
-        out.append("thoughtLevel: " + effort)
-    elif level:
-        out.append("thoughtLevel: " + level)
-new = "---\n" + "\n".join(out) + "\n---\n" + m.group(2)
-if os.path.exists(dest):
-    if open(dest, encoding="utf-8").read() == new:
-        print("  %s (unchanged)" % os.path.basename(dest))
-        sys.exit(0)
-    print("  %s (updated)" % os.path.basename(dest))
-else:
-    print("  " + os.path.basename(dest))
-with open(dest, "w", encoding="utf-8") as fh:
-    fh.write(new)
-PY
-}
-
 echo "ZCode dir: $HOME_DIR/.zcode$([ "$DRY" -eq 1 ] && echo '  (dry run)')"
 echo "== skills"
 run mkdir -p "$SKILLS_DIR"
@@ -148,27 +83,14 @@ done
 
 echo "== agents"
 run mkdir -p "$AGENTS_DIR"
-for f in "$SCRIPT_DIR"/glm-brainstorming/agents/*.md "$SCRIPT_DIR"/glm-requirements-code-audit/agents/*.md "$SCRIPT_DIR"/glm-doc-generator/agents/*.md; do
-    [ -f "$f" ] && convert "$f" "$AGENTS_DIR/$(basename "$f")"
+count=0
+for f in "$SCRIPT_DIR"/*/agents/*.md; do
+    [ -f "$f" ] || continue
+    count=$((count + 1))
+    run cp "$f" "$AGENTS_DIR/$(basename "$f")"
 done
-# glm-debug-worker is a mechanical worker; it never pays for max thinking.
-[ -f "$SCRIPT_DIR/glm-systematic-debugging/agents/glm-debug-worker.md" ] && \
-    convert "$SCRIPT_DIR/glm-systematic-debugging/agents/glm-debug-worker.md" "$AGENTS_DIR/glm-debug-worker.md" low
-if [ "$DRY" -eq 1 ]; then
-    echo "[dry-run] glm-plan-task-writer via plan_tool.py setup --harness zcode --apply"
-    echo "[dry-run] glm-dev-team zcode agents via devteam.py doctor --harness zcode --fix --flash $FLASH --main $MAIN"
-else
-    HOME="$HOME_DIR" python3 "$SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py" setup --harness zcode --apply >/dev/null
-    convert "$AGENTS_DIR/glm-plan-task-writer.md" "$AGENTS_DIR/glm-plan-task-writer.md"
-    # The seven glm-dev-team ZCode agents are delegated to the engine's doctor subcommand (cmd_doctor
-    # in devteam.py routes to def doctor_zcode(a, root):), same pattern as the plan_tool.py setup
-    # delegation above: the doctor converts the five file agents (glm-team-leader, glm-code-reviewer,
-    # glm-investigator, glm-spot-reviewer, glm-programmer.md), renders glm-programmer-lite and
-    # glm-programmer-strong via def render_agent_zcode(agents_src, name, flash, main) -> str:,
-    # installs all seven into ~/.zcode/agents/, and merges the guard hooks into
-    # ~/.zcode/cli/config.json. --flash/--main pass through, so a custom plan id reaches the agents.
-    HOME="$HOME_DIR" python3 "$SKILLS_DIR/glm-dev-team/scripts/devteam.py" doctor --harness zcode --fix --flash "$FLASH" --main "$MAIN" >/dev/null
-fi
+[ "$count" -gt 0 ] || { echo "Error: no agents/*/agent .md files found under $SCRIPT_DIR" >&2; exit 1; }
+echo "  $count agent files -> $AGENTS_DIR"
 
 # Leftover installs under the old unprefixed (or *-glm) folder names would
 # load a second skill with a confusingly similar name next to the glm- one.
@@ -188,15 +110,16 @@ cat <<MSG
 
 Done. Start a NEW ZCode session to load the installed skills and agents (a restart is not enough), then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-git-diff-summary or
 \$glm-idea-to-spec, \$glm-requirements-code-audit, \$glm-systematic-debugging, \$glm-writing-plans.
+The agents were copied verbatim from the skills' agents/*.md: their frontmatter (real GLM model ids,
+thoughtLevel, maxTurns) is the single source of truth — nothing was rewritten.
+glm-dev-team guard hooks are NOT configured by this installer; they are opt-in:
+  python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
+That also re-verifies the seven glm-dev-team agents against their source files and merges the guard
+hooks (type: process, hooks.enabled: true, commands pointing at the installed guard.py) into
+~/.zcode/cli/config.json — a key-preserving merge that rewrites in place: a re-run is a no-op, and
+every user key already in the file survives. Disable with hooks.enabled=false in the same file.
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
   python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping
 The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (dev-team opens all 8 by default, tier api).
-glm-dev-team guards (frozen tests, footprint) are ZCode hooks on Write|Edit and Bash tool events.
-The install above already ran
-  python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
-which installs the seven glm-dev-team agents into ~/.zcode/agents/ and merges the guard hooks
-(type: process, hooks.enabled: true, commands pointing at the installed skill's guard.py) into
-~/.zcode/cli/config.json — a key-preserving merge that rewrites in place: a re-run is a no-op, and
-every user key already in the file survives.
 A frontmatter description over 1024 characters makes ZCode drop the whole skill; a body over 100KB is truncated when loaded, not dropped.
 MSG

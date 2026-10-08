@@ -57,8 +57,9 @@ python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skill
 cd hybrid-skills/<skill> && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests -q
 ```
 
-Installers: `claude-skills/install-skill.sh`, `hybrid-skills/install.sh`, and
-`sh install-opencode.sh [--home DIR]` in `glm-skills/` and `opencode-skills/`.
+Installers: `claude-skills/install-skill.sh`, `hybrid-skills/install.sh`, `sh install-zcode.sh [--home DIR]`
+in `glm-skills/` (plain copy of the skills and all `agents/*.md`), and `sh install-opencode.sh [--home DIR]`
+in `opencode-skills/`.
 `install-claude-code.sh` at the repo root installs all 13 Claude Code skills at once (9 originals + 4 hybrids).
 
 ## Repo gotchas

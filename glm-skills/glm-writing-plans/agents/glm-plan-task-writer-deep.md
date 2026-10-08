@@ -1,11 +1,11 @@
 ---
-description: Writes deep-tier implementation-plan task bodies from a glm-writing-plans brief file. Use only when given a glm-writing-plans brief path whose group holds a deep-tier task.
-model: glm-5.3
-effort: max
-access: write
-bash: true
-web: false
-steps: 24
+name: "glm-plan-task-writer-deep"
+description: "Writes deep-tier implementation-plan task bodies from a glm-writing-plans brief file. Use only when given a glm-writing-plans brief path whose group holds a deep-tier task."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3"
+thoughtLevel: max
+maxTurns: 24
+injectAgentsMd: true
 ---
 
 You write implementation-plan task bodies for deep-tier tasks. Read the brief file named in your

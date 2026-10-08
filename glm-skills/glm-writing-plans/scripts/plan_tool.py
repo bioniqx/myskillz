@@ -1775,18 +1775,7 @@ per task (`T07 OK` or `T07 FAIL: <first error>`). Never echo the body.
 WRITER_AGENTS = ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer")
 
 
-def agent_file(harness, name="glm-plan-task-writer"):
-    if harness == "zcode":
-        fm = ("---\n"
-              "name: glm-plan-task-writer\n"
-              "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
-              "Use only when given a glm-writing-plans brief path.\n"
-              "model: glm-5.3-flash\n"
-              "thoughtLevel: low\n"
-              "tools: Read, Write, Edit, Bash\n"
-              "maxTurns: 16\n"
-              "---\n\n")
-        return fm + AGENT_BODY
+def agent_file():
     fm = ("---\n"
           "name: glm-plan-task-writer\n"
           "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
@@ -1810,10 +1799,18 @@ def cmd_setup(a):
     harness = a.harness if a.harness != "auto" else detect_harness()[0]
     if harness == "unknown":
         harness = "zcode"
-    paths = {"zcode": os.path.join(home, ".zcode", "agents", "glm-plan-task-writer.md"),
-             "claude": os.path.join(home, ".claude", "agents", "glm-plan-task-writer.md")}
-    agent_path = paths[harness]
-    targets = [(agent_path, agent_file(harness))]
+    if harness == "zcode":
+        # The agents/ files carry final ZCode frontmatter and are the single
+        # source of truth: install all three by plain copy, like install-zcode.sh.
+        agents_src = ref_path("agents")
+        if not os.path.isdir(agents_src):
+            print("ERR  %s not found; run setup from the skill tree" % agents_src)
+            return 1
+        targets = [(os.path.join(home, ".zcode", "agents", n + ".md"),
+                    load(os.path.join(agents_src, n + ".md"))) for n in WRITER_AGENTS]
+    else:
+        targets = [(os.path.join(home, ".claude", "agents", "glm-plan-task-writer.md"),
+                    agent_file())]
     changes = []
     for path, text in targets:
         if not os.path.exists(path) or load(path) != text:

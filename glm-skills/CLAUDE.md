@@ -41,12 +41,14 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix writes .claude/set
 # Print the install/config block for a harness
 python3 <skill>/scripts/<tool>.py setup --harness zcode|claude
 
-# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name>, agents rewritten to ZCode
-# frontmatter into ~/.zcode/agents. The agent install and the user-level hook merge into
-# ~/.zcode/cli/config.json are delegated to devteam.py doctor in its zcode harness mode: a
-# key-preserving merge (existing user keys survive, .bak before rewrite, re-run is a no-op) whose
-# hook commands point at the installed skill's absolute guard.py path.
-sh install-zcode.sh [--home DIR] [--flash MODEL_ID] [--main MODEL_ID] [--dry-run]
+# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name> and every agents/*.md
+# verbatim to ~/.zcode/agents (17 agents, overwritten, nothing rewritten — the agent files already
+# carry final ZCode frontmatter). Guard hooks are NOT configured by the installer; they are opt-in:
+#   python3 glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
+# (also re-verifies its seven agents against their source files; merges the hooks into
+# ~/.zcode/cli/config.json key-preserving, .bak before rewrite, re-run is a no-op, commands
+# pointing at the installed skill's absolute guard.py path)
+sh install-zcode.sh [--home DIR] [--dry-run]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
@@ -62,9 +64,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shar
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
 `selftest.sh` is a second automated suite that covers the glm-dev-team engine end to end. It isolates itself
 (temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
-engine behaviour gets a check there. It was written for GNU userland and runs on macOS as well; the
-last full run reported 371 pass, 0 fail (the README records the same count). If it goes red on macOS,
-reproduce on Linux before blaming the change.
+engine behaviour gets a check there. It was written for GNU userland and runs on macOS as well; the last
+full run reported 323 pass, 6 fail — the same six on a clean checkout before the agent-copy change: all in
+the Claude-Code lane rendering section (`.claude/agents` expecting `permissionMode: dontAsk`, `effort:` lines
+and a sixth agent the lane no longer installs), while every zcode section is green.
 `glm-systematic-debugging/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
 
@@ -111,10 +114,10 @@ Every port applies the same set of model facts; each skill with a tuning surface
 - **glm-requirements-code-audit**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
-  ZCode agents live in `agents/`; `install-zcode.sh` rewrites them — plus glm-debug-worker and the
-  glm-dev-team agents — to ZCode frontmatter (real GLM ids via `--flash`/`--main`, `thoughtLevel`, no
-  `effort`/`hooks`/`isolation`) and gets glm-plan-task-writer from `plan_tool.py setup --harness zcode --apply`.
-  The `opencode/` source folders are gone.
+  ZCode agents live in `agents/` with final ZCode frontmatter; `install-zcode.sh` copies every skill's
+  `agents/*.md` verbatim (17 agents in all, including glm-debug-worker and the glm-writing-plans trio),
+  and `plan_tool.py setup --harness zcode` / `devteam.py doctor --harness zcode --fix` copy theirs the
+  same way. The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
 - **glm-brainstorming**: `scripts/context.sh` is injected through the `!` preload line (or the
@@ -154,9 +157,9 @@ All facts were verified against the local 3.14.4 binary unless marked otherwise.
 - **Agents.** Custom subagents live at `~/.zcode/agents/<name>.md`, user level only, no nesting; several
   launched together in the foreground run in parallel. Frontmatter keys: `name`, `description`, `model`,
   `thoughtLevel` (honored only together with a specific `model`), `color`, `tools`/`disallowedTools`,
-  `maxTurns`, `injectAgentsMd`, `mcpServers`; no haiku/sonnet/opus aliases exist. The installed agents
-  split lite/strong — lite workers run on `glm-5.3-flash` (the `--flash` default), strong judgment agents
-  on `glm-5.3` (the `--main` default).
+  `maxTurns`, `injectAgentsMd`, `mcpServers`; no haiku/sonnet/opus aliases exist. Model ids and
+  `thoughtLevel` are pinned per file in each skill's `agents/` folder — the single source of truth
+  every installer copies verbatim; nothing remaps models at install time.
 - **Dispatch.** Subagents are dispatched through the `Agent` tool (Task alias) whose input schema is
   `{description, prompt, subagent_type, run_in_background}` with `subagent_type` omitted defaulting to
   `general-purpose` — the Claude Code Task shape minus the `model` parameter (binary-verified; the web
