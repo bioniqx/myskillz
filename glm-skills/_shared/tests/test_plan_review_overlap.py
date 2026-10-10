@@ -27,7 +27,7 @@ class ReviewBudgetGateTests(unittest.TestCase):
 
     def test_every_review_submission_sits_behind_the_budget_gate(self):
         src = _cmd_build_source()
-        sites = list(re.finditer(r"review_one\(", src))
+        sites = list(re.finditer(r"=\s*review_one\(", src))
         self.assertTrue(sites, "cmd_build submits no review at all")
         for m in sites:
             window = src[max(0, m.start() - 300):m.start()]
@@ -39,7 +39,7 @@ class ReviewBudgetGateTests(unittest.TestCase):
 
     def test_every_review_submission_honors_no_review(self):
         src = _cmd_build_source()
-        sites = list(re.finditer(r"review_one\(", src))
+        sites = list(re.finditer(r"=\s*review_one\(", src))
         self.assertTrue(sites, "cmd_build submits no review at all")
         for m in sites:
             window = src[max(0, m.start() - 300):m.start()]
@@ -83,6 +83,34 @@ class ReviewOverlapTests(unittest.TestCase):
             submit,
             "review must be submitted only after the .warn signal it reads is written",
         )
+
+
+class LeftoverReviewTests(unittest.TestCase):
+    """--resume survivors (already .ok) still get their review."""
+
+    def test_leftover_review_items_covers_resume_survivors(self):
+        import shutil
+        import tempfile
+        work = tempfile.mkdtemp(prefix="plan-leftover-")
+        self.addCleanup(shutil.rmtree, work, True)
+        tasks = os.path.join(work, "tasks")
+        os.makedirs(tasks)
+        for tid in ("T01", "T02"):
+            with open(plan_tool.task_path(work, tid), "w", encoding="utf-8") as fh:
+                fh.write("### %s\nbody\n" % tid)
+            open(plan_tool.task_path(work, tid) + ".ok", "w").close()
+        open(plan_tool.task_path(work, "T02") + ".warn", "w").close()
+
+        cs = [{"id": "T01", "consumes": [], "consumers": [], "tier": "std"},
+              {"id": "T02", "consumes": [], "consumers": [], "tier": "std"},
+              {"id": "T03", "consumes": [], "consumers": [], "tier": "std"}]
+
+        def picked(c, body, warned):
+            return ["warn"] if warned else []
+
+        out = plan_tool.leftover_review_items(cs, work, {"T01": 0}, picked)
+        self.assertEqual([c["id"] for c, _ in out], ["T02"])
+        self.assertEqual(out[0][1], ["warn"])
 
 
 if __name__ == "__main__":

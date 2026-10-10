@@ -1084,6 +1084,23 @@ def resume_todo(cs, work, resume):
     return [c for c in cs if done_state(task_path(work, c["id"]), "ok") != "done"]
 
 
+def leftover_review_items(cs, work, review_results, picked):
+    """Review work the in-wave submissions did not cover: tasks that already
+    passed in an earlier run (--resume) and so never went through write_one."""
+    out = []
+    for c in cs:
+        tid = c["id"]
+        if tid in review_results:
+            continue
+        p = task_path(work, tid)
+        if not os.path.exists(p + ".ok"):
+            continue
+        why = picked(c, load(p), os.path.exists(p + ".warn"))
+        if why:
+            out.append((c, why))
+    return out
+
+
 # ------------------------------------------------------------------ build (API lane)
 def cmd_build(a):
     t0 = time.time()
@@ -1197,6 +1214,14 @@ def cmd_build(a):
         print("Re-run `%s build %s --spec %s --resume` to retry only these, or fix them with an editor and run assemble."
               % (qtool(), shlex.quote(plan_path), shlex.quote(spec or "")))
         return 1
+
+    if not a.no_review and not budget.blown():
+        # --resume: survivors of the failed run never went through write_one,
+        # so their review must run here or --thorough silently loses them.
+        leftovers = leftover_review_items(cs, work, review_results, _picked)
+        if leftovers:
+            for (c, _why), outcome in zip(leftovers, pmap(review_one, leftovers, workers)):
+                review_results[c["id"]] = outcome
 
     if not a.no_review:
         if review_results:
