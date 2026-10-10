@@ -1,3 +1,13 @@
+# 9.6 (from 9.5) — context.sh git block concurrency
+
+context.sh: `git ls-files` output is captured once and reused for the tracked
+count, the `files:` line and the `tree:` aggregation (it ran two to three times
+before); the hot-dir `git log` runs in the background behind a mktemp file
+while the quick git calls execute and is joined with `wait` before emit, so the
+stdout block keeps its content and order. Still read-only, still bounded, still
+always exits 0: the backgrounded job is guarded with `|| true` and `wait`
+cannot propagate a failure into the script exit.
+
 # 9.5 (from 9.4) — ZCode only
 
 OpenCode support removed: the `oc_harness.py` lane machinery, the SKILL.md
