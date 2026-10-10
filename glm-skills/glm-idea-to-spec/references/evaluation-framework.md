@@ -2,6 +2,10 @@
 
 Score on evidence, not enthusiasm. Every score needs a reason and, where possible, a source. Never inflate scores to please the user — the purpose is to protect their time and money.
 
+## Contents
+
+1 Scorecard · 2 Revenue model · 3 Unit economics · 4 Risks · 5 Path to money · 6 Pre-build validation test · 7 Kill criteria · 8 Pivot options · 9 Presentation template
+
 ## 1. Scorecard (1–5 per criterion)
 
 | # | Criterion | Weight | 1 = | 5 = |

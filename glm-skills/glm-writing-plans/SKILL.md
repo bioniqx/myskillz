@@ -2,7 +2,6 @@
 name: glm-writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 8 concurrent writers by the script itself, verified by a deterministic linter.
 argument-hint: "[spec-path] [--thorough]"
-compatibility: python3 3.8+; ZCode, Claude Code, or any harness with a shell
 ---
 
 # Writing Plans (v9 - GLM edition)

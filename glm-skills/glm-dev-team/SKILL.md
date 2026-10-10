@@ -9,7 +9,6 @@ description: >-
   this PR", "add tests for …", "make it faster", "set up CI", "start a new service", even when
   they never say "team", "agents" or "tests". Skip only for a trivial one-touch edit or a pure
   question you can answer by reading.
-effort: high
 allowed-tools:
   - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py:*)
   - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py *)

@@ -3,6 +3,10 @@
 `$S` = the absolute scripts path printed as `S=` by every tool output; paste it literally, shell variables do not survive between tool calls.
 Goal: cut wall-clock time with width, without letting parallel work corrupt the evidence.
 
+## Contents
+
+1 Pick the cheapest layer · 2 Width · 3 Isolation — the quality guard · 4 Hypothesis swarm · 5 Search swarm · 6 Recipes
+
 ## 1. Pick the cheapest layer
 
 | Layer | Concurrency | Model turns it costs | Use for |

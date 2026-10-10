@@ -10,7 +10,6 @@ description: >-
   and code", "requirement traceability", "conformance/compliance check", "what is missing vs the spec and
   how do I fix it", "compare my doc to my code", or Vietnamese requests like "kiểm tra code có đúng tài liệu
   yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
-compatibility: ZCode (and Claude-compatible harnesses) with GLM-5.3 / GLM-5.3-Flash. Needs python3; ripgrep recommended; no third-party packages.
 metadata:
   version: 9.0
   models: glm-5.3-flash, glm-5.3

@@ -3,6 +3,10 @@
 Read this only when the skill misbehaves or you are tuning it. The skill itself
 does not need it.
 
+## Contents
+
+Model facts the design is built on · Tier routing · Lanes · Environment · Harness notes · Failure modes seen in practice
+
 ## Model facts the design is built on
 
 | | GLM-5.3 | GLM-5.3-Flash |
