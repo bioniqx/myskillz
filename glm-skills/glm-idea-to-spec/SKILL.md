@@ -47,6 +47,8 @@ Minimum findings before the interview:
 
 If a subagent tool (Task/Agent) exists, run branches in parallel (competitors & pricing / pain & demand / market & trend / tech & cost / legal) and have each return findings + sources.
 
+With no subagent tool, batch the query variants of every branch into one message of web search and fetch calls (several searches in parallel, then the fetches of the most promising sources), never one query per turn.
+
 Report to the user: the 5–8 findings that matter most for making money, each with a link. Flag any early red flag immediately (e.g. no evidence anyone pays).
 
 ## Phase 2 — Deep-dive interview (rounds)
@@ -77,7 +79,7 @@ Read `references/question-bank.md` and pick the questions with the highest impac
 | Constraints (budget, time, skills) | yes |
 | Legal/compliance | when relevant |
 
-Usually 2–4 rounds. If the user says "go fast", fill the rest with labeled assumptions.
+Usually 2–4 rounds. If the user says "go fast", fill the rest with labeled assumptions. If the opening brief already answers the Phase 0-2 questions (target users, goal, success criteria), collapse the remaining questions into ONE batched question round: ask everything still open in a single question-tool call or one numbered chat list, then move to Phase 3.
 
 ## Phase 3 — Verdict & path to money
 
