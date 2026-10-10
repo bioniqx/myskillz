@@ -12,6 +12,8 @@
 
 **thoughtLevel (2026-10-08):** `glm-plan-reviewer` moves `high` → `max` — review dispatches route to the deep lane (`glm-5.3` + `max`), so the reviewer vets deep-tier task bodies at the depth they were written; the writers keep their tier efforts (`std` high, `deep` max).
 
+**Parallel recon (2026-10-10):** `brief` runs its read-only recon steps (git log / ls-files / status, conventions reads, inline pattern-file reads, spec read, `pick_patterns` candidate reads) through the shared `pmap` pool via a new `run_recon` helper; the cap stays 8 and the printed output is byte-identical.
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn

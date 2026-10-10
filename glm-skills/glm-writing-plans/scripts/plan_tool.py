@@ -226,6 +226,14 @@ def workers_cap(requested=None):
     return max(1, min(MAX_WORKERS, requested or cap))
 
 
+def run_recon(steps) -> dict:
+    """Run read-only recon steps concurrently; return name -> result in input order."""
+    if not steps:
+        return {}
+    done = pmap(lambda pair: (pair[0], pair[1][1]()), list(enumerate(steps)), workers_cap())
+    return {steps[i][0]: value for i, value in sorted(done)}
+
+
 def agent_cap():
     for e in ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "ZCODE_MAX_CONCURRENT_SUBAGENTS"):
         v = os.environ.get(e, "").strip()
@@ -1579,6 +1587,7 @@ def pick_patterns(files, repo, spec_text, limit=4, exclude=()):
             recent.append(l)
     rank = {f: i for i, f in enumerate(recent)}
     scored = []
+    cands = []
     for f in files:
         if SKIP_RE.search(f) or norm_path(f) in skip or not os.path.isfile(os.path.join(repo, f)):
             continue
@@ -1593,9 +1602,17 @@ def pick_patterns(files, repo, spec_text, limit=4, exclude=()):
         s += min(4.0, 1.2 * hits)
         if s <= 1.5:
             continue  # the size check below can only lower the score: skip the full read
+        cands.append((f, s))
+
+    def read_len(f):
         try:
-            n = len(load(os.path.join(repo, f)).splitlines())
+            return len(load(os.path.join(repo, f)).splitlines())
         except Exception:
+            return None
+
+    counts = pmap(read_len, [f for f, _ in cands], workers_cap())
+    for (f, s), n in zip(cands, counts):
+        if n is None:
             continue
         if n < 5 or n > 400:
             s -= 2.0
@@ -1637,63 +1654,102 @@ def cmd_brief(a):
         out.append("models: light/std=%s(effort low/high) deep=%s(effort max)" % (GLM["std"][0], GLM["deep"][0]))
         if "--thorough" in args:
             out.append("mode: THOROUGH -> review every task")
-        branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).strip()
-        files = sh(["git", "ls-files"], repo).splitlines()
-        if not files:
-            for root, dirs, fs in os.walk(repo):
-                dirs[:] = [d for d in dirs if not d.startswith(".") and d not in
-                           ("node_modules", "venv", ".venv", "dist", "build", "__pycache__", "target")]
-                files += [os.path.relpath(os.path.join(root, f), repo) for f in fs]
-                if len(files) > 20000:
-                    break
-        dirty = len(sh(["git", "status", "--porcelain"], repo).splitlines())
-        out.append("git: branch %s | %d dirty | %d files" % (branch or "-", dirty, len(files)))
-        plans = os.path.join(repo, "docs", "plans")
-        out.append("plan path: docs/plans/%s-<feature>.md (%d existing)" % (
-            time.strftime("%Y-%m-%d"),
-            len([f for f in os.listdir(plans) if f.endswith(".md")]) if os.path.isdir(plans) else 0))
-        found = [f for f in STACK_MARKS if os.path.isfile(os.path.join(repo, f))]
-        out.append("stack: %s | markers: %s" % (", ".join(sorted({STACK_MARKS[f] for f in found})) or "?",
-                                                ", ".join(found) or "-"))
-        tests = []
-        pj = os.path.join(repo, "package.json")
-        if os.path.isfile(pj):
-            try:
-                scr = json.loads(load(pj)).get("scripts", {})
-                tests += ["npm run %s -> %s" % (k, v) for k, v in scr.items()
-                          if re.search(r"test|lint|check|typecheck", k)][:6]
-            except ValueError:
-                pass
-        pp = os.path.join(repo, "pyproject.toml")
-        if os.path.isfile(pp) and "pytest" in load(pp):
+        # read-only recon probes: each independent read becomes a zero-argument
+        # step with its exact original body, then one concurrent run_recon call
+        def recon_branch():
+            return sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).strip()
+
+        def recon_files():
+            files = sh(["git", "ls-files"], repo).splitlines()
+            if not files:
+                for root, dirs, fs in os.walk(repo):
+                    dirs[:] = [d for d in dirs if not d.startswith(".") and d not in
+                               ("node_modules", "venv", ".venv", "dist", "build", "__pycache__", "target")]
+                    files += [os.path.relpath(os.path.join(root, f), repo) for f in fs]
+                    if len(files) > 20000:
+                        break
+            return files
+
+        def recon_dirty():
+            return len(sh(["git", "status", "--porcelain"], repo).splitlines())
+
+        def recon_plan_count():
+            plans = os.path.join(repo, "docs", "plans")
+            return len([f for f in os.listdir(plans) if f.endswith(".md")]) if os.path.isdir(plans) else 0
+
+        def recon_found():
+            return [f for f in STACK_MARKS if os.path.isfile(os.path.join(repo, f))]
+
+        def recon_pkg_tests():
+            tests = []
+            pj = os.path.join(repo, "package.json")
+            if os.path.isfile(pj):
+                try:
+                    scr = json.loads(load(pj)).get("scripts", {})
+                    tests += ["npm run %s -> %s" % (k, v) for k, v in scr.items()
+                              if re.search(r"test|lint|check|typecheck", k)][:6]
+                except ValueError:
+                    pass
+            return tests
+
+        def recon_pytest():
+            pp = os.path.join(repo, "pyproject.toml")
+            return os.path.isfile(pp) and "pytest" in load(pp)
+
+        def recon_conventions():
+            conv = []
+            for md in ("AGENTS.md", "CLAUDE.md", ".zcode/AGENTS.md", ".claude/CLAUDE.md"):
+                p = os.path.join(repo, md)
+                if os.path.isfile(p):
+                    conv.append((md, load(p).splitlines()))
+            return conv
+
+        def recon_spec_lines():
+            return load(spec_abs).splitlines() if spec_abs else None
+
+        steps = [
+            ("branch", recon_branch),
+            ("files", recon_files),
+            ("dirty", recon_dirty),
+            ("plan_count", recon_plan_count),
+            ("found", recon_found),
+            ("pkg_tests", recon_pkg_tests),
+            ("pytest", recon_pytest),
+            ("conventions", recon_conventions),
+            ("spec_lines", recon_spec_lines),
+        ]
+        recon = run_recon(steps)
+        out.append("git: branch %s | %d dirty | %d files"
+                   % (recon["branch"] or "-", recon["dirty"], len(recon["files"])))
+        out.append("plan path: docs/plans/%s-<feature>.md (%d existing)"
+                   % (time.strftime("%Y-%m-%d"), recon["plan_count"]))
+        out.append("stack: %s | markers: %s" % (", ".join(sorted({STACK_MARKS[f] for f in recon["found"]})) or "?",
+                                                ", ".join(recon["found"]) or "-"))
+        tests = list(recon["pkg_tests"])
+        if recon["pytest"]:
             tests.append("pytest (pyproject.toml)")
-        if any(STACK_MARKS[f] == "go" for f in found):
+        if any(STACK_MARKS[f] == "go" for f in recon["found"]):
             tests.append("go test ./...")
-        if any(STACK_MARKS[f] == "rust" for f in found):
+        if any(STACK_MARKS[f] == "rust" for f in recon["found"]):
             tests.append("cargo test")
         if tests:
             out.append("test/check cmds: " + " ; ".join(tests))
-        conv = []
-        for md in ("AGENTS.md", "CLAUDE.md", ".zcode/AGENTS.md", ".claude/CLAUDE.md"):
-            p = os.path.join(repo, md)
-            if os.path.isfile(p):
-                conv.append(md)
-                md_lines = load(p).splitlines()
-                out.append("conventions %s (%d lines) - copy binding rules into Global Constraints:" % (md, len(md_lines)))
-                out.append("  " + "\n  ".join(md_lines[:60]))
-        if not conv:
+        for md, md_lines in recon["conventions"]:
+            out.append("conventions %s (%d lines) - copy binding rules into Global Constraints:" % (md, len(md_lines)))
+            out.append("  " + "\n  ".join(md_lines[:60]))
+        if not recon["conventions"]:
             out.append("conventions file: none")
         dirs = {}
-        for f in files:
+        for f in recon["files"]:
             d = f.split("/", 1)[0] if "/" in f else "."
             dirs[d] = dirs.get(d, 0) + 1
         out.append("top-level: " + ", ".join("%s(%d)" % (d, n) for d, n in sorted(dirs.items(), key=lambda x: -x[1])[:25]))
-        shown = [f for f in files if not SKIP_RE.search(f)]
-        out.append("files (%d of %d):" % (min(250, len(shown)), len(files)))
+        shown = [f for f in recon["files"] if not SKIP_RE.search(f)]
+        out.append("files (%d of %d):" % (min(250, len(shown)), len(recon["files"])))
         out.append("  " + "\n  ".join(shown[:250]))
         spec_text = ""
         if spec_abs:
-            sl = load(spec_abs).splitlines()
+            sl = recon["spec_lines"]
             spec_text = "\n".join(sl)
             rel = os.path.relpath(spec_abs, repo)
             heads = [(i + 1, l.strip()) for i, l in enumerate(sl) if re.match(r"^#{1,6}\s", l)]
