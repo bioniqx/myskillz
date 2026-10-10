@@ -2035,7 +2035,7 @@ def integrate_one(root, st, sid, remove=True, pc=None):
                       f"{sid}: NOT INTEGRATED — no claim recorded. Report has a `## Worktree:` line → `bind {sid} <path>` "
                       f"then integrate again; otherwise the glm-programmer never ran `claim {sid}` → `retry {sid}`.")
     wt, branch = claim["worktree"], claim["branch"]
-    if pc["tip"] is None:
+    if pc.get("tip") is None:
         return reject(s, "branch-missing", f"{sid}: NOT INTEGRATED — branch {branch} not found. `retry {sid}`.")
     tip = pc["tip"]
     base = claim.get("base") or s["base_sha"]

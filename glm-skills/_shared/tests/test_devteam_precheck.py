@@ -42,8 +42,9 @@ class TestPrecheckOneContract(unittest.TestCase):
 
     def test_precheck_one_body_is_read_only(self):
         body = _function_source(_devteam_text(), "precheck_one")
-        for banned in ("save_state", "state_lock", "merge_slice", "reject("):
-            self.assertNotIn(banned, body)
+        for banned in ("save_state(", "state_lock", "merge_slice(", "reject("):
+            self.assertNotIn(banned, body,
+                             "precheck_one must stay read-only: %s found" % banned)
 
 
 class TestPrecheckConcurrency(unittest.TestCase):
@@ -89,6 +90,17 @@ class TestIntegrateStructure(unittest.TestCase):
         params = list(inspect.signature(devteam.integrate_one).parameters)
         self.assertEqual(params[-1], "pc",
                          "integrate_one must receive its precheck result as a trailing pc param")
+
+
+class TestBranchMissingReject(unittest.TestCase):
+    def test_missing_tip_rejects_instead_of_raising(self):
+        st = {"slices": {"S1": {"status": "inflight", "mode": "work", "kind": "chore",
+                                "base_sha": "0" * 40, "files": ["a.txt"],
+                                "history": [], "rejected": None}}}
+        pc = {"claim": {"worktree": "/tmp/gone", "branch": "nosuch", "base": None}}
+        msg = devteam.integrate_one("/tmp", st, "S1", pc=pc)
+        self.assertIn("branch nosuch not found", msg)
+        self.assertIn("retry S1", msg)
 
 
 if __name__ == "__main__":
