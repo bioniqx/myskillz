@@ -49,7 +49,7 @@ in_home=no
 
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   ls_out=$(git ls-files 2>/dev/null)
-  files=$(printf '%s' "$ls_out" | awk 'END{print NR}')
+  files=$(printf '%s' "$ls_out" | awk 'END{print NR+0}')
   hot_tmp=$(mktemp "${TMPDIR:-/tmp}/ctx_hot.XXXXXX")
   ( git log --since=30.days -n 300 --name-only --pretty=format: --relative -- . 2>/dev/null \
       | head -n 20000 \
