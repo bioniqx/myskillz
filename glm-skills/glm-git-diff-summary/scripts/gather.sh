@@ -39,9 +39,21 @@ else
   B=""
   [ -n "$REMOTE" ] && B=$($G symbolic-ref -q --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null) && B=${B#"$REMOTE"/}
   if [ -z "$B" ]; then
-    for c in main master develop trunk; do
-      { [ -n "$REMOTE" ] && has "$REMOTE/$c"; } || has "refs/heads/$c" && { B=$c; break; }
-    done
+    B=$($G for-each-ref --format='%(refname)' \
+      ${REMOTE:+"refs/remotes/$REMOTE/main"} ${REMOTE:+"refs/remotes/$REMOTE/master"} \
+      ${REMOTE:+"refs/remotes/$REMOTE/develop"} ${REMOTE:+"refs/remotes/$REMOTE/trunk"} \
+      refs/heads/main refs/heads/master refs/heads/develop refs/heads/trunk 2>/dev/null | awk '
+      { remote = (index($0, "refs/remotes/") == 1)
+        base = $0
+        if (remote) { sub(/^refs\/remotes\/[^\/]+\//, "", base) }
+        else { sub(/^refs\/heads\//, "", base) }
+        c = 0
+        if (base == "main") c = 1; else if (base == "master") c = 2
+        else if (base == "develop") c = 3; else if (base == "trunk") c = 4
+        if (!c) next
+        pri = c * 10 + (remote ? 0 : 5)
+        if (best == "" || pri < best + 0) { best = pri; B = base } }
+      END { print B }')
   fi
   B=${B:-main}
 fi
@@ -187,7 +199,30 @@ else
   TL=$(awk 'END{print NR}' "$T/diff.patch")
   tgt=$(( BYTES * 23 / 20 / MAXN + 1 )); [ $tgt -lt $FAN_CHUNK ] && tgt=$FAN_CHUNK
   ml=$(( TL * 23 / 20 / MAXN + 1 )); [ $ml -lt 1900 ] && ml=1900
-  N=$(chunk $tgt $ml); while [ "$N" -gt $MAXN ]; do tgt=$((tgt*3/2)); ml=$((ml*3/2)); N=$(chunk $tgt $ml); done
+  N=$(chunk $tgt $ml)
+  if [ "$N" -gt "$MAXN" ]; then
+    # one pass: group the measured chunk index arithmetically; awk never re-runs on the patch
+    per=$(( (N + MAXN - 1) / MAXN ))
+    ml=$((ml * per))  # merged chunks can hold up to per x ml lines; keeps the NOTE gate truthful
+    awk -F'\t' -v per="$per" -v dir="$T/c" '
+      { g = int((FNR - 1) / per) + 1; nf[g] += $2
+        n = split($3, rr, / \.\. /)
+        if (!(g in gf)) gf[g] = rr[1]
+        gl[g] = rr[n]; ng = g }
+      END { for (i = 1; i <= ng; i++)
+              print i "\t" nf[i] "\t" gf[i] (gf[i] == gl[i] ? "" : " .. " gl[i]) > (dir "/index.new") }' "$T/c/index"
+    m=0; i=1
+    while [ "$i" -le "$N" ]; do
+      m=$((m+1)); j=$((i + per - 1)); [ "$j" -gt "$N" ] && j=$N
+      k=$i; : > "$T/c/.m"
+      while [ "$k" -le "$j" ]; do cat "$T/c/$(printf '%03d' "$k").patch" >> "$T/c/.m"; k=$((k+1)); done
+      mv "$T/c/.m" "$T/c/.new-$(printf '%03d' "$m")"
+      i=$((j + 1))
+    done
+    k=1; while [ "$k" -le "$m" ]; do mv "$T/c/.new-$(printf '%03d' "$k")" "$T/c/$(printf '%03d' "$k").patch"; k=$((k+1)); done
+    while [ "$k" -le "$N" ]; do rm -f "$T/c/$(printf '%03d' "$k").patch"; k=$((k+1)); done
+    mv "$T/c/index.new" "$T/c/index"; echo "$m" > "$T/c/count"; N=$m
+  fi
   [ $ml -gt 1900 ] && echo "NOTE: chunks exceed one Read (lines<=$ml): subagents must page with offset/limit"
   echo "MODE=FAN_OUT chunks=$N dir=$T/c  (idx files first..last):"
   while IFS="$(printf '\t')" read -r i n r; do printf '%s/c/%03d.patch  files=%s  %s\n' "$T" "$i" "$n" "$r"; done < "$T/c/index"
