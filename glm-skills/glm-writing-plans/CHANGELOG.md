@@ -14,6 +14,8 @@
 
 **Parallel recon (2026-10-10):** `brief` runs its read-only recon steps (git log / ls-files / status, conventions reads, inline pattern-file reads, spec read, `pick_patterns` candidate reads) through the shared `pmap` pool via a new `run_recon` helper; the cap stays 8 and the printed output is byte-identical.
 
+**Review overlap (2026-10-10):** `build` submits each picked task's review as soon as its writer finishes (right after the `.ok` mark) instead of after every writer completes; a tripped shared budget now also stops new review submissions; failed writes still skip review and the failure report and exit codes are unchanged.
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn

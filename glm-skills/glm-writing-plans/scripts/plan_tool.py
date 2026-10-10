@@ -1116,6 +1116,24 @@ def cmd_build(a):
     sys.stdout.flush()
 
     results = {}
+    review_results = {}
+
+    def _picked(c, body, warned):
+        """Pick reasons for ONE task, verbatim from the removed post-wave review pick."""
+        why = []
+        if a.thorough:
+            why.append("all")
+        if c["tier"] == "deep":
+            why.append("deep")
+        if len(body.splitlines()) > 250:
+            why.append("long")
+        if len(c["consumes"]) >= 3:
+            why.append("consumes%d" % len(c["consumes"]))
+        if c["consumers"]:
+            why.append("producer")
+        if warned:
+            why.append("warn")
+        return why
 
     def write_one(c):
         tid = c["id"]
@@ -1141,61 +1159,10 @@ def cmd_build(a):
             touch(task_path(work, tid) + ".ok")
             if w:
                 save(task_path(work, tid) + ".warn", "\n".join(w))
+            why = _picked(c, body, bool(w))
+            if not a.no_review and not budget.blown() and why:
+                review_results[tid] = review_one((c, why))
         return (tid, "OK" if not e else "LINT", "; ".join(e[:2]), rounds)
-
-    for tid, st, msg, rounds in pmap(write_one, todo, workers):
-        results[tid] = (st, msg, rounds)
-    bad = [t for t, (st, _, _) in results.items() if st != "OK"]
-    fixed = sum(1 for _, (_, _, r) in results.items() if r)
-    print("WRITE %d ok, %d repaired, %d failing (%.0fs)"
-          % (len(results) - len(bad), fixed, len(bad), time.time() - t0))
-    for t in sorted(bad):
-        print("  %s %s: %s" % (results[t][0], t, results[t][1][:180]))
-    if bad:
-        print("Re-run `%s build %s --spec %s --resume` to retry only these, or fix them with an editor and run assemble."
-              % (qtool(), shlex.quote(plan_path), shlex.quote(spec or "")))
-        return 1
-
-    if not a.no_review:
-        nrev = run_review(a, cfg, cs, plan, repo, work, spec, allow, budget, workers, prefix)
-        print("REVIEW %d task(s) judged (%.0fs total)" % (nrev, time.time() - t0))
-
-    ns = argparse.Namespace(plan=plan_path, spec=spec, clean=not a.keep_work, allow=allow)
-    rc = cmd_assemble(ns)
-    if rc == 0:
-        print("TIME %.0fs total" % (time.time() - t0))
-    return rc
-
-
-def pick_risky(cs, work, everything=False):
-    picked = []
-    for c in cs:
-        p = task_path(work, c["id"])
-        if not os.path.exists(p):
-            continue
-        body = load(p)
-        why = []
-        if everything:
-            why.append("all")
-        if c["tier"] == "deep":
-            why.append("deep")
-        if len(body.splitlines()) > 250:
-            why.append("long")
-        if len(c["consumes"]) >= 3:
-            why.append("consumes%d" % len(c["consumes"]))
-        if c["consumers"]:
-            why.append("producer")
-        if os.path.exists(p + ".warn"):
-            why.append("warn")
-        if why:
-            picked.append((c, why))
-    return picked
-
-
-def run_review(a, cfg, cs, plan, repo, work, spec, allow, budget, workers, prefix):
-    picked = pick_risky(cs, work, a.thorough)
-    if not picked:
-        return 0
 
     def review_one(item):
         c, _ = item
@@ -1218,9 +1185,30 @@ def run_review(a, cfg, cs, plan, repo, work, spec, allow, budget, workers, prefi
             return 1
         return 0
 
-    changed = sum(pmap(review_one, picked, workers))
-    print("REVIEW %d risky, %d rewritten" % (len(picked), changed))
-    return len(picked)
+    for tid, st, msg, rounds in pmap(write_one, todo, workers):
+        results[tid] = (st, msg, rounds)
+    bad = [t for t, (st, _, _) in results.items() if st != "OK"]
+    fixed = sum(1 for _, (_, _, r) in results.items() if r)
+    print("WRITE %d ok, %d repaired, %d failing (%.0fs)"
+          % (len(results) - len(bad), fixed, len(bad), time.time() - t0))
+    for t in sorted(bad):
+        print("  %s %s: %s" % (results[t][0], t, results[t][1][:180]))
+    if bad:
+        print("Re-run `%s build %s --spec %s --resume` to retry only these, or fix them with an editor and run assemble."
+              % (qtool(), shlex.quote(plan_path), shlex.quote(spec or "")))
+        return 1
+
+    if not a.no_review:
+        if review_results:
+            print("REVIEW %d risky, %d rewritten"
+                  % (len(review_results), sum(review_results.get(c["id"], 0) for c in cs)))
+        print("REVIEW %d task(s) judged (%.0fs total)" % (len(review_results), time.time() - t0))
+
+    ns = argparse.Namespace(plan=plan_path, spec=spec, clean=not a.keep_work, allow=allow)
+    rc = cmd_assemble(ns)
+    if rc == 0:
+        print("TIME %.0fs total" % (time.time() - t0))
+    return rc
 
 
 def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
