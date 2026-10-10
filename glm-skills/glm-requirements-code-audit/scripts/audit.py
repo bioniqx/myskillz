@@ -1624,6 +1624,21 @@ def needs_verify(it, f):
     return False
 
 
+def should_verify_item(no_verify, it, row):
+    """Wave-B gate for one live item: identical to the pre-pipeline wave-B
+    rule - a stale verdict never suppresses a fresh re-judge's adversarial
+    pass (--resume re-verifies live items that had one)."""
+    return (not no_verify) and needs_verify(it, row)
+
+
+def residual_verify_ids(vset, live_ids, verdict_ids):
+    """Ids that still need wave B after the pipelined pass: settled findings
+    from an earlier run (--resume) that need verification but were not
+    verified this run. Live ids are excluded on purpose: their pipeline
+    outcome (verdict or WARN) already stands."""
+    return [rid for rid in vset if rid not in live_ids and rid not in verdict_ids]
+
+
 def verify_targets(order, by_id, findings, done, prev_ver):
     """RA20: ids wave B must still verify, plus the verdicts a --resume keeps.
     A verdict is kept only when its finding was settled before this run (so
@@ -2173,7 +2188,10 @@ def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, wa
     findings = {}
     verdicts = {}
     if items and warm_judge is not None:
-        warm_judge()
+        try:
+            warm_judge()
+        except Exception as e:
+            print("judged warm-up failed: %s" % clip(str(e), 120), file=sys.stderr)
     for i, it in enumerate(items):
         pending[fan.submit(judge_fn, it)] = (i, "judge")
     verify_warmed = warm_verify is None
@@ -2188,7 +2206,10 @@ def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, wa
                     continue
                 if not verify_warmed:
                     verify_warmed = True
-                    warm_verify()
+                    try:
+                        warm_verify()
+                    except Exception as e:
+                        print("verified warm-up failed: %s" % clip(str(e), 120), file=sys.stderr)
                 pending[fan.submit(verify_fn, items[i], value)] = (i, "verify")
             else:
                 verdicts[i] = (value, err)
@@ -2265,7 +2286,7 @@ def cmd_run(a):
             return None, e
 
     def should_verify(it, row):
-        return (not a.no_verify) and it["id"] not in prev_ver and needs_verify(it, row)
+        return should_verify_item(a.no_verify, it, row)
 
     fan = Fan(cl, c.threads)
     findings, verdicts = run_judge_verify_pipeline(
@@ -2295,6 +2316,21 @@ def cmd_run(a):
             vrows_out[it["id"]] = row
         else:
             print("WARN  verify %s failed: %s" % (it["id"], clip(str(err), 120)))
+    res_ids = residual_verify_ids(vset, set(it["id"] for it in live), set(vrows_out))
+    if res_ids and not a.no_verify:
+        # --resume: settled findings that still need the adversarial pass the
+        # pipeline never saw (it only runs over live items).
+        rjobs = []
+        for rid in res_ids:
+            def mkv(rid=rid):
+                return lambda: verify_fn(by_id[rid], findings[rid])
+            rjobs.append((rid, mkv()))
+        rres = Fan(cl, c.threads).run(rjobs, "verified", warm=None)
+        for rid, (row, err) in rres.items():
+            if err is None:
+                vrows_out[rid] = row
+            else:
+                print("WARN  verify %s failed: %s" % (rid, clip(str(err), 120)))
     verdicts = vrows_out
     if a.no_verify:
         print("  skipped by --no-verify. The report will say so; MISSING items stay "

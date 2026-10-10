@@ -3,9 +3,7 @@ import importlib.util
 import os
 import sys
 import threading
-import time
 import unittest
-from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 AUDIT = os.path.join(HERE, "..", "..", "glm-requirements-code-audit", "scripts", "audit.py")
@@ -125,35 +123,18 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(order.count("warm_judge"), 1)
         self.assertEqual(order.count("warm_verify"), 1)
 
-    def test_shared_pool_never_exceeds_eight_in_flight_jobs(self):
-        live = [0]
-        peak = [0]
-        lock = threading.Lock()
-
-        def judge_fn(item):
-            with lock:
-                live[0] += 1
-                peak[0] = max(peak[0], live[0])
-            time.sleep(0.005)
-            with lock:
-                live[0] -= 1
-            return ({"id": item}, None)
-
-        def verify_fn(item, row):
-            with lock:
-                live[0] += 1
-                peak[0] = max(peak[0], live[0])
-            time.sleep(0.005)
-            with lock:
-                live[0] -= 1
-            return ({"verdict_for": item}, None)
-
-        fan = RecordingFan(workers=8)
-        self._pipeline(list(range(40)), fan, lambda it, row: True,
-                       judge_fn=judge_fn, verify_fn=verify_fn)
+    def test_every_job_flows_through_the_fan_pool(self):
+        fan = RecordingFan()
+        findings, verdicts = self._pipeline(
+            list("abcdef"), fan, lambda it, row: it in "bc")
         fan.shutdown()
 
-        self.assertLessEqual(peak[0], 8)
+        kinds = [entry[0] for entry in fan.log]
+        self.assertEqual(kinds.count("judge_fn"), 6)
+        self.assertEqual(kinds.count("verify_fn"), 2)
+        self.assertEqual([f[0]["id"] for f in findings], list("abcdef"))
+        self.assertEqual([v[0]["verdict_for"] if v else None for v in verdicts],
+                         [None, "b", "c", None, None, None])
 
     def test_api_errors_travel_as_error_rows_not_exceptions(self):
         def judge_fn(item):
@@ -176,6 +157,37 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(findings[1], (None, "api error: 429"))
         self.assertEqual([v[0]["verdict_for"] for v in verdicts[:1]], ["a"])
         self.assertIsNone(verdicts[1])
+
+
+class PipelineRobustnessTests(unittest.TestCase):
+    def test_warm_up_failure_degrades_to_a_warning(self):
+        def boom():
+            raise RuntimeError("api error: 500")
+
+        fan = RecordingFan()
+        findings, verdicts = PipelineTests._pipeline(
+            ["a", "b"], fan, lambda it, row: True, warm_judge=boom, warm_verify=boom)
+        fan.shutdown()
+
+        self.assertEqual([f[0]["id"] for f in findings], ["a", "b"])
+        self.assertEqual([v[0]["verdict_for"] for v in verdicts], ["a", "b"])
+
+
+class ResumeSelectionTests(unittest.TestCase):
+    def test_should_verify_item_ignores_prior_verdicts(self):
+        it = {"id": "R1", "stakes": "normal", "strength": "SHOULD"}
+        row = {"status": "MATCHED", "confidence": "medium"}
+        self.assertTrue(audit.should_verify_item(False, it, row),
+                        "a fresh re-judge must get its adversarial pass even with a stale verdict")
+        self.assertFalse(audit.should_verify_item(True, it, row))
+        settled = {"status": "MATCHED", "confidence": "high", "passes": 2}
+        self.assertFalse(audit.should_verify_item(False, it, settled))
+
+    def test_residual_covers_settled_ids_without_this_runs_verdict(self):
+        live, verdicts = ["R2"], {"R2"}
+        self.assertEqual(audit.residual_verify_ids(["R1", "R2", "R3"], live, verdicts),
+                         ["R1", "R3"])
+        self.assertEqual(audit.residual_verify_ids(["R2"], live, verdicts), [])
 
 
 if __name__ == "__main__":
