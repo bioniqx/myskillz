@@ -33,7 +33,7 @@ import sys
 import threading
 import time
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import zai_client  # vendored by skills/glm/_shared/sync.sh
 
 VERSION = "9.0"
@@ -1479,6 +1479,22 @@ class Fan(object):
                              % (label, total, fmt_dur(now() - t0), self.peak))
         return res
 
+    def submit(self, fn, *args):
+        """Submit fn(*args) on Fan's executor: Fan.submit(fn, *args) -> future."""
+        with self._lock:
+            ex = getattr(self, "_pool", None)
+            if ex is None:
+                ex = self._pool = ThreadPoolExecutor(max_workers=self.threads)
+
+        def task():
+            self._enter()
+            try:
+                return fn(*args)
+            finally:
+                self._exit()
+
+        return ex.submit(task)
+
 
 WARM_TASK = u"Reply with the JSON object {} and nothing else."
 
@@ -2142,6 +2158,44 @@ def _client(c):
 # --------------------------------------------------------------------------- run (api lane)
 
 
+def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, warm_judge=None, warm_verify=None) -> (list, list):
+    """One completion-aware pool pass over items.
+
+    Submits every judge job to the shared pool, then submits each item's
+    verify job the moment its judge result lands, so verify work fills
+    judge-tail slots. judge_fn and verify_fn return (value, err) tuples,
+    the convention the two waves use today; an error row is never verified.
+    Returns (findings, verdicts): two lists aligned with items; verdicts
+    holds None where no verify job ran. In-flight work is bounded by the
+    pool's own width; nothing here touches the disk or the client stats.
+    """
+    pending = {}
+    findings = {}
+    verdicts = {}
+    if items and warm_judge is not None:
+        warm_judge()
+    for i, it in enumerate(items):
+        pending[fan.submit(judge_fn, it)] = (i, "judge")
+    verify_warmed = warm_verify is None
+    while pending:
+        done, _ = wait(set(pending), return_when=FIRST_COMPLETED)
+        for fut in done:
+            i, phase = pending.pop(fut)
+            value, err = fut.result()
+            if phase == "judge":
+                findings[i] = (value, err)
+                if err is not None or not should_verify(items[i], value):
+                    continue
+                if not verify_warmed:
+                    verify_warmed = True
+                    warm_verify()
+                pending[fan.submit(verify_fn, items[i], value)] = (i, "verify")
+            else:
+                verdicts[i] = (value, err)
+    return ([findings.get(i) for i in range(len(items))],
+            [verdicts.get(i) for i in range(len(items))])
+
+
 def cmd_run(a):
     c = Ctx(a.out)
     if a.tier:
@@ -2186,53 +2240,63 @@ def cmd_run(a):
     mt = c.tcfg["max_tokens"]
     t0 = now()
 
-    print("WAVE A  %d requirements  %d threads  %s effort=%s  retrieval=%s"
-          % (len(live), min(c.threads, len(live)) if live else 0,
-             c.tcfg["judge"][0], c.tcfg["judge"][1], retr.engine_name()))
-    jobs = []
-    for it in live:
-        def mk(it=it):
-            return lambda: judge_one(c, cl, retr, jp, it, c.tier, mt)
-        jobs.append((it["id"], mk()))
-    fan = Fan(cl, c.threads)
-    res = fan.run(jobs, "judged", warm=warm_call(cl, c.tcfg["judge"], jp))
-    findings = dict(done)
-    for rid, (row, err) in res.items():
-        if err is not None:
-            findings[rid] = {"id": rid, "status": "UNSEARCHED", "confidence": "low",
-                             "evidence": [], "searched": [],
-                             "notes": "api error: " + clip(str(err), 150)}
-        else:
-            findings[rid] = row
-    order = [it["id"] for it in items if it["id"] in findings]
-    write_jsonl(c.p("findings.jsonl"), [findings[i] for i in order])
-
     by_id = dict((it["id"], it) for it in items)
     prev_ver = {}
     if a.resume:
         vrows, _b = read_jsonl(c.p("verdicts.jsonl"))
         prev_ver = dict((r["id"], r) for r in vrows if r.get("id"))
+    warm_judge = warm_call(cl, c.tcfg["judge"], jp) if len(live) >= 6 else None
+    warm_verify = warm_call(cl, c.tcfg["verify"], vp) if len(live) >= 6 else None
+    print("WAVES A+B  %d requirements  %d threads  judge=%s effort=%s  verify=%s effort=%s  retrieval=%s"
+          % (len(live), min(c.threads, len(live)) if live else 0,
+             c.tcfg["judge"][0], c.tcfg["judge"][1],
+             c.tcfg["verify"][0], c.tcfg["verify"][1], retr.engine_name()))
+
+    def judge_fn(it):
+        try:
+            return judge_one(c, cl, retr, jp, it, c.tier, mt), None
+        except Exception as e:
+            return None, e
+
+    def verify_fn(it, row):
+        try:
+            return verify_one(c, cl, retr, vp, it, row, c.tier, mt), None
+        except Exception as e:
+            return None, e
+
+    def should_verify(it, row):
+        return (not a.no_verify) and it["id"] not in prev_ver and needs_verify(it, row)
+
+    fan = Fan(cl, c.threads)
+    findings, verdicts = run_judge_verify_pipeline(
+        live, judge_fn, verify_fn, should_verify, fan,
+        warm_judge=warm_judge, warm_verify=warm_verify)
+    rows = dict(done)
+    for it, pair in zip(live, findings):
+        rid = it["id"]
+        row, err = pair
+        if err is not None:
+            rows[rid] = {"id": rid, "status": "UNSEARCHED", "confidence": "low",
+                         "evidence": [], "searched": [],
+                         "notes": "api error: " + clip(str(err), 150)}
+        else:
+            rows[rid] = row
+    findings = rows
+    order = [it["id"] for it in items if it["id"] in findings]
+    write_jsonl(c.p("findings.jsonl"), [findings[i] for i in order])
+
     vset, kept = verify_targets(order, by_id, findings, done, prev_ver)
-    print("")
-    print("WAVE B  %d of %d need an adversarial second pass  %s effort=%s%s"
-          % (len(vset), len(order), c.tcfg["verify"][0], c.tcfg["verify"][1],
-             ("  (%d verdict(s) kept from the last run)" % len(kept)) if kept else ""))
-    verdicts = dict(kept)
-    if vset and not a.no_verify:
-        vjobs = []
-        for rid in vset:
-            def mkv(rid=rid):
-                return lambda: verify_one(c, cl, retr, vp, by_id[rid], findings[rid],
-                                          c.tier, mt)
-            vjobs.append((rid, mkv()))
-        vres = Fan(cl, c.threads).run(vjobs, "verified",
-                                      warm=warm_call(cl, c.tcfg["verify"], vp))
-        for rid, (row, err) in vres.items():
-            if err is None:
-                verdicts[rid] = row
-            else:
-                print("WARN  verify %s failed: %s" % (rid, clip(str(err), 120)))
-    elif a.no_verify:
+    vrows_out = dict(kept)
+    for it, pair in zip(live, verdicts):
+        if pair is None:
+            continue
+        row, err = pair
+        if err is None:
+            vrows_out[it["id"]] = row
+        else:
+            print("WARN  verify %s failed: %s" % (it["id"], clip(str(err), 120)))
+    verdicts = vrows_out
+    if a.no_verify:
         print("  skipped by --no-verify. The report will say so; MISSING items stay "
               "single-pass and `check` will fail.")
     if verdicts or (vset and not a.no_verify):
