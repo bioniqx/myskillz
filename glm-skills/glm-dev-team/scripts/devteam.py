@@ -99,6 +99,7 @@ import shutil
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 try:
@@ -1923,14 +1924,60 @@ def cmd_dispatch(a):
     out(progress_line(st))
 
 
+def precheck_one(c, sl) -> dict:
+    """Read-only pre-checks for one slice: dirty status, log scan, footprint diff."""
+    root, st = c
+    result = {}
+    s = st["slices"].get(sl)
+    if s is None:
+        return result
+    try:
+        claim = read_claim(root, sl)
+        result["claim"] = claim
+        if not claim:
+            return result
+        wt, branch = claim["worktree"], claim["branch"]
+        if not git_ok(["rev-parse", "--verify", "--quiet", branch], root):
+            return result
+        tip = git(["rev-parse", branch], root)
+        result["tip"] = tip
+        base = claim.get("base") or s["base_sha"]
+        result["dirty"] = bool(Path(wt).exists() and git(["status", "--porcelain", "--untracked-files=no"], wt))
+        # RED commit discovery. `.slice/red` is written by the agent's own worktree, so it is NOT an
+        # input here — the integrator trusts only the branch's history and the sha it recorded itself.
+        red = None
+        for line in git(["log", "--format=%H%x1f%s", f"{base}..{tip}"], root).splitlines():
+            h, _, subj = line.partition("\x1f")
+            if subj.startswith(f"test({sl})"):
+                red = h
+        result["red"] = red
+        result["touched"] = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
+    except DevteamError as e:
+        result["error"] = str(e)   # integrate_one re-raises it inside the serial loop's error handling
+    return result
+
+
+def precheck_all(c, slices) -> list:
+    """Run the read-only per-slice pre-checks concurrently, capped at 8 threads.
+
+    Returns the results in slice order. Nothing here mutates state.
+    """
+    if not slices:
+        return []
+    workers = min(8, len(slices))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(lambda sl: precheck_one(c, sl), slices))
+
+
 def do_integrate(root, st, ids, remove=True):
     cur = git(["rev-parse", "--abbrev-ref", "HEAD"], root)
     if cur != st["integration_branch"]:
         raise DevteamError(f"HEAD is {cur}, expected integration branch {st['integration_branch']}")
     results = []
-    for sid in ids:
+    prechecks = precheck_all((root, st), ids)
+    for sid, pc in zip(ids, prechecks):
         try:
-            r = integrate_one(root, st, sid, remove=remove)
+            r = integrate_one(root, st, sid, remove=remove, pc=pc)
             results.append(r)
         except DevteamError as e:
             results.append(f"{sid}: ERROR — {e}")
@@ -1961,7 +2008,7 @@ def reject(s, event, msg, **extra):
     return msg
 
 
-def integrate_one(root, st, sid, remove=True):
+def integrate_one(root, st, sid, remove=True, pc=None):
     s = slice_state(st, sid)
     if s["status"] != "inflight":
         return f"{sid}: skipped — status is {s['status']}"
@@ -1978,34 +2025,32 @@ def integrate_one(root, st, sid, remove=True):
         follow = add_fixes_from_text(st, rp.read_text(), source=sid)
         extra = (f"; follow-up slices queued: {' '.join(follow)}" if follow else "")
         return f"{sid}: RESEARCH RECORDED — {rp} (nothing merged: read-only slice){extra}"
-    claim = read_claim(root, sid)
+    if pc is None:
+        pc = precheck_one((root, st), sid)
+    if pc.get("error"):
+        raise DevteamError(pc["error"])
+    claim = pc["claim"]
     if not claim:
         return reject(s, "no-claim",
                       f"{sid}: NOT INTEGRATED — no claim recorded. Report has a `## Worktree:` line → `bind {sid} <path>` "
                       f"then integrate again; otherwise the glm-programmer never ran `claim {sid}` → `retry {sid}`.")
     wt, branch = claim["worktree"], claim["branch"]
-    if not git_ok(["rev-parse", "--verify", "--quiet", branch], root):
+    if pc["tip"] is None:
         return reject(s, "branch-missing", f"{sid}: NOT INTEGRATED — branch {branch} not found. `retry {sid}`.")
-    tip = git(["rev-parse", branch], root)
+    tip = pc["tip"]
     base = claim.get("base") or s["base_sha"]
     mode = s["mode"]
-    if Path(wt).exists() and git(["status", "--porcelain", "--untracked-files=no"], wt):
+    if pc["dirty"]:
         return reject(s, "dirty", f"{sid}: NOT READY — uncommitted changes in {wt}. SendMessage the agent: "
                                   f"'commit your work with commit-green, then report', then integrate again.")
-    # RED commit discovery. `.slice/red` is written by the agent's own worktree, so it is NOT an
-    # input here — the integrator trusts only the branch's history and the sha it recorded itself.
-    red = None
-    for line in git(["log", "--format=%H%x1f%s", f"{base}..{tip}"], root).splitlines():
-        h, _, subj = line.partition("\x1f")
-        if subj.startswith(f"test({sid})"):
-            red = h
+    red = pc["red"]
     if not red and mode == "green" and s["red_sha"]:
         red = s["red_sha"]
     if mode == "work":   # test / refactor / chore / docs / perf: evidence-based, one commit, no RED split
         if tip == base:
             return reject(s, "no-commit", f"{sid}: REJECTED — nothing committed on {branch}. SendMessage the agent to "
                                           f"finish and run `commit-work`, then integrate again; or `retry {sid}`.")
-        touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
+        touched = pc["touched"]
         outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
         if outside:
             return reject(s, "footprint-violation",
@@ -2044,7 +2089,7 @@ def integrate_one(root, st, sid, remove=True):
         if tip == base:
             return reject(s, "no-commit", f"{sid}: REJECTED — nothing committed on {branch}. SendMessage the agent to "
                                           f"implement and run `commit-fast`, then integrate again; or `retry {sid}`.")
-        touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
+        touched = pc["touched"]
         outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
         if outside:
             return reject(s, "footprint-violation",
@@ -2082,7 +2127,7 @@ def integrate_one(root, st, sid, remove=True):
                           f"Worktree kept at {wt}. SendMessage the agent to restore them (`git checkout {red[:9]} -- <file>`, "
                           f"commit-green) or, if the test is wrong, `retry {sid}` with a note.", files=changed.splitlines())
     # footprint check on everything the branch touched
-    touched = git(["diff", "--no-renames", "--name-only", base, tip], root).splitlines()
+    touched = pc["touched"]
     outside = [f for f in touched if not any(path_matches(f, e) for e in s["files"])]
     if outside:
         return reject(s, "footprint-violation",
