@@ -1,12 +1,13 @@
 ---
 name: glm-brainstorming
-description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash."
-when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes."
+description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
 allowed-tools:
-  - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")
-  - Bash(${CLAUDE_SKILL_DIR}/scripts/start-server.sh:*)
-  - Bash(${CLAUDE_SKILL_DIR}/scripts/stop-server.sh:*)
+  - Bash(sh *context.sh*)
+  - Bash(sh *start-server.sh*)
+  - Bash(sh *stop-server.sh*)
   - Bash(kill -0:*)
+  - Agent
   - Read
   - Grep
   - Glob
@@ -19,19 +20,17 @@ allowed-tools:
 Classify → fan out wide in one round → decide on evidence → ask once →
 present once → get approval. Lower rule number wins a conflict.
 
-## Live context (preloaded — zero tool calls spent)
+## Live context (first round-1 call)
 
-!`sh "${CLAUDE_SKILL_DIR}/scripts/context.sh"`
+Run `sh <Base directory>/scripts/context.sh` as your first round-1 call,
+with the "Base directory for this skill" path in place of
+`<Base directory>`. If a context block with a `harness:` line is already
+in the conversation (the `/glm-brainstorm` command injects one), use it
+and skip the script.
 
 Trust this block. Never re-run `ls`, `find`, `git status`, or `cat` on
 manifests. Reference files live in `skill_dir` — installed at
-`~/.zcode/skills/glm-brainstorming/`; read by absolute path. A
-raw `!` line above instead of output (ZCode has no `!` preload and
-leaves `${CLAUDE_SKILL_DIR}` empty): if a context block with a `harness:`
-line is already in the conversation (the `/glm-brainstorm` command injects
-one), use it and skip the script. Otherwise run
-`sh <Base directory>/scripts/context.sh` as a round-1 call, with the
-"Base directory for this skill" path in place of `<Base directory>`.
+`~/.zcode/skills/glm-brainstorming/`; read by absolute path.
 
 ## R0 — The gate
 
@@ -58,37 +57,35 @@ Nothing downgrades. In doubt, go heavier.
 - **Bounded** — well-scoped change to a flow that ALREADY EXISTS here
   (flag, small endpoint, field, one-file fix). No existing flow to read =
   not bounded. Direct calls only, plus 2-4 Flash lanes in a large or
-  unfamiliar repo. Message: short design (approach, files, testing) +
-  Evidence if researched + assumptions + ≤4 forking questions. Explicit
+  unfamiliar repo. Message: short design (approach, files, testing) + one
+  out-of-scope line + Evidence if researched + assumptions + ≤4 forking
+  questions. Explicit
   yes → implement with the normal workflow (TDD applies).
 - **Architectural** — new projects or subsystems, or changes to
   boundaries and interfaces others depend on. Decomposition check first:
   independent subsystems → plan lanes for the first sub-project only.
   Round 1, one message: direct reads + direct searches for single-hop
   questions + lanes for multi-hop ones + `Read architectural.md`, then
-  follow it. The ONLY skill you invoke next is `glm-writing-plans` (fallback
-  `glm-writing-plans`).
+  follow it. The ONLY skill you invoke next is `glm-writing-plans`.
 
 Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 2-3. Count before sending; over budget → merge messages.
 
 ## R2 — Lane economics (biggest speed lever on GLM)
 
-Model slots map to GLM models: `haiku` → GLM-5.3-Flash, `sonnet` AND
-`opus` → GLM-5.3. A `sonnet` lane is the main model billed again — same
-weights, same ~63 tok/s. Flash runs ~1.8× faster at ~9× less cost with 3×
-coding-plan quota.
+Every lane dispatches the installed `glm-explorer` / `glm-researcher`
+agents — Flash at low effort, carried by their frontmatter; never add a
+model parameter. Flash runs ~1.8× faster than the main thread at ~9×
+less cost with 3× coding-plan quota.
 
-1. Default EVERY lane to `model: "haiku"`: reads, greps, symbol hunts,
-   single-fact web checks, doc extraction, claim verification, approach
-   drafts, spec pre-draft, spec reviewers.
-2. Spend `model: "sonnet"` only on a lane whose conclusion decides WHICH
-   approach wins. Never more than 2.
+1. Default EVERY lane to glm-explorer/glm-researcher (Flash): reads,
+   greps, symbol hunts, single-fact web checks, doc extraction, claim
+   verification, approach drafts, spec pre-draft, spec reviewers.
+2. Work whose conclusion decides WHICH approach wins stays on the main
+   thread (GLM-5.3).
 3. The main thread does classification, merge, design, final message —
    nothing a lane can do.
-4. No aliases in your harness → name ids: `glm-5.3-flash` for workers,
-   `glm-5.3` for the ≤2 judgment lanes.
-5. Never spawn a lane for what one direct call answers.
+4. Never spawn a lane for what one direct call answers.
 
 ## R3 — Effort ladder (reasoning is always on; you pick depth)
 
@@ -104,8 +101,9 @@ max`, default `max`, and thinking tokens are emitted before any tool call
   architectural message that picks AND presents in one turn, plus the
   implementation work that follows approval.
 
-Set it where the harness exposes it (Claude Code `--effort` / `/effort`;
-API `reasoning_effort`; clients with `off` map it to `low`). No control
+Set it where the runtime exposes it: per installed agent via
+`thoughtLevel` in its agent file, or `reasoning_effort` on the API
+(clients that expose an `off` setting map it to `low`). No control
 available → shorten the round, never ask the model to "think less".
 
 ## R4 — Force the batch, plan the rounds
@@ -147,7 +145,9 @@ any tool call that writes.
 Human round-trips dominate wall-clock. An answer ≥80% likely from the
 repo, conventions, research, or the request becomes a vetoable assumption
 inside the design ("Assuming Postgres like the rest of `/services` — say
-otherwise"). Ask only questions whose answer forks the design; batch ≤4.
+otherwise"). Ask only questions whose answer forks the design — and a decision
+the whole design rests on, with no ≥80% answer in sight, IS a fork: ask it,
+never pick silently. Batch ≤4.
 With AskUserQuestion make item 1 "Approve this design?" (Approve /
 Approve with my answers below / Revise) so one reply both answers and
 approves; otherwise ask in plain text.
@@ -155,9 +155,9 @@ approves; otherwise ask in plain text.
 ## R7 — Width
 
 One lane per question whose answer you will cite or act on; never pad.
-Concurrent lanes: `lanes=` in Live context (default 8 — the provider's
-full concurrent-call budget, hard max 8), and never over the subagent cap in Live context (the harness rejects the
-next one and says not to retry). Over the cap → dispatch the lanes that
+Concurrent lanes: never above `lanes=` in the caps line Live context
+prints (default 8 — the provider's full concurrent-call budget, hard
+max 8). Over `lanes=` → dispatch the lanes that
 can change the approach set first, then refill in batches as completions arrive. Details: `fanout-playbook.md`
 (read when planning more lanes than `lanes=` or after a fan-out failure).
 
@@ -172,7 +172,10 @@ in silently; message the user only if one invalidates something shown.
 Spike/Bounded: this file only. Architectural: `architectural.md` in round 1.
 `research-playbook.md` for >3 web lanes or conflicting evidence.
 `glm-tuning.md` only when configuring the runtime or hitting a
-GLM-specific failure. `visual-companion.md` only if accepted.
+GLM-specific failure. `spec-document-reviewer-prompt.md` on the
+Architectural path — load it for the inline self-review of every spec
+(architectural.md §4) and when launching escalated spec review lanes.
+`visual-companion.md` only if accepted.
 
 ## R10 — Research before recommending
 
@@ -207,8 +210,7 @@ tool schemas ahead of your text). Caching is prefix-based: keep the
 shared block byte-identical across siblings and put slice lines LAST.
 Flash is verbose unless capped, so give it a word limit and exact labels.
 
-**Code lane** — `subagent_type: "Explore"`, `model: "haiku"`
-(`general-purpose` only if it must run commands):
+**Code lane** — `subagent_type: "glm-explorer"` (built-in Explore if not installed):
 
 ```
 Read-only exploration. Task: [TASK, one line]. Root: [ROOT]. Today: [DATE].
@@ -228,8 +230,7 @@ Slice: [SLICE]. Siblings cover (stay out): [SIBLINGS].
 Question: [ONE precise question]
 ```
 
-**Web lane** — `subagent_type: "general-purpose"`, `model: "haiku"`
-(`sonnet` only for a contested comparison that picks the approach):
+**Web lane** — `subagent_type: "glm-researcher"` (built-in general-purpose if not installed):
 
 ```
 Web research for a design decision. Task: [TASK, one line]. Today: [DATE].
@@ -274,7 +275,8 @@ next question.
 - **Spike:** ∥ reads + searches (+ ∥ fetches) → Path line + answer-so-far
   - probe plan → nod → probe → recommendation.
 - **Bounded:** ∥ reads + greps (+ searches) → ∥ follow-ups → Path line +
-  design + Evidence + assumptions + questions → explicit yes → implement.
+  design (with its out-of-scope line) + Evidence + assumptions + questions →
+  explicit yes → implement.
 - **Architectural:** ∥ reads + searches + multi-hop lanes + read
   `architectural.md` → ∥ fetches → design message per `architectural.md`
   (claim-verifier and spec pre-draft lanes launched that same turn, not
@@ -296,8 +298,9 @@ next question.
   drop it. Never retry a denial.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
-- "A sonnet lane will be smarter" → same model as the main thread at ~9×
-  Flash's cost. Use Flash. And never a lane for one search.
+- "A GLM-5.3 lane will be smarter" → same model as the main thread at ~9×
+  Flash's cost; judgment stays on the main thread (R2). And never a lane
+  for one search.
 - "Spawn 6 because I can" → width must buy a saved human turn or a
   better decision. One lane per question you will cite or act on; the
   known failure is dozens of lanes for a simple query.
@@ -317,8 +320,6 @@ Missing capability → substitute, never stall.
 | Agent / subagents | Run the work yourself in R4 batches; never stall. |
 | AskUserQuestion missing (ZCode has the tool — use it) | ask in plain text: numbered questions in chat, approval ask as item 1 |
 | ToolSearch | Tools are already live; skip it. |
-| Workflow (Claude Code) | Run waves of lanes. |
-| `!` preprocessing (raw `!` above) | Context block already present → use it. Else run `sh <Base directory>/scripts/context.sh` as your first round-1 call. |
 | TaskCreate missing | use TodoWrite for the checklist write |
 
 **ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use

@@ -1,3 +1,14 @@
+# 9.7 (from 9.6) — protocol alignment: out-of-scope + costly ambiguity
+
+Design output now always names what it will NOT do: the Bounded message carries a
+one-line out-of-scope, the architectural design message gains an "Out of scope"
+section (§2 item 8), and the spec carries it forward alongside Evidence and
+Assumptions (§4). R6 names the costly-ambiguity case explicitly: a decision the
+whole design rests on with no ≥80% answer in sight is a forking question — ask
+it, never pick silently. Maps the skill onto the user's GLM coding protocol
+(clarify phase: restate, assumptions, out-of-scope, ask when two readings are
+both plausible and the wrong one is expensive).
+
 # 9.6 (from 9.5) — context.sh git block concurrency
 
 context.sh: `git ls-files` output is captured once and reused for the tracked

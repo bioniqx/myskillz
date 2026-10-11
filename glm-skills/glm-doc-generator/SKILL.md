@@ -15,7 +15,8 @@ description: >-
 
 Codebase in, correct Markdown docs out, in **≤ 4 main-thread turns**. This file is
 self-contained: every brief, template and script you need is below. **Never read any
-other file of this skill — there are none.**
+other file of this skill (the only other files are installer assets under `agents/`,
+which you must not read).**
 
 ---
 
@@ -23,16 +24,16 @@ other file of this skill — there are none.**
 
 | # | Rule | Violation = bug |
 |---|------|-----------------|
-| R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; a changed selection may add one review turn, nothing else may add one. | Adding a turn a batch could absorb |
+| R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 8 Tasks go in ONE message. | Sending calls one at a time |
 | R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Count what is already running: Turn-2 speculative writers + Gate-delta writers, or Turn-3 reviewers + the retry, together stay within ONE wave of 8; extras go in the next message. | 9+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every Task prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
 | R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. | Any prose between tool calls |
-| R7 | **Reasoning effort: main thread `high`, subagents `low`.** Subagents follow a checklist; they must not deliberate. Say so in every Task prompt. | Deep reasoning on mechanical work |
+| R7 | **Reasoning effort: main thread `high`, writers `high`, reviewers `max`.** Writers execute a checklist; the reviewer's fact-check fixes are judgment work. Say so in every Task prompt. | Deep reasoning on mechanical work |
 | R8 | **Never redo work.** Diff-skip via `<state dir>/state.json` before every wave. | Rewriting an unchanged doc |
 | R9 | **Subagent returns ≤ 5 lines.** Never the doc body. | Long subagent returns |
-| R10 | **Failure budget: 1 retry per doc, bundled into the next wave (still within its 6 slots, R3).** Never a dedicated retry turn, never a third attempt. | Retry loops |
+| R10 | **Failure budget: 1 retry per doc, bundled into the next wave (still within its 8 slots, R3).** Never a dedicated retry turn, never a third attempt. | Retry loops |
 
 On ZCode, R2's Tasks are `Agent` tool calls with `subagent_type: "glm-doc-writer"`/`"glm-doc-reviewer"`,
 `run_in_background: true`, no `model` override (the installed agent's frontmatter already carries R7's
@@ -45,8 +46,8 @@ effort) — fire all of them in ONE message, one per doc, then end the turn.
 | Turn | Content (single message) |
 |------|--------------------------|
 | 1 | 1 bash: cache check + recon + fact pack |
-| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped + 1 bash (manifest + state scaffold + index + dirs) + ≤ 6 writer Tasks (the ★ set, speculatively, while the Gate waits) |
-| 3 | Delta writers only if the Gate answer changed the set (with any still-running speculative writers ≤ 6 in flight) + reviewer Tasks (HIGH-tier only) + any 1 retry, together ≤ 6; extras next message |
+| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped + 1 bash (manifest + state scaffold + index + dirs) + ≤ 8 writer Tasks (the ★ set, speculatively, while the Gate waits) |
+| 3 | Delta writers only if the Gate answer changed the set (with any still-running speculative writers ≤ 8 in flight) + reviewer Tasks (HIGH-tier only) + any 1 retry, together ≤ 8; extras next message |
 | 4 | 1 bash (mechanical verify + update state) + final summary |
 
 Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work on a cache hit.
@@ -62,7 +63,7 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 | User said nothing specific, interactive run | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set |
 | Non-interactive run (nobody to answer) | Use the ★ set (§3.1), state it in one line, skip the Gate |
 | > 8 docs selected | Waves of 8, longest/HIGH first |
-| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `Explore`, a ZCode and Claude Code built-in. Ask which packages to document inside the Gate message |
+| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `Explore`, a ZCode built-in. Ask which packages to document inside the Gate message |
 | No git repo | Recon script auto-falls back to a mtime hash; everything else identical |
 | Requirements/spec docs found | Read-only sources. **Never** write into them. Rename any colliding output |
 | Subagents unavailable in this harness | §6 sequential fallback |
@@ -121,7 +122,7 @@ docs already live in `docs/`, else `docs/`.
 
 ---
 
-## 3. TURN 2 — GATE + WRITE WAVE (one message: Gate list or 1 line of intent + 1 bash + ≤ 6 Tasks)
+## 3. TURN 2 — GATE + WRITE WAVE (one message: Gate list or 1 line of intent + 1 bash + ≤ 8 Tasks)
 
 ### 3.0 Gate — select the docs (Turn 2)
 
@@ -194,10 +195,10 @@ EOF
 { echo "# Documentation"; echo; echo "_Generated $(date +%Y-%m-%d) from commit <HEAD>._"; echo; echo "## Technical"; for f in <HIGH files>; do echo "- [<title>](./$f)"; done; echo; echo "## Non-technical"; for f in <LOW files>; do echo "- [<title>](./$f)"; done; } > "$D/README.md"
 ```
    `$D/README.md` belongs to this index alone: no writer writes it and it links the overview (`overview.md`).
-3. **≤ 6 writer Tasks**, subagent type `glm-doc-writer` (the installed ZCode agent, Appendix A), `general-purpose` on Claude Code and other harnesses, one per non-cached doc, **each using this exact template**:
+3. **≤ 8 writer Tasks**, subagent type `glm-doc-writer` (the installed ZCode agent, Appendix A; the built-in `general-purpose` agent if it is missing), one per non-cached doc, **each using this exact template**:
 
 ```
-ROLE: Technical writer. Effort: low — follow the checklist, do not deliberate, no plan step.
+ROLE: Technical writer. Effort: high — follow the checklist, do not deliberate, no plan step.
 GOAL: Write <output dir>/<file> — "<title>" for <audience>.
 TAG: <create|update> (update = the file already exists).
 
@@ -258,13 +259,13 @@ risk=<one clause: what you were least sure about, or "none">
 
 ---
 
-## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, reviewers + retry ≤ 6 Tasks)
+## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, reviewers + retry ≤ 8 Tasks)
 
 Skip this turn entirely if every doc is LOW or `[cached]`. Reviewer ≠ the writer, fresh context,
-subagent type `glm-doc-reviewer` (the installed ZCode agent, Appendix A), `general-purpose` on Claude Code and other harnesses.
+subagent type `glm-doc-reviewer` (the installed ZCode agent, Appendix A; the built-in `general-purpose` agent if it is missing).
 
 ```
-ROLE: Technical fact-checker with edit rights. Effort: low-to-medium. No report-then-fix —
+ROLE: Technical fact-checker with edit rights. Effort: max. No report-then-fix —
 you FIX in place, in the same run.
 TARGET: <output dir>/<file>
 BUDGET: ≤ 10 reads, ≤ 6 edits, ≤ 18 tool calls. Never run project commands. Never touch
@@ -320,7 +321,7 @@ Then:
 - Cross-check the printed command list against `Commands:` — existence only, never execute.
 - Fix trivial breakage (`BROKEN_LINK`, stray path) yourself in this same turn with direct edits.
 - `SECRET_SUSPECT` → fix immediately, blocking.
-- `LOW_HAS_CODE` → one reviewer Task for that doc only (the sole path allowed to add a turn).
+- `LOW_HAS_CODE` → one reviewer Task for that doc only (a changed Gate selection is the only other path allowed to add a turn — the two §5 exceptions, R1).
 - **Final summary message** (compact): created / updated / `[cached]` docs with paths · index path ·
   `TODO(human)` questions that need a human · every reviewer `unresolved=` and `human=` value that is not "none" · anything still failing after its one retry ·
   note that `<state dir>` is a cache and can be gitignored or deleted.
@@ -343,7 +344,8 @@ speculation. Expect ~1 turn per doc — state that up front and do not add extra
 Reading this skill's non-existent `references/` · one tool call per message · sequential Tasks
 · subagents re-reading the manifest from disk · pasting doc bodies into the main thread ·
 reviewing LOW docs · a second review pass "to be sure" · asking the user a question the ★ set
-already answers · regenerating an unchanged doc · running the project's build/test commands
+already answers · regenerating an unchanged doc · padding the ★ set or a doc with sections
+nobody asked for · running the project's build/test commands
 just to document them · writing into a requirements/spec file · a plan step inside a writer
 subagent.
 
@@ -353,16 +355,19 @@ subagent.
 
 Both agents are auto-installed from `agents/` into `~/.zcode/agents/` by the installer; this appendix documents what lands there - never hand-copy it.
 
-Cuts per-Task prompt size and forces low thinking effort. `~/.zcode/agents/glm-doc-writer.md`:
+Cuts per-Task prompt size; effort is pinned in the agent file. `~/.zcode/agents/glm-doc-writer.md`:
 
 ```markdown
 ---
-name: glm-doc-writer
-description: Writes one Markdown doc from an inlined fact pack and a scoped file list. Never plans, never deliberates.
-model: glm-5.3-flash
-thoughtLevel: low
+name: "glm-doc-writer"
+description: "Writes one Markdown doc from an inlined fact pack and a scoped file list. Never plans, never deliberates."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: high
 maxTurns: 18
+injectAgentsMd: true
 ---
+
 You write exactly one Markdown file to the path given. Read only the files listed in SCOPE, in
 ranges. Every technical claim must trace to FACTS or a file you read; anything else becomes
 `TODO(human): …`. Never copy secrets. Never touch files outside the output dir. Return the
@@ -373,12 +378,15 @@ ranges. Every technical claim must trace to FACTS or a file you read; anything e
 
 ```markdown
 ---
-name: glm-doc-reviewer
-description: Fact-checks one generated Markdown doc against real source code and fixes it in place.
-model: glm-5.3
-thoughtLevel: high
+name: "glm-doc-reviewer"
+description: "Fact-checks one generated Markdown doc against real source code and fixes it in place."
+color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: max
 maxTurns: 22
+injectAgentsMd: true
 ---
+
 You verify one Markdown file against the code and edit it in place — you never write a report
 instead of a fix. Check commands, paths, endpoints, signatures, env vars, schema fields,
 invented behaviour, secrets, links, clarity — in that order, until the budget runs out. Return
@@ -389,8 +397,9 @@ the 5-line block requested, nothing else.
 
 GLM-5.3 and GLM-5.3-Flash keep reasoning always on (it cannot be disabled) and expose
 `reasoning_effort` at `low | high | max`; both carry a 1M-token context and 128K max output.
-For this skill: **main thread `high`** (routing and batching decisions), **subagents `low`**
-(they execute a checklist), `max` only for a `broadly-wrong` rewrite. Z.ai's own recommended
+For this skill: **main thread `high`** (routing and batching decisions), **writer subagents `high`**
+(checklist execution), **reviewer subagents `max`** (fact-check judgment). Z.ai's own recommended
 sampling for these models is `temperature: 1`, `top_p: 0.95`, with streaming and `tool_stream`
-enabled — tool streaming is what lets a 6-Task wave start moving immediately. GLM-5.3-Flash is
-the right model for recon shards and any mechanical pass; writers use GLM-5.3-Flash; keep reviewers on GLM-5.3.
+enabled — tool streaming is what lets an 8-Task wave start moving immediately. GLM-5.3-Flash is
+the right model for recon shards, mechanical passes and both agent roles; the reviewer compensates
+with `max` effort.

@@ -247,15 +247,17 @@ class ZcodeAgentAndDispatchTests(unittest.TestCase):
         self.assertNotIn("sonnet", text, "plan_tool.py still names the sonnet alias")
         self.assertNotIn("subagent_type=", text, "dispatch headers still carry subagent_type= jargon")
 
-    def test_r9_scopes_base_url_to_claude_compatible_harnesses(self):
+    def test_r9_setup_is_zcode_only(self):
         import os
         with open(os.path.join(self._skill_root(), "glm-writing-plans", "SKILL.md"),
                   encoding="utf-8") as fh:
             text = fh.read()
-        self.assertIn("On a Claude-compatible harness, also export the z.ai Anthropic route",
-                      text, "R9 does not scope ANTHROPIC_BASE_URL to Claude-compatible harnesses")
-        self.assertEqual(text.count("export ANTHROPIC_BASE_URL="), 1,
-                         "R9 must export ANTHROPIC_BASE_URL exactly once")
+        self.assertIn("copied verbatim to `~/.zcode/agents/`", text,
+                      "R9 must install the fallback subagents to ~/.zcode/agents")
+        self.assertNotIn("Claude-compatible", text,
+                         "R9 still describes a Claude-compatible harness branch")
+        self.assertNotIn("export ANTHROPIC_BASE_URL=", text,
+                         "R9 must not export the Anthropic route on ZCode")
 
 
 if __name__ == "__main__":

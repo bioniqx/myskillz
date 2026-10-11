@@ -132,7 +132,7 @@ class MergedRejectedTest(unittest.TestCase):
         out = _audit_dir(repo, REJECTED)
         self.addCleanup(shutil.rmtree, out, True)
         m = audit.Merged(audit.Ctx(out))
-        self.assertEqual(m.final("REQ-001"), ("MATCHED", "glm-investigator"))
+        self.assertEqual(m.final("REQ-001"), ("MATCHED", "glm-rca-investigator"))
         self.assertNotIn("REQ-001", m.ver)
         self.assertIn("REQ-001", m.ver_rejected)
         self.assertEqual(m.evidence("REQ-001")[0]["path"], "src/app.py")

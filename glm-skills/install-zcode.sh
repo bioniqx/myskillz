@@ -114,7 +114,7 @@ The agents were copied verbatim from the skills' agents/*.md: their frontmatter 
 thoughtLevel, maxTurns) is the single source of truth — nothing was rewritten.
 glm-dev-team guard hooks are NOT configured by this installer; they are opt-in:
   python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
-That also re-verifies the seven glm-dev-team agents against their source files and merges the guard
+That also re-verifies the six glm-dev-team agents against their source files and merges the guard
 hooks (type: process, hooks.enabled: true, commands pointing at the installed guard.py) into
 ~/.zcode/cli/config.json — a key-preserving merge that rewrites in place: a re-run is a no-op, and
 every user key already in the file survives. Disable with hooks.enabled=false in the same file.

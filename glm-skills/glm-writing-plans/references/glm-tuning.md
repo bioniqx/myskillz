@@ -37,15 +37,21 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 
 ## Tier routing
 
-| Tier | API model | Effort | Agent-lane alias |
-|---|---|---|---|
-| `light` | glm-5.3-flash | low | haiku |
-| (default) | glm-5.3-flash | high | haiku |
-| `deep` | glm-5.3 | max | sonnet |
+| Tier | API model | Effort (api lane) | Agent-lane model | Agent-lane effort |
+|---|---|---|---|---|
+| `light` | glm-5.3-flash | low | glm-5.3-flash | high |
+| (default) | glm-5.3-flash | high | glm-5.3-flash | high |
+| `deep` | glm-5.3 | max | glm-5.3 | max |
 
-The z.ai Anthropic-compatible route maps `haiku` to Flash and both `sonnet` and
-`opus` to GLM-5.3, so ask the agent lane for `opus` only never: it costs the same as
-`sonnet`, and the provider cap on parallel requests is a stated limit of this
+On the api lane the tier's effort column applies. On the agent lane every tier
+runs the installed agents' pinned efforts: `glm-plan-task-writer` pins
+`thoughtLevel: high`, so `light` and `std` groups both run at high, and the
+deep writer and reviewer pin `max`. The `low` effort applies to the api lane
+only.
+
+The z.ai Anthropic-compatible route maps the `haiku` alias to Flash and both
+`sonnet` and `opus` to GLM-5.3, so never ask for `opus`: it costs the same as
+`sonnet`. The provider cap on parallel requests is a stated limit of this
 route, not a design goal. Width stays the product you are designing.
 
 Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
@@ -54,14 +60,14 @@ Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
 
 1. **api** (default when a key is found). One `build` call opens up to 8
    threads, one request per task, no subagent, no per-writer system prompt, no
-   tool round trips. Lint and repair happen in Python. This is the fast path on
-   every harness.
+   tool round trips. Lint and repair happen in Python. This is the fast path.
 2. **agent** (fallback). The script writes one brief per writer and prints a
    DISPATCH table. On ZCode, foreground subagents launched together run in
    parallel and this lane is respectable: dispatch each row as one `Agent`
-   call in a single message. The agent lane starts 6 lanes per message by
-   default (up to 8 with `PLAN_LANE_WIDTH`; the api lane keeps 8 threads),
-   and each writer takes up to 4 tasks, because batching beats more workers.
+   call in a single message. The agent lane starts up to 8 lanes in ONE
+   message (`PLAN_LANE_WIDTH`, clamped 1..8, lowers it; the api lane keeps 8
+   threads), and each writer takes up to 4 tasks, because batching beats more
+   workers.
 
 Force a lane with `build --lane api|agent`.
 
@@ -69,7 +75,6 @@ Force a lane with `build --lane api|agent`.
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>          # or ANTHROPIC_AUTH_TOKEN
-export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 # China / BigModel: https://open.bigmodel.cn/api/paas/v4  (protocol auto-detects as openai)
 export PLAN_MAX_WORKERS=8         # optional, 8 is the default and the cap (provider limit)
 export PLAN_PROTOCOL=anthropic    # optional override: anthropic | openai
@@ -89,11 +94,8 @@ with the general endpoint.
 `$glm-writing-plans`. The description is capped at 1024 characters; a body-size cap is unverified.
 Subagents live in `~/.zcode/agents/` (user level only, created from
 Settings), cannot spawn further subagents, and run in parallel in the
-foreground. ZCode can import a Claude Code or Codex skill directory directly
+foreground. ZCode can import a Claude- or Codex-format skill directory directly
 from Settings, by symlink or copy.
-
-**Claude Code.** Unchanged from v8: `setup --apply` sets
-`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` to 8 and installs the auto-lint hook.
 
 ## Failure modes seen in practice
 

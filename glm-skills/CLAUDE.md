@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents working in this repository.
 
 ## Role in the skillz monorepo
 
@@ -13,9 +13,8 @@ the original from here.
 GLM-5.3 / GLM-5.3-Flash ports of the Claude-tuned originals in `../claude-skills/`
 (`claude-brainstorming-6.3`, `claude-dev-team-v3.2`, `claude-doc-generator`,
 `claude-requirements-code-audit`, `claude-systematic-debugging-6.3`, `claude-writing-plans-6.2`). Each
-`glm-*/` folder is a self-contained skill meant to be installed into **ZCode** (or a Claude-compatible
-harness). Claude Code does not load skills nested this deep, so nothing here is active in this session.
-The git root is the skillz monorepo root (`../`), not this folder.
+`glm-*/` folder is a self-contained skill meant to be installed into **ZCode** — these ports are
+ZCode-only by design. The git root is the skillz monorepo root (`../`), not this folder.
 
 When a port changes behaviour, compare against the sibling original. Keep GLM-specific changes in the port
 only; do not edit the originals from here.
@@ -36,17 +35,17 @@ for f in */scripts/*.py; do python3 -m py_compile "$f"; done
 python3 glm-systematic-debugging/scripts/debug_tool.py doctor --ping
 python3 glm-requirements-code-audit/scripts/audit.py doctor --ping
 python3 glm-writing-plans/scripts/plan_tool.py doctor --ping
-python3 glm-dev-team/scripts/devteam.py doctor        # --fix writes .claude/settings.local.json + agents
+python3 glm-dev-team/scripts/devteam.py doctor        # --fix installs the zcode agents + guard hooks (user level)
 
-# Print the install/config block for a harness
-python3 <skill>/scripts/<tool>.py setup --harness zcode|claude
+# Print the install/config block (ZCode only)
+python3 <skill>/scripts/<tool>.py setup
 
 # Install all eight skills into ZCode: skills to ~/.zcode/skills/<name> and every agents/*.md
-# verbatim to ~/.zcode/agents (17 agents, overwritten, nothing rewritten — the agent files already
+# verbatim to ~/.zcode/agents (16 agents, overwritten, nothing rewritten — the agent files already
 # carry final ZCode frontmatter). Guard hooks are NOT configured by the installer; they are opt-in:
 #   python3 glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
-# (also re-verifies its seven agents against their source files; merges the hooks into
-# ~/.zcode/cli/config.json key-preserving, .bak before rewrite, re-run is a no-op, commands
+# (also re-verifies its six agents against their source files; merges the hooks into
+# ~/.zcode/cli/config.json key-preserving, in place with no backup, re-run is a no-op, commands
 # pointing at the installed skill's absolute guard.py path)
 sh install-zcode.sh [--home DIR] [--dry-run]
 
@@ -63,11 +62,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shar
 
 The Python suite under `_shared/tests` is the main automated suite and runs on every change.
 `selftest.sh` is a second automated suite that covers the glm-dev-team engine end to end. It isolates itself
-(temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`, no real transcripts). New
-engine behaviour gets a check there. It was written for GNU userland and runs on macOS as well; the last
-full run reported 323 pass, 6 fail — the same six on a clean checkout before the agent-copy change: all in
-the Claude-Code lane rendering section (`.claude/agents` expecting `permissionMode: dontAsk`, `effort:` lines
-and a sixth agent the lane no longer installs), while every zcode section is green.
+(temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_HARNESS=zcode`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`,
+no real transcripts). New engine behaviour gets a check there. It was written for GNU userland and runs on
+macOS as well; the last full run reported 302 pass, 0 fail (the Claude-Code lane sections were removed when
+the engine became ZCode-only).
 `glm-systematic-debugging/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
 
@@ -80,9 +78,9 @@ Every port applies the same set of model facts; each skill with a tuning surface
   so a "sonnet" lane is not cheaper. Worker lanes default to Flash and judgment lanes use GLM-5.3. Never
   pick `opus` over `sonnet` for cost reasons.
 - **Thinking is always on.** `reasoning_effort` accepts only `low | high | max` (no `medium`) and defaults
-  to `max`. Effort is the real latency dial, so every tier maps to one explicit effort. Claude Code forwards
-  effort only when `*_SUPPORTED_CAPABILITIES` includes `effort`; on ZCode, effort reaches GLM through the
-  installed agent's `thoughtLevel` (honored only together with a specific `model` id).
+  to `max`. Effort is the real latency dial, so every tier maps to one explicit effort. On ZCode, effort
+  reaches GLM through the installed agent's `thoughtLevel` (honored only together with a specific
+  `model` id).
 - **GLM emits few parallel tool calls per turn.** Fan-out therefore
   lives inside the Python tools: each one opens up to 8 threads and calls the Z.ai API directly (the "api
   lane"). A single model turn replaces many batched tool calls. Each tool has an **agent lane** fallback
@@ -115,14 +113,13 @@ Every port applies the same set of model facts; each skill with a tuning surface
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
   ZCode agents live in `agents/` with final ZCode frontmatter; `install-zcode.sh` copies every skill's
-  `agents/*.md` verbatim (17 agents in all, including glm-debug-worker and the glm-writing-plans trio),
+  `agents/*.md` verbatim (16 agents in all, including glm-debug-worker and the glm-writing-plans trio),
   and `plan_tool.py setup --harness zcode` / `devteam.py doctor --harness zcode --fix` copy theirs the
   same way. The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
-- **glm-brainstorming**: `scripts/context.sh` is injected through the `!` preload line (or the
-  `/glm-brainstorm` command); on ZCode, which has no `!` preload, the SKILL.md tells the model to run it
-  as a round-1 call when the raw `!` line shows. It must stay read-only,
+- **glm-brainstorming**: the SKILL.md tells the model to run `scripts/context.sh` as its first
+  round-1 call (the `/glm-brainstorm` command can inject the block directly). It must stay read-only,
   bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. It
   also contains the visual-companion server (`server.cjs`, `start-server.sh`).
 - **glm-doc-generator**: a single self-contained SKILL.md; it runs no script of its own and states that it
@@ -141,9 +138,9 @@ The OpenCode support code is deleted: `_shared/oc_harness.py` and every vendored
 `guard.py oc` bridge and Stop-gate lane caller, the v1/v2 plugin `.js` files, `install-opencode.sh`,
 and the dev-team lane runner (`lane-run`/`wait`/`resume`, lane pid/pgid files). `guard.py stop` stays
 (the ZCode Stop hook routes to it), and the `opencode/` folders of `.md` neutral agent/command
-sources are gone too. Scripts that shared harness code lost their OpenCode branches
-(`detect_harness`, cap logic, agent-lane dispatch all speak zcode/claude only). The verified
-OpenCode v1/v2 facts live in git history only.
+sources are gone too. Scripts that shared harness code lost their OpenCode branches; the survivors are
+ZCode-only now (Claude Code support was removed after OpenCode — every install/render/setup path speaks
+zcode alone). The verified OpenCode v1/v2 facts live in git history only.
 
 ### ZCode facts (3.14.4)
 
@@ -162,11 +159,10 @@ All facts were verified against the local 3.14.4 binary unless marked otherwise.
   every installer copies verbatim; nothing remaps models at install time.
 - **Dispatch.** Subagents are dispatched through the `Agent` tool (Task alias) whose input schema is
   `{description, prompt, subagent_type, run_in_background}` with `subagent_type` omitted defaulting to
-  `general-purpose` — the Claude Code Task shape minus the `model` parameter (binary-verified; the web
-  docs confirm the tool and the `general-purpose` + `Explore` built-ins but do not document the schema).
-  `SendMessage`, `TaskStop`, and Bash `run_in_background` + `timeout` all exist and are
-  Claude-Code-compatible.
-- **Hooks.** A full Claude-Code-compatible hook system — SessionStart, UserPromptSubmit, PreToolUse,
+  `general-purpose` (binary-verified; the web docs confirm the tool and the `general-purpose` + `Explore`
+  built-ins but do not document the schema). `SendMessage`, `TaskStop`, and Bash `run_in_background` +
+  `timeout` all exist.
+- **Hooks.** A full hook system — SessionStart, UserPromptSubmit, PreToolUse,
   PermissionRequest, PostToolUse, PostToolUseFailure, Stop — with no SubagentStop. Hooks are configured at
   user level only, in `~/.zcode/cli/config.json` (`hooks.enabled: true`); project/workspace-level hooks
   are ignored. Hook stdin JSON carries snake_case + camelCase fields including `agent_type` (the calling
@@ -186,12 +182,12 @@ All facts were verified against the local 3.14.4 binary unless marked otherwise.
 - **Every installable name carries the `glm-` prefix.** Skill folders, SKILL.md frontmatter
   `name`, agents and commands are all `glm-*`, so they install next to the
   Claude-tuned originals without shadowing them. Bootstrap path-resolution loops search for
-  `glm-systematic-debugging`, `glm-writing-plans`, `glm-dev-team` and so on across the `.zcode`,
-  `.claude` and `.agents` skill dirs. Every SKILL.md frontmatter `name` equals its
+  `glm-systematic-debugging`, `glm-writing-plans`, `glm-dev-team` and so on across the `.zcode`
+  and `.agents` skill dirs. Every SKILL.md frontmatter `name` equals its
   folder name (`glm-brainstorming`, `glm-dev-team`, `glm-doc-generator`, `glm-requirements-code-audit`, `glm-systematic-debugging`,
   `glm-writing-plans`, `glm-idea-to-spec`); `test_all_skills.py` enforces this. Runtime state
   keeps its old unprefixed paths (`.claude/dev-team/`, `.audit/`, `.brainstorm/`, `devteam/<id>`
   branches, `devteam.py`/`audit.py` script names); only install identity is prefixed.
-- Version tags: the debugging and audit ports are `9.0` / v9 and glm-writing-plans is v9; glm-brainstorming is `9.3`
+- Version tags: the debugging and audit ports are `9.0` / v9 and glm-writing-plans is v9; glm-brainstorming is `9.7`
   (per its CHANGELOG), and glm-dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
   one exists.

@@ -27,12 +27,11 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 | Harness | Path |
 |---|---|
 | ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and copies the `glm-debug-worker` agent verbatim (`thoughtLevel: high` is pinned in the file) into `~/.zcode/agents/` |
-| Claude-compatible | `~/.claude/skills/glm-systematic-debugging/` |
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)
 python3 <skill>/scripts/debug_tool.py doctor --ping
-python3 <skill>/scripts/debug_tool.py setup --harness zcode   # or claude
+python3 <skill>/scripts/debug_tool.py setup --harness zcode
 ```
 
 Needs bash (3.2+ works), git and python3 (stdlib only). `timeout`/`gtimeout` is optional, for `-t`. Without an API key everything still works except `scan`, which falls back to writing subagent prompts.
@@ -72,6 +71,6 @@ Statistics in `stress.sh` were cross-checked against SciPy (`fisher_exact`, Wils
 
 ## Quality guards that did not move
 
-Iron Law; two-sided hypotheses; failed candidate fixes count toward the 3-fix stop even inside a worktree, diagnostic toggles do not; null/undefined/KeyError errors never take the FAST lane; statistical proof for flaky fixes (Fisher p < 0.05, not "it passed a few times"); reversible mitigation allowed during a production incident but never as the fix.
+Iron Law; two-sided hypotheses; failed candidate fixes count toward the 3-fix stop even inside a worktree, diagnostic toggles do not; null/undefined/KeyError errors never take the FAST lane; statistical proof for flaky fixes (Fisher p < 0.05, not "it passed a few times"); reversible mitigation allowed during a production incident but never as the fix; the 3-fix stop ends in a five-line report (current state verbatim, what was tried, what is ruled out, what is needed from the user), and weakening a test or silencing a warning to get past a failure is itself a stop sign.
 
 One guard got **stronger**: `experiment` now gives the control arm and the treatment arm a worktree each. Sharing one tree between arms lets build caches and stale compiled files leak across — during this build that silently turned a real root cause into "REFUTED" until the arms were separated. Arms of a hypothesis with `runs` above 1 run one after another, control first, so CPU contention cannot bias a flaky or timing verdict. CONFIRMED means one arm passed every run while the other failed.

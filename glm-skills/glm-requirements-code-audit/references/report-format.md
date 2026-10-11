@@ -33,6 +33,7 @@ text — must already be in the spec's language.
 ### P0
 1. **<title>** (REQ-007) — Effort S
    - Current: … / Target: … / Fix: … / Depends on: … / Risk: …
+   - (only when the fix touches money, auth or personal data) Needs human review before deploy
 ### P1 … ### P2 …
 
 ## Needs product decision

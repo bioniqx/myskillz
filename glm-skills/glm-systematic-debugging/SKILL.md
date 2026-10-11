@@ -5,7 +5,7 @@ license: MIT
 metadata:
   version: "9.0"
   models: "glm-5.3, glm-5.3-flash"
-  harness: "zcode, claude-compatible"
+  harness: "zcode"
 ---
 
 # Systematic Debugging
@@ -15,7 +15,7 @@ metadata:
 ## R0. Bootstrap — put this in front of your FIRST command, once
 
 ```bash
-for d in "${CLAUDE_SKILL_DIR:-}" ~/.zcode/skills/glm-systematic-debugging .zcode/skills/glm-systematic-debugging .claude/skills/glm-systematic-debugging ~/.claude/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
+for d in ~/.zcode/skills/glm-systematic-debugging .zcode/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
 ```
 
 Every tool output starts with `S=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path** into every later command — `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags.
@@ -86,7 +86,7 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 
 ## R6. Fix-attempt limit
 
-Count every candidate fix that failed, in the main tree or in a worktree. Diagnostic toggles (changing a variable to learn, not to fix) do not count. **3 failed fixes → STOP.** Architecture signals: each fix exposes new coupling, fixes need large refactors, symptoms move. Report what was ruled out and talk to the user before attempt #4.
+Count every candidate fix that failed, in the main tree or in a worktree. Diagnostic toggles (changing a variable to learn, not to fix) do not count. **3 failed fixes → STOP.** Architecture signals: each fix exposes new coupling, fixes need large refactors, symptoms move. Stop earlier the moment you are about to weaken a test or silence a warning to get past it — that is a stuck sign, not a fix. The stop report is five lines: `STOPPING: <why>` · `CURRENT: <command + verbatim error>` · `TRIED: 1) … → …; 2) …; 3) …` · `RULED OUT: <eliminated causes>` · `NEEDED: <decision or fact only the user can give>` — then talk to the user before attempt #4.
 
 ## R7. Effort and model ladder
 
@@ -98,7 +98,7 @@ Thinking is always on; only the effort level is yours to choose. Spending `max` 
 | Drafting hypotheses, comparing against a working analogue | high | `--tier std` (default) |
 | Choosing between confirmed causes, designing the fix, architecture calls | max | `--tier deep` |
 
-`scan` sets this per worker for you. For your own turns, say the level you are using in one word and keep it there for the round.
+`scan` sets this per worker for you. For your own turns, say the level you are using in one word and keep it there for the round. Why this ladder: `references/glm-tuning.md` - model and harness facts, failure modes; read it only when retuning effort/model routing or porting to another harness.
 
 ## R8. State carry — restate before each lane change and before the fix
 

@@ -1,4 +1,4 @@
-# Fan-out Playbook — up to 6 concurrent lanes on GLM (hard max 8)
+# Fan-out Playbook — up to 8 concurrent lanes on GLM (hard max 8)
 
 Read when planning a wave-based fan-out (more than `lanes=` lanes in total), or when a fan-out fails. Goal: the
 whole exploration costs one tool round plus background time that overlaps
@@ -6,17 +6,13 @@ the human's reading time.
 
 ## 0. Capacity facts
 
-- Lane width: `lanes=` in Live context (default 6, `OC_MAX_LANES` may raise it to 8). Fewer, fuller
+- Lane width: `lanes=` in Live context (default 8, hard max 8). Fewer, fuller
   lanes beat many tiny ones.
 - Subagents: 8 running at once (the provider's concurrent-call limit). The 9th `Agent` call fails
   with "Concurrent subagent limit reached" and tells you not to retry.
-  Never raise Claude Code's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` above 8.
-- Claude Code `Workflow` runtime: keep `CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS` at 8
-  (fewer on fewer CPUs). Needs explicit user opt-in. It never beats the
-  subagent cap, so prefer plain subagents.
 - Subagents run in the background in interactive sessions; results arrive
   as completion notifications. They have WebSearch/WebFetch but not
-  AskUserQuestion or Claude Code's `Workflow`. They may nest three levels — do not. Flat
+  AskUserQuestion. They may nest three levels — do not. Flat
   fan-outs keep merging and cost under your control.
 - Direct Read/Grep/Glob/WebSearch/WebFetch calls are not subagents and do
   not count toward the cap.
@@ -29,8 +25,7 @@ in the settings allow-list.
 
 ## 1. Width in 10 seconds
 
-All counts assume Flash lanes (SKILL.md R2). Halve them for any lane you
-put on GLM-5.3, and never run more than 2 of those.
+All counts assume Flash lanes (SKILL.md R2).
 
 | Task | Direct calls | Code lanes | Web lanes |
 | --- | --- | --- | --- |
@@ -88,29 +83,13 @@ Vague boundaries are the main cause of duplicated work between lanes.
 - Shared prompt block first and byte-identical across lanes of the same
   type and model, so siblings hit the prefix cache. Slice-specific lines
   last.
-- Model per lane: `haiku` (Flash) by default; `sonnet` (GLM-5.3) for at
-  most 2 lanes whose conclusion picks the approach.
+- Model per lane: none — every lane dispatches glm-explorer/glm-researcher
+  (Flash, low effort; SKILL.md R2); work whose conclusion picks the
+  approach stays on the main thread.
 - **Lanes over the cap → waves.** Dispatch the highest-value lanes first
   (the ones that can change the approach set), then refill in batches as
   completions arrive. Each wake-up costs a main-model turn, so never
-  refill one at a time. Use Claude Code's `Workflow` instead only when the workflow cap
-  exceeds the subagent cap and the user explicitly opted in.
-- **Claude Code `Workflow` pattern** (opt-in only; load the `workflow-authoring` skill
-  first if available — it is the authoritative script reference):
-
-```js
-export const meta = { name: 'brainstorm-fanout', description: 'Parallel code + web lanes for a design decision', phases: [{ title: 'Explore' }] }
-const LANE = { type: 'object', required: ['answer','claims','unknown'], properties: {
-  answer: { type: 'string' }, claims: { type: 'array', items: { type: 'string' } },
-  unknown: { type: 'array', items: { type: 'string' } } } }
-const lanes = args.lanes  // [{ label, prompt, model }]
-const results = await parallel(lanes.map(l => () =>
-  agent(l.prompt, { label: l.label, phase: 'Explore', model: l.model, schema: LANE })))
-return results.filter(Boolean)
-```
-
-Schema-shaped results merge mechanically and keep many outputs small —
-worth more on GLM than on Claude, because Flash is verbose by default.
+  refill one at a time.
 
 ## 4. Failure handling
 
@@ -123,7 +102,7 @@ worth more on GLM than on Claude, because Flash is verbose by default.
   assumption.
 - Lane stopped at its turn limit with partial output → continue it with
   `SendMessage`, which keeps its context, instead of spawning a fresh one.
-  On ZCode `SendMessage` exists (Claude-Code-compatible): only if the send
+  On ZCode `SendMessage` exists: only if the send
   fails should a fresh Flash lane be re-dispatched as fallback, with the
   partial output pasted in and the remaining budget stated.
 - Lane returns off-contract prose (common on Flash) → take what is usable.

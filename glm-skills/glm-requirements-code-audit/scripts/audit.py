@@ -66,7 +66,6 @@ MAX_PARALLEL = 8  # provider limit on concurrent model/API calls: threads, lanes
 AGENT_LANES = 8  # default agent-lane width: the provider's full concurrent-call budget (OC_MAX_LANES overrides, clamped to MAX_PARALLEL); the api lane keeps 8 threads
 MIN_PER_BATCH = 3  # agent-lane batches hold at least this many items when there are enough: batch, not more workers
 VERIFY_MAX_PER_AGENT = 3  # items per verifier batch on the agent lane (the original's value)
-AGENT_ALIAS = {FLASH: "haiku", PRO: "sonnet"}  # agent lane only; never "opus"
 
 STATUSES = ["MATCHED", "PARTIAL", "MISSING", "CONFLICT", "UNVERIFIABLE", "UNSEARCHED"]
 FINAL_STATUSES = STATUSES[:5]
@@ -250,7 +249,7 @@ def endpoint_of(base, route):
 def cpu_threads(requested=None):
     if requested:
         return max(1, min(MAX_PARALLEL, int(requested)))
-    env = os.environ.get("AUDIT_THREADS") or os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
+    env = os.environ.get("AUDIT_THREADS")
     if env and str(env).strip().isdigit():
         return max(1, min(MAX_PARALLEL, int(str(env).strip())))
     return MAX_PARALLEL
@@ -1691,7 +1690,7 @@ def normalize_row(r):
 
 class Merged(object):
     """Single source of truth for 'where does every requirement stand'.
-    Precedence: adjudication > verifier verdict > glm-investigator finding."""
+    Precedence: adjudication > verifier verdict > glm-rca-investigator finding."""
 
     def __init__(self, c):
         self.c = c
@@ -1756,7 +1755,7 @@ class Merged(object):
             return str(v["verified_status"]).upper(), "verifier"
         f = self.find.get(rid)
         if f and str(f.get("status") or "").upper() in FINAL_STATUSES:
-            return str(f["status"]).upper(), "glm-investigator"
+            return str(f["status"]).upper(), "glm-rca-investigator"
         return "UNSEARCHED", "none"
 
     def evidence(self, rid):
@@ -2731,7 +2730,7 @@ def cmd_check(a):
         elif unverified and fs != "MISSING":
             errs.append("%s: %s item was never verified or adjudicated" % (rid, fs))
         if rid in dis and not adj:
-            errs.append("%s: glm-investigator (%s) and verifier (%s) disagree -- adjudicate"
+            errs.append("%s: glm-rca-investigator (%s) and verifier (%s) disagree -- adjudicate"
                         % (rid, dis[rid][1], dis[rid][2]))
         if fs == "MISSING":
             if not v and not adj:

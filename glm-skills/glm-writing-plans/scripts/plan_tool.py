@@ -12,7 +12,7 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on ZCode.
   lint-task PLAN TASKFILE [--mark ok|rev]
   hook-lint                            PostToolUse hook -> additionalContext
   doctor                               lane / key / model / connectivity report
-  setup     [--apply]                  configure harness (zcode | claude | auto)
+  setup     [--apply]                  install the ZCode subagents (dry-run by default)
 Common: --allow WORD exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
 """
 import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
@@ -39,7 +39,7 @@ GLM = {
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
 KEY_ENV = ("PLAN_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
-           "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
+           "ANTHROPIC_AUTH_TOKEN")
 
 ID_RE = r"T\d{2,3}"
 CONTRACT_HEAD = re.compile(r"^####\s+(%s)\s*[:·—-]\s*(.+?)\s*$" % ID_RE)
@@ -175,24 +175,13 @@ def sh(cmd, cwd=None, timeout=8):
 
 # ------------------------------------------------------------------ harness + credentials
 def detect_harness():
-    """('zcode'|'claude'|'unknown', evidence)."""
-    ev = []
+    """('zcode'|'unknown', evidence)."""
     for k in os.environ:
         if k.startswith("ZCODE") or k.startswith("Z_CODE"):
-            ev.append(("zcode", k))
-        elif k.startswith("CLAUDE_CODE") or k == "CLAUDECODE":
-            ev.append(("claude", k))
-    if ev:
-        return ev[0][0], ev[0][1]
-    home = os.path.expanduser("~")
-    for name, path in (("zcode", os.path.join(home, ".zcode")),
-                       ("claude", os.path.join(home, ".claude"))):
-        if os.path.isdir(path) and SKILL_DIR.startswith(os.path.realpath(path)):
-            return name, path
-    for name, path in (("zcode", os.path.join(home, ".zcode")),
-                       ("claude", os.path.join(home, ".claude"))):
-        if os.path.isdir(path):
-            return name, path
+            return "zcode", k
+    path = os.path.join(os.path.expanduser("~"), ".zcode")
+    if os.path.isdir(path):
+        return "zcode", path
     return "unknown", "-"
 
 
@@ -235,10 +224,9 @@ def run_recon(steps) -> dict:
 
 
 def agent_cap():
-    for e in ("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "ZCODE_MAX_CONCURRENT_SUBAGENTS"):
-        v = os.environ.get(e, "").strip()
-        if v.isdigit() and int(v) > 0:
-            return min(MAX_WORKERS, int(v)), e
+    v = os.environ.get("ZCODE_MAX_CONCURRENT_SUBAGENTS", "").strip()
+    if v.isdigit() and int(v) > 0:
+        return min(MAX_WORKERS, int(v)), "ZCODE_MAX_CONCURRENT_SUBAGENTS"
     return DEFAULT_AGENT_CAP, ""
 
 
@@ -1027,32 +1015,44 @@ def reviewer_brief(plan_path, plan, cs_group, work, spec_path, repo):
     return "\n\n".join(parts) + "\n"
 
 
-def row_agent(g, kind, deep=True):
-    """Model alias for one dispatch row."""
-    tier = max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
-    return model_for("deep" if kind == "review" else tier, api=False)[0]
+def group_tier(g):
+    return max((c["tier"] for c in g), key=lambda t: TIER_RANK[t])
+
+
+def row_model(g, kind):
+    """Model id for one dispatch row; the tuned agents pin the same model in frontmatter."""
+    return model_for("deep" if kind == "review" else group_tier(g), api=False)[0]
+
+
+def row_agent(g, installed):
+    """Agent one writer row dispatches: the tuned writer, the tuned deep writer for
+    deep-tier groups, `general-purpose` when the tuned agents are not installed."""
+    if not installed:
+        return "general-purpose"
+    return "glm-plan-task-writer-deep" if group_tier(g) == "deep" else "glm-plan-task-writer"
 
 
 def group_span(g):
     return g[0]["id"] if len(g) == 1 else "%s-%s" % (g[0]["id"], g[-1]["id"])
 
 
-def dispatch_lines(groups, work, kind, deep=True):
+def dispatch_lines(groups, work, kind, installed=True):
     rows = []
     sub = "review-briefs" if kind == "review" else "briefs"
     for gid, g in groups:
-        rows.append("%-4s %-7s %-9s %s" % (gid, row_agent(g, kind, deep), group_span(g),
-                                           os.path.join(work, sub, gid + ".md")))
+        model = row_model(g, kind)
+        if kind == "write":
+            rows.append("%-4s %-25s %-13s %-9s %s" % (gid, row_agent(g, installed), model,
+                                                      group_span(g), os.path.join(work, sub, gid + ".md")))
+        else:
+            rows.append("%-4s %-7s %-9s %s" % (gid, model, group_span(g),
+                                               os.path.join(work, sub, gid + ".md")))
     return rows
 
 
-def agent_installed(repo, name="glm-plan-task-writer"):
-    home = os.path.expanduser("~")
-    for base in (os.path.join(home, ".zcode", "agents"),
-                 os.path.join(repo, ".claude", "agents"), os.path.join(home, ".claude", "agents")):
-        if os.path.isfile(os.path.join(base, name + ".md")):
-            return base
-    return None
+def agent_installed(name="glm-plan-task-writer"):
+    base = os.path.join(os.path.expanduser("~"), ".zcode", "agents")
+    return base if os.path.isfile(os.path.join(base, name + ".md")) else None
 
 
 # ------------------------------------------------------------------ shared prep
@@ -1252,23 +1252,22 @@ def build_agent_lane(a, plan_path, plan, cs, repo, work, spec, warns, key, src):
     info["agents"] = k
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
     _, n, wave_width = waves_block(cs)
-    installed = agent_installed(repo)
+    installed = agent_installed()
     lane = ("LANE agent (no API key found - script-side fan-out unavailable)" if not key
             else "LANE agent (forced)")
-    agent = "glm-plan-task-writer" if installed else "general-purpose"
     head = [lane,
             "WORK %s" % work,
-            ("DISPATCH %d writers, ALL in ONE message" % len(groups) if len(groups) <= MAX_WORKERS else
+            ("DISPATCH %d writers, ALL in ONE message" % len(groups) if len(groups) <= width else
              "DISPATCH %d writers in waves of at most %d (send the next wave after the previous one replied)"
-             % (len(groups), MAX_WORKERS)) + " | the `%s` agent | description 'plan <ID>'" % agent,
+             % (len(groups), width)) + " | one subagent per row, the AGENT column names it | description 'plan <ID>'",
             "prompt (verbatim): Read <brief path> and follow it exactly.",
-            "ID   MODEL   TASKS     BRIEF"]
-    rows = dispatch_lines(groups, work, "write")
+            "ID   AGENT                   MODEL        TASKS     BRIEF"]
+    rows = dispatch_lines(groups, work, "write", installed)
     tail = ["THEN: %s wait %s" % (qtool(), shlex.quote(plan_path)),
             "THEN: %s review %s" % (qtool(), shlex.quote(plan_path)),
             "THEN: %s assemble %s --clean" % (qtool(), shlex.quote(plan_path))]
     if not capenv:
-        tail.append("NOTE subagent cap assumed %d; `%s setup --apply` raises it where the harness supports it" % (cap, qtool()))
+        tail.append("NOTE subagent cap assumed %d; export ZCODE_MAX_CONCURRENT_SUBAGENTS to confirm it" % cap)
     return report([], warns, "OK contracts: %d tasks | %d waves | max wave width %d | %d writers"
                   % (len(cs), n, wave_width, len(groups)), head + rows + tail)
 
@@ -1443,13 +1442,16 @@ def cmd_review(a):
         chunks = [chunks[i] + (chunks[i + 1] if i + 1 < len(chunks) else []) for i in range(0, len(chunks), 2)]
     groups = [("R%02d" % (i + 1), g) for i, g in enumerate(chunks)]
     spec = info.get("spec")
+    repo = info.get("repo") or repo_root(plan_path)
     for gid, g in groups:
-        save(os.path.join(work, "review-briefs", gid + ".md"), reviewer_brief(plan_path, plan, g, work, spec, info.get("repo") or repo_root(plan_path)))
+        save(os.path.join(work, "review-briefs", gid + ".md"), reviewer_brief(plan_path, plan, g, work, spec, repo))
     info["review"] = [c["id"] for c, _ in picked]
     save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
+    agent = ("glm-plan-reviewer" if agent_installed("glm-plan-reviewer")
+             else "general-purpose")
     summary = "REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked))
     rows = [summary,
-            "DISPATCH %d reviewers in ONE message | the `general-purpose` agent | real ids `glm-5.3` / `glm-5.3-flash` where a model must be named | description 'review <ID>'" % len(groups),
+            "DISPATCH %d reviewers in ONE message | the `%s` agent | real ids `glm-5.3` / `glm-5.3-flash` where a model must be named | description 'review <ID>'" % (len(groups), agent),
             "prompt (verbatim): Read <brief path> and follow it exactly.",
             "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
@@ -1836,78 +1838,25 @@ def cmd_doctor(a):
 
 
 # ------------------------------------------------------------------ setup
-AGENT_BODY = """You write implementation-plan task bodies. Read the brief file named in your
-task message and follow it exactly. Rules: no repository exploration, no extra
-file reads beyond those the brief names, minimal turns, and reply with one line
-per task (`T07 OK` or `T07 FAIL: <first error>`). Never echo the body.
-"""
 WRITER_AGENTS = ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer")
-
-
-def agent_file():
-    fm = ("---\n"
-          "name: glm-plan-task-writer\n"
-          "description: Writes implementation-plan task bodies from a glm-writing-plans brief file. "
-          "Use only when given a glm-writing-plans brief path.\n"
-          "tools: Read, Write, Edit, Bash\n"
-          "model: haiku\n"
-          "maxTurns: 16\n"
-          "omitClaudeMd: true\n"
-          "hooks:\n"
-          "  PostToolUse:\n"
-          "    - matcher: \"Write|Edit\"\n"
-          "      hooks:\n"
-          "        - type: command\n"
-          "          command: \"%s hook-lint\"\n"
-          "---\n\n") % qtool()
-    return fm + AGENT_BODY
 
 
 def cmd_setup(a):
     home = os.path.expanduser("~")
-    harness = a.harness if a.harness != "auto" else detect_harness()[0]
-    if harness == "unknown":
-        harness = "zcode"
-    if harness == "zcode":
-        # The agents/ files carry final ZCode frontmatter and are the single
-        # source of truth: install all three by plain copy, like install-zcode.sh.
-        agents_src = ref_path("agents")
-        if not os.path.isdir(agents_src):
-            print("ERR  %s not found; run setup from the skill tree" % agents_src)
-            return 1
-        targets = [(os.path.join(home, ".zcode", "agents", n + ".md"),
-                    load(os.path.join(agents_src, n + ".md"))) for n in WRITER_AGENTS]
-    else:
-        targets = [(os.path.join(home, ".claude", "agents", "glm-plan-task-writer.md"),
-                    agent_file())]
+    # The agents/ files carry final ZCode frontmatter and are the single
+    # source of truth: install all three by plain copy, like install-zcode.sh.
+    agents_src = ref_path("agents")
+    if not os.path.isdir(agents_src):
+        print("ERR  %s not found; run setup from the skill tree" % agents_src)
+        return 1
+    targets = [(os.path.join(home, ".zcode", "agents", n + ".md"),
+                load(os.path.join(agents_src, n + ".md"))) for n in WRITER_AGENTS]
     changes = []
     for path, text in targets:
         if not os.path.exists(path) or load(path) != text:
             changes.append("write subagent %s" % path)
-    settings = os.path.join(home, ".claude", "settings.json")
-    new = None
-    if harness == "claude":
-        try:
-            cur = json.loads(load(settings)) if os.path.exists(settings) else {}
-        except ValueError as e:
-            print("ERR  %s is not valid JSON (%s); nothing changed" % (settings, e))
-            return 1
-        new = json.loads(json.dumps(cur))
-        env = new.setdefault("env", {})
-        for k, v in (("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", str(MAX_WORKERS)),
-                     ("CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS", str(MAX_WORKERS)),
-                     ("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "1000000"),
-                     ("API_TIMEOUT_MS", "3000000")):
-            if str(env.get(k, "")) != v:
-                env[k] = v
-                changes.append("env.%s = %s" % (k, v))
-        allow = new.setdefault("permissions", {}).setdefault("allow", [])
-        for rule in ("Bash(%s *)" % qtool(), "Edit(**/docs/plans/**)"):
-            if rule not in allow:
-                allow.append(rule)
-                changes.append("permissions.allow += %s" % rule)
     key, base, proto, src = find_credentials()
-    print("harness: %s | api key: %s (%s)" % (harness, mask(key), src))
+    print("harness: zcode | api key: %s (%s)" % (mask(key), src))
     if not changes:
         print("OK setup already complete")
     else:
@@ -1915,8 +1864,6 @@ def cmd_setup(a):
         for c in changes:
             print("  - " + c)
     if changes and a.apply:
-        if new is not None:
-            save(settings, json.dumps(new, indent=2) + "\n")
         for path, text in targets:
             save(path, text)
         print("OK written")
@@ -1926,8 +1873,7 @@ def cmd_setup(a):
     print("Fastest lane (recommended) - script-side fan-out, no subagents:")
     print("  export ZAI_API_KEY=<GLM Coding Plan key>")
     print("  export ZAI_BASE_URL=%s" % DEFAULT_BASE)
-    if harness == "zcode":
-        print("ZCode runs foreground subagents in parallel; the agent lane works without extra flags.")
+    print("ZCode runs foreground subagents in parallel; the agent lane works without extra flags.")
     print("Verify with: %s doctor --ping" % qtool())
     return 0
 
@@ -1987,7 +1933,6 @@ def main(argv=None):
     p = sub.add_parser("doctor"); p.add_argument("--ping", action="store_true"); p.set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("setup")
-    p.add_argument("--harness", choices=["auto", "zcode", "claude"], default="auto")
     p.add_argument("--apply", action="store_true"); p.set_defaults(fn=cmd_setup)
 
     a = ap.parse_args(argv)

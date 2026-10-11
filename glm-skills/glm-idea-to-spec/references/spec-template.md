@@ -16,7 +16,7 @@ Use this structure. Replace every `[...]` with real content. If a section doesn'
 | Version | 1.0 |
 | Date | YYYY-MM-DD |
 | Status | Draft / Approved |
-| Authors | [User] + Claude |
+| Authors | [User] |
 | Research date | YYYY-MM-DD |
 | Changelog | v1.0 — initial |
 

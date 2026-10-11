@@ -27,15 +27,19 @@ reviewers on disjoint scopes — review only yours; a concern elsewhere is one
 ## Report ONLY these
 
 - **Requirement gaps** — a stated acceptance criterion that the code does not actually meet.
-- **Correctness bugs** — wrong results, wrong branches, off-by-one, unhandled error paths,
-  broken contracts between slices.
-- **Security** — injection, unsafe input handling, authn/authz holes, secrets, unsafe
-  deserialization, path traversal, SSRF.
+- **Correctness bugs** — wrong results, wrong branches, off-by-one, unhandled or
+  swallowed error paths, calls to symbols that exist neither in the repo nor in
+  the dependency's types (fabricated APIs), broken contracts between slices.
+- **Security** — injection, unsafe input handling, authn/authz holes (including
+  missing per-resource checks), secrets, sensitive data in logs, unsafe
+  deserialization, path traversal, SSRF. A finding that touches money, auth or
+  personal data says so: it needs human review before deploy.
 - **Data loss / corruption** — destructive operations, migrations without a back-out,
   unflushed writes, silent truncation.
 - **Concurrency hazards** — races, deadlocks, lost updates, shared mutable state.
-- **Missing coverage of a stated edge case**, and any slice the briefing marks as having no
-  tests of its own — read those hardest; nothing else protects them.
+- **Missing coverage of a stated edge case** — a test loosened, skipped or mocked
+  into passing counts as missing coverage — and any slice the briefing marks as
+  having no tests of its own — read those hardest; nothing else protects them.
 
 **Do NOT report**: style, naming, formatting, structure, duplication, abstraction taste,
 test elegance, or anything you would label MINOR. There is no MINOR severity in this mode.
@@ -78,6 +82,6 @@ dispatches each fix as a test-first slice, so keep fix file sets disjoint.
 
 ## Re-review
 
-When the engine relaunches you with fix commits (OpenCode has no message channel), re-check **only** the changed areas against
+When the engine relaunches you with fix commits (the path for engines without a message channel), re-check **only** the changed areas against
 your findings, update the report file in place (`resolved` / `still open` per finding), and
 reply with the new verdict line and counts.

@@ -26,5 +26,5 @@ async function gitInit(directory: string) {
 
 1. Map the path the bad value took (you have it from root-cause tracing).
 2. Add the cheapest meaningful check at each layer; error messages name the value and the layer.
-3. Test each guard in isolation: bypass layer 1 (call layer 2 directly, or through a mock) and confirm layer 2 catches it. These tests are independent → `python3 $S/debug_tool.py run -j 8 '<t1>' '<t2>' '<t3>'` in one call.
+3. Test each guard in isolation: bypass layer 1 (call layer 2 directly, or through a mock) and confirm layer 2 catches it. These tests are independent → `python3 $S/debug_tool.py run -j 8 '<t1>' '<t2>' '<t3>'` in one call, then the affected suite once more with the guards in — guards are code too.
 4. Keep guards proportional: public boundaries and destructive operations get guards; internal pure helpers usually do not.

@@ -37,8 +37,8 @@ detail are not issues.
 
 The spec touches security or auth, data migration or deletion, money, or
 a public API or contract others depend on — or the user asks for a
-review. Then dispatch lenses 1-4 as four `haiku` (Flash) general-purpose
-lanes in ONE message; lens 5 stays with the claim verifier. Each reads
+review. Then dispatch lenses 1-4 as four general-purpose lanes (Flash
+tier) in ONE message; lens 5 stays with the claim verifier. Each reads
 the spec itself — do not paste it. Wait for all four before the review
 gate.
 

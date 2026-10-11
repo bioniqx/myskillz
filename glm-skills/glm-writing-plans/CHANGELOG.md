@@ -16,6 +16,8 @@
 
 **Review overlap (2026-10-10):** `build` submits each picked task's review as soon as its writer finishes (right after the `.ok` mark) instead of after every writer completes; a tripped shared budget now also stops new review submissions; failed writes still skip review and the failure report and exit codes are unchanged.
 
+**Protocol alignment (2026-10-11):** contracts gain an Out-of-scope line and a Rollback line next to Goal; contract rule 3 forbids third-party symbols recalled from memory; body-rules adds edges-are-concrete-tests (rule 16), no-weakened-tests (rule 17) and verified-third-party-symbols (rule 15 extension); the reviewer agent and the reviewer prompt check edge coverage, weakened tests and unverified third-party calls.
+
 Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn

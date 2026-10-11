@@ -33,13 +33,14 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
         lines = self.text.split("\n")
         self.assertEqual(lines[1], "name: glm-brainstorming")
 
-    def test_allowed_tools_unchanged(self):
+    def test_allowed_tools_are_path_agnostic(self):
         expected = (
             "allowed-tools:\n"
-            '  - Bash(sh "${CLAUDE_SKILL_DIR}/scripts/context.sh")\n'
-            "  - Bash(${CLAUDE_SKILL_DIR}/scripts/start-server.sh:*)\n"
-            "  - Bash(${CLAUDE_SKILL_DIR}/scripts/stop-server.sh:*)\n"
+            "  - Bash(sh *context.sh*)\n"
+            "  - Bash(sh *start-server.sh*)\n"
+            "  - Bash(sh *stop-server.sh*)\n"
             "  - Bash(kill -0:*)\n"
+            "  - Agent\n"
             "  - Read\n"
             "  - Grep\n"
             "  - Glob\n"
@@ -47,9 +48,15 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
             "  - WebFetch\n"
         )
         self.assertIn(expected, self.text)
+        self.assertNotIn("CLAUDE_SKILL_DIR", self.text)
 
-    def test_preload_line_unchanged(self):
-        self.assertIn('!`sh "${CLAUDE_SKILL_DIR}/scripts/context.sh"`', self.text)
+    def test_context_bootstraps_without_preload_mechanics(self):
+        # The skill bootstraps context without Claude mechanics: no `!`
+        # preload line, no CLAUDE_SKILL_DIR, just the direct round-1 call.
+        self.assertNotIn("!`", self.text)
+        self.assertNotIn("CLAUDE_SKILL_DIR", self.text)
+        self.assertIn("sh <Base directory>/scripts/context.sh", self.text)
+        self.assertIn("first round-1 call", self.text)
 
 
 def body_of(path):
@@ -166,13 +173,6 @@ class TestBrainstormContextHarness(ContextCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stderr, "")
 
-    def test_claude_code_env_marks_the_harness(self):
-        root = make_skill(self.plain_root())
-        proc = run_context(root, self.home, {"CLAUDECODE": "1"})
-        self.assertEqual(
-            self.line_starting(proc.stdout, "harness: "), "harness: claude-code"
-        )
-
 
 class TestBrainstormContextCaps(ContextCase):
     def test_zcode_caps_default_width_is_8(self):
@@ -198,18 +198,16 @@ class TestBrainstormContextCaps(ContextCase):
             proc = run_context(root, self.home, {"OC_MAX_LANES": val})
             self.assertIn(want, self.line_starting(proc.stdout, "caps: "), val)
 
-    def test_claude_caps_default_8(self):
+    def test_claude_env_vars_no_longer_change_the_caps_line(self):
+        # The Claude Code caps branch (CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS /
+        # CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS) was removed: the skill is
+        # ZCode-only and the zcode lanes caps line is the only one printed.
         root = make_skill(self.plain_root())
         proc = run_context(root, self.home, {"CLAUDECODE": "1"})
-        self.assertIn("subagents=8", self.line_starting(proc.stdout, "caps: "))
-
-    def test_claude_caps_clamped_to_8(self):
-        root = make_skill(self.plain_root())
-        env = {"CLAUDECODE": "1", "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "64",
-               "CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS": "16"}
-        caps = self.line_starting(run_context(root, self.home, env).stdout, "caps: ")
-        self.assertIn("subagents=8", caps)
-        self.assertIn("workflow=8", caps)
+        caps = self.line_starting(proc.stdout, "caps: ")
+        self.assertIn("lanes=8", caps)
+        self.assertNotIn("subagents=", caps)
+        self.assertNotIn("workflow=", caps)
 
     def test_output_is_bounded_and_exits_zero(self):
         root = make_skill(self.plain_root())
@@ -300,13 +298,6 @@ class ZcodeSurfaceTests(unittest.TestCase):
         self.assertIn("harness: zcode", r.stdout)
         self.assertIn("caps: lanes=8 (default 8, hard max 8)", r.stdout)
 
-    def test_context_sh_claude_code_caps_still_printed(self):
-        r = self.run_context("plain/scripts", {"CLAUDECODE": "1"})
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("harness: claude-code", r.stdout)
-        self.assertIn("subagents=8", r.stdout)
-        self.assertIn("workflow=8", r.stdout)
-
     def test_context_sh_zcode_run_is_read_only_bounded_and_exits_zero(self):
         script = self.setup_skill(".zcode/skills/glm-brainstorming/scripts")
         before = self.home_files()
@@ -324,8 +315,14 @@ class ZcodeSurfaceTests(unittest.TestCase):
                         "the TaskCreate fallback row must name TodoWrite")
         self.assertTrue(any("AskUserQuestion" in ln and "ZCode" in ln for ln in lines),
                         "the AskUserQuestion fallback row must name ZCode")
-        self.assertTrue(any("Workflow" in ln and "Claude Code" in ln for ln in lines),
-                        "Workflow facts must be scoped to Claude Code")
+        self.assertNotIn("Workflow (Claude Code)", self.flat(text),
+                         "the Claude Code Workflow fallback row must be gone")
+        self.assertNotIn("`!` preprocessing", self.flat(text),
+                         "the `!` preprocessing fallback row must be gone")
+        self.assertNotIn("haiku", self.flat(text))
+        self.assertNotIn("sonnet", self.flat(text))
+        self.assertNotIn("opus", self.flat(text))
+        self.assertNotIn("CLAUDE_SKILL_DIR", self.flat(text))
         for ln in lines:
             if "CLAUDE_CODE_" in ln:
                 self.assertIn("Claude Code", ln, ln)
@@ -335,17 +332,20 @@ class ZcodeSurfaceTests(unittest.TestCase):
         self.assertNotIn("todowrite", self.flat(text))
         self.assertNotIn("webfetch", self.flat(text))
 
-    def test_fanout_playbook_scopes_claude_code_facts_and_covers_zcode(self):
+    def test_fanout_playbook_has_no_claude_code_runtime(self):
         text = self.read("fanout-playbook.md")
-        for ln in self.prose_lines(text):
-            if "CLAUDE_CODE_" in ln or "Workflow" in ln:
-                self.assertIn("Claude Code", ln, ln)
-        self.assertIn("SendMessage` exists (Claude-Code-compatible)", self.flat(text))
-        self.assertNotIn("On ZCode no continue tool is documented", self.flat(text))
+        flat = self.flat(text)
+        self.assertIn("`SendMessage` exists", flat)
+        self.assertNotIn("Claude Code", flat)
+        self.assertNotIn("Claude-Code", flat)
+        self.assertNotIn("CLAUDE_CODE_", flat)
+        self.assertNotIn("Workflow", flat)
+        self.assertNotIn("On ZCode no continue tool is documented", flat)
 
     def test_architectural_taskstop_note_covers_zcode(self):
-        self.assertIn("TaskStop` exists (Claude-Code-compatible)",
+        self.assertIn("`TaskStop` exists",
                       self.flat(self.read("architectural.md")))
+        self.assertNotIn("Claude-Code", self.flat(self.read("architectural.md")))
         self.assertNotIn("On ZCode no stop tool is documented",
                          self.flat(self.read("architectural.md")))
 

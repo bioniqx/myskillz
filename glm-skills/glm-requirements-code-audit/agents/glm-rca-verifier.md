@@ -30,7 +30,9 @@ Stance per preliminary status:
 - MATCHED (low confidence or high stakes) → check the cited code against the EXACT wording, including specified limits,
   defaults, edge conditions and error paths; downgrade to PARTIAL/CONFLICT if any specified detail is unmet.
 - UNVERIFIABLE → decide whether static reading really cannot settle it; if it can, settle it.
-Agree only on what you independently confirmed. Read only the line ranges you need.
+Agree only on what you independently confirmed, and say so: an AGREE `reason` names the exact
+lines or the search that confirmed it — "nothing found" is not confirmation. Read only the
+line ranges you need.
 
 Write the verdict file (one JSON object per requirement, exactly the schema in the batch file, no prose; fill `searched` with the new strategies you tried) BEFORE your final reply.
 Final reply: exactly one line, `batch-VNN done: k/n written`.

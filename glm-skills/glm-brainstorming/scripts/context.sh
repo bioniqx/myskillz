@@ -11,37 +11,16 @@ skill_dir=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
 echo "date: $(date +%F)   cwd: $(pwd)"
 echo "skill_dir: $skill_dir"
 
-# --- runtime: harness, model slots, caps -----------------------------------
+# --- runtime: harness, caps ------------------------------------------------
 harness=unknown
-if [ -n "$CLAUDECODE" ] || [ -n "$CLAUDE_CODE_ENTRYPOINT" ] || [ -n "$CLAUDE_SKILL_DIR" ]; then
-  harness=claude-code
-elif case "$skill_dir" in */.zcode/*) true ;; *) false ;; esac; then harness=zcode
+if case "$skill_dir" in */.zcode/*) true ;; *) false ;; esac; then harness=zcode
 elif [ -n "$CODEX_CI" ] || [ -n "$CODEX_HOME" ]; then harness=codex
 elif [ -n "$CLINE_VERSION" ] || [ -n "$ROO_CODE" ]; then harness=cline
 elif [ -n "$GEMINI_CLI" ]; then harness=gemini-cli
 elif [ -n "$GITHUB_COPILOT_CLI" ]; then harness=copilot-cli
 fi
 echo "harness: $harness"
-
-route=anthropic
-case "${ANTHROPIC_BASE_URL:-}" in
-  *z.ai*|*zhipu*|*bigmodel*) route=glm ;;
-  "") : ;;
-  *) route=custom ;;
-esac
-big=${ANTHROPIC_DEFAULT_OPUS_MODEL:-${ANTHROPIC_MODEL:-default}}
-mid=${ANTHROPIC_DEFAULT_SONNET_MODEL:-default}
-fast=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-${ANTHROPIC_SMALL_FAST_MODEL:-default}}
-echo "route: $route   models: main=$big sonnet=$mid haiku=$fast"
-case "$fast$mid$big" in
-  *glm*|*GLM*) echo "glm: yes — lanes default to model=\"haiku\" (Flash); at most 2 lanes on \"sonnet\"; see glm-tuning.md" ;;
-  *) [ "$route" = glm ] && echo "glm: route is GLM but model slots are unmapped — set ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3-flash (glm-tuning.md §2)" ;;
-esac
-if [ "$harness" = zcode ]; then
-  echo "caps: lanes=$(c8 "${OC_MAX_LANES:-8}" 8) (default 8, hard max 8)"
-else
-  echo "caps: subagents=$(c8 "${CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:-8}") workflow=$(c8 "${CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS:-8}") compact_window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-default}"
-fi
+echo "caps: lanes=$(c8 "${OC_MAX_LANES:-8}" 8) (default 8, hard max 8)"
 
 # --- repo ------------------------------------------------------------------
 in_home=no

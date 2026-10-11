@@ -13,7 +13,7 @@ PY_CONSTANTS = (
     ("glm-requirements-code-audit/scripts/audit.py", "MAX_PARALLEL"),
     ("glm-writing-plans/scripts/plan_tool.py", "MAX_WORKERS"),
     ("glm-systematic-debugging/scripts/debug_tool.py", "MAX_API"),
-    ("glm-dev-team/scripts/devteam.py", "NON_CLAUDE_CAP"),
+    ("glm-dev-team/scripts/devteam.py", "PROVIDER_CAP"),
 )
 
 

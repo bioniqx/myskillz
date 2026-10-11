@@ -40,6 +40,11 @@ Unknown test creates files/dirs → `bash $S/find-polluter.sh` (parallel, isolat
 
 ## Rules
 
+- Reproduce at will before tracing: reduce to the smallest input that fails every
+  run (a flaky repro gets its rate from `stress.sh` first). A repro you cannot
+  trigger on demand cannot be traced, only guessed at.
+- The fix removes the cause; it never hides the symptom — no try/catch around
+  the crash site, no special case just for the failing input.
 - Never stop at the frame where the error appears if you can go one frame up.
 - The origin is where the value is **created or first becomes wrong**, not where it is first used.
 - Dead end (value comes from outside: user input, network, OS)? Then the fix is validation at the boundary where it enters.

@@ -70,7 +70,7 @@ keys `more_queries`, `retrieval`, `lint_warn` and `lint_error` exist only on row
 
 `adjudication` > `UNVERIFIABLE` for items tagged `static-limit`/`ambiguous` > `verifier verdict` >
 `first-pass finding` > `UNSEARCHED`. A `MISSING` that never had a second pass, a non-MATCHED item nobody verified
-or adjudicated, and an glm-investigator/verifier disagreement all fail `audit.py check`. The evidence shown in the
+or adjudicated, and a glm-rca-investigator/glm-rca-verifier disagreement all fail `audit.py check`. The evidence shown in the
 report comes from the pass that decided the status: the verdict when its status equals the final status,
 otherwise the first-pass finding.
 

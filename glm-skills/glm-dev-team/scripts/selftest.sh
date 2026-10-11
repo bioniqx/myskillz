@@ -13,11 +13,10 @@ D() { python3 "$S/devteam.py" "$@"; }
 # scheduling checks (they assert exact slot arithmetic; the governor has its own section), no real
 # transcripts, no peak-hour dependence, and a throwaway HOME so the machine's ~/.claude never leaks in.
 export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_TRANSCRIPTS_DIR="$TMP/no-transcripts"
-unset DEVTEAM_GLM_TIER DEVTEAM_MAX_PARALLEL ANTHROPIC_BASE_URL CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS CLAUDE_CONFIG_DIR
+unset DEVTEAM_GLM_TIER DEVTEAM_MAX_PARALLEL ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR
 # Pin the harness: DEVTEAM_HARNESS wins over every ambient marker, so a stray
-# ZCODE*/CLAUDE_CODE* variable in the session cannot flip the engine's routing.
-# The ZCode section below re-pins it itself.
-export DEVTEAM_HARNESS=claude
+# ZCODE* variable in the session cannot flip the engine's detection.
+export DEVTEAM_HARNESS=zcode
 export HOME="$TMP/home"; mkdir -p "$HOME"
 git config --global user.email t@t; git config --global user.name t
 R="$(mkt)/repo"; mkdir -p "$R"; cd "$R"
@@ -52,7 +51,6 @@ OUT=$(D init plan.md 2>&1); echo "$OUT" | head -3
 check "init ok" '[[ "$OUT" == *"INIT ok: 4 slices"* ]]'
 check "overlap warning S1<->S4" '[[ "$OUT" == *"S1↔S4"* ]]'
 check "ready set is pairwise disjoint (S4 not with S1)" '[[ "$OUT" == *"READY: S2 S1 "* && "$OUT" != *"READY: S2 S1 S4"* ]]'
-check "allow rules written" 'grep -q "node --test tests/:\*" .claude/settings.local.json && grep -q "PORT=4001 DB_SUFFIX=_s1 TMPDIR=.slice/tmp node --test" .claude/settings.local.json'
 check "excludes include bare node_modules" 'grep -qx node_modules .git/info/exclude'
 
 echo "== dispatch S1 S2 S4 (S4 must be skipped: overlaps S1)"
@@ -127,11 +125,13 @@ check "bash guard allows git reset -- file" '[[ -z "$(hook bash "{\"tool_input\"
 check "bash guard allows git checkout <ref> -- file" '[[ -z "$(hook bash "{\"tool_input\":{\"command\":\"git checkout abc123 -- tests/x.js\"}}")" ]]'
 check "bash-ro allows redirect to /dev/null" '[[ -z "$(hook bash-ro "{\"tool_input\":{\"command\":\"ls > /dev/null; x 2>/dev/null; y 2>&1 | tail\"}}")" ]]'
 check "bash-ro denies redirect to file" '[[ "$(hook bash-ro "{\"tool_input\":{\"command\":\"echo a > b.txt\"}}")" == *deny* ]]'
-echo "== doctor on installed agents (hook pinning)"
+echo "== doctor (zcode): installs the six agents user-level and merges the guard hooks"
 D doctor --fix >/dev/null 2>&1
-check "doctor pins hooks to guard.py" 'grep -q "guard.py\\\\\" edit\"" "$R/.claude/agents/glm-programmer.md"'
-OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=8 D doctor 2>&1)
-check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all good"* ]]'
+check "doctor installs the six zcode agents into ~/.zcode/agents" '[ "$(ls "$HOME/.zcode/agents"/*.md | wc -l)" -eq 6 ] && [ -f "$HOME/.zcode/agents/glm-programmer-strong.md" ] && [ ! -e "$HOME/.zcode/agents/glm-programmer.md" ]'
+check "doctor merges the PreToolUse + Stop hooks into ~/.zcode/cli/config.json" 'grep -q "guard.py zcode" "$HOME/.zcode/cli/config.json" && grep -q "\"enabled\": true" "$HOME/.zcode/cli/config.json"'
+check "doctor writes nothing under the project root" '[ ! -e "$R/.claude/agents" ]'
+OUT=$(D doctor 2>&1)
+check "doctor all good after fix" '[[ "$OUT" == *"DOCTOR: all ZCode agents and hooks installed"* ]]'
 
 # ---------------------------------------------------------------- FAST MODE --
 echo "== fast mode: a second repo, --spike (level 4) + start + next"
@@ -234,19 +234,17 @@ mkdir -p src tests && echo b > src/a.js && git add -A && git commit -qm i
   done
   printf ']}\n```\n'; } > plan.md
 D init plan.md >/dev/null 2>&1
-export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=6
 D dispatch S1 >/dev/null 2>&1
 git worktree add -q .claude/worktrees/h1 -b h1 HEAD
 ( cd "$R8/.claude/worktrees/h1" && D claim S1 >/dev/null 2>&1 && mkdir -p src && mktest tests/f1.test.js f1 && D commit-red s1 >/dev/null 2>&1 && echo i > src/f1.js && D commit-green s1 >/dev/null 2>&1 )
 OUT=$(D next S1 --shards 8 2>&1)
 NAG=$(( $(printf '%s' "$OUT" | grep -c "=== DISPATCH") + $(printf '%s' "$OUT" | grep -c "=== REVIEW") ))
-check "next stays inside the concurrency limit (dispatch+review <= 6)" '[ "$NAG" -le 6 ] && [ "$NAG" -gt 1 ]'
+check "next stays inside the concurrency limit (dispatch+review <= 8)" '[ "$NAG" -le 8 ] && [ "$NAG" -gt 1 ]'
 slotcap() { D ready | sed -n 's/.*free of \([0-9]*\) .*slots.*/\1/p' | head -1; }
 CAP_OPEN=$(slotcap)
 for f in "$R8"/.claude/dev-team/reviews/r1*.md; do case "$f" in *.report.md) ;; *) printf "x" > "${f%.md}.report.md";; esac; done
 CAP_CLOSED=$(slotcap)
-check "an open review batch cannot starve the programmers forever" '[ -n "$CAP_OPEN" ] && [ -n "$CAP_CLOSED" ] && [ "$CAP_CLOSED" -gt "$CAP_OPEN" ]' 
-unset CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS
+check "an open review batch cannot starve the programmers forever" '[ -n "$CAP_OPEN" ] && [ -n "$CAP_CLOSED" ] && [ "$CAP_CLOSED" -gt "$CAP_OPEN" ]'
 
 echo "-- a spike slice may skip tests, but may not weaken tests it wrote"
 R7="$(mkt)/r7"; mkdir -p "$R7"; cd "$R7"
@@ -366,9 +364,10 @@ check "a chore/docs/perf slice with no verify command is refused" 'printf "\140\
 check "a code slice whose footprint has no test path is warned about" 'printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"echo t\"},\"slices\":[{\"id\":\"Z\",\"title\":\"z\",\"deps\":[],\"files\":[\"src/z.js\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > warn.md; D init warn.md --force 2>&1 | grep -q "cannot write its own tests"'
 D reset --yes >/dev/null 2>&1; D init plan.md >/dev/null 2>&1
 OUT=$(D dispatch R1 R2 C1 D1 T1 X1 2>&1)
-check "a trivial slice is routed to the lite lane" '[[ "$OUT" == *"subagent_type: glm-programmer-lite, description: \"C1\""* ]]'
+check "a trivial slice is routed to the lite lane" 'grep -q "subagent_type=glm-programmer-lite, description=.ci." <<<"$OUT"'
+
 check "a research slice goes to the glm-investigator with no claim command" '[[ "$OUT" == *"[RESEARCH]"* && "$OUT" == *"subagent_type: glm-investigator"* ]]'
-check "every other kind still goes to the glm-programmer in MODE WORK" '[[ "$OUT" == *"[REFACTOR/WORK]"* && "$OUT" == *"[DOCS/WORK]"* ]]'
+check "every other kind still goes to a glm-programmer lane in MODE WORK" '[[ "$OUT" == *"[REFACTOR/WORK]"* && "$OUT" == *"[DOCS/WORK]"* ]]'
 check "a chore briefing pins the slice's own verify command" 'grep -q "verify (THIS slice.s evidence command): .*echo verified" .claude/dev-team/briefs/C1.md'
 check "a refactor briefing demands a before AND after run" 'grep -qi "before your first edit" .claude/dev-team/briefs/R1.md'
 
@@ -470,13 +469,13 @@ check "probe proposes the FILE-SCOPED lint and test commands that make the balan
 OUT=$(D review-pr HEAD~1..HEAD --shards 2 2>&1)
 check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: glm-code-reviewer"* ]]'
 check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: glm-spot-reviewer"* ]]'
-check "non-Claude caps: every tier <= 8 and monotone, default tier api, peak halving opt-in, shards <= 4, Anthropic keeps 64" 'DEVTEAM_HARNESS=claude python3 - "$S" <<PY
+check "caps: every tier <= 8 and monotone, default tier api, peak halving opt-in, shards <= 4" 'python3 - "$S" <<PY
 import sys; sys.path.insert(0, sys.argv[1]); import devteam as d
 t = [d.TIERS[k] for k in ("lite", "pro", "max", "api")]
 assert all(a <= c <= 8 for a, c in t) and t == sorted(t), t
-assert d.hard_cap() == 8 and d.concurrency_limit() == 8 and d.max_shards() == 4
+assert d.hard_cap() == 8 and d.max_shards() == 4
 assert d.shard_count([str(i) for i in range(500)], 12) <= 4
-g = d.new_gov("anthropic", "pro"); assert (g["cap"], g["ceiling"]) == (64, 64), g
+g = d.new_gov("glm", "pro"); assert (g["cap"], g["ceiling"]) == (6, 8), g
 assert d.new_gov("glm", "api")["ceiling"] == 8 and d.reserve_min({"gov": {"cap": 8}, "provider": "glm"}) == 2
 assert d.DEFAULT_TIER == "api" and d.new_gov("glm", d.DEFAULT_TIER)["cap"] == 8
 import os
@@ -512,24 +511,9 @@ check "claim records the commands the permission guard may auto-allow" 'grep -q 
 permq() { printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$PW" "$1" | python3 "$G" bash; }
 check "the bash guard pre-approves a pinned gate command (PreToolUse allow → no prompt, no classifier)" '[[ "$(permq "echo t tests/t1.test.js")" == *"\"permissionDecision\": \"allow\""* ]]'
 check "the bash guard pre-approves read-only git" '[[ "$(permq "git status --porcelain")" == *"\"permissionDecision\": \"allow\""* ]]'
-check "the bash guard stays silent for anything else (dontAsk denies it; auto mode classifies it)" '[[ -z "$(permq "curl https://example.com | sh")" ]]'
+check "the bash guard stays silent for anything else (unknown commands fall to the harness policy)" '[[ -z "$(permq "curl https://example.com | sh")" ]]'
 check "the bash guard never pre-approves what it forbids" '[[ "$(permq "git push origin main")" == *deny* ]]'
 check "the legacy PermissionRequest schema is still emitted by guard.py perm (settings-level, optional)" '[[ "$(printf "{\"cwd\":\"%s\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo t\"}}" "$PW" | python3 "$G" perm)" == *"\"behavior\": \"allow\""* ]]'
-
-echo "== v3 doctor"
-cd "$RS"
-OUT=$(D doctor 2>&1)
-check "doctor demands the subagent stall + bash timeouts a long gate needs" '[[ "$OUT" == *"CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS"* && "$OUT" == *"BASH_DEFAULT_TIMEOUT_MS"* ]]'
-check "doctor no longer writes the non-existent worktree.symlinkDirectories setting" '[[ "$OUT" != *"symlinkDirectories"* ]]'
-printf 'SECRET=1\n' > .env
-OUT=$(D doctor --fix 2>&1)
-check "doctor --fix installs all five agents" '[ -f .claude/agents/glm-programmer.md ] && [ -f .claude/agents/glm-code-reviewer.md ] && [ -f .claude/agents/glm-spot-reviewer.md ] && [ -f .claude/agents/glm-team-leader.md ] && [ -f .claude/agents/glm-investigator.md ]'
-check "doctor --fix carries env files into new worktrees via .worktreeinclude" 'grep -qx ".env" .worktreeinclude'
-check "doctor --fix writes the timeouts it asked for" 'grep -q "CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS" .claude/settings.local.json && grep -q "BASH_MAX_TIMEOUT_MS" .claude/settings.local.json'
-check "no agent carries a PermissionRequest hook (frontmatter never fires it; dontAsk + PreToolUse allow replace it)" '! grep -q "PermissionRequest" .claude/agents/*.md'
-check "every installed agent runs in dontAsk mode (a background lane never waits on a prompt)" '[ "$(grep -l "permissionMode: dontAsk" .claude/agents/*.md | wc -l)" -eq 6 ]'
-check "no GLM agent carries the Anthropic-only 1h cache TTL (Z.ai caches implicitly)" '[ "$(grep -l "cacheTtl" .claude/agents/*.md | wc -l)" -eq 0 ]'
-
 
 # =============================================================================================
 # v3.1 hardening — every finding from the adversarial review, with the attack that found it
@@ -716,13 +700,9 @@ OUT=$(D next V1 2>&1)
 check "a research-only run does not crash the review batch (research is not a merge)" '[[ "$OUT" == *"RESEARCH RECORDED"* && "$OUT" != *"ambiguous argument"* && "$OUT" != *"Traceback"* ]]'
 check "and it reaches DAG EXHAUSTED" '[[ "$OUT" == *"DAG EXHAUSTED"* ]]'
 
-echo "== v3.1 --fast 0 means strict, and doctor refreshes a stale agent"
+echo "== v3.1 --fast 0 means strict"
 cd "$RR"
 check "--fast 0 selects strict even when the plan asks for turbo" 'printf "\140\140\140json\n{\"request\":\"r\",\"profile\":\"turbo\",\"commands\":{\"test\":\"echo ok\"},\"slices\":[{\"id\":\"Z1\",\"title\":\"z\",\"deps\":[],\"files\":[\"src/z.js\",\"tests/z.test.js\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > p0.md; D init p0.md --force --fast 0 2>&1 | grep -q "PROFILE strict"'
-D doctor --fix >/dev/null 2>&1
-printf -- "---\nname: glm-programmer\ndescription: stale v2 copy\n---\nold body\n" > .claude/agents/glm-programmer.md
-check "doctor notices an agent left behind by an older glm-dev-team" 'D doctor 2>&1 | grep -q "differs from the version shipped"'
-check "doctor --fix refreshes it in place, no .bak" 'D doctor --fix >/dev/null 2>&1; grep -q "permissionMode: dontAsk" .claude/agents/glm-programmer.md && [ ! -e .claude/agents/glm-programmer.md.bak ]'
 
 # =============================================================================================
 # v3.2 — no-relay integration (Stop-gate markers), never-prompt permissions, tighter dispatch
@@ -774,12 +754,12 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch T1 D1 D2 N1 2>&1)
-check "a trivial slice rides the lite lane (GLM-5.3-Flash, effort low)" '[[ "$OUT" == *"subagent_type: glm-programmer-lite, description: \"T1\", prompt:"* && "$OUT" == *"(glm-5.3-flash · effort low)"* ]]'
-check "a small docs slice rides the lite lane too" '[[ "$OUT" == *"subagent_type: glm-programmer-lite, description: \"D1\", prompt:"* ]]'
-check "a LARGE docs slice escalates to the strong model" '[[ "$OUT" == *"subagent_type: glm-programmer, description: \"D2\", model: opus, prompt:"* ]]'
-check "a normal code slice keeps the default model" '[[ "$OUT" == *"description: \"N1\", prompt:"* ]]'
+check "a trivial slice rides the lite lane (GLM-5.3-Flash, thoughtLevel low)" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
+check "a small docs slice rides the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.readme." <<<"$OUT"'
+check "a LARGE docs slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big docs." <<<"$OUT"'
+check "a normal code slice rides the lite lane with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
 check "the prompt is the bare claim command and nothing else" '[[ "$OUT" == *"prompt: \"python3 "*"devteam.py"*" claim N1\""* ]]'
-check "one dispatch = header + one Agent line" '[ "$(echo "$OUT" | grep -c "^Agent → subagent_type: glm-programmer")" -eq 4 ] && [ "$(echo "$OUT" | grep -c "prompt: |")" -eq 0 ]'
+check "one dispatch = header + one Agent line" '[ "$(echo "$OUT" | grep -c "^Agent(subagent_type=glm-programmer-")" -eq 4 ] && [ "$(echo "$OUT" | grep -c "prompt: |")" -eq 0 ]'
 
 echo "== v3.2 never-prompt permissions: PreToolUse pre-approves exactly the safe set"
 cd "$RM"; PW="$MW2"     # M2 is still in flight (rejected → warm fix), so its .slice/ is live
@@ -796,7 +776,7 @@ check "cd <subdir> && <toolchain> is pre-approved" 'isallow "cd src && npx tsc -
 check "a file operation inside the footprint is pre-approved (rm/touch/mkdir/git add)" 'isallow "rm src/m2.js" && isallow "touch tests/m2.test.js" && isallow "mkdir -p src" && isallow "git add src/m2.js"'
 check "a file operation OUTSIDE the footprint is not" 'issilent "rm src/a.js" && issilent "mv src/m2.js src/z.js" && issilent "touch src/other.js"'
 check "recursive rm is never pre-approved" 'issilent "rm -rf src"'
-check "package installs are never pre-approved (64 lanes share node_modules)" 'issilent "npm install left-pad" && issilent "pip install requests" && issilent "cargo install x" && issilent "npm" && issilent "go get ./..."'
+check "package installs are never pre-approved (lanes share node_modules)" 'issilent "npm install left-pad" && issilent "pip install requests" && issilent "cargo install x" && issilent "npm" && issilent "go get ./..."'
 check "inline interpreters are never pre-approved" 'issilent "python3 -c \"print(1)\"" && issilent "node -e \"1\"" && issilent "bash -c ls"'
 check "an in-tree shell script is pre-approved, one outside is not" 'isallow "bash scripts/test.sh" && issilent "bash /tmp/x.sh" && issilent "sh ../x.sh"'
 check "redirecting to a file is never pre-approved" 'issilent "echo ok > out.txt" && issilent "npx vitest run > log"'
@@ -806,7 +786,7 @@ check "the engine is pre-approved ONLY through the slice helpers" 'isallow "pyth
 check "what the guard forbids is still denied, never merely silent" 'isdeny "git push origin main" && isdeny "git reset --hard HEAD~1"'
 check "a write to the Conductor run state from a lane is denied (absolute) or at least never pre-approved (relative)" 'isdeny "touch $RM/.claude/dev-team/slices/M4.done" && issilent "echo x > ../../glm-dev-team/slices/M4.done"'
 eq2() { printf '{"cwd":"%s","tool_input":{"file_path":"%s"}}' "$PW" "$1" | python3 "$G" edit; }
-check "an edit inside the footprint is pre-approved (no prompt in dontAsk)" '[[ "$(eq2 "$PW/src/m2.js")" == *"\"permissionDecision\": \"allow\""* ]]'
+check "an edit inside the footprint is pre-approved (no prompt)" '[[ "$(eq2 "$PW/src/m2.js")" == *"\"permissionDecision\": \"allow\""* ]]'
 check "an edit outside the footprint is denied with the reason" '[[ "$(eq2 "$PW/src/a.js")" == *"outside your slice footprint"* ]]'
 echo "-- read-only roles"
 rq() { printf '{"cwd":"%s","tool_input":{"command":%s}}' "$RM" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" | python3 "$G" bash-ro; }
@@ -816,11 +796,6 @@ check "a reviewer may run the project toolchain for evidence" '[[ "$(rq "npx vit
 check "a reviewer still cannot install, write or commit" '[[ "$(rq "npm install x")" == *deny* && "$(rq "echo x > y")" == *deny* && "$(rq "git commit -am x")" == *deny* ]]'
 check "a reviewer running an unknown command falls to the normal flow (silent)" '[ -z "$(rq "curl https://example.com")" ]'
 
-echo "== v3.2 doctor: subagent cache TTL, forced-model warning; start: greenfield git init; finish: PR summary"
-cd "$RM"
-D doctor --fix >/dev/null 2>&1
-check "doctor --fix does not write the Anthropic subagent cache TTL for GLM" '! grep -q "subagentPromptCacheTtl" .claude/settings.local.json'
-check "doctor warns when CLAUDE_CODE_SUBAGENT_MODEL_FORCE would disable model routing" '[[ "$(CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 D doctor 2>&1)" == *"SUBAGENT_MODEL_FORCE"* ]]'
 GF="$(mkt)/greenfield"; mkdir -p "$GF"; cd "$GF"
 cat > plan.md <<'EOF'
 ```json
@@ -847,7 +822,7 @@ git worktree add -q .claude/worktrees/v1 -b wv1 HEAD
 ( cd .claude/worktrees/v1 && D claim V1 >/dev/null 2>&1 && mktest tests/v1.test.js V1 && D commit-red v >/dev/null 2>&1 && echo i > src/v1.js && D commit-green v >/dev/null 2>&1 )
 D next V1 >/dev/null 2>&1
 printf '## Review verdict: CHANGES_REQUIRED\n```json\n{"fixes":[{"id":"F?","title":"x","files":["src/x.js","tests/x.test.js"],"criteria":["c"]}]}\n```\n' > .claude/dev-team/reviews/r1.report.md
-OUT=$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 D next 2>&1)
+OUT=$(D next 2>&1)
 check "the review was harvested as CHANGES_REQUIRED with a fix queued" '[[ "$OUT" == *"REVIEW r1: CHANGES_REQUIRED"* && "$OUT" == *"queued F1"* ]]'
 check "its shard stays reserved until it is APPROVED (8 - 2 reserved - 1 pending re-review = 5 slots)" '[[ "$OUT" == *"free of 5 slots"* ]]'
 
@@ -888,34 +863,11 @@ cat > plan.md <<'EOF'
  "slices":[{"id":"P1","title":"p","deps":[],"files":["src/p1.js","tests/p1.test.js"],"risk":"low","criteria":["c"]}]}
 ```
 EOF
-check "a Z.ai base URL selects the GLM provider" '[[ "$(env -u DEVTEAM_PROVIDER ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic python3 "$S/devteam.py" init plan.md 2>&1)" == *"PROVIDER Z.ai GLM"* ]]'
-check "a BigModel base URL in .claude/settings.json selects it too" 'mkdir -p .claude && printf "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://open.bigmodel.cn/api/anthropic\"}}" > .claude/settings.json && [[ "$(env -u DEVTEAM_PROVIDER python3 "$S/devteam.py" init plan.md --force 2>&1)" == *"PROVIDER Z.ai GLM"* ]]'
-check "no base URL means Anthropic (legacy routing)" 'rm -f .claude/settings.json && [[ "$(env -u DEVTEAM_PROVIDER python3 "$S/devteam.py" init plan.md --force 2>&1)" == *"PROVIDER Anthropic"* ]]'
-
-echo "== v4 agents are rendered per provider"
-RAG="$(newrepo rag4)"; cd "$RAG"
-OUT=$(D doctor --fix 2>&1)
-fm() { sed -n "s/^$2: //p" ".claude/agents/$1.md" | head -1; }
-check "six agents are installed (glm-programmer-lite is the new one)" '[ "$(ls .claude/agents/*.md | wc -l)" -eq 6 ] && [ "$(fm glm-programmer-lite name)" = glm-programmer-lite ]'
-check "GLM lanes: glm-programmer = haiku (GLM-5.3-Flash) at effort high; lite = effort low" '[ "$(fm glm-programmer model)" = haiku ] && [ "$(fm glm-programmer effort)" = high ] && [ "$(fm glm-programmer-lite model)" = haiku ] && [ "$(fm glm-programmer-lite effort)" = low ]'
-check "GLM strong roles: glm-code-reviewer opus/high, glm-team-leader opus/max; glm-spot-reviewer and glm-investigator on flash" '[ "$(fm glm-code-reviewer model)" = opus ] && [ "$(fm glm-team-leader effort)" = max ] && [ "$(fm glm-spot-reviewer model)" = haiku ] && [ "$(fm glm-investigator model)" = haiku ]'
-body() { awk 'f;/^---$/{c++; if(c==2) f=1}' "$1"; }
-check "glm-programmer-lite shares glm-programmer's system prompt byte for byte (one cache prefix, no drift)" '[ -n "$(body .claude/agents/glm-programmer.md)" ] && [ "$(body .claude/agents/glm-programmer.md | md5sum)" = "$(body .claude/agents/glm-programmer-lite.md | md5sum)" ] && [ "$(fm glm-programmer-lite maxTurns)" = 80 ]'
-L=.claude/settings.local.json
-jget() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("env",{}).get(sys.argv[2],""))' "$L" "$1"; }
-check "doctor maps the aliases to GLM ids (opus/sonnet → glm-5.3, haiku → glm-5.3-flash)" '[ "$(jget ANTHROPIC_DEFAULT_OPUS_MODEL)" = glm-5.3 ] && [ "$(jget ANTHROPIC_DEFAULT_SONNET_MODEL)" = glm-5.3 ] && [ "$(jget ANTHROPIC_DEFAULT_HAIKU_MODEL)" = glm-5.3-flash ]'
-check "doctor makes Claude Code forward effort to the pinned GLM models" '[ "$(jget ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES)" = effort,thinking ] && [ "$(jget ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES)" = effort,thinking ]'
-check "doctor applies Z.ai's recommended timeout, 1M compact window and non-essential-traffic switch" '[ "$(jget API_TIMEOUT_MS)" = 3000000 ] && [ "$(jget CLAUDE_CODE_AUTO_COMPACT_WINDOW)" = 1000000 ] && [ "$(jget CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC)" = 1 ]'
-check "doctor never writes credentials or the base URL" '! grep -q "ANTHROPIC_AUTH_TOKEN\|ANTHROPIC_BASE_URL\|ANTHROPIC_API_KEY" $L'
-check "doctor is all good after --fix" '[[ "$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=8 D doctor 2>&1)" == *"DOCTOR: all good"* ]]'
-check "doctor --fix writes 8 for the concurrency envs on GLM (the provider allows 8 concurrent calls)" '[ "$(jget CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS)" = 8 ] && [ "$(jget CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY)" = 8 ]'
-check "doctor flags 64 on GLM as too wide, and asks for 64 on Anthropic" '[[ "$(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D doctor 2>&1)" == *"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is 64 — need 8"* && "$(DEVTEAM_PROVIDER=anthropic CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=8 D doctor 2>&1)" == *"need 64 for full width"* ]]'
-check "an older GLM mapping is upgraded, a deliberate custom one is kept" 'python3 - "$L" <<PY
-import json,sys; p=sys.argv[1]; d=json.load(open(p)); d["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"]="glm-4.7"; d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"]="glm-5.3"; json.dump(d,open(p,"w"))
-PY
-OUT=$(D doctor --fix 2>&1); [ "$(jget ANTHROPIC_DEFAULT_OPUS_MODEL)" = glm-5.3 ] && [ "$(jget ANTHROPIC_DEFAULT_HAIKU_MODEL)" = glm-5.3 ] && [[ "$OUT" == *"your mapping is kept"* ]]'
-check "doctor reinstalls agents rendered for another provider (switching providers is safe)" 'DEVTEAM_PROVIDER=anthropic D doctor --fix >/dev/null 2>&1; [ "$(fm glm-programmer model)" = sonnet ] && [ "$(grep -l "cacheTtl: 1h" .claude/agents/*.md | wc -l)" -eq 6 ] && grep -q "\"subagentPromptCacheTtl\": \"1h\"" $L && D doctor --fix >/dev/null 2>&1 && [ "$(fm glm-programmer model)" = haiku ] && [ "$(grep -l cacheTtl .claude/agents/*.md | wc -l)" -eq 0 ]'
-check "doctor warns about a forced subagent model (it would flatten the flash/strong routing)" '[[ "$(CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 D doctor 2>&1)" == *"fast-lane / strong-model routing"* ]]'
+check "a Z.ai base URL selects the GLM provider" '[[ "$(env -u DEVTEAM_PROVIDER DEVTEAM_HARNESS=other ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic python3 "$S/devteam.py" init plan.md 2>&1)" == *"PROVIDER Z.ai GLM"* ]]'
+check "a BigModel base URL in .claude/settings.json selects it too" 'mkdir -p .claude && printf "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://open.bigmodel.cn/api/anthropic\"}}" > .claude/settings.json && [[ "$(env -u DEVTEAM_PROVIDER DEVTEAM_HARNESS=other python3 "$S/devteam.py" init plan.md --force 2>&1)" == *"PROVIDER Z.ai GLM"* ]]'
+# DEVTEAM_HARNESS=other above only isolates the URL fallthrough of detect_provider (the zcode
+# marker would short-circuit it); on a real zcode install the provider defaults to glm anyway.
+check "no base URL means Anthropic (plain fallthrough)" 'rm -f .claude/settings.json && [[ "$(env -u DEVTEAM_PROVIDER DEVTEAM_HARNESS=other python3 "$S/devteam.py" init plan.md --force 2>&1)" == *"PROVIDER Anthropic"* ]]'
 
 echo "== v4 routing: cheap first, strong where it pays, escalate on retry"
 RRT="$(newrepo rrt4)"; cd "$RRT"
@@ -926,22 +878,20 @@ cat > plan.md <<'EOF'
            {"id":"T1","title":"tiny","size":"trivial","deps":[],"files":["src/t1.js","tests/t1.test.js"],"risk":"low","criteria":["c"]},
            {"id":"H1","title":"auth","deps":[],"files":["src/h1.js","tests/h1.test.js"],"risk":"high","criteria":["c"]},
            {"id":"L1","title":"big","size":"large","deps":[],"files":["src/l1.js","tests/l1.test.js"],"risk":"low","criteria":["c"]},
-           {"id":"X1","title":"survey","kind":"research","size":"large","deps":[],"files":["docs/x1.md"],"risk":"low","criteria":["q?"]},
-           {"id":"E1","title":"pinned","model":"glm-5.3","size":"trivial","deps":[],"files":["src/e1.js","tests/e1.test.js"],"risk":"low","criteria":["c"]}]}
+           {"id":"X1","title":"survey","kind":"research","size":"large","deps":[],"files":["docs/x1.md"],"risk":"low","criteria":["q?"]}]}
 ```
 EOF
-OUT=$(D init plan.md 2>&1 && D dispatch N1 T1 H1 L1 X1 E1 2>&1)
-check "a normal slice rides GLM-5.3-Flash on the glm-programmer lane with no override" '[[ "$OUT" == *"subagent_type: glm-programmer, description: \"N1\", prompt:"* && "$OUT" == *"normal   (glm-5.3-flash · effort high)"* ]]'
-check "a trivial slice takes the lite lane" '[[ "$OUT" == *"subagent_type: glm-programmer-lite, description: \"T1\", prompt:"* ]]'
-check "a high-risk slice escalates to GLM-5.3" '[[ "$OUT" == *"description: \"H1\", model: opus"* && "$OUT" == *"auth   (glm-5.3 · effort high)"* ]]'
-check "a large slice escalates to GLM-5.3" '[[ "$OUT" == *"description: \"L1\", model: opus"* ]]'
-check "a large research slice sends the glm-investigator on GLM-5.3" '[[ "$OUT" == *"subagent_type: glm-investigator, description: \"X1\", model: opus"* ]]'
-check "a model pinned in the plan is passed through verbatim" '[[ "$OUT" == *"description: \"E1\", model: glm-5.3, prompt:"* ]]'
+OUT=$(D init plan.md 2>&1 && D dispatch N1 T1 H1 L1 X1 2>&1)
+check "a normal slice rides the lite lane (GLM-5.3-Flash) with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
+check "a trivial slice takes the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
+check "a high-risk slice escalates to the strong lane (GLM-5.3)" 'grep -q "subagent_type=glm-programmer-strong, description=.auth." <<<"$OUT"'
+check "a large slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big." <<<"$OUT"'
+check "a large research slice still goes to the glm-investigator" '[[ "$OUT" == *"subagent_type: glm-investigator, description: \"X1\""* ]]'
 D fail N1 --why "stuck" >/dev/null 2>&1; D fail T1 --why "stuck" >/dev/null 2>&1; D retry N1 >/dev/null 2>&1; D retry T1 >/dev/null 2>&1
 OUT=$(D dispatch N1 T1 2>&1)
-check "a retried slice escalates to the strong model (the fast one already missed once)" '[[ "$OUT" == *"subagent_type: glm-programmer, description: \"N1\", model: opus"* ]]'
-check "a retried trivial slice leaves the lite lane too" '[[ "$OUT" == *"subagent_type: glm-programmer, description: \"T1\", model: opus"* ]]'
-check "the route is recorded for stats" 'python3 -c "import json;s=json.load(open(\"$RRT/.claude/dev-team/state.json\"));assert s[\"slices\"][\"N1\"][\"route\"].startswith(\"glm-5.3 \")"'
+check "a retried slice escalates to the strong lane (the fast one already missed once)" 'grep -q "subagent_type=glm-programmer-strong, description=.normal." <<<"$OUT"'
+check "a retried trivial slice leaves the lite lane too" 'grep -q "subagent_type=glm-programmer-strong, description=.tiny." <<<"$OUT"'
+check "the route is recorded for stats" 'python3 -c "import json;s=json.load(open(\"$RRT/.claude/dev-team/state.json\"));assert s[\"slices\"][\"N1\"][\"route\"].startswith(\"Agent(subagent_type=glm-programmer-strong\")"'
 
 echo "== v4 governor: size the fan-out to what the API really serves"
 # The pro-ladder scenario pins DEVTEAM_GLM_TIER=pro on its inits (a wrapper-wide pin would shadow the
@@ -954,10 +904,10 @@ sl.append({"id":"C1","title":"code","deps":[],"files":["src/c1.js","tests/c1.tes
 print("```json\n"+json.dumps({"request":"g","commands":{"test":"echo ok","lint":"none","typecheck":"none","build":"none"},"slices":sl})+"\n```")
 PY
 TX="$RGV/tx"; mkdir -p "$TX/sess/subagents"
-G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D "$@"; }
+G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" D "$@"; }
 OUT=$(DEVTEAM_GLM_TIER=pro G4 init plan.md 2>&1)
 check "tier pro starts at a 6-agent window (not 8) with 1 slot reserved on a small window" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6, ceiling 8, tier pro, slow start)"* && "$OUT" == *"5 free of 5 glm-programmer slots"* ]]'
-OUTA=$(DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D init plan.md --force 2>&1)
+OUTA=$(DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" D init plan.md --force 2>&1)
 check "the default tier is api: the full 8-agent window opens at once, 2 slots reserved for leader/reviewer" '[[ "$OUTA" == *"GOVERNOR: 8 agents (window 8, ceiling 8, tier api, slow start)"* && "$OUTA" == *"6 free of 6 glm-programmer slots"* ]]'
 check "tier lite starts at 3 with no reserve eating the width" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force 2>&1)" == *"3 free of 3 glm-programmer slots"* ]]'
 check "--tier on the command line wins" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force --tier max 2>&1)" == *"tier max"* ]]'
@@ -987,20 +937,20 @@ printf '{"type":"user","message":{"role":"user","content":"python3 %s claim C1"}
 OUT=$(G4 next 2>&1)
 check "a lane that died on an API error is reported once, with the warm fix" '[[ "$OUT" == *"LANE DOWN C1 (slice)"*"SendMessage that agent \"continue\""* ]]'
 check "…and not again on the next wake-up" '[[ "$(G4 next 2>&1)" != *"LANE DOWN C1"* ]]'
-check "DEVTEAM_GOVERNOR=off restores the static runtime cap" '[[ "$(DEVTEAM_GOVERNOR=off CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D status 2>&1)" != *"GOVERNOR:"* ]]'
+check "DEVTEAM_GOVERNOR=off restores the static provider cap" '[[ "$(DEVTEAM_GOVERNOR=off D status 2>&1)" != *"GOVERNOR:"* ]]'
 
 echo "== v4 stats: measured tokens / cache / effort / errors per role"
 cat > "$TX/sess/subagents/agent-p1.jsonl" <<EOF
 {"type":"user","message":{"role":"user","content":"python3 x claim Q1"},"timestamp":"$NOW"}
-{"type":"assistant","attributionAgent":"glm-programmer","requestId":"r1","perTurnEffort":"high","message":{"model":"glm-5.3-flash","usage":{"input_tokens":8,"cache_creation_input_tokens":808,"cache_read_input_tokens":95177,"output_tokens":1}},"timestamp":"$NOW"}
-{"type":"assistant","attributionAgent":"glm-programmer","requestId":"r1","perTurnEffort":"high","message":{"model":"glm-5.3-flash","usage":{"input_tokens":8,"cache_creation_input_tokens":808,"cache_read_input_tokens":95177,"output_tokens":1}},"timestamp":"$NOW"}
+{"type":"assistant","attributionAgent":"glm-programmer-lite","requestId":"r1","perTurnEffort":"high","message":{"model":"glm-5.3-flash","usage":{"input_tokens":8,"cache_creation_input_tokens":808,"cache_read_input_tokens":95177,"output_tokens":1}},"timestamp":"$NOW"}
+{"type":"assistant","attributionAgent":"glm-programmer-lite","requestId":"r1","perTurnEffort":"high","message":{"model":"glm-5.3-flash","usage":{"input_tokens":8,"cache_creation_input_tokens":808,"cache_read_input_tokens":95177,"output_tokens":1}},"timestamp":"$NOW"}
 EOF
 cat > "$TX/sess/subagents/agent-l1.jsonl" <<EOF
-{"type":"assistant","attributionAgent":"glm-programmer-lite","requestId":"r9","message":{"model":"glm-5.3-flash","usage":{"input_tokens":10,"output_tokens":5}},"timestamp":"$NOW"}
+{"type":"assistant","attributionAgent":"glm-programmer-strong","requestId":"r9","message":{"model":"glm-5.3","usage":{"input_tokens":10,"output_tokens":5}},"timestamp":"$NOW"}
 EOF
 OUT=$(G4 stats 2>&1)
-check "stats groups by role and model, de-duplicating the per-block usage of one request" '[[ "$OUT" == *"glm-programmer   glm-5.3-flash"*"  1 |     1 |         1 |  99.1% | high×2"* ]]'
-check "stats flags a role whose calls carry no effort (GLM would think at max)" '[[ "$OUT" == *"effort is NOT being sent for: glm-programmer-lite"* ]]'
+check "stats groups by role and model, de-duplicating the per-block usage of one request" '[[ "$OUT" == *"glm-programmer-lite glm-5.3-flash"*"  1 |     1 |         1 |  99.1% | high×2"* ]]'
+check "stats flags a role whose calls carry no effort (GLM would think at max)" '[[ "$OUT" == *"effort is NOT being sent for: glm-programmer-strong"* ]]'
 check "stats reports the governor" '[[ "$OUT" == *"GOVERNOR:"* ]]'
 
 echo "== v4 misc"
@@ -1018,7 +968,7 @@ print("```json\n"+json.dumps({"request":"g","commands":{"test":"echo ok","lint":
 PY2
   TX="$d/tx"; mkdir -p "$TX/sess/subagents"
 }
-G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=64 D "$@"; }
+G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" D "$@"; }
 spawnfail() { # desc id text [is_error]
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"%s","name":"Agent","input":{"description":"%s"}}]},"timestamp":"%s"}\n{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","is_error":%s,"content":"%s"}]},"timestamp":"%s"}\n' "$2" "$1" "$(nowz)" "$2" "${4:-false}" "$3" "$(nowz)"
 }
@@ -1059,7 +1009,7 @@ spawnfail K1 t_k1 "Agent type glm-programmer-lite not found" true > "$TX/sess.js
 G4 dispatch K1 >/dev/null 2>&1
 check "a non-limit spawn error (unknown agent type) re-queues without cutting the window" 'OUT=$(G4 next 2>&1); [[ "$OUT" == *"re-queued K1"* && "$OUT" != *"RUNTIME LIMIT"* ]]'
 G4 dispatch K1 >/dev/null 2>&1; spawnfail K1 t_k2 "Agent type glm-programmer-lite not found" true >> "$TX/sess.jsonl"
-check "the second identical spawn error marks the slice failed and says to restart Claude Code" '[[ "$(G4 next 2>&1)" == *"marked failed"*"not restarted after"* ]] && D status | grep -q "K1     failed"'
+check "the second identical spawn error marks the slice failed and says to open a new ZCode session" '[[ "$(G4 next 2>&1)" == *"marked failed"*"new ZCode session was not opened"* ]] && D status | grep -q "K1     failed"'
 G4 dispatch K2 >/dev/null 2>&1
 printf '{"type":"user","message":{"role":"user","content":"python3 %s claim K2"},"timestamp":"2020-01-01T00:00:00.000Z"}\n{"type":"assistant","isApiErrorMessage":true,"message":{"content":[{"type":"text","text":"API Error: 429"}]},"uuid":"old-attempt","timestamp":"%s"}\n' "'$S/devteam.py'" "$(nowz)" > "$TX/sess/subagents/agent-k2old.jsonl"
 check "a previous attempt's dead transcript is not reported against the new lane" '[[ "$(G4 next 2>&1)" != *"LANE DOWN K2"* ]]'
@@ -1068,8 +1018,6 @@ check "an oversized transcript line is skipped instead of stalling the scan fore
 
 echo "-- provider details"
 check "only a real Z.ai / BigModel hostname selects GLM (gw.xyz.ai does not)" 'python3 -c "import sys;sys.path.insert(0,\"$S\");import devteam as d;assert d.is_glm_url(\"https://api.z.ai/api/anthropic\") and d.is_glm_url(\"https://open.bigmodel.cn/x\") and not d.is_glm_url(\"https://gw.xyz.ai\") and not d.is_glm_url(\"https://z.ai.evil.com\")"'
-check "doctor adds effort to an existing capability list instead of overwriting it" 'RC="$(newrepo rc4)"; cd "$RC"; mkdir -p .claude; printf "{\"env\":{\"ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES\":\"thinking,vision\"}}" > .claude/settings.local.json; D doctor --fix >/dev/null 2>&1; [ "$(python3 -c "import json;print(json.load(open(\".claude/settings.local.json\"))[\"env\"][\"ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES\"])")" = "thinking,vision,effort" ]'
-check "Anthropic keeps v3 routing: no escalation of high-risk / large slices (no silent cost increase)" 'cd "$RRT"; D reset --yes >/dev/null 2>&1; OUT=$(DEVTEAM_PROVIDER=anthropic D init plan.md 2>&1 && DEVTEAM_PROVIDER=anthropic D dispatch H1 L1 2>&1); [[ "$OUT" == *"description: \"H1\", prompt:"* && "$OUT" == *"description: \"L1\", prompt:"* ]]'
 check "a closed pipe on a read-only command is quiet; on a state-changing one it is loud" 'cd "$RRT"; python3 - "$S" <<PY2
 import sys, io
 sys.path.insert(0, sys.argv[1]); import devteam as d

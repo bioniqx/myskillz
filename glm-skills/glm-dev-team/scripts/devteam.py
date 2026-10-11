@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """glm-dev-team engine v4.0 — deterministic scheduler, integrator, worktree helper and concurrency governor,
-tuned for Claude Code on Z.ai GLM-5.3 (strong) + GLM-5.3-Flash (fast). Anthropic models still work
-(`DEVTEAM_PROVIDER=anthropic`, auto-detected from ANTHROPIC_BASE_URL).
+tuned for ZCode on Z.ai GLM-5.3 (strong) + GLM-5.3-Flash (fast). The provider is auto-detected from
+ANTHROPIC_BASE_URL (`DEVTEAM_PROVIDER=glm|anthropic` forces it); model routing itself is ZCode-only
+(glm-programmer-strong / glm-programmer-lite, pinned in the agents' own frontmatter).
 
 Stdlib only (Python 3.8+), git >= 2.31.
 
@@ -40,7 +41,6 @@ Conductor commands (run in the integration checkout):
   stats [--all]             measured per role/model: requests, output tokens, cache hit, effort sent, API
                             errors, wall time — read from Claude Code's transcripts (tune with evidence)
   finish                    final cleanup + summary
-  allow <cmd...>            add Bash allow rules to .claude/settings.local.json
   reset --yes               delete run state
 
 Programmer commands (run inside the slice worktree — the agent's cwd):
@@ -67,9 +67,10 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
 Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
 Provider + governor (v4):
-  routing   GLM: lanes on GLM-5.3-Flash (`haiku` alias, effort high); trivial / small-docs slices on the
-            lite lane (effort low); high-risk, large and RETRIED slices, the leader and the full reviewer on
-            GLM-5.3 (`opus`). `doctor --fix` maps the aliases and forwards effort (*_SUPPORTED_CAPABILITIES).
+  routing   ZCode-only: every lane rides glm-programmer-lite (GLM-5.3-Flash, thoughtLevel low); high-risk,
+            large and RETRIED slices escalate to glm-programmer-strong (GLM-5.3, thoughtLevel max). Model
+            and effort are pinned in the agents' own frontmatter — the Agent tool takes no per-dispatch
+            model, and `doctor --fix` installs the agents verbatim.
   governor  AIMD window over the fan-out: default tier api opens the full 8-call window at once (the provider
             allows 8 concurrent API calls, so no tier goes above 8); DEVTEAM_GLM_TIER=lite|pro|max trades
             width for gentler rate limits (starts 3/6/7, ceiling 8); +1 per finished lane; halve on a
@@ -113,14 +114,11 @@ DEP_DIRS = ["node_modules", ".venv", "venv", "vendor", ".pnpm-store", "Pods", ".
 ENV_FILES = [".env", ".env.local", ".env.test", ".env.development"]
 # bare names (no trailing slash) so that symlinked dependency dirs are ignored too
 EXCLUDE_LINES = [".claude/worktrees/", ".claude/dev-team/", ".claude/agent-memory-local/", ".slice/"] + DEP_DIRS + ENV_FILES
-GIT_READ_PREFIXES = ["git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git grep", "git blame"]
 NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall every background agent
 LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail", "retry", "bind",
                "add-fix", "add-fixes", "review-batch", "review-done", "verify-brief", "checkpoint",
                "status", "finish", "review-pr"}
-DEFAULT_LIMIT = 20          # Claude Code default concurrent-subagent cap
-HARD_CAP = 64               # this skill's ceiling on Claude (provider "anthropic")
-NON_CLAUDE_CAP = 8          # every non-anthropic provider allows only 8 concurrent API calls; provider cap, keep in sync: _shared/zai_client.py MAX_PARALLEL
+PROVIDER_CAP = 8           # the provider allows only 8 concurrent API calls; keep in sync: _shared/zai_client.py MAX_PARALLEL
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
@@ -154,59 +152,26 @@ KIND_MODE = {          # kind -> the glm-programmer mode a normal (non-high-risk
 KINDS = tuple(KIND_MODE)
 SIZES = ("trivial", "small", "large")
 SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
-LITE_SIZES = ("trivial",)               # -> glm-programmer-lite (same fast model, effort low)
-LITE_KINDS = ("docs",)                  # mechanical kinds ride the lite lane unless the slice is `large`
 
-# --- providers: model routing is rendered per provider (v4 is tuned for Z.ai GLM-5.3 / GLM-5.3-Flash) --
-# Agent `model:` values are Claude Code ALIASES, resolved through ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL.
-# On Z.ai (docs.z.ai/devpack/tool/claude) opus=sonnet=glm-5.3 and haiku=glm-5.3-flash, so the only real
-# "cheap/fast" alias on GLM is `haiku`: the v3 `sonnet` routing would have run every lane on GLM-5.3.
-# Effort: GLM thinking cannot be disabled and defaults to `max`; Claude Code only forwards `effort` for a
-# pinned third-party model whose *_SUPPORTED_CAPABILITIES lists it (doctor sets that). Only low/high/max
-# are used because those are GLM's own three levels (no lossy medium/xhigh mapping).
+# --- providers: which API serves the run. Model routing itself is ZCode-only — the Agent tool takes no
+# per-dispatch model, so each agents/<name>.md file pins its own model id + thoughtLevel
+# (glm-programmer-strong = GLM-5.3/max, glm-programmer-lite = GLM-5.3-Flash/low, reviewer/leader likewise).
+# The provider name only drives detection, stats labels and the glm-only peak-hour governor.
 PROVIDERS = {
-    "glm": {
-        "label": "Z.ai GLM",
-        "strong": "opus",                       # -> glm-5.3
-        "agents": {                              # name: (model alias, effort)
-            "glm-programmer": ("haiku", "high"),     # GLM-5.3-Flash: DeepSWE 63.4 vs 66.9, ~1/3 the plan quota
-            "glm-programmer-lite": ("haiku", "low"),
-            "glm-code-reviewer": ("opus", "high"),
-            "glm-spot-reviewer": ("haiku", "high"),
-            "glm-investigator": ("haiku", "high"),
-            "glm-team-leader": ("opus", "max"),     # planning runs once and decides the width of the whole run
-        },
-        "cache_ttl": False,                      # Z.ai caches implicitly; the Anthropic 1h TTL does not apply
-        "escalate": True,                        # high-risk / large / retried slices -> the strong model
-    },
-    "anthropic": {
-        "label": "Anthropic",
-        "strong": "opus",
-        "agents": {
-            "glm-programmer": ("sonnet", "medium"),
-            "glm-programmer-lite": ("sonnet", "low"),
-            "glm-code-reviewer": ("opus", "high"),
-            "glm-spot-reviewer": ("sonnet", "high"),
-            "glm-investigator": ("sonnet", "high"),
-            "glm-team-leader": ("opus", "high"),
-        },
-        "cache_ttl": True,
-        "escalate": False,                       # keep v3 behaviour (and cost) on Anthropic
-    },
+    "glm": {"label": "Z.ai GLM"},
+    "anthropic": {"label": "Anthropic"},
 }
-AGENT_NAMES = ("glm-programmer", "glm-programmer-lite", "glm-code-reviewer", "glm-spot-reviewer", "glm-team-leader", "glm-investigator")
-GLM_MODEL_MAP = {"ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3", "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3",
-                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5.3-flash"}
 GLM_HOSTS = ("z.ai", "bigmodel.cn")
 
 # --- concurrency governor (AIMD). This repo assumes the Z.ai provider allows 8 concurrent API calls
-# (NON_CLAUDE_CAP); Z.ai says rate (concurrency) limits are tied to the plan tier and adjusted dynamically,
+# (PROVIDER_CAP); Z.ai says rate (concurrency) limits are tied to the plan tier and adjusted dynamically,
 # so the governor still adapts the live window below that cap (and off-peak raises it back).
+# The provider cap is 8 on every provider now.
 # many lanes against that wall = 429/1302 storms, client retries with backoff, stalled lanes. So the engine
 # measures instead of guessing: slow start from a tier-based window, +1 per productive wake-up, halve on a
 # throttle signal read from Claude Code's own transcripts. The numbers below are ENGINEERING STARTING
 # POINTS, not Z.ai figures — the governor corrects them within a few wake-ups.
-TIERS = {"lite": (3, 8), "pro": (6, 8), "max": (7, 8), "api": (8, 8)}   # (start, ceiling); ceiling <= NON_CLAUDE_CAP
+TIERS = {"lite": (3, 8), "pro": (6, 8), "max": (7, 8), "api": (8, 8)}   # (start, ceiling); ceiling <= PROVIDER_CAP
 DEFAULT_TIER = "api"        # full 8-call width from wave one; lower tiers opt-in via --tier / DEVTEAM_GLM_TIER
 PEAK_FACTOR = 0.5            # Z.ai peak: Mon–Fri 14:00–18:00 UTC+8 (full credit rate, lower concurrency)
 GOV_COOLDOWN_S = 90          # one cut per burst: signals inside the window after a cut are the same burst
@@ -437,25 +402,13 @@ def footprints_overlap(a, b):
     return False
 
 
-def hard_cap_for(provider):
-    """Concurrent model calls the skill may ever have: 64 on Claude, 8 for any other provider."""
-    return HARD_CAP if provider == "anthropic" else NON_CLAUDE_CAP
-
-
 def hard_cap(st=None):
-    return hard_cap_for(provider_of(st) if st else detect_provider())
+    """Concurrent model calls the skill may ever have: the provider allows 8 (PROVIDER_CAP)."""
+    return PROVIDER_CAP
 
 
 def max_shards(st=None):
     return min(MAX_SHARDS, hard_cap(st))
-
-
-def concurrency_limit(st=None):
-    """Claude Code's concurrent-subagent cap, bounded by hard_cap()."""
-    cap = hard_cap(st)
-    raw = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS", "")
-    limit = int(raw) if raw.isdigit() else DEFAULT_LIMIT
-    return max(1, min(cap, limit))
 
 
 # ----------------------------------------------------------------------------- provider + governor
@@ -516,10 +469,7 @@ def zai_peak():
 
 
 def new_gov(provider, tier):
-    if provider == "anthropic":             # Claude: the runtime cap is the limit; only cut on throttling
-        start = ceiling = hard_cap_for(provider)
-    else:                                   # every non-Claude provider: tier window, never above 8
-        start, ceiling = (min(v, NON_CLAUDE_CAP) for v in TIERS[tier])
+    start, ceiling = (min(v, PROVIDER_CAP) for v in TIERS[tier])   # tier window, never above 8
     return {"cap": start, "ceiling": ceiling, "tier": tier if provider != "anthropic" else "-", "cut_at": 0,
             "cuts": 0, "grown": 0, "throttles": 0, "tx": {}, "seen_down": []}
 
@@ -533,8 +483,8 @@ def gov_ceiling(st):
 
 
 def effective_cap(st=None):
-    """Agents the engine lets run at once: the runtime limit, bounded by the governor's window."""
-    rt = min(hard_cap(st), concurrency_limit(st))
+    """Agents the engine lets run at once: the provider cap, bounded by the governor's window."""
+    rt = hard_cap(st)
     if st is None or not gov_enabled(st) or not st.get("gov"):
         return rt
     pin = os.environ.get("DEVTEAM_MAX_PARALLEL", "")
@@ -762,7 +712,7 @@ def govern(root, st, successes):
     enabled = gov_enabled(st)
     sig = scan_transcripts(root, st)   # always: re-queue / LANE DOWN are correctness
     t = time.time()
-    bound = max(GOV_MIN, min(gov_ceiling(st), concurrency_limit(st), hard_cap(st)))
+    bound = max(GOV_MIN, min(gov_ceiling(st), hard_cap(st)))
     # 1. Agent spawns that failed: the lane never started — put the slice back, untouched
     requeued, relaunch, failed_hard, limit_hits = [], [], [], 0
     for desc, ts, text, limit in sig["spawn_fail"]:
@@ -790,13 +740,13 @@ def govern(root, st, successes):
                      + (f"re-queued {' '.join(requeued)} (they never started; the engine re-dispatches them)" if requeued else "")
                      + (f"; relaunch these printed Agent lines when a slot frees: {', '.join(relaunch)}" if relaunch else "")
                      + (f"; marked failed after 2 non-limit spawn errors: {'; '.join(failed_hard)} — an unknown "
-                        "agent type means Claude Code was not restarted after `doctor --fix`" if failed_hard else ""))
+                        "agent type means a new ZCode session was not opened after `doctor --fix`" if failed_hard else ""))
     if limit_hits and enabled:
         inflight = sum(1 for s in st["slices"].values() if s["status"] == "inflight")
         g["cap"] = max(GOV_MIN, min(int(g.get("cap") or 1), bound, inflight or 1))
         g["cut_at"], g["cuts"] = t, int(g.get("cuts") or 0) + 1
-        lines.append(f"RUNTIME LIMIT: {limit_hits}× \"Concurrent subagent limit reached\" → window {g['cap']}. If "
-                     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS was just raised by `doctor --fix`, restart Claude Code once.")
+        lines.append(f"RUNTIME LIMIT: {limit_hits}× \"Concurrent subagent limit reached\" → window {g['cap']}. "
+                     "Running lanes keep going; fewer new lanes launch until they drain.")
     # 2. throttling → multiplicative decrease of the window that is really in force, once per burst
     fresh = [x for x in sig["throttle"] if x > float(g.get("cut_at") or 0)]
     g["throttles"] = int(g.get("throttles") or 0) + len(sig["throttle"])
@@ -805,15 +755,14 @@ def govern(root, st, successes):
         g["cap"] = max(GOV_MIN, old // 2)
         g["cut_at"], g["cuts"] = t, int(g.get("cuts") or 0) + 1
         lines.append(f"THROTTLED: {len(fresh)} rate-limit/overload signal(s) from the API → window {old} → {g['cap']} "
-                     + ("(running lanes keep going; the engine launches fewer new lanes until it recovers)" if is_zcode() else
-                        "(running lanes keep going; Claude Code retries them)"))
+                     "(running lanes keep going; the engine launches fewer new lanes until it recovers)")
     elif enabled and successes and not fresh and g.get("saturated", True) \
             and t - float(g.get("cut_at") or 0) >= GOV_COOLDOWN_S:
         # 3. additive increase: slow start (+1 per finished lane) until the first cut, then +1 per wake-up
         old = min(int(g.get("cap") or 1), bound)
         g["cap"] = min(bound, old + (successes if not g.get("cuts") else 1))
         g["grown"] = int(g.get("grown") or 0) + max(0, g["cap"] - old)
-    # 4. lanes that died on an API error after Claude Code's own retries
+    # 4. lanes that died on an API error after the runtime's own retries
     seen = g.setdefault("seen_down", [])
     open_reviews = {rid for rid, r in (st.get("reviews") or {}).items() if r.get("status") == "dispatched"}
     for kind, name, text, uuid, t0 in sig["down"]:
@@ -1447,11 +1396,9 @@ def cmd_init(a):
     if set(kinds) - {"code"}:
         out("  KINDS: " + ", ".join(f"{k}×{v}" for k, v in sorted(kinds.items())))
     out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; glm-programmer slots {cap} "
-        f"(CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={os.environ.get('CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS', 'unset→20' if provider == 'anthropic' else 'unset→8 expected')}, "
-        f"hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
-    out(f"PROVIDER {PROVIDERS[provider]['label']}: " + (
-        "lanes on GLM-5.3-Flash (`haiku`), high-risk / large / retried slices, the leader and the full reviewer "
-        "on GLM-5.3 (`opus`)" if provider == "glm" else "lanes on sonnet, leader/reviewer on opus"))
+        f"(hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
+    out(f"PROVIDER {PROVIDERS[provider]['label']}: lanes on glm-programmer-lite (GLM-5.3-Flash); high-risk, large "
+        "and retried slices on glm-programmer-strong (GLM-5.3); model + effort pinned in the agents' frontmatter")
     if gov_line(st):
         out(gov_line(st))
     high = [sid for sid, s in slices.items() if s["risk"] == "high"]
@@ -1462,14 +1409,6 @@ def cmd_init(a):
         out("ISOLATED RESOURCES pinned for: " + " ".join(iso))
     for w in warns:
         out("NOTE: " + w)
-    added = write_allow_rules(root, st)
-    if added:
-        out(f"PERMISSIONS: added {added} Bash allow rules for the plan commands to .claude/settings.local.json "
-            f"(no prompts for gate commands; approve once with 'don't ask again' if one still appears)")
-    if concurrency_limit(st) < hard_cap(st) and (provider != "glm" or not gov_enabled(st)):
-        out(f"NOTE: concurrency limit is {concurrency_limit(st)} (< {hard_cap(st)}). Set env "
-            f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS={hard_cap(st)} in .claude/settings.json (`doctor --fix`) "
-            f"and restart Claude Code for full width.")
     print_ready(st)
 
 
@@ -1488,41 +1427,6 @@ def ensure_excludes(root, extra=()):
 def isolation_prefix(iso):
     """Exact env prefix a glm-programmer must use (relative TMPDIR: Bash already runs at the worktree root)."""
     return f"PORT={iso['PORT']} DB_SUFFIX={iso['DB_SUFFIX']} TMPDIR=.slice/tmp " if iso else ""
-
-
-def allow_rules_for(st):
-    """Bash allow rules covering every command the plan's programmers, reviewers and the engine run."""
-    rules = [f"Bash(python3 {q(st['script'])}:*)", f"Bash(python3 {q(st['script'])} *)"]
-    prefixes = []
-    for k in ("build", "test", "test_file", "lint", "lint_file", "typecheck", "typecheck_file", "bench"):
-        v = cmd_value(st["commands"], k)
-        if v:
-            prefixes.append(v.split("{files}")[0].strip())
-    for s in st["slices"].values():
-        v = (s.get("verify") or "").strip()
-        if v:
-            prefixes.append(v.split("{files}")[0].strip())
-    for pfx in prefixes + GIT_READ_PREFIXES:
-        rules.append(f"Bash({pfx}:*)")
-    for s in st["slices"].values():
-        if s.get("isolation"):
-            for pfx in prefixes:
-                rules.append(f"Bash({isolation_prefix(s['isolation'])}{pfx}:*)")
-    return rules
-
-
-def write_allow_rules(root, st):
-    local = settings_paths(root)["local"]
-    cur = load_json(local)
-    allow = cur.setdefault("permissions", {}).setdefault("allow", [])
-    before = len(allow)
-    for r in allow_rules_for(st):
-        if r not in allow:
-            allow.append(r)
-    if len(allow) != before:
-        local.parent.mkdir(parents=True, exist_ok=True)
-        local.write_text(json.dumps(cur, indent=2) + "\n")
-    return len(allow) - before
 
 
 def cmd_ready(a):
@@ -1800,8 +1704,7 @@ def do_dispatch(root, st, ids, force=False):
             cf.unlink()
         clear_markers(root, sid)
         if mode != "research":
-            route = dispatch_route(st, s, mode)
-            s["route"] = route if isinstance(route, str) else route[2]   # zcode: the Agent line itself
+            s["route"] = dispatch_route(st, s, mode)   # the Agent line itself
         else:
             s["route"] = "glm-investigator"
         write_atomic(state_dir(root) / "briefs" / f"{sid}.md", briefing_text(st, s, mode))
@@ -1813,31 +1716,16 @@ def do_dispatch(root, st, ids, force=False):
 
 
 def dispatch_route(st, s, mode):
-    """(subagent_type, per-invocation model override or "", human label) for one glm-programmer dispatch.
-    Cheap first, strong where it pays: every lane starts on the fast model (GLM-5.3-Flash on Z.ai), a
-    trivial or small-docs slice on the low-effort lite lane; high-risk, large and RETRIED slices escalate
-    to the strong model (GLM-5.3) — a second attempt means the fast model already missed once.
-    On zcode the return is the Agent line itself (subagent_type + description, no model:): the Agent
-    tool there takes no per-dispatch model, and strong slices run glm-programmer-strong."""
-    if is_zcode():
-        strong = (s.get("risk") == "high" or s.get("size") == "large"
-                  or int(s.get("attempt") or 1) >= 2)
-        agent = "glm-programmer-strong" if strong else "glm-programmer-lite"
-        description = s.get("title") or s.get("id") or "slice"
-        return "Agent(subagent_type=" + agent + ", description=" + repr(description) + ")"
-    prov = provider_of(st)
-    cfg = PROVIDERS[prov]
-    size = s.get("size") or "small"
-    lite = size in LITE_SIZES or (slice_kind(s) in LITE_KINDS and size != "large")
-    strong = cfg["escalate"] and (s.get("risk") == "high" or size == "large" or int(s.get("attempt") or 0) >= 2)
-    explicit = (s.get("model") or "").strip()
-    agent = "glm-programmer-lite" if (lite and not strong) else "glm-programmer"
-    model = explicit or (cfg["strong"] if strong else "")
-    alias, effort = cfg["agents"][agent]
-    alias = model or alias
-    shown = GLM_MODEL_MAP.get({"opus": "ANTHROPIC_DEFAULT_OPUS_MODEL", "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-                               "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL"}.get(alias, ""), alias) if prov == "glm" else alias
-    return agent, model, f"{shown} · effort {effort}"
+    """The Agent line for one glm-programmer dispatch (ZCode-only: the Agent tool takes no per-dispatch
+    model). Cheap first, strong where it pays: every lane starts on glm-programmer-lite
+    (GLM-5.3-Flash, thoughtLevel low); high-risk, large and RETRIED slices escalate to
+    glm-programmer-strong (GLM-5.3, thoughtLevel max) — a second attempt means the fast model already
+    missed once. The agent's own frontmatter pins the model and effort."""
+    strong = (s.get("risk") == "high" or s.get("size") == "large"
+              or int(s.get("attempt") or 1) >= 2)
+    agent = "glm-programmer-strong" if strong else "glm-programmer-lite"
+    description = s.get("title") or s.get("id") or "slice"
+    return "Agent(subagent_type=" + agent + ", description=" + repr(description) + ")"
 
 
 def is_zcode() -> bool:
@@ -1869,13 +1757,10 @@ def _pid_alive(pid) -> bool:
     return True
 
 
-def emit_agent(root, st, agent, model, prompt, label) -> str:
-    """The launch line for one agent: the `Agent →` instruction. On zcode the Agent tool takes no
-    model, so the model segment is dropped there."""
-    if is_zcode():
-        return f"Agent → subagent_type: {agent}, description: \"{label}\", prompt: \"{prompt}\""
-    return (f"Agent → subagent_type: {agent}, description: \"{label}\"" + (f", model: {model}" if model else "")
-            + f", prompt: \"{prompt}\"")
+def emit_agent(agent, prompt, label) -> str:
+    """The launch line for one agent: the `Agent →` instruction (no model — the Agent tool takes none,
+    the agent's own frontmatter pins it)."""
+    return f"Agent → subagent_type: {agent}, description: \"{label}\", prompt: \"{prompt}\""
 
 
 def launch_hint() -> str:
@@ -1894,23 +1779,13 @@ def print_dispatch(st, blocks, skipped):
         kind = slice_kind(s)
         if mode == "research":
             brief = state_dir(root) / "briefs" / f"{sid}.md"
-            strong = (PROVIDERS[provider_of(st)]["escalate"] and not s.get("model")
-                      and (s.get("size") == "large" or int(s.get("attempt") or 0) >= 2))
-            model = (s.get("model") or "").strip() or (PROVIDERS[provider_of(st)]["strong"] if strong else "")
             out(f"=== DISPATCH {sid} [RESEARCH] — {s['title'][:50]}",
-                emit_agent(root, st, "glm-investigator", model, f"Read {brief} and follow it exactly.", sid),
+                emit_agent("glm-investigator", f"Read {brief} and follow it exactly.", sid),
                 "")
             continue
         route = dispatch_route(st, s, mode)
-        if isinstance(route, str):   # zcode: dispatch_route returns the Agent line; the Agent tool
-            # there takes no model, so only the claim prompt is appended to it
-            out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}",
-                route[:-1] + f", prompt: \"python3 {sp} claim {sid}\")",
-                "")
-            continue
-        agent, model, label = route
-        out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}   ({label})",
-            emit_agent(root, st, agent, model, f"python3 {sp} claim {sid}", sid),
+        out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}",
+            route[:-1] + f", prompt: \"python3 {sp} claim {sid}\")",
             "")
     if skipped:
         out("SKIPPED: " + "; ".join(skipped))
@@ -2526,7 +2401,7 @@ def do_review_batch(root, st, force=False, shards=1):
                   ""]
         write_atomic(state_dir(root) / "reviews" / f"{name}.md", "\n".join(lines))
         out(f"=== REVIEW {name}: {len(take)} slices, {len(scope)} files",
-            emit_agent(root, st, 'glm-spot-reviewer' if spot else 'glm-code-reviewer', "",
+            emit_agent('glm-spot-reviewer' if spot else 'glm-code-reviewer',
                       f"Read {state_dir(root) / 'reviews' / (name + '.md')} and follow it exactly.", f"review {name}"),
             "")
     out("Nothing to report afterwards: the next `next` reads each shard's verdict out of its report file "
@@ -2568,7 +2443,7 @@ def cmd_verify_brief(a):
               "(title, files, criteria) so the Conductor can queue it."]
     p = state_dir(root) / "reviews" / "verification.md"
     write_atomic(p, "\n".join(lines))
-    out(emit_agent(root, st, "glm-team-leader", "", f"MODE: VERIFICATION. Read {p} and follow it.", "verify intent"))
+    out(emit_agent("glm-team-leader", f"MODE: VERIFICATION. Read {p} and follow it.", "verify intent"))
 
 
 def cmd_checkpoint(a):
@@ -2875,9 +2750,6 @@ def cmd_start(a):
         out("TIP (GLM): the fan-out opens at the full 8-call width (tier api); DEVTEAM_GLM_TIER=lite|pro|max "
             "trades width for gentler rate limits; DEVTEAM_PEAK=on opts into Z.ai's peak-hour halving "
             "(Mon–Fri 14–18 UTC+8) to spare credits; `stats` shows measured tokens/effort/errors per role.")
-    else:
-        out("TIP: `/fast` (Opus fast mode, usage credits) makes the Conductor and the opus reviewers/leader "
-            "up to 2.5x faster; the lanes already ride sonnet.")
 
 
 PROBE_RULES = [
@@ -3188,7 +3060,8 @@ def cmd_stats(a):
                       and all(k in ("None", "null", "") for k in g["efforts"])]
             if unsent:
                 out("  ! effort is NOT being sent for: " + ", ".join(sorted(set(unsent)))
-                    + " — every call runs at GLM's default `max`. `doctor --fix` sets *_SUPPORTED_CAPABILITIES=effort,thinking; restart.")
+                    + " — every call runs at GLM's default `max`. Check the agents' frontmatter (thoughtLevel"
+                    " pins it) and re-run `doctor --harness zcode --fix`.")
     done = [s for s in (st.get("slices") or {}).values()
             if s.get("status") == "done" and s.get("dispatched") and s.get("merged_at")]
     if done:
@@ -3346,14 +3219,6 @@ def cmd_reset(a):
 
 # ----------------------------------------------------------------------------- settings / doctor
 
-def settings_paths(root):
-    return {
-        "project": root / ".claude" / "settings.json",
-        "local": root / ".claude" / "settings.local.json",
-        "user": Path.home() / ".claude" / "settings.json",
-    }
-
-
 def load_json(p):
     try:
         return json.loads(p.read_text()) if p.exists() else {}
@@ -3362,9 +3227,13 @@ def load_json(p):
 
 
 def merged_settings(root):
+    """Provider auto-detection input: the `env` block of the settings files, most specific wins."""
+    paths = [Path.home() / ".claude" / "settings.json",
+             Path(root) / ".claude" / "settings.json",
+             Path(root) / ".claude" / "settings.local.json"]
     m = {}
-    for key in ("user", "project", "local"):
-        d = load_json(settings_paths(root)[key])
+    for p in paths:
+        d = load_json(p)
         for k, v in d.items():
             if isinstance(v, dict) and isinstance(m.get(k), dict):
                 m[k] = {**m[k], **v}
@@ -3373,253 +3242,12 @@ def merged_settings(root):
     return m
 
 
-OC_AGENT_NAMES = ("glm-programmer", "glm-programmer-lite", "glm-code-reviewer", "glm-spot-reviewer", "glm-investigator", "glm-team-leader")
-# The real templates pass SKILL_DIR and "scripts"/"guard.py" as separate path.join() args, not one
-# concatenated string, so the path is only ever findable as path.join()'s first argument.
-OC_GUARD_PATH_RE = re.compile(r'path\.join\(\s*"([^"]+)"\s*,\s*"scripts"\s*,\s*"guard\.py"\s*\)')
-
-
-def cap_value_ok(raw, want, provider):
-    """Claude: at least `want` (more width is harmless). Any other provider: at most `want` (never above 8)."""
-    if not str(raw).isdigit() or int(raw) < 1:
-        return False
-    return int(raw) >= want if provider == "anthropic" else int(raw) <= want
-
-
 def cmd_doctor(a):
-    root = toplevel()
-    harness = getattr(a, "harness", None) or ("zcode" if is_zcode() else "claude")
-    if harness == "zcode":
-        return doctor_zcode(a, root)
-    problems, notes, fixes = [], [], {}
-    gv = git(["--version"]).split()[-1]
-    notes.append(f"git {gv}, python {sys.version.split()[0]}, root {root}")
-    if git(["status", "--porcelain", "--untracked-files=no"], root):
-        problems.append("uncommitted tracked changes in the integration checkout (commit/stash before a run)")
-    st = merged_settings(root)
-    env = st.get("env", {}) if isinstance(st.get("env"), dict) else {}
-    provider = detect_provider(root)
-    want_cap = hard_cap_for(provider)
-    lim = os.environ.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS") or env.get("CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS")
-    if not cap_value_ok(lim, want_cap, provider):
-        problems.append(f"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is {lim or ('unset (20)' if provider == 'anthropic' else 'unset (8 expected)')} — need {want_cap} "
-                        + ("for full width" if provider == "anthropic" else "(the provider allows 8 concurrent calls)"))
-        fixes.setdefault("env", {})["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = str(want_cap)
-    tc = os.environ.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY") or env.get("CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY")
-    if not cap_value_ok(tc, want_cap, provider):
-        problems.append(f"CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY is {tc or 'unset'} — set to {want_cap}"
-                        + (" so one message can launch a full wave" if provider == "anthropic" else
-                           " (the provider allows 8 concurrent calls)"))
-        fixes.setdefault("env", {})["CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY"] = str(want_cap)
-    # a background agent that is silent for longer than the stall timeout is killed mid-slice, and a
-    # Bash gate longer than the bash timeout is killed too: both cost a whole retry per lane.
-    for var, want, why in (("CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS", 1800000,
-                            "a subagent running a long test suite is aborted after 10 min by default"),
-                           ("BASH_DEFAULT_TIMEOUT_MS", 600000,
-                            "a gate command longer than 2 min is killed by default"),
-                           ("BASH_MAX_TIMEOUT_MS", 1800000,
-                            "the ceiling an agent may ask for (default 10 min)")):
-        cur_v = os.environ.get(var) or env.get(var)
-        if not (str(cur_v).isdigit() and int(cur_v) >= want):
-            problems.append(f"{var} is {cur_v or 'unset'} — raise to {want}: {why}")
-            fixes.setdefault("env", {})[var] = str(want)
-    url = base_url_of(root)
-    notes.append(f"provider {PROVIDERS[provider]['label']} (ANTHROPIC_BASE_URL={url or 'unset'}"
-                 + (", forced by DEVTEAM_PROVIDER" if os.environ.get("DEVTEAM_PROVIDER") else "") + ")")
-    if provider == "glm":
-        if url and not is_glm_url(url):
-            notes.append("NOTE: provider is glm but ANTHROPIC_BASE_URL is not Z.ai/BigModel — routing assumes GLM model ids")
-        # model aliases → GLM ids (docs.z.ai/devpack/tool/claude). Never touches the token or the base URL.
-        for var, want in GLM_MODEL_MAP.items():
-            cur_v = str(os.environ.get(var) or env.get(var) or "")
-            base_id = cur_v.split("[")[0].strip().lower()
-            if not cur_v:
-                problems.append(f"{var} is unset — glm-dev-team routes by alias and needs it to resolve to {want}")
-                fixes.setdefault("env", {})[var] = want
-            elif base_id.startswith("glm-") and not base_id.startswith("glm-5.3"):
-                problems.append(f"{var}={cur_v} is an older GLM — {want} is the current model for this alias")
-                fixes.setdefault("env", {})[var] = want
-            elif base_id != want:
-                notes.append(f"NOTE: {var}={cur_v} (glm-dev-team expects {want}; your mapping is kept)")
-            cap_var = var + "_SUPPORTED_CAPABILITIES"
-            caps = str(os.environ.get(cap_var) or env.get(cap_var) or "")
-            have = [c.strip() for c in caps.split(",") if c.strip()]
-            if "effort" not in have:
-                problems.append(f"{cap_var} does not list `effort` — Claude Code then never forwards the agents' "
-                                "effort, and GLM thinks at its default `max` on every call (slowest)")
-                fixes.setdefault("env", {})[cap_var] = ",".join(have + [c for c in ("effort", "thinking") if c not in have])
-        for var, want, why in (("API_TIMEOUT_MS", 3000000, "Z.ai's recommended request timeout (default 10 min)"),):
-            cur_v = os.environ.get(var) or env.get(var)
-            if not (str(cur_v).isdigit() and int(cur_v) >= want):
-                problems.append(f"{var} is {cur_v or 'unset'} — raise to {want}: {why}")
-                fixes.setdefault("env", {})[var] = str(want)
-        if not (os.environ.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") or env.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")):
-            problems.append("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC is unset — background calls would share the plan's "
-                            "concurrency with the lanes (Z.ai recommends setting it)")
-            fixes.setdefault("env", {})["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
-        if not (os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW") or env.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW")):
-            problems.append("CLAUDE_CODE_AUTO_COMPACT_WINDOW is unset — GLM-5.3 / -Flash have a 1M window (Z.ai recommends 1000000)")
-            fixes.setdefault("env", {})["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "1000000"
-        notes.append(f"governor tier {resolve_tier()} (start/ceiling {TIERS[resolve_tier()]}; DEVTEAM_GLM_TIER=lite|pro|max|api)"
-                     + (" · Z.ai PEAK now" if zai_peak() else " · off-peak now"))
-    elif str(st.get("subagentPromptCacheTtl") or "") != "1h":
-        problems.append("subagentPromptCacheTtl is not \"1h\" — subagent prompt caches expire after 5 min by default, "
-                        "which makes every warm resume hours later a full re-read")
-        fixes["subagentPromptCacheTtl"] = "1h"
-    if provider == "anthropic" and not url:
-        notes.append("NOTE: this build is tuned for Z.ai GLM-5.3/-Flash — point Claude Code at "
-                     "https://api.z.ai/api/anthropic (or set DEVTEAM_PROVIDER=glm) to get the GLM routing")
-    if str(os.environ.get("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") or env.get("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") or "") == "1":
-        problems.append("CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 is set — it overrides every agent's model, so the "
-                        "fast-lane / strong-model routing this skill relies on is disabled (unset it; not auto-fixed)")
-    wt = st.get("worktree", {}) if isinstance(st.get("worktree"), dict) else {}
-    if wt.get("baseRef") != "head":
-        problems.append("worktree.baseRef is not \"head\" — subagent worktrees would branch from the default branch instead of the integration HEAD")
-        fixes.setdefault("worktree", {})["baseRef"] = "head"
-    # `.worktreeinclude` is the documented way to carry gitignored files into a new worktree. Only
-    # small files belong there (it COPIES); dependency dirs are symlinked by `claim` instead.
-    wti = root / ".worktreeinclude"
-    have_wti = wti.read_text().splitlines() if wti.exists() else []
-    want_wti = [f for f in ENV_FILES if (root / f).exists()]
-    if [f for f in want_wti if f not in have_wti]:
-        problems.append(f".worktreeinclude does not carry {want_wti} into new worktrees "
-                        f"(agents would run against a worktree with no env file)")
-        fixes["worktreeinclude"] = sorted(set(have_wti) | set(want_wti))
-    skill_dir = Path(__file__).resolve().parent.parent
-    agents_src = skill_dir / "agents"
-    guard = str(Path(__file__).resolve().parent / "guard.py")
-    for name in AGENT_NAMES:
-        found = [x for x in (root / ".claude" / "agents" / f"{name}.md", Path.home() / ".claude" / "agents" / f"{name}.md") if x.exists()]
-        src = agent_source(agents_src, name)
-        if not found:
-            problems.append(f"agent {name} not installed in .claude/agents/ (source: {src})")
-            fixes.setdefault("agents", []).append(name)
-        elif not hooks_resolve(found[0], root):
-            problems.append(f"agent {name}: its hook commands don't resolve to an existing guard.py (hooks would fail open)")
-            fixes.setdefault("agents", []).append(name)
-        elif src.exists() and found[0].read_text() != render_agent(agents_src, name, provider, guard):
-            # an older glm-dev-team left this file behind: it can be missing the PermissionRequest hook,
-            # the prompt cache, or whole modes this engine dispatches
-            problems.append(f"agent {name} differs from the version shipped with this skill (stale install)")
-            fixes.setdefault("agents", []).append(name)
-    rules = [f"Bash(python3 {q(script_path())}:*)", f"Bash(python3 {q(script_path())} *)"]
-    allow_now = (st.get("permissions") or {}).get("allow") or []
-    if not any(r in allow_now for r in rules):
-        problems.append("no permission rule for the engine — every engine call would prompt")
-        fixes["rules"] = rules
-    excl = common_dir(root) / "info" / "exclude"
-    have_excl = excl.read_text() if excl.exists() else ""
-    if any(ln not in have_excl for ln in EXCLUDE_LINES):
-        problems.append("git info/exclude lacks glm-dev-team entries (.claude/worktrees/, .claude/dev-team/, .slice/, dep dirs)")
-        fixes["excludes"] = True
-    out(*[f"- {n}" for n in notes])
-    if not problems:
-        out("DOCTOR: all good")
-        return []
-    out("DOCTOR found:", *[f"  ✗ {p}" for p in problems])
-    if not a.fix:
-        out("run `doctor --fix` to apply the fixes below (writes .claude/settings.local.json, installs agents, updates git excludes):",
-            json.dumps({k: v for k, v in fixes.items() if k not in ("agents", "excludes")}, indent=2))
-        return []
-    written = []   # paths this call wrote, so `start` does not trip on them as "uncommitted changes"
-    local = settings_paths(root)["local"]
-    cur = load_json(local)
-    for k in ("env", "worktree"):
-        if k in fixes:
-            cur[k] = {**(cur.get(k) or {}), **fixes[k]}
-    if "subagentPromptCacheTtl" in fixes:
-        cur["subagentPromptCacheTtl"] = fixes["subagentPromptCacheTtl"]
-    allow = cur.setdefault("permissions", {}).setdefault("allow", [])
-    for rule in rules:
-        if rule not in allow:
-            allow.append(rule)
-    local.parent.mkdir(parents=True, exist_ok=True)
-    local.write_text(json.dumps(cur, indent=2) + "\n")
-    out(f"wrote {local}")
-    written.append(local)
-    for name in fixes.get("agents", []):
-        src = agent_source(agents_src, name)
-        dst = root / ".claude" / "agents" / f"{name}.md"
-        if src.exists():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(render_agent(agents_src, name, provider, guard))
-            m_, e_ = PROVIDERS[provider]["agents"][name]
-            written.append(dst)
-            out(f"installed {dst} (model {m_}, effort {e_}; hooks → {guard})")
-        else:
-            out(f"MISSING source agent file {src} — copy {name}.md into .claude/agents/ manually")
-    if fixes.get("excludes"):
-        ensure_excludes(root)
-        out("updated git info/exclude")
-    if fixes.get("worktreeinclude"):
-        wti_path = root / ".worktreeinclude"
-        wti_path.write_text("\n".join(fixes["worktreeinclude"]) + "\n")
-        written.append(wti_path)
-        out(f"wrote {wti_path} ({', '.join(fixes['worktreeinclude'])})")
-    if "env" in fixes:
-        out("RESTART Claude Code so the env limits take effect (settings env applies at startup).")
-    return written
-
-
-HOOK_LOOP_RE = re.compile(r"command: >-\s*\n\s*sh -c '[^\n]*\n[^\n]*guard\.py\" ([a-z-]+); done; exit 0'")
-HOOK_PIN_RE = re.compile(r'command: "python3 \\"([^"]+guard\.py)\\" [a-z-]+"')
-
-
-def pin_hooks(text, guard):
-    """Rewrite the shipped location-probing hook commands to an absolute guard.py path."""
-    return HOOK_LOOP_RE.sub(lambda m: f'command: "python3 \\"{guard}\\" {m.group(1)}"', text)
-
-
-def agent_source(agents_src, name):
-    """glm-programmer-lite has no file of its own: it is rendered from glm-programmer.md, so the two system
-    prompts stay byte-identical (one shared prompt-cache prefix, no drift)."""
-    return agents_src / ("glm-programmer.md" if name == "glm-programmer-lite" else f"{name}.md")
-
-
-def render_agent(agents_src, name, provider, guard):
-    """The installed agent file for a provider: its model alias and effort, the lite variant, the
-    Anthropic-only 1h cache TTL, and hooks pinned to this guard.py."""
-    text = agent_source(agents_src, name).read_text()
-    model, effort = PROVIDERS[provider]["agents"][name]
-    text = re.sub(r"(?m)^model: .*$", f"model: {model}", text, count=1)
-    text = re.sub(r"(?m)^effort: .*$", f"effort: {effort}", text, count=1)
-    text = re.sub(r"(?m)^experimental:\n  cacheTtl: .*\n", "", text)
-    if PROVIDERS[provider]["cache_ttl"]:
-        text = re.sub(r"(?m)^color: ", "experimental:\n  cacheTtl: 1h\ncolor: ", text, count=1)
-    if name == "glm-programmer-lite":
-        text = re.sub(r"(?m)^name: glm-programmer$", "name: glm-programmer-lite", text, count=1)
-        text = re.sub(r"(?m)^description: >-\n", "description: >-\n  LITE LANE (trivial and small docs slices; low effort, same rules and gates).\n", text, count=1)
-        text = re.sub(r"(?m)^maxTurns: \d+$", "maxTurns: 80", text, count=1)
-    return pin_hooks(text, guard)
-
-
-def hooks_resolve(agent_file, root):
-    """True if every hook command in the agent file points at an existing guard.py."""
-    text = agent_file.read_text()
-    if "guard.py" not in text:
-        return True  # no glm-dev-team hooks in this file; nothing to resolve
-    for m in HOOK_PIN_RE.finditer(text):
-        if not Path(m.group(1)).exists():
-            return False
-    if HOOK_LOOP_RE.search(text):
-        candidates = [root / ".claude" / "skills" / "glm-dev-team" / "scripts" / "guard.py",
-                      Path.home() / ".claude" / "skills" / "glm-dev-team" / "scripts" / "guard.py"]
-        return any(c.exists() for c in candidates)
-    return True
-
-
-def cmd_allow(a):
-    root = toplevel()
-    local = settings_paths(root)["local"]
-    cur = load_json(local)
-    allow = cur.setdefault("permissions", {}).setdefault("allow", [])
-    for c in a.cmds:
-        rule = f"Bash({c}:*)"
-        if rule not in allow:
-            allow.append(rule)
-    local.parent.mkdir(parents=True, exist_ok=True)
-    local.write_text(json.dumps(cur, indent=2) + "\n")
-    out(f"allow rules now: {allow}")
+    """Check and install the ZCode agents plus the user-level guard hooks (see `doctor_zcode`).
+    Nothing is written under the project root, so `start` has no doctor-written files to
+    exempt from its dirty-check."""
+    doctor_zcode(a, toplevel())
+    return []
 
 
 # ----------------------------------------------------------------------------- commands: glm-programmer (inside worktree)
@@ -3940,7 +3568,7 @@ def main(argv=None):
                             help="legacy alias: 0=strict, 1|2|3=turbo, 4=spike (bare --fast means turbo)")
         parser.add_argument("--spike", action="store_true", help="shorthand for --profile spike (low-risk slices ship untested)")
         parser.add_argument("--tier", choices=sorted(TIERS), help="Z.ai plan tier for the governor's first window "
-                            "(default: DEVTEAM_GLM_TIER, the plan's glm.tier, else pro)")
+                            "(default: DEVTEAM_GLM_TIER, the plan's glm.tier, else api)")
         return parser
 
     pr = fast_flags(sp.add_parser("init")); pr.add_argument("plan"); pr.add_argument("--force", action="store_true"); pr.add_argument("--allow-worktree", action="store_true"); pr.set_defaults(fn=cmd_init)
@@ -3966,9 +3594,8 @@ def main(argv=None):
     pr = sp.add_parser("stats"); pr.add_argument("--all", action="store_true"); pr.set_defaults(fn=cmd_stats)
     pr = sp.add_parser("finish"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_finish)
     pr = sp.add_parser("reset"); pr.add_argument("--yes", action="store_true"); pr.set_defaults(fn=cmd_reset)
-    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["claude", "zcode"])
+    pr = sp.add_parser("doctor"); pr.add_argument("--fix", action="store_true"); pr.add_argument("--harness", choices=["zcode"])
     pr.set_defaults(fn=cmd_doctor)
-    pr = sp.add_parser("allow"); pr.add_argument("cmds", nargs="+"); pr.set_defaults(fn=cmd_allow)
     pr = sp.add_parser("claim"); pr.add_argument("id"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_claim)
     pr = sp.add_parser("bind"); pr.add_argument("id"); pr.add_argument("worktree"); pr.set_defaults(fn=cmd_bind)
     pr = sp.add_parser("commit-red"); pr.add_argument("title"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_commit_red)
@@ -4023,13 +3650,13 @@ def zcode_agent_text(agents_src, name) -> str:
         return fh.read()
 
 
-ZCODE_AGENTS = ("glm-programmer", "glm-programmer-lite", "glm-programmer-strong",
+ZCODE_AGENTS = ("glm-programmer-lite", "glm-programmer-strong",
                 "glm-code-reviewer", "glm-spot-reviewer", "glm-investigator",
                 "glm-team-leader")
 
 
 def _zcode_write(path, text):
-    """Overwrite a rendered agent file in place (no backup copy is kept)."""
+    """Overwrite an agent file in place (no backup copy is kept)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(text)
@@ -4147,7 +3774,7 @@ def _zcode_merge_hooks(cfg_path, hook_cmd):
 
 
 def doctor_zcode(a, root):
-    """Check and install the seven `zcode` agents plus the user-level hook config.
+    """Check and install the six `zcode` agents plus the user-level hook config.
 
     CLI: `doctor --harness zcode [--fix]` (routed from `cmd_doctor`/`cmd_start`).
     Agents are copied verbatim from the skill's `agents/` files (each already
@@ -4155,9 +3782,8 @@ def doctor_zcode(a, root):
     maxTurns) into `~/.zcode/agents/`; the PreToolUse (`Write|Edit`, `Bash`)
     and Stop hooks merge into `~/.zcode/cli/config.json`
     (`hooks.enabled: true`, `type: process`, absolute `guard.py` path).
-    Unlike the claude doctor nothing is written under the project root: no
-    `.claude/settings.local.json` (`root` exists only for signature parity
-    with the other harness doctors).
+    Nothing is written under the project root (`root` exists only for
+    signature parity with the other conductor commands).
     """
     fix = bool(getattr(a, "fix", False))
     home = os.path.expanduser("~")

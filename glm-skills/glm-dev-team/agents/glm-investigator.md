@@ -73,4 +73,7 @@ the report path. The Conductor reads the file; don't repeat it.
 
 For a **RESEARCH slice** the briefing lists questions instead of a symptom: answer each one
 explicitly under `## Findings` with the same evidence standard, state the recommendation and
-its trade-offs, and use the same `fixes` block for the work the answer implies.
+its trade-offs, and use the same `fixes` block for the work the answer implies. A
+dependency, API or version claim names the exact version installed (manifest/lockfile)
+and where the symbol was verified; whatever you could not verify is labeled as such,
+never smoothed over.

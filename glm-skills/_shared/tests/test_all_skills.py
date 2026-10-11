@@ -102,8 +102,8 @@ class TestScriptsCompile(unittest.TestCase):
 class TestSkillMdHygiene(unittest.TestCase):
     def test_doc_generator_no_unknown_agents(self):
         """glm-doc-generator SKILL.md names the installed glm-doc-writer/glm-doc-reviewer
-        agents for ZCode; 'general-purpose' and 'Explore' are built-ins on Claude Code and
-        ZCode, so they may appear only on lines that name one of those harnesses."""
+        agents for ZCode; 'general-purpose' and 'Explore' are ZCode built-ins, so they may
+        appear only on lines that also name ZCode."""
         skill_md = os.path.join(GLM_ROOT, "glm-doc-generator", "SKILL.md")
         with open(skill_md, encoding="utf-8") as fh:
             content = fh.read()
@@ -116,8 +116,8 @@ class TestSkillMdHygiene(unittest.TestCase):
             if line.strip().startswith("```") or line.strip().startswith("#"):
                 continue
             for name in ("general-purpose", "Explore"):
-                if name in line and "Claude Code" not in line and "ZCode" not in line:
-                    self.fail("SKILL.md:%d names '%s' without Claude Code or ZCode" % (line_num, name))
+                if name in line and "ZCode" not in line:
+                    self.fail("SKILL.md:%d names '%s' without ZCode" % (line_num, name))
 
         # Writer (§3 step 3) and reviewer (§4) dispatch lines name the installed agent and
         # the general-purpose fallback.
@@ -127,16 +127,15 @@ class TestSkillMdHygiene(unittest.TestCase):
         self.assertTrue(writer, "no writer 'subagent type' line")
         self.assertTrue(reviewer, "no reviewer 'subagent type' line")
         for l in writer + reviewer:
-            for needle in ("ZCode", "Appendix A", "general-purpose", "Claude Code"):
+            for needle in ("ZCode", "Appendix A", "general-purpose"):
                 self.assertIn(needle, l, "dispatch line lacks %r: %s" % (needle, l))
 
-        # Large-repo recon row: Explore is a ZCode and Claude Code built-in.
+        # Large-repo recon row: Explore is a ZCode built-in (ZCode-only wording).
         recon = [l for l in lines if "read-only shards" in l]
         self.assertTrue(recon, "no large-repo recon row")
         for l in recon:
             self.assertIn("Explore", l)
-            if "Claude Code harness only" in l:
-                self.fail("recon row still claims Explore is Claude Code only")
+            self.assertNotIn("Claude Code", l, "recon row still names Claude Code")
             self.assertIn("ZCode", l, "recon row does not name ZCode for Explore")
 
         # No stale claim that the /glm-docs command injects the skill path.

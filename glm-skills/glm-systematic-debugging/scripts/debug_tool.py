@@ -7,7 +7,7 @@ Subcommands
   experiment  N hypotheses tested control-vs-treatment in isolated worktrees (up to 64)
   scan        N judgment workers fanned out to the model API directly (at most 8 at once)
   doctor      environment / key / harness check
-  setup       print or apply harness config
+  setup       print the ZCode config block
 
 Stdlib only. Python 3.8+. Every subcommand supports -h.
 """
@@ -755,7 +755,7 @@ TIERS = {
 }
 
 SYS_PROMPT = (
-    "You are a debugging glm-investigator. Root cause before fix. Evidence means output, traces, "
+    "You are a glm-debug-worker. Root cause before fix. Evidence means output, traces, "
     "diffs or code you were shown - never a guess. Answer in at most 12 lines, no preamble, "
     "in exactly this shape:\n"
     "VERDICT: CONFIRMED | REFUTED | INCONCLUSIVE\n"
@@ -940,12 +940,9 @@ def cmd_scan(a):
 # ------------------------------------------------------------ doctor/setup
 
 def detect_harness():
-    h = []
     if (Path.home() / ".zcode").exists() or os.environ.get("ZCODE"):
-        h.append("zcode")
-    if os.environ.get("CLAUDE_SKILL_DIR") or (Path.home() / ".claude").exists():
-        h.append("claude-compatible")
-    return ",".join(h) or "unknown"
+        return "zcode"
+    return "unknown"
 
 
 def cmd_doctor(a):
@@ -993,22 +990,9 @@ SETUP = {
     "zcode": """# ZCode
 # Settings -> Model Settings -> Z.ai account or API key; thinking effort is per-model in the UI.
 # Skill:  ~/.zcode/skills/glm-systematic-debugging/SKILL.md
-Run `sh install-zcode.sh` from the glm-skills checkout instead of copying the file raw: it installs this skill to ~/.zcode/skills/ and rewrites the glm-debug-worker frontmatter into ~/.zcode/agents/ (real model ids, `thoughtLevel: low`, `maxTurns` instead of `steps`).
+Run `sh install-zcode.sh` from the glm-skills checkout instead of copying the file raw: it installs this skill to ~/.zcode/skills/ and copies agents/glm-debug-worker.md verbatim into ~/.zcode/agents/ (real model ids, `thoughtLevel: high`).
 # export ZAI_API_KEY=<GLM Coding Plan key>   # so debug_tool.py scan can fan out by itself
 # Foreground subagents run truly in parallel here: the agent lane of `scan` is fine on ZCode.""",
-    "claude": """# ~/.claude/settings.json  (merge)
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5.3-flash",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3",
-    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "8",
-    "API_TIMEOUT_MS": "3000000"
-  },
-  "permissions": { "allow": ["Bash(git worktree *)"] }
-}
-# export ANTHROPIC_AUTH_TOKEN=<GLM Coding Plan key>""",
 }
 
 

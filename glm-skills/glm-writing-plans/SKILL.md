@@ -23,13 +23,10 @@ defect to explain, not a habit.
 Run this as your FIRST tool call, with the spec path in place of `SPEC`:
 
 ```bash
-for d in "${CLAUDE_SKILL_DIR:-}/skills/glm-writing-plans" \
-  ~/.zcode/skills/glm-writing-plans \
+for d in ~/.zcode/skills/glm-writing-plans \
   .zcode/skills/glm-writing-plans \
   .agents/skills/glm-writing-plans \
-  ~/.agents/skills/glm-writing-plans \
-  .claude/skills/glm-writing-plans \
-  ~/.claude/skills/glm-writing-plans; do
+  ~/.agents/skills/glm-writing-plans; do
   [ -f "$d/scripts/plan_tool.py" ] && T="$d/scripts/plan_tool.py" && break
 done
 [ -z "$T" ] && echo "glm-writing-plans skill not found in any standard location" >&2 && exit 1
@@ -61,6 +58,10 @@ only this:
 # [Feature] Implementation Plan
 
 **Goal:** [one sentence]
+
+**Out of scope:** [what this plan deliberately does not touch - one line]
+
+**Rollback:** [how to undo the whole plan: branch, migration down, flag | n/a]
 
 **Architecture:** [2-3 sentences]
 
@@ -102,7 +103,9 @@ Contract rules - all plan quality is decided here, nowhere later:
    return - written the way they will appear in code. `Consumes` copies the
    producer's text byte for byte; `(existing)` marks a symbol already in the
    codebase. Omit `Consumes` to mean "everything my Depends produce". Depends
-   are derived from Consumes automatically.
+   are derived from Consumes automatically. A third-party symbol a task will
+   call is spelled exactly as the inlined files or the dependency's own types
+   spell it - a name recalled from memory is a fabricated API.
 4. `Spec` gives line ranges from the heading map. Each writer receives exactly
    those lines and nothing else, so a wrong range silently starves a task.
 5. `Read` (optional) adds existing files that writer needs inlined.
@@ -141,8 +144,10 @@ to review every task instead of only the risky ones.
    single message (ZCode runs subagents launched together in parallel), each
    with the prompt `Read <brief path> and follow it
    exactly.`, then run the printed `wait`, `review` and `assemble` commands in
-   that order. The table holds at most 6 rows per message by default (up to 8
-   via `PLAN_LANE_WIDTH`); send the next MESSAGE after the previous one replied.
+   that order. The table usually holds 8 rows or fewer, dispatched ALL in ONE
+   message; past 32 tasks it can hold more, and it is then dispatched in waves
+   of at most the lane width (`PLAN_LANE_WIDTH`, clamped 1..8, lowers the rows
+   per message; send the next wave after the previous one replied).
    Tell the user once that `<TOOL> doctor` shows how to enable the fast lane.
 
 # R5 - Handoff
@@ -200,15 +205,14 @@ editor and git can execute. The linter enforces this and will fail the build.
 # R9 - One-time setup
 
 `<TOOL> doctor` reports the lane, the key, the models and the concurrency.
-`<TOOL> setup --apply` installs the fallback subagents for the detected harness (on ZCode: all three `agents/*.md`, copied verbatim).
+`<TOOL> setup --apply` installs the fallback subagents: all three `agents/*.md`,
+copied verbatim to `~/.zcode/agents/`.
 Never run `--apply` without the user's consent. The fast lane needs one export:
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>
 ```
 
-On a Claude-compatible harness, also export the z.ai Anthropic route:
-
-```bash
-export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
-```
+GLM model facts, routing rationale and known GLM failure modes live in
+`references/glm-tuning.md` - read it only when changing tier, effort or model
+choices, or when a GLM-specific failure appears.

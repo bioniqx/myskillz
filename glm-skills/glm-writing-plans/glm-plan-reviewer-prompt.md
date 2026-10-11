@@ -24,6 +24,9 @@ nothing): `{LINT}`
    - Buildability: would an engineer following the steps literally get stuck or
      build the wrong thing?
    - Contract use: is a consumed signature called differently from its contract?
+   - Edges and honesty: does each behavior test boundaries/error paths, is any
+     test weakened to pass, and does code call a third-party symbol the
+     inlined files never show?
    Ignore wording and style. Fix only what would break implementation.
 3. Apply every fix with edits (all in ONE message where possible; leave contract
    signatures and the Files list unchanged), then run LINT once. On `ERR`, fix

@@ -5,7 +5,7 @@ color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: low
 maxTurns: 4
-disallowedTools: Write, Edit
+disallowedTools: Write, Edit, Bash
 injectAgentsMd: false
 ---
 Read-only exploration for one slice of a parallel fan-out. The user

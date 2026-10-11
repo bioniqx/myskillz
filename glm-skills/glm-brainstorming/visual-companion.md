@@ -73,18 +73,11 @@ Reading screenshots back: GLM-5.3-Flash is natively multimodal, so a
 Flash lane can look at a screenshot of the rendered page if you need a
 visual check. GLM-5.3 is text-only — do not send it images.
 
-Platform notes: Claude Code — run as above (script backgrounds itself;
-on Windows it auto-foregrounds, so pass `run_in_background: true` and
-read `server-info` next turn). Codex — auto-foregrounds via `CODEX_CI`,
-run normally. Gemini CLI — add `--foreground` and set
-`is_background: true`. Copilot CLI — `bash scripts/start-server.sh …
---foreground` via its background shell mechanism.
-ZCode — no ZCode-specific
-server behavior is documented: run as above (the script backgrounds
-itself), and if the harness reaps detached processes, switch to
-`--foreground` plus its background mechanism and read `server-info`
-next turn. Any harness that
-reaps detached processes → `--foreground` + its background mechanism.
+Platform notes: ZCode — no ZCode-specific server behavior is documented:
+run as above (the script backgrounds itself), and if the harness reaps
+detached processes, switch to `--foreground` plus its background
+mechanism and read `server-info` next turn. Any harness that reaps
+detached processes → `--foreground` + its background mechanism.
 Unreachable URL in containers → `--host 0.0.0.0 --url-host localhost`.
 
 ## The loop

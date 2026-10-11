@@ -26,9 +26,8 @@ def load_devteam():
 
 dt = load_devteam()
 
-ZCODE_AGENTS = ("glm-code-reviewer", "glm-investigator", "glm-programmer",
-                "glm-programmer-lite", "glm-programmer-strong",
-                "glm-spot-reviewer", "glm-team-leader")
+ZCODE_AGENTS = ("glm-code-reviewer", "glm-investigator", "glm-programmer-lite",
+                "glm-programmer-strong", "glm-spot-reviewer", "glm-team-leader")
 ALLOWED_KEYS = {"name", "description", "model", "thoughtLevel", "color", "tools",
                 "disallowedTools", "maxTurns", "background", "injectAgentsMd", "mcpServers"}
 BAD_KEYS = ("effort:", "hooks:", "mode:", "permissionMode:", "steps:",
@@ -96,7 +95,7 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         for name in ZCODE_AGENTS:
             self.assertEqual(dt.zcode_agent_text(AGENTS_SRC, name), self.source_text(name), name)
 
-    def test_fix_installs_seven_agents_with_zcode_frontmatter(self):
+    def test_fix_installs_six_agents_with_zcode_frontmatter(self):
         out = self.zfix()
         self.assertIn("harness zcode", out)
         agents_dir = os.path.join(self.home, ".zcode", "agents")
@@ -141,8 +140,8 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         agents_dir = os.path.join(self.home, ".zcode", "agents")
         cfg_path = os.path.join(self.home, ".zcode", "cli", "config.json")
         self.zfix()
-        agent = os.path.join(agents_dir, "glm-programmer.md")
-        want = dt.zcode_agent_text(AGENTS_SRC, "glm-programmer")
+        agent = os.path.join(agents_dir, "glm-programmer-strong.md")
+        want = dt.zcode_agent_text(AGENTS_SRC, "glm-programmer-strong")
         with open(agent, "a", encoding="utf-8") as f:
             f.write("my edit\n")
         with open(cfg_path, encoding="utf-8") as f:
@@ -164,7 +163,7 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         cli_dir = os.path.join(self.home, ".zcode", "cli")
         self.zfix()
         cfg_path = os.path.join(cli_dir, "config.json")
-        agent = os.path.join(agents_dir, "glm-programmer.md")
+        agent = os.path.join(agents_dir, "glm-programmer-strong.md")
         with open(agent, encoding="utf-8") as f:
             agent_before = f.read()
         with open(cfg_path, encoding="utf-8") as f:
@@ -182,19 +181,20 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         agents_dir = os.path.join(self.home, ".zcode", "agents")
         out = self.cdoctor(fix=True)
         installed = sorted(os.listdir(agents_dir)) if os.path.isdir(agents_dir) else []
-        self.assertIn("glm-programmer.md", installed)
+        self.assertIn("glm-programmer-strong.md", installed)
+        self.assertNotIn("glm-programmer.md", installed)
         self.assertIn("harness zcode", out)
         self.assertFalse(os.path.exists(os.path.join(self.repo, ".claude", "settings.local.json")))
         report = self.cdoctor(fix=False)
         self.assertIn("harness zcode", report)
         self.assertNotIn("MISSING:", report)
-        agent = os.path.join(agents_dir, "glm-programmer.md")
+        agent = os.path.join(agents_dir, "glm-programmer-strong.md")
         with open(agent, "a", encoding="utf-8") as f:
             f.write("drift\n")
-        self.assertIn("STALE: agent glm-programmer does not match the source file", self.cdoctor(fix=False))
+        self.assertIn("STALE: agent glm-programmer-strong does not match the source file", self.cdoctor(fix=False))
         self.cdoctor(fix=True)
         with open(agent, encoding="utf-8") as f:
-            self.assertEqual(f.read(), self.source_text("glm-programmer"))
+            self.assertEqual(f.read(), self.source_text("glm-programmer-strong"))
 
 
 if __name__ == "__main__":

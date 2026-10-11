@@ -85,4 +85,12 @@ end. Number steps 1..N with no gaps.
 14. "Runs after" tasks edit your files before you do: anchor Modify steps on
     surrounding code, not on line numbers alone.
 15. Use only symbols from your contract, your consumed signatures, the Global
-    Constraints, or the inlined files. Invent nothing else.
+    Constraints, or the inlined files. Invent nothing else. A third-party symbol
+    the inlined files never show is a guess: name where it is verified
+    (`# verified: <file or registry>`) or drop it.
+16. Every behavior tests its real edges - boundary values, empty/null, malformed
+    input, error paths - as concrete test cases, never as prose. A bug-fix task's
+    first failing test reproduces the bug itself.
+17. Never weaken a test to make an implementation pass: loosened assertions,
+    skip/xfail, or mocking the unit under test are placeholders in disguise.
+    Either the code is wrong, or the `Expected:` line was wrong from the start.

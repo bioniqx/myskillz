@@ -97,7 +97,7 @@ and Flash lanes need it stated explicitly, not implied.
 | --- | --- | --- |
 | Single fact or API detail | 1-3 | none, or 1 Flash lane at ≤4 calls |
 | Comparison of 2-4 options | 4-8 searches + 2-6 fetches, two parallel batches | 0-2 Flash lanes at ≤5 calls each, only for multi-hop angles |
-| Broad landscape or new domain | 4-8 | 4-8 Flash lanes (waves of `lanes=`, default 6, hard max 8) at ≤5 calls each |
+| Broad landscape or new domain | 4-8 | 4-8 Flash lanes (waves of `lanes=`, default 8, hard max 8) at ≤5 calls each |
 
 Promote one lane to GLM-5.3 only when the comparison is contested and its
 outcome picks the approach.
@@ -120,8 +120,8 @@ Inside the design, not as a research report:
 
 ```
 Evidence (checked YYYY-MM-DD)
-- <claim that drives the choice> — [<source title>](<url>) (<YYYY-MM>)
-- <our version vs latest: what changes> — [<release notes>](<url>) (<YYYY-MM>)
+- <claim that drives the choice> — [<source title>](<url>) (<YYYY-MM-DD>)
+- <our version vs latest: what changes> — [<release notes>](<url>) (<YYYY-MM-DD>)
 - UNVERIFIED: <claim> — only a tier-C source
 ```
 

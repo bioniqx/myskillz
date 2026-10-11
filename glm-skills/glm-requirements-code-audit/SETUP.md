@@ -65,7 +65,7 @@ contract files (`.erb`, `.sol`, `.cshtml`); `.git/` itself is never searched or 
 
 8 by default, and 8 is the ceiling (the provider allows 8 concurrent API calls). Override with `run --threads N`, or
 `AUDIT_THREADS=N`. Lower it if the endpoint rate-limits you (the client already backs off on 429/5xx); values above 8
-are clamped to 8. The agent lane is narrower: `OC_MAX_LANES` (agent-lane width) defaults to 6 and is clamped to 8 (0 gives 1, non-numeric or empty gives 6); batching items beats more workers.
+are clamped to 8. The agent lane has its own width control: `OC_MAX_LANES` (agent-lane width) defaults to 8 and is clamped to 1-8 (0 gives 1, non-numeric or empty gives 8); batching items beats more workers.
 
 ## 5. Permissions
 
@@ -74,13 +74,14 @@ The skill needs to run one script and write under one directory:
 - Bash: `python3 <skill>/scripts/audit.py …`
 - Writes: `<cwd>/.audit/**` only. The codebase is never modified.
 - On the api lane the workers are HTTPS requests, not agents, so no per-agent tool permissions apply.
-- ZCode: the agent files already deny `edit`/`bash` for the fallback workers.
+- ZCode: the fallback-worker agent files declare no tool frontmatter; their read-only (write-one-file)
+  constraints live in the agents' prompt bodies.
 
 ## 6. Where things go
 
 - `<cwd>/.audit/` — everything the audit writes: `index.json`, `repo-map.txt`, `spec/`, `checklist.jsonl`,
-  `findings.jsonl`, `verdicts.jsonl`, `adjudications.jsonl`, `plan.jsonl`, `glm-requirements-code-audit.md`,
-  `traceability.csv`, `state.json`, `config.json`. Added to `.git/info/exclude` automatically (local and
+  `batches/`, `findings/`, `verify/`, `findings.jsonl`, `verdicts.jsonl`, `adjudications.jsonl`, `plan.jsonl`,
+  `glm-requirements-code-audit.md`, `traceability.csv`, `state.json`, `config.json`, `ACTIVE`. Added to `.git/info/exclude` automatically (local and
   untracked — the repository itself is not touched).
 - `brief --force` archives a previous audit to `.audit.prev-<timestamp>/`.
 - Uninstall: delete the skill folder and the two agent files. Nothing is written outside audit dirs.

@@ -11,7 +11,7 @@ Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 | `reasoning_effort` is `low` \| `high` \| `max`, default `max` | **there is no `medium`** — the old agent files pinned `effort: medium`, which is not a GLM value. Tiers use low/high/max only |
 | z.ai recommends `thinking.clear_thinking: false` | sent on every request |
 | Context caching is supported | one byte-identical prefix per wave; the `cache_read_input_tokens` figure is printed by `run` |
-| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. The api lane names models outright; the agent lane uses `haiku`/`sonnet` only where a harness demands an alias |
+| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. The api lane names models outright; the agent lane dispatches the installed `glm-rca-*` agents, whose frontmatter pins real model ids and `thoughtLevel` |
 | GLM emits few parallel tool calls per turn | an agentic search loop is the wrong place for this work → retrieval moved into Python |
 | Flash is more verbose than median | `max_tokens` is capped per tier and every prompt demands JSON only |
 | GLM is trained toward brevity; long prompts fight the training | SKILL.md and every system block are numbered rules, no XML ceremony, no behaviour tables |
@@ -25,7 +25,7 @@ Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 | ZCode | skills at `~/.zcode/skills/<name>/SKILL.md`, invoked `$glm-requirements-code-audit`; a description over 1024 chars **drops the skill**; per-turn trigger metadata is a description excerpt of up to 250 chars (the WHEN-clause sits up front); a body over 100KB is truncated when loaded, not dropped | description reordered with the WHEN-clause first; description measured at 920 chars |
 | ZCode | user-level hooks exist, merged into `~/.zcode/cli/config.json` | this skill installs none; the api lane's structural enforcement carries the rules here anyway |
 
-## What changed from the Claude Code edition
+## What changed since the Claude-tuned original
 
 1. **Parallelism moved out of the model's turn.** `audit.py run` opens up to 8 threads and issues one request
    per requirement. Capped at **8 concurrent requests** (the provider limit): 80 requirements take 10 rounds
@@ -45,7 +45,7 @@ Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
    client drops that one field, retries without spending a retry, and remembers the working shape for the rest
    of the run. `doctor --ping` prints the shape that was accepted.
 
-6. **Gate parity with the Claude Code edition.** `check` applies the original gate: a non-MATCHED item must be
+6. **Gate parity with the original port.** `check` applies the original gate: a non-MATCHED item must be
    verified or adjudicated, a verifier disagreement must be adjudicated, a MISSING needs a second pass and
    recorded searches, citations must exist and must not be prose or `.git/`, and the plan must cover every
    discrepancy (warnings: effort, P0 anchors, MATCHED with low confidence or high stakes never verified). The

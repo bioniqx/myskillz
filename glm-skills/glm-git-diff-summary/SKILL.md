@@ -2,20 +2,16 @@
 name: glm-git-diff-summary
 description: Use when the user wants to understand or summarize what the current branch changed versus the main branch — describing what the new code does, drafting a commit or PR/MR message, or reviewing branch changes before committing. Triggers on requests like "so sánh với main", "tóm tắt thay đổi", "mô tả code đã làm gì", "viết commit message", "what did this branch do", "summarize my changes vs main".
 argument-hint: "[base-branch|tag|sha]"
-allowed-tools: Read Bash(bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh"*) Bash(git diff *) Bash(git log *) Bash(git show *)
+allowed-tools: Read Bash(bash *gather.sh*) Bash(git diff *) Bash(git log *) Bash(git show *)
 ---
 
 # glm-git-diff-summary
 
 Goal: diff **merge-base(fresh base) → working tree** (committed + staged + unstaged + untracked), then output **Part 1 change summary — Vietnamese first, English right below** + **Part 2 English commit message**.
 
-## Context — already gathered (0 tool calls)
+## Context — gather it first (one tool call)
 
-```!
-bash "${CLAUDE_SKILL_DIR}/scripts/gather.sh" "$ARGUMENTS"
-```
-
-If the block above shows the raw command instead of output (harness without `!` injection), run it once with Bash: `bash <directory of this file>/scripts/gather.sh`. The block passes the user's argument as the base. If the user named a base (branch, tag or SHA) that differs from `REF`, first check it against the pattern `^[A-Za-z0-9][A-Za-z0-9._/@~^-]*$` (the pattern also rejects a leading `-`; if it does not match, ask for a different base and run nothing), then re-run once with the value single-quoted: `bash <directory of this file>/scripts/gather.sh '<base>'`. The script resolves the base with `git rev-parse`, so a branch, tag or SHA all work. Never run git commands one by one.
+Run once with Bash, with the "Base directory for this skill" path in place of `<Base directory>`: `bash <Base directory>/scripts/gather.sh`. The call passes the user's argument as the base. If the user named a base (branch, tag or SHA) that differs from `REF`, first check it against the pattern `^[A-Za-z0-9][A-Za-z0-9._/-]*$` (the pattern also rejects a leading `-`; if it does not match, ask for a different base and run nothing), then re-run once with the value single-quoted: `bash <Base directory>/scripts/gather.sh '<base>'`. The script resolves the base with `git rev-parse`, so a branch, tag or SHA all work. Never run git commands one by one.
 
 What the script already did (don't redo): background `git fetch` of only the base branch (6s hard timeout, no prompts, skipped if fetched <5 min ago) · speculative diff on the cached base in parallel (reused when merge-base is unchanged) · untracked files included · lockfiles/generated/minified/`*.meta`/dist excluded from content but listed in NUMSTAT · ticket parsed from branch · diff pre-split into chunks that each fit one Read.
 
@@ -42,9 +38,9 @@ Prompt (fill path):
 > Read-only. Read `<chunk path>` fully (if the Read is truncated, continue with offset until the end). It is a git diff of one area of a branch. Reply ONLY with ≤10 bullets, ≤150 words, no code, no line numbers:
 > `AREA: <feature/area name inferred from paths+code>`
 > `- OLD→NEW: <behavior change a user/operator would notice>` (or `- ADD:` / `- REMOVE:` / `- INTERNAL:` for refactor-only)
-> `- RISK: <migration, API/contract change, deleted behavior, config/env>` (only if real)
+> `- RISK: <migration, API/contract change, deleted behavior, config/env, secrets/auth change, weakened or removed tests, changes unrelated to the ticket>` (only if real)
 
-Then synthesize from lane bullets + `INTENT` + `NUMSTAT` only. Never Read chunks yourself in this mode; if one summary is unclear, re-dispatch just that one lane in your next message (SendMessage is Claude Code only).
+Then synthesize from lane bullets + `INTENT` + `NUMSTAT` only. Never Read chunks yourself in this mode; if one summary is unclear, re-dispatch just that one lane in your next message.
 
 ## Output contract (both parts, this order, nothing else)
 

@@ -25,8 +25,7 @@ Write `A` for the audit script, pinned as your first call of the run:
 `A=python3 <dir>/scripts/audit.py` for the first `<dir>` that has `scripts/audit.py`, trying in order the
 directory holding this file, `~/.zcode/skills/glm-requirements-code-audit`,
 `.zcode/skills/glm-requirements-code-audit`,
-`.agents/skills/glm-requirements-code-audit`, `~/.agents/skills/glm-requirements-code-audit`,
-`.claude/skills/glm-requirements-code-audit`, `~/.claude/skills/glm-requirements-code-audit`
+`.agents/skills/glm-requirements-code-audit`, `~/.agents/skills/glm-requirements-code-audit`
 (`python` instead of `python3` on Windows). No candidate
 exists → say so and ask for the install dir; never guess a path. Every command prints a `NEXT:` line —
 follow it and do not deliberate about plumbing.
@@ -144,8 +143,8 @@ CONFLICT or unmet MUST on a core/high-stakes flow, **P1** other unmet/partial MU
 user-visible impact, **P2** the rest. Order P0 first, then by dependency.
 
 `A finalize` = report + gate + close. It writes `.audit/glm-requirements-code-audit.md` and `traceability.csv` in
-the spec's language and fails loudly on: a non-MATCHED item that no verifier or adjudication settled, an
-glm-investigator/verifier disagreement, a MISSING that never had a second pass or lists no searches,
+the spec's language and fails loudly on: a non-MATCHED item that no verifier or adjudication settled, a
+glm-rca-investigator/glm-rca-verifier disagreement, a MISSING that never had a second pass or lists no searches,
 an unplanned discrepancy, and a citation that does not exist, is prose documentation or lies under `.git/`. It warns on a
 MATCHED item with low confidence or high stakes that was never verified, on an effort that is not S/M/L, and on
 priority mismatches (a CONFLICT or an unmet high-stakes MUST not at P0, a MAY at P0). It prints the headline
@@ -177,7 +176,7 @@ it maps to the same model as `sonnet`, at no gain.
 ## R9 — Fallback lane
 
 No API key → `brief` reports `lane agent` and the pipeline becomes `A plan` → dispatch the printed subagents in
-ONE message (agent-lane width defaults to 6, up to 8 with `OC_MAX_LANES`; batches hold at least 3 items, and when `A plan` prints more batches than lanes, dispatch them in waves of that width and wait for each wave) → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
+ONE message (agent-lane width defaults to 8, clamped to 1-8 via `OC_MAX_LANES` — empty or invalid values fall back to 8; batches hold at least 3 items, and when `A plan` prints more batches than lanes, dispatch them in waves of that width and wait for each wave) → `A status` (repeat as they report) → `A queue`, unchanged from there. Re-running `A plan` clears
 the earlier findings and verifier batches (`A plan --resume` keeps finished batches); each worker lists in
 `searched` the queries it ran, and the gate rejects a MISSING without them. The batch files carry the
 pre-retrieved excerpts, so the workers mostly judge rather than search. ZCode runs subagents launched together

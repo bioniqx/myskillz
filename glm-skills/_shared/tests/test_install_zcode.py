@@ -9,7 +9,7 @@ SCRIPT = os.path.join(GLM_ROOT, "install-zcode.sh")
 SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-git-diff-summary", "glm-idea-to-spec", "glm-requirements-code-audit",
           "glm-systematic-debugging", "glm-writing-plans"]
 AGENTS = ["glm-code-reviewer", "glm-debug-worker", "glm-doc-reviewer", "glm-doc-writer", "glm-explorer", "glm-investigator",
-          "glm-plan-reviewer", "glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-programmer", "glm-programmer-lite",
+          "glm-plan-reviewer", "glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-programmer-lite",
           "glm-programmer-strong", "glm-rca-investigator", "glm-rca-verifier", "glm-researcher", "glm-spot-reviewer", "glm-team-leader"]
 ALLOWED_KEYS = {"name", "description", "model", "thoughtLevel", "color", "tools", "disallowedTools",
                 "maxTurns", "background", "injectAgentsMd", "mcpServers"}
@@ -107,10 +107,10 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertEqual(self.install().returncode, 0)
         self.assertEqual(self.install().returncode, 0)
         self.assertEqual([f for f in os.listdir(self.agents_dir()) if f.endswith(".bak")], [])
-        with open(self.agent("glm-programmer"), "a", encoding="utf-8") as fh:
+        with open(self.agent("glm-team-leader"), "a", encoding="utf-8") as fh:
             fh.write("my edit\n")
         self.assertEqual(self.install().returncode, 0)
-        with open(self.agent("glm-programmer"), encoding="utf-8") as fh:
+        with open(self.agent("glm-team-leader"), encoding="utf-8") as fh:
             self.assertNotIn("my edit", fh.read())
         self.assertEqual([f for f in os.listdir(self.agents_dir()) if f.endswith(".bak")], [])
 

@@ -15,7 +15,7 @@ decisive lanes are still running, end the turn with one status line
 2 human turns.
 
 **Split.** The request is too open to design (unknown users, goal, or a
-constraint that eliminates whole approaches), or lanes exceed `lanes=` (default 6,
+constraint that eliminates whole approaches), or lanes exceed `lanes=` (default 8,
 hard max 8) and must run in waves. Send questions + assumptions right away while lanes
 keep running; the user thinks while machines work. Next message is the
 design. Budget: 3 human turns.
@@ -32,10 +32,11 @@ undermines it. Lead with your recommendation and why. YAGNI: cut
 unrequested features.
 
 For large or contested problems, draft approaches with 2-3 parallel
-`haiku` (Flash) lanes, each forced onto a different lens so they do not
-converge: (a) maximum reuse of existing repo patterns, (b) current best
-practice per the web evidence, (c) smallest change that ships the goal.
-Promote one lens to `sonnet` only if that lens is the contested one.
+Flash `general-purpose` lanes, each forced onto a different lens so they
+do not converge: (a) maximum reuse of existing repo patterns, (b)
+current best practice per the web evidence, (c) smallest change that
+ships the goal. A contested lens is settled on the main thread, never
+promoted to a lane.
 
 ```
 Draft one design approach. Lens: [LENS]. Task: [TASK].
@@ -67,6 +68,8 @@ nuanced:
    items labeled; the version gap between the repo and the latest release.
 7. Assumptions — every ≥80%-likely answer you did not ask about, one line
    each, phrased so one "yes" confirms all of them.
+8. Out of scope — one line naming what this design deliberately will not do,
+   so the approval covers the exclusion too.
 
 Keep sections short: small single-purpose units, well-defined interfaces,
 independently testable; follow existing repo patterns; targeted
@@ -80,7 +83,7 @@ and I will revise just that."
 
 Launch these, then write the design message immediately in the same turn.
 Never wait for them. Their results are consumed in the spec turn (§4).
-All three run on `haiku` (Flash).
+All three run on Flash.
 
 - **Claim verifier** — one lane, only if the design rests on web-sourced
   claims. Cited links often work while the page does not support the
@@ -100,14 +103,12 @@ Claims:
 ```
 
 - **Spec pre-draft** — one lane, only when file writes will not raise a
-  permission prompt (acceptEdits, auto, or bypass mode). Use a `fork` if
-  the harness offers one (it inherits the conversation); otherwise
-  `general-purpose` with the design pasted. It writes to
+  permission prompt (acceptEdits, auto, or bypass mode): a writable
+  `general-purpose` lane with the design pasted. It writes to
   `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
-  The lane agents (`glm-explorer`, `glm-researcher`) are read-only,
-  so no lane can write it: the main session writes the pre-draft itself
-  to the same path as the last call of the design turn.
+  The tuned lane agents (`glm-explorer`, `glm-researcher`) are read-only,
+  so they cannot take this lane.
 - **Runner-up approach** — one lane, only when the top two approaches are
   close. It fleshes out the runner-up's sections so "use B instead" costs
   one re-present, not a new exploration.
@@ -120,14 +121,14 @@ Drop to `reasoning_effort: low` here; this turn is formatting and
 targeted edits, not judgment.
 
 1. If a pre-draft lane is still running, stop it. On ZCode `TaskStop`
-   exists (Claude-Code-compatible): stop the lane, then write the
+   exists: stop the lane, then write the
    spec yourself. No stop tool → skip straight to the move below.
    Otherwise move the draft to
    `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
    override the path) and apply the user's corrections and the verifier's
    results with targeted edits. No draft → write the spec from the
-   approved design. Content = the approved design, including Evidence and
-   Assumptions. Use `elements-of-style:writing-clearly-and-concisely` if
+   approved design. Content = the approved design, including Evidence,
+   Assumptions and Out of scope. Use `elements-of-style:writing-clearly-and-concisely` if
    available.
 2. Inline self-review per `spec-document-reviewer-prompt.md` — five
    lenses, one pass, about a minute; fix in place. Escalate to parallel
@@ -152,8 +153,7 @@ only, commit if committing, ask again. Proceed only on approval.
 
 ## 5. Hand-off
 
-Invoke `glm-writing-plans` (the name this port installs under); if no skill
-with that exact name is installed, invoke `glm-writing-plans`. Pass the
+Invoke `glm-writing-plans` (the name this port installs under). Pass the
 spec path as its input: the committed path
 (`docs/specs/YYYY-MM-DD-<topic>-design.md`, or the path user
 preferences chose), or the untracked path when the commit was skipped. No

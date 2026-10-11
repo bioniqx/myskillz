@@ -14,8 +14,8 @@ LINT: `{LINT}`
 
 1. HARD RULE: your only inputs are this brief. Do not open the plan, the spec,
    the lint script or any other file. Do not search the repository. The rules
-   above are the complete lint specification and every file you need is already
-   inlined with real line numbers.
+   above are binding - both the linter-checked and the judgment-checked rules -
+   and every file you need is already inlined with real line numbers.
 2. Write every output file. Several tasks -> put all the writes in ONE message.
 3. Lint. If the write result already shows a `plan-lint:` note, that note IS the
    lint result - do not run the command again. Otherwise run LINT in one shell

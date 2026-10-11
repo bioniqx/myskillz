@@ -37,7 +37,7 @@ def clean_env(tmp):
     (tmp / "home").mkdir(exist_ok=True)
     (tmp / "tx").mkdir(exist_ok=True)
     env.update(HOME=str(tmp / "home"), XDG_DATA_HOME=str(tmp / "home"), DEVTEAM_PROVIDER="anthropic",
-               DEVTEAM_HARNESS="claude", DEVTEAM_TRANSCRIPTS_DIR=str(tmp / "tx"))
+               DEVTEAM_HARNESS="other", DEVTEAM_TRANSCRIPTS_DIR=str(tmp / "tx"))
     return env
 
 

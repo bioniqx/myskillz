@@ -10,8 +10,8 @@ description: >-
   they never say "team", "agents" or "tests". Skip only for a trivial one-touch edit or a pure
   question you can answer by reading.
 allowed-tools:
-  - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py:*)
-  - Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/devteam.py *)
+  - Bash(python3 *devteam.py:*)
+  - Bash(python3 *devteam.py *)
 ---
 
 # Dev Team — GLM edition (v4.0): event-driven, governed fan-out, evidence-gated
@@ -21,7 +21,7 @@ You are the **Conductor**.
 **Bootstrap — put this in front of your FIRST command, once.** If the harness shows a "Base directory for this skill" line, replace `<base dir>` with that path. Otherwise leave it as is.
 
 ```bash
-D=; for d in "${CLAUDE_SKILL_DIR:-<base dir>}" ~/.zcode/skills/glm-dev-team .zcode/skills/glm-dev-team .claude/skills/glm-dev-team ~/.claude/skills/glm-dev-team .agents/skills/glm-dev-team ~/.agents/skills/glm-dev-team; do [ -f "$d/scripts/devteam.py" ] && D=$(cd "$d/scripts" && pwd) && break; done; [ -n "$D" ] || { echo "glm-dev-team: scripts/devteam.py not found in any skills dir; set CLAUDE_SKILL_DIR=<the Base directory for this skill>" >&2; exit 1; }; echo "D=$D"
+D=; for d in "<base dir>" ~/.zcode/skills/glm-dev-team .zcode/skills/glm-dev-team .agents/skills/glm-dev-team ~/.agents/skills/glm-dev-team; do [ -f "$d/scripts/devteam.py" ] && D=$(cd "$d/scripts" && pwd) && break; done; [ -n "$D" ] || { echo "glm-dev-team: scripts/devteam.py not found in any skills dir; use the Base directory for this skill" >&2; exit 1; }; echo "D=$D"
 ```
 
 The output starts with `D=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path**. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. On a miss the snippet prints `glm-dev-team: scripts/devteam.py not found …` and exits 1. Install the skill first (README), and never run `python3 "" …`.
@@ -31,20 +31,20 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
   every finished lane's marker, report file and checkpoint log, merges, queues fixes, sizes the
   fan-out to what the API is serving, dispatches everything newly ready and prints the endgame.
   Never re-derive its work in prose.
-- **Workers** (background subagents; `doctor --fix` installs them with the right model and effort):
+- **Workers** (background subagents; `doctor --fix` installs them user-level — model and effort are pinned
+  in each agent's own frontmatter, the Agent tool takes no per-dispatch model):
 
   | Agent | Model on Z.ai | Effort | Job |
   | --- | --- | --- | --- |
-  | `glm-programmer` | GLM-5.3-Flash (`haiku`) | high | one slice in its own git worktree |
-  | `glm-programmer-lite` | GLM-5.3-Flash | low | `trivial` and non-large `docs` slices |
-  | `glm-programmer` + `model: opus` | GLM-5.3 | high | `risk: high`, `size: large`, and any **retried** slice |
-  | `glm-code-reviewer` | GLM-5.3 (`opus`) | high | full review, read-only |
+  | `glm-programmer-lite` | GLM-5.3-Flash | low | every slice that is not strong: the default lane |
+  | `glm-programmer-strong` | GLM-5.3 | max | `risk: high`, `size: large`, and any **retried** slice |
+  | `glm-code-reviewer` | GLM-5.3 | high | full review, read-only |
   | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | high | correctness-only review / research, root cause |
   | `glm-team-leader` | GLM-5.3 | max | planning, plan adoption, verification; remembers the repo |
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
-  read-only roles, and pre-approve every pinned command. Agents run `permissionMode: dontAsk`: a lane
-  never waits on a prompt; an unapproved command is denied and the agent adapts or reports `Blocked`.
+  read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
+  command is denied and the agent adapts or reports `Blocked`.
 
 **Each turn = read what arrived → ONE engine call → launch everything it printed, as parallel tool
 calls in ONE message → end the turn.** GLM always thinks before answering, so every extra turn,
@@ -52,13 +52,13 @@ tool call or paragraph you write sits on the critical path of every running lane
 
 #### ZCode protocol
 
-The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (8-call cap), and `doctor --harness zcode --fix` installs the seven agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool:
+The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (8-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool:
 
 | ZCode fact | What the Conductor does |
 | --- | --- |
 | `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` — no per-dispatch `model` | Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`; the agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash` — no haiku/sonnet/opus aliases). |
-| No SubagentStop event, and zcode agent files carry no hooks — no stop gate writes the `.done` marker | The wake-up is the lane completion notification. Run `devteam next [<id>]` with the finished slice's id: the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) is the gate, not a marker. |
-| `SendMessage` and `TaskStop` exist (Claude-Code-compatible) | Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`. |
+| No SubagentStop event, but `doctor --harness zcode --fix` installs a Stop hook in `~/.zcode/cli/config.json` that routes programmer Stops through `guard.py` — it writes the `.done`/`.blocked` marker | The wake-up is the lane completion notification. Run `devteam next [<id>]` with the finished slice's id: the Stop gate wrote the marker, and the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) still gates the merge. |
+| `SendMessage` and `TaskStop` exist | Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`. |
 | Installed agents and hook config load only in a new session | After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart). |
 
 The hooks are user-level: `guard.py zcode` routes on the payload's `agent_type` — programmer roles run the edit/bash checks, reviewer/leader/investigator roles the read-only checks, and every foreign role silently allows, so ordinary sessions are never affected.
@@ -116,17 +116,14 @@ in one line what is traded, list every untested slice at the end with an offer t
 
 ## GLM runtime (what v4 adds)
 
-- **Setup once:** `devteam start` runs `doctor --fix`. For Z.ai it writes to `.claude/settings.local.json`
-  (never the token or base URL): alias map `opus`/`sonnet` → `glm-5.3`, `haiku` → `glm-5.3-flash`;
-  `*_SUPPORTED_CAPABILITIES=effort,thinking` (without it Claude Code does not forward effort and GLM runs
-  every call at its default `max`); `API_TIMEOUT_MS=3000000`; `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`;
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`; subagent/Bash timeouts; installs the six agents. **If it
-  changed env or agents, tell the user to restart Claude Code once.** Provider is auto-detected from
-  `ANTHROPIC_BASE_URL` (`DEVTEAM_PROVIDER=glm|anthropic` forces it).
+- **Setup once:** `devteam start` runs `doctor --fix` — it installs the six agents verbatim into
+  `~/.zcode/agents/` (each already carries its final model id and `thoughtLevel`) and merges the guard
+  hooks into `~/.zcode/cli/config.json`. **If it installed or changed agents/hooks, tell the user to open
+  a new ZCode session once.** Provider is auto-detected from `ANTHROPIC_BASE_URL`
+  (`DEVTEAM_PROVIDER=glm|anthropic` forces it).
 - **Governor:** the provider allows only 8 concurrent API calls, so the window never exceeds 8 (leader and
-  reviewer slots included; `doctor --fix` sets `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` and
-  `CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY` to 8; Claude models keep the 64 cap), and the engine measures the
-  rest. The default tier `api` opens the full 8-call window at once; `DEVTEAM_GLM_TIER` or
+  reviewer slots included), and the engine measures the rest. The default tier `api` opens the full
+  8-call window at once; `DEVTEAM_GLM_TIER` or
   `start --tier lite|pro|max` trades width for gentler rate limits (starts 3/6/7, all ceiling 8). The window
   grows as lanes finish and halves when a 429 / 1302 / 1305 / overload shows up in the transcripts.
   `DEVTEAM_PEAK=on` opts into halving the ceiling during the Z.ai peak (Mon–Fri 14:00–18:00 UTC+8 — full
@@ -138,7 +135,9 @@ in one line what is traded, list every untested slice at the end with an offer t
 ## Fast lane (Small)
 
 1. Same turn: start the project test command in the background (baseline); read the manifest + key
-   files (or `devteam probe`); state acceptance criteria and edge cases; ask only blocking questions, in one message.
+   files (or `devteam probe`); state acceptance criteria and edge cases; ask only blocking questions
+   (a dependency to add, a public API/schema change, a money/auth/privacy surface, an irreversible
+   step, or a gate you cannot run), in one message.
 2. **RED** — failing tests (happy path + edges), run only them, confirm right-reason failure, commit `test: RED — <title>`.
 3. **GREEN** — minimum code; affected tests + file-scoped lint/type-check; commit.
 4. **Review** — one `glm-code-reviewer`; prompt = request + criteria + changed files + `git diff <base> HEAD` +
@@ -150,9 +149,12 @@ in one line what is traded, list every untested slice at the end with an offer t
 
 ### Phase 1 — first turn: start everything, then plan
 
-1. Bash, background: the full test command (baseline). Bash: `git status --porcelain` and `devteam probe`
+1. Bash, background: the full test command (baseline — pre-existing failures go into plan `notes`
+   as the baseline, never absorbed into a slice's gate). Bash: `git status --porcelain` and `devteam probe`
    (prints build/test/lint/typecheck incl. the `lint_file`/`typecheck_file` forms — check them). Dirty
-   tracked files → one bundled question (`init` refuses a dirty index). `SendMessage` and `TaskStop` may be deferred tools (Claude Code): if a call fails because the tool is not available, load it with ToolSearch `select:SendMessage,TaskStop`, then retry.
+   tracked files → one bundled question (`init` refuses a dirty index). `SendMessage` and `TaskStop` may
+   be deferred tools: if a call fails because the tool is not available, load it with ToolSearch
+   `select:SendMessage,TaskStop`, then retry.
 2. **Plan at the lowest rung that fits:**
    - **User supplied a plan** (message, `PLAN.md`, spec, ticket): adopt it. Execution-ready → write
      `plan.md` from it. Gaps → `glm-team-leader` in **PLAN ADOPTION** mode. Plans in files the user didn't
@@ -166,6 +168,8 @@ in one line what is traded, list every untested slice at the end with an offer t
 3. `devteam start .claude/dev-team/plan.md` (`--profile …` only if asked; `--tier …` if the user's Z.ai
    plan is known) → doctor, validate, and an Agent line for every ready slice the window allows.
 4. Blocking questions + high-risk assumptions → **one message**, same turn, while the lanes already run.
+   Blocking = a dependency the plan must add, a public API/schema change, a money/auth/privacy
+   surface, an irreversible step, or a pinned gate you cannot run — anything else is an assumption.
    Launch everything `start` printed except slices the open questions would change.
 
 ### Phase 2 — the event loop (until the DAG is exhausted)
@@ -176,8 +180,8 @@ whose marker never arrived.)
 
 Act on each block, in the same turn:
 
-- `=== DISPATCH <id> …` → one `Agent` call: the printed `subagent_type`, `description`, `model:` when
-  present, and the prompt **verbatim and nothing else**.
+- `=== DISPATCH <id> …` → one `Agent` call: the printed `subagent_type`, `description`, and the prompt
+  **verbatim and nothing else** (never add a `model`).
 - `=== REVIEW <rN> …` / `=== INVESTIGATE …` → the printed Agent line(s).
 - `CHECKPOINT … run in the BACKGROUND` → Bash `run_in_background: true` with the printed command.
 - `MERGED` / `RESEARCH RECORDED` / `RED accepted` → nothing (the GREEN phase is already dispatched).
@@ -189,7 +193,8 @@ Act on each block, in the same turn:
 - `LANE DOWN <id>` (API failed after retries) → `SendMessage` that agent `continue`.
 - `SPAWN FAILED → re-queued …` / `RUNTIME LIMIT` / `THROTTLED` → nothing: the engine re-queued and resized.
   `… relaunch these printed Agent lines` → relaunch those (reviewers/leader) when a slot frees. `marked
-  failed … not restarted` → tell the user to restart Claude Code (new agents load at startup), then `retry`.
+  failed … new ZCode session was not opened` → tell the user to open a new session (agents load at
+  startup), then `retry`.
 - `NOT INTEGRATED — no claim recorded` with a `## Worktree:` line → `devteam bind <id> <path>`, `next`.
 - `CONFLICT` → fix footprints in `plan.md`, `devteam retry <id>`.
 - Review `UNKNOWN` (no verdict line) → read the report; `devteam add-fixes <report>` / `review-done <rN>
@@ -214,20 +219,22 @@ Commits after the last passing checkpoint → run one more (background) and wait
 while a review is open or not `APPROVED`; `--force` ships anyway and names them) cleans up, writes
 `summary.md`, prints the diff stat, the last checkpoint, the trade-offs and the concurrency summary.
 Report concisely: what was built, files changed, how it meets the request, review/verification outcome,
-final gate, trade-offs, remaining minor suggestions, `attempt/*` branches the user may delete.
+final gate, trade-offs, high-risk assumptions that stood, remaining minor suggestions, `attempt/*`
+branches the user may delete.
 
 ## Dispatch templates
 
 - **Programmer / glm-investigator / reviewer** — exactly the printed line. Add nothing: identical prompts cache best.
 - **Leader** — `subagent_type: glm-team-leader`, prompt `MODE: PLANNING|PLAN ADOPTION|VERIFICATION.` + the
-  request verbatim (+ plan source / glm-explorer maps / briefing path).
+  request verbatim (+ plan source / explorer maps / briefing path).
 - **Explore** — built-in type, one per area; prompt = the area + what a planner needs.
 - **SendMessage** — `to: <agent id from the notification>`, message = the answer or the exact fix.
 
 ## Plan format (`.claude/dev-team/plan.md`)
 
-Prose for the user (Understanding · Open questions with options/recommended/affects · Assumptions
-safe/high-risk · Dispatch DAG) + one ```json block the engine executes (`devteam plan-template`):
+Prose for the user (Understanding with its out-of-scope line · Open questions with
+options/recommended/affects · Assumptions safe/high-risk · Dispatch DAG) + one ```json block the
+engine executes (`devteam plan-template`):
 
 ```json
 {"request": "…",
@@ -238,6 +245,7 @@ safe/high-risk · Dispatch DAG) + one ```json block the engine executes (`devtea
               "bench": "(perf only)"},
  "contracts": ["C1 <name>: <exact signature/schema> — established in S1, consumed by S2"],
  "notes": "conventions, gotchas, representative test file",
+ "test_globs": [],
  "slices": [{"id": "S1", "title": "walking skeleton", "goal": "…", "kind": "code",
              "size": "small", "deps": [], "files": ["src/…", "tests/…"], "risk": "low",
              "isolation": false, "criteria": ["testable…"], "edge_cases": ["…"],

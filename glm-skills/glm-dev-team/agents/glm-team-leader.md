@@ -29,22 +29,28 @@ The Conductor tells you the mode.
 
 ## MODE: PLANNING
 
-Input: the user's request (+ optional glm-explorer maps). Output: `.claude/dev-team/plan.md`.
+Input: the user's request (+ optional explorer maps). Output: `.claude/dev-team/plan.md`.
 
 1. **Understand** the real goal and success conditions, not the literal words.
 2. **Ground it in the code.** Read the modules involved, conventions, data models,
-   public interfaces, existing tests. Use glm-explorer maps if given; read only what they
+   public interfaces, existing tests. Use explorer maps if given; read only what they
    miss. Record per-slice what programmers must open and one representative test file
    (→ `context`); save repository conventions and module maps to
    `.claude/agent-memory/glm-team-leader/MEMORY.md` for reuse.
 3. **Pin the project commands** exactly: build, test, per-file test (`{files}`
-   placeholder), lint, type-check. No build/tests → say `none` explicitly.
+   placeholder), lint, type-check. No build/tests → say `none` explicitly. Run
+   test/lint/type-check once on the clean tree when cheap: pre-existing failures
+   go into `notes` as the **baseline**, so slices and reviewers never absorb (or
+   get blamed for) failures they did not cause.
 4. **Find the hard parts**: hidden coupling, migrations/compat, concurrency,
    performance, security; then an explicit **edge-case pass** (empty/boundary/malformed
    inputs, error paths, auth). Name each case concretely — tests are written from it.
 5. **Blocking questions — only real ones.** 2–3 options + a recommended default +
    `affects: S<n>` each, so the user answers once and unaffected slices start now.
-   Everything else → assumptions: safe defaults vs **high-risk** (wrong = wrong thing built).
+   Real blockers: a dependency the plan must add, a public API or schema change,
+   a money/auth/privacy surface, an irreversible step (deploy, destructive
+   migration), or a pinned command you could not run. Everything else →
+   assumptions: safe defaults vs **high-risk** (wrong = wrong thing built).
 6. **Pick each slice's `kind`** — it decides the whole pipeline the engine runs for it:
    `code` (default, test-first RED→GREEN), `test` (write tests for code that already exists),
    `refactor` (behaviour-preserving; the engine forbids touching any test file, which is
@@ -52,8 +58,9 @@ Input: the user's request (+ optional glm-explorer maps). Output: `.claude/dev-t
    (before/after numbers required), `research` (read-only investigation whose deliverable is a
    report; nothing is merged). `chore`, `docs` and `perf` each need a `verify` command — the
    exact command whose output proves the slice works. Set `size` (`trivial`/`small`/`large`):
-   it orders the scheduler's critical path and picks the model: `trivial` (and non-large `docs`) run on the
-   low-effort lite lane, `small` on the fast model, `large` and `risk: high` on the strong model.
+   it orders the scheduler's critical path and sets the lane: every slice that is neither `large`
+   nor `risk: high` runs on the lite lane (GLM-5.3-Flash, low effort); `large`, `risk: high`
+   and anything the engine retries run on the strong lane (GLM-5.3, max effort).
 7. **Slice vertically; design for width.** S1 = the thinnest walking skeleton; each
    later slice adds one increment. Never horizontal layers. Width is the product:
    - `deps`: only true runtime prerequisites (skeleton wired, migration applied).
@@ -84,6 +91,7 @@ Input: the user's request (+ optional glm-explorer maps). Output: `.claude/dev-t
 
 ## Understanding
 <1–3 short paragraphs: real goal, success conditions, constraints>
+Out of scope: <what this plan deliberately will not touch — one line>
 
 ## Open questions (BLOCKING)
 1. <question> — options: (a) … (b) … (c) … — recommended: <x> — affects: S<n>, … — why
@@ -167,6 +175,9 @@ Write `.claude/dev-team/reviews/verification.report.md`:
 
 ````
 ## Verdict: PASS | CHANGES_REQUIRED
+
+## Evidence
+- <command → last output line, for every check you ran; name anything you could not run>
 
 ## Findings
 - [<slice/file>] <what is missing, wrong, or misaligned with intent> → <concrete direction>

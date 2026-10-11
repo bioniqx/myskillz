@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""glm-dev-team hook guards (Claude Code hooks; JSON on stdin).
+"""glm-dev-team hook guards (hooks; JSON on stdin).
 
   guard.py edit     PreToolUse Edit|Write|NotebookEdit  (glm-programmer): footprint + frozen tests; a kind:refactor
                     slice may not touch ANY test file. A write that passes every check is returned as an
-                    explicit `allow`, so it never prompts (the glm-programmer runs in `dontAsk` mode).
+                    explicit `allow`, so it never prompts (a PreToolUse allow pre-approves it).
   guard.py bash     PreToolUse Bash                     (glm-programmer): deny history rewriting / integration git /
                     writes to `.slice/`; then `allow` the commands the briefing pinned (`.slice/allow`),
                     read-only git, the project toolchain, footprint-scoped file ops and simple pipelines
-                    of those. Anything else is left to the normal flow (denied in dontAsk, classified in
-                    auto mode) — a background agent must never wait on a prompt nobody will answer.
-  guard.py stop     Stop → SubagentStop                 (glm-programmer): RED committed, GREEN after RED, tree clean,
+                    of those. Anything else is left to the normal permission flow — a lane that cannot
+                    ask gets an explicit deny instead — a background agent must never wait on a prompt
+                    nobody will answer.
+  guard.py stop     Stop                                (glm-programmer): RED committed, GREEN after RED, tree clean,
                     real evidence under `## Gate:` for evidence-gated kinds. When the gate passes it writes a
                     `<root>/.claude/dev-team/slices/<id>.done` marker (or `.blocked`), which is how `devteam
                     next` finds finished programmers without the Conductor relaying ids.
@@ -17,8 +18,8 @@
                     reviews/, research/, agent memory — and plan.md for the glm-team-leader.
   guard.py bash-ro  PreToolUse Bash                     (reviewer/leader/glm-investigator): read-only shell; the plan's
                     test/lint commands are `allow`ed so a reviewer can gather evidence without a prompt.
-  guard.py perm     PermissionRequest (settings.json only, optional): same allow-list as `bash`, in the
-                    PermissionRequest output schema. Not needed when the PreToolUse hooks are installed.
+  guard.py perm     PermissionRequest (optional): same allow-list as `bash`, in the PermissionRequest
+                    output schema. Not needed when the PreToolUse hooks are installed.
 
 Fail-open by design: any internal error allows the action (the integrator re-checks at merge time).
 Deny/allow = JSON on stdout (exit 0). Stop-block = exit 2 with the reason on stderr.
@@ -59,7 +60,7 @@ def deny(reason):
 
 def allow(reason=None):
     """Silent exit = normal permission flow. With a reason = explicit pre-approval: no prompt, no
-    classifier round-trip, and no auto-deny under `permissionMode: dontAsk`."""
+    classifier round-trip, and no auto-deny for a lane that cannot ask."""
     if reason:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                  "permissionDecision": "allow",
@@ -200,7 +201,8 @@ def guard_edit(inp):
     if rel in frozen:
         deny(f"`{rel}` is a test committed in the RED commit and is FROZEN. Make the implementation satisfy it. "
              "If the test itself is wrong, report `Status: Blocked` explaining why — never edit it.")
-    # Every check passed: pre-approve so the write never prompts (dontAsk would otherwise auto-deny it).
+    # Every check passed: pre-approve so the write never prompts (a lane that cannot ask
+    # would otherwise be denied it).
     allow(f"glm-dev-team: `{rel}` is inside the slice footprint" if fp else None)
 
 
@@ -1009,7 +1011,7 @@ def perm_allow(reason):
 
 
 def guard_perm(inp):
-    """Optional settings-level PermissionRequest hook (matcher Bash): same allow-list as `bash`."""
+    """Optional PermissionRequest hook (Bash only): same allow-list as `bash`."""
     if (inp.get("tool_name") or "") != "Bash":
         allow()
     cmd = ((inp.get("tool_input") or {}).get("command") or "").strip()
@@ -1428,7 +1430,7 @@ def oc_patch_paths(text):
 
 
 def oc_capture(check, inp):
-    """Run one Claude-shaped check and return what it printed (it always ends in sys.exit)."""
+    """Run one guard check and return what it printed (it always ends in sys.exit)."""
     buf = io.StringIO()
     old, sys.stdout = sys.stdout, buf
     try:

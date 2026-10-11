@@ -19,7 +19,7 @@ class TestDevteamZcodeCore(unittest.TestCase):
     def test_is_zcode_by_env_override(self):
         with mock.patch.dict(os.environ, {"DEVTEAM_HARNESS": "zcode"}, clear=True):
             self.assertTrue(devteam.is_zcode())
-        with mock.patch.dict(os.environ, {"DEVTEAM_HARNESS": "claude"}, clear=True):
+        with mock.patch.dict(os.environ, {"DEVTEAM_HARNESS": "other"}, clear=True):
             self.assertFalse(devteam.is_zcode())
 
     def test_is_zcode_by_path_detector(self):

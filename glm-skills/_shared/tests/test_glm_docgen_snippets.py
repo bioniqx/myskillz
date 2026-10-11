@@ -196,12 +196,20 @@ class ZcodeFactTests(unittest.TestCase):
                 self.assertTrue(i > 0 and lines[i - 1].strip().startswith("model:"),
                                 "a thoughtLevel line has no model: line above it")
         self.assertGreater(seen, 0, "no thoughtLevel lines in SKILL.md")
-        self.assertIn("model: glm-5.3-flash\n", self.text,
-                      "Appendix A writer frontmatter lacks model: glm-5.3-flash")
-        self.assertIn("model: glm-5.3\n", self.text,
-                      "Appendix A reviewer frontmatter lacks model: glm-5.3")
+        self.assertEqual(
+            self.text.count('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n'), 2,
+            "Appendix A writer and reviewer must both carry the real GLM flash model id "
+            "(agents/ is the source of truth)")
+        self.assertEqual(fence_after(self.text, "agents/glm-doc-writer.md"),
+                         read(ZWRITER).strip(),
+                         "Appendix A writer snapshot must match agents/glm-doc-writer.md exactly")
+        self.assertEqual(fence_after(self.text, "agents/glm-doc-reviewer.md"),
+                         read(ZREVIEWER).strip(),
+                         "Appendix A reviewer snapshot must match agents/glm-doc-reviewer.md exactly")
         self.assertIn("thoughtLevel: high\n", self.text,
-                      "Appendix A reviewer frontmatter lacks thoughtLevel: high")
+                      "Appendix A writer frontmatter lacks thoughtLevel: high")
+        self.assertIn("thoughtLevel: max\n", self.text,
+                      "Appendix A reviewer frontmatter lacks thoughtLevel: max")
 
     def test_appendix_a_points_at_the_auto_installed_zcode_agents(self):
         self.assertIn("agents/", self.text, "no pointer to the agents/ files")

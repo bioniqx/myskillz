@@ -134,7 +134,7 @@ Fix what fails. Then give the user: file path(s), a 5-line summary, the verdict,
 
 - **Fast mode** ("go fast", detailed brief already given): one research sweep + one round of ≤4 questions, then verdict and spec with labeled assumptions. Never skip the verdict — it's the most valuable part.
 - **Verdict only** ("is this idea good?"): Phases 0, 1, 3 → `docs/<slug>/evaluation.md`; then offer to continue to a full spec.
-- **Update existing doc:** read it, compare against the coverage map and template, re-research data older than ~6 months, ask only about gaps, and keep a changelog in Metadata.
+- **Update existing doc:** read it, compare against the coverage map and template, re-research data past its shelf life (~12 months for tech, pricing and AI data, ~2 years for market data), ask only about gaps, and keep a changelog in Metadata.
 
 ## When web access is unavailable
 
