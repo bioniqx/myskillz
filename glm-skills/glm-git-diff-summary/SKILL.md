@@ -44,12 +44,12 @@ Then synthesize from lane bullets + `INTENT` + `NUMSTAT` only. Never Read chunks
 
 ## Output contract (both parts, this order, nothing else)
 
-**Part 1 — Mô tả thay đổi (song ngữ: tiếng Việt trước, tiếng Anh ngay dưới)** for PM/QA/manager, non-technical:
+**Part 1 — Mô tả thay đổi (song ngữ: tiếng Việt trước, tiếng Anh ngay dưới — khối tiếng Anh là bắt buộc)** for PM/QA/manager, non-technical:
 1. One-sentence summary of what the branch delivers, from the player's/operator's side.
 2. Groups named by **user-facing feature** (e.g. "Vòng quay Rush", "Ví tiền") — never file/class/module names.
 3. 1–4 bullets per group: `Trước đây <cũ> → giờ <mới>` or `Thêm/Sửa <người dùng thấy gì> để <lợi ích>`.
 4. **Ảnh hưởng** (only if real): 1–3 lines — what users notice + release risk.
-5. **Then the same summary in English, directly below the Vietnamese block** under the heading `**Change summary (English)**`: translate the one-sentence summary, every group and every bullet — no new facts, no omissions, natural technical English instead of word-for-word.
+5. **Then the same summary in English, directly below the Vietnamese block** under the heading `**Change summary (English)**` — this block is mandatory in every answer, even a one-line or noise-only summary, because non-Vietnamese readers rely on it alone: translate the one-sentence summary, every group and every bullet — no new facts, no omissions, natural technical English instead of word-for-word.
 
 Sentences ≲25 words, everyday words, user/game as subject; unavoidable jargon explained once. Wording: endpoint/API → "màn hình … lấy dữ liệu từ máy chủ" · cache/Redis → "bộ nhớ tạm để chạy nhanh hơn" · race condition → "hai thao tác cùng lúc gây kết quả sai" · refactor → "dọn lại code cho gọn, cách chạy giữ nguyên" · migration → "đổi cấu trúc dữ liệu đang lưu" · null/NPE → "thiếu dữ liệu nên hệ thống báo lỗi".
 
@@ -81,4 +81,4 @@ type(scope): imperative summary ≤72 chars
 - Extra git/bash calls "to double-check" — the header is authoritative.
 - `git diff main HEAD` (misses uncommitted work, pulls in main's newer commits).
 - Reading FAN_OUT chunks in the main context, or launching subagents across several messages.
-- Part 1 as a dev changelog (files, classes, internals); English block above or instead of the Vietnamese one; missing ticket scope; silent stale-base.
+- Part 1 as a dev changelog (files, classes, internals); English block above or instead of the Vietnamese one, or skipped entirely; missing ticket scope; silent stale-base.
