@@ -1,3 +1,17 @@
+# 9.8 (from 9.7) — sibling triage: route misrouted tasks instead of designing them
+
+R1 gains a triage step before the Path line: a request that is actually a raw
+product idea or viability question (`glm-idea-to-spec`), a bug, failing test or
+unexpected behavior (`glm-systematic-debugging`), an already-approved design
+(`glm-writing-plans`) or an already-approved plan (`glm-dev-team`) is announced
+in one line and handed off via the Skill tool with a 2-3 line summary, instead
+of being brainstormed. Guards: routing is not implementation (R0 unchanged), at
+most 3 skills per task counting this one, one hand-off direction per task (the
+target skill owns it and never routes back), lanes and subagents never invoke
+skills, and mid-task the only hand-off point is a path upgrade that reveals the
+task belongs to a sibling. New red flag: "It's misrouted, but I can design it
+anyway."
+
 # 9.7 (from 9.6) — protocol alignment: out-of-scope + costly ambiguity
 
 Design output now always names what it will NOT do: the Bounded message carries a

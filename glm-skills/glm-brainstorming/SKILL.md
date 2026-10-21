@@ -44,6 +44,27 @@ Ceremony scales with the task; R0 never does.
 
 ## R1 — Classify; open your first message with it
 
+Triage before the Path line: a misrouted task gets routed, not
+designed. Match the request against the sibling skills; on a hit,
+announce the hand-off in one line ("Not a design task — handing to X
+because Y") — that line replaces the Path line — then invoke the
+Skill tool for X with a 2-3 line summary (task plus what is already
+known). The target skill's rules own the task from that call.
+
+| The request actually is | Hand off to |
+| --- | --- |
+| Raw product idea, "is it viable/profitable", market research | `glm-idea-to-spec` |
+| Bug, failing test, error, unexpected behavior | `glm-systematic-debugging` |
+| Approved design already in hand | `glm-writing-plans` |
+| Approved plan already in hand | `glm-dev-team` |
+
+Hand-off guards: routing is not implementation, so R0 stands
+unchanged. At most 3 skills loaded per task, counting this one. One
+direction per task — a hand-off target never routes back here. Lanes
+and subagents never invoke skills. Mid-task, the only hand-off point
+is a path upgrade that reveals the task belongs to a sibling: stop,
+say so, route.
+
 First line: `Path: <Spike|Bounded|Architectural> — <one-line reason>`.
 Hidden complexity found mid-task upgrades the path (stop, say so).
 Nothing downgrades. In doubt, go heavier.
@@ -309,6 +330,8 @@ next question.
 - "It grew, but I'm almost done" → hidden complexity upgrades the path.
   Parallel work is never implementation, and a spike's kept code is a new
   request to classify.
+- "It's misrouted, but I can design it anyway" → routing costs one
+  line; designing the wrong task costs the session.
 
 ## Harness fallbacks
 
