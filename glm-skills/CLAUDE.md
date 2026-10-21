@@ -188,6 +188,6 @@ All facts were verified against the local 3.14.4 binary unless marked otherwise.
   `glm-writing-plans`, `glm-idea-to-spec`); `test_all_skills.py` enforces this. Runtime state
   keeps its old unprefixed paths (`.claude/dev-team/`, `.audit/`, `.brainstorm/`, `devteam/<id>`
   branches, `devteam.py`/`audit.py` script names); only install identity is prefixed.
-- Version tags: the debugging and audit ports are `9.0` / v9 and glm-writing-plans is v9; glm-brainstorming is `9.7`
+- Version tags: the debugging and audit ports are `9.0` / v9 and glm-writing-plans is v9; glm-brainstorming is `9.9`
   (per its CHANGELOG), and glm-dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
   one exists.

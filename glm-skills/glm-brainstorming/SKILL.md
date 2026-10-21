@@ -1,6 +1,6 @@
 ---
 name: glm-brainstorming
-description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
 allowed-tools:
   - Bash(sh *context.sh*)
@@ -39,7 +39,9 @@ file outside `.brainstorm/drafts/` until you have told your human
 partner what you intend and they said yes. Every task, every path.
 The one exception is the visual companion, after the user accepts it:
 its screens go to `screen_dir` under `.brainstorm/brainstorm/`.
-Parallel work is read-only: exploration, research, drafting, review.
+Parallel work is read-only: exploration, research, drafting, review
+(a sibling lane's own report file under `.claude/dev-team/`, R11, is
+not implementation).
 Ceremony scales with the task; R0 never does.
 
 ## R1 — Classify; open your first message with it
@@ -55,15 +57,23 @@ known). The target skill's rules own the task from that call.
 | --- | --- |
 | Raw product idea, "is it viable/profitable", market research | `glm-idea-to-spec` |
 | Bug, failing test, error, unexpected behavior | `glm-systematic-debugging` |
+| "Does the code match this spec/PRD", gaps vs a requirements doc | `glm-requirements-code-audit` |
+| Document existing code: README, API reference, guides | `glm-doc-generator` |
+| Summarize branch changes vs main, commit or PR message | `glm-git-diff-summary` |
 | Approved design already in hand | `glm-writing-plans` |
-| Approved plan already in hand | `glm-dev-team` |
+| Approved plan already in hand, or a settled task the user asks to just implement, review, refactor or migrate | `glm-dev-team` |
+
+Mixed request (e.g. "audit against the spec, then redesign the gaps") →
+hand off the first step only and say the rest is a new request after it.
 
 Hand-off guards: routing is not implementation, so R0 stands
 unchanged. At most 3 skills loaded per task, counting this one. One
 direction per task — a hand-off target never routes back here. Lanes
-and subagents never invoke skills. Mid-task, the only hand-off point
-is a path upgrade that reveals the task belongs to a sibling: stop,
-say so, route.
+and subagents never invoke skills. Mid-task hand-off points: a path
+upgrade that reveals the task belongs to a sibling (stop, say so,
+route), and the post-approval exits in R13. Sibling skill not
+installed → say so in one line, point to `sh install-zcode.sh`, and
+continue here only if the task is design-shaped.
 
 First line: `Path: <Spike|Bounded|Architectural> — <one-line reason>`.
 Hidden complexity found mid-task upgrades the path (stop, say so).
@@ -81,7 +91,7 @@ Nothing downgrades. In doubt, go heavier.
   unfamiliar repo. Message: short design (approach, files, testing) + one
   out-of-scope line + Evidence if researched + assumptions + ≤4 forking
   questions. Explicit
-  yes → implement with the normal workflow (TDD applies).
+  yes → implement with the normal workflow (TDD applies), or the R13 exit.
 - **Architectural** — new projects or subsystems, or changes to
   boundaries and interfaces others depend on. Decomposition check first:
   independent subsystems → plan lanes for the first sub-project only.
@@ -97,7 +107,9 @@ Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 Every lane dispatches the installed `glm-explorer` / `glm-researcher`
 agents — Flash at low effort, carried by their frontmatter; never add a
 model parameter. Flash runs ~1.8× faster than the main thread at ~9×
-less cost with 3× coding-plan quota.
+less cost with 3× coding-plan quota. Sibling agents join only per the
+R11 sibling-lane table, when a lane needs a shell (explorer and
+researcher have none).
 
 1. Default EVERY lane to glm-explorer/glm-researcher (Flash): reads,
    greps, symbol hunts, single-fact web checks, doc extraction, claim
@@ -274,6 +286,25 @@ Angle: [ANGLE]. Sibling angles (skip): [SIBLINGS].
 Question: [ONE precise question]
 ```
 
+**Sibling lanes** — agents installed by other glm skills. They count
+toward `lanes=` and run long (dozens of turns, not 4-5), so each needs
+a reason a Code/Web lane cannot meet. Briefings go to `.brainstorm/drafts/`; the
+dev-team guard lets those roles write reports only under
+`.claude/dev-team/research/` or `reviews/`, so name report paths there.
+
+| Agent | Use it when | Prompt |
+| --- | --- | --- |
+| `glm-debug-worker` | One claim about CURRENT behavior that only running a command settles (does test X pass, what does command Y print, is flag Z honored) — Spike probes, Bounded load-bearing assumptions | One hypothesis, the exact command, "FIX: n/a"; it answers inline in 12 lines |
+| `glm-investigator` | Feasibility, dependency/upgrade, security or architecture survey needing git archaeology or read-only builds/tests beyond 4 hops. Spike/Architectural only, max 2 per task | Briefing file: question, angle, sibling angles, report path `.claude/dev-team/research/brainstorm-<slug>-<n>.md` |
+| `glm-spot-reviewer` | After an approved Bounded change touching >1 file or any auth, money, data or concurrency surface (R13) | Briefing file: request, approved design as acceptance criteria, file scope, `git diff` command, test command, report path `.claude/dev-team/reviews/brainstorm-<slug>.md` |
+
+Every other sibling agent (`glm-team-leader`, `glm-programmer-*`,
+`glm-code-reviewer`, `glm-plan-*`, `glm-rca-*`, `glm-doc-*`) needs its
+owner skill's engine (worktrees, script-built briefs, run state):
+reach it only by handing off to that skill, never by direct dispatch.
+Sibling agent not installed → its Code-lane equivalent (`glm-explorer`),
+or the main thread runs the one command itself.
+
 **Merge:** scratch-list the `path:line` facts and cited claims.
 Conflicts → one direct check next round. Every UNKNOWN or UNVERIFIED
 becomes an assumption or one of the ≤4 questions, never a new exploration
@@ -290,6 +321,22 @@ self-review + commit if allowed (`architectural.md` §4) in one turn, then the s
 separate "I wrote the spec" message. A visual-companion offer rides with
 the first question batch. Serialize only when one answer determines the
 next question.
+
+## R13 — Post-approval exits
+
+The approved deliverable picks the next owner; announce it in one line.
+
+- **Architectural** → `glm-writing-plans` with the spec path
+  (`architectural.md` §5). Nothing else.
+- **Bounded**, ≤3 files, one flow → implement here (TDD applies); then
+  the `glm-spot-reviewer` lane if R11 says so, fix its BLOCKER/MAJOR
+  findings, report done with the test line.
+- **Bounded** that turned out to need >3 files or parallel slices →
+  hand the approved design to `glm-dev-team` instead of implementing.
+- **Spike** → the recommendation ends the task; building on it is a
+  new request to classify.
+- Done and the user wants a commit or PR message → `glm-git-diff-summary`
+  (counts toward the 3-skill cap).
 
 ## Checklist (∥ = one concurrent message)
 
@@ -332,6 +379,10 @@ next question.
   request to classify.
 - "It's misrouted, but I can design it anyway" → routing costs one
   line; designing the wrong task costs the session.
+- "glm-programmer can just build the bounded change" → sibling agents
+  outside the R11 table need their owner's engine; hand off instead.
+- "An investigator is deeper, use it everywhere" → a 60-turn agent per
+  lane; only when a shell or >4 hops is required, max 2.
 
 ## Harness fallbacks
 

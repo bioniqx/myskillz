@@ -1,3 +1,22 @@
+# 9.9 (from 9.8) — orchestrate every sibling skill and agent
+
+R1 triage now covers all seven sibling skills: `glm-requirements-code-audit`
+(code vs spec), `glm-doc-generator` (document existing code) and
+`glm-git-diff-summary` (branch summary, commit/PR message) join the table, and
+`glm-dev-team` also takes settled tasks the user asks to just implement,
+review, refactor or migrate. Mixed requests hand off the first step only; a
+missing sibling is reported with the install command. R11 adds a sibling-lane
+table: `glm-debug-worker` for a claim about current behavior that only a
+command settles, `glm-investigator` (max 2, Spike/Architectural) for surveys
+needing a shell or more than 4 hops, `glm-spot-reviewer` after an approved
+Bounded change touching more than one file or a sensitive surface. Briefings
+go to `.brainstorm/drafts/`, reports to the paths the dev-team guard allows.
+Every other sibling agent is reached only through its owner skill. New R13
+fixes the post-approval exits (Architectural to glm-writing-plans, small
+Bounded implemented here plus spot review, larger Bounded to glm-dev-team,
+optional glm-git-diff-summary at the end). Two
+new red flags.
+
 # 9.8 (from 9.7) — sibling triage: route misrouted tasks instead of designing them
 
 R1 gains a triage step before the Path line: a request that is actually a raw
