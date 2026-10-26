@@ -41,7 +41,7 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix installs the zcode
 python3 <skill>/scripts/<tool>.py setup
 
 # Install all eight skills into ZCode: skills to ~/.zcode/skills/<name> and every agents/*.md
-# verbatim to ~/.zcode/agents (16 agents, overwritten, nothing rewritten — the agent files already
+# verbatim to ~/.zcode/agents (17 agents, overwritten, nothing rewritten — the agent files already
 # carry final ZCode frontmatter). Guard hooks are NOT configured by the installer; they are opt-in:
 #   python3 glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
 # (also re-verifies its six agents against their source files; merges the hooks into
@@ -113,7 +113,7 @@ Every port applies the same set of model facts; each skill with a tuning surface
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
   ZCode agents live in `agents/` with final ZCode frontmatter; `install-zcode.sh` copies every skill's
-  `agents/*.md` verbatim (16 agents in all, including glm-debug-worker and the glm-writing-plans trio),
+  `agents/*.md` verbatim (17 agents in all, including glm-debug-worker and the glm-writing-plans trio),
   and `plan_tool.py setup --harness zcode` / `devteam.py doctor --harness zcode --fix` copy theirs the
   same way. The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task

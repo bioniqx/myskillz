@@ -8,7 +8,7 @@ GLM_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SCRIPT = os.path.join(GLM_ROOT, "install-zcode.sh")
 SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-git-diff-summary", "glm-idea-to-spec", "glm-requirements-code-audit",
           "glm-systematic-debugging", "glm-writing-plans"]
-AGENTS = ["glm-code-reviewer", "glm-debug-worker", "glm-doc-reviewer", "glm-doc-writer", "glm-explorer", "glm-investigator",
+AGENTS = ["glm-code-reviewer", "glm-debug-worker", "glm-doc-reviewer", "glm-doc-writer", "glm-drafter", "glm-explorer", "glm-investigator",
           "glm-plan-reviewer", "glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-programmer-lite",
           "glm-programmer-strong", "glm-rca-investigator", "glm-rca-verifier", "glm-researcher", "glm-spot-reviewer", "glm-team-leader"]
 ALLOWED_KEYS = {"name", "description", "model", "thoughtLevel", "color", "tools", "disallowedTools",

@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
-"""Deterministic verifier for glm-brainstorming: lane output and specs.
+"""Deterministic verifier for glm-brainstorming.
 
-GLM (Flash above all) invents plausible path:line citations, URLs, dates and quotes. This script
-checks what a machine can check, in one Bash call, so the main thread cites only what survived.
+GLM invents path:line citations, URLs, dates and quotes, drops rules in a long
+prompt, and reads soft agreement as approval. This script checks what a machine
+can check, in one Bash call.
 
-  check.py cites [--root DIR]   stdin: explorer FINDINGS lines `path:line - fact - "snippet"`
-  check.py web                  stdin: researcher CLAIMS lines `claim - tier - URL - date - "quote"`
-  check.py spec PATH            lint a written spec (headings, placeholders, evidence format)
+  check.py cites [--root DIR]          stdin: FINDINGS lines
+  check.py web                         stdin: CLAIMS lines
+  check.py spec PATH                   lint a written spec
+  check.py route                       stdin: the user request. Always exit 0.
+  check.py send [--root DIR] [--approved]
+                                       stdin: the draft about to be shown
+  check.py approve --asked design|other
+                                       stdin: the human reply
 
-Read-only, stdlib only. Exit 0 = nothing wrong, 1 = at least one BAD / DROP / FAIL, 2 = usage error.
+Read-only, stdlib only. Exit 0 = nothing wrong, 1 = a BAD / DROP / FAIL / no, 2 = usage error.
 """
 import argparse
 import datetime
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -37,6 +44,46 @@ REQUIRED = [("Architecture", r"architecture"), ("Components", r"components?"), (
             ("Out of scope", r"out[ -]of[ -]scope|non-goals?")]
 HEADING_RE = re.compile(r"^(#{1,4})\s*(?:\d+[.)]?\s*)?(.+?)\s*#*\s*$")
 LABELS = ("ANSWER:", "CONFLICTS:", "VERSION_NOTES:", "UNVERIFIED:", "FINDINGS:", "PATTERNS:", "RISKS:", "UNKNOWN:")
+DASH = "(?:\u2014|--|-)"
+HAND_OFFS = (
+    "glm-idea-to-spec", "glm-systematic-debugging", "glm-requirements-code-audit",
+    "glm-doc-generator", "glm-git-diff-summary", "glm-writing-plans", "glm-dev-team",
+)
+CODE_LANGS = {
+    "python", "py", "javascript", "js", "typescript", "ts", "tsx", "jsx", "go",
+    "rust", "rs", "java", "ruby", "rb", "php", "bash", "sh", "zsh", "sql",
+    "csharp", "cs", "cpp", "c", "swift", "kotlin",
+}
+FENCE_MAX = 40
+FEATURE_RE = re.compile(r"\b(add|build|implement|create|design)\b")
+ROUTE_RULES = (
+    ("glm-idea-to-spec", re.compile(
+        r"\b(is (?:it|this)(?: \w+){0,4} viable|business model|make money|product idea|y tuong san pham)\b")),
+    ("glm-systematic-debugging", re.compile(
+        r"\b(traceback|stack ?trace|stacktrace|failing tests?|tests? fails?|flaky|regression|bugs?|bi loi)\b")),
+    ("glm-requirements-code-audit", re.compile(
+        r"\b(match the spec|match this spec|requirements traceability|gaps between spec|doi chieu spec)\b")),
+    ("glm-doc-generator", re.compile(
+        r"\b(write|update|draft) (the |a )?(readme|api reference|api docs|user guide|onboarding guide)\b")),
+    ("glm-git-diff-summary", re.compile(
+        r"\b(commit message|pr message|pull request message|what did this branch|"
+        r"summarize (the |this )?branch|tom tat thay doi|so sanh voi main)\b")),
+    ("glm-writing-plans", re.compile(
+        r"\b(write the (implementation )?plan|approved design|design is approved|thiet ke da duyet|viet plan)\b")),
+    ("glm-dev-team", re.compile(
+        r"\b(implement the (approved )?plan|plan is approved|just implement)\b")),
+)
+SUPPRESS_IF_FEATURE = {"glm-doc-generator", "glm-git-diff-summary"}
+APPROVE_START = re.compile(
+    r"^(?:please |i |ok |okay |da |vang |anh )*"
+    r"(approved|approve with my answers below|approve|yes|dong y|duyet|"
+    r"lam di|trien khai di|trien khai|go ahead|ship it)\b")
+REJECT_RE = re.compile(
+    r"\b(revise|not yet|khong duyet|khong dong y|do not implement|don't implement|chua duyet)\b"
+    r"|^wait\b|^stop\b|^khoan\b|^chua\b")
+SOFT_RE = re.compile(
+    r"^(sounds good|looks good|lgtm|ok|okay|on|on roi|duoc|tot|hay|nice|great|"
+    r"sure|good|nghe duoc|ok luon|fine|on do|duoc do)[.! ]*$")
 
 
 def today_of(a):
@@ -56,65 +103,83 @@ def last_quote(line):
 
 # ----------------------------------------------------------------------------- cites
 
-def check_cites(a):
-    root = Path(a.root).resolve()
+def fold_ascii(text):
+    text = text.replace("\u0111", "d").replace("\u0110", "D")
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    return text.lower()
+
+
+def eval_cite(root, cache, path, lo, hi, ranged, snippet, sole):
+    """Return (status, message). status is ok, bad, unchecked, or skip."""
+    ref = f"{path}:{lo}" + (f"-{hi}" if ranged else "")
+    target = (root / path).resolve()
+    if path.rsplit(".", 1)[-1].lower() in TLD_LIKE and not target.exists():
+        return "skip", None
+    try:
+        inside = target.is_relative_to(root)
+    except ValueError:
+        inside = False
+    if not inside:
+        return "bad", f"BAD {ref} - path leaves the repository root"
+    if not target.is_file():
+        return "bad", f"BAD {ref} - file not found"
+    if target not in cache:
+        try:
+            cache[target] = target.read_text(errors="replace").splitlines()
+        except OSError as e:
+            cache[target] = None
+            return "bad", f"BAD {ref} - unreadable ({e.__class__.__name__})"
+    lines = cache[target]
+    if lines is None:
+        return "bad", None
+    if lo < 1 or hi < lo or hi > len(lines):
+        return "bad", f"BAD {ref} - line out of range (file has {len(lines)} lines)"
+    if not sole or not snippet:
+        return "unchecked", (f"NOQUOTE {ref} - exists, but no single quoted snippet to verify; "
+                             "label it unverified")
+    want = norm(snippet.rstrip(".").rstrip("\u2026")).strip()
+    window = norm(" ".join(lines[max(0, lo - 4):hi + 3]))
+    if want and want in window:
+        return "ok", f"OK {ref}"
+    elsewhere = next((i + 1 for i, ln in enumerate(lines) if want and want in norm(ln)), None)
+    extra = f" (it appears at line {elsewhere}: use that line)" if elsewhere else " (not found in the file)"
+    return "bad", f"BAD {ref} - snippet not within 3 lines of it" + extra
+
+
+def walk_cites(text, root):
+    """Yield (line, status, message) for each citation. status skip is omitted."""
     cache = {}
-    ok = bad = unchecked = 0
     seen = set()
-    for raw in sys.stdin.read().splitlines():
+    for raw in text.splitlines():
         cites = [m for m in CITE_RE.finditer(raw)]
         snippet = last_quote(raw)
+        sole = len(cites) == 1
         for m in cites:
             path, lo = m.group(1), int(m.group(2))
             hi = int(m.group(3)) if m.group(3) else lo
-            key = (path, lo, hi, snippet if len(cites) == 1 else "")
+            key = (path, lo, hi, snippet if sole else "")
             if key in seen:
                 continue
             seen.add(key)
-            ref = f"{path}:{lo}" + (f"-{hi}" if m.group(3) else "")
-            target = (root / path).resolve()
-            if path.rsplit(".", 1)[-1].lower() in TLD_LIKE and not target.exists():
-                continue                       # `example.com:443` is a host, not a citation
-            try:
-                inside = target.is_relative_to(root)
-            except ValueError:
-                inside = False
-            if not inside:
-                bad += 1
-                print(f"BAD {ref} - path leaves the repository root")
+            status, msg = eval_cite(root, cache, path, lo, hi, bool(m.group(3)), snippet, sole)
+            if status == "skip":
                 continue
-            if not target.is_file():
-                bad += 1
-                print(f"BAD {ref} - file not found")
-                continue
-            if target not in cache:
-                try:
-                    cache[target] = target.read_text(errors="replace").splitlines()
-                except OSError as e:
-                    cache[target] = None
-                    print(f"BAD {ref} - unreadable ({e.__class__.__name__})")
-            lines = cache[target]
-            if lines is None:
-                bad += 1
-                continue
-            if lo < 1 or hi < lo or hi > len(lines):
-                bad += 1
-                print(f"BAD {ref} - line out of range (file has {len(lines)} lines)")
-                continue
-            if len(cites) != 1 or not snippet:
-                unchecked += 1
-                print(f"NOQUOTE {ref} - exists, but no single quoted snippet to verify; label it unverified")
-                continue
-            want = norm(snippet.rstrip(".").rstrip("…")).strip()
-            window = norm(" ".join(lines[max(0, lo - 4):hi + 3]))
-            if want and want in window:
-                ok += 1
-                print(f"OK {ref}")
-                continue
-            elsewhere = next((i + 1 for i, ln in enumerate(lines) if want and want in norm(ln)), None)
+            yield raw, status, msg
+
+
+def check_cites(a):
+    root = Path(a.root).resolve()
+    ok = bad = unchecked = 0
+    for _raw, status, msg in walk_cites(sys.stdin.read(), root):
+        if msg:
+            print(msg)
+        if status == "ok":
+            ok += 1
+        elif status == "unchecked":
+            unchecked += 1
+        elif status == "bad":
             bad += 1
-            print(f"BAD {ref} - snippet not within 3 lines of it"
-                  + (f" (it appears at line {elsewhere}: use that line)" if elsewhere else " (not found in the file)"))
     print(f"RESULT cites ok={ok} bad={bad} unchecked={unchecked}")
     return 1 if bad else 0
 
@@ -256,6 +321,181 @@ def check_spec(a):
     return 1 if fails else 0
 
 
+# ----------------------------------------------------------------------------- route, send, approve
+
+def visible_lines(text):
+    """Lines outside fenced blocks, plus (lang, non-empty-count) for each fence."""
+    visible, fences = [], []
+    fence = False
+    lang, buf = "", []
+    for ln in text.splitlines():
+        stripped = ln.strip()
+        if stripped.startswith("```"):
+            if not fence:
+                fence = True
+                lang = stripped[3:].strip().split()[0].lower() if stripped[3:].strip() else ""
+                buf = []
+            else:
+                fence = False
+                fences.append((lang, sum(1 for x in buf if x.strip())))
+            continue
+        if fence:
+            buf.append(ln)
+        else:
+            visible.append(ln)
+    if fence:
+        fences.append((lang, sum(1 for x in buf if x.strip())))
+    return visible, fences
+
+
+def line_kind(first):
+    """(kind, path_or_skill). kind is path, unchanged, handoff, or bad."""
+    m = re.match(r"Path: (Spike|Bounded|Architectural) " + DASH + r" \S", first)
+    if m:
+        return "path", m.group(1)
+    m = re.match(r"Path unchanged: (Spike|Bounded|Architectural)\b", first)
+    if m:
+        return "unchanged", m.group(1)
+    m = re.match(r"Not a design task " + DASH + r" handing to (glm-[a-z0-9-]+) because \S", first)
+    if m:
+        return "handoff", m.group(1)
+    return "bad", ""
+
+
+def url_problem(line, today):
+    if not URL_RE.search(line):
+        return None
+    low = line.lower()
+    if "unverified" in low or "repo-internal" in low:
+        return None
+    urls = URL_RE.findall(line)
+    if not urls[0].lower().startswith("https://"):
+        return "evidence URL is not https; use https or label the line unverified"
+    dm = DATE_RE.search(line)
+    if not dm:
+        return "evidence URL has no YYYY-MM-DD date and is not labelled unverified"
+    try:
+        when = datetime.date(int(dm.group(1)), int(dm.group(2)), int(dm.group(3)))
+    except ValueError:
+        return f"{dm.group(0)} is not a real date"
+    if when > today:
+        return f"date {when} is in the future"
+    return None
+
+
+def check_route(a):
+    text = fold_ascii(sys.stdin.read())
+    feature = FEATURE_RE.search(text)
+    strong_debug = re.compile(
+        r"\b(traceback|stack ?trace|stacktrace|failing tests?|tests? fails?|flaky|regression|bi loi)\b")
+    bug_denied = re.search(r"\bno\b.{0,24}\bbugs?\b", text) and not strong_debug.search(text)
+    hits = []
+    for name, rx in ROUTE_RULES:
+        if name in SUPPRESS_IF_FEATURE and feature:
+            continue
+        if name == "glm-systematic-debugging" and bug_denied:
+            continue
+        if rx.search(text):
+            hits.append(name)
+    if not hits:
+        print("ROUTE none")
+        print("RESULT route name=none")
+        return 0
+    print(f"ROUTE {hits[0]}")
+    for extra in hits[1:]:
+        print(f"ALSO {extra}")
+    print(f"RESULT route name={hits[0]}")
+    return 0
+
+
+def check_send(a):
+    text = sys.stdin.read()
+    fails = []
+    if not text.strip():
+        fails.append("FAIL draft - empty; write the message first")
+    else:
+        first = text.splitlines()[0].strip()
+        kind, value = line_kind(first)
+        if kind == "bad":
+            fails.append(
+                "FAIL path - line 1 must be 'Path: Spike|Bounded|Architectural - reason', "
+                "'Path unchanged: <path>', or 'Not a design task - handing to glm-<skill> because <reason>'")
+            value = ""
+        elif kind == "handoff" and value not in HAND_OFFS:
+            fails.append(f"FAIL path - unknown hand-off target {value}")
+        visible, fences = visible_lines(text)
+        body = "\n".join(visible)
+        questions = URL_RE.sub(" ", re.sub(r"(?i)approve this design\?", " ", body)).count("?")
+        if questions > 4:
+            fails.append(f"FAIL questions - {questions} question marks (max 4); merge the rest into assumptions")
+        design = re.search(r"(?i)approve this design\?", body) is not None
+        if design:
+            low = body.lower()
+            if not re.search(r"out of scope|out-of-scope|non-goal", low):
+                fails.append("FAIL scope - a design message needs an Out of scope line")
+            if not re.search(r"assum(e|ing|ption)", low):
+                fails.append("FAIL assumptions - a design message needs an assumption line")
+            if value == "Architectural":
+                n = len(re.findall(r"(?m)^APPROACH\s+[1-3]\s*:", text))
+                if n < 2:
+                    fails.append(
+                        f"FAIL approaches - {n} APPROACH line(s); Architectural needs 2 or 3, "
+                        "each 'APPROACH 1: ...' on its own line")
+            scrub = re.sub(r"not (?:a |an )?new (?:project|subsystem)\b", " ", low)
+            if value == "Bounded" and re.search(r"new (project|subsystem)\b", scrub):
+                fails.append("FAIL class - Bounded draft says 'new project' or 'new subsystem'; "
+                             "upgrade the path to Architectural")
+        root = Path(a.root).resolve()
+        for raw, status, msg in walk_cites("\n".join(visible), root):
+            if "unverified" in raw.lower():
+                continue
+            if status == "ok":
+                continue
+            if status == "unchecked":
+                fails.append(f"FAIL cite {msg.split(' - ', 1)[0].replace('NOQUOTE ', '')} "
+                             "- no quote; re-read it or label the line unverified")
+            elif status == "bad" and msg:
+                fails.append("FAIL cite " + msg[4:])
+            elif status == "bad":
+                fails.append("FAIL cite - unreadable file")
+        today = today_of(a)
+        for ln in visible:
+            why = url_problem(ln, today)
+            if why:
+                fails.append(f"FAIL evidence - {why}: {ln.strip()[:70]}")
+        if not a.approved:
+            for lang, count in fences:
+                if lang in CODE_LANGS and count > FENCE_MAX:
+                    fails.append(
+                        f"FAIL fence - {count}-line {lang} block is implementation; "
+                        "remove it until approve prints yes")
+    for item in fails:
+        print(item)
+    print(f"RESULT send fail={len(fails)}")
+    return 1 if fails else 0
+
+
+def check_approve(a):
+    if a.asked != "design":
+        print("RESULT approve no - a reply to a side question is not approval")
+        return 1
+    folded = fold_ascii(sys.stdin.read()).strip()
+    if not folded:
+        print("RESULT approve no - empty reply")
+        return 1
+    if REJECT_RE.search(folded):
+        print("RESULT approve no - the reply asks for a revision")
+        return 1
+    if SOFT_RE.fullmatch(folded):
+        print("RESULT approve no - soft agreement is not approval")
+        return 1
+    if re.fullmatch(r"1[.)]?", folded) or APPROVE_START.match(folded):
+        print("RESULT approve yes")
+        return 0
+    print("RESULT approve no - no approval token at the start of the reply")
+    return 1
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="check.py", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -268,7 +508,16 @@ def main(argv=None):
     ps = sp.add_parser("spec")
     ps.add_argument("path")
     ps.set_defaults(fn=check_spec)
-    for q in (pc, pw, ps):
+    pr = sp.add_parser("route")
+    pr.set_defaults(fn=check_route)
+    pe = sp.add_parser("send")
+    pe.add_argument("--root", default=".")
+    pe.add_argument("--approved", action="store_true")
+    pe.set_defaults(fn=check_send)
+    pa = sp.add_parser("approve")
+    pa.add_argument("--asked", required=True, choices=("design", "other"))
+    pa.set_defaults(fn=check_approve)
+    for q in (pc, pw, ps, pr, pe, pa):
         q.add_argument("--today", help=argparse.SUPPRESS)
     a = p.parse_args(argv)
     try:

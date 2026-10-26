@@ -28,11 +28,13 @@ without spending a turn.
 
 **Approaches (top).** 2-3, each with: a one-line summary, 2-3 trade-offs,
 what it would break, and the evidence line that most supports or
-undermines it. Lead with your recommendation and why. YAGNI: cut
+undermines it. Put each on its own line as `APPROACH 1:` (the recommendation),
+`APPROACH 2:`, and `APPROACH 3:` only when a real third exists.
+`check.py send` fails an Architectural draft with fewer than 2. YAGNI: cut
 unrequested features.
 
 For large or contested problems, draft approaches with 2-3 parallel
-Flash `general-purpose` lanes, each forced onto a different lens so they
+`glm-drafter` lanes (built-in general-purpose if that agent is not installed), each forced onto a different lens so they
 do not converge: (a) maximum reuse of existing repo patterns, (b)
 current best practice per the web evidence, (c) smallest change that
 ships the goal. A contested lens is settled on the main thread, never
@@ -44,9 +46,9 @@ Constraints: [CONSTRAINTS]. Key findings: [FINDINGS]. Evidence: [EVIDENCE LINES]
 Rules:
 1 Stay inside your lens even if another looks better; siblings cover the others.
 2 No tool calls unless a fact is missing; then 2 at most.
-3 Output only the five labels below. No preamble, no headings. 150 words max.
+3 Output only the five labels below. No preamble, no headings. 150 words max. Counts are maximums.
 ARCHITECTURE: 2-3 sentences
-COMPONENTS: 3 lines `name — one-line responsibility`
+COMPONENTS: up to 3 lines `name — one-line responsibility`; fewer is fine
 TRADEOFFS: top 3, one line each
 BREAKS: what this would break | nothing
 RELIES_ON: the evidence lines this depends on
@@ -77,15 +79,16 @@ Keep sections short: small single-purpose units, well-defined interfaces,
 independently testable; follow existing repo patterns; targeted
 improvements only where an existing problem affects this work.
 
-**Close with one approval ask** (the first AskUserQuestion item if used):
-"Approve as-is, answer the questions, or name the section that is wrong
-and I will revise just that."
+**Close with the R6 ask**, including the exact line `Approve this design?`
+so one reply both answers and approves. `check.py send` treats that line
+as the design message and requires Out of scope and Assumptions.
 
 ## 3. Leave lanes running while the user reads (same turn as §2)
 
 Launch these, then write the design message immediately in the same turn.
 Never wait for them. Their results are consumed in the spec turn (§4).
-All three run on Flash.
+Claim verifier and runner-up dispatch `glm-drafter` (Flash, low).
+Spec pre-draft stays `general-purpose` because it writes.
 
 - **Claim verifier** — one lane, only if the design rests on web-sourced
   claims. Cited links often work while the page does not support the
@@ -109,7 +112,7 @@ Claims:
   `general-purpose` lane with the design pasted. It writes to
   `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
   commit, and returns only the path. A rejected design is overwritten later.
-  The tuned lane agents (`glm-explorer`, `glm-researcher`) are read-only,
+  `glm-explorer`, `glm-researcher` and `glm-drafter` are read-only,
   so they cannot take this lane.
 - **Runner-up approach** — one lane, only when the top two approaches are
   close. It fleshes out the runner-up's sections so "use B instead" costs

@@ -80,12 +80,13 @@ Vague boundaries are the main cause of duplicated work between lanes.
   Load deferred tools first: ToolSearch goes in this message, and batched
   TaskCreate joins only if it is already loaded. State the call count
   first (SKILL.md R4) and then make every one of them.
-- Shared prompt block first and byte-identical across lanes of the same
-  type and model, so siblings hit the prefix cache. Slice-specific lines
-  last.
-- Model per lane: none — every lane dispatches glm-explorer/glm-researcher
-  (Flash, low effort; SKILL.md R2); work whose conclusion picks the
-  approach stays on the main thread.
+- The shared prefix is the agent file, identical for every sibling of
+  that type. The user message is only the R11 slice, question last.
+  Do not paste the lane rules again.
+- Model per lane: none — code lanes dispatch glm-explorer, web lanes
+  glm-researcher, drafts and the claim verifier glm-drafter (Flash, low
+  effort, pinned in the agent file; SKILL.md R2). Work whose conclusion
+  picks the approach stays on the main thread.
 - **Lanes over the cap → waves.** Dispatch the highest-value lanes first
   (the ones that can change the approach set), then refill in batches as
   completions arrive. Each wake-up costs a main-model turn, so never

@@ -1,3 +1,30 @@
+# 10.1 (from 10.0) — gates the model was dropping, checked by script
+
+GLM-5.3 drops rules that sit in the middle of a long prompt, treats a
+private restatement as optional, and fabricates lines to satisfy a minimum
+count. The checks that used to be prose now fail closed in `check.py`:
+
+- `route` catches an obvious misroute (bug, viability, commit message,
+  approved plan) and is binding when it names a skill.
+- `send` rejects a draft whose first line is not the Path line, a design
+  that omits assumptions or out of scope, an Architectural draft with
+  fewer than two `APPROACH N:` lines, a citation that does not match the
+  file, an undated URL, or a code fence over 40 lines.
+- `approve --asked design` returns yes only for an approval token at the
+  start of the reply. "sounds good", "ok", and a reply to a side question
+  return no.
+- Lane templates no longer demand 3-6 findings or 2-6 claims. Zero is valid.
+- `glm-explorer`, `glm-researcher` and new `glm-drafter` pin Flash at
+  `thoughtLevel: low`. Approach drafts, the claim verifier and the runner-up
+  use `glm-drafter` instead of the session model. `context.sh` prints the
+  three gates at the top of the block the model just received.
+- Lane rules have one home, the agent file. The dispatch prompt is only
+  the slice (task, root, date, angle, question). A missing agent is the
+  one case that pastes the agent body in front of that slice.
+- R14 no longer restates the checker. `check.py` prints the repair, and
+  the skill only says when to run each mode, so the body stays under the
+  500-line point where GLM starts dropping rules in the middle.
+
 # 10.0 (from 9.9) — mechanical verification, hard-rule header, tables to rules
 
 New `scripts/check.py` (stdlib-only, read-only) and R14, "Verify before you

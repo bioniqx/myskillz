@@ -10,6 +10,9 @@ export GIT_OPTIONAL_LOCKS=0
 skill_dir=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
 echo "date: $(date +%F)   cwd: $(pwd)"
 echo "skill_dir: $skill_dir"
+echo "gate: check.py send must print fail=0 before you show a message (R14)"
+echo "gate: round 1 includes check.py route; ROUTE other than none is binding (R1)"
+echo "gate: no write outside .brainstorm/drafts/ until check.py approve --asked design prints RESULT approve yes"
 
 # --- runtime: harness, caps ------------------------------------------------
 harness=unknown

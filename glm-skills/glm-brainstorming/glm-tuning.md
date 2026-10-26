@@ -33,9 +33,15 @@ verdict picks the approach.
 
 ## 2. Runtime setup
 
-The installed agent files already carry the real model ids and
-`thoughtLevel`, so no runtime model mapping is needed. Calling the GLM
-API directly: `temperature: 1`, `top_p: 0.95`, `reasoning_effort`
+`glm-explorer`, `glm-researcher` and `glm-drafter` pin
+`model: "account:zai-individual-coding-plan/GLM-5.3-Flash"` and
+`thoughtLevel: low`. ZCode honors `thoughtLevel` only together with a
+model id; without both, a lane inherits the session model and effort
+`max` (the failure behind slow, over-thought lanes). Recent ZCode
+sessions on this machine use the individual plan, so that prefix is the
+pin. The team-plan account is a second login, not the lane default.
+
+Calling the GLM API directly: `temperature: 1`, `top_p: 0.95`, `reasoning_effort`
 per R3, `thinking.clear_thinking: false` for agent use, and `stream: true`
 with `tool_stream: true`. A long request timeout covers always-on
 thinking at effort `max`. R7's 8-lane hard max is the provider's
@@ -68,6 +74,12 @@ coding tasks.
 | A lane hit its turn limit and returned nothing | The report was written after the last allowed turn | `maxTurns` has slack over the tool-call cap, and the lane rule says "write the report now" after 3-4 turns |
 | A casual reply was treated as approval | A "sounds good" to a side question or a lane result read as a yes | Hard rule 1 (only a human reply to the design message counts) plus the "Approve this design?" item in every ask |
 | Lane output cited without a check | Lane text looks authoritative once merged | R14: run `check.py` in round 2, before anything is cited |
+| The design message cites a path the lane never proved | The model rewrites citations after the check | `check.py send` re-verifies every path:line in the draft |
+| "sounds good" started implementation | Soft agreement read as a yes | `check.py approve`; only an approval token at the start of the reply passes |
+| A bug report got a design | Misroute | `check.py route` in round 1; `ROUTE` other than `none` is binding |
+| A lane invented findings to hit a minimum count | "3-6 lines" forces fabrication | The agent file says up to 6, and zero is valid |
+| The path was forgotten by message 3 | Long-horizon drift; private restatement does not hold | Every message line 1 is Path or Path unchanged; `send` enforces it |
+| Lanes ran on the session model at effort max | Agent frontmatter had no model id, so thoughtLevel was ignored | The three lane files pin Flash and `thoughtLevel: low` |
 
 ## 5. Evidence
 
@@ -99,7 +111,7 @@ instruction; R4 is written to hold either way.
 
 Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/` and the bundled agents verbatim to
-`~/.zcode/agents/` — the agent files already carry real model ids and `thoughtLevel`. When a model
+`~/.zcode/agents/` — the three brainstorming lane files pin Flash and `thoughtLevel: low` (section 2). When a model
 must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills and agents load only in a NEW ZCode
 session, not on a restart. Invoke the skill with `$glm-brainstorming`; there is no `!` preload
 support. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
@@ -124,6 +136,10 @@ one Bash call and no file write. It has three modes (SKILL.md R14):
 - `check.py spec PATH` lints a written spec: required headings, no
   placeholders or empty sections, dated https Evidence lines. Exit 1 if
   any FAIL.
+- `check.py route` classifies an obvious misroute. Always exit 0.
+- `check.py send` lints the draft before it is shown. Exit 1 on any FAIL.
+- `check.py approve --asked design` accepts only an approval token.
+  Exit 1 on no.
 
 It cannot judge whether a source supports its claim; that stays on the
 main thread. It never writes files and never touches the network.

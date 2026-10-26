@@ -62,6 +62,10 @@ class TestOutputContract(unittest.TestCase):
         proc = run_context(self.repo)
         self.assertEqual(proc.returncode, 0)
         lines = proc.stdout.splitlines()
+        self.assertTrue(lines[2].startswith("gate:"), lines[:4])
+        self.assertLess(
+            next(i for i, l in enumerate(lines) if l.startswith("gate:")),
+            next(i for i, l in enumerate(lines) if l.startswith("git: ")))
         git_line = next(i for i, l in enumerate(lines) if l.startswith("git: "))
         commits = next(i for i, l in enumerate(lines) if l == "recent_commits:")
         hot = next(i for i, l in enumerate(lines) if l.startswith("hot_dirs_30d:"))

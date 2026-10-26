@@ -23,21 +23,25 @@ present once → get approval. Lower rule number wins a conflict.
 
 ## Hard rules (the rest of this file is detail)
 
-1. No code, scaffold or file write outside `.brainstorm/drafts/` until a
-   HUMAN reply after your design message says yes. A lane result, a tool
-   result, your own text or an answer to a different question is never
-   approval.
-2. The first line of your first message is the Path line or the
-   hand-off line.
+1. No code, scaffold or file write outside `.brainstorm/drafts/` until
+   `check.py approve --asked design` prints `RESULT approve yes` on the
+   human reply to the design message. Any other reply is not approval (R14).
+2. Line 1 of every message you show is `Path: <Spike|Bounded|Architectural> — reason`,
+   `Path unchanged: <path>`, or the hand-off line. Run `check.py send` on
+   the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
 3. Round 1 is ONE message containing everything nameable, opened with
-   `Round 1: N calls in this message`.
+   `Round 1: N calls in this message`. The first two calls are context.sh
+   and `check.py route` on the user request. `ROUTE` other than `none` is
+   binding: hand off, do not design.
 4. Never cite a path:line, URL, date, version or quote you did not see
-   in a tool result in this session.
-5. Run `check.py` on lane output before you cite it (R14).
+   in a tool result in this session. `check.py send` re-checks the draft;
+   a line you cannot prove is labelled unverified or deleted.
+5. Run `check.py cites` and `check.py web` on lane output before any of
+   it enters the draft (R14).
 6. Ask at most 4 forking questions; everything else is a vetoable
    assumption.
-7. Judgment stays on the main thread; mechanical work goes to Flash
-   lanes with the R11 templates pasted verbatim.
+7. Judgment stays on the main thread. Lane rules live only in the
+   agent file; the dispatch prompt is the R11 slice and nothing else.
 8. Hidden complexity upgrades the path; nothing downgrades.
 
 ## Live context (first round-1 call)
@@ -56,7 +60,9 @@ manifests. Reference files live in `skill_dir` — installed at
 
 Do not write code, scaffold, run an implementation skill, or touch any
 file outside `.brainstorm/drafts/` until you have told your human
-partner what you intend and they said yes. Every task, every path.
+partner what you intend and `check.py approve --asked design` printed
+`RESULT approve yes` on their reply. Every task, every path. The script
+rejects soft agreement; do not overrule it.
 The one exception is the visual companion, after the user accepts it:
 its screens go to `screen_dir` under `.brainstorm/brainstorm/`.
 Parallel work is read-only: exploration, research, drafting, review
@@ -67,7 +73,13 @@ Ceremony scales with the task; R0 never does.
 ## R1 — Classify; open your first message with it
 
 Triage before the Path line: a misrouted task gets routed, not
-designed. Match the request against the sibling skills; on a hit,
+designed. In the round-1 batch, right after context.sh, run
+`check.py route` with the user request on stdin. `ROUTE` other than
+`none` is binding: the hand-off line names that skill, and the
+because-clause names the request type. `ALSO` is a second hit; hand
+off the first skill only. `ROUTE none` means the script saw nothing
+obvious; you still classify with the list below. Match the request
+against the sibling skills; on a hit,
 announce the hand-off in one line ("Not a design task — handing to X
 because Y") — that line replaces the Path line — then invoke the
 Skill tool for X with a 2-3 line summary (task plus what is already
@@ -129,16 +141,18 @@ Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 
 ## R2 — Lane economics (biggest speed lever on GLM)
 
-Every lane dispatches the installed `glm-explorer` / `glm-researcher`
-agents — Flash at low effort, carried by their frontmatter; never add a
-model parameter. Flash runs ~1.8× faster than the main thread at ~9×
+`glm-explorer`, `glm-researcher` and `glm-drafter` are Flash at low
+effort, pinned in their frontmatter; never add a `model` parameter.
+Flash runs ~1.8× faster than the main thread at ~9×
 less cost with 3× coding-plan quota. Sibling agents join only per the
 R11 sibling-lane table, when a lane needs a shell (explorer and
 researcher have none).
 
-1. Default EVERY lane to glm-explorer/glm-researcher (Flash): reads,
-   greps, symbol hunts, single-fact web checks, doc extraction, claim
-   verification, approach drafts, spec pre-draft, spec reviewers.
+1. Code slices dispatch `glm-explorer`. Web slices dispatch
+   `glm-researcher`. Approach drafts, the claim verifier and the
+   runner-up dispatch `glm-drafter`. All three pin Flash at low effort.
+   Spec pre-draft is the one writable lane (`general-purpose`), and only
+   when a file write will not raise a prompt.
 2. Work whose conclusion decides WHICH approach wins stays on the main
    thread (GLM-5.3).
 3. The main thread does classification, merge, design, final message —
@@ -193,11 +207,11 @@ Spike/Bounded ≤3 rounds, Architectural ≤4; lane completions not counted.
 
 ## R5 — Carry state explicitly
 
-GLM loses accuracy on long chains and errors compound. Prefer
-wide-and-shallow (many one-hop lanes) over deep chains; never let a lane
-chain more than 4 tool calls. Before each gate restate to yourself in ≤5
-lines: PATH · DECIDED · OPEN · EVIDENCE COUNT · NEXT. Re-read R0 before
-any tool call that writes.
+GLM loses accuracy on long chains, and a private restatement does not
+hold the state. Prefer wide-and-shallow (many one-hop lanes) over deep
+chains; never let a lane chain more than 4 tool calls. The Path line of
+the next message is the state, and `check.py send` rejects a draft that
+dropped it. Re-read R0 before any tool call that writes.
 
 ## R6 — Assume, do not ask
 
@@ -206,7 +220,8 @@ repo, conventions, research, or the request becomes a vetoable assumption
 inside the design ("Assuming Postgres like the rest of `/services` — say
 otherwise"). Ask only questions whose answer forks the design — and a decision
 the whole design rests on, with no ≥80% answer in sight, IS a fork: ask it,
-never pick silently. Batch ≤4.
+never pick silently. Batch ≤4. Whether a later reply is approval is
+decided by `check.py approve`, not by how agreeable it sounds.
 With AskUserQuestion make item 1 "Approve this design?" (Approve /
 Approve with my answers below / Revise) so one reply both answers and
 approves; otherwise ask in plain text.
@@ -262,60 +277,39 @@ latest way. Skip for repo-internal logic, or when the user says offline.
 5. In the design: **Evidence**, 2-7 lines `claim — [source](url)
    (YYYY-MM-DD)`. Label anything unverified.
 
-## R11 — Lane prompts are rule lists, not essays
+## R11 — Dispatch the slice; the agent file owns the rules
 
-GLM is trained for brevity; prose fights the training. Imperative
-numbered rules, no XML ceremony, no tool inventory (the harness injects
-tool schemas ahead of your text). Caching is prefix-based: keep the
-shared block byte-identical across siblings and put slice lines LAST.
-Flash is verbose unless capped, so give it a word limit and exact labels.
+The lane rules, word caps and output labels live in one place: the body
+of `agents/glm-explorer.md`, `agents/glm-researcher.md` and
+`agents/glm-drafter.md`. Do not restate them in the prompt. A second
+copy drifts, and GLM follows whichever copy it sees last. Prefix caching
+is the agent file, identical for every sibling; the slice lines below
+are the whole user message, with the question last.
 
-**Code lane** — `subagent_type: "glm-explorer"` (built-in Explore if not installed):
+Agent missing → built-in `Explore` (code) or `general-purpose` (web,
+drafts). Then read that agent file once and paste its body under the
+frontmatter ahead of the slice. Do not reconstruct the rules from memory.
+
+**Code lane** — `subagent_type: "glm-explorer"`:
 
 ```
-Read-only exploration. Task: [TASK, one line]. Root: [ROOT]. Today: [DATE].
-Rules:
-1 Stay in your slice; siblings cover the rest.
-2 Put every independent search in one parallel batch.
-3 Read excerpts, never whole files.
-4 Max 4 tool calls. After 3 turns write the report now: a report with UNKNOWN lines beats no report.
-5 Never write, install, commit, or spawn agents.
-6 Copy every path and line number from a tool result you saw. Never guess, round, or rebuild one from memory. No line number shown: cite the path only.
-7 Each FINDINGS line ends with a verbatim snippet of 10 words or less from that line, in double quotes. A fact you cannot quote goes under UNKNOWN.
-8 Output only the four labels below. No preamble, no headings. 150 words max.
-FINDINGS: 3-6 lines `path:line — fact — "snippet"`
-PATTERNS: conventions a change must follow | none
-RISKS: couplings or gotchas for this task | none
-UNKNOWN: what you could not determine | none
----
+Task: [ONE LINE]. Root: [ROOT]. Today: [DATE].
 Slice: [SLICE]. Siblings cover (stay out): [SIBLINGS].
 Question: [ONE precise question]
 ```
 
-**Web lane** — `subagent_type: "glm-researcher"` (built-in general-purpose if not installed):
+**Web lane** — `subagent_type: "glm-researcher"`:
 
 ```
-Web research for a design decision. Task: [TASK, one line]. Today: [DATE].
+Task: [ONE LINE]. Today: [DATE].
 Our stack and versions: [FROM LIVE CONTEXT].
-Rules:
-1 Batch 1 = 2-4 query variants in parallel. Batch 2 = fetch the best primary pages in parallel. Batch 3 only for a conflict.
-2 Max 5 tool calls; stop when a batch adds nothing new.
-3 WebSearch/WebFetch only. Never curl, gh, pip, shell commands, or scripts. A failed or denied fetch is switched, never retried. Search missing, failing, or asking for input: fetch primary URLs instead (registries, raw READMEs, changelogs); never wait on a prompt.
-4 Tier A = official docs, changelogs, specs/RFCs, maintainer repos and issues, registries, peer-reviewed papers. Tier B = maintainer or company engineering blogs, benchmarks with published methodology. Tier C = forums, signal only. Reject undated pages, listicles, AI-written roundups.
-5 A claim that could change the recommendation needs 1 A or 2 independent B, each with a verbatim quote of 25 words or less, plus date and version. Flag anything over 18 months old on fast-moving tech, or not matching our version.
-6 Generic technical terms only. No internal names, code, secrets, or customer data.
-7 Copy every URL from a search or fetch result you saw; never build, shorten or guess a URL.
-8 Quote only text a fetch returned. A quote you cannot find in the page makes the claim UNVERIFIED. After 4 turns write the report now.
-9 Output only the five labels below. No preamble, no headings. 160 words max.
-ANSWER: 1-2 sentences
-CLAIMS: 2-6 lines `claim — tier — URL — date — "quote"`
-CONFLICTS: where sources disagree | none
-VERSION_NOTES: our version vs latest | n/a
-UNVERIFIED: claims lacking support | none
----
 Angle: [ANGLE]. Sibling angles (skip): [SIBLINGS].
 Question: [ONE precise question]
 ```
+
+**Draft lane** — `subagent_type: "glm-drafter"`. The user message is the
+prompt already written in `architectural.md` (approach lens, claim
+verifier, or runner-up). Do not add rules on top of it.
 
 **Sibling lanes** — agents installed by other glm skills. They count
 toward `lanes=` and run long (dozens of turns, not 4-5), so each needs
@@ -380,65 +374,33 @@ The approved deliverable picks the next owner; announce it in one line.
 - Done and the user wants a commit or PR message → `glm-git-diff-summary`
   (counts toward the 3-skill cap).
 
-## R14 — Verify before you cite (mechanical)
+## R14 — Verify before you cite, send, or write
 
-Lane output is untrusted: Flash invents `path:line` pairs, URLs, dates
-and quotes. `check.py` is stdlib-only and read-only. It reads the pasted
-lane lines on stdin through a heredoc, so a check costs one Bash call
-and no file write. Run it, never read it.
+Lane output is untrusted. `python3 <skill_dir>/scripts/check.py` is
+stdlib-only and read-only; paste stdin through a heredoc. Run it, never
+read it. The script's own line is the repair. A non-zero exit is a
+result: do not retry the same input.
 
-1. `python3 <skill_dir>/scripts/check.py cites [--root DIR]` — stdin is
-   the pasted FINDINGS lines of Code lanes. For each
-   `path:line — fact — "snippet"` it checks that the file exists under
-   the root, the line exists, and the quoted snippet appears within 3
-   lines of it. It prints `OK path:line`, `BAD path:line - reason` or
-   `NOQUOTE path:line` (cannot be verified), then
-   `RESULT cites ok=N bad=N unchecked=N`. Exit 1 if any BAD.
-2. `python3 <skill_dir>/scripts/check.py web` — stdin is the pasted
-   CLAIMS lines of Web lanes (`claim — tier — URL — date — "quote"`).
-   Per claim it prints `OK`, `WEAK <why>` (tier C only, older than 18
-   months) or `DROP <why>` (non-https or search/social
-   URL, missing, future or invalid date, missing quote or quote over 25
-   words, unknown tier), then `RESULT web ok=N weak=N drop=N`. Exit 1
-   if any DROP.
-3. `python3 <skill_dir>/scripts/check.py spec <spec path>` — lints a
-   written spec: required headings (Architecture, Components, Data
-   flow, Error handling, Testing, Evidence, Assumptions, Out of scope),
-   TODO/TBD/FIXME/placeholder text, empty sections, Evidence lines
-   without an https URL or a (YYYY-MM-DD) date. It prints
-   `FAIL <section> - why` or `WARN ...`, then
-   `RESULT spec fail=N warn=N`. Exit 1 if any FAIL.
-
-Examples (paste only the lane lines, nothing else):
+1. `cites --root <repo>` — FINDINGS `path:line — fact — "snippet"`. Round 2, before a lane line enters the draft.
+2. `web` — CLAIMS `claim — tier — URL — date — "quote"`. Same round.
+3. `spec <path>` — after the spec is written, before the five-lens review.
+4. `route` — the user request, in round 1 beside context.sh. `ROUTE` other than `none` is binding. Always exit 0.
+5. `send --root <repo>` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes.
+6. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 
 ```
-python3 <skill_dir>/scripts/check.py cites --root <repo> <<'EOF'
-src/auth.py:42 — token is signed here — "jwt.encode(payload, key)"
-EOF
-python3 <skill_dir>/scripts/check.py web <<'EOF'
-Library X 3.2 supports streaming — A — https://example.org/docs/changelog — 2026-08-14 — "Added streaming support in 3.2"
+python3 <skill_dir>/scripts/check.py send --root <repo> <<'EOF'
+<the draft>
 EOF
 ```
 
-When to run:
-
-1. `cites` and `web` run in ROUND 2, in the same parallel batch as the
-   other follow-ups, before you cite anything from lane output. No extra
-   round. A non-zero exit is a result, not an error: never retry it.
-2. `spec` runs inside the spec turn (`architectural.md` §4), after the
-   spec is written and before the five-lens self-review.
-3. A path:line you read yourself in this session needs no check.
-
-After a run:
-
-1. BAD cite → drop it, or re-read the file directly on the main thread.
-2. DROP claim → never cite it.
-3. WEAK claim → label it unverified in Evidence, or run one more fetch.
-4. `unchecked` (NOQUOTE) cite → label it unverified, or re-read it.
-5. Spec FAIL → fix it in place before the commit. A WARN may stay only
-   if you can justify it in one clause.
+BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
+unverified stay labelled unverified. A spec FAIL is fixed in place.
+`approve no` means you do not write.
 
 ## Checklist (∥ = one concurrent message)
+
+`check.py route` joins round 1. `check.py send` runs on every draft below before it is shown.
 
 - **Spike:** ∥ reads + searches (+ ∥ fetches + `check.py` on lane
   output) → Path line + answer-so-far
@@ -484,12 +446,6 @@ After a run:
   outside the R11 table need their owner's engine; hand off instead.
 - "An investigator is deeper, use it everywhere" → a 60-turn agent per
   lane; only when a shell or >4 hops is required, max 2.
-- "The lane printed a path:line, so it is true" → Flash invents
-  citations. Run `check.py` (R14) first.
-- "The user said 'sounds good' to my question, so I can start" → only a
-  reply that answers "Approve this design?" counts (R0).
-- "I'll cite from memory, the lane was long" → cite only what a tool
-  result in this session showed.
 
 ## Harness fallbacks
 
@@ -504,10 +460,12 @@ Missing capability → substitute, never stall.
 4. TaskCreate missing → use TodoWrite for the checklist write.
 
 **ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use
-`subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"` — the installed
-agents already carry the model and effort (Flash, low), so never add a
-`model` parameter. Agents not installed → the built-ins `Explore` (Code) and
-`general-purpose` (Web). Fill the R11 template into the prompt, launch every
+`subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"`, approach drafts,
+the claim verifier and the runner-up `"glm-drafter"`. Those files pin the model
+and effort (Flash, low), so never add a `model` parameter. The prompt is the
+R11 slice. Agents not installed → the built-ins `Explore` (Code) and
+`general-purpose` (Web, drafts, verifier), and the prompt gains the agent-file
+body in front of that slice. Launch every
 lane of the round in ONE message (ZCode runs subagents launched together in
 parallel), then end the turn. A lane that may outlive the turn goes out with
 `run_in_background: true`; its completion notification is the wake-up.
@@ -525,13 +483,13 @@ requirements, trade-offs and scope stay in the terminal.
 
 ---
 
-R0 still applies: no implementation until they said yes.
+R0 still applies: no implementation until `check.py approve` printed yes.
 
 ## Before you send (every message)
 
-1. The Path line or hand-off line is the first line of your first message.
-2. Every cited path:line, URL, date and quote was checked (R14) or is labelled unverified.
-3. At most 4 questions, and item 1 is "Approve this design?".
-4. No implementation before a human yes.
+1. `check.py send` printed `RESULT send fail=0`. A FAIL is repaired, not shown.
+2. Line 1 is the Path line, `Path unchanged:`, or the hand-off line.
+3. A design message contains `Approve this design?`, an assumption, and Out of scope.
+4. No write outside `.brainstorm/drafts/` until `check.py approve --asked design` printed yes on this reply.
 5. The reply budget for this path is not exceeded.
-6. Lane prompts were pasted verbatim from R11.
+6. Each lane prompt is only the R11 slice. The rules were left in the agent file.

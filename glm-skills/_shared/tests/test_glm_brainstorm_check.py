@@ -182,5 +182,218 @@ class SpecTests(unittest.TestCase):
         self.assertEqual(rc, 0, out)
 
 
+class SendTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="bs_send_")
+        os.makedirs(os.path.join(self.root, "src"))
+        with open(os.path.join(self.root, "src", "app.py"), "w", encoding="utf-8") as fh:
+            fh.write("import os\n\ndef connect(url):\n    return pool.get(url)\n")
+
+    def send(self, text, extra=None):
+        args = ["send", "--root", self.root] + (extra or [])
+        return run(args, text)
+
+    def test_bounded_design_passes(self):
+        text = (
+            "Path: Bounded - add a flag on the existing export.\n"
+            "Out of scope: no new format.\n"
+            "Assumptions: CSV stays the default.\n"
+            "Evidence: repo-internal.\n"
+            "Approve this design?\n"
+            "- Keep CSV as the default?\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("fail=0", out)
+
+    def test_missing_path_line_fails(self):
+        rc, out = self.send("Here is the design.\nApprove this design?\n")
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL path", out)
+
+    def test_too_many_questions_fail(self):
+        text = (
+            "Path: Bounded - add a flag.\n"
+            "Out of scope: none.\n"
+            "Assumptions: one caller.\n"
+            "Approve this design?\n"
+            "Which store? Which queue? Which region? Which key? Which ttl?\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL questions", out)
+
+    def test_architectural_needs_two_approaches(self):
+        thin = (
+            "Path: Architectural - new billing subsystem.\n"
+            "APPROACH 1: extend invoices\n"
+            "Out of scope: no tax filing.\n"
+            "Assumptions: one currency.\n"
+            "Approve this design?\n"
+        )
+        rc, out = self.send(thin)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL approaches", out)
+        thick = thin.replace("APPROACH 1:", "APPROACH 1: extend invoices\nAPPROACH 2: separate ledger")
+        rc, out = self.send(thick)
+        self.assertEqual(rc, 0, out)
+
+    def test_bad_citation_fails_and_unverified_passes(self):
+        bad = (
+            "Path: Bounded - fix the helper.\n"
+            "Out of scope: no rewrite.\n"
+            "Assumptions: one caller.\n"
+            "src/app.py:40 - missing - \"return pool.get(url)\"\n"
+            "Approve this design?\n"
+        )
+        rc, out = self.send(bad)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL cite", out)
+        rc, out = self.send(bad.replace("missing -", "missing unverified -"))
+        self.assertEqual(rc, 0, out)
+
+    def test_real_citation_passes(self):
+        text = (
+            "Path: Bounded - name the helper.\n"
+            "Out of scope: no rewrite.\n"
+            "Assumptions: one caller.\n"
+            "src/app.py:4 - returns the pool - \"return pool.get(url)\"\n"
+            "Approve this design?\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 0, out)
+
+    def test_undated_url_fails(self):
+        text = (
+            "Path: Spike - which client.\n"
+            "See https://docs.example.org/client for the API.\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL evidence", out)
+
+    def test_dated_url_passes(self):
+        text = (
+            "Path: Spike - which client.\n"
+            "The client added retries (https://docs.example.org/client) (2026-08-01).\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 0, out)
+
+    def test_large_code_fence_fails_until_approved(self):
+        body = "\n".join("print(%d)" % i for i in range(41))
+        text = "Path: Bounded - show the shape.\n```python\n" + body + "\n```\n"
+        rc, out = self.send(text)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL fence", out)
+        rc, out = self.send(text, ["--approved"])
+        self.assertEqual(rc, 0, out)
+
+    def test_new_subsystem_on_bounded_fails(self):
+        text = (
+            "Path: Bounded - add it.\n"
+            "This adds a new subsystem beside the api.\n"
+            "Out of scope: no ui.\n"
+            "Assumptions: one db.\n"
+            "Approve this design?\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL class", out)
+        rc, out = self.send(text.replace("adds a new subsystem", "is not a new subsystem"))
+        self.assertEqual(rc, 0, out)
+
+    def test_handoff_line_passes(self):
+        rc, out = self.send(
+            "Not a design task - handing to glm-systematic-debugging because the tests fail.\n")
+        self.assertEqual(rc, 0, out)
+
+
+class ApproveTests(unittest.TestCase):
+    def approve(self, text, asked="design"):
+        return run(["approve", "--asked", asked], text)
+
+    def test_soft_agreement_is_not_approval(self):
+        for reply in ("sounds good", "ok", "looks good", "lgtm"):
+            rc, out = self.approve(reply)
+            self.assertEqual(rc, 1, reply)
+            self.assertIn("soft agreement", out)
+
+    def test_yes_on_the_design_is_approval(self):
+        rc, out = self.approve("yes, keep the CSV default")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT approve yes", out)
+
+    def test_yes_on_a_side_question_is_not_approval(self):
+        rc, out = self.approve("yes, keep the CSV default", asked="other")
+        self.assertEqual(rc, 1)
+        self.assertIn("side question", out)
+
+    def test_revise_wins_over_approve(self):
+        rc, out = self.approve("Approve, but revise the cache section")
+        self.assertEqual(rc, 1)
+        self.assertIn("revision", out)
+
+    def test_narrative_approved_does_not_count(self):
+        rc, out = self.approve("yesterday we approved the old schema, but I have questions")
+        self.assertEqual(rc, 1)
+
+    def test_vietnamese_approval_token(self):
+        rc, out = self.approve("\u0111\u1ed3ng \u00fd, l\u00e0m ph\u1ea7n export")
+        self.assertEqual(rc, 0, out)
+
+    def test_bare_option_one_counts(self):
+        rc, out = self.approve("1")
+        self.assertEqual(rc, 0, out)
+        rc, out = self.approve("1. use postgres")
+        self.assertEqual(rc, 1)
+
+
+class RouteTests(unittest.TestCase):
+    def route(self, text):
+        return run(["route"], text)
+
+    def test_feature_request_is_none(self):
+        rc, out = self.route("add a login endpoint to the existing api")
+        self.assertEqual(rc, 0)
+        self.assertIn("RESULT route name=none", out)
+
+    def test_traceback_routes_to_debugging(self):
+        rc, out = self.route("the login tests fail with a traceback")
+        self.assertIn("ROUTE glm-systematic-debugging", out)
+        self.assertEqual(rc, 0)
+
+    def test_no_bugs_does_not_route(self):
+        rc, out = self.route("confirm there are no bugs in the export")
+        self.assertIn("name=none", out)
+        self.assertEqual(rc, 0)
+
+    def test_readme_alone_routes_to_docs(self):
+        rc, out = self.route("please update the README")
+        self.assertIn("ROUTE glm-doc-generator", out)
+
+    def test_readme_plus_a_feature_stays_here(self):
+        rc, out = self.route("add a settings page and update the readme")
+        self.assertIn("name=none", out)
+
+    def test_commit_message_routes(self):
+        rc, out = self.route("write a commit message for this branch")
+        self.assertIn("ROUTE glm-git-diff-summary", out)
+
+    def test_viable_product_routes(self):
+        rc, out = self.route("is this product viable")
+        self.assertIn("ROUTE glm-idea-to-spec", out)
+        rc, out = self.route("add a viable cache to the existing client")
+        self.assertIn("name=none", out)
+
+    def test_approved_plan_routes_to_dev_team(self):
+        rc, out = self.route("implement the approved plan")
+        self.assertIn("ROUTE glm-dev-team", out)
+
+    def test_write_the_plan_routes(self):
+        rc, out = self.route("the design is approved, write the plan")
+        self.assertIn("ROUTE glm-writing-plans", out)
+
+
 if __name__ == "__main__":
     unittest.main()
