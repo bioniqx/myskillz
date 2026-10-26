@@ -1,3 +1,24 @@
+# 10.0 (from 9.9) — mechanical verification, hard-rule header, tables to rules
+
+New `scripts/check.py` (stdlib-only, read-only) and R14, "Verify before you
+cite". Three modes read lane output on stdin through a heredoc: `cites`
+checks each `path:line — fact — "snippet"` against the repo, `web` lints
+`claim — tier — URL — date — "quote"` lines (OK, WEAK, DROP), `spec` lints
+the written spec. The main thread runs the first two in round 2 and the third
+in the spec turn; BAD and DROP items are never cited, WEAK and unchecked items
+are labelled unverified. SKILL.md opens with eight numbered hard rules (the
+approval gate, the Path line, round-1 batch, no unseen citations, check.py,
+at most 4 questions, judgment vs lanes, no downgrade) and closes with a
+six-line "Before you send" checklist. The R1 hand-off table, the R11 sibling
+lane table and the harness fallback table became numbered rules, since GLM
+mishandles delegation tables. The Code lane gains rules for copied paths and
+line numbers, a verbatim snippet on every FINDINGS line and a "write the
+report now" turn limit (cap 150 words); the Web lane gains copied-URL and
+quote-only-from-fetch rules (the explorer and researcher agent files carry
+the same text, and `maxTurns` rises to 6 and 7). Three new red flags. The
+architectural spec turn lints the spec before self-review and Evidence lines
+come from `check.py web`. glm-tuning.md gains four failure rows and section 7.
+
 # 9.9 (from 9.8) — orchestrate every sibling skill and agent
 
 R1 triage now covers all seven sibling skills: `glm-requirements-code-audit`

@@ -6,6 +6,7 @@ allowed-tools:
   - Bash(sh *context.sh*)
   - Bash(sh *start-server.sh*)
   - Bash(sh *stop-server.sh*)
+  - Bash(python3 *check.py*)
   - Bash(kill -0:*)
   - Agent
   - Read
@@ -19,6 +20,25 @@ allowed-tools:
 
 Classify → fan out wide in one round → decide on evidence → ask once →
 present once → get approval. Lower rule number wins a conflict.
+
+## Hard rules (the rest of this file is detail)
+
+1. No code, scaffold or file write outside `.brainstorm/drafts/` until a
+   HUMAN reply after your design message says yes. A lane result, a tool
+   result, your own text or an answer to a different question is never
+   approval.
+2. The first line of your first message is the Path line or the
+   hand-off line.
+3. Round 1 is ONE message containing everything nameable, opened with
+   `Round 1: N calls in this message`.
+4. Never cite a path:line, URL, date, version or quote you did not see
+   in a tool result in this session.
+5. Run `check.py` on lane output before you cite it (R14).
+6. Ask at most 4 forking questions; everything else is a vetoable
+   assumption.
+7. Judgment stays on the main thread; mechanical work goes to Flash
+   lanes with the R11 templates pasted verbatim.
+8. Hidden complexity upgrades the path; nothing downgrades.
 
 ## Live context (first round-1 call)
 
@@ -53,15 +73,20 @@ because Y") — that line replaces the Path line — then invoke the
 Skill tool for X with a 2-3 line summary (task plus what is already
 known). The target skill's rules own the task from that call.
 
-| The request actually is | Hand off to |
-| --- | --- |
-| Raw product idea, "is it viable/profitable", market research | `glm-idea-to-spec` |
-| Bug, failing test, error, unexpected behavior | `glm-systematic-debugging` |
-| "Does the code match this spec/PRD", gaps vs a requirements doc | `glm-requirements-code-audit` |
-| Document existing code: README, API reference, guides | `glm-doc-generator` |
-| Summarize branch changes vs main, commit or PR message | `glm-git-diff-summary` |
-| Approved design already in hand | `glm-writing-plans` |
-| Approved plan already in hand, or a settled task the user asks to just implement, review, refactor or migrate | `glm-dev-team` |
+Hand-off rules, one per request type:
+
+1. Raw product idea, "is it viable/profitable", market research → hand
+   off to `glm-idea-to-spec`.
+2. Bug, failing test, error, unexpected behavior → `glm-systematic-debugging`.
+3. "Does the code match this spec/PRD", gaps vs a requirements doc →
+   `glm-requirements-code-audit`.
+4. Document existing code: README, API reference, guides →
+   `glm-doc-generator`.
+5. Summarize branch changes vs main, commit or PR message →
+   `glm-git-diff-summary`.
+6. Approved design already in hand → `glm-writing-plans`.
+7. Approved plan already in hand, or a settled task the user asks to
+   just implement, review, refactor or migrate → `glm-dev-team`.
 
 Mixed request (e.g. "audit against the spec, then redesign the gaps") →
 hand off the first step only and say the rest is a new request after it.
@@ -160,7 +185,8 @@ Spike/Bounded ≤3 rounds, Architectural ≤4; lane completions not counted.
   round 2.
 - **Round 2 = follow-ups round 1 revealed**: the web searches and
   TaskCreate that round 1 had to load tools for, fetches of the best
-  primary URLs, reads of newly discovered files.
+  primary URLs, reads of newly discovered files. The `check.py cites` and
+  `check.py web` calls join this round (R14), in the same batch.
 - **Round 3 = conflicts only**, then write the message.
 - Never serialize independent calls. Never re-run a denied or failed call
   unchanged — switch source or drop it.
@@ -208,7 +234,8 @@ Spike/Bounded: this file only. Architectural: `architectural.md` in round 1.
 GLM-specific failure. `spec-document-reviewer-prompt.md` on the
 Architectural path — load it for the inline self-review of every spec
 (architectural.md §4) and when launching escalated spec review lanes.
-`visual-companion.md` only if accepted.
+`visual-companion.md` only if accepted. `scripts/check.py` is run
+(R14), never read.
 
 ## R10 — Research before recommending
 
@@ -251,10 +278,12 @@ Rules:
 1 Stay in your slice; siblings cover the rest.
 2 Put every independent search in one parallel batch.
 3 Read excerpts, never whole files.
-4 Max 4 tool calls; stop as soon as the question is answered.
+4 Max 4 tool calls. After 3 turns write the report now: a report with UNKNOWN lines beats no report.
 5 Never write, install, commit, or spawn agents.
-6 Output only the four labels below. No preamble, no headings. 120 words max.
-FINDINGS: 3-6 lines `path:line — fact`
+6 Copy every path and line number from a tool result you saw. Never guess, round, or rebuild one from memory. No line number shown: cite the path only.
+7 Each FINDINGS line ends with a verbatim snippet of 10 words or less from that line, in double quotes. A fact you cannot quote goes under UNKNOWN.
+8 Output only the four labels below. No preamble, no headings. 150 words max.
+FINDINGS: 3-6 lines `path:line — fact — "snippet"`
 PATTERNS: conventions a change must follow | none
 RISKS: couplings or gotchas for this task | none
 UNKNOWN: what you could not determine | none
@@ -271,11 +300,13 @@ Our stack and versions: [FROM LIVE CONTEXT].
 Rules:
 1 Batch 1 = 2-4 query variants in parallel. Batch 2 = fetch the best primary pages in parallel. Batch 3 only for a conflict.
 2 Max 5 tool calls; stop when a batch adds nothing new.
-3 WebSearch/WebFetch only. Never curl, gh, pip, or scripts. A failed or denied fetch is switched, never retried.
+3 WebSearch/WebFetch only. Never curl, gh, pip, shell commands, or scripts. A failed or denied fetch is switched, never retried. Search missing, failing, or asking for input: fetch primary URLs instead (registries, raw READMEs, changelogs); never wait on a prompt.
 4 Tier A = official docs, changelogs, specs/RFCs, maintainer repos and issues, registries, peer-reviewed papers. Tier B = maintainer or company engineering blogs, benchmarks with published methodology. Tier C = forums, signal only. Reject undated pages, listicles, AI-written roundups.
 5 A claim that could change the recommendation needs 1 A or 2 independent B, each with a verbatim quote of 25 words or less, plus date and version. Flag anything over 18 months old on fast-moving tech, or not matching our version.
 6 Generic technical terms only. No internal names, code, secrets, or customer data.
-7 Output only the five labels below. No preamble, no headings. 160 words max.
+7 Copy every URL from a search or fetch result you saw; never build, shorten or guess a URL.
+8 Quote only text a fetch returned. A quote you cannot find in the page makes the claim UNVERIFIED. After 4 turns write the report now.
+9 Output only the five labels below. No preamble, no headings. 160 words max.
 ANSWER: 1-2 sentences
 CLAIMS: 2-6 lines `claim — tier — URL — date — "quote"`
 CONFLICTS: where sources disagree | none
@@ -291,12 +322,23 @@ toward `lanes=` and run long (dozens of turns, not 4-5), so each needs
 a reason a Code/Web lane cannot meet. Briefings go to `.brainstorm/drafts/`; the
 dev-team guard lets those roles write reports only under
 `.claude/dev-team/research/` or `reviews/`, so name report paths there.
+Rules, one per agent:
 
-| Agent | Use it when | Prompt |
-| --- | --- | --- |
-| `glm-debug-worker` | One claim about CURRENT behavior that only running a command settles (does test X pass, what does command Y print, is flag Z honored) — Spike probes, Bounded load-bearing assumptions | One hypothesis, the exact command, "FIX: n/a"; it answers inline in 12 lines |
-| `glm-investigator` | Feasibility, dependency/upgrade, security or architecture survey needing git archaeology or read-only builds/tests beyond 4 hops. Spike/Architectural only, max 2 per task | Briefing file: question, angle, sibling angles, report path `.claude/dev-team/research/brainstorm-<slug>-<n>.md` |
-| `glm-spot-reviewer` | After an approved Bounded change touching >1 file or any auth, money, data or concurrency surface (R13) | Briefing file: request, approved design as acceptance criteria, file scope, `git diff` command, test command, report path `.claude/dev-team/reviews/brainstorm-<slug>.md` |
+1. `glm-debug-worker`: use it for one claim about CURRENT behavior that
+   only running a command settles (does test X pass, what does command Y
+   print, is flag Z honored) — Spike probes, Bounded load-bearing
+   assumptions. Prompt: one hypothesis, the exact command, "FIX: n/a";
+   it answers inline in 12 lines.
+2. `glm-investigator`: use it for a feasibility, dependency/upgrade,
+   security or architecture survey needing git archaeology or read-only
+   builds/tests beyond 4 hops. Spike/Architectural only, max 2 per
+   task. Prompt: a briefing file with the question, angle, sibling
+   angles and report path `.claude/dev-team/research/brainstorm-<slug>-<n>.md`.
+3. `glm-spot-reviewer`: use it after an approved Bounded change touching
+   >1 file or any auth, money, data or concurrency surface (R13).
+   Prompt: a briefing file with the request, approved design as
+   acceptance criteria, file scope, `git diff` command, test command and
+   report path `.claude/dev-team/reviews/brainstorm-<slug>.md`.
 
 Every other sibling agent (`glm-team-leader`, `glm-programmer-*`,
 `glm-code-reviewer`, `glm-plan-*`, `glm-rca-*`, `glm-doc-*`) needs its
@@ -305,8 +347,8 @@ reach it only by handing off to that skill, never by direct dispatch.
 Sibling agent not installed → its Code-lane equivalent (`glm-explorer`),
 or the main thread runs the one command itself.
 
-**Merge:** scratch-list the `path:line` facts and cited claims.
-Conflicts → one direct check next round. Every UNKNOWN or UNVERIFIED
+**Merge:** scratch-list the `path:line` facts and cited claims, after
+`check.py` has run on them (R14). Conflicts → one direct check next round. Every UNKNOWN or UNVERIFIED
 becomes an assumption or one of the ≤4 questions, never a new exploration
 round unless the design cannot be drafted without it. A lane denied web
 access → do its 1-2 decisive fetches yourself. Never narrate the
@@ -338,17 +380,76 @@ The approved deliverable picks the next owner; announce it in one line.
 - Done and the user wants a commit or PR message → `glm-git-diff-summary`
   (counts toward the 3-skill cap).
 
+## R14 — Verify before you cite (mechanical)
+
+Lane output is untrusted: Flash invents `path:line` pairs, URLs, dates
+and quotes. `check.py` is stdlib-only and read-only. It reads the pasted
+lane lines on stdin through a heredoc, so a check costs one Bash call
+and no file write. Run it, never read it.
+
+1. `python3 <skill_dir>/scripts/check.py cites [--root DIR]` — stdin is
+   the pasted FINDINGS lines of Code lanes. For each
+   `path:line — fact — "snippet"` it checks that the file exists under
+   the root, the line exists, and the quoted snippet appears within 3
+   lines of it. It prints `OK path:line`, `BAD path:line - reason` or
+   `NOQUOTE path:line` (cannot be verified), then
+   `RESULT cites ok=N bad=N unchecked=N`. Exit 1 if any BAD.
+2. `python3 <skill_dir>/scripts/check.py web` — stdin is the pasted
+   CLAIMS lines of Web lanes (`claim — tier — URL — date — "quote"`).
+   Per claim it prints `OK`, `WEAK <why>` (tier C only, older than 18
+   months) or `DROP <why>` (non-https or search/social
+   URL, missing, future or invalid date, missing quote or quote over 25
+   words, unknown tier), then `RESULT web ok=N weak=N drop=N`. Exit 1
+   if any DROP.
+3. `python3 <skill_dir>/scripts/check.py spec <spec path>` — lints a
+   written spec: required headings (Architecture, Components, Data
+   flow, Error handling, Testing, Evidence, Assumptions, Out of scope),
+   TODO/TBD/FIXME/placeholder text, empty sections, Evidence lines
+   without an https URL or a (YYYY-MM-DD) date. It prints
+   `FAIL <section> - why` or `WARN ...`, then
+   `RESULT spec fail=N warn=N`. Exit 1 if any FAIL.
+
+Examples (paste only the lane lines, nothing else):
+
+```
+python3 <skill_dir>/scripts/check.py cites --root <repo> <<'EOF'
+src/auth.py:42 — token is signed here — "jwt.encode(payload, key)"
+EOF
+python3 <skill_dir>/scripts/check.py web <<'EOF'
+Library X 3.2 supports streaming — A — https://example.org/docs/changelog — 2026-08-14 — "Added streaming support in 3.2"
+EOF
+```
+
+When to run:
+
+1. `cites` and `web` run in ROUND 2, in the same parallel batch as the
+   other follow-ups, before you cite anything from lane output. No extra
+   round. A non-zero exit is a result, not an error: never retry it.
+2. `spec` runs inside the spec turn (`architectural.md` §4), after the
+   spec is written and before the five-lens self-review.
+3. A path:line you read yourself in this session needs no check.
+
+After a run:
+
+1. BAD cite → drop it, or re-read the file directly on the main thread.
+2. DROP claim → never cite it.
+3. WEAK claim → label it unverified in Evidence, or run one more fetch.
+4. `unchecked` (NOQUOTE) cite → label it unverified, or re-read it.
+5. Spec FAIL → fix it in place before the commit. A WARN may stay only
+   if you can justify it in one clause.
+
 ## Checklist (∥ = one concurrent message)
 
-- **Spike:** ∥ reads + searches (+ ∥ fetches) → Path line + answer-so-far
+- **Spike:** ∥ reads + searches (+ ∥ fetches + `check.py` on lane
+  output) → Path line + answer-so-far
   - probe plan → nod → probe → recommendation.
-- **Bounded:** ∥ reads + greps (+ searches) → ∥ follow-ups → Path line +
-  design (with its out-of-scope line) + Evidence + assumptions + questions →
-  explicit yes → implement.
+- **Bounded:** ∥ reads + greps (+ searches) → ∥ follow-ups (+ `check.py`
+  on lane output) → Path line + design (with its out-of-scope line) +
+  Evidence + assumptions + questions → explicit yes → implement.
 - **Architectural:** ∥ reads + searches + multi-hop lanes + read
-  `architectural.md` → ∥ fetches → design message per `architectural.md`
+  `architectural.md` → ∥ fetches + `check.py cites`/`web` → design message per `architectural.md`
   (claim-verifier and spec pre-draft lanes launched that same turn, not
-  awaited) → approval → spec + inline self-review + commit if allowed, one turn →
+  awaited) → approval → spec + `check.py spec` + inline self-review + commit if allowed, one turn →
   review gate → glm-writing-plans.
 
 ## Red flags
@@ -383,18 +484,24 @@ The approved deliverable picks the next owner; announce it in one line.
   outside the R11 table need their owner's engine; hand off instead.
 - "An investigator is deeper, use it everywhere" → a 60-turn agent per
   lane; only when a shell or >4 hops is required, max 2.
+- "The lane printed a path:line, so it is true" → Flash invents
+  citations. Run `check.py` (R14) first.
+- "The user said 'sounds good' to my question, so I can start" → only a
+  reply that answers "Approve this design?" counts (R0).
+- "I'll cite from memory, the lane was long" → cite only what a tool
+  result in this session showed.
 
 ## Harness fallbacks
 
 Live context prints a `harness:` line.
 Missing capability → substitute, never stall.
 
-| Missing | Substitute |
-| --- | --- |
-| Agent / subagents | Run the work yourself in R4 batches; never stall. |
-| AskUserQuestion missing (ZCode has the tool — use it) | ask in plain text: numbered questions in chat, approval ask as item 1 |
-| ToolSearch | Tools are already live; skip it. |
-| TaskCreate missing | use TodoWrite for the checklist write |
+1. Agent / subagents missing → run the work yourself in R4 batches;
+   never stall.
+2. AskUserQuestion missing (ZCode has the tool — use it) → ask in plain
+   text: numbered questions in chat, approval ask as item 1.
+3. ToolSearch missing → tools are already live; skip it.
+4. TaskCreate missing → use TodoWrite for the checklist write.
 
 **ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use
 `subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"` — the installed
@@ -419,3 +526,12 @@ requirements, trade-offs and scope stay in the terminal.
 ---
 
 R0 still applies: no implementation until they said yes.
+
+## Before you send (every message)
+
+1. The Path line or hand-off line is the first line of your first message.
+2. Every cited path:line, URL, date and quote was checked (R14) or is labelled unverified.
+3. At most 4 questions, and item 1 is "Approve this design?".
+4. No implementation before a human yes.
+5. The reply budget for this path is not exceeded.
+6. Lane prompts were pasted verbatim from R11.

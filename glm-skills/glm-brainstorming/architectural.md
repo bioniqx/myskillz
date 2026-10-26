@@ -66,6 +66,8 @@ nuanced:
 5. Testing — what proves it works, at which level.
 6. Evidence — 2-7 lines `claim — [source](url) (YYYY-MM-DD)`; unverified
    items labeled; the version gap between the repo and the latest release.
+   Every line must come from `check.py web` output marked OK or WEAK
+   (SKILL.md R14); a WEAK line is labelled unverified.
 7. Assumptions — every ≥80%-likely answer you did not ask about, one line
    each, phrased so one "yes" confirms all of them.
 8. Out of scope — one line naming what this design deliberately will not do,
@@ -130,7 +132,10 @@ targeted edits, not judgment.
    approved design. Content = the approved design, including Evidence,
    Assumptions and Out of scope. Use `elements-of-style:writing-clearly-and-concisely` if
    available.
-2. Inline self-review per `spec-document-reviewer-prompt.md` — five
+2. Lint the spec: run `python3 <skill_dir>/scripts/check.py spec <spec path>`.
+   Fix every FAIL in place. A WARN may stay only if you can justify it in
+   one clause.
+   Then the inline self-review per `spec-document-reviewer-prompt.md` — five
    lenses, one pass, about a minute; fix in place. Escalate to parallel
    reviewers only under that file's criteria, and wait for all of them.
 3. Commit the spec (`git add` + `git commit`, one commit, after fixes)

@@ -64,6 +64,10 @@ coding tasks.
 | Accuracy drifts late in a long task | Long-horizon chains compound errors | R5: wide-and-shallow lanes, ≤4 tool calls per lane, restate state before each gate |
 | Cache hit rate collapses across siblings | Prefix-based caching; one changed character upstream invalidates the rest | Byte-identical shared block, slice lines last |
 | Tool-call parse errors on a self-hosted server | Known GLM tool-parser bugs on some vLLM/SGLang builds | Update the serving stack; do not work around it in the prompt |
+| Fabricated `path:line`, URL or quote in lane output | Flash fills gaps with plausible text and shares the main model's blind spots | Lane rules require copied paths and verbatim snippets; `check.py cites` / `check.py web` (R14) verify before citing |
+| A lane hit its turn limit and returned nothing | The report was written after the last allowed turn | `maxTurns` has slack over the tool-call cap, and the lane rule says "write the report now" after 3-4 turns |
+| A casual reply was treated as approval | A "sounds good" to a side question or a lane result read as a yes | Hard rule 1 (only a human reply to the design message counts) plus the "Approve this design?" item in every ask |
+| Lane output cited without a check | Lane text looks authoritative once merged | R14: run `check.py` in round 2, before anything is cited |
 
 ## 5. Evidence
 
@@ -105,3 +109,21 @@ and cannot spawn nested subagents, so keep the fan-out flat: width cap 8, defaul
 prints `harness: zcode` with the lane cap in force). Lane economics (R2) are unchanged: every lane
 Flash, judgment on the main thread.
 
+## 7. Mechanical verification
+
+`scripts/check.py` is a stdlib-only, read-only checker. The main thread
+pastes lane output into it on stdin through a heredoc, so a check costs
+one Bash call and no file write. It has three modes (SKILL.md R14):
+
+- `check.py cites [--root DIR]` verifies Code-lane FINDINGS: the file
+  exists, the line exists, and the quoted snippet appears within 3 lines
+  of it. Exit 1 if any cite is BAD.
+- `check.py web` lints Web-lane CLAIMS: https URL, valid and recent date,
+  version, quote of 25 words or less, known tier. Prints OK, WEAK or
+  DROP per claim. Exit 1 if any claim is DROPped.
+- `check.py spec PATH` lints a written spec: required headings, no
+  placeholders or empty sections, dated https Evidence lines. Exit 1 if
+  any FAIL.
+
+It cannot judge whether a source supports its claim; that stays on the
+main thread. It never writes files and never touches the network.

@@ -33,6 +33,12 @@ detail are not issues.
    verifier results are applied, unverified items are labeled as
    assumptions.
 
+Mechanical part: lens 1 (completeness) and the format half of lens 5
+(evidence: https URL and date on every line) are checked by
+`python3 <skill_dir>/scripts/check.py spec <spec path>`, which runs before
+this pass (`architectural.md` §4). Spend the inline pass on lenses 2-4 and
+on what the evidence means: whether each source supports its claim.
+
 ## Escalate to parallel reviewers only if
 
 The spec touches security or auth, data migration or deletion, money, or
