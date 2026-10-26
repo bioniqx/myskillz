@@ -1,0 +1,18 @@
+{
+  "format": "9x16",
+  "fps": 30,
+  "theme": {"bg": ["#0B1026", "#1E2A78"], "accent": "#FFD400", "text": "#FFFFFF"},
+  "music": "auto",
+  "captions": true,
+  "progress_bar": true,
+  "scenes": [
+    {"type": "hook", "text": "Stop saving money", "highlight": ["saving"], "say": "Stop saving money if you want to get rich.", "duration": 3},
+    {"type": "stat", "value": "90%", "label": "of young people don't know this", "say": "Ninety percent of young people don't know this.", "duration": 3.5},
+    {"type": "bullets", "title": "3 mistakes", "items": ["Low-interest savings", "No emergency fund", "Emotional spending"], "say": "The three most common mistakes.", "duration": 5},
+    {"type": "bars", "title": "10 years of compounding", "data": [["Year 1", 10], ["Year 5", 16], ["Year 10", 26]], "unit": "k", "say": "Ten thousand becomes twenty-six thousand.", "duration": 4},
+    {"type": "compare", "left": {"title": "Saving", "items": ["Low interest", "Safe"]}, "right": {"title": "Investing", "items": ["Higher potential", "Has risk"]}, "say": "Which side are you on?", "duration": 4},
+    {"type": "quote", "text": "Compound interest is the eighth wonder", "author": "Popular saying", "say": "Compound interest is the eighth wonder of the world.", "duration": 3},
+    {"type": "text", "text": "Start today", "highlight": ["today"], "say": "Start today.", "duration": 3},
+    {"type": "cta", "text": "Follow for part 2", "say": "Follow for part two.", "duration": 3}
+  ]
+}
