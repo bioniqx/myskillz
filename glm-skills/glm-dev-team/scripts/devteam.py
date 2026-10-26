@@ -67,10 +67,11 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
 Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
 Provider + governor (v4):
-  routing   ZCode-only: every lane rides glm-programmer-lite (GLM-5.3-Flash, thoughtLevel low); high-risk,
+  routing   ZCode-only: every lane rides glm-programmer-lite (GLM-5.3-Flash, thoughtLevel high); high-risk,
             large and RETRIED slices escalate to glm-programmer-strong (GLM-5.3, thoughtLevel max). Model
             and effort are pinned in the agents' own frontmatter — the Agent tool takes no per-dispatch
-            model, and `doctor --fix` installs the agents verbatim.
+            model, and `doctor --fix` installs the agents verbatim. thoughtLevel is ignored unless that
+            model id is present.
   governor  AIMD window over the fan-out: default tier api opens the full 8-call window at once (the provider
             allows 8 concurrent API calls, so no tier goes above 8); DEVTEAM_GLM_TIER=lite|pro|max trades
             width for gentler rate limits (starts 3/6/7, ceiling 8); +1 per finished lane; halve on a
@@ -92,6 +93,7 @@ import contextlib
 import fnmatch
 import glob
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -130,6 +132,7 @@ ENGINE_VERSION = "4.1"
 FAST_NAMES = {0: "off", 1: "lean", 2: "no-red-run", 3: "spot-review", 4: "spike"}  # legacy --fast labels
 PORT_BASE = 4000
 STALL_MINUTES_DEFAULT = 20  # a lane silent this long is reported STALLED? (env DEVTEAM_STALL_MINUTES overrides)
+UNCLAIMED_GRACE_S = 120      # inflight with no claim file for this long is reprinted (env DEVTEAM_UNCLAIMED_S; 0 disables)
 
 # --- profiles: four independent dials, so speed is bought one trade at a time ------------------
 POLICY = {
@@ -1254,6 +1257,52 @@ def stall_lines(root, st, now_ts=None):
             for sid, mins in stalled_lanes(root, st, now_ts)]
 
 
+def unclaimed_grace():
+    """Seconds an inflight non-research slice may sit with no claim file before `next` reprints
+    its Agent line. GLM drops parallel tool calls, so a launch that never claimed is the usual
+    cause. 0 disables. A slice dispatched in this same call is younger than the grace."""
+    raw = os.environ.get("DEVTEAM_UNCLAIMED_S", "").strip()
+    if raw == "0":
+        return 0
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return UNCLAIMED_GRACE_S
+
+
+def unclaimed_blocks(root, st, now_ts=None):
+    """Inflight slices whose programmer never ran `claim`, old enough that the launch was dropped
+    rather than merely slow. Sets `relaunch_at` so the same line is not reprinted every wake-up.
+    Research slices never claim; they are harvested from their report."""
+    grace = unclaimed_grace()
+    if grace <= 0:
+        return []
+    now_ts = now() if now_ts is None else now_ts
+    blocks = []
+    for sid, s in st["slices"].items():
+        if s.get("status") != "inflight" or s.get("mode") == "research":
+            continue
+        if read_claim(root, sid):
+            continue
+        if read_marker(root, sid, "done") is not None or read_marker(root, sid, "blocked") is not None:
+            continue
+        since = max(float(s.get("dispatched") or 0), float(s.get("relaunch_at") or 0))
+        if since <= 0 or now_ts - since < grace:
+            continue
+        s["relaunch_at"] = now_ts
+        blocks.append((sid, s, s.get("mode") or "slice"))
+    return blocks
+
+
+def print_unclaimed(root, st):
+    blocks = unclaimed_blocks(root, st)
+    if not blocks:
+        return
+    save_state(root, st)
+    out("UNCLAIMED: dispatched but never claimed (a dropped Agent call). "
+        "Launch each reprinted line once. Do not start a second copy of a slice that is already running.")
+    print_dispatch(st, blocks, [])
+
+
 def refresh_reviews(root, st):
     """A reviewer that has written every shard report is done occupying slots, even before the
     Conductor records its verdict with `review-done`. Without this, reserved slots only grow."""
@@ -1734,7 +1783,9 @@ def briefing_text(st, s, mode):
                   "3. No TODO/FIXME, placeholder, hard-coded expected value, empty catch, new dependency, or file outside "
                   "the footprint.",
                   "4. Everything is committed through the helper and `git status` is clean.",
-                  "5. Not sure a symbol, file or option exists? Verify it in the repo, or `## Status: Blocked`. Never guess.", ""]
+                  "5. Not sure a symbol, file or option exists? Verify it in the repo, or `## Status: Blocked`. Never guess.",
+                  "6. An import commit cannot resolve (not in this repo, the stdlib, or the declared dependencies) is refused. "
+                  "A criterion that names a number or a quoted value must appear verbatim in the test.", ""]
     lines += report_block(s["id"], s["title"], mode)
     return "\n".join(lines)
 
@@ -1798,7 +1849,7 @@ def do_dispatch(root, st, ids, force=False):
 def dispatch_route(st, s, mode):
     """The Agent line for one glm-programmer dispatch (ZCode-only: the Agent tool takes no per-dispatch
     model). Cheap first, strong where it pays: every lane starts on glm-programmer-lite
-    (GLM-5.3-Flash, thoughtLevel low); high-risk, large and RETRIED slices escalate to
+    (GLM-5.3-Flash, thoughtLevel high); high-risk, large and RETRIED slices escalate to
     glm-programmer-strong (GLM-5.3, thoughtLevel max) — a second attempt means the fast model already
     missed once. The agent's own frontmatter pins the model and effort."""
     strong = (s.get("risk") == "high" or s.get("size") == "large"
@@ -2967,6 +3018,8 @@ def cmd_next(a):
     else:
         mark_utilization(st, len(inflight), cap)
         save_state(root, st)
+    st = load_state(root)
+    print_unclaimed(root, st)
     print_ready(st)
     out(progress_line(st))
     out(*stall_lines(root, st))
@@ -3703,17 +3756,358 @@ def stage_footprint(top, fp):
     return staged
 
 
+_CRIT_LIT = re.compile(r"""['"`]([^'"`]{2,})['"`]|\b(\d{2,})\b""")
+_CRIT_LIT_SKIP = {"true", "false", "none", "null", "undefined"}
+_PY_STDLIB_BLOCK = {"antigravity", "turtle", "tkinter", "idlelib", "ensurepip", "venv", "webbrowser", "this"}
+_NODE_BUILTINS = {
+    "assert", "async_hooks", "buffer", "child_process", "cluster", "console", "constants", "crypto",
+    "dgram", "diagnostics_channel", "dns", "domain", "events", "fs", "http", "http2", "https",
+    "inspector", "module", "net", "os", "path", "perf_hooks", "process", "punycode", "querystring",
+    "readline", "repl", "stream", "string_decoder", "sys", "timers", "tls", "trace_events", "tty",
+    "url", "util", "v8", "vm", "wasi", "worker_threads", "zlib",
+}
+_JS_EXT = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"}
+_JS_RESOLVE_EXT = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".json")
+_CODE_EXT = _JS_EXT | {".py", ".pyi", ".go"}
+_PY_FROM_RE = re.compile(r"^\s*from\s+(?P<mod>\.*[\w.]*)\s+import\s+(?P<names>.+?)\s*(?:#.*)?$")
+_PY_IMPORT_RE = re.compile(
+    r"^\s*import\s+(?P<mods>[\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*)\s*(?:#.*)?$")
+_JS_SPEC_RE = re.compile(
+    r"""(?:\bfrom\s+|require\s*\(\s*|import\s*\(\s*)['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]""")
+_GO_IMP_RE = re.compile(r'^\s*(?:import\s+(?:\w+\s+)?)?"([^"]+)"\s*(?://.*)?$')
+
+
+def _code_without_comments(text):
+    kept = []
+    for ln in (text or "").splitlines():
+        s = ln.strip()
+        if s.startswith(("#", "//", "/*", "*")):
+            continue
+        kept.append(ln)
+    return "\n".join(kept)
+
+
+def criterion_gaps(text, criteria):
+    """[(criterion, [missing literals])] when a criterion names a 2+ digit number or a quoted
+    value that the test text never contains. Prose with no such literal is not judged."""
+    blob = (text or "").lower()
+    gaps = []
+    for c in criteria or []:
+        lits = []
+        for m in _CRIT_LIT.finditer(c or ""):
+            lit = (m.group(1) or m.group(2) or "").strip().lower()
+            if len(lit) >= 2 and lit not in _CRIT_LIT_SKIP and lit not in lits:
+                lits.append(lit)
+        missing = [lit for lit in lits if lit not in blob]
+        if lits and missing:
+            gaps.append((c, missing))
+    return gaps
+
+
+def _norm_dep(name):
+    return re.split(r"[<>=!\[;\s]", (name or "").strip().strip("'\""), maxsplit=1)[0].lower().replace("_", "-")
+
+
+def _py_declared(root):
+    names = set()
+    root = Path(root)
+    files = list(root.glob("requirements*.txt"))
+    req_dir = root / "requirements"
+    if req_dir.is_dir():
+        files += list(req_dir.glob("*.txt"))
+    for p in files:
+        try:
+            lines = p.read_text(errors="replace").splitlines()
+        except OSError:
+            continue
+        for ln in lines:
+            ln = ln.split("#", 1)[0].strip()
+            if not ln or ln.startswith(("-", "--")):
+                continue
+            n = _norm_dep(ln)
+            if n:
+                names.add(n)
+    pyproject = root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            text = pyproject.read_text(errors="replace")
+        except OSError:
+            text = ""
+        for m in re.finditer(r"(?s)\bdependencies\s*=\s*\[(.*?)\]", text):
+            for s in re.finditer(r"""['"]([A-Za-z0-9][A-Za-z0-9_.-]*)""", m.group(1)):
+                names.add(_norm_dep(s.group(1)))
+        header = ""
+        for ln in text.splitlines():
+            hm = re.match(r"\s*\[([^\]]+)\]", ln)
+            if hm:
+                header = hm.group(1).lower()
+                continue
+            if "dependenc" in header:
+                km = re.match(r"""\s*([A-Za-z0-9][A-Za-z0-9_.-]*)\s*=""", ln)
+                if km and km.group(1).lower() not in ("python", "version"):
+                    names.add(_norm_dep(km.group(1)))
+    return names
+
+
+def _py_module_exists(root, dotted):
+    rel = Path(*[p for p in dotted.split(".") if p])
+    if not rel.parts:
+        return False
+    for base in (Path(root), Path(root) / "src"):
+        # a directory counts: Python 3 treats it as a namespace package
+        if (base / rel).with_suffix(".py").is_file() or (base / rel).is_dir():
+            return True
+    return False
+
+
+def _py_rel_target(base, rest):
+    target = base.joinpath(*[p for p in rest.split(".") if p])
+    return target.with_suffix(".py").is_file() or target.is_dir()
+
+
+def _import_names(raw):
+    out = []
+    for part in (raw or "").replace("(", " ").replace(")", " ").split(","):
+        part = part.split("#", 1)[0].strip()
+        if not part:
+            continue
+        part = re.split(r"\s+as\s+", part, maxsplit=1)[0].strip()
+        if part:
+            out.append(part)
+    return out
+
+
+def _stdlib_missing_names(module, names):
+    first = module.split(".", 1)[0]
+    stdlib = getattr(sys, "stdlib_module_names", ())
+    if first in _PY_STDLIB_BLOCK or first not in stdlib:
+        return []
+    try:
+        mod = importlib.import_module(module)
+    except Exception:
+        return []
+    missing = []
+    for name in names:
+        if not name or name == "*" or not name.isidentifier():
+            continue
+        if not hasattr(mod, name):
+            missing.append(name)
+    return missing
+
+
+def _py_absolute(root, rel, mod, names, py_deps, from_import):
+    first = mod.split(".", 1)[0]
+    if not first or first.startswith("."):
+        return []
+    if first in getattr(sys, "stdlib_module_names", ()):
+        if not from_import:
+            return []
+        return [f"{rel}: `{mod}.{n}` does not resolve — the stdlib module has no such attribute"
+                for n in _stdlib_missing_names(mod, names)]
+    if _norm_dep(first) in py_deps or _py_module_exists(root, mod):
+        return []
+    return [f"{rel}: import `{mod}` does not resolve in this repo, the stdlib, or the declared dependencies"]
+
+
+def _py_relative(root, path, rel, mod, names):
+    dots = len(mod) - len(mod.lstrip("."))
+    rest = mod.lstrip(".")
+    base = path.parent
+    for _ in range(max(0, dots - 1)):
+        base = base.parent
+    try:
+        base.resolve().relative_to(Path(root).resolve())
+    except ValueError:
+        return [f"{rel}: import `{mod}` does not resolve (relative import escapes the repo)"]
+    if rest:
+        if _py_rel_target(base, rest):
+            return []
+        return [f"{rel}: import `{mod}` does not resolve in this repo, the stdlib, or the declared dependencies"]
+    problems = []
+    for name in names:
+        if name == "*" or not name.isidentifier():
+            continue
+        if not _py_rel_target(base, name):
+            problems.append(
+                f"{rel}: import `{name}` does not resolve in this repo, the stdlib, or the declared dependencies")
+    return problems
+
+
+def _js_spec_exists(file_path, spec):
+    base = file_path.parent / spec
+    if base.suffix:
+        return base.is_file()
+    for ext in _JS_RESOLVE_EXT:
+        if Path(str(base) + ext).is_file() or (base / ("index" + ext)).is_file():
+            return True
+    return False
+
+
+def _npm_deps(root):
+    p = Path(root) / "package.json"
+    if not p.is_file():
+        return None
+    try:
+        data = json.loads(p.read_text(errors="replace"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    names = set()
+    if isinstance(data, dict):
+        for key in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+            block = data.get(key)
+            if isinstance(block, dict):
+                names.update(block)
+    return names
+
+
+def _js_bare_ok(spec, npm):
+    raw = spec[5:] if spec.startswith("node:") else spec
+    parts = raw.split("/")
+    head = parts[0]
+    pkg = "/".join(parts[:2]) if head.startswith("@") and len(parts) >= 2 else head
+    if spec.startswith("node:") or (not head.startswith("@") and head in _NODE_BUILTINS):
+        builtin = head if not spec.startswith("node:") else raw.split("/")[0]
+        return builtin in _NODE_BUILTINS
+    if npm is None:
+        return False
+    return pkg in npm
+
+
+def _go_mod(root):
+    p = Path(root) / "go.mod"
+    if not p.is_file():
+        return None, set()
+    try:
+        text = p.read_text(errors="replace")
+    except OSError:
+        return None, set()
+    m = re.search(r"(?m)^module\s+(\S+)", text)
+    mod = m.group(1) if m else ""
+    reqs = set(re.findall(r"(?m)^\s*([A-Za-z0-9][^\s]*)\s+v\d", text))
+    return mod, reqs
+
+
+def _go_ok(root, spec, mod, reqs):
+    if mod is None:
+        return True
+    first = spec.split("/", 1)[0]
+    if "." not in first:
+        return True
+    if mod and (spec == mod or spec.startswith(mod + "/")):
+        rest = spec[len(mod):].lstrip("/")
+        if not rest:
+            return True
+        base = Path(root) / rest
+        return base.is_dir() or Path(str(base) + ".go").is_file()
+    for req in reqs:
+        if spec == req or spec.startswith(req + "/"):
+            return True
+    return False
+
+
+def import_problems_in_line(root, rel, line, py_deps=None, npm=None, gomod=None, goreq=None):
+    """Problems for one source line. Dependency maps default to a fresh scan of `root`."""
+    root = Path(root)
+    ext = Path(rel).suffix.lower()
+    line = (line or "").strip()
+    if not line or line.startswith(("#", "//", "*", "/*")) or ext not in _CODE_EXT:
+        return []
+    if py_deps is None:
+        py_deps = _py_declared(root)
+    if npm is None and ext in _JS_EXT:
+        npm = _npm_deps(root)
+    if gomod is None and goreq is None and ext == ".go":
+        gomod, goreq = _go_mod(root)
+    path = root / rel
+    if ext in (".py", ".pyi"):
+        m = _PY_FROM_RE.match(line)
+        if m:
+            mod = m.group("mod")
+            names = _import_names(m.group("names"))
+            if mod == "__future__" or not mod:
+                return []
+            if mod.startswith("."):
+                return _py_relative(root, path, rel, mod, names)
+            return _py_absolute(root, rel, mod, names, py_deps, True)
+        m = _PY_IMPORT_RE.match(line)
+        if not m:
+            return []
+        problems = []
+        for part in m.group("mods").split(","):
+            part = re.split(r"\s+as\s+", part.strip(), maxsplit=1)[0].strip()
+            if part:
+                problems += _py_absolute(root, rel, part, [], py_deps, False)
+        return problems
+    if ext in _JS_EXT:
+        problems = []
+        for m in _JS_SPEC_RE.finditer(line):
+            spec = m.group(1) or m.group(2)
+            if not spec or spec.startswith(("@/", "~/", "#")):
+                continue
+            if spec.startswith("."):
+                if not _js_spec_exists(path, spec):
+                    problems.append(f"{rel}: import `{spec}` does not resolve (relative file missing)")
+                continue
+            if not _js_bare_ok(spec, npm):
+                problems.append(
+                    f"{rel}: import `{spec}` does not resolve (not a Node builtin and not in package.json)")
+        return problems
+    if ext == ".go":
+        m = _GO_IMP_RE.match(line)
+        if not m:
+            return []
+        spec = m.group(1)
+        if _go_ok(root, spec, gomod, goreq or set()):
+            return []
+        return [f"{rel}: import `{spec}` does not resolve (not in go.mod and not a local package)"]
+    return []
+
+
+def _added_lines(top, files):
+    files = [f for f in files if Path(f).suffix.lower() in _CODE_EXT]
+    if not files:
+        return {}
+    diff = sh(["git", "diff", "--cached", "--unified=0", "--no-color", "--no-renames", "--"] + files,
+              cwd=top, check=False).stdout
+    added, cur = {}, None
+    for ln in diff.splitlines():
+        if ln.startswith("+++ "):
+            cur = ln[4:].removeprefix("b/") if ln[4:] != "/dev/null" else None
+        elif ln.startswith("+") and not ln.startswith("+++") and cur:
+            added.setdefault(cur, []).append(ln[1:])
+    return added
+
+
+def unresolved_import_check(top, staged):
+    """Added imports that resolve nowhere: not in the repo, the language stdlib, or the
+    project's declared dependencies. GLM fabricates these, and a project with no typechecker
+    never sees them. `--force` on the commit command is the escape hatch."""
+    added = _added_lines(top, staged)
+    if not added:
+        return []
+    py_deps = _py_declared(top)
+    npm = _npm_deps(top)
+    gomod, goreq = _go_mod(top)
+    problems = []
+    for rel, lines in added.items():
+        for line in lines:
+            problems += import_problems_in_line(top, rel, line, py_deps, npm, gomod, goreq)
+    return problems
+
+
 def vacuous_test_check(top, tests, criteria):
     """Static stand-in for the RED verification run (which `red_run` skips in most profiles): a test
     file with no assertion, or fewer tests than criteria, is what a skipped RED run would let through.
     Cheap, deterministic, and it runs in every profile — including the ones that DO run RED."""
     problems = []
     total = 0
+    blob_parts = []
     for rel in tests:
         try:
             text = (Path(top) / rel).read_text(errors="replace")
         except OSError:
             continue
+        blob_parts.append(text)
         decls = len(TEST_DECL.findall(text))
         total += decls
         if not ASSERT_TOKENS.search(text):
@@ -3732,6 +4126,11 @@ def vacuous_test_check(top, tests, criteria):
         if m:
             problems.append(f"{rel} has a test with an empty body (`{m.group(0).strip()[:60]}`) — every case needs a "
                             f"real arrange/act/assert")
+    if criteria and blob_parts:
+        for c, missing in criterion_gaps("\n".join(_code_without_comments(t) for t in blob_parts), criteria):
+            shown = ", ".join(missing[:4])
+            problems.append(f"criterion `{c}` names {shown} but no test text contains "
+                            f"{'it' if len(missing) == 1 else 'them'} — assert that concrete value, not a stand-in")
     if not problems and criteria and total and total < len(criteria):
         problems.append(f"{total} test case(s) for {len(criteria)} acceptance criteria — every criterion "
                         f"needs its own failing test (parameterized cases count individually)")
@@ -3788,6 +4187,7 @@ def cmd_commit_red(a):
         raise DevteamError("no test files staged — RED must contain failing tests (test_*.py, *.test.ts, tests/…, or plan test_globs)")
     criteria = [ln for ln in (sd / "criteria").read_text().splitlines() if ln.strip()] if (sd / "criteria").exists() else []
     problems = vacuous_test_check(top, tests, criteria)
+    problems += unresolved_import_check(top, tests)
     if problems and not a.force:
         git(["reset", "-q"], top)
         raise DevteamError("RED refused — these tests would not catch a regression:\n  - "
@@ -3860,6 +4260,11 @@ def cmd_commit_work(a):
         if problems and not a.force:
             git(["reset", "-q"], top)
             raise DevteamError("refused — these tests would not catch a regression:\n  - " + "\n  - ".join(problems))
+    iproblems = unresolved_import_check(top, staged)
+    if iproblems and not a.force:
+        git(["reset", "-q"], top)
+        raise DevteamError("refused — an added import does not resolve:\n  - " + "\n  - ".join(iproblems) +
+                           "\nFix the import, or re-run with --force and say why in ## Notes:.")
     if kind in ("refactor", "perf"):
         problems = sloppy_code_check(top, staged, globs)
         if problems and not a.force:
@@ -3891,6 +4296,7 @@ def cmd_commit_green(a):
     if not staged:
         raise DevteamError("nothing to commit")
     problems = sloppy_code_check(top, staged, globs)
+    problems += unresolved_import_check(top, staged)
     if problems and not a.force:
         git(["reset", "-q"], top)
         raise DevteamError("GREEN refused — this code would not survive review:\n  - " + "\n  - ".join(problems) +

@@ -91,6 +91,23 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         with open(os.path.join(AGENTS_SRC, name + ".md"), encoding="utf-8") as fh:
             return fh.read()
 
+    def test_source_agents_pin_model_and_effort(self):
+        """ZCode ignores thoughtLevel unless a real model id is in the same frontmatter.
+        A missing pin silently runs every lane on the session model."""
+        pins = {
+            "glm-programmer-lite": ("GLM-5.3-Flash", "high"),
+            "glm-programmer-strong": ("GLM-5.3", "max"),
+            "glm-code-reviewer": ("GLM-5.3", "high"),
+            "glm-spot-reviewer": ("GLM-5.3-Flash", "high"),
+            "glm-investigator": ("GLM-5.3-Flash", "high"),
+            "glm-team-leader": ("GLM-5.3", "max"),
+        }
+        for name, (model, level) in pins.items():
+            fm = frontmatter(os.path.join(AGENTS_SRC, name + ".md"))
+            self.assertIn('model: "account:zai-individual-coding-plan/%s"' % model, fm, name)
+            self.assertIn("\nthoughtLevel: %s\n" % level, fm, name)
+            self.assertTrue(fm.rstrip().endswith("\ninjectAgentsMd: false"), name)
+
     def test_zcode_agent_text_is_the_repo_file_verbatim(self):
         for name in ZCODE_AGENTS:
             self.assertEqual(dt.zcode_agent_text(AGENTS_SRC, name), self.source_text(name), name)

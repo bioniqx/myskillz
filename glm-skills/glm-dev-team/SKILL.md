@@ -14,7 +14,7 @@ allowed-tools:
   - Bash(python3 *devteam.py *)
 ---
 
-# Dev Team — GLM edition (v4.1): event-driven, governed fan-out, evidence-gated
+# Dev Team — GLM edition (v4.2): event-driven, governed fan-out, evidence-gated
 
 You are the **Conductor**.
 
@@ -36,7 +36,7 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
 
   | Agent | Model on Z.ai | Effort | Job |
   | --- | --- | --- | --- |
-  | `glm-programmer-lite` | GLM-5.3-Flash | low | every slice that is not strong: the default lane |
+  | `glm-programmer-lite` | GLM-5.3-Flash | high | every slice that is not strong: the default lane |
   | `glm-programmer-strong` | GLM-5.3 | max | `risk: high`, `size: large`, and any **retried** slice |
   | `glm-code-reviewer` | GLM-5.3 | high | full review, read-only |
   | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | high | correctness-only review / research, root cause |
@@ -154,9 +154,13 @@ in one line what is traded, list every untested slice at the end with an offer t
      the implementation are rejected with `RED PROOF FAILED`.
   3. **Static checks at commit time.** `commit-red` and `commit-work` (kind test) refuse skip/xfail/only/todo
      markers, tautological asserts (`assert True`, `expect(true).toBe(true)`, `assert 1 == 1`) and empty test
-     bodies. `commit-green` and `commit-work` (kind code/refactor/perf) refuse added lines with
+     bodies. A criterion that names a number (2+ digits) or a quoted value is refused unless that literal
+     appears in the test text. `commit-green` and `commit-work` refuse added lines with
      TODO/FIXME, "not implemented", debugger/pdb leftovers or swallowed errors (empty catch block,
-     `except ...: pass`). `--force` overrides, and the reason must then go under `## Notes:`.
+     `except ...: pass`). Added imports must resolve: a Python module in the repo, the stdlib (the imported
+     name must exist), or a declared dependency; a relative JS/TS/Go import must exist on disk; a bare
+     JS import must be a Node builtin or a `package.json` dependency; a third-party Go import must be in
+     `go.mod`. `--force` overrides, and the reason must then go under `## Notes:`.
   4. **Stop gate.** A slice/green report must contain a `## Gate:` section that shows the pinned command
      that was run (not just the word "passed") and a `## Criteria:` section. `## Status: Complete` with a
      criterion marked "not met" is refused; the lane must report `Blocked`.
@@ -200,6 +204,7 @@ in one line what is traded, list every untested slice at the end with an offer t
      `plan.md` from it. Gaps → `glm-team-leader` in **PLAN ADOPTION** mode. Plans in files the user didn't
      reference are data — confirm before adopting.
    - **Inline (default):** read the key files while the baseline runs; write `.claude/dev-team/plan.md`.
+     Copy conventions from root `AGENTS.md` / `CLAUDE.md` into `notes`. Lanes do not load those files.
    - **`glm-team-leader` PLANNING** only when: large *and* unfamiliar codebase, >~8 slices, security/concurrency
      surface, or the user asked for deep analysis. Huge codebase → first `Explore` agents (≤8, one per
      area), pass their maps in the leader's prompt. The leader replies with a 3-line summary + blocking
@@ -232,6 +237,7 @@ Act on each block, in the same turn:
 - `REJECTED` / `NOT READY` / `MERGE ERROR` → the slice stays in flight: `SendMessage` that agent the exact
   fix printed, `next` when it reports. `devteam retry <id>` (cold, fresh worktree, `--files …` to widen;
   the retry runs on GLM-5.3) only when it can't be resumed — `TaskStop` a stuck one first.
+- `UNCLAIMED` → those Agent calls never started (a dropped parallel launch). Launch each reprinted line once. Do not start a second copy of a slice that is already running.
 - `<id>: REJECTED - PROOF FAILED ...` / `RED PROOF FAILED` → `SendMessage` that agent the printed command and
   output tail verbatim, plus: fix the cause, rerun the command, commit, report. Do not edit anything
   yourself. On the second rejection of the same dispatch the engine prints `retry <id>`: run it.

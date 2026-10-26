@@ -758,7 +758,7 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch T1 D1 D2 N1 2>&1)
-check "a trivial slice rides the lite lane (GLM-5.3-Flash, thoughtLevel low)" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
+check "a trivial slice rides the lite lane (GLM-5.3-Flash, thoughtLevel high)" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
 check "a small docs slice rides the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.readme." <<<"$OUT"'
 check "a LARGE docs slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big docs." <<<"$OUT"'
 check "a normal code slice rides the lite lane with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
@@ -886,7 +886,7 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch N1 T1 H1 L1 X1 2>&1)
-check "a normal slice rides the lite lane (GLM-5.3-Flash) with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
+check "a normal slice rides the lite lane (GLM-5.3-Flash, thoughtLevel high) with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
 check "a trivial slice takes the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
 check "a high-risk slice escalates to the strong lane (GLM-5.3)" 'grep -q "subagent_type=glm-programmer-strong, description=.auth." <<<"$OUT"'
 check "a large slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big." <<<"$OUT"'
@@ -1172,6 +1172,9 @@ check "commit-green refuses a TODO placeholder" '( cd "$XW" && printf "exports.c
 check "commit-green refuses an empty catch" '( cd "$XW" && printf "exports.compute = () => { try { return run(); } catch (e) {} };\n" > src/x1.js && D commit-green x 2>&1 | grep -q "swallowed error" )'
 check "commit-green refuses except: pass" '( cd "$XW" && rm -f src/x1.js && printf "def compute():\n    try:\n        return run()\n    except Exception:\n        pass\n" > src/x1.py && D commit-green x 2>&1 | grep -q "swallowed error" )'
 check "a refused GREEN commits nothing" '( cd "$XW" && [ -z "$(git log --format=%s -1 | grep "GREEN")" ] )'
+check "commit-green refuses an import the repo does not have" '( cd "$XW" && rm -f src/x1.js && printf "import not_a_real_module_zzz\n\ndef compute():\n    return 2\n" > src/x1.py && D commit-green x 2>&1 | grep -q "does not resolve" )'
+check "commit-green refuses a stdlib attribute that does not exist" '( cd "$XW" && printf "from os import not_a_real_function_zzz\n\ndef compute():\n    return 2\n" > src/x1.py && D commit-green x 2>&1 | grep -q "no such attribute" )'
+check "commit-green allows a stdlib import" '( cd "$XW" && printf "import os\n\ndef compute():\n    return 2\n" > src/x1.py && D commit-green x 2>&1 | grep -q "GREEN committed" )'
 check "a variable named todo is not a placeholder" '( cd "$XW" && rm -f src/x1.py && printf "exports.compute = () => { const todo = 2; return todo; };\n" > src/x1.js && D commit-green x 2>&1 | grep -q "GREEN committed" )'
 check "commit-green --force is the documented escape hatch" '( cd "$XW" && printf "exports.compute = () => 2; // TODO handle negatives\n" > src/x1.js && D commit-green x --force 2>&1 | grep -q "GREEN committed" )'
 
@@ -1188,6 +1191,25 @@ check "an absolute path in a footprint is refused" '[[ "$(D init bad.md --force 
 printf '\140\140\140json\n{"request":"r","commands":{"test":"echo t"},"slices":[{"id":"A","title":"a","deps":[],"files":["src/a.js","tests/a.test.js"],"risk":"high","criteria":["works"]}]}\n\140\140\140\n' > vague.md
 OUT=$(D init vague.md --force 2>&1)
 check "vague criteria and a high-risk slice without edge cases are warned about" '[[ "$OUT" == *"criteria too vague"* && "$OUT" == *"risk high without edge_cases"* ]]'
+
+echo "== v4.2 criterion literals and a dropped launch"
+UC="$(newrepo uc)"; cd "$UC"
+cat > plan.md <<'EOF'
+```json
+{"request":"literals","commands":{"test":"echo ok","lint":"none"},
+ "slices":[{"id":"U1","title":"status","deps":[],"files":["src/u1.js","tests/u1.test.js"],"risk":"low","criteria":["returns 404 when the id is missing"]}]}
+```
+EOF
+D init plan.md >/dev/null 2>&1; D dispatch U1 >/dev/null 2>&1
+git worktree add -q .claude/worktrees/u1 -b wt-u1 HEAD
+check "commit-red refuses a test that drops the criterion's concrete value" '( cd .claude/worktrees/u1 && D claim U1 >/dev/null 2>&1 && mkdir -p tests && printf "test(\"a\", () => { assert.equal(status(), 200); });\n" > tests/u1.test.js && D commit-red u 2>&1 | grep -q "names 404" )'
+check "commit-red accepts a test that asserts the criterion value" '( cd .claude/worktrees/u1 && mkdir -p tests && printf "test(\"a\", () => { assert.equal(status(), 404); });\n" > tests/u1.test.js && D commit-red u 2>&1 | grep -q "RED committed" )'
+python3 -c 'import json; p=".claude/dev-team/state.json"; d=json.load(open(p)); d["slices"]["U1"]["dispatched"]=1; d["slices"]["U1"].pop("relaunch_at", None); json.dump(d, open(p,"w"))'
+rm -f .claude/dev-team/slices/U1.claim.json
+OUT=$(DEVTEAM_UNCLAIMED_S=10 D next 2>&1)
+check "a dispatched slice that never claimed is reprinted" '[[ "$OUT" == *"UNCLAIMED"* && "$OUT" == *"claim U1"* ]]'
+OUT2=$(DEVTEAM_UNCLAIMED_S=10 D next 2>&1)
+check "the same dropped launch is not reprinted on the very next wake-up" '[[ "$OUT2" != *"UNCLAIMED"* ]]'
 
 echo
 echo "passed=$pass failed=$fail"
