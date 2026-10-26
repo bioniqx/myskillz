@@ -362,6 +362,8 @@ Cuts per-Task prompt size; effort is pinned in the agent file. `~/.zcode/agents/
 name: "glm-doc-writer"
 description: "Writes one Markdown doc from an inlined fact pack and a scoped file list. Never plans, never deliberates."
 color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: high
 maxTurns: 18
 injectAgentsMd: true
 ---
@@ -379,6 +381,8 @@ ranges. Every technical claim must trace to FACTS or a file you read; anything e
 name: "glm-doc-reviewer"
 description: "Fact-checks one generated Markdown doc against real source code and fixes it in place."
 color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: max
 maxTurns: 22
 injectAgentsMd: true
 ---

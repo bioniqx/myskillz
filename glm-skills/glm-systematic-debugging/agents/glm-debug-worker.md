@@ -2,6 +2,8 @@
 name: "glm-debug-worker"
 description: "Investigates one debugging hypothesis or code area, answers in a fixed 12-line verdict; fallback lane without an API key."
 color: red
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: high
 injectAgentsMd: true
 ---
 

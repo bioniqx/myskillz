@@ -40,9 +40,10 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix installs the zcode
 # Print the install/config block (ZCode only)
 python3 <skill>/scripts/<tool>.py setup
 
-# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name> and every agents/*.md
+# Install all eight skills into ZCode: skills to ~/.zcode/skills/<name>, every agents/*.md
 # verbatim to ~/.zcode/agents (17 agents, overwritten, nothing rewritten — the agent files already
-# carry final ZCode frontmatter). Guard hooks are NOT configured by the installer; they are opt-in:
+# carry final ZCode frontmatter), and every commands/*.md to ~/.zcode/commands with {{SKILL_DIR}}
+# replaced by the installed skill path. Guard hooks are NOT configured by the installer; they are opt-in:
 #   python3 glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
 # (also re-verifies its six agents against their source files; merges the hooks into
 # ~/.zcode/cli/config.json key-preserving, in place with no backup, re-run is a no-op, commands

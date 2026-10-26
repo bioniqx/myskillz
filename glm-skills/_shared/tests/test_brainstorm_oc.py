@@ -95,13 +95,13 @@ class TestBrainstormLaneAgentBodies(unittest.TestCase):
 
 
 class TestBrainstormCommandFallback(unittest.TestCase):
-    def test_keeps_preload_and_runs_context_sh_when_raw(self):
+    def test_runs_context_sh_without_a_dynamic_shell_line(self):
         text = read(BRAINSTORM_MD)
-        preload = "!`sh {{SKILL_DIR}}/scripts/context.sh`"
-        self.assertIn(preload, text)
-        rest = text.split(preload, 1)[1]
-        self.assertIn("raw `!` line", rest)
-        self.assertIn("run `sh {{SKILL_DIR}}/scripts/context.sh`", rest)
+        self.assertNotIn("!`", text)
+        self.assertNotRegex(text, r"(?m)^[ \t]*!")
+        self.assertIn("sh {{SKILL_DIR}}/scripts/context.sh", text)
+        self.assertIn("{{SKILL_DIR}}", text)
+        self.assertIn("$ARGUMENTS", text)
 
 
 CONTEXT_SH = os.path.join(SKILL_DIR, "scripts", "context.sh")

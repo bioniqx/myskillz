@@ -138,6 +138,10 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode", "skills", "glm-brainstorming")))
         self.assertFalse(os.path.exists(self.agents_dir()))
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode", "commands")))
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode", "glm-skills-manifest.txt")))
+        self.assertIn("Nothing written.", r.stdout)
+        self.assertNotIn("\nDone.", r.stdout)
 
     def test_oversize_description_is_rejected_before_any_copy(self):
         copy_root = self.copied_tree()
@@ -168,6 +172,88 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertIn("devteam.py doctor --harness zcode", r.stdout)
         self.assertIn("~/.zcode/cli/config.json", r.stdout)
         self.assertIn("truncated when loaded", r.stdout)
+        self.assertIn("/glm-brainstorm", r.stdout)
+
+    def test_commands_are_installed_with_the_skill_path_filled_in(self):
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        skill_dir = self.skill("glm-brainstorming")
+        live = os.path.join(self.home, ".zcode", "commands", "glm-brainstorm.md")
+        inside = self.skill("glm-brainstorming", "commands", "glm-brainstorm.md")
+        with open(live, encoding="utf-8") as fh:
+            text = fh.read()
+        with open(inside, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), text)
+        self.assertNotIn("{{SKILL_DIR}}", text)
+        self.assertNotIn("!`", text)
+        self.assertIn("sh " + skill_dir + "/scripts/context.sh", text)
+        for name, folder in (("glm-devteam.md", "glm-dev-team"), ("glm-plan.md", "glm-writing-plans")):
+            path = os.path.join(self.home, ".zcode", "commands", name)
+            with open(path, encoding="utf-8") as fh:
+                body = fh.read()
+            self.assertNotIn("{{SKILL_DIR}}", body)
+            self.assertIn(self.skill(folder), body)
+        manifest = os.path.join(self.home, ".zcode", "glm-skills-manifest.txt")
+        with open(manifest, encoding="utf-8") as fh:
+            listed = fh.read().split()
+        self.assertIn("commands/glm-brainstorm.md", listed)
+        self.assertIn("agents/glm-debug-worker.md", listed)
+        self.assertEqual(self.install().returncode, 0)
+
+    def test_rerun_drops_manifested_files_and_keeps_foreign_ones(self):
+        self.assertEqual(self.install().returncode, 0)
+        retired = self.agent("glm-retired")
+        foreign = self.agent("my-custom")
+        old_cmd = os.path.join(self.home, ".zcode", "commands", "glm-old.md")
+        keep_cmd = os.path.join(self.home, ".zcode", "commands", "my-alias.md")
+        for path, text in ((retired, "old\n"), (foreign, "keep\n"), (old_cmd, "old\n"), (keep_cmd, "keep\n")):
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(text)
+        manifest = os.path.join(self.home, ".zcode", "glm-skills-manifest.txt")
+        with open(manifest, "a", encoding="utf-8") as fh:
+            fh.write("agents/glm-retired.md\ncommands/glm-old.md\n")
+        self.assertEqual(self.install().returncode, 0)
+        self.assertFalse(os.path.exists(retired))
+        self.assertFalse(os.path.exists(old_cmd))
+        self.assertTrue(os.path.isfile(foreign))
+        self.assertTrue(os.path.isfile(keep_cmd))
+        self.assertTrue(os.path.isfile(self.agent("glm-team-leader")))
+        with open(manifest, encoding="utf-8") as fh:
+            listed = fh.read()
+        self.assertNotIn("glm-retired", listed)
+        self.assertNotIn("glm-old", listed)
+
+    def test_missing_home_is_rejected(self):
+        env = dict(os.environ)
+        env.pop("HOME", None)
+        r = subprocess.run(["sh", SCRIPT], capture_output=True, text=True, env=env, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("HOME", r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode")))
+
+    def test_missing_name_is_rejected_before_any_copy(self):
+        copy_root = self.copied_tree()
+        skill_md = os.path.join(copy_root, "glm-idea-to-spec", "SKILL.md")
+        with open(skill_md, encoding="utf-8") as fh:
+            text = fh.read()
+        with open(skill_md, "w", encoding="utf-8") as fh:
+            fh.write(text.replace("name: glm-idea-to-spec\n", "", 1))
+        r = self.install(root=copy_root)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("name", r.stderr)
+        self.assertFalse(os.path.exists(self.skill("glm-idea-to-spec")))
+
+    def test_agent_without_model_is_rejected_before_any_copy(self):
+        copy_root = self.copied_tree()
+        agent = os.path.join(copy_root, "glm-systematic-debugging", "agents", "glm-debug-worker.md")
+        with open(agent, encoding="utf-8") as fh:
+            text = fh.read()
+        with open(agent, "w", encoding="utf-8") as fh:
+            fh.write(text.replace('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n', "", 1))
+        r = self.install(root=copy_root)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("model", r.stderr)
+        self.assertFalse(os.path.exists(self.agent("glm-debug-worker")))
 
 
 if __name__ == "__main__":

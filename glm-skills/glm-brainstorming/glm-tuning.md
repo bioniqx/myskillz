@@ -110,11 +110,12 @@ instruction; R4 is written to hold either way.
 ## 6. ZCode runtime
 
 Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
-copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/` and the bundled agents verbatim to
-`~/.zcode/agents/` — the three brainstorming lane files pin Flash and `thoughtLevel: low` (section 2). When a model
-must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills and agents load only in a NEW ZCode
-session, not on a restart. Invoke the skill with `$glm-brainstorming`; there is no `!` preload
-support. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
+copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/`, the bundled agents verbatim to
+`~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
+(/glm-brainstorm runs context.sh from the installed skill; ZCode rejects a dynamic-shell preload). The three
+brainstorming lane files pin Flash and `thoughtLevel: low` (section 2). When a model
+must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills, agents and
+commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$glm-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
 characters, and a description over 1024 characters makes ZCode drop the skill — which is why the
 WHEN clause sits at the front of this skill's description. Agents launched together run in parallel
 and cannot spawn nested subagents, so keep the fan-out flat: width cap 8, default 8 (Live context

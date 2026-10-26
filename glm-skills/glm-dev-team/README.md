@@ -62,7 +62,7 @@ v4.1 đã có proof run và static check. v4.2 vá lỗ mà prompt không chặn
 ## Cài đặt
 
 ```
-sh install-zcode.sh            ← cài cả tám skill vào ~/.zcode/skills/ và mọi agents/*.md vào ~/.zcode/agents/
+sh install-zcode.sh            ← cài cả tám skill vào ~/.zcode/skills/, mọi agents/*.md vào ~/.zcode/agents/, và slash command vào ~/.zcode/commands/
 ```
 
 1. Chạy `sh install-zcode.sh` từ thư mục gốc repo (thêm `--home DIR` để chỉ định HOME, `--dry-run` để xem trước).

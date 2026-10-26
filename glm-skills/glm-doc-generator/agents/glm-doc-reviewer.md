@@ -2,6 +2,8 @@
 name: "glm-doc-reviewer"
 description: "Fact-checks one generated Markdown doc against real source code and fixes it in place."
 color: yellow
+model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: max
 maxTurns: 22
 injectAgentsMd: true
 ---
