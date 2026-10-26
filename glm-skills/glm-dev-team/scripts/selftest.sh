@@ -12,7 +12,7 @@ D() { python3 "$S/devteam.py" "$@"; }
 # Deterministic environment: GLM provider (what v4 is tuned for), the governor OFF for the legacy
 # scheduling checks (they assert exact slot arithmetic; the governor has its own section), no real
 # transcripts, no peak-hour dependence, and a throwaway HOME so the machine's ~/.claude never leaks in.
-export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_TRANSCRIPTS_DIR="$TMP/no-transcripts"
+export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_PROOF=off DEVTEAM_TRANSCRIPTS_DIR="$TMP/no-transcripts"
 unset DEVTEAM_GLM_TIER DEVTEAM_MAX_PARALLEL ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR
 # Pin the harness: DEVTEAM_HARNESS wins over every ambient marker, so a stray
 # ZCODE* variable in the session cannot flip the engine's detection.
@@ -31,7 +31,7 @@ skip() { echo "  SKIP $1"; }
 check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 hook() { printf '%s' "$2" | python3 "$G" "$1"; }
 # a minimally REAL test file: the engine statically refuses tests with no assertion / no case
-mktest() { mkdir -p "$(dirname "$1")"; printf 'test("%s", () => { assert.equal(1, 1); });\n' "${2:-case}" > "$1"; }
+mktest() { mkdir -p "$(dirname "$1")"; printf 'test("%s", () => { assert.equal(1 + 1, 2); });\n' "${2:-case}" > "$1"; }
 
 cat > plan.md <<'EOF'
 # plan
@@ -69,7 +69,7 @@ echo "== S1 slice"
 run_prog S1 w1 tests/sub.test.js src/sub.js
 check "claim printed isolation prefix" 'grep -q "PORT=4001 DB_SUFFIX=_s1 TMPDIR=.slice/tmp" "$R/claim-S1.out"'
 check "node_modules symlinked and not stray" '[ -L "$R/.claude/worktrees/w1/node_modules" ] && [ -z "$(cd "$R/.claude/worktrees/w1" && git status --porcelain | grep node_modules)" ]'
-check "stop hook allows a finished slice" '(cd "$R/.claude/worktrees/w1" && printf "{\"cwd\":\"%s\",\"last_assistant_message\":\"## Status: Complete\"}" "$PWD" | python3 "$G" stop) >/dev/null 2>&1'
+check "stop hook allows a finished slice" '(cd "$R/.claude/worktrees/w1" && printf "{\"cwd\":\"%s\",\"last_assistant_message\":\"## Status: Complete -- ## Criteria: sub works -> test sub -- met -- ## Gate: node --test tests/sub.test.js -> ok\"}" "$PWD" | python3 "$G" stop) >/dev/null 2>&1'
 echo "== S2 RED then GREEN"
 run_prog S2 w2 tests/mul.test.js src/mul.js red
 check "balanced keeps the RED verification run for a HIGH-RISK slice" 'grep -q "confirm right-reason failures" "$R/claim-S2.out"' 
@@ -342,8 +342,8 @@ check "commit-red --force is the documented escape hatch" '( cd "$VW" && D commi
 echo "== v3 slice kinds"
 RK="$(newrepo rk)"; cd "$RK"
 echo "legacy" > src/old.js; echo "other" > src/other.js; echo "docs" > README.md; mkdir -p tests
-printf 'test("keep", () => { assert.equal(1,1); });\n' > tests/old.test.js
-printf 'test("keep2", () => { assert.equal(2,2); });\n' > tests/other.test.js
+printf 'test("keep", () => { assert.equal(2 - 1, 1); });\n' > tests/old.test.js
+printf 'test("keep2", () => { assert.equal(1 + 2, 3); });\n' > tests/other.test.js
 git add -A && git commit -qm seed
 cat > plan.md <<'EOF'
 ```json
@@ -361,7 +361,7 @@ OUT=$(D init plan.md 2>&1)
 check "init accepts every slice kind" '[[ "$OUT" == *"INIT ok: 6 slices"* ]]'
 check "init summarises the kinds" '[[ "$OUT" == *"KINDS:"* && "$OUT" == *"refactor"* && "$OUT" == *"research"* ]]'
 check "a chore/docs/perf slice with no verify command is refused" 'printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"echo t\"},\"slices\":[{\"id\":\"Z\",\"title\":\"z\",\"kind\":\"chore\",\"deps\":[],\"files\":[\"z\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > bad.md; D init bad.md --force 2>&1 | grep -q "needs a .verify. command"'
-check "a code slice whose footprint has no test path is warned about" 'printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"echo t\"},\"slices\":[{\"id\":\"Z\",\"title\":\"z\",\"deps\":[],\"files\":[\"src/z.js\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > warn.md; D init warn.md --force 2>&1 | grep -q "cannot write its own tests"'
+check "a code slice whose footprint has no test path is refused (it can never commit RED)" 'printf "\140\140\140json\n{\"request\":\"r\",\"commands\":{\"test\":\"echo t\"},\"slices\":[{\"id\":\"Z\",\"title\":\"z\",\"deps\":[],\"files\":[\"src/z.js\"],\"risk\":\"low\",\"criteria\":[\"c\"]}]}\n\140\140\140\n" > warn.md; D init warn.md --force 2>&1 | grep -q "can never commit RED"'
 D reset --yes >/dev/null 2>&1; D init plan.md >/dev/null 2>&1
 OUT=$(D dispatch R1 R2 C1 D1 T1 X1 2>&1)
 check "a trivial slice is routed to the lite lane" 'grep -q "subagent_type=glm-programmer-lite, description=.ci." <<<"$OUT"'
@@ -392,7 +392,7 @@ D dispatch T1 >/dev/null 2>&1; git worktree add -q .claude/worktrees/k2 -b wt-k2
 ( cd "$RK/.claude/worktrees/k2" && D claim T1 >/dev/null 2>&1 )
 
 echo "-- test-kind and research-kind integration"
-( cd "$RK/.claude/worktrees/k2" && printf "test(\"n\", () => { assert.equal(1,1); });\n" > tests/new.test.js && D commit-work t >/dev/null 2>&1 )
+( cd "$RK/.claude/worktrees/k2" && printf "test(\"n\", () => { assert.equal(2 - 1, 1); });\n" > tests/new.test.js && D commit-work t >/dev/null 2>&1 )
 OUT=$(D integrate T1 2>&1)
 check "a kind:test slice that added no test file is rejected at merge" '
   D add-fix --id T9 --title "empty backfill" --kind test --files src/nothing.js --criteria "covered" >/dev/null 2>&1
@@ -602,7 +602,7 @@ check "a require() import line does not count as an assertion" '[[ "$(vac "const
 test(\"a\", () => { foo(1); });")" != "0" ]]'
 check "the English word should in a comment does not count" '[[ "$(vac "// this should do things
 test(\"a\", () => { foo(1); });")" != "0" ]]'
-check "a real assertion call does count" '[[ "$(vac "test(\"a\", () => { assert.equal(1,1); });")" == "0" ]]'
+check "a real assertion call does count" '[[ "$(vac "test(\"a\", () => { assert.equal(2 - 1, 1); });")" == "0" ]]'
 check "expect(...) counts" '[[ "$(vac "test(\"a\", () => { expect(x).toBe(1); });")" == "0" ]]'
 check "unittest self.assertIn(...) counts" '[[ "$(vac "class T(unittest.TestCase):
     def test_a(self):
@@ -613,7 +613,7 @@ check "pytest.raises(...) counts" '[[ "$(vac "def test_a():
 check "a Python test with no assertion is still flagged" '[[ "$(vac "def test_a():
     f()" test_x.py)" != "0" ]]'
 check "unittest assertEqual/assertIn count" '[[ "$(vac "def test_a(self):
-    self.assertEqual(1, 1); self.assertIn(1, [1])")" == "0" ]]'
+    self.assertEqual(len([1]), 1); self.assertIn(1, [1])")" == "0" ]]'
 
 echo "== v3.1 verdict parsing fails closed"
 RV="$(newrepo rv)"; cd "$RV"
@@ -635,7 +635,10 @@ check "CHANGES REQUIRED with a space is not read as APPROVED" '[[ "$OUT" == *"RE
 check "finish refuses to close over a review that is not APPROVED" '[[ "$(D finish 2>&1)" == *"reviews not closed"* ]]'
 printf '## Review verdict: APPROVED\n## Findings\nNo issues found.\n' > .claude/dev-team/reviews/r1.report.md
 OUT=$(D next 2>&1)
-check "a report rewritten in place IS re-harvested (the re-review loop can close)" '[[ "$OUT" == *"REVIEW r1: APPROVED"* && "$OUT" == *"re-review, round 2"* ]]'
+check "an APPROVED report with no Evidence section is NOT an approval (fails closed)" '[[ "$OUT" == *"REVIEW r1: UNKNOWN"* && "$OUT" == *"without a "*"Evidence"*"section"* ]]'
+printf '## Review verdict: APPROVED\n## Evidence\n- git diff main..HEAD -> read all 2 files\n## Findings\nNo issues found.\n' > .claude/dev-team/reviews/r1.report.md
+OUT=$(D next 2>&1)
+check "a report rewritten in place IS re-harvested (the re-review loop can close)" '[[ "$OUT" == *"REVIEW r1: APPROVED"* && "$OUT" == *"re-review, round 3"* ]]'
 check "finish refuses to close without a recorded passing checkpoint" '[[ "$(D finish 2>&1)" == *"finish gate"* ]]'
 D checkpoint >/dev/null 2>&1; D checkpoint --result pass >/dev/null 2>&1
 check "and finish then closes cleanly" '[[ "$(D finish 2>&1)" == *"FINISHED"* ]]'
@@ -725,7 +728,8 @@ git worktree add -q .claude/worktrees/m2 -b wm2 HEAD; MW2="$RM/.claude/worktrees
 check "claim records the integration root for the Stop gate" '[ "$(cat "$MW1/.slice/root")" = "$RM" ]'
 stopq() { printf '{"cwd":"%s","last_assistant_message":%s}' "$1" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$2")" | python3 "$G" stop 2>&1; }
 check "a finished glm-programmer passes the Stop gate" '[ -z "$(stopq "$MW1" "## Status: Complete
-## Gate: echo ok -> ok
+## Criteria: c -> m1 test -- met
+## Gate: echo ok -> ok (1 test passed)
 ## Notes: none")" ]'
 check "and the gate wrote a .done marker into the integration checkout" '[ -f "$RM/.claude/dev-team/slices/M1.done" ]'
 ( cd "$MW2" && D claim M2 >/dev/null 2>&1 && mktest tests/m2.test.js M2 && D commit-red m2 >/dev/null 2>&1 )
@@ -1098,6 +1102,92 @@ then
   exit 1
 fi
 echo "zcode dispatch ok"
+
+
+echo "== v4.1 engine-side proof, static checks, launch count"
+RP="$(newrepo rp)"; cd "$RP"
+cat > plan.md <<'EOF'
+```json
+{"request":"proof","commands":{"test":"sh -c 'if [ -f .slowflag ]; then sleep 4; fi; test ! -f .failflag'","test_file":"sh -c 'if [ -f .slowflag ]; then sleep 4; fi; test ! -f .failflag' {files}","lint":"none"},
+ "slices":[
+  {"id":"P1","title":"ok","deps":[],"files":["src/p1.js","tests/p1.test.js"],"risk":"low","criteria":["p1 returns the sum of two numbers"]},
+  {"id":"P2","title":"bad","deps":[],"files":["src/p2.js","tests/p2.test.js"],"risk":"low","criteria":["p2 returns the product of two numbers"]},
+  {"id":"P3","title":"slow","deps":[],"files":["src/p3.js","tests/p3.test.js"],"risk":"low","criteria":["p3 returns the difference of two numbers"]}]}
+```
+EOF
+mkprog() { # id: worktree + claim + RED + GREEN, in the current repo
+  local id=$1 lc; lc=$(echo "$id" | tr A-Z a-z)
+  git worktree add -q ".claude/worktrees/$lc" -b "wt-$lc" HEAD
+  ( cd ".claude/worktrees/$lc" && D claim "$id" >/dev/null 2>&1 && mktest "tests/$lc.test.js" "$id" \
+    && D commit-red "$id" >/dev/null 2>&1 && echo "exports.$lc = 1;" > "src/$lc.js" && D commit-green "$id" >/dev/null 2>&1 )
+}
+D init plan.md >/dev/null 2>&1
+OUT=$(D dispatch P1 P2 P3 2>&1)
+check "dispatch ends with the exact launch count" '[[ "$OUT" == *"LAUNCH 3: emit exactly 3 Agent call(s) (ok, bad, slow)"* ]]'
+check "the launch line is the LAST line" '[[ "$(printf "%s\n" "$OUT" | tail -1)" == LAUNCH* ]]'
+mkprog P1; mkprog P2; mkprog P3
+touch .claude/worktrees/p2/.failflag .claude/worktrees/p3/.slowflag
+OUT=$(DEVTEAM_PROOF=on D integrate P1 P2 2>&1)
+check "proof: a lane whose gate passes under the engine merges, and the merge says what was proven" '[[ "$OUT" == *"P1: MERGED"* && "$OUT" == *"proof passed: tests"* ]]'
+check "proof: a lane whose tests fail when the ENGINE runs them is rejected" '[[ "$OUT" == *"P2: REJECTED — PROOF FAILED"* && "$OUT" == *"exited 1"* ]]'
+check "proof: the rejection stays in flight for a warm fix" 'D status 2>&1 | grep -q "P2 .*inflight.*REJECTED:proof-failed"'
+OUT=$(DEVTEAM_PROOF=on D integrate P2 2>&1)
+check "a second rejection says warm fixes are not converging and names retry" '[[ "$OUT" == *"not converging"* && "$OUT" == *"retry P2"* ]]'
+OUT=$(DEVTEAM_PROOF=on DEVTEAM_PROOF_TIMEOUT=1 D integrate P3 2>&1)
+check "a proof that times out is SKIPPED, never a rejection (infrastructure must not reject good work)" '[[ "$OUT" == *"P3: MERGED"* && "$OUT" == *"proof SKIPPED"* ]]'
+echo "== v4.1 RED proof (strict): the new tests must fail before the implementation"
+RQ="$(newrepo rq)"; cd "$RQ"; echo "exports.q2 = 0;" > src/q2.js; git add -A; git commit -qm seed
+cat > plan.md <<'EOF'
+```json
+{"request":"red proof","profile":"strict","commands":{"test":"sh -c 'exit 1'","test_file":"sh -c 'test -f \"src/$(basename \"$0\" .test.js).js\"' {files}","lint":"none","typecheck":"none","build":"none"},
+ "slices":[
+  {"id":"Q1","title":"fails first","deps":[],"files":["src/q1.js","tests/q1.test.js"],"risk":"low","criteria":["q1 exports a named constant"]},
+  {"id":"Q2","title":"passes at once","deps":[],"files":["src/q2.js","tests/q2.test.js"],"risk":"low","criteria":["q2 exports a named constant"]}]}
+```
+EOF
+D init plan.md >/dev/null 2>&1; D dispatch Q1 Q2 >/dev/null 2>&1
+mkprog Q1; mkprog Q2
+OUT=$(DEVTEAM_PROOF=on D integrate Q1 Q2 2>&1)
+check "RED proof: tests that fail before the implementation are accepted and the merge reports it" '[[ "$OUT" == *"Q1: MERGED"* && "$OUT" == *"RED fails as it must"* ]]'
+check "RED proof: tests that already PASS without the implementation are rejected" '[[ "$OUT" == *"Q2: REJECTED — RED PROOF FAILED"* && "$OUT" == *"retry Q2"* ]]'
+check "RED proof leaves no detached proof worktree behind" '[ -z "$(git worktree list | grep "/proof/")" ]'
+
+echo "== v4.1 static checks at commit time"
+RS="$(newrepo rs)"; cd "$RS"
+cat > plan.md <<'EOF'
+```json
+{"request":"static","commands":{"test":"echo ok","lint":"none"},
+ "slices":[{"id":"X1","title":"x","deps":[],"files":["src/x1.js","src/x1.py","tests/x1.test.js"],"risk":"low","criteria":["x1 computes the total"]}]}
+```
+EOF
+D init plan.md >/dev/null 2>&1; D dispatch X1 >/dev/null 2>&1
+git worktree add -q .claude/worktrees/x1 -b wt-x1 HEAD; XW="$RS/.claude/worktrees/x1"; mkdir -p "$XW/tests"
+( cd "$XW" && D claim X1 >/dev/null 2>&1 )
+check "commit-red refuses a skipped test" '( cd "$XW" && printf "test(\"a\", () => { assert.equal(compute(), 2); });\ntest.skip(\"b\", () => { assert.equal(compute(), 3); });\n" > tests/x1.test.js && D commit-red x 2>&1 | grep -q "disables or isolates" )'
+check "commit-red refuses an assertion that can never fail" '( cd "$XW" && printf "test(\"a\", () => { assert.equal(1, 1); });\n" > tests/x1.test.js && D commit-red x 2>&1 | grep -q "can never fail" )'
+check "commit-red refuses expect(true).toBe(true)" '( cd "$XW" && printf "test(\"a\", () => { expect(true).toBe(true); });\n" > tests/x1.test.js && D commit-red x 2>&1 | grep -q "can never fail" )'
+check "commit-red refuses a test with an empty body" '( cd "$XW" && printf "test(\"e\", () => {});\ntest(\"a\", () => { assert.equal(compute(), 2); });\n" > tests/x1.test.js && D commit-red x 2>&1 | grep -q "empty body" )'
+check "a real RED commit still goes through" '( cd "$XW" && printf "test(\"a\", () => { assert.equal(compute(), 2); });\n" > tests/x1.test.js && D commit-red x 2>&1 | grep -q "RED committed" )'
+check "commit-green refuses a TODO placeholder" '( cd "$XW" && printf "exports.compute = () => 2; // TODO handle negatives\n" > src/x1.js && D commit-green x 2>&1 | grep -q "placeholder" )'
+check "commit-green refuses an empty catch" '( cd "$XW" && printf "exports.compute = () => { try { return run(); } catch (e) {} };\n" > src/x1.js && D commit-green x 2>&1 | grep -q "swallowed error" )'
+check "commit-green refuses except: pass" '( cd "$XW" && rm -f src/x1.js && printf "def compute():\n    try:\n        return run()\n    except Exception:\n        pass\n" > src/x1.py && D commit-green x 2>&1 | grep -q "swallowed error" )'
+check "a refused GREEN commits nothing" '( cd "$XW" && [ -z "$(git log --format=%s -1 | grep "GREEN")" ] )'
+check "a variable named todo is not a placeholder" '( cd "$XW" && rm -f src/x1.py && printf "exports.compute = () => { const todo = 2; return todo; };\n" > src/x1.js && D commit-green x 2>&1 | grep -q "GREEN committed" )'
+check "commit-green --force is the documented escape hatch" '( cd "$XW" && printf "exports.compute = () => 2; // TODO handle negatives\n" > src/x1.js && D commit-green x --force 2>&1 | grep -q "GREEN committed" )'
+
+echo "== v4.1 stop gate: claims must hold up"
+stopx() { rm -f "$1/.slice/stop_blocks"; printf '{"cwd":"%s","last_assistant_message":%s}' "$1" "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$2")" | python3 "$G" stop 2>&1; }
+check "stop gate: Complete over a not-met criterion is refused" '[[ "$(stopx "$XW" "## Status: Complete -- ## Criteria: c -> test -- not met -- ## Gate: echo ok -> ok")" == *"not met"* ]]'
+check "stop gate: a slice report with no pinned command in ## Gate is refused" '[[ "$(stopx "$XW" "## Status: Complete -- ## Criteria: c -> t -- met -- ## Gate: all tests passed and everything looks fine")" == *"shows none of the pinned commands"* ]]'
+check "stop gate: a slice report with no ## Criteria is refused" '[[ "$(stopx "$XW" "## Status: Complete -- ## Gate: echo ok -> ok, the output was fine")" == *"no "*"Criteria:"*" section"* ]]'
+check "stop gate: a complete, honest report passes" '[ -z "$(stopx "$XW" "## Status: Complete -- ## Criteria: c -> t -- met -- ## Gate: echo ok -> ok, the output was fine")" ]'
+
+echo "== v4.1 plan validation"
+printf '\140\140\140json\n{"request":"r","commands":{"test":"echo t"},"slices":[{"id":"A","title":"a","deps":[],"files":["/etc/a.js","tests/a.test.js"],"risk":"low","criteria":["a does a thing for the user"]}]}\n\140\140\140\n' > bad.md
+check "an absolute path in a footprint is refused" '[[ "$(D init bad.md --force 2>&1)" == *"must be relative to the repository"* ]]'
+printf '\140\140\140json\n{"request":"r","commands":{"test":"echo t"},"slices":[{"id":"A","title":"a","deps":[],"files":["src/a.js","tests/a.test.js"],"risk":"high","criteria":["works"]}]}\n\140\140\140\n' > vague.md
+OUT=$(D init vague.md --force 2>&1)
+check "vague criteria and a high-risk slice without edge cases are warned about" '[[ "$OUT" == *"criteria too vague"* && "$OUT" == *"risk high without edge_cases"* ]]'
 
 echo
 echo "passed=$pass failed=$fail"

@@ -125,7 +125,7 @@ class PlanValidationTests(Base):
 class ReadyFootprintTests(Base):
     def test_red_done_holds_its_footprint_and_research_is_exempt(self):
         repo = self.new_repo()
-        self.init_plan(repo, [slice_("S1", ["src/a.py", "tests/a.test.js"]), slice_("S2", ["src/a.py"]),
+        self.init_plan(repo, [slice_("S1", ["src/a.py", "tests/a.test.js"]), slice_("S2", ["src/a.py", "tests/b.test.js"]),
                               slice_("R1", ["src/a.py"], kind="research")])
         self.edit_state(repo, lambda st: st["slices"]["S1"].update({"status": "red-done"}))
         st = DT.load_state(repo)

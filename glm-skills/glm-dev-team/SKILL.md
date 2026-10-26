@@ -14,7 +14,7 @@ allowed-tools:
   - Bash(python3 *devteam.py *)
 ---
 
-# Dev Team — GLM edition (v4.0): event-driven, governed fan-out, evidence-gated
+# Dev Team — GLM edition (v4.1): event-driven, governed fan-out, evidence-gated
 
 You are the **Conductor**.
 
@@ -46,33 +46,43 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
   read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
   command is denied and the agent adapts or reports `Blocked`.
 
+## Conductor discipline (read before every turn)
+
+1. One engine call per wake-up. Then launch EXACTLY the number of `Agent` calls the `LAUNCH N: <ids>` line states (plus any printed background commands), all in ONE message. Never fewer, never two lanes in one call.
+2. Paste each printed prompt verbatim. Never paraphrase it, never shorten it, never add a `model` parameter.
+3. A slice is done only when `next` printed `MERGED` for it. A lane's own report, your own belief or a green-looking message never counts.
+4. On a `devteam: ...` error (stderr), quote the message to yourself and do exactly what it says. Never rerun the same failing command more than once. Never edit `state.json`, briefs, markers or worktrees.
+5. On `PROOF FAILED` or `RED PROOF FAILED`, `SendMessage` the lane the printed command and output tail verbatim and tell it to fix the cause, rerun, commit and report. On the second rejection run `retry <id>` (the engine prints it).
+6. Never weaken a test, a gate, a footprint or a profile to get past a rejection.
+7. Do not implement slices yourself outside the fast lane.
+8. No narration between tool calls. No summaries of engine output the user did not ask for.
+9. Before `finish`, verify the last `next` printed no `UNRESOLVED`, no open review and no `FAIL` checkpoint. Then report with the evidence lines the engine printed.
+
 **Each turn = read what arrived → ONE engine call → launch everything it printed, as parallel tool
 calls in ONE message → end the turn.** GLM always thinks before answering, so every extra turn,
 tool call or paragraph you write sits on the critical path of every running lane. No narration.
 
 #### ZCode protocol
 
-The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (8-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool:
+The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (8-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool. Follow these rules:
 
-| ZCode fact | What the Conductor does |
-| --- | --- |
-| `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` — no per-dispatch `model` | Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`; the agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash` — no haiku/sonnet/opus aliases). |
-| No SubagentStop event, but `doctor --harness zcode --fix` installs a Stop hook in `~/.zcode/cli/config.json` that routes programmer Stops through `guard.py` — it writes the `.done`/`.blocked` marker | The wake-up is the lane completion notification. Run `devteam next [<id>]` with the finished slice's id: the Stop gate wrote the marker, and the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) still gates the merge. |
-| `SendMessage` and `TaskStop` exist | Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`. |
-| Installed agents and hook config load only in a new session | After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart). |
+1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`. The agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash`; there are no haiku/sonnet/opus aliases).
+2. ZCode has no SubagentStop event, but `doctor --harness zcode --fix` installs a Stop hook in `~/.zcode/cli/config.json` that routes programmer Stops through `guard.py`, which writes the `.done`/`.blocked` marker. Treat the lane completion notification as the wake-up. Run `devteam next [<id>]` with the finished slice's id. The Stop gate wrote the marker, and the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) still gates the merge.
+3. `SendMessage` and `TaskStop` exist. Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`.
+4. Installed agents and hook config load only in a new session. After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart).
 
 The hooks are user-level: `guard.py zcode` routes on the payload's `agent_type` — programmer roles run the edit/bash checks, reviewer/leader/investigator roles the read-only checks, and every foreign role silently allows, so ordinary sessions are never affected.
 
 ## Route first (one line to the user, then act)
 
-| The request is… | Route |
-| --- | --- |
-| One obvious edit, no design choice | Do it, run the gate, done. No engine. |
-| A question about the code | `Explore` agents in parallel (one per area), answer. No engine. |
-| One coherent slice, ≲6 files, one approach, no new shared interface, no concurrency/security surface | **Fast lane** (below). |
-| A bug whose cause is not obvious | `devteam brief-debug "<symptom>" -n 4` → launch every glm-investigator in ONE message, end the turn. First `ROOT CAUSE FOUND` wins → pipeline (or fast lane) for the fix. |
-| "Review this PR / audit this code" — nothing to write | `devteam review-pr <range> [--shards N]` → launch the reviewers, end the turn, read their reports. |
-| Anything larger: ≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research | **Pipeline** below. |
+Pick the first rule that matches:
+
+1. One obvious edit, no design choice: do it, run the gate, done. No engine.
+2. A question about the code: launch `Explore` agents in parallel (one per area), answer. No engine.
+3. One coherent slice, ≲6 files, one approach, no new shared interface, no concurrency/security surface: use the **Fast lane** (below).
+4. A bug whose cause is not obvious: run `devteam brief-debug "<symptom>" -n 4`, launch every glm-investigator in ONE message (the count on the `LAUNCH` line), end the turn. The first `ROOT CAUSE FOUND` wins; then use the pipeline (or fast lane) for the fix.
+5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
+6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
 Unsure → one level up. A Small task that grows a second slice → promote.
 
@@ -131,6 +141,36 @@ in one line what is traded, list every untested slice at the end with an offer t
   `DEVTEAM_MAX_PARALLEL=N` pins it; `DEVTEAM_GOVERNOR=off` disables.
 - **`devteam stats`** — measured requests, output tokens, cache-hit rate, effort actually sent, API errors
   and wall time per role/model. Use it before changing tier, effort or routing; never guess.
+- **Proof and static gates (v4.1)** — the engine no longer trusts a lane's own `## Gate:` text by itself.
+  1. **Proof run.** Before merging a slice (profiles `strict` and `balanced`; off in `turbo`/`spike`) the
+     engine re-runs, inside the slice worktree: the slice's own test files through `commands.test_file`
+     (else `commands.test`) for `code`/`test` slices; the slice's `verify` command for `chore`/`docs`/`perf`;
+     the full test command for `refactor`; plus the file-scoped lint/typecheck of the gate. Any non-zero
+     exit rejects the slice. The printed line is `<id>: REJECTED - PROOF FAILED ...` with the command and
+     the last output lines, and the slice stays in flight. `DEVTEAM_PROOF=off|on` overrides the profile;
+     `DEVTEAM_PROOF_TIMEOUT=<seconds>` (default 600) bounds each command.
+  2. **Red proof.** Where the profile runs RED verification (`strict`: every slice; `balanced`: risk high
+     only) the engine checks on the RED commit that the new tests FAIL. Tests that already pass without
+     the implementation are rejected with `RED PROOF FAILED`.
+  3. **Static checks at commit time.** `commit-red` and `commit-work` (kind test) refuse skip/xfail/only/todo
+     markers, tautological asserts (`assert True`, `expect(true).toBe(true)`, `assert 1 == 1`) and empty test
+     bodies. `commit-green` and `commit-work` (kind code/refactor/perf) refuse added lines with
+     TODO/FIXME, "not implemented", debugger/pdb leftovers or swallowed errors (empty catch block,
+     `except ...: pass`). `--force` overrides, and the reason must then go under `## Notes:`.
+  4. **Stop gate.** A slice/green report must contain a `## Gate:` section that shows the pinned command
+     that was run (not just the word "passed") and a `## Criteria:` section. `## Status: Complete` with a
+     criterion marked "not met" is refused; the lane must report `Blocked`.
+  5. **Review fail-closed.** A reviewer or verifier report with verdict APPROVED/PASS but no `## Evidence`
+     section is treated as UNKNOWN, i.e. changes required.
+  6. **Plan validation.** A `code` slice whose footprint has no test path is an ERROR (it can never commit
+     RED); absolute or `..` paths in `files` are errors. Warnings: criterion under 4 words, risk high
+     without `edge_cases`, `test_file` without `{files}`, `commands.test` none while `code` slices exist.
+  7. **Launch line.** The last line printed by `next`/`start`/`dispatch`/`review-batch`/`review-pr`/`brief-debug`
+     is `LAUNCH N: <ids>`. Emit exactly N `Agent` calls (plus printed background commands) in ONE message.
+  8. **Reject escalation.** After 2 rejections of the same dispatch the engine says the warm fixes are not
+     converging and prints `retry <id>` (cold restart on `glm-programmer-strong`). Run it.
+  When a rejection appears, send the lane the printed text verbatim (see Phase 2). Never answer a
+  rejection by editing tests, gates or footprints.
 
 ## Fast lane (Small)
 
@@ -180,6 +220,8 @@ whose marker never arrived.)
 
 Act on each block, in the same turn:
 
+- `LAUNCH N: <ids>` (always the last line) → count your `Agent` calls before sending: exactly N, plus the
+  printed background commands, all in ONE message.
 - `=== DISPATCH <id> …` → one `Agent` call: the printed `subagent_type`, `description`, and the prompt
   **verbatim and nothing else** (never add a `model`).
 - `=== REVIEW <rN> …` / `=== INVESTIGATE …` → the printed Agent line(s).
@@ -190,6 +232,9 @@ Act on each block, in the same turn:
 - `REJECTED` / `NOT READY` / `MERGE ERROR` → the slice stays in flight: `SendMessage` that agent the exact
   fix printed, `next` when it reports. `devteam retry <id>` (cold, fresh worktree, `--files …` to widen;
   the retry runs on GLM-5.3) only when it can't be resumed — `TaskStop` a stuck one first.
+- `<id>: REJECTED - PROOF FAILED ...` / `RED PROOF FAILED` → `SendMessage` that agent the printed command and
+  output tail verbatim, plus: fix the cause, rerun the command, commit, report. Do not edit anything
+  yourself. On the second rejection of the same dispatch the engine prints `retry <id>`: run it.
 - `LANE DOWN <id>` (API failed after retries) → `SendMessage` that agent `continue`.
 - `SPAWN FAILED → re-queued …` / `RUNTIME LIMIT` / `THROTTLED` → nothing: the engine re-queued and resized.
   `… relaunch these printed Agent lines` → relaunch those (reviewers/leader) when a slot frees. `marked
@@ -280,3 +325,11 @@ trade width for rate-limit headroom (default `api` is full width) · profile `tu
 asked) · `review_batch` / `checkpoint_every` up for very large runs · `effort` on a role after `stats`
 shows it is the bottleneck. Past `spike` only two rules remain — independent review and one writer per
 path. If asked to cut those, say plainly what breaks, and don't.
+
+## Final check (every turn)
+
+1. Engine called exactly once this turn.
+2. `Agent` call count equals the `LAUNCH N` count, all in one message.
+3. Every prompt pasted verbatim, no `model` parameter.
+4. No `MERGED` line for a slice means it is not done.
+5. Nothing weakened (test, gate, footprint, profile) to get past a rejection.

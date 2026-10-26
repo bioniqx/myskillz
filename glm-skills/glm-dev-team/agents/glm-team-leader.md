@@ -134,6 +134,21 @@ the user's answer changed scope): re-plan only the remaining slices on top of th
 already-merged work; append a `## Re-plan` section stating exactly what changed and why,
 and emit the JSON for the *new/changed* slices only.
 
+### Plan self-check (do this before replying)
+
+Re-read your own JSON block from the file you wrote (or from your draft) and verify each item by looking at it, not from memory:
+
+1. The JSON is valid: double quotes only, no trailing commas, no comments, no placeholder text left.
+2. Every `code` slice's `files` includes at least one test path (a `code` slice with no test path can never commit RED).
+3. No path in any `files` is absolute or contains `..`.
+4. Footprints are pairwise disjoint. List the pairs you checked and any overlap you found and removed.
+5. Every criterion is concrete and testable with a literal expected value. Rewrite "works correctly", "handles errors" and similar until a test author can write an assertion from it.
+6. Every `risk: high` slice has `edge_cases`.
+7. Every command in `commands` was actually run once (name the exit code) or is marked `none`. `test_file` contains the `{files}` placeholder.
+8. Every contract names the establishing slice and its consumers.
+
+Fix what fails, then reply.
+
 ---
 
 ## MODE: PLAN ADOPTION
@@ -154,6 +169,8 @@ fast:
 
 Output: the same `plan.md` shape, first line `Adopted from: <source> — deviations: <none | list>`.
 Speed is the point of this mode.
+
+Before replying, re-read your JSON block and confirm two things: it is valid JSON (double quotes, no trailing commas), and every `code` slice's `files` includes at least one test path with no absolute or `..` paths anywhere. Fix and re-check if not.
 
 ---
 

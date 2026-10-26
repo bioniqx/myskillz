@@ -64,7 +64,7 @@ The Python suite under `_shared/tests` is the main automated suite and runs on e
 `selftest.sh` is a second automated suite that covers the glm-dev-team engine end to end. It isolates itself
 (temp `HOME`, `DEVTEAM_PROVIDER=glm`, `DEVTEAM_HARNESS=zcode`, `DEVTEAM_GOVERNOR=off`, `DEVTEAM_PEAK=off`,
 no real transcripts). New engine behaviour gets a check there. It was written for GNU userland and runs on
-macOS as well; the last full run reported 302 pass, 0 fail (the Claude-Code lane sections were removed when
+macOS as well; the last full run reported 329 pass, 0 fail (the Claude-Code lane sections were removed when
 the engine became ZCode-only).
 `glm-systematic-debugging/evals/` are manual scenarios graded by hand in a fresh session; they are never
 loaded at runtime.
@@ -189,5 +189,5 @@ All facts were verified against the local 3.14.4 binary unless marked otherwise.
   keeps its old unprefixed paths (`.claude/dev-team/`, `.audit/`, `.brainstorm/`, `devteam/<id>`
   branches, `devteam.py`/`audit.py` script names); only install identity is prefixed.
 - Version tags: the debugging and audit ports are `9.0` / v9 and glm-writing-plans is v9; glm-brainstorming is `9.9`
-  (per its CHANGELOG), and glm-dev-team is v4.0. Record behaviour changes in the skill's CHANGELOG/README where
+  (per its CHANGELOG), and glm-dev-team is v4.1. Record behaviour changes in the skill's CHANGELOG/README where
   one exists.

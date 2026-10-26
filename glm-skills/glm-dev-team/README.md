@@ -1,4 +1,4 @@
-# glm-dev-team v4.0 — bản tối ưu cho Z.ai GLM-5.3 / GLM-5.3-Flash (chỉ ZCode)
+# glm-dev-team v4.1 — bản tối ưu cho Z.ai GLM-5.3 / GLM-5.3-Flash (chỉ ZCode)
 
 Skill ZCode điều phối nhiều subagent song song (glm-programmer-lite / glm-programmer-strong trong git
 worktree riêng, reviewer / glm-investigator / leader chỉ đọc). Engine giữ trạng thái và kiểm tra bằng máy
@@ -27,6 +27,25 @@ mô hình theo frontmatter agent của ZCode, cộng thêm bộ **governor** t�
 | **`devteam stats`** | Số liệu **đo được** từ transcript (định dạng Claude Code) theo role/model: số request (khử trùng lặp theo requestId), output token, tỉ lệ cache hit, effort thực gửi, lỗi API, thời gian chạy; cảnh báo nếu effort không được gửi |
 | **Agent prompts** | Bỏ nhắc sonnet/opus/64; thêm quy tắc "ít turn, gộp đọc file thành tool call song song" (mỗi turn là một lần gọi model có thinking) |
 | Anthropic | Provider vẫn nhận diện được (`DEVTEAM_PROVIDER=anthropic` hoặc tự nhận từ base URL) — chỉ còn ảnh hưởng nhãn stats; định tuyến strong/lite như nhau và trần vẫn là 8 |
+
+## v4.1 - giảm sai sót cho GLM
+
+v4.1 không đổi kiến trúc. Nó thêm các lớp chặn cho những lỗi mà GLM-5.3 / GLM-5.3-Flash hay mắc: engine tự chạy lại và kiểm tra thay vì tin lời báo cáo của lane, còn prompt được viết lại thành quy tắc đánh số, đặt điều quan trọng ở đầu và nhắc lại bằng checklist ở cuối.
+
+| Điểm yếu GLM | Cơ chế chặn |
+|---|---|
+| Báo "xong / test pass" mà chưa chạy gì | **Proof run**: trước khi merge (profile `strict`/`balanced`) engine tự chạy lại test của slice, `verify` (chore/docs/perf), toàn bộ test (refactor) và lint/typecheck theo file trong worktree; exit khác 0 thì `PROOF FAILED`. **Stop gate**: `## Gate:` phải ghi lệnh đã chạy, `## Criteria:` bắt buộc, `Complete` kèm tiêu chí "not met" bị từ chối. Prompt: mục "What gets a slice rejected" và checklist "Before you finish" |
+| Bịa API, symbol, đường dẫn | Rule "Verified symbols only" (đã có); reviewer phải mở mọi vị trí bằng Read/grep trước khi trích dòng nguyên văn, vị trí chưa mở thì loại; unknown symbol là `Blocked` |
+| Viết test rỗng hoặc yếu | **Red proof** (strict: mọi slice; balanced: risk high): test mới phải FAIL trên commit RED. **Static check** lúc `commit-red`/`commit-work`: chặn skip/xfail/only/todo, assert tautology, thân test rỗng |
+| Để lại TODO, placeholder, giá trị expected hard-code | **Static check** lúc `commit-green`/`commit-work`: chặn dòng thêm có TODO/FIXME, "not implemented", debugger/pdb; reviewer có danh sách kiểm tra tường minh |
+| Nuốt lỗi | Static check chặn empty catch và `except ...: pass`; rule "Fail loudly"; reviewer kiểm swallowed errors từng mục |
+| Lặp mãi một lệnh lỗi | Mục "Tool mechanics" trong agent: lỗi giống nhau lần 2 thì đổi cách, lần 3 thì `Blocked` kèm lỗi; investigator có loop guard tương tự. **Reject escalation**: sau 2 lần bị từ chối cùng một dispatch, engine in `retry <id>` (khởi động lạnh trên `glm-programmer-strong`) |
+| Edit với `old_string` chưa đọc lại | "Tool mechanics": Read lại vùng cần sửa trước mỗi Edit, Edit lỗi thì Read lại, hai lần lỗi thì dùng Write (chỉ trong footprint) hoặc `Blocked` |
+| Reviewer đóng dấu APPROVED không bằng chứng, bịa vị trí finding | **Review fail-closed**: APPROVED/PASS mà thiếu `## Evidence` bị coi là UNKNOWN (changes required); báo cáo reviewer có mục `## Evidence`; mỗi finding phải trích dòng nguyên văn tại vị trí đã mở |
+| Diễn đạt lại prompt phải dán nguyên văn; chỉ launch một phần số lane được in | Mục "Conductor discipline" (9 quy tắc) trong SKILL.md; dòng cuối `LAUNCH N: <ids>` cho biết đúng N lời gọi `Agent` phải phát trong MỘT message; mục "Final check" cuối file |
+| Plan sai ngay từ đầu (slice code không có test, đường dẫn tuyệt đối, tiêu chí mơ hồ) | **Plan validation**: slice `code` không có đường dẫn test hoặc `files` tuyệt đối/`..` là lỗi; cảnh báo cho tiêu chí dưới 4 từ, risk high thiếu `edge_cases`, `test_file` thiếu `{files}`, `commands.test` là none mà vẫn có slice `code`; leader có "Plan self-check" |
+
+Khi bị từ chối, Conductor gửi nguyên văn lệnh và đoạn cuối output cho lane qua `SendMessage` để sửa nguyên nhân, không bao giờ nới test, gate, footprint hay profile để qua.
 
 ## Cài đặt
 
@@ -64,11 +83,13 @@ Hook là cấp user: cầu `guard.py zcode` routing theo `agent_type` của payl
 | `DEVTEAM_GOVERNOR=off` | Tắt governor (vẫn giữ re-queue spawn lỗi và LANE DOWN) |
 | `DEVTEAM_PROVIDER` | `glm` / `anthropic` — ép provider (chỉ ảnh hưởng nhãn stats và peak) |
 | `DEVTEAM_PEAK=on/off` | `on`: bật giảm trần một nửa trong giờ cao điểm Z.ai (T2–T6, 14–18h UTC+8) để tiết kiệm credit; mặc định tắt — chạy đủ 8 cả ngày |
+| `DEVTEAM_PROOF=off/on` | Ghi đè profile cho proof run: engine tự chạy lại test/verify/lint trong worktree trước khi merge. Mặc định bật ở `strict`/`balanced`, tắt ở `turbo`/`spike` |
+| `DEVTEAM_PROOF_TIMEOUT` | Số giây tối đa cho mỗi lệnh của proof run (mặc định 600) |
 | `DEVTEAM_TRANSCRIPTS_DIR` | Thư mục transcript (định dạng Claude Code) nếu nằm ngoài vị trí mặc định |
 
 ## Đã kiểm thử
 
-- `bash scripts/selftest.sh` — **301 check, 301 pass, 0 fail**. Dựng repo git tạm, đi hết vòng đời;
+- `bash scripts/selftest.sh` — **329 check, 329 pass, 0 fail**. Dựng repo git tạm, đi hết vòng đời;
   chạy toàn bộ dưới harness zcode; môi trường test cô lập (HOME tạm, không đọc transcript thật).
 - Phần ZCode được kiểm thử bằng `class TestDevteamZcodeCore` (engine/guard chế độ zcode: dispatch bỏ model, chọn strong, provider mặc định glm; guard định tuyến, fail-open, no-op với role lạ) và `class TestDevteamZcodeDoctor` (doctor: cài 6 agent vào `~/.zcode/agents/`, merge hook giữ nguyên key user, re-run no-op, không tạo `.bak`, không ghi `.claude/settings.local.json`), tách khỏi `bash scripts/selftest.sh`.
 - **Mutation test**: cố tình phá 13 cơ chế mới (halving, re-queue, leo thang khi retry, effort lite,
@@ -98,6 +119,7 @@ low/high/max chưa có tài liệu chính thức chi tiết → dùng `devteam s
 
 ## Lịch sử ngắn
 
+- **v4.1 (2026-10-26)** — giảm sai sót cho GLM: engine tự proof run trước khi merge, red proof, static check lúc commit (skip/tautology/TODO/nuốt lỗi), stop gate bắt `## Gate:` có lệnh thật và `## Criteria:`, review fail-closed (APPROVED không có `## Evidence` bị coi là UNKNOWN), validate plan chặt hơn, dòng `LAUNCH N: <ids>` và leo thang `retry <id>` sau 2 lần bị từ chối; biến môi trường `DEVTEAM_PROOF`, `DEVTEAM_PROOF_TIMEOUT`. Prompt: SKILL.md thêm "Conductor discipline" và "Final check" (bảng hành vi đổi thành quy tắc đánh số), programmer thêm "What gets a slice rejected", "Tool mechanics" và checklist cuối, reviewer bắt buộc có `## Evidence` và trích dòng nguyên văn, investigator có loop guard, leader có "Plan self-check".
 - **Protocol alignment (2026-10-11)** — theo GLM coding protocol của user: programmer thêm "Verified symbols only" (chỉ gọi API/ký hiệu đã thấy trong repo, contract hoặc source/types của dependency — không bịa API, không tự thêm dependency) và "Fail loudly" (không nuốt lỗi, validate ở biên, không ghi secret); reviewer/spot-reviewer phát hiện API bịa, test bị nới lỏng/skip/mock để pass, lỗi bị nuốt, secret trong log, thiếu authz theo từng resource, flag money/auth/privacy cần human review; leader chạy baseline trước khi lập plan (failure có sẵn ghi vào `notes`), liệt kê stop-and-ask trigger thật, verification report kèm mục Evidence; investigator ghi rõ version đã verify cho claim dependency/API.
 - **Agent copy nguyên văn (2026-10-08)** — `doctor --harness zcode` bỏ renderer: bảy file trong `agents/` là bản cuối (frontmatter ZCode, model id thật, `thoughtLevel`), doctor chỉ copy và so sánh byte; bỏ cờ `--flash/--main`; `install-zcode.sh` cũng chỉ copy mọi `agents/*.md` của cả tám skill (không merge hook — hook guard giờ là opt-in qua doctor).
 - **thoughtLevel về lại correct ladder (2026-10-08)** — `glm-code-reviewer`, `glm-investigator`, `glm-spot-reviewer` hạ `max` → `high` đúng bảng định tuyến (chỉ leader chạy `max`); `max` giữ cho lane quyết định trên GLM-5.3.

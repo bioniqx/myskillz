@@ -1062,6 +1062,45 @@ def notes_of(last):
 
 
 
+def section(last, name):
+    m = re.search(r"##\s*" + name + r":(.*?)(?=\n##\s|\Z)", last, re.S)
+    return m.group(1) if m else None
+
+
+def claim_problems(last):
+    """A report that contradicts itself: `Status: Complete` next to a criterion marked `not met`."""
+    crit = section(last, "Criteria")
+    if crit is None or not re.search(r"##\s*Status:\s*Complete", last, re.I):
+        return []
+    bad = [ln.strip() for ln in crit.splitlines()
+           if re.search(r"\bnot met\b|\bunmet\b", ln, re.I) and not re.search(r"met\s*[|/]\s*not met", ln, re.I)]
+    if not bad:
+        return []
+    return ["your report says Status: Complete but marks a criterion as not met (" + bad[0][:120] + ") → finish it, "
+            "or end with `## Status: Blocked` and the exact reason; never report Complete over an unmet criterion"]
+
+
+def gate_problems(last, sd):
+    """For a RED->GREEN slice the `## Gate:` must show a command that was actually run (the pinned test or
+    gate program), not just the word `passed`; the engine re-runs it at merge, so an invented gate is caught
+    there too, but a lane that never ran anything should hear about it now, while it can still run it."""
+    gate = section(last, "Gate")
+    if gate is None or len(gate.strip()) < 20:
+        return ["no real evidence under `## Gate:` → run the gate commands from your briefing after your last edit and "
+                "paste the command and its last output lines (not \"should work\", not an empty heading)"]
+    progs = set()
+    for ln in read_lines(sd / "allow"):
+        if ln.startswith("python3 "):
+            continue
+        toks = [x for x in ln.split() if "=" not in x]
+        if toks:
+            progs.add(toks[0])
+    if progs and not any(p in gate for p in progs):
+        return ["`## Gate:` shows none of the pinned commands (" + ", ".join(sorted(progs)[:4]) + ") → run the exact "
+                "gate commands from your briefing and paste the command line with its real output"]
+    return []
+
+
 def guard_stop(inp):
     cwd = inp.get("cwd") or os.getcwd()
     wt = find_slice_root(cwd)
@@ -1140,6 +1179,7 @@ def guard_stop(inp):
         if not re.search(r"##\s*Status:", last):
             problems.append("your final message must use the report format from the briefing "
                             "(## Slice / ## Status / ## Worktree / ## Commits / ## Changes / ## Criteria / ## Gate / ## Notes)")
+        problems += claim_problems(last)
         if problems:
             block(blocks_file, blocks, problems)
         write_marker(wt, sd, sid, "done", notes_of(last))
@@ -1160,6 +1200,11 @@ def guard_stop(inp):
             problems.append("no implementation commit after the RED commit → implement the minimum to pass, run the gate, `commit-green \"<title>\"`")
     if not re.search(r"##\s*Status:", last):
         problems.append("your final message must use the report format from the briefing (## Slice / ## Status / ## Commits / ## Changes / ## Criteria / ## Gate / ## Notes)")
+    elif mode in ("slice", "green"):
+        problems += gate_problems(last, sd)
+        if section(last, "Criteria") is None:
+            problems.append("no `## Criteria:` section → map every acceptance criterion to the test that pins it")
+    problems += claim_problems(last)
     if problems:
         block(blocks_file, blocks, problems)
     write_marker(wt, sd, sid, "done", notes_of(last))
