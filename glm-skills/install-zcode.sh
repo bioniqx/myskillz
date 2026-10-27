@@ -384,9 +384,5 @@ esac
 
 cat <<MSG
 
-Done. Start a NEW ZCode session to load the installed skills, agents and commands (a restart is not enough), then invoke a skill with $invoke.
-$slash_line
-The agents were copied verbatim from the skills' agents/*.md: each file pins its model id and thoughtLevel (ZCode honors thoughtLevel only together with a model id). Nothing in the agent files was rewritten.$devteam_block$plans_block
-The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (dev-team opens all 8 by default, tier api).
-A frontmatter description over 1024 characters makes ZCode drop the whole skill; a body over 100KB is truncated when loaded, not dropped.
+Done.
 MSG
