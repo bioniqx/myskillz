@@ -12,6 +12,15 @@ DRY. YAGNI. TDD.
 
 Announce once: "I'm using the glm-writing-plans skill to create the implementation plan."
 
+# R-hand - sibling skills, before call 1
+
+Run `scripts/handoff.py route --self glm-writing-plans` (same directory as
+`plan_tool.py`) with the user request on stdin. If you were handed here, stdin
+starts with the previous `FROM-LINE`. `HANDOFF` or `STOP` is binding: follow
+`NEXT:` and do not plan. `STAY` means the three calls below. `GUARD` lines bind
+the whole task. Run `next --self glm-writing-plans --event <event>` only when
+the user wants that exit. Do not choose the sibling from memory.
+
 # R0 - The whole pipeline is three tool calls
 
 Call 1 `brief` -> Call 2 write the contracts -> Call 3 `build`. Nothing else.
@@ -162,16 +171,17 @@ via its Execution Protocol. Options:
    tasks; each wave's `[P]` tasks dispatched together in one message (within
    the subagent cap).
 2. Inline Execution here - sequential, with checkpoints.
-3. Hand off - the glm-dev-team skill adopts this plan as authoritative and
-   implements it end to end; or give the file to any coding agent or human
-   with: 'Execute this plan following its Execution Protocol.'
+3. Hand off - run `handoff.py next --self glm-writing-plans --event plan-ready`
+   and follow `NEXT:`. The plan file stays portable (R8). Giving the file to a
+   human with 'Execute this plan following its Execution Protocol.' is the
+   same exit when no sibling skill is installed.
 
 Which approach?"
 
 - Subagent-Driven -> dispatch each wave's `[P]` tasks yourself as subagents
   here, reviewing between waves.
 - Inline -> execute the plan yourself here, sequentially, with checkpoints.
-- Hand off -> nothing else; the plan carries everything.
+- Hand off -> follow the `NEXT:` line from `handoff.py next`. Do not implement the plan here.
 
 # R6 - Speed rules that decide the wall clock
 

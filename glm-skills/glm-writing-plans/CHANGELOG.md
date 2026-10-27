@@ -1,5 +1,9 @@
 # glm-writing-plans v9 (GLM edition) - what changed from v8
 
+**Sibling router (2026-10-27):** `scripts/handoff.py` is vendored from `_shared/handoff.py`. Call 1 runs `route --self glm-writing-plans` first. A `plan-ready` exit runs `next` and follows `NEXT:` into `glm-dev-team`. The plan file stays free of skill names (R8).
+
+
+
 **Parity repair:** the linter functions scan, fence_mask, files_block, commit_errors, allow_hit, apply_marks, cmd_wait and contract_hashes are re-synced from the original; the inline threshold is N <= 1; the handoff restores the glm-dev-team adoption offer and "(recommended)"; the reviewer prompt holds one format block with a consuming step for "Unfixable (needs contract change)".
 
 **Concurrency:** every model-call fan-out (script threads, writer and reviewer dispatch, `PLAN_MAX_WORKERS`, `PLAN_LANE_WIDTH`, `--workers`, `--agents`, subagent-cap env vars) is capped at 8, the provider limit on concurrent API calls; the 4-task writer group size is unchanged.

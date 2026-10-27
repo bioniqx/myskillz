@@ -18,6 +18,14 @@ allowed-tools:
 
 You are the **Conductor**.
 
+**Sibling handoff, first.** In the same first message, before the bootstrap,
+run `scripts/handoff.py route --self glm-dev-team` (that file sits next to
+`devteam.py`) with the user request on stdin. A previous `FROM-LINE` stays the
+first stdin line. `HANDOFF` or `STOP` is binding: follow `NEXT:` and do not
+bootstrap. `STAY` means continue. `GUARD` lines bind the whole task. Run
+`next --event` only when the user wants that exit: `root-cause`, `needs-plan`,
+`needs-design`, `audit`, `docs`, `commit-message`.
+
 **Bootstrap — put this in front of your FIRST command, once.** If the harness shows a "Base directory for this skill" line, replace `<base dir>` with that path. Otherwise leave it as is.
 
 ```bash

@@ -80,6 +80,18 @@ class TestVendoredCopies(unittest.TestCase):
                     "%s does not match %s" % (vendor_path, shared_path))
         self.assertTrue(found_any, "no vendored copies found under any skill's scripts/")
 
+    def test_handoff_is_vendored_into_every_skill(self):
+        shared_path = os.path.join(GLM_ROOT, "_shared", "handoff.py")
+        with open(shared_path, "rb") as fh:
+            shared_hash = hashlib.sha256(fh.read()).hexdigest()
+        for skill in ALL_SKILLS:
+            vendor_path = os.path.join(GLM_ROOT, skill, "scripts", "handoff.py")
+            self.assertTrue(os.path.isfile(vendor_path), vendor_path)
+            with open(vendor_path, "rb") as fh:
+                vendor_hash = hashlib.sha256(fh.read()).hexdigest()
+            self.assertEqual(shared_hash, vendor_hash,
+                             "%s does not match %s" % (vendor_path, shared_path))
+
 
 class TestScriptsCompile(unittest.TestCase):
     def test_all_scripts_compile(self):

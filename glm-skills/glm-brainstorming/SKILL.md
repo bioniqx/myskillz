@@ -7,6 +7,7 @@ allowed-tools:
   - Bash(sh *start-server.sh*)
   - Bash(sh *stop-server.sh*)
   - Bash(python3 *check.py*)
+  - Bash(python3 *handoff.py*)
   - Bash(kill -0:*)
   - Agent
   - Read
@@ -31,8 +32,9 @@ present once → get approval. Lower rule number wins a conflict.
    the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
 3. Round 1 is ONE message containing everything nameable, opened with
    `Round 1: N calls in this message`. The first two calls are context.sh
-   and `check.py route` on the user request. `ROUTE` other than `none` is
-   binding: hand off, do not design.
+   and `handoff.py route --self glm-brainstorming` on the user request.
+   `HANDOFF` or `STOP` is binding: follow its `NEXT:` line, do not design.
+   `STAY` means you classify the path. `GUARD` lines bind the whole task.
 4. Never cite a path:line, URL, date, version or quote you did not see
    in a tool result in this session. `check.py send` re-checks the draft;
    a line you cannot prove is labelled unverified or deleted.
@@ -72,45 +74,22 @@ Ceremony scales with the task; R0 never does.
 
 ## R1 — Classify; open your first message with it
 
-Triage before the Path line: a misrouted task gets routed, not
-designed. In the round-1 batch, right after context.sh, run
-`check.py route` with the user request on stdin. `ROUTE` other than
-`none` is binding: the hand-off line names that skill, and the
-because-clause names the request type. `ALSO` is a second hit; hand
-off the first skill only. `ROUTE none` means the script saw nothing
-obvious; you still classify with the list below. Match the request
-against the sibling skills; on a hit,
-announce the hand-off in one line ("Not a design task — handing to X
-because Y") — that line replaces the Path line — then invoke the
-Skill tool for X with a 2-3 line summary (task plus what is already
-known). The target skill's rules own the task from that call.
+Triage before the Path line. In the round-1 batch, right after context.sh,
+run `python3 <skill_dir>/scripts/handoff.py route --self glm-brainstorming`
+with the user request on stdin. If you were handed here, stdin starts with
+the previous `FROM-LINE`. `HANDOFF` or `STOP` is binding: the line you show
+is `Not a design task - handing to <skill> because <reason>` (it replaces
+the Path line), then do what `NEXT:` says, and do not design. `STAY` means
+the script saw nothing more specific; classify the path below. A mixed
+request hands off the first step only. At a real exit (R13), run
+`handoff.py next --self glm-brainstorming --event <event>` with an event
+from the `EXITS` line, and only when the user wants that next job.
 
-Hand-off rules, one per request type:
-
-1. Raw product idea, "is it viable/profitable", market research → hand
-   off to `glm-idea-to-spec`.
-2. Bug, failing test, error, unexpected behavior → `glm-systematic-debugging`.
-3. "Does the code match this spec/PRD", gaps vs a requirements doc →
-   `glm-requirements-code-audit`.
-4. Document existing code: README, API reference, guides →
-   `glm-doc-generator`.
-5. Summarize branch changes vs main, commit or PR message →
-   `glm-git-diff-summary`.
-6. Approved design already in hand → `glm-writing-plans`.
-7. Approved plan already in hand, or a settled task the user asks to
-   just implement, review, refactor or migrate → `glm-dev-team`.
-
-Mixed request (e.g. "audit against the spec, then redesign the gaps") →
-hand off the first step only and say the rest is a new request after it.
-
-Hand-off guards: routing is not implementation, so R0 stands
-unchanged. At most 3 skills loaded per task, counting this one. One
-direction per task — a hand-off target never routes back here. Lanes
-and subagents never invoke skills. Mid-task hand-off points: a path
-upgrade that reveals the task belongs to a sibling (stop, say so,
-route), and the post-approval exits in R13. Sibling skill not
-installed → say so in one line, point to `sh install-zcode.sh`, and
-continue here only if the task is design-shaped.
+Hand-off guards: routing is not implementation, so R0 stands. At most 3
+skills; the script enforces the cap and a cycle. Subagents never invoke
+skills. A path upgrade that reveals a sibling stops and routes. Sibling
+not installed: `NEXT:` names the file; if that file is missing, say
+`sh install-zcode.sh` and continue here only when the task is design-shaped.
 
 First line: `Path: <Spike|Bounded|Architectural> — <one-line reason>`.
 Hidden complexity found mid-task upgrades the path (stop, say so).
@@ -360,6 +339,10 @@ next question.
 
 ## R13 — Post-approval exits
 
+Run `handoff.py next --self glm-brainstorming --event <event>` and follow
+`NEXT:`. The event is the bullet you are taking. Do not pick the sibling
+from memory.
+
 The approved deliverable picks the next owner; announce it in one line.
 
 - **Architectural** → `glm-writing-plans` with the spec path
@@ -384,7 +367,7 @@ result: do not retry the same input.
 1. `cites --root <repo>` — FINDINGS `path:line — fact — "snippet"`. Round 2, before a lane line enters the draft.
 2. `web` — CLAIMS `claim — tier — URL — date — "quote"`. Same round.
 3. `spec <path>` — after the spec is written, before the five-lens review.
-4. `route` — the user request, in round 1 beside context.sh. `ROUTE` other than `none` is binding. Always exit 0.
+4. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
 5. `send --root <repo>` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes.
 6. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 

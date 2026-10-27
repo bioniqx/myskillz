@@ -18,6 +18,8 @@ metadata:
 
 # Requirements ↔ Code Audit — GLM edition
 
+**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-requirements-code-audit` (next to `audit.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not brief. `STAY`: continue. `GUARD` lines bind the whole task. After `finalize`, run `next --event` only if the user asks: `implement-gaps`, `fix-gaps`, or `bug`. This skill still does not edit the code.
+
 Checks whether the **code faithfully implements a requirements document**, reports every divergence with
 `path:lines` evidence, and produces a prioritized remediation plan. It never changes the code.
 

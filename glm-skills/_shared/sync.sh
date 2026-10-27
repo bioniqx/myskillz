@@ -14,3 +14,13 @@ for skill in $zai_skills; do
     cp "$zai_client_src" "$dest"
     echo "synced $dest"
 done
+
+handoff_src="$script_dir/handoff.py"
+handoff_skills="glm-brainstorming glm-dev-team glm-doc-generator glm-git-diff-summary glm-idea-to-spec glm-requirements-code-audit glm-systematic-debugging glm-writing-plans"
+
+for skill in $handoff_skills; do
+    dest="$dest_root/$skill/scripts/handoff.py"
+    mkdir -p "$(dirname "$dest")"
+    cp "$handoff_src" "$dest"
+    echo "synced $dest"
+done

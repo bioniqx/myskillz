@@ -12,6 +12,8 @@ metadata:
 
 **Iron Law:** no fix until you can write `ROOT CAUSE: X causes Y because Z`, backed by evidence you observed in this session (output, trace, diff, repro). A guess is not evidence. Speed comes from fewer model turns, never from skipping the root cause.
 
+**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-systematic-debugging` (next to `debug_tool.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not probe. `STAY`: continue. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here.
+
 ## R0. Bootstrap — put this in front of your FIRST command, once
 
 ```bash

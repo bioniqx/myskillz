@@ -1,3 +1,11 @@
+# 10.2 (from 10.1) — one router for every sibling
+
+`scripts/handoff.py` (vendored from `_shared/handoff.py`) is the binding
+misroute and exit check. Round 1 runs `route --self glm-brainstorming`.
+`HANDOFF` means read that sibling's SKILL.md and stop. `next --event` is
+how an approved design leaves. The chain stops at 3 skills. `check.py route`
+uses the same table.
+
 # 10.1 (from 10.0) — gates the model was dropping, checked by script
 
 GLM-5.3 drops rules that sit in the middle of a long prompt, treats a

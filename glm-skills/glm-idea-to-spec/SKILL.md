@@ -23,6 +23,7 @@ The end goal is not a document. The end goal is **software that makes money**. T
 
 ## Phase 0 — Intake (one turn)
 
+- First, run `scripts/handoff.py route --self glm-idea-to-spec` with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and stop. `STAY`: continue. `GUARD` lines bind the whole task.
 - Restate the idea in 2–3 sentences and confirm.
 - Classify the product type (B2C app, B2B SaaS, marketplace, dev tool, AI app/agent, bot, extension, game, internal tool). Type drives questions, revenue model and scoring.
 - If missing, ask these together (via AskUserQuestion if available):
@@ -126,7 +127,7 @@ Re-read the whole document as (a) a developer starting tomorrow, (b) an AI codin
 - [ ] The "Instructions for AI coding agents" section is complete.
 - [ ] No contradictions between sections (pricing, scope, stack, persona).
 
-Fix what fails. Then give the user: file path(s), a 5-line summary, the verdict, the assumptions they must confirm, and the next 3 actions (usually: run the validation test → build M0 → get first paying customer).
+Fix what fails. Run `scripts/check_spec.py` on the spec file and repair every FAIL before showing it; a money figure with no URL and no ASSUMPTION, ESTIMATE, or UNVERIFIED label does not ship. Then give the user: file path(s), a 5-line summary, the verdict, the assumptions they must confirm, and the next 3 actions (usually: run the validation test, build M0, get the first paying customer). Run `handoff.py next --event spec-ready`, `plan`, or `implement` only when the user wants that next job.
 
 ---
 

@@ -10,10 +10,13 @@ class TestVendored(unittest.TestCase):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
         shared_dir = os.path.join(repo_root, 'glm-skills/_shared')
 
-        zai_client_src = os.path.join(shared_dir, 'zai_client.py')
-
         skills = {
             'zai_client.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit'],
+            'handoff.py': [
+                'glm-brainstorming', 'glm-dev-team', 'glm-doc-generator', 'glm-git-diff-summary',
+                'glm-idea-to-spec', 'glm-requirements-code-audit', 'glm-systematic-debugging',
+                'glm-writing-plans',
+            ],
         }
 
         sync_script = os.path.join(shared_dir, 'sync.sh')
@@ -21,7 +24,7 @@ class TestVendored(unittest.TestCase):
         self.assertEqual(result.returncode, 0, f"sync.sh failed: {result.stderr}")
 
         for filename, skill_list in skills.items():
-            src = zai_client_src
+            src = os.path.join(shared_dir, filename)
             with open(src, 'rb') as f:
                 src_bytes = f.read()
             src_hash = hashlib.sha256(src_bytes).hexdigest()
@@ -35,7 +38,7 @@ class TestVendored(unittest.TestCase):
                 self.assertEqual(src_hash, dest_hash, f"{filename} in {skill} differs from canonical")
 
         lines = result.stdout.strip().split('\n')
-        expected_count = len(skills['zai_client.py'])
+        expected_count = sum(len(names) for names in skills.values())
         self.assertEqual(len([l for l in lines if l.startswith('synced ')]), expected_count)
 
 

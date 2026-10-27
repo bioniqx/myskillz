@@ -15,8 +15,10 @@ description: >-
 
 Codebase in, correct Markdown docs out, in **≤ 4 main-thread turns**. This file is
 self-contained: every brief, template and script you need is below. **Never read any
-other file of this skill (the only other files are installer assets under `agents/`,
-which you must not read).**
+other file of this skill.** `agents/` are installer assets. `scripts/handoff.py` is
+run, not read.
+
+**Sibling handoff, same message as Turn 1.** Run `scripts/handoff.py route --self glm-doc-generator` with the user request on stdin before the recon. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not recon. `STAY`: Turn 1 as written. `GUARD` lines bind the whole task. After the summary, `next --event commit-message` or `code-wrong` only when the user wants that job.
 
 ---
 

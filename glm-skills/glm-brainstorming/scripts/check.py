@@ -55,25 +55,6 @@ CODE_LANGS = {
     "csharp", "cs", "cpp", "c", "swift", "kotlin",
 }
 FENCE_MAX = 40
-FEATURE_RE = re.compile(r"\b(add|build|implement|create|design)\b")
-ROUTE_RULES = (
-    ("glm-idea-to-spec", re.compile(
-        r"\b(is (?:it|this)(?: \w+){0,4} viable|business model|make money|product idea|y tuong san pham)\b")),
-    ("glm-systematic-debugging", re.compile(
-        r"\b(traceback|stack ?trace|stacktrace|failing tests?|tests? fails?|flaky|regression|bugs?|bi loi)\b")),
-    ("glm-requirements-code-audit", re.compile(
-        r"\b(match the spec|match this spec|requirements traceability|gaps between spec|doi chieu spec)\b")),
-    ("glm-doc-generator", re.compile(
-        r"\b(write|update|draft) (the |a )?(readme|api reference|api docs|user guide|onboarding guide)\b")),
-    ("glm-git-diff-summary", re.compile(
-        r"\b(commit message|pr message|pull request message|what did this branch|"
-        r"summarize (the |this )?branch|tom tat thay doi|so sanh voi main)\b")),
-    ("glm-writing-plans", re.compile(
-        r"\b(write the (implementation )?plan|approved design|design is approved|thiet ke da duyet|viet plan)\b")),
-    ("glm-dev-team", re.compile(
-        r"\b(implement the (approved )?plan|plan is approved|just implement)\b")),
-)
-SUPPRESS_IF_FEATURE = {"glm-doc-generator", "glm-git-diff-summary"}
 APPROVE_START = re.compile(
     r"^(?:please |i |ok |okay |da |vang |anh )*"
     r"(approved|approve with my answers below|approve|yes|dong y|duyet|"
@@ -384,19 +365,9 @@ def url_problem(line, today):
 
 
 def check_route(a):
-    text = fold_ascii(sys.stdin.read())
-    feature = FEATURE_RE.search(text)
-    strong_debug = re.compile(
-        r"\b(traceback|stack ?trace|stacktrace|failing tests?|tests? fails?|flaky|regression|bi loi)\b")
-    bug_denied = re.search(r"\bno\b.{0,24}\bbugs?\b", text) and not strong_debug.search(text)
-    hits = []
-    for name, rx in ROUTE_RULES:
-        if name in SUPPRESS_IF_FEATURE and feature:
-            continue
-        if name == "glm-systematic-debugging" and bug_denied:
-            continue
-        if rx.search(text):
-            hits.append(name)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from handoff import opening_hits
+    hits = opening_hits(sys.stdin.read())
     if not hits:
         print("ROUTE none")
         print("RESULT route name=none")

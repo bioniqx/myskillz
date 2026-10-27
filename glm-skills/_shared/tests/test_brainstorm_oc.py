@@ -40,6 +40,7 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
             "  - Bash(sh *start-server.sh*)\n"
             "  - Bash(sh *stop-server.sh*)\n"
             "  - Bash(python3 *check.py*)\n"
+            "  - Bash(python3 *handoff.py*)\n"
             "  - Bash(kill -0:*)\n"
             "  - Agent\n"
             "  - Read\n"
