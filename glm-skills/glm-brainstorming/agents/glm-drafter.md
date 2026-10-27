@@ -2,7 +2,7 @@
 name: "glm-drafter"
 description: "Flash lane for glm-brainstorming: one assigned lens, approach draft, claim check, or runner-up. No repo writes."
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: low
+thoughtLevel: high
 color: blue
 maxTurns: 8
 disallowedTools: Write, Edit, Bash

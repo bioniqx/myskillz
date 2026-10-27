@@ -35,7 +35,7 @@ verdict picks the approach.
 
 `glm-explorer`, `glm-researcher` and `glm-drafter` pin
 `model: "account:zai-individual-coding-plan/GLM-5.3-Flash"` and
-`thoughtLevel: low`. ZCode honors `thoughtLevel` only together with a
+`thoughtLevel: high`. ZCode honors `thoughtLevel` only together with a
 model id; without both, a lane inherits the session model and effort
 `max` (the failure behind slow, over-thought lanes). Recent ZCode
 sessions on this machine use the individual plan, so that prefix is the
@@ -79,7 +79,7 @@ coding tasks.
 | A bug report got a design | Misroute | `check.py route` in round 1; `ROUTE` other than `none` is binding |
 | A lane invented findings to hit a minimum count | "3-6 lines" forces fabrication | The agent file says up to 6, and zero is valid |
 | The path was forgotten by message 3 | Long-horizon drift; private restatement does not hold | Every message line 1 is Path or Path unchanged; `send` enforces it |
-| Lanes ran on the session model at effort max | Agent frontmatter had no model id, so thoughtLevel was ignored | The three lane files pin Flash and `thoughtLevel: low` |
+| Lanes ran on the session model at effort max | Agent frontmatter had no model id, so thoughtLevel was ignored | The three lane files pin Flash and `thoughtLevel: high` |
 
 ## 5. Evidence
 
@@ -113,7 +113,7 @@ Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target 
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/`, the bundled agents verbatim to
 `~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
 (/glm-brainstorm runs context.sh from the installed skill; ZCode rejects a dynamic-shell preload). The three
-brainstorming lane files pin Flash and `thoughtLevel: low` (section 2). When a model
+brainstorming lane files pin Flash and `thoughtLevel: high` (section 2). When a model
 must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills, agents and
 commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$glm-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
 characters, and a description over 1024 characters makes ZCode drop the skill — which is why the

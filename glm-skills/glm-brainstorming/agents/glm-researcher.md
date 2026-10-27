@@ -2,7 +2,7 @@
 name: "glm-researcher"
 description: "Web research lane for glm-brainstorming: tiered, dated, cited evidence for one design decision."
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: low
+thoughtLevel: high
 color: blue
 maxTurns: 7
 disallowedTools: Write, Edit, Bash
