@@ -1,9 +1,12 @@
 #!/bin/sh
-# Install the eight GLM skills, their subagents, and their slash commands into ZCode.
+# Install every glm-* skill folder that has SKILL.md at its root, plus those
+# skills' subagents and slash commands, into ZCode.
 #
 #   skills    glm-<name>/  ->  <home>/.zcode/skills/glm-<name>/   (copied as-is; the glm- prefix
 #             keeps them distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
-#   agents    <skill>/agents/*.md across all eight skills
+#             Folders matching glm-* without a root SKILL.md are skipped (they are not
+#             ZCode skill packs; glm-viral-video-studio has its own installer).
+#   agents    <skill>/agents/*.md across the discovered skills
 #             ->  <home>/.zcode/agents/   (copied verbatim; existing files are overwritten, no backup)
 #   commands  <skill>/commands/*.md
 #             ->  <home>/.zcode/commands/ and the copy inside the installed skill
@@ -21,6 +24,7 @@
 # Anything not in the manifest is left alone.
 #
 # Usage: sh install-zcode.sh [--home DIR] [--dry-run]
+# In an interactive terminal the script waits for Enter before the window closes.
 set -eu
 
 HOME_DIR="${HOME:-}"
@@ -36,16 +40,70 @@ done
 
 [ -n "$HOME_DIR" ] || { echo "Error: HOME is unset; pass --home DIR" >&2; exit 1; }
 
+pause() {
+    [ -t 0 ] && [ -t 1 ] || return 0
+    printf "Press Enter to close. "
+    read -r _ || true
+}
+trap pause EXIT
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="$HOME_DIR/.zcode/skills"
 AGENTS_DIR="$HOME_DIR/.zcode/agents"
 COMMANDS_DIR="$HOME_DIR/.zcode/commands"
 MANIFEST="$HOME_DIR/.zcode/glm-skills-manifest.txt"
-FOLDERS="glm-brainstorming glm-dev-team glm-doc-generator glm-git-diff-summary glm-idea-to-spec glm-requirements-code-audit glm-systematic-debugging glm-writing-plans"
 
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found" >&2; exit 1; }
 
+# Discover installable skills: directories named glm-* with SKILL.md at the root.
+FOLDERS=$(
+    for d in "$SCRIPT_DIR"/glm-*; do
+        [ -d "$d" ] || continue
+        [ -f "$d/SKILL.md" ] || continue
+        basename "$d"
+    done | sort | tr '\n' ' '
+)
+FOLDERS=${FOLDERS%" "}
+SKIPPED=$(
+    for d in "$SCRIPT_DIR"/glm-*; do
+        [ -d "$d" ] || continue
+        [ -f "$d/SKILL.md" ] && continue
+        basename "$d"
+    done | sort | tr '\n' ' '
+)
+SKIPPED=${SKIPPED%" "}
+[ -n "$FOLDERS" ] || { echo "Error: no glm-*/SKILL.md folders under $SCRIPT_DIR" >&2; exit 1; }
+skill_n=0
+for _folder in $FOLDERS; do
+    skill_n=$((skill_n + 1))
+done
+invoke=""
+inv_sep=""
+for _folder in $FOLDERS; do
+    invoke="${invoke}${inv_sep}\$${_folder}"
+    inv_sep=", "
+done
+
 run() { if [ "$DRY" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
+
+# Print relative file paths under root, skipping the same junk the copy step deletes.
+list_rel_files() {
+    python3 - "$1" <<'PY'
+import os, sys
+root = sys.argv[1]
+skip_dir = {"opencode", ".idea", "__pycache__"}
+out = []
+for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [d for d in dirnames if d not in skip_dir]
+    for fn in filenames:
+        if fn == ".DS_Store" or fn.endswith(".pyc"):
+            continue
+        rel = os.path.relpath(os.path.join(dirpath, fn), root)
+        out.append(rel.replace("\\", "/"))
+for rel in sorted(out):
+    print(rel)
+PY
+}
 
 write_command() {
     src=$1
@@ -134,37 +192,60 @@ PY
 
 echo "ZCode dir: $HOME_DIR/.zcode$([ "$DRY" -eq 1 ] && echo '  (dry run)')"
 echo "== skills"
+echo "    dest: $SKILLS_DIR/<name>/   (rm -rf then copy; invoke \$<name>)"
 run mkdir -p "$SKILLS_DIR"
+skill_files=0
 for folder in $FOLDERS; do
     src="$SCRIPT_DIR/$folder"
     [ -d "$src" ] || { echo "Error: $src not found" >&2; exit 1; }
     name="$folder"
-    run rm -rf "$SKILLS_DIR/$name"
-    run mkdir -p "$SKILLS_DIR/$name"
+    dest="$SKILLS_DIR/$name"
+    run rm -rf "$dest"
+    run mkdir -p "$dest"
     if [ "$DRY" -eq 0 ]; then
         # cp, not a tar pipe: macOS tar adds com.apple.provenance xattrs the extracting side cannot write.
-        cp -R "$src/." "$SKILLS_DIR/$name/"
-        find "$SKILLS_DIR/$name" \( -name opencode -o -name .DS_Store -o -name .idea -o -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
+        cp -R "$src/." "$dest/"
+        find "$dest" \( -name opencode -o -name .DS_Store -o -name .idea -o -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
+        tree="$dest"
+    else
+        tree="$src"
     fi
-    echo "  $name"
+    n=0
+    echo "  $dest/   invoke \$$name"
+    while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        echo "    $rel"
+        n=$((n + 1))
+    done <<EOF
+$(list_rel_files "$tree")
+EOF
+    echo "    ($n files)"
+    skill_files=$((skill_files + n))
 done
+echo "  $skill_files files in $skill_n skill folders -> $SKILLS_DIR"
 
 echo "== agents"
+echo "    dest: $AGENTS_DIR/<name>.md   (overwrite, no backup; Settings -> Subagents)"
 run mkdir -p "$AGENTS_DIR"
 count=0
 for folder in $FOLDERS; do
     for f in "$SCRIPT_DIR/$folder/agents/"*.md; do
         [ -f "$f" ] || continue
         count=$((count + 1))
-        run cp "$f" "$AGENTS_DIR/$(basename "$f")"
+        base=$(basename "$f")
+        run cp "$f" "$AGENTS_DIR/$base"
+        echo "    $folder/agents/$base  ->  $AGENTS_DIR/$base"
     done
 done
 [ "$count" -gt 0 ] || { echo "Error: no agents/*.md files found under $SCRIPT_DIR" >&2; exit 1; }
 echo "  $count agent files -> $AGENTS_DIR"
 
 echo "== commands"
+echo "    dest: $COMMANDS_DIR/<name>.md   (ZCode slash menu; {{SKILL_DIR}} filled in)"
 run mkdir -p "$COMMANDS_DIR"
 ccount=0
+slash=""
+slash_sep=""
 for folder in $FOLDERS; do
     for f in "$SCRIPT_DIR/$folder/commands/"*.md; do
         [ -f "$f" ] || continue
@@ -174,10 +255,20 @@ for folder in $FOLDERS; do
         if [ "$DRY" -eq 0 ]; then
             write_command "$f" "$SKILLS_DIR/$folder/commands/$base" "$SKILLS_DIR/$folder"
         fi
-        echo "  $base"
+        echo "    $folder/commands/$base  ->  $COMMANDS_DIR/$base   /${base%.md}"
+        echo "    $folder/commands/$base  ->  $SKILLS_DIR/$folder/commands/$base   ({{SKILL_DIR}} filled)"
+        slash="${slash}${slash_sep}/${base%.md}"
+        slash_sep=", "
     done
 done
 echo "  $ccount command files -> $COMMANDS_DIR"
+echo "== skipped"
+echo "    $HOME_DIR/.zcode/cli/config.json   (guard hooks stay opt-in: doctor --harness zcode --fix)"
+if [ -n "$SKIPPED" ]; then
+    for skip in $SKIPPED; do
+        echo "    $SCRIPT_DIR/$skip/   (glm-* folder with no SKILL.md at root; not installed)"
+    done
+fi
 
 # Leftover installs under the old unprefixed (or *-glm) folder names would
 # load a second skill with a confusingly similar name next to the glm- one.
@@ -194,7 +285,7 @@ done
 [ -z "$STALE" ] || echo "To remove the stale installs, run: rm -rf$STALE"
 
 NEWLIST=$(mktemp)
-trap 'rm -f "$NEWLIST"' EXIT
+trap 'rm -f "$NEWLIST"; pause' EXIT
 : > "$NEWLIST"
 for folder in $FOLDERS; do
     for f in "$SCRIPT_DIR/$folder/agents/"*.md "$SCRIPT_DIR/$folder/commands/"*.md; do
@@ -269,20 +360,37 @@ if [ "$DRY" -eq 1 ]; then
     exit 0
 fi
 
-cat <<MSG
-
-Done. Start a NEW ZCode session to load the installed skills, agents and commands (a restart is not enough), then invoke a skill with \$glm-brainstorming, \$glm-dev-team, \$glm-doc-generator, \$glm-git-diff-summary or
-\$glm-idea-to-spec, \$glm-requirements-code-audit, \$glm-systematic-debugging, \$glm-writing-plans.
-Slash commands are /glm-brainstorm, /glm-devteam and /glm-plan, installed under ~/.zcode/commands with the skill path filled in.
-The agents were copied verbatim from the skills' agents/*.md: each file pins its model id and thoughtLevel (ZCode honors thoughtLevel only together with a model id). Nothing in the agent files was rewritten.
+if [ -z "$slash" ]; then
+    slash_line="No slash commands in the discovered skills."
+else
+    slash_line="Slash commands are $slash, installed under ~/.zcode/commands with the skill path filled in."
+fi
+devteam_block=""
+case " $FOLDERS " in
+    *" glm-dev-team "*)
+        devteam_block="
 glm-dev-team guard hooks are NOT configured by this installer; they are opt-in:
   python3 $SKILLS_DIR/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
 That also re-verifies the six glm-dev-team agents against their source files and merges the guard
 hooks (type: process, hooks.enabled: true, commands pointing at the installed guard.py) into
 ~/.zcode/cli/config.json — a key-preserving merge that rewrites in place: a re-run is a no-op, and
-every user key already in the file survives. Disable with hooks.enabled=false in the same file.
+every user key already in the file survives. Disable with hooks.enabled=false in the same file."
+        ;;
+esac
+plans_block=""
+case " $FOLDERS " in
+    *" glm-writing-plans "*)
+        plans_block="
 Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
-  python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping
+  python3 $SKILLS_DIR/glm-writing-plans/scripts/plan_tool.py doctor --ping"
+        ;;
+esac
+
+cat <<MSG
+
+Done. Start a NEW ZCode session to load the installed skills, agents and commands (a restart is not enough), then invoke a skill with $invoke.
+$slash_line
+The agents were copied verbatim from the skills' agents/*.md: each file pins its model id and thoughtLevel (ZCode honors thoughtLevel only together with a model id). Nothing in the agent files was rewritten.$devteam_block$plans_block
 The Z.ai plan allows 8 concurrent API calls: the skills cap their fan-out at 8 (dev-team opens all 8 by default, tier api).
 A frontmatter description over 1024 characters makes ZCode drop the whole skill; a body over 100KB is truncated when loaded, not dropped.
 MSG

@@ -6,11 +6,36 @@ import unittest
 
 GLM_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SCRIPT = os.path.join(GLM_ROOT, "install-zcode.sh")
-SKILLS = ["glm-brainstorming", "glm-dev-team", "glm-doc-generator", "glm-git-diff-summary", "glm-idea-to-spec", "glm-requirements-code-audit",
-          "glm-systematic-debugging", "glm-writing-plans"]
-AGENTS = ["glm-code-reviewer", "glm-debug-worker", "glm-doc-reviewer", "glm-doc-writer", "glm-drafter", "glm-explorer", "glm-investigator",
-          "glm-plan-reviewer", "glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-programmer-lite",
-          "glm-programmer-strong", "glm-rca-investigator", "glm-rca-verifier", "glm-researcher", "glm-spot-reviewer", "glm-team-leader"]
+
+
+def discover_skills(root):
+    names = []
+    for name in sorted(os.listdir(root)):
+        if name.startswith("glm-") and os.path.isfile(os.path.join(root, name, "SKILL.md")):
+            names.append(name)
+    return names
+
+
+def discover_agents(root, skills):
+    names = []
+    for skill in skills:
+        agents = os.path.join(root, skill, "agents")
+        if os.path.isdir(agents):
+            names += [f[:-3] for f in os.listdir(agents) if f.endswith(".md")]
+    return sorted(names)
+
+
+def discover_commands(root, skills):
+    names = []
+    for skill in skills:
+        commands = os.path.join(root, skill, "commands")
+        if os.path.isdir(commands):
+            names += [f for f in os.listdir(commands) if f.endswith(".md")]
+    return sorted(names)
+
+
+SKILLS = discover_skills(GLM_ROOT)
+AGENTS = discover_agents(GLM_ROOT, SKILLS)
 ALLOWED_KEYS = {"name", "description", "model", "thoughtLevel", "color", "tools", "disallowedTools",
                 "maxTurns", "background", "injectAgentsMd", "mcpServers"}
 
@@ -163,6 +188,32 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no agents", r.stderr)
 
+    def test_install_prints_full_inventory(self):
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = r.stdout
+        self.assertIn("dest: " + os.path.join(self.home, ".zcode", "skills") + "/", out)
+        self.assertIn(self.skill("glm-brainstorming") + "/", out)
+        self.assertIn("invoke $glm-brainstorming", out)
+        self.assertIn("    SKILL.md\n", out)
+        self.assertIn("    scripts/context.sh\n", out)
+        self.assertIn("    scripts/devteam.py\n", out)
+        self.assertIn("    scripts/debug_tool.py\n", out)
+        self.assertIn("glm-brainstorming/agents/glm-drafter.md  ->  " + self.agent("glm-drafter"), out)
+        self.assertIn("glm-dev-team/agents/glm-team-leader.md  ->  " + self.agent("glm-team-leader"), out)
+        self.assertIn("glm-systematic-debugging/agents/glm-debug-worker.md  ->  " + self.agent("glm-debug-worker"), out)
+        cmd = os.path.join(self.home, ".zcode", "commands", "glm-brainstorm.md")
+        self.assertIn("glm-brainstorming/commands/glm-brainstorm.md  ->  " + cmd, out)
+        self.assertIn("/glm-brainstorm", out)
+        self.assertIn("/glm-devteam", out)
+        self.assertIn("/glm-plan", out)
+        self.assertIn("cli/config.json", out)
+        self.assertRegex(out, r"\d+ files in %d skill folders" % len(SKILLS))
+        self.assertRegex(out, r"%d agent files -> " % len(AGENTS))
+        self.assertRegex(out, r"%d command files -> " % len(discover_commands(GLM_ROOT, SKILLS)))
+        self.assertIn("glm-viral-video-studio/", out)
+        self.assertIn("no SKILL.md at root", out)
+
     def test_closing_message_claims(self):
         r = self.install()
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -222,6 +273,29 @@ class InstallZcodeTests(unittest.TestCase):
             listed = fh.read()
         self.assertNotIn("glm-retired", listed)
         self.assertNotIn("glm-old", listed)
+
+    def test_discovers_new_glm_folder_with_skill_md(self):
+        copy_root = self.copied_tree()
+        new = os.path.join(copy_root, "glm-newskill")
+        os.makedirs(new)
+        with open(os.path.join(new, "SKILL.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\nname: glm-newskill\n"
+                     "description: Use when testing installer discovery of a new glm folder.\n"
+                     "---\n\nBody.\n")
+        r = self.install(root=copy_root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isfile(self.skill("glm-newskill", "SKILL.md")))
+        self.assertIn("invoke $glm-newskill", r.stdout)
+
+    def test_skips_glm_folder_without_skill_md(self):
+        copy_root = self.copied_tree()
+        os.makedirs(os.path.join(copy_root, "glm-not-a-skill", "scripts"))
+        r = self.install(root=copy_root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(os.path.exists(self.skill("glm-not-a-skill")))
+        self.assertIn("glm-not-a-skill/", r.stdout)
+        self.assertIn("no SKILL.md at root", r.stdout)
+        self.assertFalse(os.path.exists(self.skill("glm-viral-video-studio")))
 
     def test_missing_home_is_rejected(self):
         env = dict(os.environ)
