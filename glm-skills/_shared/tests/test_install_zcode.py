@@ -305,17 +305,18 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertIn("HOME", r.stderr)
         self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode")))
 
-    def test_missing_name_is_rejected_before_any_copy(self):
+    def test_skill_name_is_not_checked(self):
         copy_root = self.copied_tree()
         skill_md = os.path.join(copy_root, "glm-idea-to-spec", "SKILL.md")
         with open(skill_md, encoding="utf-8") as fh:
             text = fh.read()
         with open(skill_md, "w", encoding="utf-8") as fh:
-            fh.write(text.replace("name: glm-idea-to-spec\n", "", 1))
+            fh.write(text.replace("name: glm-idea-to-spec\n", "name: some-other-name\n", 1))
         r = self.install(root=copy_root)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("name", r.stderr)
-        self.assertFalse(os.path.exists(self.skill("glm-idea-to-spec")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isfile(self.skill("glm-idea-to-spec", "SKILL.md")))
+        with open(self.skill("glm-idea-to-spec", "SKILL.md"), encoding="utf-8") as fh:
+            self.assertIn("name: some-other-name\n", fh.read())
 
     def test_agent_without_model_is_rejected_before_any_copy(self):
         copy_root = self.copied_tree()

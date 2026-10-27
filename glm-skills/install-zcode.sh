@@ -123,10 +123,11 @@ with open(dest, "w", encoding="utf-8") as fh:
 PY
 }
 
-# Read-only pre-flight. ZCode drops a skill whose name or description is missing,
-# or whose description is over 1024 characters. A body over 100KB is truncated
-# when loaded. thoughtLevel is ignored unless the agent also pins a model id.
-# A command that contains a dynamic shell line is rejected by ZCode.
+# Read-only pre-flight. Folder name and SKILL.md `name` are not compared: the
+# folder is the install identity. ZCode drops a skill whose description is
+# missing or over 1024 characters. A body over 100KB is truncated when loaded.
+# thoughtLevel is ignored unless the agent also pins a model id. A command that
+# contains a dynamic shell line is rejected by ZCode.
 python3 - "$SCRIPT_DIR" $FOLDERS <<'PY' || exit 1
 import os, re, sys
 root, bad = sys.argv[1], []
@@ -140,11 +141,6 @@ for folder in folders:
     text = open(path, encoding="utf-8").read()
     m = re.match(r"---\n(.*?)\n---\n", text, re.S)
     fm = m.group(1) if m else ""
-    nm = re.search(r"(?m)^name:[ \t]*[\"']?([^\"'\n]+?)[\"']?[ \t]*$", fm)
-    if not nm or not nm.group(1).strip():
-        bad.append("%s: frontmatter name is missing (ZCode drops the skill)" % folder)
-    elif nm.group(1).strip() != folder:
-        bad.append("%s: frontmatter name is %s (must equal the folder)" % (folder, nm.group(1).strip()))
     d = re.search(r"^description:[ \t]*(.*?)(?=^\S|\Z)", fm, re.S | re.M)
     desc = " ".join(l.strip() for l in d.group(1).splitlines()) if d else ""
     head, _, rest = desc.partition(" ")
