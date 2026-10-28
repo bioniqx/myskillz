@@ -3,7 +3,7 @@ name: "glm-doc-writer"
 description: "Writes one Markdown doc from an inlined fact pack and a scoped file list. Never plans, never deliberates."
 color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: high
+thoughtLevel: max
 maxTurns: 18
 injectAgentsMd: true
 ---

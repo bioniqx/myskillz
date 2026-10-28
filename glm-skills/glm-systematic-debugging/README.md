@@ -26,7 +26,7 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 
 | Harness | Path |
 |---|---|
-| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and copies the `glm-debug-worker` agent verbatim (`thoughtLevel: high` is pinned in the file) into `~/.zcode/agents/` |
+| ZCode | `~/.zcode/skills/glm-systematic-debugging/` — invoke with `$glm-systematic-debugging`; `sh install-zcode.sh` installs the skill and copies the `glm-debug-worker` agent verbatim (`thoughtLevel: max` is pinned in the file) into `~/.zcode/agents/` |
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)

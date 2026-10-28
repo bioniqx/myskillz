@@ -45,7 +45,7 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 
 On the api lane the tier's effort column applies. On the agent lane every tier
 runs the installed agents' pinned efforts: `glm-plan-task-writer` pins
-`thoughtLevel: high`, so `light` and `std` groups both run at high, and the
+`thoughtLevel: max`, so `light` and `std` groups both run at high, and the
 deep writer and reviewer pin `max`. The `low` effort applies to the api lane
 only.
 

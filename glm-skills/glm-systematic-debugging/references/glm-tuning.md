@@ -30,7 +30,7 @@ On Anthropic-style routing, `haiku` maps to Flash while **both** `sonnet` and `o
 
 ## Harness notes
 
-**ZCode.** Skill at `~/.zcode/skills/glm-systematic-debugging/SKILL.md`, invoked as `$glm-systematic-debugging`; agents at `~/.zcode/agents/` (user-level, no nested subagents). Foreground subagents do run in parallel, so the agent-lane fallback of `scan` is a real option here — `sh install-zcode.sh` installs the skill and copies `agents/glm-debug-worker.md` verbatim into `~/.zcode/agents/` (`thoughtLevel: high`). Thinking effort is chosen per model in Settings → Model Settings.
+**ZCode.** Skill at `~/.zcode/skills/glm-systematic-debugging/SKILL.md`, invoked as `$glm-systematic-debugging`; agents at `~/.zcode/agents/` (user-level, no nested subagents). Foreground subagents do run in parallel, so the agent-lane fallback of `scan` is a real option here — `sh install-zcode.sh` installs the skill and copies `agents/glm-debug-worker.md` verbatim into `~/.zcode/agents/` (`thoughtLevel: max`). Thinking effort is chosen per model in Settings → Model Settings.
 
 ## Failure modes and what to do
 
@@ -41,4 +41,4 @@ On Anthropic-style routing, `haiku` maps to Flash while **both** `sonnet` and `o
 5. **Verdicts flip between runs.** The command is flaky. Set `runs` to at least 3/p and confirm with `stress.sh -b`. Arms with `runs` above 1 run one after another (control first), so the call takes the sum of both arms' time, not the longer one; CONFIRMED needs one arm to pass every run while the other fails.
 6. **The suite is slower under `-j 64`.** The command is CPU-bound and you oversubscribed. Total processes ≤ CPU count; `probe` prints the CPU count.
 7. **You are writing a fix before a `ROOT CAUSE` line exists.** Stop. That is the one rule no amount of speed buys out.
-8. **A `glm-debug-worker` stops before it answers.** Its turn budget ran out. The zcode install copies the agent verbatim — `thoughtLevel: high`, no `maxTurns`. Enough for a 12-line investigation plus one `stress.sh` arm. Narrow the question or split the area into two briefs instead of asking one worker to cover both.
+8. **A `glm-debug-worker` stops before it answers.** Its turn budget ran out. The zcode install copies the agent verbatim — `thoughtLevel: max`, no `maxTurns`. Enough for a 12-line investigation plus one `stress.sh` arm. Narrow the question or split the area into two briefs instead of asking one worker to cover both.

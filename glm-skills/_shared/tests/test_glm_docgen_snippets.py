@@ -169,9 +169,9 @@ class ZcodeAgentFileTests(unittest.TestCase):
         for role, text in (("writer", writer), ("reviewer", reviewer)):
             self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n', text,
                           "zcode %s frontmatter lacks the real GLM flash model id" % role)
-        self.assertIn("thoughtLevel: high\n", writer, "zcode writer frontmatter lacks thoughtLevel: high")
+        self.assertIn("thoughtLevel: max\n", writer, "zcode writer frontmatter lacks thoughtLevel: max")
         self.assertIn("thoughtLevel: max\n", reviewer, "zcode reviewer frontmatter lacks thoughtLevel: max")
-        self.assertNotIn("thoughtLevel: high", reviewer, "zcode reviewer still sits at thoughtLevel: high")
+        self.assertNotIn("thoughtLevel: max", reviewer, "zcode reviewer still sits at thoughtLevel: max")
 
 
 class ZcodeFactTests(unittest.TestCase):
@@ -206,8 +206,8 @@ class ZcodeFactTests(unittest.TestCase):
         self.assertEqual(fence_after(self.text, "agents/glm-doc-reviewer.md"),
                          read(ZREVIEWER).strip(),
                          "Appendix A reviewer snapshot must match agents/glm-doc-reviewer.md exactly")
-        self.assertIn("thoughtLevel: high\n", self.text,
-                      "Appendix A writer frontmatter lacks thoughtLevel: high")
+        self.assertIn("thoughtLevel: max\n", self.text,
+                      "Appendix A writer frontmatter lacks thoughtLevel: max")
         self.assertIn("thoughtLevel: max\n", self.text,
                       "Appendix A reviewer frontmatter lacks thoughtLevel: max")
 

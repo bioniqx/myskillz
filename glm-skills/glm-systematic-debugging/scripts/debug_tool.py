@@ -990,7 +990,7 @@ SETUP = {
     "zcode": """# ZCode
 # Settings -> Model Settings -> Z.ai account or API key; thinking effort is per-model in the UI.
 # Skill:  ~/.zcode/skills/glm-systematic-debugging/SKILL.md
-Run `sh install-zcode.sh` from the glm-skills checkout instead of copying the file raw: it installs this skill to ~/.zcode/skills/ and copies agents/glm-debug-worker.md verbatim into ~/.zcode/agents/ (real model ids, `thoughtLevel: high`).
+Run `sh install-zcode.sh` from the glm-skills checkout instead of copying the file raw: it installs this skill to ~/.zcode/skills/ and copies agents/glm-debug-worker.md verbatim into ~/.zcode/agents/ (real model ids, `thoughtLevel: max`).
 # export ZAI_API_KEY=<GLM Coding Plan key>   # so debug_tool.py scan can fan out by itself
 # Foreground subagents run truly in parallel here: the agent lane of `scan` is fine on ZCode.""",
 }

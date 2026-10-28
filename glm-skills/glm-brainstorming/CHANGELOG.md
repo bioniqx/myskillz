@@ -23,7 +23,7 @@ count. The checks that used to be prose now fail closed in `check.py`:
   return no.
 - Lane templates no longer demand 3-6 findings or 2-6 claims. Zero is valid.
 - `glm-explorer`, `glm-researcher` and new `glm-drafter` pin Flash at
-  `thoughtLevel: high`. Approach drafts, the claim verifier and the runner-up
+  `thoughtLevel: max`. Approach drafts, the claim verifier and the runner-up
   use `glm-drafter` instead of the session model. `context.sh` prints the
   three gates at the top of the block the model just received.
 - Lane rules have one home, the agent file. The dispatch prompt is only
