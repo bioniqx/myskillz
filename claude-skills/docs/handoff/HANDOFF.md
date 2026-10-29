@@ -12,7 +12,7 @@
 (unavailable)
 
 ### Last Assistant Message (transcript tail)
-**Lưu ý:** trong repo `hybrid-*` ở thư mục anh để riêng nếu có gọi các skill này theo tên cũ thì cần đổi theo. Em chưa đụng tới. Bản cài đặt ở `~/.claude` vẫn là bản cũ. Để dùng tên mới anh cần cài lại các thư mục `claude-*`, và có thể xóa các agent cũ không tiền tố (`programmer`, `team-leader`...).
+**Note:** In the `hybrid-*` repo in your separate directory, if any of these skills are called by their old names, they need to be updated accordingly. I have not touched them. The installation at `~/.claude` is still the old version. To use the new names, you will need to reinstall the `claude-*` directories, and you can delete old agents without prefixes (`programmer`, `team-leader`...).
 
 ### Git Snapshot
 - Branch: main

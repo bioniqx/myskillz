@@ -1,47 +1,47 @@
-# claude-writing-plans v8 (max-parallel) — thay đổi so với v7
+# claude-writing-plans v8 (max-parallel) — changes from v7
 
-Ghi chú nhãn phiên bản: `claude-writing-plans-6.2` là tên thư mục cài đặt; `v8` là số phiên bản nội bộ của skill (cùng một bản phát hành).
+Version label note: `claude-writing-plans-6.2` is the installation directory name; `v8` is the internal skill version number (same release).
 
-## Sửa lỗi nghiêm trọng về song song
-- Claude Code mặc định chỉ cho **20 subagent chạy cùng lúc** (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`). v7 bắn 64 writer trong một message → từ writer thứ 21 bị từ chối "Concurrent subagent limit reached". v8 đọc giới hạn thật, tự gom task vào ≤ cap writer (chia cân bằng theo khối lượng), và `setup --apply` nâng lên 64.
+## Critical concurrency fix
+- Claude Code defaults to only **20 concurrent subagents** (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`). v7 dispatched 64 writers in a single message -> writers from the 21st onward were rejected with "Concurrent subagent limit reached". v8 reads the real limit, packs tasks into <= cap writers (balanced by workload), and `setup --apply` raises it to 64.
 
-## Nhanh hơn ở orchestrator (nút thắt tuần tự)
-- Context repo + bản đồ heading của spec được **inject lúc load skill** (`!` command) → bỏ 1 vòng tool.
-- Orchestrator không còn gõ Execution Protocol, File Structure, Waves, `Parallel:`, Depends suy ra từ Consumes, Interfaces — script sinh hết.
-- Prompt mỗi writer còn 1 dòng (`Read <brief> and follow it exactly.`).
+## Faster orchestrator (sequential bottleneck)
+- Repo context + spec heading map are **injected when loading the skill** (`!` command) -> skips one tool round trip.
+- Orchestrator no longer types Execution Protocol, File Structure, Waves, `Parallel:`, Depends inferred from Consumes, Interfaces — scripts generate all of them.
+- Each writer's prompt is reduced to 1 line (`Read <brief> and follow it exactly.`).
 
-## Nhanh hơn ở writer
-- Script tạo **brief riêng cho từng writer**: hợp đồng, dòng spec đã cắt sẵn, file hiện có đã inline kèm số dòng, luật lint đầy đủ → writer chỉ đọc 1 file.
-- Luật cứng cấm writer đọc script/khám phá repo (đo thực tế: đây là nguyên nhân chính làm writer chậm).
-- Agent tùy chọn `claude-plan-task-writer`: sonnet, effort medium, không nạp CLAUDE.md, hook PostToolUse tự lint sau Write/Edit → bớt 1 lượt/writer.
-- `Tier: light|deep` chỉ ảnh hưởng việc chọn task để review (deep luôn được review); mọi writer đều chạy sonnet.
-- `wait` chặn đến khi mọi task lint OK (không phải xử lý 64 notification).
+## Faster writers
+- Script generates **dedicated briefs for each writer**: contract, pre-sliced spec lines, existing files inlined with line numbers, full lint rules -> writer only reads 1 file.
+- Hard rule forbids writer from reading scripts or exploring the repo (empirical measurement: this was the primary cause of slow writers).
+- Optional `claude-plan-task-writer` agent: sonnet, medium effort, does not load CLAUDE.md, PostToolUse hook automatically lints after Write/Edit -> saves 1 turn/writer.
+- `Tier: light|deep` only affects task selection for review (deep is always reviewed); all writers run on sonnet.
+- `wait` blocks until all tasks lint OK (no need to handle 64 notifications).
 
-## Kiểm tra máy móc mạnh hơn (thay review bằng model)
-- Kiểm cú pháp code block: Python, JSON, TOML, bash, JS (`fragment` để bỏ qua đoạn cố ý dở dang).
-- File trong task ⊆ Files của hợp đồng; `git add` chỉ đường dẫn tường minh thuộc task; mỗi `Run:` có `Expected:`; bước đánh số liên tục; Create/Modify khớp trạng thái đĩa.
-- Task dùng chung file tự được xếp thứ tự (`Runs after`), cảnh báo "hot file" làm tuần tự hóa.
-- Review theo rủi ro (deep / dài / nhiều phụ thuộc / có WARN), `--thorough` để review tất cả; mỗi reviewer 1 slot riêng.
+## Stronger machine verification (replacing model reviews)
+- Syntax checking for code blocks: Python, JSON, TOML, bash, JS (`fragment` to skip intentionally incomplete snippets).
+- Files in task ⊆ Files of the contract; `git add` only touches explicit paths belonging to the task; each `Run:` has an `Expected:`; steps are continuously numbered; Create/Modify matches disk state.
+- Tasks sharing files are automatically ordered (`Runs after`), warning on "hot files" that cause serialization.
+- Risk-based review (deep / long / many dependencies / has WARN), `--thorough` to review all; each reviewer gets 1 dedicated slot.
 
-## Benchmark A/B (cùng repo, cùng 4 hợp đồng, n=1 — sai số LLM lớn)
+## Benchmark A/B (same repo, same 4 contracts, n=1 — high LLM variance)
 | | v7 | v8 |
 |---|---|---|
-| Wall-clock fan-out (task chậm nhất) | 275 s | 163 s |
-| Tổng thời gian writer | 543 s | 314 s |
+| Wall-clock fan-out (slowest task) | 275 s | 163 s |
+| Total writer time | 543 s | 314 s |
 | Tool calls | 33 | 12 (3/writer) |
-Script: `contracts` 70 task < 0.25 s, `assemble` 70 task 0.3 s.
+Script: `contracts` 70 tasks < 0.25 s, `assemble` 70 tasks 0.3 s.
 
-## Cài đặt
-1. Giải nén vào `~/.claude/skills/claude-writing-plans-6.2/` (skill sync từ claude.ai sẽ không chạy lệnh `!`).
-2. Một lần: `python3 ~/.claude/skills/claude-writing-plans-6.2/scripts/plan_tool.py setup` (xem trước) → `--apply` → khởi động lại Claude Code.
+## Installation
+1. Extract into `~/.claude/skills/claude-writing-plans-6.2/` (skills synced from claude.ai will not execute `!` commands).
+2. One-time setup: `python3 ~/.claude/skills/claude-writing-plans-6.2/scripts/plan_tool.py setup` (dry-run) -> `--apply` -> restart Claude Code.
 
-## W8 — preload không bao giờ hủy skill, context bị giới hạn, hash hợp đồng, mark warn/fail, phát hiện agent cũ, assemble/wait nhanh hơn
-- Preload `!` giờ truyền `"$ARGUMENTS"` như MỘT token đã quote; `context` luôn thoát mã 0 kể cả với đối số rỗng, dấu ngoặc kép bên trong, đường dẫn không tồn tại, HEAD detached, repo chưa có commit, hoặc ngoài git repo — không còn nguy cơ hủy cả skill vì lỗi shell-split.
-- `context` dùng `git --no-optional-locks` cho mọi lệnh git (không đụng mtime của index) và giới hạn danh sách file hiển thị còn ≤30 (tổng đầu ra ≤~55 dòng) kể cả trên repo 300+ file.
-- `contracts` giờ băm (sha256) nội dung từng hợp đồng; nếu một hợp đồng đổi, script xóa đúng `TXX.md` + `TXX.md.ok` (và các mark khác) của task đó, giữ nguyên các task khác không đổi.
-- `lint-task` và `hook-lint` dùng chung một hàm đánh dấu: lint có warning ghi `.warn`, lint sạch xóa `.warn` cũ, lint lỗi ghi `.fail` (và `.fail` được xóa khi lint lại sạch).
-- `context` phát hiện agent `claude-plan-task-writer` cài sẵn nhưng còn dính placeholder `__PLAN_TOOL__` (chưa chạy `setup --apply`) và luôn cảnh báo, kể cả khi cap subagent đã ở mức tối đa.
-- `wait` trả về `PENDING` sớm khi mọi task còn lại đều đang `.fail` và không đổi ≥45 giây, thay vì đợi hết `--idle`/`--timeout`.
-- `assemble` chạy `node --check` cho các code block song song giữa các task thay vì tuần tự.
-- Reviewer brief giờ inline sẵn nội dung file đích hiện có (giống writer brief), reviewer không cần đọc thêm.
-- SKILL.md: bỏ nhắc "ultracode", thêm lời khuyên `--allow` ngay ở Phase 1, hand-off trỏ về skill `claude-dev-team` thay vì các skill hand-off cũ (không còn tồn tại), và mục "One-time speed setup" nêu rõ nó cũng xử lý agent cũ/placeholder.
+## W8 — preload never cancels skill, bounded context, contract hashing, warn/fail marks, legacy agent detection, faster assemble/wait
+- Preload `!` now passes `"$ARGUMENTS"` as ONE quoted token; `context` always exits code 0 even with empty arguments, embedded quotes, non-existent paths, detached HEAD, repo with no commits, or outside a git repo — eliminating the risk of aborting the entire skill due to shell-split errors.
+- `context` uses `git --no-optional-locks` for all git commands (avoids touching index mtime) and caps the visible file list at <=30 (total output <=~55 lines) even on 300+ file repos.
+- `contracts` now hashes (sha256) each contract's content; if a contract changes, the script removes only `TXX.md` + `TXX.md.ok` (and other marks) for that task, keeping other tasks untouched.
+- `lint-task` and `hook-lint` share the same marking function: lint with warnings writes `.warn`, clean lint clears old `.warn`, lint errors write `.fail` (and `.fail` is cleared on clean re-lint).
+- `context` detects pre-installed `claude-plan-task-writer` agent still containing the `__PLAN_TOOL__` placeholder (where `setup --apply` has not been run) and always warns, even when the subagent cap is already at maximum.
+- `wait` returns `PENDING` early when all remaining tasks are `.fail` and unchanged for >=45 seconds, instead of waiting for the full `--idle`/`--timeout`.
+- `assemble` runs `node --check` for code blocks in parallel across tasks rather than sequentially.
+- Reviewer brief now pre-inlines existing target file contents (matching writer brief), so reviewers need no extra reads.
+- SKILL.md: dropped "ultracode" mention, added `--allow` recommendation early in Phase 1, repointed hand-off to `claude-dev-team` instead of obsolete hand-off skills, and clarified in "One-time speed setup" that it also handles legacy agents/placeholders.
