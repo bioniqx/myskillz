@@ -1,12 +1,12 @@
-// spectrum-morph-ui —— 频谱化 UI
-// 标题 "LAUNCH WEEK" 下方 8px ink 下划线（720px）。25f 起裂成 28 根竖条
-// （20px 宽、6px 间隙），条高按伪 FFT 跳动 64f（低频端高、高频端矮的包络），
-// 条底对齐原线、向上生长。两小节后 12f 收拢回 8px 直线，收线后真静止 ≥35f。
+// spectrum-morph-ui — Spectrogram-style UI
+// 8px ink underline (720px) beneath title "LAUNCH WEEK". At 25f splits into 28 vertical bars
+// (20px wide, 6px gap); bar heights bounce via pseudo-FFT for 64f (envelope with high bass and lower treble),
+// bottoms aligned with original line, growing upward. After two bars, collapses back to 8px line in 12f; true rest ≥35f after collapse.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, TitleBlock } from '../../_fixtures/Fixtures';
 
-// 库内标准 seed hash（帧确定，无 Math.random）
+// Library-standard seed hash (frame-deterministic, no Math.random)
 const h = (n: number) => {
   const s = Math.sin(n * 127.3) * 43758.5453;
   return s - Math.floor(s);
@@ -15,21 +15,21 @@ const h = (n: number) => {
 const LINE_W = 720;
 const LINE_H = 8;
 const LINE_X = (1920 - LINE_W) / 2; // 600
-const LINE_BOTTOM = 620; // 下划线底边 y（条从这里向上长）
+const LINE_BOTTOM = 620; // Underline bottom y (bars grow upward from here)
 
 const N_BARS = 28;
 const GAP_MAX = 6;
 
-const SPLIT = 25; // 裂开起点
-const SPLIT_DUR = 8; // 裂开 & 幅度爬升
-const DANCE = 64; // 跳动两小节
+const SPLIT = 25; // Split start frame
+const SPLIT_DUR = 8; // Split & amplitude ramp-up
+const DANCE = 64; // Dance for two measures
 const COLLAPSE_START = SPLIT + DANCE; // 89
 const COLLAPSE_DUR = 12;
-const COLLAPSE_END = COLLAPSE_START + COLLAPSE_DUR; // 101 → 之后真静止 39f
+const COLLAPSE_END = COLLAPSE_START + COLLAPSE_DUR; // 101 -> true rest 39f thereafter
 
-const AMP = 92; // 理论峰值 8 + 92 = 100px；wobble×jitter×env 很少同时取满，实测峰值 ~80px
+const AMP = 92; // Theoretical peak 8 + 92 = 100px; wobble×jitter×env rarely maximize simultaneously, measured peak ~80px
 
-// 低频端高、高频端矮的包络
+// Envelope: higher on low frequencies, lower on high frequencies
 const env = (i: number) => 0.4 + 0.6 * Math.pow(1 - i / (N_BARS - 1), 1.1);
 
 export const SpectrumMorphUi: React.FC = () => {
@@ -40,7 +40,7 @@ export const SpectrumMorphUi: React.FC = () => {
     extrapolateRight: 'clamp',
   });
 
-  // 幅度爬升（扩散 → out-cubic）与收拢（12f 归零）
+  // Amplitude ramp-up (spread -> out-cubic) and collapse (12f to zero)
   const rampIn = interpolate(frame, [SPLIT, SPLIT + SPLIT_DUR], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: 'clamp',
@@ -53,7 +53,7 @@ export const SpectrumMorphUi: React.FC = () => {
   });
   const amp = rampIn * rampOut;
 
-  // 间隙：裂开时 0→6，收拢时 6→0（收拢结束恰好合成整线）
+  // Gap: 0->6 when splitting, 6->0 when collapsing (precisely merges into solid line at end of collapse)
   const gapIn = interpolate(frame, [SPLIT, SPLIT + SPLIT_DUR], [0, GAP_MAX], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: 'clamp',
@@ -65,9 +65,9 @@ export const SpectrumMorphUi: React.FC = () => {
     extrapolateRight: 'clamp',
   });
   const gap = Math.min(gapIn, gapOut);
-  const barW = (LINE_W - (N_BARS - 1) * gap) / N_BARS; // gap=6 时 ≈20px
+  const barW = (LINE_W - (N_BARS - 1) * gap) / N_BARS; // ≈20px when gap=6
 
-  // 条形阶段以外条件挂载整线（摘罩=条件挂载，保证收尾像素级静止）
+  // Conditionally mount solid line outside bar phase (unmasking = conditional mount, ensuring pixel-perfect rest at end)
   const barsActive = frame >= SPLIT && frame < COLLAPSE_END;
 
   return (
@@ -105,7 +105,7 @@ export const SpectrumMorphUi: React.FC = () => {
 
       {barsActive &&
         Array.from({ length: N_BARS }).map((_, i) => {
-          // 伪 FFT：|sin| 摆动 × 每 4 帧换挡的 seed 随机 × 频段包络 × 幅度包络
+          // Pseudo-FFT: |sin| oscillation × seed random shifted every 4 frames × frequency envelope × amplitude envelope
           const wobble = Math.abs(Math.sin(i * 0.7 + frame * 0.31));
           const jitter = 0.4 + 0.6 * h(i * 13 + Math.floor(frame / 4));
           const barH = LINE_H + AMP * wobble * jitter * env(i) * amp;
@@ -115,8 +115,8 @@ export const SpectrumMorphUi: React.FC = () => {
               style={{
                 position: 'absolute',
                 left: LINE_X + i * (barW + gap),
-                top: LINE_BOTTOM - barH, // 底边对齐原线，向上长
-                width: barW + (gap < 1 ? 0.5 : 0), // gap 收到 0 时补 0.5px 防细缝
+                top: LINE_BOTTOM - barH, // Bottom aligned to original line, growing upward
+                width: barW + (gap < 1 ? 0.5 : 0), // Add 0.5px when gap closes to 0 to prevent subpixel seams
                 height: barH,
                 background: G.ink,
                 borderRadius: 3,

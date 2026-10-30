@@ -1,51 +1,40 @@
 ---
 name: overhead-camera-moves
-一句话: 俯拍揭示两式——tilt-reveal 俯仰抬正揭示、overhead-tabletop-drop 桌面卡阵横滑骤降扎入
-适用: 用"俯仰角"讲故事的开场/转场：单页 establishing 用 A，多页巡视择一扎入用 B
-时长: A 120f（4s）/ B 140f（4.7s）
-能量: A 中 / B 中高
-标签: opening、transition
+summary: Two overhead reveals: a tilted scene leveling into view, and a tabletop layout dropping sharply into place.
+use: Opening or transition storytelling via pitch angles: use Variant A for single-page establishing shots, and Variant B for multi-page inspections diving into a chosen page
+duration: A 120f (4s) / B 140f (4.7s)
+energy: A Medium / B Medium-high
+tags: opening, transition
 ---
 
-## 意图
-库内俯拍视角一直空缺——crane-rise 是"平移+缩放"的升起（俯仰角
-不动），space-camera C 式 drone-dive 是俯冲降落一镜到底；这两式让
-**俯仰角本身讲故事**：A 是揭示——整页 rotateX 平躺、开场只见远端上缘
-一条发光的透视窄带（像天际线上的第一道光），机位"抬头"回正，内容一排排
-涌入视野，像掀开桌上的图纸；B 是选择——三张页面卡平躺成桌面卡阵，相机俯拍横向滑过依次
-掠过（韦斯·安德森 tabletop），滑到目标页猛地俯冲扎入、抬正成满屏，
-"巡视一圈，就选这张"。选型：单页开场用 A，多页转场/开场用 B。
+## Intention
+Overhead perspective has been a gap in the shot library: crane-rise is a "pan + zoom" elevation with a fixed tilt angle, while space-camera Variant C (drone-dive) is a one-way dive landing. These two recipes let the **pitch angle itself tell the story**: Variant A is a reveal—the entire page lies flat under rotateX; at opening, only a luminous perspective sliver at the far top edge is visible (like first light on the horizon), then the camera tilts up to level the page as content pours into view like unrolling architectural plans on a table; Variant B is a selection—three page cards lie flat in a tabletop layout, the overhead camera slides horizontally across them (Wes Anderson tabletop style), then dives steeply into the chosen page, leveling it to full screen: "inspect the field, pick this one." Selection guide: use A for single-page openings; use B for multi-page transitions or openings.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A tilt-reveal | 整页绕下沿铰链 rotateX 86° 正面朝上平躺，40f 抬正（过冲 −2.2° 再软回），角度/缩放/铰链位置/透视/视点高度共用一条进度 | 开场 establishing；单主体 |
-| B overhead-tabletop-drop | 卡阵平躺 rotateX 62°，pan 段只动 translateX 横滑掠过，drop 段角度/缩放/位移三通道同跑扎入落版 | 多页巡视后择一；转场/开场两用 |
+## Variant Selection
+| Variant | Approach | Use Case |
+|---|---|---|
+| A tilt-reveal | Full page lies face-up with rotateX 86 deg hinged on bottom edge, tilts up to level over 40f (overshooting to -2.2 deg before softening back); angle, scale, hinge position, perspective, and viewpoint height share a single progress driver | Opening establishing shot; single subject |
+| B overhead-tabletop-drop | Card array lies flat with rotateX 62 deg; pan phase only moves translateX horizontally, drop phase synchronizes angle, scale, and translation to dive into final lockup | Inspecting multiple pages then picking one; opening or transition |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 俯角 | rotateX 86°（f0–20 极缓 creep 到 83°）→ −2.2°（f60，速度归零）→ 0°（f70），主段 EASE.swift 不对称 in-out、过冲回落 smooth，transformOrigin 50% 100%（下沿铰链） | 首版 −55° 太弱：f0 仍见半页，无"窄带"悬念（实渲判例）；视点低于页面平面会看到背面（窄带里的字上下颠倒，实渲判例）——视点要在页面上方；分段各用 out-cubic 会在接缝处速度突变 |
-| A 联动 | perspective 700→1500、视点 y 从铰链上方 300px → 画面中心；scale 2.5→0.84（落定留边看见舞台）、铰链 y 600→935；背景光池与浮尘反向视差下移 150px | perspective 不联动则俯角初始见不到"只露一条"；背景不视差读作页面在转、不是相机抬头 |
-| A 收尾 | 机位 f70 落定；38–82 面积图折线描出、80f 终点光点亮起；70–120 极缓推近 1→1.018 | 过冲幅度 ≤3°，再大读作弹簧不是机位；69f 纯静止太长（> 1s 死帧），hold 段要有极缓推近 |
-| B pan 段 | 0–50f 只改 translateX +760→−360（smooth），角度不动；50–58 停 8f 选定（目标稿离桌 16px、它的顶灯亮、另两盏暗到 35%） | pan 段动角度 = 两段职责糊掉（判例：pan 巡视、drop 表态）；没有选定那一拍，扎入读作随机 |
-| B drop 段 | 58–86f 三通道同跑：rotateX 62→−1.6→0.5→0（零速起步的不对称曲线 + smooth 回落过冲）、scale 1→2.04→2.0（起步带 ~5% 预备回缩）、translateX −360→0 | 三通道必须同跑；分先后读作两个动作；pan 静止后直接 out-cubic 起跳是速度突变 |
-| B 卡阵 | 卡片 996×560（16:9 精确比），落版 scale 2.0 恰满屏正视；transform 顺序 translateX→rotateX→scale | 顺序错了 pan 会带出弧线轨迹 |
-| B 地板 | 深石墨台面 + 发丝网格 + 每张稿一盏顶灯光池/体积光束 + 稿下印刷标签（01 SHOTS…） | 无地板参照，横滑段读不出"相机在动"；暗桌白稿的反差就是层次 |
-| B 收尾 | 机位 f94 落版；98–118 页面内金色镜头块滑入分镜板空槽（一次过冲）；94–140 极缓推近 1→1.012 | 落版后完全静止 47f 偏死；页面内给一个小动作收尾 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Pitch angle | rotateX 86 deg (f0–20 ultra-slow creep to 83 deg) -> -2.2 deg (f60, velocity zeroes) -> 0 deg (f70); main segment uses EASE.swift asymmetric in-out, smooth overshoot recovery, transformOrigin 50% 100% (bottom edge hinge) | Initial version at -55 deg was too weak: half the page was visible at f0 without the "narrow sliver" suspense (render precedent); if the viewpoint is below page plane, the backside is exposed (text in the sliver appears inverted) — viewpoint must stay above the page plane; per-segment out-cubic curves cause velocity jumps at seams |
+| A Coupled motion | perspective 700 -> 1500; viewpoint y shifts from 300px above hinge to screen center; scale 2.5 -> 0.84 (leaving borders to expose the stage); hinge y 600 -> 935; background light pool and dust drift shift downward 150px in counter-parallax | If perspective is not coupled, the opening angle fails to show "just a sliver"; without background parallax, it looks like the page is rotating rather than the camera tilting up |
+| A Resolution | Camera settles at f70; 38–82 area chart polyline draws on; 80f endpoint beacon ignites; 70–120 ultra-slow push-in 1 -> 1.018 | Overshoot amplitude <=3 deg, anything larger feels like a spring instead of a camera mount; 69f of pure static hold is too dead (>1s dead frame); holds need an ultra-slow push-in |
+| B Pan phase | 0–50f only modifies translateX +760 -> -360 (smooth), pitch angle locked; 50–58 holds 8f on selection (target board lifts 16px off table, its top spotlight lights up, other two dim to 35%) | Changing angle during pan blurs stage roles (precedent: pan inspects, drop commits); without a distinct selection beat, the dive feels random |
+| B Drop phase | 58–86f runs three channels concurrently: rotateX 62 -> -1.6 -> 0.5 -> 0 (zero-velocity takeoff asymmetric curve + smooth overshoot recovery), scale 1 -> 2.04 -> 2.0 (anticipatory ~5% recoil at start), translateX -360 -> 0 | All three channels must run simultaneously; sequential motion reads as two separate actions; jumping directly with out-cubic after pan halt creates velocity discontinuities |
+| B Card array | Cards at 996x560 (precise 16:9 ratio), final lockup scale 2.0 perfectly fills screen frontally; transform order translateX -> rotateX -> scale | Incorrect transform order causes curved pan trajectories |
+| B Floor plane | Dark graphite tabletop + hairline grid + top spotlight pool / volumetric beam for each card + print-style labels below cards (01 SHOTS...) | Without floor reference, horizontal sliding fails to convey "camera is moving"; contrast between dark desk and white artboards creates visual depth |
+| B Resolution | Camera locks onto board at f94; 98–118 golden shot block slides into storyboard empty slot (single overshoot); 94–140 ultra-slow push-in 1 -> 1.012 | 47f of total stillness after landing is too lifeless; give the inner page a subtle concluding action |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 大角度透视下卡片必须 backfaceVisibility hidden + translateZ(4px)
-  兜底，否则个别帧背面/深度穿帮
-- A 与 crane-rise-reveal 同片二选一——都是开场揭示，两个"揭示开场"
-  等于没有揭示
-- B pan 段角度锁死是命门（两段职责分离判例）：巡视归巡视、扎入归
-  扎入，混着动观众不知道相机想干嘛
-- 两式都是"相机大动作"，与 space-camera/crane-rise 同屏段落互斥，
-  一个段落只能有一个持镜人
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- At steep perspective angles, cards must include backfaceVisibility: hidden + translateZ(4px) fallback, otherwise certain frames expose backface or depth glitches.
+- Choose between Variant A and crane-rise-reveal within the same video: both are opening reveals, and having two "reveal openings" nullifies the impact.
+- Locking angle during Variant B's pan phase is critical (separation of responsibilities precedent): panning is for inspection, dropping is for commitment; mixing them leaves the audience confused about camera intent.
+- Both variants represent major camera maneuvers and conflict with space-camera / crane-rise in the same segment; a sequence can only have one camera operator at a time.
 
-## 参考实现
+## Reference Implementation
 demos/camera/overhead-camera-moves/
-（OverheadTabletopDrop.tsx / TiltReveal.tsx）
+(OverheadTabletopDrop.tsx / TiltReveal.tsx)

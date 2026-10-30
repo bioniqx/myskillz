@@ -1,25 +1,25 @@
-// comic-panel-split｜漫画分格并列 —— 同一主体，三个机位，咔咔咔三格定格，末格斜边吃屏。
+// comic-panel-split — Comic panel split: same subject, three camera angles, snap-snap-snap freeze into panels, last panel slant-expands full screen.
 //
-// 第二轮重设计（墨黑 · 朱砂红 · 漫画分格的夜间镜头发布）：
-// - look = custom「漫画墨」：带红相的墨黑底（不是纯黑）+ 奶油纸色缝线 + 一种朱砂红强调（镜头的红圈 / 对焦指示 /
-//   标题里的一个词）。分格的漫画语言靠三样东西撑：12° 斜缝（奶油纸芯 + 墨边）、格角的漫画旁白框、
-//   末格弹入时的一圈速度线。
-// - 主体 = video-shotcraft 定焦镜头「35mm f/1.2」（镜名环刻 video-shotcraft + 品牌短句），全部用 SVG 矢量画（铝筒、橡胶对焦环、距离刻度、红圈、
-//   镜名环形字、镀膜反光、11 片光圈叶片），所以三格的 0.68x / 2.3x / 2.2x 机位都是矢量重绘、字边锐利。
-//   三格 = 同一支镜头的三个机位：① 3/4 侧拍全身（看得见筒身体积）② 对焦环特写（数字在转——手动对焦）
-//   ③ 镜片微距（光圈叶片在收——f/1.2 → f/2）。保活不是缓推，而是"镜头本身在工作"。
-// - 三个旁白框按「Shot 01 / 02 / 03」编号（三格 = 三个镜头），第一格写品牌短句前半「Frame motion.」。
-// - 末格吃屏后成为结尾海报：镜片微距铺右半屏，左侧 video-shotcraft 字标 + 大标题「Craft / the shot.」逐行升起。
+// Redesign (Ink Black · Cinnabar Red · Comic Panel Nocturnal Lens Launch):
+// - look = custom "Manga Ink": red-tinted ink black base (not pure black) + cream paper gutters + cinnabar red accents (lens red ring / focus index mark /
+//   highlight word in title). Comic panel language relies on three elements: 12° diagonal gutters (cream core + ink borders), corner narration captions,
+//   and radial speed lines when the final panel pops in.
+// - Subject = video-shotcraft prime lens "35mm f/1.2" (barrel text engraved with video-shotcraft + brand motto), rendered fully in SVG vectors (aluminum barrel, rubber focus grip, distance scale, red ring,
+//   circular text, coating reflections, 11-blade aperture), ensuring sharp edges across 0.68x / 2.3x / 2.2x framing angles.
+//   Three panels = three angles of the same lens: (1) 3/4 profile full barrel (barrel volume visible) (2) focus ring close-up (distance scale rotating — manual focus)
+//   (3) front element macro (aperture blades stopping down — f/1.2 -> f/2). Life in the frame comes from the lens operating, rather than camera creep.
+// - Three narration boxes numbered "Shot 01 / 02 / 03" (three panels = three shots), panel 1 carrying brand motto opener "Frame motion.".
+// - Final panel expands to become the closing poster: macro lens fills the right half, while video-shotcraft wordmark + title "Craft / the shot." rise line-by-line on left.
 //
-// 时间表（30fps，共 156f）：
-//   0–20    全屏 3/4 侧拍（缓推 1→1.04），镜头已在画面里，不从空白起
-//   20/24/28 三刀斜缝依次劈下（每刀 3f 从上到下画出），同帧对应格硬切弹入（5f scale 1.07→1 + 白闪）
-//            —— 4f 一拍，"咔、咔、咔"，比原版 2f 更读得清
-//   27/31/35 三个旁白框逐个盖章（overshoot，-2° 歪斜）
-//   35–64   定格 29f：① 极缓推 ② 对焦环转 26°（距离数字滑过红色指示）③ 光圈叶片收拢
-//   64–80   末格斜边吃屏：2f 反向回拉（anticip）后 14f 扫过全屏，镜片机位同步滑到海报构图；缝线按速度横向拖影
-//   82–106  标题两行 rise 升起，副标题 blur 入
-//   106–156 hold：光圈极缓回开 + 1.5% 推近，最后干净落定
+// Timeline (30fps, 156f total):
+//   0–20    Full-screen 3/4 profile (slow push 1->1.04), lens already established on screen rather than starting blank
+//   20/24/28 Three diagonal slashes strike in sequence (each drawn top-to-bottom over 3f); matching panel hard-cuts in on same frame (5f scale 1.07->1 + white flash)
+//            — 4f rhythm, "snap, snap, snap", clearly readable
+//   27/31/35 Three narration captions stamp in sequentially (overshoot, -2° tilt)
+//   35–64   Hold 29f: (1) subtle push-in (2) focus ring rotates 26° (distance numbers glide past red mark) (3) aperture stops down
+//   64–80   Final panel slant-expands full screen: 2f anticipation pull-back then 14f screen wipe; lens camera glides to poster composition; gutters streak horizontally with speed
+//   82–106  Two title lines rise into view, subtitle blurs in
+//   106–156 Hold: aperture reopens slightly + 1.5% push-in, clean static finish
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, SpeedBlur, Vignette, mix, ramp, velocity } from '../../_fixtures/Polish';
@@ -28,50 +28,50 @@ import { BRAND, ShotcraftWordmark } from '../../_fixtures/Brand';
 
 export const COMIC_PANEL_SPLIT_DURATION = 156;
 
-// ───────────── 配色（custom 漫画墨）─────────────
+// ───────────── Color Palette (custom Manga Ink) ─────────────
 const C = {
-  ink: '#0b0607', // 墨（缝线边、旁白框描边）
-  bg0: '#1c0c0f', bg1: '#0f0708', bg2: '#070304', // 带红相的墨黑舞台
-  cream: '#f3eadb', // 纸芯 / 刻字 / 标题
+  ink: '#0b0607', // Ink (gutter border, caption stroke)
+  bg0: '#1c0c0f', bg1: '#0f0708', bg2: '#070304', // Red-tinted ink black stage
+  cream: '#f3eadb', // Paper core / engravings / title
   cream2: '#b9ab9a', cream3: '#6e625a',
-  red: '#ff3346', // 朱砂红：红圈、对焦指示、标题一个词
-  metal0: '#09090b', metal1: '#1b1b1f', metal2: '#34333a', // 阳极氧化黑铝
+  red: '#ff3346', // Cinnabar red: red ring, focus mark, title highlight
+  metal0: '#09090b', metal1: '#1b1b1f', metal2: '#34333a', // Anodized black aluminum
 };
 
-// ───────────── 时间 ─────────────
-const SPLIT = 20; // 第一刀
-const BEAT = 4; // 逐格间隔
+// ───────────── Timing ─────────────
+const SPLIT = 20; // First cut
+const BEAT = 4; // Panel interval
 const POP = 5;
-const CAP = 7; // 旁白框比格子晚 7f
-const HOLD0 = SPLIT + 2 * BEAT + POP + 2; // 35：三格全部落定
-const EXP0 = 64; // 吃屏起
-const EXP_DUR = 16; // 含 2f 预备
+const CAP = 7; // Caption delays 7f after panel
+const HOLD0 = SPLIT + 2 * BEAT + POP + 2; // 35: all three panels settled
+const EXP0 = 64; // Panel expansion starts
+const EXP_DUR = 16; // Includes 2f anticipation
 const EXP1 = EXP0 + EXP_DUR; // 80
 const TITLE = 82;
 
-// ───────────── 斜缝几何（12°：tan12°×1080 ≈ 230）─────────────
+// ───────────── Diagonal Gutter Geometry (12°: tan12°*1080 ~ 230) ─────────────
 const SLANT = 230;
-const B1 = 750; // 缝 1 顶端 x
-const B2 = 1405; // 缝 2 顶端 x
-const HALF = 9; // 缝半宽（纸芯 + 墨边）
+const B1 = 750; // Gutter 1 top x
+const B2 = 1405; // Gutter 2 top x
+const HALF = 9; // Gutter half-width (paper core + ink border)
 
-// ───────────── 机位：屏幕 = c + s·(p − f)，世界坐标原点 = 镜头光轴 ─────────────
+// ───────────── Camera angles: screen = c + s*(p - f), world origin = optical axis ─────────────
 type Cam = { fx: number; fy: number; cx: number; cy: number; s: number };
-const CAM_OPEN: Cam = { fx: -90, fy: 0, cx: 1040, cy: 560, s: 1.12 }; // 开场全屏 3/4 侧拍
-const CAM1: Cam = { fx: -90, fy: 0, cx: 360, cy: 590, s: 0.68 }; // ① 全身
-const CAM2: Cam = { fx: 0, fy: -240, cx: 1010, cy: 300, s: 2.3 }; // ② 对焦环顶部
-const CAM3: Cam = { fx: 0, fy: 0, cx: 1640, cy: 540, s: 2.2 }; // ③ 镜片
-const CAM_END: Cam = { fx: 0, fy: 0, cx: 1360, cy: 540, s: 2.45 }; // 海报：镜片铺右半屏
+const CAM_OPEN: Cam = { fx: -90, fy: 0, cx: 1040, cy: 560, s: 1.12 }; // Opening full-screen 3/4 profile
+const CAM1: Cam = { fx: -90, fy: 0, cx: 360, cy: 590, s: 0.68 }; // (1) Full barrel
+const CAM2: Cam = { fx: 0, fy: -240, cx: 1010, cy: 300, s: 2.3 }; // (2) Focus ring top
+const CAM3: Cam = { fx: 0, fy: 0, cx: 1640, cy: 540, s: 2.2 }; // (3) Front element
+const CAM_END: Cam = { fx: 0, fy: 0, cx: 1360, cy: 540, s: 2.45 }; // Poster: front element fills right half
 const camT = (c: Cam) => `translate(${(c.cx - c.s * c.fx).toFixed(2)} ${(c.cy - c.s * c.fy).toFixed(2)}) scale(${c.s.toFixed(4)})`;
 
-// 吃屏进度：2f 反向回拉 + 14f 扫屏（snappy，起步猛、落点稳）
+// Screen expansion: 2f anticipation pull-back + 14f screen wipe (snappy: brisk start, solid landing)
 const expandAt = (f: number) => {
   if (f < EXP0) return 0;
   const pre = ramp(f, EXP0, 2, EASE.out);
   const go = ramp(f, EXP0 + 2, EXP_DUR - 2, EASE.snappy);
   return -0.03 * pre * (1 - go) + go;
 };
-const edgeAt = (f: number) => mix(B2 + 5, -SLANT - 40, expandAt(f)); // 第三格左斜边顶端 x
+const edgeAt = (f: number) => mix(B2 + 5, -SLANT - 40, expandAt(f)); // Top-x of panel 3 left diagonal edge
 const cam3At = (f: number): Cam => {
   const e = Math.max(0, expandAt(f));
   const hold = ramp(f, HOLD0, EXP0 - HOLD0, EASE.smooth);
@@ -83,25 +83,25 @@ const cam3At = (f: number): Cam => {
 };
 const cam3X = (f: number) => { const c = cam3At(f); return c.cx; };
 
-// 光圈：0 = 全开 f/1.2，1 = 收到 f/2；定格期收拢，海报 hold 期回开一半
+// Aperture: 0 = wide open f/1.2, 1 = stopped down to f/2; stops down during hold, reopens halfway in poster phase
 const apertureAt = (f: number) =>
   ramp(f, HOLD0 - 2, 30, EASE.swift) * (1 - 0.55 * ramp(f, 100, 50, EASE.smooth));
-// 对焦环旋转（度）：定格期转一段 = 手动对焦
+// Focus ring rotation (degrees): rotates during panel hold = manual focus
 const focusAt = (f: number) => -18 + 26 * ramp(f, HOLD0 - 4, 30, EASE.swift);
 
-// ───────────── 镜头（SVG 矢量，世界坐标）─────────────
-const R = 300; // 外筒半径
+// ───────────── Lens (SVG vector, world coordinates) ─────────────
+const R = 300; // Outer barrel radius
 const DIST = ['0.3', '0.5', '0.7', '1', '2', '5', '∞'];
 
 const Lens: React.FC<{ id: string; tilt?: number; focus: number; aperture: number }> = ({ id, tilt = 0, focus, aperture }) => {
   const th = (tilt * Math.PI) / 180;
   const cs = Math.cos(th);
-  const len = 400 * Math.sin(th); // 筒身投影长度（向左）
+  const len = 400 * Math.sin(th); // Projected barrel length (leftward)
   const g = (n: string) => `${n}${id}`;
-  // 光圈开口：11 边形，半径 128（全开）→ 74（f/2）
+  // Aperture opening: 11-gon, radius 128 (wide open) -> 74 (f/2)
   const open = mix(128, 74, aperture);
   const blades = 11;
-  const rot = aperture * 18; // 收光圈时叶片整体转
+  const rot = aperture * 18; // Blades rotate together as aperture closes
   const poly = Array.from({ length: blades }, (_, i) => {
     const a = ((i / blades) * 360 + rot) * (Math.PI / 180);
     return [open * Math.cos(a), open * Math.sin(a)];
@@ -153,7 +153,7 @@ const Lens: React.FC<{ id: string; tilt?: number; focus: number; aperture: numbe
       </defs>
       {tilt > 0 && (
         <g>
-          {/* 筒身：后端椭圆 + 侧带（顶部一道轮廓高光、底部一抹红色环境反光）*/}
+          {/* Barrel body: rear ellipse + side strip (top contour rim highlight, bottom red ambient reflection) */}
           <ellipse cx={-len} cy={0} rx={R * cs} ry={R} fill={`url(#${g('side')})`} />
           <rect x={-len} y={-R} width={len} height={2 * R} fill={`url(#${g('side')})`} />
           <ellipse cx={-len} cy={0} rx={R * cs * 0.9} ry={R * 0.9} fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={6} />
@@ -165,10 +165,10 @@ const Lens: React.FC<{ id: string; tilt?: number; focus: number; aperture: numbe
         </g>
       )}
       <g transform={`scale(${cs.toFixed(4)} 1)`}>
-        {/* 外筒唇 */}
+        {/* Outer barrel lip */}
         <circle r={R} fill={`url(#${g('lip')})`} />
         <circle r={R - 1} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={2} />
-        {/* 对焦环：橡胶纹 + 距离刻度带（随 focus 转）*/}
+        {/* Focus ring: rubber grip ridges + distance scale (rotates with focus) */}
         <g transform={`rotate(${focus.toFixed(2)})`}>
           <circle r={275} fill="none" stroke="#141417" strokeWidth={28} />
           {Array.from({ length: 120 }, (_, i) => (
@@ -191,19 +191,19 @@ const Lens: React.FC<{ id: string; tilt?: number; focus: number; aperture: numbe
             <line key={`m${i}`} x1={0} y1={-259} x2={0} y2={-254} stroke={C.cream2} strokeWidth={1.4} transform={`rotate(${-66 + i * 11 + 5.5})`} />
           ))}
         </g>
-        {/* 固定指示线（红色三角）*/}
+        {/* Fixed index mark (red triangle) */}
         <path d="M -9,-300 L 9,-300 L 0,-287 Z" fill={C.red} />
         <circle r={226} fill="#0d0d10" />
         <circle r={223} fill="none" stroke={C.red} strokeWidth={5} />
-        {/* 镜名环 */}
+        {/* Lens name ring */}
         <circle r={219} fill="#111014" />
         <text fill={C.cream2} style={{ font: `600 15px ${FONT.sans}`, letterSpacing: '0.32em' }}>
           <textPath href={`#${g('name')}`} startOffset="2%">{`${BRAND.name} 35mm 1:1.2 · FRAME MOTION · CRAFT THE SHOT · ${BRAND.name} 35mm 1:1.2`}</textPath>
         </text>
         <circle r={170} fill="#060508" />
-        {/* 前镜片 */}
+        {/* Front element */}
         <circle r={164} fill={`url(#${g('glass')})`} />
-        {/* 光圈叶片：11 片，每片按朝向主光（左上）给明暗，像真的金属叶片 */}
+        {/* Aperture blades: 11 blades shaded according to orientation toward key light (top-left) like real metal */}
         <g clipPath={`url(#${g('iris')})`}>
           <circle r={152} fill="#0b0a0e" />
           {poly.map((p, i) => {
@@ -218,11 +218,11 @@ const Lens: React.FC<{ id: string; tilt?: number; focus: number; aperture: numbe
             );
           })}
         </g>
-        {/* 开口里的后组：深处的红色余辉 + 两圈后镜片反光 */}
+        {/* Rear elements inside opening: deep red ambient glow + two rear element reflections */}
         <path d={holePath} fill={`url(#${g('deep')})`} />
         <circle r={open * 0.55} fill="none" stroke="rgba(255,80,120,0.22)" strokeWidth={3} />
         <circle r={open * 0.3} fill="none" stroke="rgba(120,255,200,0.16)" strokeWidth={2} />
-        {/* 镀膜反光：品红 / 青绿两道月牙 + 白色高光，叠在玻璃上（只在镜片圆内）*/}
+        {/* Coating reflections: magenta / cyan crescents + white specular highlight over glass (clipped to lens circle) */}
         <g filter={`url(#${g('soft')})`}>
           <path d="M -120,-60 A 135,135 0 0 1 20,-132" fill="none" stroke="rgba(255,70,170,0.55)" strokeWidth={10} strokeLinecap="round" />
           <path d="M 70,110 A 130,130 0 0 0 128,20" fill="none" stroke="rgba(90,255,190,0.4)" strokeWidth={8} strokeLinecap="round" />
@@ -236,7 +236,7 @@ const Lens: React.FC<{ id: string; tilt?: number; focus: number; aperture: numbe
   );
 };
 
-// ───────────── 背景：带红相的墨黑 + 半调网点（漫画印刷感）─────────────
+// ───────────── Background: red-tinted ink black + halftone dots (manga print texture) ─────────────
 const PanelBg: React.FC<{ lx: number; ly: number; k?: number }> = ({ lx, ly, k = 1 }) => (
   <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${C.bg0} 0%, ${C.bg1} 55%, ${C.bg2} 100%)` }}>
     <div style={{
@@ -253,18 +253,18 @@ const PanelBg: React.FC<{ lx: number; ly: number; k?: number }> = ({ lx, ly, k =
   </div>
 );
 
-// 一格的镜头层（铺满 1920×1080 的 SVG，靠机位取景）
+// Lens layer for a panel (full 1920x1080 SVG framed via camera)
 const Shot: React.FC<{ id: string; cam: Cam; tilt?: number; focus: number; aperture: number }> = ({ id, cam, tilt, focus, aperture }) => (
   <svg width={1920} height={1080} viewBox="0 0 1920 1080" style={{ position: 'absolute', inset: 0 }}>
     <g transform={camT(cam)}>
-      {/* 镜头下的接触影 */}
+      {/* Contact shadow beneath lens */}
       <ellipse cx={tilt ? -120 : 0} cy={R + 40} rx={R * 1.3} ry={50} fill="rgba(0,0,0,0.6)" filter="blur(20px)" />
       <Lens id={id} tilt={tilt} focus={focus} aperture={aperture} />
     </g>
   </svg>
 );
 
-// 漫画旁白框：奶油底 + 墨描边 + 硬投影，盖章式弹入
+// Comic caption box: cream background + ink stroke + hard drop shadow, stamps in with overshoot
 const Caption: React.FC<{ f: number; at: number; x: number; y: number; kicker: string; text: string; tilt: number; anchor?: 'left' | 'right' }> = ({
   f, at, x, y, kicker, text, tilt, anchor = 'left',
 }) => {
@@ -282,7 +282,7 @@ const Caption: React.FC<{ f: number; at: number; x: number; y: number; kicker: s
   );
 };
 
-// 速度线：末格弹入一下（漫画"冲击"），从镜片中心放射、快速淡出
+// Speed lines: flash impact when last panel pops in, radiating from lens center and fading rapidly
 const SpeedLines: React.FC<{ f: number; at: number; cx: number; cy: number }> = ({ f, at, cx, cy }) => {
   const t = (f - at) / 12;
   if (t < 0 || t > 1) return null;
@@ -320,13 +320,13 @@ export const ComicPanelSplit: React.FC = () => {
   const focus = focusAt(f);
   const aperture = apertureAt(f);
 
-  // ===== 海报：吃屏完成后摘罩，只剩镜片机位 + 标题 =====
+  // ===== Poster: clips removed after full-screen expansion, leaving only lens angle + title =====
   if (f >= EXP1) {
     return (
       <AbsoluteFill style={{ background: C.bg2, overflow: 'hidden' }}>
         <PanelBg lx={CAM_END.cx} ly={540} />
         <Shot id="end" cam={cam3At(f)} focus={focus} aperture={aperture} />
-        {/* 左侧压暗，给标题让出干净的墨底 */}
+        {/* Left darkening gradient to give headline a clean dark ink ground */}
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, ${alpha(C.bg2, 0.92)} 0%, ${alpha(C.bg2, 0.6)} 34%, ${alpha(C.bg2, 0)} 52%)` }} />
         <Headline f={f} />
         <Vignette strength={0.5} inner={0.45} color="#050102" />
@@ -335,7 +335,7 @@ export const ComicPanelSplit: React.FC = () => {
     );
   }
 
-  // ===== 开场：全屏 3/4 侧拍 =====
+  // ===== Intro: full-screen 3/4 profile shot =====
   if (f < SPLIT) {
     const push = ramp(f, 0, SPLIT, EASE.linear);
     return (
@@ -348,7 +348,7 @@ export const ComicPanelSplit: React.FC = () => {
     );
   }
 
-  // ===== 分格 + 吃屏 =====
+  // ===== Split panels + screen expansion =====
   const hold = ramp(f, HOLD0, EXP0 - HOLD0, EASE.smooth);
   const e = edgeAt(f);
   const seamV = velocity(edgeAt, f);
@@ -364,7 +364,7 @@ export const ComicPanelSplit: React.FC = () => {
       bg: { lx: 1640, ly: 540 }, shot: <Shot id="p3" cam={cam3At(f)} focus={focus} aperture={aperture} /> },
   ];
 
-  // 一刀斜缝：3f 从上到下劈出（纸芯 + 墨边 + 一层柔影）
+  // Diagonal slash: drawn top-to-bottom over 3f (paper core + ink border + soft shadow)
   const seam = (x: number, at: number, key: string) => {
     const d = ramp(f, at - 1, 3, EASE.out);
     if (d <= 0) return null;
@@ -382,7 +382,7 @@ export const ComicPanelSplit: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: C.ink, overflow: 'hidden' }}>
-      {/* 被劈开的原画面：未弹入的区域仍是压暗的开场全景，读作"一刀刀把这张图切成格" */}
+      {/* Base canvas before split: unpopped areas show dimmed intro wide shot, visualising the image being sliced into panels */}
       {f < cut(2) + 2 && (
         <div style={{ position: 'absolute', inset: 0 }}>
           <PanelBg lx={1100} ly={520} />
@@ -391,7 +391,7 @@ export const ComicPanelSplit: React.FC = () => {
         </div>
       )}
       {panels.map((p, i) => {
-        if (f < cut(i)) return null; // 硬切：未到拍点不渲染
+        if (f < cut(i)) return null; // Hard cut: do not render before cue point
         const pop = ramp(f, cut(i), POP, EASE.snappy);
         const flash = 1 - ramp(f, cut(i), 4, EASE.out);
         return (
@@ -403,7 +403,7 @@ export const ComicPanelSplit: React.FC = () => {
             {i === 2 ? <SpeedBlur vx={contentV} amount={0.14} max={20}>{p.shot}</SpeedBlur> : p.shot}
             {i === 2 && <SpeedLines f={f} at={cut(2)} cx={CAM3.cx} cy={540} />}
             {flash > 0.01 && <div style={{ position: 'absolute', inset: 0, background: C.cream, opacity: 0.55 * flash }} />}
-            {/* 旁白框活在格子里：被末格吃屏时一起被盖掉（末格自己的框在吃屏起点淡出）*/}
+            {/* Captions live inside panels: covered when last panel expands (panel 3 caption fades out at start of expansion) */}
             {i === 0 && <Caption f={f} at={cut(0) + CAP} x={88} y={96} kicker="Shot 01 · Wide" text="Frame motion." tilt={-2} />}
             {i === 1 && <Caption f={f} at={cut(1) + CAP} x={800} y={810} kicker="Shot 02 · Close" text="0.3 m → ∞" tilt={1.5} />}
             {i === 2 && <div style={{ position: 'absolute', inset: 0, opacity: capOut }}>

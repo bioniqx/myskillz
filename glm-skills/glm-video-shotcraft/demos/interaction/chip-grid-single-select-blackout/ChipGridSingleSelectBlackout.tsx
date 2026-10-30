@@ -1,28 +1,26 @@
-// chip-grid-single-select-blackout —— Single Select 1 帧灰闪单选反黑
-// 五个选项 chip 3+2 居中排布错峰入场；光标点下：先插 1 帧灰色按压块，紧接 5 帧线性反黑（白字）+ 1→1.04→1 极轻回弹，
-// 其余 chip 淡到 18% 但位置锁死；约 1.5s 后余项归零，黑 chip 上移收窄回中线，下方升起结算价格。
+// chip-grid-single-select-blackout — Single Select 1-frame gray flash & blackout toggle
+// Five option chips in a 3+2 centered layout enter staggered. On cursor click: 1-frame active gray flash, followed by 5-frame linear transition to black (white text) + 1->1.04->1 subtle rebound;
+// Remaining chips dim to 18% with locked positions. ~1.5s later, non-selected chips fade to 0, selected black chip centers and scales down, revealing billing calculation below.
 //
-// 第二轮重设计（瓷白 · 结账页的一次"决定"）：
-// - look = porcelain（冷白 · 墨蓝黑 · 钴蓝）。按 1080p 原生排版重写（不再用 480×270 设计坐标放大）：
-//   眉题 + 84px 问句「How would you like to pay?」、96px 高的实体 chip（36px 字，发丝线 + 顶部内高光 + 两层软阴影），
-//   主体占画宽 ~62%。眉题挂 video-shotcraft 标志 + 名字：这是它的结账页。
-// - 选中两级状态拆开演（本卡命门，参数不变）：56f 单帧灰闪（:active）→ 57–62f 线性反黑（:selected，不加缓动）
-//   + sin 回弹 0.04；其余 chip 只降不透明度、transform 恒为 none。新增一只光标从右下走弧线点中它，因果更明确。
-// - 黑 chip 被选中后底下亮起一圈极淡的钴蓝落地光（只给主角一次）；收束时上移 + 缩到 0.88 + 横向回中线，
-//   阴影随抬升变深变大（离地更高）。
-// - 结果段换成大字结算：现价「$34.44」180px tabular + 「/mo」，原价「$42.00」先出现再被一道划线划掉、退灰，
-//   钴蓝「Save 18%」胶囊最后 overshoot 弹出——结尾是一张完整的价格海报。
+// Iteration 2 redesign (porcelain · checkout decision):
+// - look = porcelain (cool white · ink blue-black · cobalt blue). Native 1080p layout:
+//   eyebrow + 84px question "How would you like to pay?", 96px physical chips (36px text, hairline border + top specular + dual soft shadows), spanning ~62% width.
+// - Two-stage selection state: 56f single-frame gray flash (:active) -> 57–62f linear transition to dark ink (:selected, linear)
+//   + sin rebound 0.04; other chips reduce opacity only with static transform. Cursor glides from bottom-right along an arc to trigger selection.
+// - Selected black chip illuminates with a subtle cobalt blue floor ring; on consolidation, it shifts up, scales to 0.88, and centers horizontally, shadow expanding with elevation.
+// - Checkout outcome: new price "$34.44" 180px tabular + "/mo", original price "$42.00" struck through with line,
+//   and cobalt "Save 18%" badge pops with overshoot — settling as a pricing poster.
 //
-// 时间表（30fps，共 165f）：
-//   0–14    眉题字距收拢、问句逐词升起
-//   8–28    5 个 chip 错峰升起（3f 间隔，snappy）
-//   26–54   读题：光标从右下入画、swift 弧线移向「Annual billing」（相机极缓推近 1.5%）
-//   56      单帧灰闪（按下）
-//   57–62   线性反黑 5f；57–66 回弹；57–66 余项降到 18%（outQuad），位置锁死
-//   66–101  选中态 hold ~1.2s（落地光呼吸）；光标 70f 起淡出
-//   101–119 收束：余项 101–110 归零；黑 chip 上移 / 缩 0.88 / 回中线（18f smooth in-out）
-//   108–134 结算：原价升起 → 118f 划线 → 现价升起（rise）→ 128f Save 18% 弹出
-//   134–165 落定 hold 31f
+// Timeline (30fps, 165f total):
+//   0–14    Eyebrow tracking collapses, question rises word-by-word
+//   8–28    5 chips rise staggered (3f intervals, snappy)
+//   26–54   Deliberation: cursor enters from bottom-right, gliding toward "Annual billing" (subtle 1.5% camera push)
+//   56      Single-frame gray active flash (click down)
+//   57–62   Linear black transition 5f; 57–66 rebound; 57–66 non-selected chips drop to 18% (positions locked)
+//   66–101  Selected hold ~1.2s (floor glow breathes); cursor fades from 70f
+//   101–119 Consolidation: unselected chips fade to 0 (101–110); selected chip shifts up / scales 0.88 / centers (18f smooth)
+//   108–134 Outcome: original price rises -> strikethrough at 118f -> active price rises -> "Save 18%" pops at 128f
+//   134–165 Settled hold 31f
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -32,21 +30,21 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const CHIP_GRID_SINGLE_SELECT_BLACKOUT_DURATION = 165;
 
 const L = LOOKS.porcelain;
-const INK = '#0b1020'; // 反黑目标：墨蓝黑（不用纯 #000）
+const INK = '#0b1020'; // Target dark tone: deep ink blue-black (avoids harsh #000)
 
 const NAMES = ['Annual billing', 'Monthly billing', 'Two-year commitment', 'Student', 'Nonprofit rate'];
-const WIDTHS = [346, 364, 476, 236, 330]; // chip 固定宽（按 36px 字测得 + 左右 44 内边距）——几何确定，不用运行时测量
-const TI = 0; // 选中项
+const WIDTHS = [346, 364, 476, 236, 330]; // Fixed chip widths (calibrated for 36px type + 44px padding)
+const TI = 0; // Selected target item
 const CHIP_H = 96;
 const GAP = 22;
-const ROW_Y = [452, 570]; // 两行 chip 的顶
-const FS = 56; // 灰闪帧
-const COLLAPSE = 101; // 收束起点（选中后 ~1.5s）
+const ROW_Y = [452, 570]; // Top positions of chip rows
+const FS = 56; // Gray flash frame
+const COLLAPSE = 101; // Consolidation start (~1.5s post-selection)
 const COLLAPSE_DUR = 18;
-const TARGET_Y = 330; // 收束后黑 chip 中心 y
-const TARGET_S = 0.88; // 收窄到 0.88（字仍 ≈32px，满足辅助字下限）
+const TARGET_Y = 330; // Consolidated target center y
+const TARGET_S = 0.88; // Scales down to 0.88 (text stays ≈32px for legibility)
 
-// 3+2 居中排布的 chip 左上角（位置全程锁死）
+// 3+2 centered chip grid coordinates (locked in place)
 const chipPos = (i: number) => {
   const row = i < 3 ? 0 : 1;
   const ids = row === 0 ? [0, 1, 2] : [3, 4];
@@ -88,9 +86,9 @@ const Cursor: React.FC<{ frame: number }> = ({ frame }) => {
 export const ChipGridSingleSelectBlackout: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ── 选中两级状态 ──
-  const flash = frame === FS ? 1 : 0; // 就一帧
-  const bk = lin(frame, FS + 1, FS + 6); // 线性反黑 5f（故意不缓动）
+  // ── Dual-stage selection mechanics ──
+  const flash = frame === FS ? 1 : 0; // Exactly 1 frame active flash
+  const bk = lin(frame, FS + 1, FS + 6); // Linear transition to black over 5f (deliberately un-eased)
   const pr = lin(frame, FS + 1, FS + 10);
   const pulse = 1 + Math.sin(pr * Math.PI) * 0.04 * (pr > 0 ? 1 : 0);
   const fade = outQuad(lin(frame, FS + 1, FS + 10));
@@ -101,13 +99,13 @@ export const ChipGridSingleSelectBlackout: React.FC = () => {
   const c0x = p0.x + WIDTHS[TI] / 2, c0y = p0.y + CHIP_H / 2;
   const dx = (960 - c0x) * lift, dy = (TARGET_Y - c0y) * lift;
 
-  // 相机：读题段极缓推近，收束后回正
+  // Camera: gentle push during deliberation, settles on consolidation
   const cam = 1 + 0.015 * ramp(frame, 20, 60, EASE.smooth) - 0.015 * ramp(frame, COLLAPSE, 30, EASE.smooth);
 
-  // 问句随收束让位（上移淡出），把舞台让给结果
+  // Question yields during consolidation (rises and fades out), clearing stage for outcome
   const titleOut = ramp(frame, COLLAPSE - 4, 16, EASE.exit);
 
-  // ── 结算 ──
+  // ── Pricing outcome ──
   const oldIn = ramp(frame, 108, 14, EASE.snappy);
   const strike = ramp(frame, 118, 8, EASE.swift);
   const saveIn = ramp(frame, 128, 14, EASE.overshoot);
@@ -117,9 +115,9 @@ export const ChipGridSingleSelectBlackout: React.FC = () => {
       <Stage look={L} keyLight={{ x: 0.5, y: 0.12 }} fill={null} />
 
       <AbsoluteFill style={{ transform: `scale(${cam.toFixed(4)})`, transformOrigin: '50% 50%' }}>
-        {/* 眉题 + 问句 */}
+        {/* Eyebrow + Question */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 168, textAlign: 'center', opacity: 1 - titleOut, transform: `translateY(${(-30 * titleOut).toFixed(2)}px)` }}>
-          {/* 眉题：标志 + 小写品牌名（不随字距动画）+ caps 标签（字距收拢） */}
+          {/* Eyebrow: mark + lowercase brand logotype + caps tag (tracking collapse) */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, opacity: ramp(frame, 0, 10, EASE.out) }}>
             <ShotcraftMark size={32} tone="light" />
             <span style={{ ...type(26, 680), letterSpacing: '0.01em', color: L.ink }}>{BRAND.name}</span>
@@ -157,7 +155,7 @@ export const ChipGridSingleSelectBlackout: React.FC = () => {
               position: 'absolute', left: x, top: y + (1 - inP) * 30, width: WIDTHS[i], height: CHIP_H, opacity: inP,
               transform: `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${(pulse * mix(1, TARGET_S, lift)).toFixed(4)})`,
             }}>
-              {/* 落地光：选中后在 chip 下方亮起，只给主角一次 */}
+              {/* Floor ring glow: illuminates beneath selected chip */}
               <div style={{
                 position: 'absolute', left: -120, right: -120, top: CHIP_H * 0.35, height: CHIP_H * 1.3,
                 background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha(L.accent, 0.2 * bk * (1 - 0.5 * lift))} 0%, transparent 70%)`,
@@ -170,7 +168,7 @@ export const ChipGridSingleSelectBlackout: React.FC = () => {
                 boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 1 - 0.85 * bk)}, ${softShadow(elev, { color: L.shadow, strength: 1.1 + 0.9 * bk })}`,
                 display: 'grid', placeItems: 'center', ...type(36, 600), color: mixC(bk, L.ink, '#ffffff'),
               }}>
-                {/* 按压灰块：1 帧 */}
+                {/* Active press gray layer: 1 frame */}
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(120,128,146,0.5)', opacity: flash }} />
                 <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
                   <svg width={30} height={30} viewBox="0 0 18 18" style={{ marginLeft: -12 * bk, width: 30 * bk, opacity: bk }}>
@@ -183,9 +181,9 @@ export const ChipGridSingleSelectBlackout: React.FC = () => {
           );
         })}
 
-        {/* ── 结算：原价划掉 → 现价 → Save 18% ── */}
+        {/* ── Outcome: strikethrough -> active price -> Save 18% ── */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 452, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 44 }}>
-          {/* 起播前隐藏：未升起的「$42.00」字顶（$ 尖、数字上缘）会从 82px 遮罩框底露出几道细痕，压在第二行 chip 左边 */}
+          {/* Hidden before reveal: prevents masked text remnants from showing before trigger */}
           <div style={{ height: 82, overflow: 'hidden', marginBottom: 0, opacity: frame >= 108 ? 1 : 0 }}>
             <div style={{ position: 'relative', transform: `translateY(${((1 - oldIn) * 110).toFixed(1)}%)`, ...type(60, 500), color: mixC(strike, L.ink2, L.ink3) }}>
               $42.00

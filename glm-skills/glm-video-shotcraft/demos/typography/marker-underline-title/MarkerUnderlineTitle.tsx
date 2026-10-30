@@ -1,16 +1,16 @@
-// marker-underline-title —— 白底大标题落定后，斜体 "new" 下方一道
-// 马克笔下划线从左到右描画（粗细变化/端头圆润/微歪/边缘毛糙）。
-// 对标 notion-ai.mp4 2.3–3.6s。与库内 draw-svg-trace 撞车，本版做马克笔质感。
-// 质感层（改版）：补导出时长 75f（f42 划完后静止 33f ≥1s）；标题两行错峰 blur-slide
-// （snappy，第二行晚 4f）；笔画加确定性干笔肌理——feTurbulence 位移做毛糙边 + 细碎飞白镂空，
-// 墨色改带暖调的近黑并 multiply 进纸面；纸面 = 暖白低对比底 + 主光 + 颗粒；
-// 第二行 = video-shotcraft 品牌行（镜刻标志 + 小写品牌名）；整段极缓推近 1→1.015。
+// marker-underline-title — after large title settles, marker underline draws from left to right
+// beneath italic keyword (variable width / rounded caps / organic slant / textured edge).
+// Reference: notion-ai.mp4 2.3-3.6s. Emphasizes organic felt-tip marker texture.
+// Polish pass: total 75f (line finishes at f42, holds 33f >= 1s); two title lines blur-slide staggered
+// (snappy, row 2 lags 4f); dry marker texture via feTurbulence displacement edge + cutout,
+// warm near-black ink multiplying onto paper base; warm white paper + key light + grain;
+// row 2 = video-shotcraft brand mark + lowercase name; slow continuous push 1->1.015.
 import React, { useId } from 'react';
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { Backdrop, EASE, FONT, ramp } from '../../_fixtures/Polish';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
-export const MARKER_UNDERLINE_TITLE_DURATION = 75; // 标题 22f 落定 → f32–42 划线 → 静止 33f
+export const MARKER_UNDERLINE_TITLE_DURATION = 75; // Title settles 22f -> underline draws f32-42 -> static hold 33f
 
 const mulberry32 = (a: number) => () => {
   let t = (a += 0x6d2b79f5);
@@ -19,21 +19,21 @@ const mulberry32 = (a: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-// 马克笔笔画：中轴微歪的路径 + 变宽轮廓，一次生成多边形
+// Marker stroke: slightly slanted spine + variable-width polygon outline
 const buildStroke = (len: number, seed: number) => {
   const rand = mulberry32(seed);
   const N = 40;
   const top: string[] = [];
   const bot: string[] = [];
-  // 预生成微歪偏移（低频）与毛糙（高频）
+  // Precomputed organic offset (low freq) and roughness (high freq)
   const wob = Array.from({ length: N + 1 }, () => rand() - 0.5);
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     const x = t * len;
-    // 中轴：跟随斜体微上斜（左低右高，对照截图）+ 缓波
+    // Spine: follows italic slant upward (low left, high right) + subtle undulation
     const mid = 19 - t * 9 + Math.sin(t * Math.PI * 1.6 + 0.4) * 2.6 + wob[i] * 1.6;
-    // 宽度：起笔略细→中段饱满→收笔收尖，加高频毛糙
-    const wBase = 14 + Math.sin(t * Math.PI) * 6 - Math.max(0, t - 0.86) * 46 - Math.max(0, 0.06 - t) * 70; // 起笔再收细一点，不再是平头
+    // Stroke width: tapered start -> full middle -> tapered end + roughness
+    const wBase = 14 + Math.sin(t * Math.PI) * 6 - Math.max(0, t - 0.86) * 46 - Math.max(0, 0.06 - t) * 70; // Tapered stroke entrance
     const w = Math.max(2.2, wBase + wob[i] * 3);
     top.push(`${x.toFixed(1)},${(mid - w / 2).toFixed(1)}`);
     bot.push(`${x.toFixed(1)},${(mid + w / 2).toFixed(1)}`);
@@ -43,16 +43,16 @@ const buildStroke = (len: number, seed: number) => {
 
 const LEN = 252;
 const PATH = buildStroke(LEN, 77);
-const MARKER_INK = '#1b1916'; // 暖调近黑（马克笔墨，不是纯黑）
+const MARKER_INK = '#1b1916'; // Warm near-black marker ink
 
 export const MarkerUnderlineTitle: React.FC = () => {
   const frame = useCurrentFrame();
-  // SVG id 按实例生成，多实例同场不串引（useId 的 «:» 在 url() 里非法，需清洗）
+  // Unique instance SVG IDs (sanitizing colons for url())
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const revealId = `reveal-${uid}`;
   const dryId = `dry-${uid}`;
 
-  // 标题两行错峰落定：同一条 snappy 进度驱动 y / blur / opacity
+  // Two-line staggered title entrance: shared snappy progress driving y / blur / opacity
   const line = (delay: number): React.CSSProperties => {
     const e = ramp(frame, delay, 22, EASE.snappy);
     return {
@@ -62,12 +62,12 @@ export const MarkerUnderlineTitle: React.FC = () => {
     };
   };
 
-  // 下划线：标题落定停一拍后描画，10 帧从左到右（提速一档），ease-out
+  // Underline: draws after title settles, 10 frames left to right, ease-out
   const draw = interpolate(frame, [32, 42], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
   const drawE = 1 - Math.pow(1 - draw, 2.2);
-  // 整段极缓推近（smooth，起止速度为 0）
+  // Slow continuous camera push (smooth)
   const push = 1 + 0.015 * ramp(frame, 0, 74, EASE.smooth);
 
   return (
@@ -83,7 +83,7 @@ export const MarkerUnderlineTitle: React.FC = () => {
             Meet the{' '}
             <span style={{ fontStyle: 'italic', position: 'relative', display: 'inline-block' }}>
               new
-              {/* 马克笔下划线：clip 从左到右揭示，保留笔形本身的粗细变化 */}
+              {/* Marker underline: clip reveals left to right, preserving stroke width variation */}
               <svg
                 width={LEN} height={44} viewBox={`0 0 ${LEN} 44`}
                 style={{ position: 'absolute', left: -12, bottom: -20, overflow: 'visible', mixBlendMode: 'multiply' }}
@@ -92,7 +92,7 @@ export const MarkerUnderlineTitle: React.FC = () => {
                   <clipPath id={revealId}>
                     <rect x={0} y={-20} width={drawE * (LEN + 6)} height={60} />
                   </clipPath>
-                  {/* 干笔肌理：低频位移 → 毛糙边；高频噪声阈值 → 细碎飞白（固定 seed，确定性） */}
+                  {/* Dry marker texture: low-freq displacement edge + high-freq noise threshold cutout */}
                   <filter id={dryId} x="-5%" y="-40%" width="110%" height="180%" colorInterpolationFilters="sRGB">
                     <feTurbulence type="fractalNoise" baseFrequency="0.09 0.5" numOctaves={2} seed={7} result="warp" />
                     <feDisplacementMap in="SourceGraphic" in2="warp" scale={1.8} xChannelSelector="R" yChannelSelector="G" result="rough" />

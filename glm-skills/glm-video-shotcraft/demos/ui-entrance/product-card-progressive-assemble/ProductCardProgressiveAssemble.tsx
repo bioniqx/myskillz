@@ -1,31 +1,31 @@
-// product-card-progressive-assemble — 详情卡像被逐字段抓取般自建
-// 图 → 标题 → 分类 pill → 价格（原价被划线降级、新价 spring 跳出）→ 正文逐行 + 马克笔高亮 → 色卡 → 按钮，
-// 整卡全程极慢前推。价格降级是全片唯一的"改变"事件，放在中段最显眼处。
+// product-card-progressive-assemble — Detail card self-assembles as if fetched field by field
+// Image → Title → Category pills → Price (original price struck-through & discounted, new price spring-pops) → Body lines + marker highlight → Swatches → Button,
+// Entire card pushes forward ultra-slowly. Price markdown is the sole "mutation" event in the shot, positioned prominently in the middle.
 //
-// 第二轮重设计（瓷白 · 自动填充的商品详情页）：
-// - look = porcelain（冷白 + 钴蓝）。原生 1920 坐标重画：一张 1520×840 的商品详情卡占画宽 79%，
-//   左侧 640 宽棚拍图（video-shotcraft 标志当棚拍主体 + 无缝背景 + 接触影），右侧字段按真实字号排版：
-//   标题 108px、价格 112px、正文 34px、pill 28px——不再是 480×270 小画布放大的小字。
-// - 手法强化：一枚钴蓝"填充光标"（描边框 + AUTOFILL 小签）领先每个字段 2–3f 跳到它的槽位，
-//   框形在字段之间不对称 in-out 变形移动；字段落位前槽位里是浅灰骨架条，落位时骨架淡出、内容升起
-//   ——读作"表单正在被一格一格自动填好"。光标是唯一的主角光效（Q4），最后缩进按钮里消失。
-// - 价格事件：$449 先完整落位 hold 18f，再 6f 内同窗"缩小 + 变灰 + 删除线从左划过"，钴蓝新价
-//   Free（Apache-2.0 开源）物理弹簧（damping 14）从 1.18 收到 1、OPEN SOURCE chip 晚 6f 滑入。
-// - 马克笔高亮：钴蓝 16% 底块 scaleX 0→1 由左向右 6f 刷过，比字段落位更快。
-// - 收尾：按钮底色由左向右填满（墨黑），光标收进按钮淡出。
+// Round 2 redesign (Porcelain · Autofilling product detail page):
+// - look = porcelain (cool white + cobalt blue). Redrawn in native 1920 coordinates: a 1520x840 detail card occupying 79% frame width,
+//   left 640px studio shot (video-shotcraft mark as studio subject + seamless cyclorama backdrop + contact shadow), right fields set in real font sizes:
+//   Title 108px, Price 112px, Body 34px, Pill 28px — no longer small text scaled up from a 480x270 canvas.
+// - Technique refinement: A cobalt blue "autofill cursor" (stroked bounding box + AUTOFILL badge) jumps 2–3f ahead of each field into its slot,
+//   its bounding box morphing with asymmetric in-out easing between fields; slots show light gray skeleton bars before fields land, fading as content rises
+//   — visually conveying "a form being automatically filled field by field". Cursor is the sole hero visual effect (Q4), finally collapsing into the button.
+// - Price event: $449 lands completely and holds for 18f, then within 6f simultaneously "shrinks + grays out + strikethrough sweeps from left", cobalt new price
+//   Free (Apache-2.0 open source) spring-settles (damping 14) from 1.18 to 1, OPEN SOURCE chip slides in 6f later.
+// - Marker highlight: Cobalt blue 16% backdrop scaleX 0→1 sweeps left-to-right in 6f, faster than field landing.
+// - Finale: Button fill sweeps left-to-right (ink black), cursor collapses into button and fades out.
 //
-// 时间表（30fps，共 172f）：
-//   0–14    卡片升起落位（scale .96→1 + 上移 30px，expo-out），骨架槽位已在
-//   8–24    光标 → 图：棚拍图揭示（失焦→清晰 + 商品 1.08→1 慢收）
-//   20–34   光标 → 标题：逐字升起
-//   30–44   光标 → pill：三枚错峰 pop（3f 间隔，过冲）
-//   42–56   光标 → 价格：$449 落位
-//   62–80   价格降级（6f 急变）+ 新价 Free 弹簧 + chip
-//   76–96   光标 → 正文：三行错峰升起（3f），两处高亮 86/90 刷过
-//   96–112  光标 → 色卡：四枚 pop（3f）+ 色名
-//   114–128 光标 → 按钮：底色左→右填满，光标收进按钮消失
-//   0–132   整卡前推 1→1.035（不对称 in-out）
-//   132–172 hold 40f，干净定格
+// Timeline (30fps, 172f total):
+//   0–14    Card rises and settles (scale .96→1 + 30px upward, expo-out), skeleton slots in place
+//   8–24    Cursor → Image: Studio shot reveals (defocus→sharp + product 1.08→1 slow settle)
+//   20–34   Cursor → Title: Characters rise sequentially
+//   30–44   Cursor → Pills: 3 staggered pops (3f interval, overshoot)
+//   42–56   Cursor → Price: $449 lands
+//   62–80   Price markdown (6f snap) + new price Free spring + chip
+//   76–96   Cursor → Body: 3 lines staggered rise (3f), two highlights sweep at 86/90
+//   96–112  Cursor → Swatches: 4 pops (3f) + swatch name
+//   114–128 Cursor → Button: Background fills left-to-right, cursor collapses into button and vanishes
+//   0–132   Entire card pushes forward 1→1.035 (asymmetric in-out)
+//   132–172 Hold 40f, clean freeze
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -37,35 +37,35 @@ export const PRODUCT_CARD_PROGRESSIVE_ASSEMBLE_DURATION = 172;
 const L = LOOKS.porcelain;
 const BLUE = L.accent;
 
-// 卡片几何（画面坐标）
+// Card geometry (frame coordinates)
 const CW = 1520;
 const CH = 840;
 const CL = (1920 - CW) / 2;
 const CT = (1080 - CH) / 2 + 6;
 const PAD = 60;
 const IMG = { x: PAD, y: PAD, w: 640, h: CH - PAD * 2 };
-const COL = PAD + 640 + 64; // 右列 x（卡片局部）
+const COL = PAD + 640 + 64; // Right column x (card local)
 const COLW = CW - COL - PAD;
 
-// 字段槽位（卡片局部坐标）+ 光标到达帧
+// Field slots (card local coordinates) + cursor arrival frames
 type Box = { x: number; y: number; w: number; h: number };
 const F = {
   img: { box: { ...IMG }, at: 8 },
   title: { box: { x: COL, y: 66, w: 560, h: 150 }, at: 20 },
   pills: { box: { x: COL, y: 244, w: 560, h: 52 }, at: 30 },
-  price: { box: { x: COL, y: 322, w: 670, h: 112 }, at: 42 }, // w 670：框住 OPEN SOURCE chip
+  price: { box: { x: COL, y: 322, w: 670, h: 112 }, at: 42 }, // w 670: encloses OPEN SOURCE chip
   body: { box: { x: COL, y: 462, w: COLW, h: 150 }, at: 76 },
   swatch: { box: { x: COL, y: 636, w: 520, h: 56 }, at: 96 },
   cta: { box: { x: COL, y: 716, w: COLW, h: 64 }, at: 114 },
 };
 const ORDER: (keyof typeof F)[] = ['img', 'title', 'pills', 'price', 'body', 'swatch', 'cta'];
-const HOP = 6; // 光标跳格帧数
-const LAND = 2; // 字段在光标到达后几帧开始落位
+const HOP = 6; // Cursor jump duration (frames)
+const LAND = 2; // Field lands this many frames after cursor arrives
 const PRICE_DROP = 62;
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-// 光标当前框：在相邻两个字段框之间按 swift 插值
+// Current cursor bounding box: swift interpolation between adjacent field boxes
 const cursorBox = (f: number): Box & { k: number } => {
   let prev = F[ORDER[0]].box as Box;
   for (let i = 0; i < ORDER.length; i++) {
@@ -81,7 +81,7 @@ const cursorBox = (f: number): Box & { k: number } => {
   return { ...prev, k: 1 };
 };
 
-// 字段落位：骨架淡出 + 内容上移 18px 失焦淡入（snappy 14f）
+// Field landing: skeleton fades + content rises 18px with blur fade-in (snappy 14f)
 const landP = (f: number, key: keyof typeof F, extra = 0) => ramp(f, F[key].at + LAND + extra, 14, EASE.snappy);
 const rise = (p: number, dist = 18): React.CSSProperties => ({
   opacity: clamp01(p * 1.8),
@@ -93,7 +93,7 @@ const pop = (f: number, start: number): React.CSSProperties => {
   return { opacity: clamp01((f - start) / 4), transform: `scale(${mix(0.4, 1, s).toFixed(4)})` };
 };
 
-// 骨架条（字段落位前的浅灰占位）
+// Skeleton bars (light gray placeholders before fields land)
 const Skeleton: React.FC<{ box: Box; fade: number; rows?: number[]; radius?: number }> = ({ box, fade, rows = [1], radius = 10 }) =>
   fade >= 1 ? null : (
     <div style={{ position: 'absolute', left: box.x, top: box.y, width: box.w, height: box.h, opacity: 1 - fade, display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' }}>
@@ -103,7 +103,7 @@ const Skeleton: React.FC<{ box: Box; fade: number; rows?: number[]; radius?: num
     </div>
   );
 
-// 商品：video-shotcraft 标志当棚拍主体（亮底 light 版），下方一团独立的地面接触影（不是标志投影）
+// Product: video-shotcraft mark as studio subject (light theme), with independent ground contact shadow below (not a mark drop-shadow)
 const ProductMark: React.FC = () => (
   <div style={{ position: 'relative', width: '100%', height: '100%' }}>
     <div style={{
@@ -119,7 +119,7 @@ const LINES: [string, boolean?][][] = [
   [['Built on '], ['real page captures', true], [' and 2.5D,']],
   [['cut to the beat, rendered in Remotion.']],
 ];
-// 色卡 = 品牌四色（成片 look 可选）
+// Swatches = 4 brand colors (selectable film looks)
 const SWATCHES: [string, string][] = [[BRAND.ink, 'Ink'], [BRAND.paper, 'Paper'], [BRAND.amber, 'Amber'], [BRAND.slate, 'Slate']];
 
 export const ProductCardProgressiveAssemble: React.FC = () => {
@@ -128,20 +128,20 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
   const enter = ramp(frame, 0, 14, EASE.snappy);
   const push = 1 + 0.035 * ramp(frame, 0, 132, EASE.swift);
 
-  // 各字段进度
+  // Field progress
   const img = landP(frame, 'img');
   const title = landP(frame, 'title');
   const price = landP(frame, 'price');
   const sw = landP(frame, 'swatch');
   const cta = ramp(frame, F.cta.at + LAND, 12, EASE.out);
 
-  // 价格降级（6f 同窗：缩小 + 变灰 + 删除线）
+  // Price markdown (6f synchronized: shrink + gray out + strikethrough)
   const cut = ramp(frame, PRICE_DROP, 6, EASE.snappy);
   const strike = ramp(frame, PRICE_DROP, 5, EASE.out);
   const newP = springAt(frame, PRICE_DROP + 1, { damping: 14, stiffness: 240 });
   const chip = ramp(frame, PRICE_DROP + 7, 10, EASE.snappy);
 
-  // 光标
+  // Cursor
   const cb = cursorBox(frame);
   const cursorIn = ramp(frame, 2, 6, EASE.out);
   const cursorOut = ramp(frame, F.cta.at + 8, 8, EASE.exit);
@@ -151,7 +151,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.05 }} fill={{ x: 0.85, y: 0.95 }} vignette={0.2} />
-      {/* 远景：一块极淡的钴蓝光晕在卡片右后方（空间层次） */}
+      {/* Background: faint cobalt blue glow behind right side of card (spatial depth) */}
       <div style={{ position: 'absolute', left: 1100, top: 520, width: 900, height: 700, background: `radial-gradient(closest-side, ${alpha(BLUE, 0.08)}, ${alpha(BLUE, 0)})` }} />
 
       <div style={{
@@ -159,13 +159,13 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
         transform: `translateY(${((1 - enter) * 30).toFixed(2)}px) scale(${(mix(0.96, 1, enter) * push).toFixed(5)})`,
         transformOrigin: '50% 55%', opacity: clamp01(enter * 1.6),
       }}>
-        {/* 卡面：白 + 发丝线 + 内高光 + 两层带色相软阴影 */}
+        {/* Card face: white + hairline border + inner highlight + two-tier tinted soft shadows */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 36, background: 'linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%)',
           boxShadow: `inset 0 1px 0 #ffffff, 0 0 0 1px ${L.line}, 0 2px 4px ${alpha(L.shadow, 0.06)}, 0 40px 90px -20px ${alpha(L.shadow, 0.28)}`,
         }} />
 
-        {/* 骨架槽位 */}
+        {/* Skeleton slots */}
         <Skeleton box={{ x: COL, y: 66, w: 200, h: 26 }} fade={title} />
         <Skeleton box={{ x: COL, y: 112, w: 520, h: 96 }} fade={title} rows={[0.85]} radius={16} />
         <Skeleton box={F.pills.box} fade={landP(frame, 'pills')} rows={[0.62]} radius={26} />
@@ -174,7 +174,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
         <Skeleton box={F.swatch.box} fade={sw} rows={[0.5]} radius={28} />
         <Skeleton box={F.cta.box} fade={cta} rows={[1]} radius={32} />
 
-        {/* 图：棚拍无缝背景 + 标志 */}
+        {/* Image: studio cyclorama backdrop + mark */}
         <div style={{ position: 'absolute', left: IMG.x, top: IMG.y, width: IMG.w, height: IMG.h, borderRadius: 24, overflow: 'hidden', background: '#eef2f8' }}>
           <div style={{ position: 'absolute', inset: 0, opacity: img, background: 'radial-gradient(110% 80% at 38% 26%, #ffffff 0%, #eef2f8 46%, #dde4ee 100%)' }} />
           <div style={{ position: 'absolute', left: 0, right: 0, top: '72%', bottom: 0, opacity: img, background: `linear-gradient(180deg, ${alpha(L.shadow, 0.04)}, ${alpha(L.shadow, 0)})` }} />
@@ -189,7 +189,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           <div style={{ position: 'absolute', left: 32, top: 30, fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.14em', color: L.ink3, opacity: img }}>01 / 06</div>
         </div>
 
-        {/* 眉标 + 标题 */}
+        {/* Eyebrow + Title */}
         <div style={{ position: 'absolute', left: COL, top: 66, fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.18em', color: L.ink3, ...rise(title, 10) }}>
           VIDEO-SHOTCRAFT · AGENT SKILL
         </div>
@@ -197,7 +197,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           Shotcraft
         </div>
 
-        {/* 分类 pill：错峰 pop */}
+        {/* Category pills: staggered pop */}
         <div style={{ position: 'absolute', left: COL, top: F.pills.box.y, display: 'flex', gap: 12 }}>
           {['Agent skill', 'Remotion', 'Shot recipes'].map((t, i) => (
             <div key={t} style={{
@@ -208,7 +208,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           ))}
         </div>
 
-        {/* 价格行：$449 落位 → 降级；Free 弹簧跳出；chip 滑入 */}
+        {/* Price row: $449 lands → markdown; Free spring-pops; chip slides in */}
         <div style={{ position: 'absolute', left: COL, top: F.price.box.y, height: 112, width: 680, ...rise(price, 16) }}>
           <div style={{
             position: 'absolute', left: 0, bottom: 4, ...type(112, 760), letterSpacing: '-0.04em',
@@ -235,7 +235,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           </div>
         </div>
 
-        {/* 正文：三行错峰 + 马克笔高亮 */}
+        {/* Body: 3 staggered lines + marker highlight */}
         <div style={{ position: 'absolute', left: COL, top: F.body.box.y, width: COLW, ...type(34, 450), lineHeight: '50px', color: L.ink2, letterSpacing: '-0.012em' }}>
           {LINES.map((segs, li) => (
             <div key={li} style={{ whiteSpace: 'nowrap', ...rise(landP(frame, 'body', li * 3), 14) }}>
@@ -252,7 +252,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           ))}
         </div>
 
-        {/* 色卡：四枚 pop + 色名 */}
+        {/* Swatches: 4 pops + swatch name */}
         <div style={{ position: 'absolute', left: COL, top: F.swatch.box.y, height: 56, display: 'flex', alignItems: 'center', gap: 16 }}>
           {SWATCHES.map(([c], i) => (
             <div key={c} style={{
@@ -267,7 +267,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           </div>
         </div>
 
-        {/* 按钮：底色由左向右填满 */}
+        {/* Button: background fills left to right */}
         <div style={{ position: 'absolute', left: F.cta.box.x, top: F.cta.box.y, width: F.cta.box.w, height: F.cta.box.h, borderRadius: 32, overflow: 'hidden', opacity: clamp01(cta * 4) }}>
           <div style={{ position: 'absolute', inset: 0, background: L.ink, transform: `scaleX(${cta.toFixed(4)})`, transformOrigin: 'left center' }} />
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, ...type(30, 650), color: '#ffffff', opacity: ramp(frame, F.cta.at + 8, 8, EASE.out) }}>
@@ -275,7 +275,7 @@ export const ProductCardProgressiveAssemble: React.FC = () => {
           </div>
         </div>
 
-        {/* 填充光标：描边框 + AUTOFILL 签，领先字段跳格 */}
+        {/* Autofill cursor: stroked box + AUTOFILL badge, hops ahead of fields */}
         {cursorOp > 0.01 && (
           <div style={{
             position: 'absolute', left: cb.x - pad, top: cb.y - pad, width: cb.w + pad * 2, height: cb.h + pad * 2,

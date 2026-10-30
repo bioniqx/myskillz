@@ -1,23 +1,23 @@
-// graze-face-tour v3 —— 源片 clickup-30.mp4 约 28.5–33s：
-// 相机大倾角贴着 UI 表面游走特写，三段接力：侧栏树 → 顶部 tab 条 → 列表行。
-// v2（用户意见）：页面文字初始悬浮在界面上空（3D 抬高），空中时在 UI 面上
-// 投模糊同形软影；随镜头推进先后落贴回界面，影子随高度收敛消失。
-// v3 质感升级：
-// - 灰阶骨架 UI（Helvetica 回退、5px 粗边框图标、CSS 三角）→ 出版级浅色产品 UI：系统字体栈、
-//   字重层级、统一线性 SVG 图标、3px 发丝线（界面按 ~2.7x 排版，等效 1px）、单一靛紫强调色
-//   （选中行 / List 视图 / 徽标），与霓虹缘光同色系。
-// - 品牌轮：界面就是 video-shotcraft 的工作区——侧栏标志 + 字标、活动 tab 的标志图标，
-//   树 / 卡片 / 任务行的内容换成镜头配方卡、分镜、渲染队列（行数与文字长度按原版保持）。
-// - 运镜不再"段段刹停"：中段匀速巡航、首段缓起、末段缓落，交叉淡化窗口里相机继续外推
-//   （旧版淡化期 t 被钳住 = 每次接力都有 7f 静止），并带 ±1° 的缓慢滚转，持续"低飞"。
-// - 同形软影改纯色压暗（不再是灰字重影），落地瞬间收成贴地接触影；背景霓虹框改发光描边、
-//   随相机反向视差漂移；暗角改带色相的深色，不再把亮面 UI 压成脏灰；加暗场颗粒。
+// graze-face-tour v3 —— Source clip clickup-30.mp4 around 28.5–33s:
+// Camera grazes across the UI surface at a steep tilt in close-up, across three sequential segments: sidebar tree → top tab bar → list rows.
+// v2 (user feedback): Page text initially floats above the interface (3D elevated); while airborne, it casts
+// a blurred isomorphic soft shadow onto the UI plane. As the camera advances, text settles back down to the surface, and shadows collapse and vanish with height.
+// v3 polish upgrades:
+// - Grayscale wireframe UI (Helvetica fallback, 5px thick-bordered icons, CSS triangles) → publication-grade light product UI: system font stack,
+//   proper font weight hierarchy, unified linear SVG icons, 3px hairline borders (UI rendered at ~2.7x scale, equivalent to 1px), single indigo-purple accent
+//   (selected row / List view / badge), color-matched with the neon rim glow.
+// - Brand round: the UI represents the video-shotcraft workspace — sidebar mark + wordmark, active tab mark icon,
+//   tree / cards / task rows swapped with shot recipe cards, storyboards, and render queues (row counts and text lengths preserved from original).
+// - Camera travel no longer hard-stops between segments: uniform cruise mid-segment, gentle ease-in on first segment, gentle ease-out on last segment; camera continues extrapolating through crossfade windows
+//   (legacy version clamped t during crossfade = 7f static freeze at each handover), with a slow ±1° roll for a continuous "low-altitude glide".
+// - Isomorphic soft shadow changed to solid-color dark tint (no longer gray text ghosting); collapses into a grounded contact shadow on touchdown; background neon frames changed to glowing stroked borders,
+//   drifting with reverse parallax relative to the camera; vignette tinted with hue so it doesn't degrade bright UI into dirty gray; dark-field grain added.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { FONT, Grain, Vignette, bezier } from '../../_fixtures/Polish';
 import { ShotcraftMark, ShotcraftWordmark } from '../../_fixtures/Brand';
 
-export const GRAZE_FACE_TOUR_DURATION = 150; // 三段 × 50f
+export const GRAZE_FACE_TOUR_DURATION = 150; // Three segments × 50f
 
 const INK = '#17181c';
 const INK2 = '#5d6068';
@@ -29,11 +29,11 @@ const ACC = '#7457f5';
 const ACC_SOFT = 'rgba(116,87,245,0.11)';
 const SANS = FONT.sans;
 
-const easeFall = bezier(0.5, 0.05, 0.6, 1); // 加速下落、末端软着陆
+const easeFall = bezier(0.5, 0.05, 0.6, 1); // Accelerated fall, soft landing at end
 
-/* ---------- 悬浮 + 同形软影 ----------
- * h=悬浮高度(px)。文字整体向上（屏幕上-左）抬起，原位置留一份纯色压暗的同形投影：
- * 高处影大、糊、淡、偏移远；h→0 时收成贴地接触影并消失。 */
+/* ---------- Float + Isomorphic Soft Shadow ----------
+ * h = float height (px). Text is lifted upward (screen up-left); an isomorphic darkened silhouette remains in place:
+ * high elevation = larger, blurrier, fainter shadow with greater offset; as h→0, collapses into contact shadow and vanishes. */
 const FloatWrap: React.FC<{ h: number; children: React.ReactNode }> = ({ h, children }) => (
   <div style={{ position: 'relative' }}>
     {h > 1.5 && (
@@ -49,14 +49,14 @@ const FloatWrap: React.FC<{ h: number; children: React.ReactNode }> = ({ h, chil
   </div>
 );
 
-/* 每行的悬浮高度：land = 该行贴回完成的段内时刻(0..1)，之前从 H 高度加速落下 */
+/* Float height per row: land = intra-segment time (0..1) when the row finishes landing; accelerates down from height H beforehand */
 const liftOf = (t: number, land: number, H = 120) => {
   const FALL = 0.34;
   const p = Math.min(1, Math.max(0, (t - (land - FALL)) / FALL));
   return (1 - easeFall(p)) * H;
 };
 
-/* ---------- 线性图标（24 视框，界面按 ~2.7x 排版，描边 1.7 ≈ 屏幕 4px） ---------- */
+/* ---------- Linear Icons (24 viewBox, UI laid out at ~2.7x, stroke 1.7 ≈ 4px screen) ---------- */
 type IconName = 'doc' | 'folder' | 'more' | 'chevR' | 'chevD' | 'home' | 'inbox' | 'building' | 'users'
   | 'target' | 'search' | 'list' | 'grid' | 'square' | 'dot';
 const PATHS: Record<IconName, string> = {
@@ -85,7 +85,7 @@ const Icon: React.FC<{ name: IconName; size?: number; color?: string; sw?: numbe
   </svg>
 );
 
-/* 空间徽标：低饱和色块 + 字母 */
+/* Space chip: low-saturation colored block + letter */
 const SpaceChip: React.FC<{ letter: string; hue: string }> = ({ letter, hue }) => (
   <div style={{
     width: 60, height: 60, borderRadius: 16, background: hue, flex: 'none',
@@ -161,8 +161,8 @@ const ViewSwitch: React.FC<{ size: number }> = ({ size }) => (
   </div>
 );
 
-/* 场景 A：侧栏 SPACES 树 + 右侧 Recent 卡
- * 树行/卡片按镜头行进方向（自上而下）先后从空中落贴回界面 */
+/* Scene A: Sidebar SPACES tree + right Recent cards
+ * Tree rows/cards land back down to UI surface sequentially along camera direction (top to bottom) */
 const SceneTree: React.FC<{ t?: number }> = ({ t = 1 }) => {
   const L = (i: number, n = 14) => liftOf(t, 0.22 + (i / n) * 0.62, 130);
   const rows: [number, string, RowIcon, string | undefined, string | undefined][] = [
@@ -226,8 +226,8 @@ const SceneTree: React.FC<{ t?: number }> = ({ t = 1 }) => {
   );
 };
 
-/* 场景 B：顶部 tab 条 + 左上侧栏导航
- * tab 条、video-shotcraft 字标、Home 行、侧栏项先后从空中贴落 */
+/* Scene B: Top tab bar + top-left sidebar navigation
+ * Tab bar, video-shotcraft wordmark, Home row, and sidebar items settle down sequentially from the air */
 const NAV: [IconName, string][] = [['inbox', 'Inbox'], ['building', 'Company'], ['users', 'People & Teams'], ['target', 'Goals'], ['doc', 'Docs']];
 const SceneTopNav: React.FC<{ t?: number }> = ({ t = 1 }) => (
   <div style={{ width: 3000, height: 2100, background: SURF, borderRadius: 48 }}>
@@ -317,7 +317,7 @@ const SceneTopNav: React.FC<{ t?: number }> = ({ t = 1 }) => (
   </div>
 );
 
-/* 场景 C：列表行（TODAY / TASK NAME 区）——Todo 头/TODAY 徽章/任务行自上而下先后贴落 */
+/* Scene C: List rows (TODAY / TASK NAME section) — Todo header / TODAY badge / task rows settle down sequentially from top to bottom */
 const TASKS = [
   { n: 'Render launch film', who: '#8a7cf0', due: 'Today', p: 0.72 },
   { n: 'Add shot: crash zoom', who: '#4fb39a', due: 'Today', p: 0.45 },
@@ -375,15 +375,15 @@ const SceneListRows: React.FC<{ t?: number }> = ({ t = 1 }) => (
   </div>
 );
 
-/* ---------- 3D 摄影 ---------- */
+/* ---------- 3D Camera ---------- */
 
 type Cam = {
   rx: number; ry: number; rz: number; scale: number;
   x: [number, number]; y: [number, number];
 };
 
-// 巡航曲线：首段缓起（前 30% 二次加速接匀速）、末段缓落、中段匀速；u 超出 [0,1]（交叉淡化
-// 窗口）时按端点斜率线性外推，相机在淡化里继续飞，接力处不再刹停
+// Cruise curve: gentle ease-in on first segment (first 30% quadratic acceleration into uniform speed), gentle ease-out on last segment, uniform in middle;
+// when u exceeds [0,1] (crossfade window), linearly extrapolates by endpoint slope so camera continues flying during crossfade without stopping at handovers
 const cruise = (u: number, first: boolean, last: boolean) => {
   const A = 0.3;
   const k = 1 / (1 - (first ? A / 2 : 0) - (last ? A / 2 : 0));
@@ -398,7 +398,7 @@ const Plane: React.FC<{
 }> = ({ cam, p, edge = 'left', children }) => {
   const x = cam.x[0] + (cam.x[1] - cam.x[0]) * p;
   const y = cam.y[0] + (cam.y[1] - cam.y[0]) * p;
-  const roll = cam.rz + (p - 0.5) * 2; // ±1° 缓慢滚转
+  const roll = cam.rz + (p - 0.5) * 2; // ±1° slow roll
   return (
     <AbsoluteFill style={{ perspective: 1050, perspectiveOrigin: '50% 46%' }}>
       <div style={{
@@ -408,7 +408,7 @@ const Plane: React.FC<{
       }}>
         <div style={{ position: 'absolute', transform: `translate3d(${x}px, ${y}px, 0)` }}>
           <div style={{ position: 'relative', transform: 'translate(-50%, -50%)' }}>
-            {/* 屏幕边缘霓虹缘光：外晕 + 贴边细亮线 */}
+            {/* Screen edge neon rim glow: outer halo + hairline bright stroke along edge */}
             {edge === 'left' ? (
               <>
                 <div style={{
@@ -435,7 +435,7 @@ const Plane: React.FC<{
               </>
             )}
             {children}
-            {/* 远端压暗：贴面透视里远处渐暗（比 v2 轻，亮面不发脏） */}
+            {/* Distant darkening: far edge darkens in grazing perspective (gentler than v2, keeps bright surfaces clean) */}
             <div style={{
               position: 'absolute', inset: 0,
               background: edge === 'left'
@@ -450,7 +450,7 @@ const Plane: React.FC<{
   );
 };
 
-/* 背景霓虹框（暗场道具）：发光细描边，随镜头行进反向视差漂移 */
+/* Background neon rects (dark-field props): glowing hairline strokes, drifting with reverse parallax as camera advances */
 const NeonRects: React.FC<{ drift: number }> = ({ drift }) => {
   const box = (c: string, a: number): React.CSSProperties => ({
     position: 'absolute', borderRadius: 32, border: `3px solid ${c}`, opacity: a,
@@ -465,26 +465,26 @@ const NeonRects: React.FC<{ drift: number }> = ({ drift }) => {
   );
 };
 
-// 平移目标以内容坐标 (cx,cy) 给出：translate = (W/2-cx, H/2-cy)
+// Pan targets specified in content coordinates (cx, cy): translate = (W/2-cx, H/2-cy)
 const SEGS: { cam: Cam; edge: 'left' | 'top'; render: (t: number) => React.ReactNode }[] = [
   {
-    // 侧栏树：从树顶（SPACES 附近）贴面滑到树底（Components/Patterns/Tokens）
+    // Sidebar tree: graze from top of tree (near SPACES) to bottom (Components/Patterns/Tokens)
     cam: { rx: 12, ry: 30, rz: -6, scale: 0.95, x: [1450 - 950, 1450 - 880], y: [1200 - 1050, 1200 - 1850] },
     edge: 'left', render: (t) => <SceneTree t={t} />,
   },
   {
-    // 顶栏 tab 条 → 右区 Home 大标题
+    // Top tab bar → right section Home headline
     cam: { rx: 20, ry: -20, rz: 6, scale: 0.95, x: [1500 - 800, 1500 - 2000], y: [1050 - 350, 1050 - 800] },
     edge: 'top', render: (t) => <SceneTopNav t={t} />,
   },
   {
-    // 列表行：沿 TASK NAME 行右扫
+    // List rows: sweep right along TASK NAME row
     cam: { rx: 14, ry: 28, rz: -5, scale: 1.05, x: [1450 - 900, 1450 - 680], y: [1100 - 620, 1100 - 1240] },
     edge: 'left', render: (t) => <SceneListRows t={t} />,
   },
 ];
 
-const SEG_LEN = 50; // 每段 50 帧，总 150
+const SEG_LEN = 50; // 50 frames per segment, 150 total
 const FADE = 7;
 
 const Stage: React.FC = () => {
@@ -495,10 +495,10 @@ const Stage: React.FC = () => {
         const start = i * SEG_LEN;
         const local = frame - start;
         if (local < -FADE || local > SEG_LEN + FADE) return null;
-        const u = local / SEG_LEN; // 不钳：淡化窗口里相机继续外推
-        const t = Math.min(1, Math.max(0, u)); // 内容（贴落进度）照旧钳位
+        const u = local / SEG_LEN; // Unclamped: camera continues flying in crossfade window
+        const t = Math.min(1, Math.max(0, u)); // Content (landing progress) clamped as usual
         const p = cruise(u, i === 0, i === SEGS.length - 1);
-        // 相邻段交叉淡化：后段在边界前 [-FADE,0] 淡入、前段在 [SEG_LEN-FADE, SEG_LEN] 淡出，边界帧无纯黑
+        // Adjacent segment crossfade: next segment fades in over [-FADE, 0] before boundary, previous segment fades out over [SEG_LEN-FADE, SEG_LEN]; no pure black at boundaries
         const fadeIn = i === 0 ? 1 : Math.min(1, Math.max(0, (local + FADE) / FADE));
         const fadeOut = i === SEGS.length - 1 ? 1 : Math.min(1, Math.max(0, (SEG_LEN - local) / FADE));
         return (
@@ -514,19 +514,19 @@ const Stage: React.FC = () => {
 
 export const GrazeFaceTour: React.FC = () => {
   const frame = useCurrentFrame();
-  // 浅景深焦点带：焦点椭圆随段落平滑移动（段间 10f 过渡，不跳）
+  // Shallow depth-of-field focal zone: focus ellipse moves smoothly across segments (10f transition between segments, no popping)
   const FX = [44, 40, 46];
   const FY = [46, 40, 50];
   const k1 = Math.min(1, Math.max(0, (frame - SEG_LEN + 5) / 10));
   const k2 = Math.min(1, Math.max(0, (frame - 2 * SEG_LEN + 5) / 10));
-  const kk = k1 + k2; // 0→1→2：段 A→B→C 的焦点
+  const kk = k1 + k2; // 0→1→2: focus for segments A→B→C
   const lerpArr = (a: number[]) => (kk <= 1 ? a[0] + (a[1] - a[0]) * kk : a[1] + (a[2] - a[1]) * (kk - 1));
   const focusX = lerpArr(FX);
   const focusY = lerpArr(FY);
   return (
     <AbsoluteFill style={{ background: '#07060c' }}>
       <Stage />
-      {/* 屏幕空间浅景深：焦点带外整体模糊 */}
+      {/* Screen-space shallow depth of field: overall blur outside focal zone */}
       <AbsoluteFill style={{
         filter: 'blur(15px)',
         WebkitMaskImage: `radial-gradient(ellipse 58% 52% at ${focusX}% ${focusY}%, transparent 34%, rgba(0,0,0,0.85) 72%, black 92%)`,
@@ -534,7 +534,7 @@ export const GrazeFaceTour: React.FC = () => {
       }}>
         <Stage />
       </AbsoluteFill>
-      {/* 带色相的暗角（不再把亮面压成灰）+ 暗场颗粒 */}
+      {/* Hue-tinted vignette (no longer crushes bright surfaces to gray) + dark-field grain */}
       <Vignette strength={0.62} inner={0.42} color="#06040e" cx={focusX / 100} cy={focusY / 100} />
       <Grain opacity={0.06} blend="soft-light" />
     </AbsoluteFill>

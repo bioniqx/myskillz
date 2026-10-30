@@ -2,19 +2,19 @@ import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 import { FakeDashboard, Card, G } from '../../_fixtures/Fixtures';
 
-// shared-element-morph〔转场〕：全屏特写面板收缩、位移、长出圆角，
-// 严丝合缝飞落进 dashboard 网格里它所属的卡片槽位，落座带 3% 过冲。
-// 观众感觉是同一个物体被镜头送回原位（FLIP 共享元素转场）。
+// shared-element-morph [transition]: Fullscreen close-up panel contracts, translates, develops rounded corners,
+// flying seamlessly into its designated card slot within the dashboard grid, landing with 3% overshoot.
+// Creates the perception of the identical element being returned to place by the camera (FLIP shared-element transition).
 //
-// 目标槽位 = FakeDashboard A 中列第二行那格（seed 5），按 fixtures 布局精确推算：
-//   侧栏 220 + 网格 padding 36 → 列宽 (1920-220-72-56)/3 = 524
-//   头部 72 + padding 36     → 行高 (1008-72-28)/2   = 454
-//   中列 x = 220+36+524+28 = 808；第二行 y = 72+36+454+28 = 590
+// Target slot = FakeDashboard A center column, row 2 slot (seed 5), calculated precisely from fixtures layout:
+//   Sidebar 220 + grid padding 36 -> column width (1920-220-72-56)/3 = 524
+//   Header 72 + padding 36       -> row height (1008-72-28)/2   = 454
+//   Center col x = 220+36+524+28 = 808; row 2 y = 72+36+454+28 = 590
 const SLOT = { x: 808, y: 590, w: 524, h: 454, r: 14, seed: 5 };
 const FULL = { x: 0, y: 0, w: 1920, h: 1080, r: 0 };
 
-// 节拍：0–35 全屏特写 hold ｜ 35–60 morph 25f（bezier 0.4,0,0.2,1 → 1.03）
-//       60–70 过冲回弹落座 ｜ 70–130 静止收尾
+// Rhythm: 0–35 fullscreen close-up hold | 35–60 morph 25f (bezier 0.4,0,0.2,1 -> 1.03)
+//         60–70 overshoot rebound into place | 70–130 static tail
 const MORPH_START = 35;
 const MORPH_END = 60;
 const SETTLE_END = 70;
@@ -24,7 +24,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const SharedElementMorph: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 位置/尺寸/圆角共用同一条进度曲线：25f 冲到 1.03，再 10f 弹回 1
+  // Position/size/border-radius share identical progress curve: ramps to 1.03 over 25f, bounces back to 1 over 10f
   const drive = interpolate(frame, [MORPH_START, MORPH_END], [0, 1.03], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -43,17 +43,17 @@ export const SharedElementMorph: React.FC = () => {
   const h = lerp(FULL.h, SLOT.h, p);
   const r = lerp(FULL.r, SLOT.r, p);
 
-  // 内容是同一张卡：按目标尺寸渲染，等比放大铺满全屏（全屏 = 这张卡的特写），
-  // 收缩过程中内容随容器一起缩小，强化"同一个物体"的感知
+  // Content is the exact same card: rendered at target dimensions, scaled up proportionally to fill fullscreen (fullscreen = close-up of this card);
+  // content shrinks along with container during contraction, reinforcing the "single continuous object" perception
   const contentScale = w / SLOT.w;
 
-  // 投影随尺寸缩小：悬空时大而深，落座后收敛到 fixtures 卡片原生投影量级
+  // Shadow shrinks with size: large and deep while airborne, settling into fixtures card native shadow scale upon landing
   const ps = Math.min(Math.max(p, 0), 1);
   const shadowY = lerp(36, 2, ps);
   const shadowBlur = lerp(110, 8, ps);
   const shadowAlpha = lerp(0.32, 0.06, ps);
 
-  // 背景 dashboard 先 0.9 透明度待命，落座瞬间提到 1
+  // Background dashboard stays on standby at 0.9 opacity, snapping to 1 the instant of landing
   const bgOpacity = interpolate(frame, [MORPH_END - 2, MORPH_END + 3], [0.9, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -65,7 +65,7 @@ export const SharedElementMorph: React.FC = () => {
       <div style={{ opacity: bgOpacity }}>
         <FakeDashboard variant="A" />
       </div>
-      {/* 共享元素：全屏特写 → 精确飞落进槽位 */}
+      {/* Shared element: fullscreen close-up -> flies precisely into slot */}
       <div
         style={{
           position: 'absolute',

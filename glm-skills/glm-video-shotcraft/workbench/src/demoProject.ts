@@ -2,8 +2,8 @@ import type { ProjectData } from "./types";
 import { uid } from "./types";
 import { t } from "./i18n";
 
-/** 初始演示工程（未接入成片时）：纸底 + 两张 demo 镜头卡顺排 + 字卡 + 解说条。
- *  同时是 Remotion Studio「Main」合成的 defaultProps 来源——保持纯函数，别引 store。 */
+/** Initial demo project (before linking video): paper background + two demo shot cards in sequence + title card + caption strip.
+ *  Also serves as defaultProps for Remotion Studio "Main" composition — keep as pure function without store imports. */
 export const demoProject = (): ProjectData => {
   const clip = (cardId: string, start: number, duration: number, props: Record<string, unknown> = {}, label?: string) => ({
     id: uid("clip"), cardId, start, duration, inOffset: 0, speed: 1, opacity: 1, scale: 1, x: 0, y: 0, props, label,

@@ -1,51 +1,37 @@
 ---
 name: neon-frame-orbit-drop
-一句话: 霓虹框先行描框后，镜头绕页面左→右弧线旋转，页面全部组件/文字**同帧**从空中往下贴合（同形软影同步收敛）——整体登场式的框内安放
-适用: 单页 UI 的一次性隆重登场（与巡礼/逐区亮相相对）；暗场霓虹调性段落的主视觉揭幕；neon-frame-forerun 的姊妹镜
-时长: 描框 ~0.5s + 旋转&同时贴落 ~2.5s + 落定 ~1s；全段 ~4.7s（140f，旋转到 128f 收住后留落定）
-能量: 中高（一次性的大动作，落定即静）
-标签: effects、camera
+summary: After a neon frame draws itself, the camera arcs left to right while every page component drops from the air and lands on the same frame.
+use: Grand single-take reveal for a single-page UI (contrasting with sectional tours); hero visual unveiling in dark neon aesthetics; sibling shot to neon-frame-forerun.
+duration: Frame trace ~0.5s + rotation & simultaneous drop ~2.5s + settle ~1s; full segment ~4.7s (140f, rotation settles at 128f followed by rest)
+energy: Medium-High (A singular sweeping gesture, settling into complete stillness)
+tags: effects, camera
 ---
 
-## 意图
-neon-frame-forerun 的孪生变体：同样框先行、内容后落，但镜头
-不是固定的——从页面左侧视角连续弧线旋转到右侧视角，旋转进行
-的同时全部组件从空中贴落。命门是**同时贴合**：所有组件和文字
-同帧起落、同帧贴合、软影同步消失——这是"整体登场"的语法
-（判例：错峰版被裁"应该是所有组件和文字同时从空中往下贴合"）。
-错峰贴落属于巡礼镜（graze-face-tour），一页一次性亮相
-必须齐落，节奏语义不能混用。
+## Intention
+Twin variant to neon-frame-forerun: similarly uses frame-first, content-after structure, but the camera is not static—it sweeps in a continuous arc from the page's left flank to the right flank, while all components drop from the air simultaneously during rotation. The non-negotiable rule is **simultaneous landing**: every component and text block launches on the same frame, descends on the same frame, lands on the same frame, and drops shadows in perfect synchrony—this is the visual syntax of a "monolithic entrance" (review ruling: staggered version rejected as "all components and text should drop from the air and land together"). Staggered landings belong to walkthrough shots (graze-face-tour); revealing an entire page in a single beat requires synchronous landing, and the two timing vocabularies must never be conflated.
 
-## 动效核心
-- 霓虹描框：渐变霓虹框 ~14f 奔画成型（同 neon-frame-forerun）
-- 视角弧线：rotateY +38° → -26° 连续弧线（透视原点 30%→64% 随动
-  近似相机环绕），贯穿全片
-- 同时贴落：全部元素统一 LAND 时刻（归一化 ~0.52）——同帧离地
-  悬空、同帧空中下降、同帧贴合；FloatWrap 同形软影（blur/offset/
-  opacity 随高度）全体同步收敛
-- 背景霓虹管框群衬场，主面板落定后让位
+## Motion Core
+- Neon frame trace: gradient neon frame outlines across ~14f (identical to neon-frame-forerun).
+- Perspective arc: rotateY +38° → -26° continuous arc (perspective-origin 30%→64% tracking camera orbit) spanning the entire sequence.
+- Simultaneous drop: all elements share a single LAND cue (normalized ~0.52)—lifting into mid-air on the same frame, descending through space on the same frame, and locking to the surface on the same frame; FloatWrap soft silhouette shadows (blur/offset/opacity scaling with elevation) contract in lockstep.
+- Background neon tube array frames the stage, stepping down once the main panel settles.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 贴落同时性 | 全元素同帧起落（零错峰） | **命门**；任何错峰都会读成巡礼语法（判例裁决原话见上） |
-| 视角弧线 | rotateY +38°→-26°、透视原点随动 | 弧度小读作抖动；只转不落=空转 |
-| 旋转×贴落耦合 | 贴落窗口居中于旋转行程 | 旋转完才落=两段戏；落完还在转=收不了尾 |
-| 悬浮高度/软影 | 同 graze-face-tour（100–180px、影随高度） | 影不可感=没做（累计判例） |
-| 描框 | ~14f 奔画 | 同 neon-frame-forerun |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Drop synchrony | All elements launch and land on the same frame (zero stagger) | **Critical**: any stagger slips into walkthrough syntax (review ruling noted above) |
+| Camera arc | rotateY +38°→-26°, perspective-origin tracking | Shallow arc reads as camera shake; rotation without drops feels like idle wheel-spinning |
+| Rotation-drop coupling | Drop window centered within camera arc | Landing after rotation completes creates two fragmented shots; rotating after landing prevents clean conclusion |
+| Elevation / Shadows | Matches graze-face-tour (100–180px, shadows track elevation) | Imperceptible shadow invalidates depth (accumulated rulings) |
+| Frame trace | ~14f swift race | Identical to neon-frame-forerun |
 
-## 已知坑
-- 参数经占位素材两轮调校通过，非实战定稿，首次实战须以真实素材回验
-- **贴落节奏语义判例**（本卡与 graze-face-tour 互为反例）：
-  巡礼镜=错开起点+重叠并行下落；整体登场镜=全体同帧。选错语法
-  两边都会被裁
-- 与 neon-frame-forerun 分工：那张镜头固定、错峰贴落+页面点亮
-  三层咬合；本卡镜头旋转+同帧齐落。同段落二选一，别连用（同框
-  语言重复）
-- 弧线旋转是透视原点近似而非真实 3D 相机环绕，极端角度下框辉光
-  形变略平——实战若需大角度环绕考虑真 3D 场景
+## Known Pitfalls
+- Parameters tuned over two review rounds with placeholder assets; verify against real assets in production.
+- **Rhythmic syntax ruling** (this card and graze-face-tour are mutual counterparts): walkthrough shots use staggered starts + overlapping parallel drops; monolithic entrance shots use strict synchrony across all elements. Picking the wrong syntax triggers rejections on both sides.
+- Division with neon-frame-forerun: that shot uses a fixed camera, staggered drops, and page illumination across three synchronized layers; this shot uses camera rotation and synchronous drops. Choose one per section; never chain consecutively to avoid repeating frame motifs.
+- Arc rotation approximates camera orbit via perspective-origin rather than true 3D camera transforms; frame glow deformation flattens slightly at extreme angles—consider true 3D setups for wide-angle sweeps.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/neon-frame-orbit-drop/
-（NeonFrameForerunOrbit.tsx）
-原片出处：无对应原段
+(NeonFrameForerunOrbit.tsx)
+Source clip: None (original synthesis)

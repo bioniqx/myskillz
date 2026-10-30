@@ -1,23 +1,23 @@
-// spotlight-sweep-reveal —— 聚光扫字：暗场里几乎不可见的标题，被一盏摆动的追光扫亮，光到哪哪亮。
+// spotlight-sweep-reveal — Spotlight sweep reveal: A title barely visible in the dark field is illuminated by an oscillating spotlight, revealing content wherever the light hits.
 //
-// 第二轮重设计（剧场首演夜 · 天鹅绒幕布）：
-// - look = custom「velvet」：酒红黑天鹅绒幕布 + 钨丝暖白追光 + 香槟金点缀（库里没有的剧场色）。
-//   标题是 220px 衬线「Craft the shot.」（video-shotcraft 品牌短句，roman + italic 混排，剧院海报感），
-//   全亮后收在 video-shotcraft 字标上——一支宣传片的首映夜。
-// - 光是物理的：灯头在画外正上方；追光像钟摆——光斑沿一条下凹的弧线摆（中心最低），两个来回后阻尼收拢，
-//   x 与速度同时归零停在正中（不是纯 sin 急刹）。光斑照到哪里，哪里的字（亮版副本 + 柔晕）和
-//   幕布褶皱（亮版天鹅绒）一起被揭开——暗场里常驻的只有 0.07 的字影和几乎看不见的幕布。
-// - 开灯有"钨丝预热"闪两下（确定性闪烁表）；停稳后光圈像追光灯的 iris 一样张开铺满整行标题 =
-//   全亮定格（扩散 out-cubic、光锥消散 linear，解耦判例），之后留一层顶光暖幕 + 光束里的浮尘让 hold 活着。
-// - 空间：幕布（远景，褶皱竖纹）→ 标题（中景）→ 舞台台口地板（近景，台沿高光 + 地面光斑反射）。
+// Second-round redesign (Opening night at the theater · Velvet curtain):
+// - look = custom "velvet": Burgundy black velvet curtain + tungsten warm white follow-spot + champagne gold accents (theater palette not in default presets).
+//   The title is a 220px serif "Craft the shot." (video-shotcraft brand tagline, roman + italic mix, theater poster aesthetic),
+//   fully illuminated before locking onto the video-shotcraft wordmark — opening night of a launch film.
+// - Light is physical: Lamp head is positioned directly above off-screen; follow-spot behaves like a pendulum — light spot swings along a concave arc (lowest at center), dampening and settling after two round trips,
+//   with x and velocity simultaneously reaching zero at dead center (not an abrupt pure sine brake). Wherever the spotlight hits, the typography (illuminated duplicate + soft bloom) and
+//   curtain folds (bright velvet pass) are revealed together — permanently present in the dark field is only a 0.07 text shadow and barely visible curtain texture.
+// - Powering on has a 2-flash "filament warmup" (deterministic flicker table); once stabilized, the spotlight iris opens wide to cover the full title line =
+//   full illumination freeze (out-cubic spread, linear cone dissipation, decoupled verdict), followed by a persistent warm overhead backlight + drifting dust motes to keep the hold frame alive.
+// - Spatial layers: Curtain (background, vertical drape folds) -> Title (midground) -> Stage floor apron (foreground, rim highlight + floor spotlight reflection).
 //
-// 时间表（30fps，共 170f）：
-//   0–4     暗场：幕布与字影几乎不可见（第一帧就有台沿与顶光余光）
-//   4–10    开灯：钨丝预热闪烁两下后稳定
-//   8–121   主动作：追光从左侧起摆，两个半来回（周期 50f），后 1.5 个来回阻尼收拢，121f 停在正中
-//   121–141 iris 张开：光圈 360→1080px（out-cubic），标题全亮；光锥 20f 线性收成柔和顶光
-//   128–152 跟随：眉题字距收拢、副标题与品牌行淡入上浮
-//   152–170 hold：顶光暖幕 + 浮尘缓漂，干净海报
+// Timeline (30fps, total 170f):
+//   0–4     Dark field: Curtain and text shadow barely perceptible (stage edge and ambient top light present from frame 0)
+//   4–10    Light on: Filament warmup flickers twice before stabilizing
+//   8–121   Main action: Follow-spot swings from left, 2.5 cycles (period 50f), damped settle across last 1.5 cycles, halts at center at 121f
+//   121–141 Iris opens: Aperture 360->1080px (out-cubic), title fully illuminated; light cone linearly resolves into soft overhead light over 20f
+//   128–152 Follow-through: Overline tracking tightens, subtitle and brand line fade in and float up
+//   152–170 Hold: Warm top-lit stage + slowly drifting dust motes, pristine poster composition
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, Vignette, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -26,26 +26,26 @@ import { ShotcraftWordmark } from '../../_fixtures/Brand';
 
 export const SPOTLIGHT_SWEEP_REVEAL_DURATION = 170;
 
-// 自定义 look「velvet」
+// Custom look "velvet"
 const V = {
   bg0: '#1a0a0d', bg1: '#0f0507', bg2: '#070203',
   velvet: '#5a1622', velvetDeep: '#22080c',
-  warm: '#ffe6c2', // 钨丝暖白
+  warm: '#ffe6c2', // Tungsten warm white
   ink: '#f8efe2',
   gold: '#e3bd7f',
   ink2: '#c9b39d',
 };
 
 const CX = 960;
-const CY = 470; // 标题中线
-const AMP = 600; // 摆幅
+const CY = 470; // Title centerline
+const AMP = 600; // Swing amplitude
 const PERIOD = 50;
-const SWING0 = 8; // 起摆
-const SWING_END = SWING0 + PERIOD * 2.25; // 121：θ 从 -π/2 走到 4π，sin=0 落在正中
+const SWING0 = 8; // Swing start
+const SWING_END = SWING0 + PERIOD * 2.25; // 121: θ sweeps from -π/2 to 4π, sin=0 lands dead center
 const IRIS_END = SWING_END + 20; // 141
 const LAMP_Y = -160;
-const FLOOR_Y = 868; // 台沿
-const R0 = 360; // 摆动期光圈半径
+const FLOOR_Y = 868; // Stage floor edge
+const R0 = 360; // Swing phase aperture radius
 const outCubic = bezier(0.215, 0.61, 0.355, 1);
 
 const rnd = (i: number) => {
@@ -53,16 +53,16 @@ const rnd = (i: number) => {
   return s - Math.floor(s);
 };
 
-// 光斑位置：钟摆。θ 从 -π/2（最左）起，第一来回满幅，之后包络 smooth 收到 0（x 与速度同时归零）
+// Spotlight position: Pendulum motion. θ starts from -π/2 (far left), full swing for first cycle, then envelope smoothly decays to 0 (x and velocity hit zero together)
 const spotAt = (f: number) => {
   const sf = Math.min(Math.max(f, SWING0), SWING_END);
   const th = -Math.PI / 2 + (2 * Math.PI * (sf - SWING0)) / PERIOD;
   const env = 1 - ramp(sf, SWING0 + PERIOD * 0.75, SWING_END - SWING0 - PERIOD * 0.75, EASE.smooth);
   const u = Math.sin(th) * env; // -1..1
-  return { x: CX + AMP * u, y: CY + 26 - 44 * u * u }; // 下凹弧：中心最低
+  return { x: CX + AMP * u, y: CY + 26 - 44 * u * u }; // Concave arc: lowest at center
 };
 
-// 钨丝预热闪烁（4–10f）
+// Filament warmup flicker (4–10f)
 const FLICKER = [0, 0.55, 0.15, 0.8, 0.45, 1];
 const lampOn = (f: number) => (f < 4 ? 0 : f >= 10 ? 1 : FLICKER[Math.min(5, f - 4)]);
 
@@ -79,7 +79,7 @@ const Title: React.FC<{ color: string; style?: React.CSSProperties }> = ({ color
   </div>
 );
 
-// 天鹅绒幕布：不等宽竖褶（三组周期叠加）+ 顶部挂杆暗、下摆略亮
+// Velvet curtain: Non-uniform vertical pleats (superposition of three cycles) + dark top rod, slightly lighter bottom drape
 const CURTAIN =
   `repeating-linear-gradient(90deg, rgba(0,0,0,0.55) 0px, rgba(0,0,0,0) 46px, rgba(255,210,200,0.10) 70px, rgba(0,0,0,0) 96px, rgba(0,0,0,0.55) 132px),` +
   `repeating-linear-gradient(90deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0.3) 210px, rgba(0,0,0,0) 330px),` +
@@ -94,7 +94,7 @@ export const SpotlightSweepReveal: React.FC = () => {
   const on = lampOn(f);
   const { x, y } = spotAt(f);
 
-  // iris 张开 + 全亮（扩散 out-cubic）；光锥收成柔和顶光（linear）
+  // Iris opens + full illumination (out-cubic spread); light cone resolves into soft overhead light (linear)
   const iris = ramp(f, SWING_END, IRIS_END - SWING_END, outCubic);
   const coneFade = 1 - 0.7 * ramp(f, SWING_END, IRIS_END - SWING_END, EASE.linear);
   const radius = mix(R0, 1080, iris);
@@ -104,13 +104,13 @@ export const SpotlightSweepReveal: React.FC = () => {
   const spotMask = `radial-gradient(ellipse ${radius.toFixed(1)}px ${ry.toFixed(1)}px at ${x.toFixed(1)}px ${y.toFixed(1)}px, #000 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.35) 72%, transparent 100%)`;
   const maskStyle: React.CSSProperties = { WebkitMaskImage: spotMask, maskImage: spotMask };
 
-  // 光锥：灯头窄口 → 光斑左右切点
+  // Light cone: Narrow lamp nozzle -> Left/right spotlight tangent points
   const topHalf = 40;
   const poolHalf = mix(R0 * 1.05, 1300, iris);
   const coneBottom = y + mix(R0 * 0.8, 420, iris);
   const cone = `${CX - topHalf},${LAMP_Y} ${CX + topHalf},${LAMP_Y} ${x + poolHalf},${coneBottom} ${x - poolHalf},${coneBottom}`;
 
-  // 光束浮尘：沿光锥轴向分布，缓慢上浮 + 横漂（确定性）
+  // Beam dust motes: Distributed along light cone axis, gentle upward drift + horizontal sway (deterministic)
   const motes = Array.from({ length: 56 }, (_, i) => {
     const u = rnd(i);
     const v = rnd(i + 100) - 0.5;
@@ -131,22 +131,22 @@ export const SpotlightSweepReveal: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: `linear-gradient(180deg, ${V.bg0} 0%, ${V.bg1} 60%, ${V.bg2} 100%)`, overflow: 'hidden', fontFamily: FONT.sans }}>
-      {/* 远景：幕布常驻极暗 */}
+      {/* Background: Velvet curtain stays ultra dark */}
       <Curtain opacity={0.16} />
-      {/* 顶光余光：灯头口漏下来的一点暖光（常驻，第一帧就有） */}
+      {/* Ambient top light: Warm spill from lamp head nozzle (persistent, present from frame 0) */}
       <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 30% 22% at 50% 0%, ${alpha(V.warm, 0.1)} 0%, ${alpha(V.warm, 0)} 100%)` }} />
 
-      {/* 幕布被照亮的部分：亮版幕布，随光斑遮罩 */}
+      {/* Illuminated curtain section: Bright velvet pass, masked by spotlight */}
       <div style={{ position: 'absolute', inset: 0, opacity: on * breathe, ...maskStyle }}>
         <Curtain opacity={0.95} />
-        {/* 暖光染色 */}
+        {/* Warm light tint */}
         <div style={{ position: 'absolute', inset: 0, background: alpha('#ff9a6a', 0.08), mixBlendMode: 'screen' }} />
       </div>
 
-      {/* 台口地板：近景 */}
+      {/* Stage floor apron: Foreground */}
       <div style={{ position: 'absolute', left: 0, right: 0, top: FLOOR_Y, bottom: 0, background: 'linear-gradient(180deg, #1c0d0c 0%, #0b0505 100%)' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, top: FLOOR_Y, height: 2, background: `linear-gradient(90deg, transparent, ${alpha(V.warm, 0.14)}, transparent)` }} />
-      {/* 地面光斑：追光落到台面的那一小块 */}
+      {/* Floor spotlight: Small pool where follow-spot strikes floor apron */}
       <div
         style={{
           position: 'absolute', inset: 0, opacity: on * coneFade * 0.9,
@@ -154,10 +154,10 @@ export const SpotlightSweepReveal: React.FC = () => {
         }}
       />
 
-      {/* 字影：暗场里常驻的 0.07 */}
+      {/* Text shadow: Persistent 0.07 baseline in dark field */}
       <Title color={V.ink} style={{ opacity: 0.07 }} />
 
-      {/* 光锥：柔边体积光 + 浮尘 */}
+      {/* Light cone: Soft-edged volumetric beam + dust motes */}
       <div style={{ position: 'absolute', inset: 0, opacity: on * coneFade }}>
         <svg viewBox="0 0 1920 1080" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
           <defs>
@@ -182,7 +182,7 @@ export const SpotlightSweepReveal: React.FC = () => {
         </svg>
       </div>
 
-      {/* 墙上光斑：暖白椭圆，硬一点的芯 + 长软边 */}
+      {/* Wall spotlight: Warm white ellipse, firmer core + wide soft falloff */}
       <div
         style={{
           position: 'absolute', inset: 0, opacity: on * mix(1, 0.55, iris) * breathe,
@@ -191,13 +191,13 @@ export const SpotlightSweepReveal: React.FC = () => {
         }}
       />
 
-      {/* 亮版标题：随光斑遮罩；底下垫一层同遮罩柔晕（被照亮的字边微溢光） */}
+      {/* Bright title: Masked by spotlight; padded underneath with identical soft halo (subtle edge glow on lit characters) */}
       <div style={{ position: 'absolute', inset: 0, opacity: on, ...maskStyle }}>
         <Title color={V.warm} style={{ filter: 'blur(16px)', opacity: 0.5 }} />
         <Title color={V.ink} />
       </div>
 
-      {/* 眉题 + 副标题（全亮后入场） */}
+      {/* Overline + Subtitle (enters after full illumination) */}
       <div
         style={{
           position: 'absolute', left: 0, right: 0, top: CY - 210, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22,

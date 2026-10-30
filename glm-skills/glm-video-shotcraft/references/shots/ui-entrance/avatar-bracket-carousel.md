@@ -1,59 +1,42 @@
 ---
 name: avatar-bracket-carousel
-一句话: "Your ___ agent" 填空排版，四角对焦框钉在句中不动，头像队列在框内垂直 spring 轮换三次，入框放大清晰、出框按距离缩小淡化模糊，角色标签同步更换，切换瞬间对焦框呼吸 7%
-适用: "一个位置，多种角色"的能力枚举；团队/身份/预设/人格类产品的核心一句话镜头
-时长: 约 5.2s（156f@30fps）
-能量: 中（三次等距切换构成稳定节拍器，对焦框脉冲是唯一装饰性动作）
+summary: A four-corner focus bracket stays locked mid-sentence while a vertical queue of avatars springs through it three times, each one sharpening and growing as it enters the frame and shrinking, dimming and blurring as it leaves.
+use: Capability enumeration for "one slot, multiple roles"; core one-sentence shot for team, identity, preset, or persona products.
+duration: ~5.2s (156f @ 30fps)
+energy: Medium (Three equidistant switches form a steady metronome; focus bracket pulse is the only decorative motion)
 ---
 
-## 意图
-"我们的 agent 能当导演、剪辑、动画师、音效师"列成四行就是一张清单。塞进一句话的一个槽位里，
-它变成一个承诺加四次证明：句子不动，只有槽里的人在换。四角对焦框是这个手法的关键
-——它不参与轮换，但它把观众的眼睛钉死在那 92×92 的方框里，所以四次更换才读作
-"同一个位置"而不是"四张头像飘过"。
+## Intention
+Listing "our agent can act as director, editor, animator, sound designer" as four lines is just a checklist. Packing it into a single slot in a sentence turns it into a promise plus four proofs: the sentence stays still while only the person in the slot changes. The four-corner focus bracket is key to this technique—it does not rotate, but it pins the viewer's eyes onto that 92×92 box, so the four replacements read as "the exact same slot" rather than "four avatars floating by."
 
-## 动效核心
-- 位置量 `pos` 是三段 spring 的累加：`[0.24, 0.46, 0.68].forEach(s0 => pos +=
-  seg(t, s0, s0+0.14, k => E.spring(k, 0.25)))`——不是索引跳变，而是连续量，所以任意
-  时刻都能算出每个头像离槽位有多远
-- 距离驱动一切：`d = |k - pos|`，然后 `scale = max(0.5, 1-d*0.38)`、
-  `opacity = max(0, 1-d*0.62)`、`blur = min(3, d*2.4)`、`translateY = (k-pos)*76`——
-  四个属性同源于一个距离量，所以入框/出框的变化天然同步，不需要单独排时间
-- 队列是绝对定位在 `slot` 的 0×0 锚点上叠放的（`left:-29px, top:-29px` 自居中），
-  垂直位移全靠 `(k-pos)*STEP`；框外的头像照样在渲染，只是被 opacity 和 blur 藏掉
-- 入场是叠在轮换之上的另一层：`el.style.opacity = op * seg(t, 0.02+k*0.03, 0.12+k*0.03)`
-  ——四张按 0.03 错峰在开场 0.15 内建立队列，之后这一项恒为 1，轮换全权接管
-- 角色标签独立一套但共享 `pos`：`opacity = max(0, 1-|k-pos|*2.2)`，衰减斜率 2.2 比
-  头像的 0.62 陡得多——标签在 0.45 格距离外就完全消失，永远不会出现两个标签同屏
-- 对焦框呼吸：`breath = Σ sin(seg(t, s0, s0+0.1) * π)`，取 `min(1, breath)` 后乘 0.07
-  加到 scale 上；正弦包络让脉冲在切换动作的正中达峰，走完归零
+## Motion Core
+- Position variable `pos` is an accumulation of three spring segments: `[0.24, 0.46, 0.68].forEach(s0 => pos += seg(t, s0, s0+0.14, k => E.spring(k, 0.25)))`—not discrete index jumps, but a continuous variable, so the distance from each avatar to the slot can be computed at any moment.
+- Distance drives everything: `d = |k - pos|`, then `scale = max(0.5, 1-d*0.38)`, `opacity = max(0, 1-d*0.62)`, `blur = min(3, d*2.4)`, `translateY = (k-pos)*76`—four properties originate from a single distance value, so entering/leaving transformations are naturally synchronized without separate timing tracks.
+- The queue is stacked absolutely at the `slot`'s 0×0 anchor (`left:-29px, top:-29px` self-centered), vertical displacement relies entirely on `(k-pos)*STEP`; avatars outside the box still render, just hidden by opacity and blur.
+- Entrance is another layer superimposed on the rotation: `el.style.opacity = op * seg(t, 0.02+k*0.03, 0.12+k*0.03)`—four cards establish the queue staggered by 0.03 within the opening 0.15, after which this term remains 1 and rotation takes full control.
+- Role labels are independent but share `pos`: `opacity = max(0, 1-|k-pos|*2.2)`, decay slope 2.2 is much steeper than the avatar's 0.62—labels disappear completely beyond 0.45 slots of distance, ensuring two labels never appear on screen simultaneously.
+- Focus bracket breathing: `breath = Σ sin(seg(t, s0, s0+0.1) * π)`, taking `min(1, breath)` multiplied by 0.07 added to scale; sine envelope makes the pulse peak at the exact midpoint of the switching motion and decay to zero when finished.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 切换点 | 0.24 / 0.46 / 0.68，间隔 0.22（≈34f / 1.14s） | 间隔就是"读得完一个角色"的时长；<0.12 观众来不及看标签，>0.3 节拍器感散掉 |
-| 切换行程 | 窗 0.14（≈22f），`E.spring(k, 0.25)` | 行程占间隔的 64% → 静置时间约 12f；阻尼 0.25 是明确一次回弹，调小会抖两下与相邻切换互相干扰 |
-| 步距 | STEP=76px（框 92px、头像 58px） | 步距必须大于头像直径否则相邻两张会咬边；76/92 意味着出框的头像仍露出一角，队列的存在被暗示 |
-| 缩放衰减 | `1 - d*0.38`，下限 0.5 | 一格距离缩到 0.62；斜率调大出框更决绝，但下限 0.5 会更早触顶，队列变成"两档尺寸" |
-| 透明度衰减 | `1 - d*0.62` | 1.6 格距离外完全消失 → 画面里始终有约 3 张可见；斜率降到 0.3 会看到整列四张都在，取景框的"锁定"语义被削弱 |
-| 模糊衰减 | `d*2.4`，上限 3px | 模糊是景深暗示，2.4 的斜率让邻位约 2.4px；>4px 邻位糊成色块，队列读不出是头像 |
-| 标签衰减 | `1 - d*2.2` | 斜率必须显著大于头像的 0.62——标签是文字，两句同时半透明叠着最难读 |
-| 框脉冲 | 窗 0.1，`sin(·π)` × 0.07 | 7% 是"咬合了一下"的量；>15% 框自己变成主角，抢过头像更换 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Switch points | 0.24 / 0.46 / 0.68, interval 0.22 (≈34f / 1.14s) | The interval is the duration needed to finish reading one role; <0.12 viewers cannot read the label in time, >0.3 the metronome rhythm falls apart |
+| Switch travel | Window 0.14 (≈22f), `E.spring(k, 0.25)` | Travel accounts for 64% of interval → rest time ~12f; damping 0.25 gives a distinct single bounce, smaller values shake twice and interfere with adjacent switches |
+| Step distance | STEP=76px (bracket 92px, avatar 58px) | Step distance must exceed avatar diameter otherwise adjacent items overlap edges; 76/92 means avatars exiting the frame still show a corner, hinting at queue presence |
+| Scale decay | `1 - d*0.38`, lower bound 0.5 | One slot distance shrinks to 0.62; steeper slope makes exit more decisive, but 0.5 lower bound hits ceiling earlier, turning queue into "two stepped sizes" |
+| Opacity decay | `1 - d*0.62` | Disappears completely beyond 1.6 slots distance → ~3 avatars always visible on screen; dropping slope to 0.3 reveals all four, weakening bracket "locking" semantics |
+| Blur decay | `d*2.4`, upper bound 3px | Blur suggests depth of field, 2.4 slope gives adjacent slot ~2.4px blur; >4px turns adjacent items into blurry patches, unreadable as avatars |
+| Label decay | `1 - d*2.2` | Slope must be significantly steeper than avatar's 0.62—labels are text, two translucent sentences overlapping is hardest to read |
+| Bracket pulse | Window 0.1, `sin(·π)` × 0.07 | 7% is the feel of a solid mechanical click; >15% bracket steals the spotlight from avatar replacement |
 
-## 已知坑
-- 四张头像对三次切换：`pos` 最终停在 3，正好是末位。加第五张必须加第四次切换（且
-  末次切换要在 0.86 之前结束才有静置时间），否则队列末尾永远进不了框
-- 切换点是硬编码数组，出现两处（`pos` 累加与 `breath` 累加）。改节拍必须同时改两处，
-  漏改一处会出现"框脉冲和头像换位错开"
-- 入场 stagger 与首次切换的间隔只有 0.09（入场末 0.15 → 切换 0.24）。加头像数会推后
-  入场结束点（`0.12+k*0.03`），5 张以上就要把首次切换往后挪
-- 头像是白色线性图标 + 中性灰阶受光渐变圆（灰度分层仅用于区分队列项），强调色只用在对焦框的
-  四个 SVG 角标上（及标签 chip 的一粒圆点）——落地换成真实头像后仍应保持这个分工，头像本身别抢色
-- 对焦框 SVG 的四条 path 与 92×92 viewBox 是写死的坐标（`M4,26 L4,4 L26,4` 等）。改
-  框尺寸要整套重标，只改容器宽高会让角标缩放失真
-- 句子 "Your ___ agent"（demo：video-shotcraft 的 agent 摄制组 Director / Editor / Animator / Sound）用 flex + gap:22px 居中，槽宽固定 92px 所以句干不会因
-  头像更换而重排——但换成中文句子时要确认槽两侧的字宽变化不会让槽偏离画面中心
+## Known Pitfalls
+- Four avatars match three switches: `pos` ends at 3, exactly the final slot. Adding a fifth avatar requires adding a fourth switch (and the last switch must end before 0.86 to leave rest time), otherwise queue end never enters bracket.
+- Switch points are hardcoded arrays appearing in two places (`pos` accumulation and `breath` accumulation). Altering cadence requires updating both simultaneously; missing one causes bracket pulse and avatar shift to desync.
+- Entrance stagger to first switch interval is only 0.09 (entrance ends 0.15 → switch 0.24). Adding avatars pushes back entrance end point (`0.12+k*0.03`), so 5+ avatars require delaying first switch.
+- Avatars use white outline icons + neutral grayscale lighting gradient circles (grayscale layering only distinguishes queue items), accent color only applies to bracket's four SVG corners (and label chip dot)—keep this division when replacing with real avatars; avatar itself should not steal accent color.
+- Bracket SVG's four paths and 92×92 viewBox are hardcoded coordinates (`M4,26 L4,4 L26,4`, etc.). Resizing bracket requires recalibrating coordinates; changing container width/height distorts corner markers.
+- Sentence "Your ___ agent" (demo: video-shotcraft agent crew Director / Editor / Animator / Sound) uses flex + gap:22px centered, fixed 92px slot width prevents sentence stem from reflowing during switches—verify text width changes on either side do not pull slot off screen center.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/avatar-bracket-carousel/
-（AvatarBracketCarousel.tsx）
+(AvatarBracketCarousel.tsx)

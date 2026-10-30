@@ -1,8 +1,10 @@
-// research-card-stack-scroll — Research Stack 论文卡叠压滚流（motion-lab 定稿转原生 Remotion）
-// 深色论文卡沿微微向右下的轴线连续飞入并叠压在中心：入场是 translateY(-40)+scale 0.94→1
-// 的 6 帧短促 spring，落位带 1 帧压缩；只有最上一张全清晰渲染标题+作者+摘要，
-// 下方卡按 depth 递增 blur/变暗只露顶部标题条，背景浅灰横向 grid 同步移动做速度参照。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// research-card-stack-scroll — Research Stack paper card stacked flow (motion-lab finalized design ported to native Remotion)
+// Dark paper cards continuously fly in and stack at the center along a slightly down-right axis:
+// entrance is a 6-frame brisk spring with translateY(-40) + scale 0.94→1, landing with a 1-frame squash;
+// only the top card fully renders title + author + abstract sharply;
+// cards underneath increase blur/dimming by depth, revealing only the top title bar;
+// a light gray horizontal grid in the background moves synchronously as a speed reference.
+// Design coordinates: 480×270 (proportionally scaled by DesignStage); parameters calibrated to this system.
 import React from 'react';
 import { DesignStage, E, lerp, rand, seg, useT } from '../../_fixtures/Motion';
 
@@ -13,15 +15,15 @@ const ORANGE_SOFT = '#FF8A44';
 const INK = '#1A1A1A';
 const FONT = '-apple-system,system-ui,"SF Pro Text","PingFang SC",sans-serif';
 
-// 原 setup 里的 stage.clientWidth/clientHeight 分支——原渲染 stage 恒为 480×270
+// Original setup's stage.clientWidth/clientHeight branch — original render stage is constantly 480×270
 const W = 480;
 const H = 270;
-const F = 144; // recipe 帧总数（f = t·F）
-const PER = 12; // 每 12 帧进一张卡
-const GAP = 30; // 叠压后每张卡的下移间距
-const XOFF = 9; // 滚流时的右移量
+const F = 144; // Total recipe frames (f = t·F)
+const PER = 12; // One card enters every 12 frames
+const GAP = 30; // Downward spacing between cards after stacking
+const XOFF = 9; // Rightward offset during flow
 
-// 逻辑画布 420×250 → 实际 stage 的等比缩放
+// Logical canvas 420×250 → proportional scaling to actual stage
 const LW = 420;
 const LH = 250;
 const S = Math.min(W / LW, H / LH);
@@ -47,10 +49,10 @@ const CH = 96;
 export const ResearchCardStackScroll: React.FC = () => {
   const t = useT();
   const f = t * F;
-  const focus = Math.floor(f / PER); // 只有最上一张卡渲染正文
+  const focus = Math.floor(f / PER); // Only the top card renders body content
   return (
     <DesignStage bg="#FAFAFA">
-      {/* 背景横向 grid：随滚流同步下移做速度参照 */}
+      {/* Background horizontal grid: moves downward in sync with the flow as a speed reference */}
       <div
         style={{
           position: 'absolute',
@@ -60,7 +62,7 @@ export const ResearchCardStackScroll: React.FC = () => {
           transform: `translateY(${((f / PER) * GAP * S) % 24}px)`,
         }}
       />
-      {/* 逻辑画布 track：中心锚点 + 等比缩放 */}
+      {/* Logical canvas track: center anchor + proportional scaling */}
       <div
         style={{
           position: 'absolute',
@@ -73,13 +75,13 @@ export const ResearchCardStackScroll: React.FC = () => {
         }}
       >
         {TITLES.map((tt, i) => {
-          const e = f - i * PER; // 该卡的本地帧
-          const p = seg(Math.max(0, Math.min(1, (e + 6) / 6)), 0, 1, E.outCubic); // 6 帧入场
-          const drift = (Math.max(0, e) / PER) * GAP; // 叠压后随流下移
-          const squash = e >= 0 && e < 1.6 ? 0.97 : 1; // 落位 1 帧压缩
+          const e = f - i * PER; // Local frame for this card
+          const p = seg(Math.max(0, Math.min(1, (e + 6) / 6)), 0, 1, E.outCubic); // 6-frame entrance
+          const drift = (Math.max(0, e) / PER) * GAP; // Downward drift with the flow after stacking
+          const squash = e >= 0 && e < 1.6 ? 0.97 : 1; // 1-frame squash on landing
           const y = lerp(p, -40, 0) + drift;
           const x = (Math.max(0, e) / PER) * XOFF;
-          const depth = Math.min(1, drift / (GAP * 3)); // depth 递增 blur + 变暗
+          const depth = Math.min(1, drift / (GAP * 3)); // Increasing blur + dimming with depth
           const opacity =
             e < -6 ? 0 : Math.min(1, (e + 6) / 2) * (1 - Math.max(0, (drift - GAP * 3.2) / (GAP * 1.6)));
           return (
@@ -104,7 +106,7 @@ export const ResearchCardStackScroll: React.FC = () => {
                 filter: `blur(${(depth * 4).toFixed(2)}px) brightness(${(1 - depth * 0.25).toFixed(3)})`,
               }}
             >
-              {/* 左侧色条：每 4 张一根橙色 */}
+              {/* Left accent bar: orange every 4 cards */}
               <div
                 style={{
                   position: 'absolute',
@@ -115,7 +117,7 @@ export const ResearchCardStackScroll: React.FC = () => {
                   background: i % 4 === 1 ? ORANGE : '#2E2E2E',
                 }}
               />
-              {/* 标题条：所有卡都渲染 */}
+              {/* Title bar: rendered on all cards */}
               <div
                 style={{
                   position: 'absolute',
@@ -128,7 +130,7 @@ export const ResearchCardStackScroll: React.FC = () => {
               >
                 {tt}
               </div>
-              {/* 正文（作者 + 摘要骨架线）：只有 focus 卡可见 */}
+              {/* Body content (author + abstract skeleton lines): visible only on focused card */}
               <div style={{ position: 'absolute', left: 14, top: 40, width: 266, opacity: i === focus ? 1 : 0 }}>
                 <div style={{ font: `500 8px/1 ${FONT}`, color: ORANGE_SOFT, letterSpacing: '.3px' }}>
                   {`A. Author, B. Writer, C. Reader · preprint:24${10 + i}.0${i % 9}${i % 7}`}

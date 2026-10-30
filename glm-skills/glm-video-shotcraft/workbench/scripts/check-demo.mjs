@@ -1,14 +1,14 @@
-// 单卡快速渲染自检：只打包指定的 demo（不拉起整个工作台索引），渲成 mp4 + 联系表。
+// Single card quick render check: bundles only the specified demo (without loading the entire workbench index), renders to mp4 + contact sheet.
 //
-//   node scripts/check-demo.mjs <demos 下的相对路径.tsx> [...更多] [--out <目录>]
+//   node scripts/check-demo.mjs <relative path under demos/.tsx> [...more] [--out <dir>]
 //        [--frames 12,40,88] [--sheet 8] [--scale 1] [--concurrency 3] [--no-video]
 //
-// 例：node scripts/check-demo.mjs camera/crash-zoom-punch/CrashZoomReal.tsx --frames 10,20
-// 产物（默认 ../shot-polish/after/）：
-//   <Stem>.mp4           整段渲染（1920×1080 h264）
-//   <Stem>.sheet.jpg     均匀取 --sheet 帧（默认 8）拼的联系表（4 列，按时间顺序，帧号见终端输出）
-//   <Stem>.f<N>.jpg      --frames 指定帧的全尺寸单帧
-// 时长：demo 导出的 *_DURATION / *_DUR 优先，否则取 demo-index.ts 里 gen-index 的推断值。
+// Example: node scripts/check-demo.mjs camera/crash-zoom-punch/CrashZoomReal.tsx --frames 10,20
+// Outputs (default ../shot-polish/after/):
+//   <Stem>.mp4           Full segment render (1920×1080 h264)
+//   <Stem>.sheet.jpg     Evenly sampled --sheet frames (default 8) contact sheet (4 columns, chronological, frame numbers in stdout)
+//   <Stem>.f<N>.jpg      Full-size single frame for specified --frames
+// Duration: exported *_DURATION / *_DUR takes precedence, otherwise inferred by gen-index in demo-index.ts.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -82,7 +82,7 @@ try {
   serveUrl = await bundle({
     entryPoint: path.join(dir, "index.tsx"),
     publicDir: path.join(ROOT, "public"),
-    // 每次入口路径都不同，webpack 持久缓存永远命中不了，只会在 node_modules/.cache 里堆积（实测 19GB）
+    // Distinct entry paths mean webpack persistent cache never hits, piling up in node_modules/.cache (~19GB)
     enableCaching: false,
     webpackOverride: (c) => ({
       ...c,
@@ -95,7 +95,7 @@ try {
   });
   const chromiumOptions = { gl: "angle" };
   for (const d of demos) {
-    // 清掉这个 stem 上一轮迭代留下的单帧图，免得新旧帧混看
+    // Clear previous iteration stills for this stem to avoid mixing old and new frames
     for (const f of readdirSync(out)) if (f.startsWith(`${d.stem}.f`) && f.endsWith(".jpg")) rmSync(path.join(out, f));
     const composition = await selectComposition({ serveUrl, id: d.stem, chromiumOptions });
     const n = composition.durationInFrames;
@@ -127,7 +127,7 @@ try {
         muted: true,
         timeoutInMilliseconds: 120000,
       });
-      // 联系表：均匀取 sheetN 帧，4 列
+      // Contact sheet: evenly sample sheetN frames across 4 columns
       const picks = Array.from({ length: sheetN }, (_, k) => Math.round(((k + 0.5) * n) / sheetN));
       const sel = picks.map((p) => `eq(n\\,${p})`).join("+");
       execFileSync("ffmpeg", [
@@ -140,6 +140,6 @@ try {
   }
 } finally {
   rmSync(dir, { recursive: true, force: true });
-  // 打包产物落在系统临时目录，每次 ~20MB，不清会把磁盘吃满
+  // Bundled artifacts land in system temp dir, ~20MB each; clean up to avoid filling disk
   if (serveUrl) rmSync(serveUrl, { recursive: true, force: true });
 }

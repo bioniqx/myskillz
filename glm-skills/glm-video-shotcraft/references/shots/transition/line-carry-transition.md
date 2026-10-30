@@ -1,55 +1,41 @@
 ---
 name: line-carry-transition
-一句话: 线条接力横移转场——场景 A 的进度条延伸出画，镜头跟线横移，线在移动中拐角围出场景 B 的卡框，全程无剪切
-适用: 两个有图形亲缘的场景之间（进度条→卡框、下划线→图表轴）；一支片子的招牌转场位，Catch Me If You Can 片头的图形接力
-时长: ~6.3s / 190f（进度条走满 36f + 冲出 10f + 横移 56f + 收框 24f + 框内海报 30f + 静止 24f）
-能量: 中
-标签: camera
+summary: A progress line exits scene A, guides the camera sideways, then turns corners to become the frame of scene B.
+use: Transitions between two scenes with graphical kinship (progress bar → card frame, underline → chart axis); marquee transition position in a promo video, evoking the graphic relay of the Catch Me If You Can title sequence.
+duration: ~6.3s / 190f (progress bar fills 36f + breakout 10f + lateral pan 56f + frame wrap 24f + in-frame poster 30f + static hold 24f).
+energy: Medium
+tags: camera
 ---
 
-## 意图
-转场库三大族（穿越/藏切/体块）都在回答"场景怎么换"；本卡的回答是
-**根本不换——一条线牵着你走过去**。进度条走满后末端延伸成长线冲出
-卡缘，镜头跟着线横移 1920px 进入新世界，线在移动中拐直角围出 B 场景
-的卡框，框闭合、内容淡入，从头到尾观众的眼睛没离开过这条线。图形
-连续性本身就是转场。与 match-cut 的区别：那是切点两侧形状对位——
-终究还是切；这是连续绘制——**没有切**。线的身份要有叙事逻辑（进度条
-"走完了"所以延伸出去），无来由的线只是装饰。
+## Intention
+The three major families in the transition library (travel / hidden cut / block push) all answer the question of "how to swap scenes." This card's answer is: **do not swap at all—let a single line guide you across**. Once a progress bar fills to 100%, its leading tip extends past the card edge and punches out of the frame. The camera tracks the line laterally across 1920px into a new world. In transit, the line turns right angles to construct the card frame of Scene B. The frame closes, content fades in, and from start to finish the viewer's eyes never leave the line. Graphic continuity *is* the transition. Contrast with a match cut: a match cut aligns shapes across an edit point—it is still an edit; this is continuous drawing—**there is no cut**. The line's identity must possess narrative logic (the progress bar has "completed," so it extends outward); a line without motivation is merely arbitrary decoration.
 
-## 动效核心
-- 3840 宽世界容器 translateX 当镜头，56–112f 移 1920px，smooth in-out（bezier .65,0,.35,1）
-- 一条手写折线 path（进度条 648 + 冲出段 + 直角 + 720×480 矩形框，总长 4944）全程
-  dasharray evolve，分段驱动 drawn 长度
-- **命门：横移段 drawn = 1144 + cam，线生长与镜头同速**——笔头钉在画面 x≈1480 偏右，
-  永不出画也永不落后；一旦失速，观众跟丢线就等于跟丢了转场
-- **交接处速度连续**：进度条 ease-out 落到零速 → 满格停 6f（状态翻成完成、对勾弹出）→
-  冲出段两端零速（swift）→ 镜头 in-out 零速起步 → 收框 in-out 零速接住镜头的落点
-- 笔头是全片唯一的强调色点（赤陶 r=14 + 晕圈），框闭合后 136–142f 消散并条件卸载（摘罩判例）
-- 横移时世界内容（卡、点阵、展签）按镜头速度做水平运动模糊（SpeedBlur，≤16px），线与笔头在模糊层外始终锐利；
-  线经过后在线下长出制图刻度，横移中段画面里只有线时给眼睛一个速度参照
-- B 的展签标题在框外，可以在镜头到位前后先升起；框内海报必须等框闭合（136f 起）才长出
+## Motion Core
+- A 3840px-wide world container uses `translateX` as the camera, translating 1920px across 56–112f with smooth in-out easing (`cubic-bezier(0.65, 0, 0.35, 1)`).
+- A single continuous polyline path (648px progress bar + breakout segment + right angles + 720×480 rectangular frame, total length 4944px) evolves its `dasharray` throughout, driving drawn length in staged segments.
+- **The Crux: During lateral pan, drawn = 1144 + cam, synchronizing line growth with camera velocity**—the pen head remains pinned around x ≈ 1480 on the right side of the screen, never exiting the viewport and never falling behind; if velocity desyncs and the viewer loses track of the line, the transition falls apart.
+- **Velocity Continuity at Handoffs**: Progress bar eases out to zero velocity → holds full for 6f (state flips to completed, checkmark pops up) → breakout segment starts and ends at zero velocity (swift) → camera starts from zero velocity with in-out easing → frame wrap catches the camera's deceleration at zero velocity.
+- The pen head serves as the only accent color focal point in the sequence (terracotta r=14 + halo); after the frame seals (136–142f), it dissolves and is conditionally unmounted (following the mask removal precedent).
+- During the lateral pan, world content (cards, dot matrix, exhibit captions) undergoes horizontal motion blur proportional to camera speed (`SpeedBlur`, ≤16px), while the line and pen head remain razor-sharp outside the blur layer; drafting ticks bloom beneath the line after it passes, providing a spatial velocity reference for the eye when only the line occupies the frame mid-pan.
+- Scene B's exhibit caption title sits outside the frame and can rise before or as the camera arrives; content inside the frame must strictly wait until the frame seals (from 136f onward) before blooming into view.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 线体 | 8px 墨色实线，方头 + 直角 miter | 太细横移中读丢；虚线读作未完成态 |
-| 横移配比 | 1920px / 56f（均速 34px/f） | 更远的横移等比拉长时长，别提速——峰速 >80px/f 笔头开始跟丢 |
-| 笔头位置 | 画面 x≈1480（约 77% 处偏右） | 居中读作"线追镜头"；贴边一颤就出画 |
-| 拐角 | 直角硬拐，不倒圆 | 圆角软拐丢掉制图感，Saul Bass 味就没了 |
-| 框闭合 | 闭合帧起框内内容再出 | 框没闭合内容先出，线的悬念白搭 |
-| 收尾 | 海报长完后 ≥24f 真静止 | 笔头墨点必须条件卸载，残留即毁静止 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Line stroke | 8px solid ink line, square cap + sharp miter joins | Too thin gets lost during fast pans; dashed lines read as an unfinished drafting state |
+| Pan ratio | 1920px / 56f (average speed 34px/f) | For longer pan distances, scale duration proportionally without increasing speed—peak velocity >80px/f causes the eye to lose the pen head |
+| Pen head anchor | Screen x ≈ 1480 (~77% toward the right) | Centering reads as "line chasing the camera"; anchoring too close to the edge risks clipping out of frame on minor jitter |
+| Corners | Sharp right angles, no border rounding | Rounded fillets destroy the technical drafting aesthetic, stripping away the Saul Bass design character |
+| Frame closure | Interior content enters only on/after the closure frame | Spawning content before the frame seals ruins the suspense built by the line |
+| Outro settle | ≥24f true static hold after poster finishes drawing | The pen head ink dot must be conditionally unmounted; visual debris ruins the static hold |
 
-## 已知坑
-- demo 是手搓的 video-shotcraft 渲染场景（米色纸 + 墨 + 赤陶；A 渲染发布片进度卡 → B 这支片的海报）——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 draw-svg-trace 的关系：那是元素级描边点名（线属于元素），这是
-  场景级线条接力（线属于镜头）——同片可共存，但线的语义要一致：
-  同为 ink 8px 几何硬线，或同为手绘感，混用读作两套美术
-- 全片 ≤1 次——这是招牌转场不是常规转场，第二次出现魔法就穿帮
-- 起点必须是已有图形构件的自然延伸（进度条走满、下划线画完），
-  凭空起线读作屏保
-- 声音：线生长一声持续笔擦、框闭合一声轻叩（sound-design §4.5）
+## Known Pitfalls
+- The demo is a handcrafted video-shotcraft rendering sequence (cream paper + ink + terracotta accent; Scene A render promo progress card → Scene B final poster of the video)—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- Relationship with draw-svg-trace: that card performs element-level vector tracing (the line belongs to the element); this card performs scene-level graphic relay (the line belongs to the camera)—both can coexist in the same film, but the line's visual language must remain cohesive: either both are 8px geometric ink strokes, or both share a hand-drawn texture; mixing styles reads as disparate art directions.
+- Use ≤1 time across an entire video—this is a signature hero transition, not an everyday utility wipe; repeating it dispels the magic.
+- The line origin must be a natural continuation of an existing visual component (a filled progress bar, a completed underline); spawning a line from nowhere reads like an idle screensaver.
+- Audio cues: continuous pen friction sound as the line draws, followed by a crisp click/tap when the frame seals (sound-design §4.5).
 
-## 参考实现
+## Reference Implementation
 demos/transition/line-carry-transition/
-（LineCarryTransition.tsx）
+(LineCarryTransition.tsx)

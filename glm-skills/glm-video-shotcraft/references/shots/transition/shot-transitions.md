@@ -1,45 +1,36 @@
 ---
 name: shot-transitions
-一句话: 镜头交棒三式——推进流白、whip-pan 甩镜（急刹款）、mask-wipe 穿窗（纵深款），按能量落差与接缝语义选型
-适用: 任何两镜衔接处（技法卡，分镜阶段排完镜头后逐个接缝选一式）
-时长: n/a（技法卡；各式占用帧数见参数表，从相邻镜头预算里划）
-能量: n/a（技法卡，不占能量位）
+summary: Three handoff recipes for matching scene energy: flash cut, braking whip pan, and portal mask wipe.
+use: Any shot-to-shot junction (technique card: select one variant per seam during the storyboard phase after arranging shots).
+duration: n/a (technique card; frame allocations for each variant are detailed in the parameter table, deducted from adjacent shot budgets).
+energy: n/a (technique card, does not consume an energy slot).
 ---
 
-## 意图
-库内各镜头卡只管自己的入场和收尾，镜与镜"怎么接"一直没有词汇——
-接缝裸切会把逐镜头攒出的电影感一次漏光。公认优秀的发布片
-（Linear Releases/Agent，2026-07-11 抽帧逆向）全程没有一次裸切：
-换景要么靠深度旅行、要么靠焦点接力、要么靠黑场字卡蓄力。本卡收三式：
-白闪盖切、甩镜借糊帧换景、穿窗点进详情世界。
+## Intention
+Individual shot cards in the library manage only their own entrance and outro settle; how shots connect with one another has historically lacked explicit vocabulary—naked hard cuts at seams bleed away the cinematic atmosphere painstakingly cultivated shot by shot. Universally acclaimed launch videos (e.g., Linear Releases/Agent, reverse-engineered frame-by-frame on 2026-07-11) feature zero bare cuts: scene changes rely on spatial depth journeys, focus relays, or blackout title-card pauses. This card codifies three foundational recipes: white flash over hard cut, whip-pan using motion blur to mask scene swaps, and portal window zoom entering detailed environments.
 
-## 三式选型
+## Variant Selection
+| Variant | Method | Applicable Seams |
+|---|---|---|
+| A Flash Cut | Camera pushes in on the outgoing shot; a single-frame white flash straddles the edit point to mask the page swap | Interactive transitions between page-to-page layouts with similar energy levels (already available in library, incorporated here) |
+| B Whip Pan (Braking Variant) | Camera whips horizontally to the next scene in a single beat, blurring the mid-section beyond recognition to disguise the cut; brakes hard before landing with an ease-out long tail slide | High-tempo, rapid-fire feature montages (lightweight high-energy to high-energy transfers); ideal when the landing shot contains content meant to be read |
+| C Portal Mask Wipe (Depth Variant) | A real in-page element (e.g., card) zooms to become a full-screen viewport, out of which the incoming scene expands to take over | Semantic seams: feature overview → detailed drill-down ("clicking into this card to enter its world") |
 
-| 式 | 做法 | 适用接缝 |
-|----|------|----------|
-| A 推进流白 flash-cut | 前镜相机推进，切点跨骑一层白闪盖住换页 | 交互穿透、能量相近的页面→页面（库内已有，收编）|
-| B whip-pan 甩镜（急刹款） | 机位一拍横甩到下一场景，中段运动模糊糊到不可辨，借糊帧换景；落点前急刹、长尾滑入 | 快节奏功能段连打（高能量→高能量的轻快款）；落点是"要读内容"的镜头 |
-| C mask-wipe 穿窗（纵深款） | 页面内真实元素（卡片）放大成全屏窗口，新场景从窗内长出接管 | 语义化接缝：功能总览→该功能详情（"点开这张卡进入它的世界"）|
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A flash-cut | assets/lib/FlashCut.tsx, from = cut frame − 5, 5f on each side | Usage details in type-and-filter card; white flash exists purely to mask hard cuts, never as decorative flash (Q4) |
+| B Whip Pan Braking Variant | Origin hold ≥20f → first 70% of distance consumes 30% of time (blurred phase, peak ~300px/f) → remaining 30% of distance glides to a stop on an ease-out long tail ~48f; integrate displacement from a single continuous velocity curve (3f launch + exponential decay), never chain segmented ease-outs (which cause velocity bumps at handoffs); apply directional motion blur proportional to instantaneous speed (_fixtures/Polish's SpeedBlur, sd ≈ 0.085 × speed, capped at 64px), active only during whip phase; reference implementation binds this identical displacement curve to a mechanical roller index counter (Nº 02 → 09) and a ruler scale moving past a fixed playhead, lifting the target card to 1.2x scale upon settling for legibility | Ideal when the landing shot contains content to be read—the long tail grants viewer eye tracking time to settle; long tails >60f steal entrance time from the incoming shot, keep it brisk; scale travel distance to ensure peak velocity ≥300px/f, otherwise blur will be insufficient to hide the cut; stitch both scenes along the same horizontal baseline (identical page-space y); CameraMotionBlur sub-frame accumulation shifts yellow in 8-bit and forms stepped echo ghosting, do not use for light-mode UI whip pans |
+| C Portal Mask Wipe portal-wipe | Target card elevates in anticipation (−10px, 1.03x, neighbor cards dim) → window expands over 40f using bezier(0.7, 0, 0.3, 1) ramping slow to fast; incoming scene counter-compensates from ~0.42 scale up to 1 (sharing identical parameter t with window geometry); card surface fades within the first ~28% of travel (opacity 1 − t·3.6, any slower drags out full-screen residual text ghosting); incoming scene uses **strictly 2 layers** of parallax (background panel coefficient 0.08 + foreground 2 cards 0.3, zero blur); once portal transit concludes, 8f soft deceleration → static hold ≥30f to absorb the new scene; best practice: incoming scene represents the "expanded universe" of the clicked card's cover (reference implementation: video-shotcraft Workspace project card with Cobalt Blue waveform cover → identical waveform landscape in a viewership forecast world + glass panel + 2 floating metric cards, curves drawn synchronously with t) | Window geometry and interior scene must be driven synchronously, as desync shatters the illusion; layer count and spread are paramount for legibility—a 3-layer + 0.85 spread + blur prototype was rejected, passing only after simplification; must reach a complete halt post-transit, as continuous parallax drift undermines reading the incoming shot |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A flash-cut | `assets/lib/FlashCut.tsx`，from = 切点 − 5，两侧各 5f | 用法详见 type-and-filter 卡；白闪只盖硬切，不当装饰光效（Q4）|
-| B 甩镜急刹款 | 起点 hold ≥20f → 前 70% 路程用 30% 时间（糊段，峰值 ~300px/f）→ 后 30% 路程 ease-out 长尾 ~48f 滑入落位；用一条连续速度曲线（3f 起步 + 指数衰减）积分出位移，别分段各套 ease-out（分段处速度会二次起跳）；按瞬时速度做方向性运动模糊（`_fixtures/Polish` 的 `SpeedBlur`，sd ≈ 0.085×速度、封顶 64px），只在甩动段生效；参考实现把同一条位移曲线接到一只机械滚轮索引计数器（Nº 02→09）和随长廊走的刻度尺 + 固定播放头上，落定后目标卡抬到 1.2× 可读 | 适合落点是"要读内容"的镜头——长尾给观众视线一个追上的坡；长尾 >60f 偷走后镜入场，宁短勿长；跨度按"峰值速度 ≥300px/f"配，不足则糊不透露出换景穿帮；两景同一水平线上拼接（页面空间同 y）；CameraMotionBlur 子帧叠加在 8bit 下会整片偏黄、拖影呈一格格回波，亮场 UI 甩镜别用 |
-| C 穿窗纵深款 portal-wipe | 目标卡先悬浮抬起作预备（−10px、1.03×，邻卡退暗）→ 窗放大 40f 用 bezier(0.7,0,0.3,1) 先慢后快，窗内新景从 ~0.42 缩放反向补偿长到 1（与窗几何同一个 t），卡面在前 ~28% 行程内渐隐（opacity 1−t·3.6，再慢会被拉成满屏巨字残影）；窗内**只 2 层**视差（远景面板系数 0.08 + 近景 2 卡 0.3，不加 blur），穿窗完成后 8f 缓停 → 静止 ≥30f 读清新景；窗内世界最好是被点开卡的封面"长大"（参考实现：video-shotcraft Workspace 里「Premiere Forecast」项目卡的钴蓝波形封面 → 同款波形地貌的观看量预测世界 + 玻璃面板 + 2 枚指标浮卡，曲线随 t 画完）| 窗几何与窗内景必须同步驱动，异步读作穿帮；层数/散开是可读性命门——3 层+0.85 散开+blur 版被裁，收敛后过；穿完必须真停，视差飘着不停偷走后镜阅读 |
+## Known Pitfalls
+- Annotate the chosen transition variant for every seam during the storyboard phase (recorded in the "Key Motion" column); postponing until the per-shot phase forces timeline shifts across the entire sequence—transition frames are deducted from adjacent shot budgets, adhering to hold budget rules (R3).
+- Do not stack transitions: use only one technique per seam; adding white flashes during a whip pan's blur phase or during a portal wipe reads as an amateur visual error.
+- B/C variant parameters were calibrated on placeholder assets and refined with real assets; they represent singular benchmark cases—in case of conflict with precedent rulings, precedent rulings take precedence.
+- For Variant C, the incoming scene inside the window must semantically represent the "detailed world" of the clicked element (in production, link to genuine detail screenshots)—stuffing unrelated scenes breaks continuity, degrading the technique into a gimmicky wipe; ensure the expanding element uses high-resolution source textures (Q2, as it is subjected to an extreme close-up throughout).
+- Variant C depth parameters are an initial baseline tuned on handcrafted placeholder UI (video-shotcraft Workspace / Viewership Forecast World) and have not been validated on real screenshots; reference implementation: demos/transition/shot-transitions/PortalWipeV2.tsx.
 
-## 已知坑
-- 分镜表阶段就逐接缝标注转场式（写进"关键动效"列），逐镜头阶段才补
-  等于全线挪帧——转场占用的帧从相邻镜头预算划走，规矩同 hold 预算（R3）
-- 转场不叠加：一个接缝只用一式；甩镜糊段、穿窗途中再加 flash 白闪读作穿帮
-- B/C 式参数经占位素材调校+真实素材转正，非用户
-  实战判例——单例判例，与判例冲突时判例优先
-- C 式窗内新景语义应是被点开元素的"详情世界"（实战接真实详情页
-  截图）——窗里塞无关场景语义断裂，沦为花哨擦除；被放大元素用高清纹理（Q2，全程被特写）
-- C 纵深款参数系手搓占位 UI（video-shotcraft Workspace / 观看量预测世界）调校起点、未经真实截图验证；
-  参考实现 demos/transition/shot-transitions/PortalWipeV2.tsx
-
-## 参考实现
-A 式：template/src/aifl/Main.tsx flash-cut 层（组件 `assets/lib/FlashCut.tsx`）；
-B 式（whip 甩镜急刹款）：demos/transition/shot-transitions/WhipBrakeReal.tsx；
-C 式（mask-wipe 穿窗纵深款）：demos/transition/shot-transitions/PortalWipeV2.tsx。
+## Reference Implementation
+Variant A: template/src/aifl/Main.tsx flash-cut layer (component assets/lib/FlashCut.tsx);
+Variant B (whip pan braking variant): demos/transition/shot-transitions/WhipBrakeReal.tsx;
+Variant C (mask-wipe portal depth variant): demos/transition/shot-transitions/PortalWipeV2.tsx.

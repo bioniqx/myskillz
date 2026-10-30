@@ -1,23 +1,23 @@
-# video-shotcraft 品牌规范
+# video-shotcraft Brand Guidelines
 
-## 核心概念
+## Core Concept
 
-标志名：**镜刻 / Frame Chisel**
+Mark name: **Frame Chisel**
 
-未闭合的黑色框是一格正在被选择的镜头；琥珀斜面既是剪辑切点，也是把运动“刻”成镜头的刀口。标志不直接画摄像机、播放键或胶片，而是表现 video-shotcraft 的核心动作：**从运动中取景，以工艺完成它。**
+The open black frame represents a shot in the process of being framed; the amber diagonal facet serves both as an editing cut point and the chisel edge that carves motion into a crafted shot. The mark avoids literal depictions of cameras, play buttons, or film reels, directly embodying the core craft of video-shotcraft: **frame the motion, craft the shot.**
 
-## 品牌色
+## Brand Palette
 
-| Token | 名称 | Hex | 用途 |
+| Token | Name | Hex | Usage |
 |---|---|---|---|
-| `--brand-amber` | 镜琥珀 | `#D3923C` | 唯一主强调色、关键动作、选中态、标志刀口 |
-| `--brand-ink` | 片场墨 | `#171714` | 主背景、标题、标志结构 |
-| `--brand-paper` | 剪辑纸 | `#F5F3EE` | 浅色背景、深底主文字 |
-| `--brand-slate` | 场记灰 | `#B5B0A5` | 次级文字、说明信息 |
+| `--brand-amber` | Frame Amber | `#D3923C` | Primary accent, key interactions, active state, chisel facet |
+| `--brand-ink` | Stage Ink | `#171714` | Primary dark background, headlines, mark structure |
+| `--brand-paper` | Cut Paper | `#F5F3EE` | Light background, dark-mode primary text |
+| `--brand-slate` | Slate Gray | `#B5B0A5` | Secondary text, captions, annotations |
 
-推荐比例：片场墨 70% / 剪辑纸 20% / 镜琥珀 10%。在高密度界面中，镜琥珀面积应进一步压到 3–5%，只标记真正的切点或焦点。
+Recommended proportions: Stage Ink 70% / Cut Paper 20% / Frame Amber 10%. In high-density interfaces, Frame Amber should be restrained to 3–5%, highlighting only true focus points or cut boundaries.
 
-浅色界面沿用：
+Light mode tokens:
 
 ```css
 :root {
@@ -29,7 +29,7 @@
 }
 ```
 
-深色界面沿用：
+Dark mode tokens:
 
 ```css
 :root {
@@ -41,17 +41,15 @@
 }
 ```
 
-## 使用规则
+## Usage Rules
 
-- 最小显示尺寸：数字界面 16px；低于 24px 时优先只用标志，不带字标。
-- 安全空间：四周至少保留标志宽度的 1/4。
-- 深底使用 `logo-mark-reverse.svg`；浅底使用 `logo-mark.svg`。
-- 单色印刷、激光雕刻和遮罩使用 `logo-mark-mono.svg`。
-- 字标默认使用 Avenir Next / Avenir / Inter，全部小写；不要改成全大写科技字标。
-- 不旋转斜切刀口，不添加发光、渐变、描边或投影，不把琥珀色替换为多个强调色。
+- Minimum display size: 16px in digital UI; below 24px, prefer the isolated mark without wordmark.
+- Clear space: maintain at least 1/4 mark width on all sides.
+- On dark backgrounds use `logo-mark-reverse.svg`; on light backgrounds use `logo-mark.svg`.
+- For single-color printing, laser etching, and masks, use `logo-mark-mono.svg`.
+- Wordmark typography: Avenir Next / Avenir / Inter, strictly lowercase `video-shotcraft`; never render in all-caps.
+- Do not rotate the chisel cut angle, do not add glows, gradients, strokes, or drop shadows, and do not swap the amber accent with other hues.
 
-## 品牌语气
+## Brand Voice
 
-中文短句：**把运动，刻成镜头。**
-
-英文短句：**Frame motion. Craft the shot.**
+English Motto: **Frame motion. Craft the shot.**

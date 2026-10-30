@@ -1,15 +1,15 @@
-// 逐字遮罩裂升（split-text-stagger）——GSAP SplitText 惯用入场。
-// 标题 "FRAME MOTION."（video-shotcraft 品牌短句前半句）按字符拆 span，每字外包 overflow:hidden 的行高盒，
-// 内层从 translateY(115%) 升到 0，各 14f Easing.out(cubic)，带 10% 过冲
-// 再 6f 回落（原案 6% 过冲，按可感性红线加码到 10%）。delay = 字符索引×2f。
-// 底部基线细线在首字起跳同帧从左向右生长，暗示裁切线存在。
-// 关键帧：0–12 空场 hold → 12 首字起跳 + 基线开始生长 → 每字 12+i*2 起跳，
-// 14f 升至 -10% 过冲 → 再 6f 回落归 0 → 末字(索引12)于 56f 落定 →
-// 56–130 全静止（74f ≥ 40f，无逐帧噪声层）。
+// split-text-stagger — masked per-character split-rise entrance (GSAP SplitText style).
+// Title "FRAME MOTION." split per character into spans inside overflow:hidden line-height boxes,
+// rising from translateY(115%) to 0 over 14f Easing.out(cubic) with 10% overshoot
+// then 6f settle. delay = charIndex * 2f.
+// Bottom baseline grows left to right concurrently with first character launch.
+// Keyframes: 0-12 empty hold -> 12 first char launches + baseline grows -> each char 12+i*2,
+// 14f rise to -10% overshoot -> 6f settle to 0 -> last char settles at 56f ->
+// 56-130 complete static hold (74f >= 40f).
 //
-// 质感升级：去掉调试标题；柔光 Backdrop；系统 SF 栈 700、字号 120→136；
-// 升起快速段按每字竖向速度加 y 向运动模糊（静止为 0）；基线改强调色、宽度与文字行严格等宽，
-// 生长用强 ease-out；补导出时长 130f（原工作台按 56f 推断，末字刚落定就切走）。
+// Polish pass: soft lighting backdrop; system font stack 700, font size 136px;
+// vertical motion blur during rapid rise; accent colored baseline matching text width exactly,
+// strong ease-out growth; total duration 130f.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -17,15 +17,15 @@ import { Backdrop, EASE, FONT as PFONT, ramp } from '../../_fixtures/Polish';
 
 export const SPLIT_TEXT_STAGGER_DURATION = 130;
 
-const TEXT = 'FRAME MOTION.'; // 品牌短句 Frame motion. Craft the shot. 的前半句（13 字符，与原文等长）
-const START = 12; // 首字起跳帧
-const RISE = 14; // 升起时长
-const SETTLE = 6; // 过冲回落时长
-const OVERSHOOT = -10; // 过冲到 -10%（原案 6%，加码）
+const TEXT = 'FRAME MOTION.'; // First half of brand motto Frame motion. Craft the shot. (13 chars)
+const START = 12; // First character launch frame
+const RISE = 14; // Rise duration
+const SETTLE = 6; // Overshoot settle duration
+const OVERSHOOT = -10; // Overshoot to -10%
 const FONT = 136;
-const LINE_H = 1.05; // span 行高（translateY 百分比以此为基准）
+const LINE_H = 1.05; // Span line-height (translateY % basis)
 
-// 单字符纵向位移（%）：115 → -10（out cubic）→ 0（out quad），帧确定
+// Character vertical displacement (%): 115 -> -10 (out cubic) -> 0 (out quad)
 const charY = (f: number, idx: number): number => {
   const t0 = START + idx * 2;
   if (f < t0 + RISE) {
@@ -45,7 +45,7 @@ const charY = (f: number, idx: number): number => {
 export const SplitTextStagger: React.FC = () => {
   const frame = useCurrentFrame();
   const chars = TEXT.split('');
-  // 基线：首字起跳同帧开始，从左向右生长到 100%
+  // Baseline: launches with first char, grows left-to-right to 100%
   const lineW = ramp(frame, START, 30, EASE.snappy) * 100;
 
   return (
@@ -60,12 +60,12 @@ export const SplitTextStagger: React.FC = () => {
           justifyContent: 'center',
         }}
       >
-        {/* 行容器：基线与文字行同宽 */}
+        {/* Line container: baseline matches text row width */}
         <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'stretch' }}>
           <div style={{ display: 'flex' }}>
             {chars.map((c, i) => {
               const y = charY(frame, i);
-              // 竖向速度（px/帧）→ y 向模糊
+              // Vertical velocity (px/frame) -> y-axis blur
               const vy = Math.abs(charY(frame + 0.5, i) - charY(frame - 0.5, i)) * FONT * LINE_H * 0.01;
               const blur = Math.min(10, vy * 0.32);
               const id = `sts-vb-${i}`;
@@ -73,7 +73,7 @@ export const SplitTextStagger: React.FC = () => {
                 <div
                   key={i}
                   style={{
-                    // 遮罩盒：上方留 0.3em 头部空间容纳过冲，底边即裁切线
+                    // Mask box: 0.3em headroom for overshoot, bottom edge forms clip line
                     overflow: 'hidden',
                     height: FONT * 1.35,
                     display: 'flex',
@@ -106,7 +106,7 @@ export const SplitTextStagger: React.FC = () => {
               );
             })}
           </div>
-          {/* 基线细线：宽度从 0 生长到全文宽（强调色，暗示裁切线） */}
+          {/* Baseline hairline: width grows from 0 to full line width (accent color) */}
           <div style={{ marginTop: 12, height: 3, display: 'flex' }}>
             <div
               style={{

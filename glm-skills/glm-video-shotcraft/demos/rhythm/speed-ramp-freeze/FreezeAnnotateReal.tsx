@@ -1,26 +1,26 @@
-// freeze-annotate 定格标注——真实卡片流运动中瞬间定格，马克笔圈注目标卡 + 箭头点题，解冻继续。
+// freeze-annotate — Freeze on real card stream in motion, marker circle + arrow on target card, thaw and resume.
 //
-// 第二轮重设计（「评审暂停」· porcelain 瓷白 + 钴蓝马克笔）：
-// - look = porcelain（冷白舞台 · 钴蓝强调）。主角仍是产品真实的项目卡流（2x 截图纹理，Q1）；
-//   卡片立在冷白展台上，舞台有顶光与地面接触影，不再是平铺页面截图。
-// - 定格要"像按下暂停"：45f 一帧切到斜率 0——快门白闪 3f、整帧套上钴蓝取景框四角（8f 弹入）、
-//   左上时间码从「● LIVE 00:00:01:14」走字到「❚❚ PAUSED」并停住；其余卡去饱和 + 退淡，目标卡被拾起。
-// - 标注是一套钴蓝马克笔：超椭圆一笔圈（1.08 圈、收笔不闭合、feTurbulence 手绘抖动）10f 画完 →
-//   弧线箭头 6f + 箭头 3f → 右上 68px 粗体批注「Ship this first.」从线下升起 + 手绘下划线 →
-//   批注署名一行。解冻前 8f 墨迹淡出，但在目标卡右上角留下一枚评论图钉「1」随卡离场——标注被"存下来了"。
-// - 解冻：ease-in 起步（smootherstep），一张卡的行程 22f 赶完（平均斜率 >1 补偿停掉的时间），
-//   快段按速度方向性模糊，落定时下一张卡停在屏中、带图钉的目标卡留在左侧。
+// Redesign ("Review Pause" — porcelain white + cobalt blue marker):
+// - look = porcelain (cool white stage, cobalt blue accent). Main focus remains real product project card stream (2x screenshot texture, Q1);
+//   cards stand on a cool white plinth with top lighting and contact shadow, rather than flat page screenshots.
+// - Freeze feels like hitting pause: at 45f cuts to slope 0 in a single frame — shutter white flash for 3f, cobalt blue framing brackets spring in over 8f,
+//   top-left timecode flips from "● LIVE 00:00:01:14" to "❚❚ PAUSED" and halts; other cards desaturate and fade, while the target card is lifted.
+// - Annotation uses a cobalt blue marker: single-stroke superellipse (1.08 turns, open-ended, feTurbulence hand-drawn jitter) drawn in 10f ->
+//   curved arrow shaft 6f + arrowhead 3f -> top-right 68px bold note "Ship this first." rises from below line + hand-drawn underline ->
+//   signature row. Ink fades out 8f before thawing, leaving a comment pin "1" on the target card corner trailing off-screen — persisting the annotation.
+// - Thaw: ease-in start (smootherstep), completes one card travel in 22f (average slope >1 compensating for paused time),
+//   directional blur during fast sprint, settling with the next card centered and the pinned target card resting on the left.
 //
-// 时间表（30fps，共 158f）：
-//   0–45    流动 1×（26px/f，轻微模糊），时间码走字——开场第 1 帧就在动
-//   45      定格（瞬切，无缓入）：快门白闪 45–48、取景框 45–53 弹入、时间码变 PAUSED
-//   45–55   拾起目标、其余卡去饱和退淡
-//   54–64   圈注一笔（10f）；64–70 箭杆、70–73 箭头
-//   66–78   批注升起；78–88 下划线；84–96 署名
-//   96–108  hold（读）
-//   104–112 墨迹淡出、取景框收回；图钉 104 起钉到卡角
-//   112–134 解冻：ease-in 起步 → 刹停，一张卡行程（峰值 ≈55px/f，平均斜率 >1）
-//   134–158 hold 24f：静止落定，带评论图钉的目标卡停在左侧
+// Timeline (30fps, 158f total):
+//   0–45    Stream 1x (26px/f, subtle blur), running timecode — moves from frame 1
+//   45      Freeze (hard cut, no ease-in): shutter flash 45–48, framing brackets spring in 45–53, timecode turns to PAUSED
+//   45–55   Lift target card, desaturate and fade remaining cards
+//   54–64   Single marker circle stroke (10f); 64–70 arrow shaft, 70–73 arrowhead
+//   66–78   Note rises; 78–88 underline; 84–96 signature
+//   96–108  Hold (reading)
+//   104–112 Ink fades, framing brackets retract; pin drops onto card corner at 104
+//   112–134 Thaw: ease-in start -> brake to stop, one card pitch (peak ~55px/f, avg slope >1)
+//   134–158 Hold 24f: static settle, pinned target card stays on left
 import React, { useId } from 'react';
 import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion';
 import layout from '../../_textures/live-layout.json';
@@ -31,7 +31,7 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const FREEZEANNOTATE_DUR = 158;
 
 const L = LOOKS.porcelain;
-const INK = L.accent; // 钴蓝马克笔
+const INK = L.accent; // Cobalt blue marker
 
 const CARD_W = 600;
 const GAP = 52;
@@ -43,33 +43,33 @@ const SHIFT = RAIL.findIndex((c) => c.file === TARGET_FILE) - TARGET_K;
 const fileOf = (k: number) => RAIL[(((k + SHIFT) % RAIL.length) + RAIL.length) % RAIL.length].file;
 const cardH = (file: string) => (file === 'card1.png' || file === 'card2.png' ? (CARD_W * 576) / 716 : (CARD_W * 624) / 716);
 const RAIL_TOP = 336;
-const PX = 26; // 每源帧导轨位移（px）
+const PX = 26; // Track displacement per source frame (px)
 
 const FREEZE = 45;
 const THAW = 112;
 const LAND = 134;
-const THAW_SRC = PITCH / PX; // 解冻段一张卡的源帧行程（带图钉的目标卡停在左侧，留在尾帧海报里）
+const THAW_SRC = PITCH / PX; // Source frame travel for one card during thaw (pinned target card rests on left in end poster)
 
-// remap：流动斜率 1 → 定格斜率 0（瞬切）→ 解冻 smootherstep（ease-in 起步，峰值斜率 ≈2.1，落定为 0）
+// Remap: stream slope 1 -> freeze slope 0 (hard cut) -> thaw smootherstep (ease-in start, peak slope ~2.1, settle to 0)
 const srcAt = (f: number) => {
   if (f <= FREEZE) return Math.max(0, f);
   if (f <= THAW) return FREEZE;
   const t = Math.min(1, (f - THAW) / (LAND - THAW));
   return FREEZE + THAW_SRC * t * t * t * (t * (6 * t - 15) + 10);
 };
-// 定格时目标卡中心落屏中
+// Target card center aligns to screen center when frozen
 const OFFSET = 960 - (TARGET_K * PITCH + CARD_W / 2) + FREEZE * PX;
 const railX = (f: number) => OFFSET - srcAt(f) * PX;
 
-// 目标卡显示尺寸 → 圈注几何（定格时卡被拾起 −16px、放大 3%）
+// Target card display dimensions -> annotation geometry (lifted -16px and scaled 3% during freeze)
 const TARGET_H = cardH(TARGET_FILE);
 const CX = 960;
 const CY = RAIL_TOP + TARGET_H / 2 - 16;
 const RX = 1.2 * (CARD_W / 2) * 1.03;
 const RY = 1.22 * (TARGET_H / 2) * 1.03;
-const SE = 2 / 3; // 超椭圆参数指数 2/n（n=3）
+const SE = 2 / 3; // Superellipse parameter exponent 2/n (n=3)
 
-// 一笔马克笔圈：左上起笔，顺时针 1.08 圈，半径随行程内收 4%（收笔不闭合，像手画）
+// Single marker circle: starts top-left, clockwise 1.08 turns, radius tightens 4% (open finish, hand-drawn feel)
 const circlePath = (() => {
   const N = 140;
   const a0 = -2.3;
@@ -86,9 +86,9 @@ const circlePath = (() => {
   return `M ${pts.join(' L ')}`;
 })();
 
-// 时间码（30fps）：定格后停住
+// Timecode (30fps): freezes when paused
 const timecode = (f: number) => {
-  const total = 30 * 72 + Math.floor(srcAt(f)); // 从 00:00:01:12 起
+  const total = 30 * 72 + Math.floor(srcAt(f)); // Starting from 00:00:01:12
   const ff = total % 30;
   const ss = Math.floor(total / 30) % 60;
   const mm = Math.floor(total / 1800) % 60;
@@ -96,7 +96,7 @@ const timecode = (f: number) => {
   return `00:${p(mm)}:${p(ss)}:${p(ff)}`;
 };
 
-// 取景框四角
+// Framing brackets
 const Bracket: React.FC<{ x: number; y: number; sx: 1 | -1; sy: 1 | -1; s: number }> = ({ x, y, sx, sy, s }) => (
   <div
     style={{
@@ -124,14 +124,14 @@ export const FreezeAnnotateReal: React.FC = () => {
   const frozen = frame >= FREEZE && frame < THAW;
   const blurV = frozen ? 0 : Math.sign(v) * Math.max(0, Math.abs(v) - 8);
 
-  // 定格聚焦：10f 拾起目标、退淡其余；解冻前还原
+  // Freeze focus: lift target card over 10f, fade out others; restore before thawing
   const focus = ramp(frame, FREEZE, 10, EASE.snappy) * (1 - ramp(frame, THAW - 8, 12, EASE.swift));
   const flash = frame >= FREEZE ? 1 - ramp(frame, FREEZE, 4, EASE.out) : 0;
   const frameIn = frame >= FREEZE ? springAt(frame, FREEZE, { damping: 16, stiffness: 260 }) : 0;
   const frameOut = ramp(frame, 104, 8, EASE.exit);
   const bracket = frameIn * (1 - frameOut);
 
-  // 圈注时序
+  // Annotation timing
   const draw = ramp(frame, 54, 10, EASE.swift);
   const shaft = ramp(frame, 64, 6, EASE.out);
   const head = ramp(frame, 70, 3, EASE.out);
@@ -140,10 +140,10 @@ export const FreezeAnnotateReal: React.FC = () => {
   const fade = 1 - ramp(frame, 104, 8, EASE.out);
   const showInk = frame >= 54 && fade > 0.001;
 
-  // 图钉：墨迹淡出时钉到目标卡右上角，随卡离场
+  // Pin: drops onto top-right corner of target card as ink fades, exits with card
   const pin = frame >= 104 ? springAt(frame, 104, { damping: 13, stiffness: 240 }) : 0;
 
-  // 箭头：右上批注 → 圈的右上缘
+  // Arrow: top-right note -> top-right edge of circle
   const ax0 = 1296, ay0 = 262;
   const ax1 = CX + RX * 0.72, ay1 = CY - RY * 0.78;
   const qx = ax1 + 30, qy = ay0 + 4;
@@ -175,7 +175,7 @@ export const FreezeAnnotateReal: React.FC = () => {
           zIndex: isT ? 2 : 1,
         }}
       >
-        {/* 两层软阴影：接触影 + 环境影（拾起时加深加大） */}
+        {/* Two-layer soft shadow: contact shadow + ambient shadow (deepened and expanded when lifted) */}
         <div
           style={{
             position: 'absolute',
@@ -218,7 +218,7 @@ export const FreezeAnnotateReal: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden', fontFamily: FONT.sans }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.1 }} fill={{ x: 0.5, y: 1.0 }} horizon={0.86} />
-      {/* 展台地面：一道很淡的冷灰接地带，让卡片"立在台上" */}
+      {/* Plinth surface: subtle cool gray ground plane grounding cards on stage */}
       <div
         style={{
           position: 'absolute',
@@ -230,12 +230,12 @@ export const FreezeAnnotateReal: React.FC = () => {
         }}
       />
 
-      {/* 导轨 */}
+      {/* Track rail */}
       <SpeedBlur vx={blurV} amount={0.3} max={26}>
         <div style={{ position: 'absolute', left: 0, top: RAIL_TOP, transform: `translateX(${x0.toFixed(2)}px)` }}>{cards}</div>
       </SpeedBlur>
 
-      {/* 左上：时间码（定格即停） */}
+      {/* Top-left: timecode (freezes on pause) */}
       <div style={{ position: 'absolute', left: 96, top: 96, display: 'flex', alignItems: 'center', gap: 18 }}>
         <div
           style={{
@@ -262,14 +262,14 @@ export const FreezeAnnotateReal: React.FC = () => {
         </div>
         <span style={{ ...type(30, 600, { mono: true }), color: frozen ? INK : L.ink2 }}>{timecode(frame)}</span>
       </div>
-      {/* 右上：video-shotcraft 字标 + 评审场次（定格时退场，让位给批注） */}
+      {/* Top-right: video-shotcraft wordmark + review session (fades out on freeze to make room for note) */}
       <div style={{ position: 'absolute', right: 96, top: 96, display: 'flex', alignItems: 'center', gap: 16, opacity: 1 - focus }}>
         <ShotcraftMark size={44} tone="light" />
         <span style={{ ...type(32, 700), fontFamily: BRAND.font, letterSpacing: '0.02em', color: L.ink }}>{BRAND.name}</span>
         <span style={{ ...type(30, 450), color: L.ink3 }}>Shot review</span>
       </div>
 
-      {/* 墨迹：圈 + 箭头 + 下划线 */}
+      {/* Marker ink: circle + arrow + underline */}
       {showInk && (
         <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: fade, mixBlendMode: 'multiply' }}>
           <defs>
@@ -300,7 +300,7 @@ export const FreezeAnnotateReal: React.FC = () => {
         </svg>
       )}
 
-      {/* 批注：粗体钴蓝，从线下升起；署名一行 */}
+      {/* Note: bold cobalt blue rising from underline; author signature */}
       {showInk && frame >= 66 && (
         <div style={{ position: 'absolute', left: 1318, top: 112, opacity: fade, transform: 'rotate(-2deg)', transformOrigin: '0% 100%' }}>
           <div style={{ ...type(68, 820), color: INK, whiteSpace: 'nowrap' }}>
@@ -330,7 +330,7 @@ export const FreezeAnnotateReal: React.FC = () => {
         </div>
       )}
 
-      {/* 取景框四角（定格才出现） */}
+      {/* Framing brackets (visible only during freeze) */}
       {bracket > 0.001 && (
         <AbsoluteFill style={{ pointerEvents: 'none' }}>
           <Bracket x={48} y={48} sx={1} sy={1} s={bracket} />
@@ -355,7 +355,7 @@ export const FreezeAnnotateReal: React.FC = () => {
         </AbsoluteFill>
       )}
 
-      {/* 快门白闪 */}
+      {/* Shutter white flash */}
       {flash > 0.001 && <AbsoluteFill style={{ background: '#ffffff', opacity: 0.7 * flash, pointerEvents: 'none' }} />}
     </AbsoluteFill>
   );

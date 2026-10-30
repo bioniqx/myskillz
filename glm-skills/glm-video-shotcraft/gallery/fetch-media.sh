@@ -8,8 +8,8 @@ cd "$(dirname "$0")"
 python3 assemble-media.py media --repo Vincentwei1021/video-shotcraft
 echo "done: $(ls media/*.mp4 | wc -l | tr -d ' ') clips in gallery/media/"
 
-# Showcase 用户投稿（存 showcase-media release，同样不进 git）。
-# release 还不存在（尚无投稿）时静默跳过，showcase 页显示空列表。
+# Showcase community submissions (stored in showcase-media release, not in git).
+# If the release does not exist yet (no submissions), silently skip; showcase page displays an empty list.
 if gh release view showcase-media --repo Vincentwei1021/video-shotcraft >/dev/null 2>&1; then
   mkdir -p showcase-media
   gh release download showcase-media \

@@ -1,26 +1,26 @@
-// changelog-scroll-brake —— Changelog 长卷急刹
-// ~34 行条目（行高错落）从下往上高速掠过（快起步 + 指数式长尾减速），
-// 高速段叠纵向运动模糊（速度差分驱动，糊成色带），急刹精准停位后目标行抬升
-// （scale 1.03 + 阴影加深）+ 强调色描边，其余行退暗。f=84 后全静止（66f）。
+// changelog-scroll-brake — Changelog scroll brake
+// ~34 rows (staggered row heights) rush upward at high speed (fast start + exponential long-tail deceleration).
+// High-speed phase overlays vertical motion blur (driven by velocity delta, blurred into color streaks); after precise braking stop, target row elevates
+// (scale 1.03 + deepened shadow) + accent border, while remaining rows dim. Full freeze after f=84 (66f).
 //
-// 质感升级：灰色骨架行换成一整年的真实感 changelog（版本号 / 类型标签 / 标题 / 说明 / 日期，按时间
-// 自上而下排列，停点之后是 Planned 路线图条目）；目标行 v2.41 出版级内容 + NEW 徽标；起步从"第 14 帧
-// 瞬间满速"改为 cubic-bezier(0.45,0,0.06,1)（约 5f 拉满速度后长尾刹停）；各向同性 blur 改为沿滚动方向
-// 的纵向 SpeedBlur（横向字形不糊，读作真实运动模糊）；顶部固定页眉 + 上下渐隐遮罩；柔光亮场 + 颗粒。
+// Polish upgrade: gray skeleton rows replaced with a full year of realistic changelog (version / type badge / title / description / date,
+// chronologically ordered top to bottom, with Planned roadmap items following the stop point); target row has v2.41 publication-grade content + NEW badge;
+// start transition changed from "instant full speed at frame 14" to cubic-bezier(0.45,0,0.06,1) (ramps to peak in ~5f before long-tail brake); isotropic blur replaced with
+// vertical SpeedBlur along the scroll direction (horizontal glyphs stay sharp, yielding authentic motion blur); fixed header at top + vertical gradient fade masks; soft light + grain.
 import React from 'react';
 import { useCurrentFrame, interpolate } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
 import { Backdrop, EASE, FONT, Grain, SpeedBlur, bezier, innerHighlight, softShadow, tracking } from '../../_fixtures/Polish';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
-export const CHANGELOG_SCROLL_BRAKE_DURATION = 150; // 静置 14f + 滚动 50f + 抬升 14f + 静止 66f
+export const CHANGELOG_SCROLL_BRAKE_DURATION = 150; // Rest 14f + scroll 50f + elevation 14f + hold 66f
 
 const CL = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 
-// 时间轴
-const SCROLL0 = 14; // 前 14f 初始静置（停在长卷顶部）
-const SCROLL1 = 64; // 急刹停位帧
-const LIFT0 = 68; // 目标行抬升开始
+// Timeline
+const SCROLL0 = 14; // Initial rest for 14f (stopped at top of scroll)
+const SCROLL1 = 64; // Hard brake stop frame
+const LIFT0 = 68; // Target row lift start
 const LIFT1 = 82;
 
 const COL_W = 1000;
@@ -29,10 +29,10 @@ const GAP = 20;
 const N = 34;
 const TARGET = 28;
 
-// 行高错落（帧确定性：全由 i 决定）
+// Staggered row heights (frame-deterministic: derived solely from i)
 const rowH = (i: number) => 72 + ((i * 29) % 3) * 22; // 72 / 94 / 116
 
-// 预计算每行 y
+// Precompute y for each row
 const rowY: number[] = [];
 {
   let y = 0;
@@ -42,15 +42,15 @@ const rowY: number[] = [];
   }
 }
 const TARGET_CY = rowY[TARGET] + rowH(TARGET) / 2;
-const END_T = 540 - TARGET_CY; // 目标行停在画面正中
-const START_T = 200; // 起始：长卷顶部在页眉下方
+const END_T = 540 - TARGET_CY; // Target row stops at screen center
+const START_T = 200; // Initial: top of scroll below header
 
-// 快起步（~5f 到峰速）+ 长尾指数式减速：高开中收
+// Fast launch (~5f to peak speed) + exponential long-tail deceleration: explosive start with gradual taper
 const BRAKE_EASE = bezier(0.45, 0, 0.06, 1);
 const scrollAt = (f: number): number =>
   interpolate(f, [SCROLL0, SCROLL1], [START_T, END_T], { easing: BRAKE_EASE, ...CL });
 
-// ── 假内容：video-shotcraft 一整年的发布记录（自上而下时间递增），停点 = Motion workbench，之后为路线图 ──
+// Mock content: video-shotcraft full-year release log (chronological top-down), stop point = Motion workbench, followed by roadmap
 const TITLES = [
   'Crash zoom shot card', 'Faster Remotion renders', 'Fix: audio drift on long renders',
   'Beat grid from any BGM', 'Dolly zoom shot card', 'Real page captures', 'Fix: caption timing at 60 fps',
@@ -94,7 +94,7 @@ const Row: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const tall = h >= 94;
   const planned = e.kind === 'Planned';
 
-  // 目标行抬升 + 高亮；其余行退暗
+  // Target row elevates + highlights; remaining rows dim
   const t = interpolate(frame, [LIFT0, LIFT1], [0, 1], { easing: EASE.out, ...CL });
   const lift = isTarget ? t : 0;
   const dim = isTarget ? 0 : t;
@@ -190,13 +190,13 @@ const Row: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   );
 };
 
-// 列表上下渐隐：页眉下方与画面底部各一段
+// Top/bottom gradient fade for list: regions below header and at bottom of screen
 const LIST_MASK = 'linear-gradient(180deg, transparent 150px, #000 250px, #000 930px, transparent 1060px)';
 
 export const ChangelogScrollBrake: React.FC = () => {
   const frame = useCurrentFrame();
   const T = scrollAt(frame);
-  // 速度差分（px/f）→ 纵向运动模糊
+  // Velocity delta (px/f) -> vertical motion blur
   const v = scrollAt(frame + 0.5) - scrollAt(frame - 0.5);
 
   return (
@@ -220,7 +220,7 @@ export const ChangelogScrollBrake: React.FC = () => {
           </div>
         </SpeedBlur>
       </div>
-      {/* 固定页眉：镜刻标志 + Changelog + 品牌名 */}
+      {/* Fixed header: brand mark + Changelog + brand name */}
       <div style={{ position: 'absolute', left: COL_X, top: 64, width: COL_W, display: 'flex', alignItems: 'baseline', gap: 22 }}>
         <ShotcraftMark size={50} tone="light" style={{ alignSelf: 'center', marginRight: -4 }} />
         <div style={{ fontSize: 52, fontWeight: 720, letterSpacing: tracking(52), color: G.ink1 }}>Changelog</div>

@@ -2,26 +2,26 @@ import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 import { FakeDashboard, G } from '../../_fixtures/Fixtures';
 
-// beat-cut-accelerando：六个不同构图按 16→12→8→6→4 帧递减间隔全屏硬切，
-// 加速逼近，最后一切戛然定格回主画面并 1→1.06 慢推收住。
-// 真硬切：frame 落在哪个区间就渲染哪个视图，无任何过渡。
+// beat-cut-accelerando: Six different compositions hard-cut fullscreen at decreasing intervals of 16→12→8→6→4 frames,
+// accelerating forward, culminating in a sudden freeze-frame back to the main view with a 1→1.06 slow push-in hold.
+// True hard cut: whichever interval frame falls into renders that view directly, without any transition.
 
-// 一个视图 = FakeDashboard 变体 + 缩放 + 对焦点（画面上要被推到屏幕中心的点）
+// A view = FakeDashboard variant + scale + focal point (point on canvas pushed to screen center)
 type View = { variant: 'A' | 'B'; scale: number; cx: number; cy: number };
 
 const VIEWS: View[] = [
-  { variant: 'A', scale: 1, cx: 960, cy: 540 },    // v0 全景（建立）
-  { variant: 'A', scale: 1.8, cx: 1070, cy: 576 }, // v1 卡片区
-  { variant: 'A', scale: 2.6, cx: 600, cy: 340 },  // v2 单卡特写
-  { variant: 'B', scale: 1, cx: 960, cy: 540 },    // v3 列表页全景
-  { variant: 'B', scale: 1.9, cx: 1070, cy: 500 }, // v4 列表行区
-  { variant: 'B', scale: 2.8, cx: 1070, cy: 290 }, // v5 单行特写
+  { variant: 'A', scale: 1, cx: 960, cy: 540 },    // v0 Full view (establishing)
+  { variant: 'A', scale: 1.8, cx: 1070, cy: 576 }, // v1 Cards area
+  { variant: 'A', scale: 2.6, cx: 600, cy: 340 },  // v2 Single card close-up
+  { variant: 'B', scale: 1, cx: 960, cy: 540 },    // v3 List page full view
+  { variant: 'B', scale: 1.9, cx: 1070, cy: 500 }, // v4 List rows area
+  { variant: 'B', scale: 2.8, cx: 1070, cy: 290 }, // v5 Single row close-up
 ];
 
-// 每段起始帧：建立 49f，然后间隔 16→12→8→6→4，末段（回主画面）hold 35f
-// 0–48 v0 | 49–64 v1 | 65–76 v2 | 77–84 v3 | 85–90 v4 | 91–94 v5 | 95–129 定格
+// Start frame per segment: establishing 49f, then intervals 16→12→8→6→4, final segment (return to main view) hold 35f
+// 0–48 v0 | 49–64 v1 | 65–76 v2 | 77–84 v3 | 85–90 v4 | 91–94 v5 | 95–129 freeze
 const CUTS = [0, 49, 65, 77, 85, 91, 95];
-const FINAL = 95; // 最后一切：戛然定格回主画面
+const FINAL = 95; // Final cut: sudden freeze back to main view
 
 const ViewShot: React.FC<{ view: View; extraScale?: number }> = ({ view, extraScale = 1 }) => {
   const s = view.scale * extraScale;
@@ -42,7 +42,7 @@ const ViewShot: React.FC<{ view: View; extraScale?: number }> = ({ view, extraSc
 export const BeatCutAccelerando: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 当前落在哪个区间（末段 = 主画面 v0）
+  // Which interval current frame falls into (final segment = main view v0)
   let seg = 0;
   for (let i = 0; i < CUTS.length; i++) {
     if (frame >= CUTS[i]) seg = i;
@@ -50,7 +50,7 @@ export const BeatCutAccelerando: React.FC = () => {
   const isFinal = seg === CUTS.length - 1;
   const view = isFinal ? VIEWS[0] : VIEWS[seg];
 
-  // 末段慢推：scale 1 → 1.06，ease-out，推 22f 后静止（结尾静止 ≥15f）
+  // Final slow push-in: scale 1 → 1.06, ease-out, pushes 22f then static (ending static ≥15f)
   const push = isFinal
     ? interpolate(frame, [FINAL, FINAL + 20], [1, 1.06], {
         extrapolateLeft: 'clamp',
@@ -59,7 +59,7 @@ export const BeatCutAccelerando: React.FC = () => {
       })
     : 1;
 
-  // 每次硬切的 1f 亮度跳变（约 +5%）模拟快门
+  // 1f brightness jump (~+5%) on each hard cut to simulate shutter
   const isCutFrame = CUTS.some((c, i) => i > 0 && frame === c);
   const flash = isCutFrame ? 1.05 : 1;
 
@@ -68,7 +68,7 @@ export const BeatCutAccelerando: React.FC = () => {
       <div style={{ position: 'absolute', inset: 0, filter: `brightness(${flash})` }}>
         <ViewShot view={view} extraScale={push} />
       </div>
-      {/* 切帧再叠一层极薄白闪，保证肉眼可感 */}
+      {/* Super thin white flash on cut frame to ensure human perceptibility */}
       {isCutFrame && (
         <AbsoluteFill style={{ background: '#ffffff', opacity: 0.06 }} />
       )}

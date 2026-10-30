@@ -1,19 +1,19 @@
-// 线条沸腾（line-boil）——手绘动画 line boil 质感：静止线稿在"沸腾段"
-// 边缘逐帧微颤，像手绘逐帧描线的抖动。SVG filter feTurbulence(baseFrequency
-// 0.015, numOctaves 2, seed = Math.floor(f/3) 每 3 帧阶梯换) + feDisplacementMap
-// scale=8（原案 3–6 已按可感性加码）作用于大标题 "ALIVE" 与描边卡整层。
-// 结构靠"对比"可感：先静止（干净版）→ 沸腾 → 摘罩回静止；判例：feTurbulence
-// 收尾必须整个 filter 移除（沸腾段外根本不渲染 filter 与 SVG def），
-// 105f 起逐帧完全相同，真静止 ≥35f。
-// 关键帧：0–35 完全静止(boil off) → 35–105 沸腾(boil on, seed 每 3 帧一换)
-// → 105 摘罩 → 105–140 真静止(boil off)。
+// Line boil (line-boil) — hand-drawn animation line boil texture: static line art micro-jitters
+// along edges frame-by-frame during the "boil phase", mimicking hand-traced line trembling. SVG filter feTurbulence (baseFrequency
+// 0.015, numOctaves 2, seed = Math.floor(f/3) stepped every 3 frames) + feDisplacementMap
+// scale=8 (boosted from 3–6 for perceptibility) applied to title "ALIVE" and stroked card layer.
+// Structure felt through contrast: static (clean) → boil → unmount back to static; criterion: feTurbulence
+// filter must be entirely removed at end (no filter or SVG def rendered outside boil phase),
+// perfectly identical frames from 105f onward, true static ≥35f.
+// Keyframes: 0–35 fully static (boil off) → 35–105 boil (boil on, seed steps every 3 frames)
+// → 105 unmount → 105–140 true static (boil off).
 import React, { useId } from 'react';
 import { useCurrentFrame, interpolate } from 'remotion';
 import { G, TitleBlock } from '../../_fixtures/Fixtures';
 
 const BOIL_START = 35;
 const BOIL_END = 105;
-const BOIL_SCALE = 8; // 原案 3–6 已按可感性加码；QA 看不出再加到 12
+const BOIL_SCALE = 8; // Boosted from original 3–6 for perceptibility; increase to 12 if QA cannot perceive
 
 const CornerTag: React.FC<{ text: string; opacity: number }> = ({ text, opacity }) => (
   <div
@@ -39,14 +39,14 @@ const CornerTag: React.FC<{ text: string; opacity: number }> = ({ text, opacity 
 
 export const LineBoil: React.FC = () => {
   const f = useCurrentFrame();
-  // 滤镜 ID 按实例生成，多实例同场不串引（useId 的 «:» 在 url() 里非法，需清洗）
+  // Filter ID generated per instance to prevent cross-referencing in multi-instance setups (sanitize «:» from useId which is invalid in url())
   const boilId = `boil-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const boiling = f >= BOIL_START && f < BOIL_END;
-  // seed 每 3 帧阶梯换 → 8~10Hz 的手绘颤动感；帧确定，无随机源
+  // Seed stepped every 3 frames → 8–10Hz hand-drawn jitter feel; frame-deterministic, no random sources
   const seed = Math.floor(f / 3);
 
-  // 角标：boil on 只在沸腾段淡入淡出；boil off 与之互补。
-  // 全部过渡在 105f 前完成 → 105–140 逐帧完全相同
+  // Corner tag: boil on fades in/out only during boil phase; boil off is complementary.
+  // All transitions finish before 105f → 105–140 frames are strictly identical
   const onOp = interpolate(f, [35, 40, 100, 105], [0, 1, 1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -55,7 +55,7 @@ export const LineBoil: React.FC = () => {
 
   return (
     <div style={{ width: 1920, height: 1080, background: G.bg, position: 'relative', overflow: 'hidden' }}>
-      {/* 沸腾段才渲染 filter 定义——摘罩即整个 SVG def 消失，收尾天然真静止 */}
+      {/* Filter definition only rendered during boil phase — unmounting removes entire SVG def, ensuring natural static ending */}
       {boiling && (
         <svg width={0} height={0} style={{ position: 'absolute' }}>
           <defs>
@@ -79,12 +79,12 @@ export const LineBoil: React.FC = () => {
         </svg>
       )}
 
-      {/* 手法名标签：不入滤镜层，作为静止参照物 */}
+      {/* Technique title tag: excluded from filter layer as a static visual reference */}
       <div style={{ position: 'absolute', left: 120, top: 96 }}>
         <TitleBlock text="LINE BOIL" size={54} />
       </div>
 
-      {/* 被沸腾的整层：大标题 + 描边卡 */}
+      {/* Boiled layer: large title + stroked card */}
       <div
         style={{
           position: 'absolute',
@@ -109,7 +109,7 @@ export const LineBoil: React.FC = () => {
         >
           ALIVE
         </div>
-        {/* 描边卡：透明底 3px ink 描边 520×300 圆角框 + 几条灰线 */}
+        {/* Stroked card: transparent background, 3px ink stroke, 520×300 rounded box + gray lines */}
         <div
           style={{
             width: 520,
@@ -134,7 +134,7 @@ export const LineBoil: React.FC = () => {
         </div>
       </div>
 
-      {/* 状态角标：沸腾段 boil on，静止段 boil off */}
+      {/* Status corner tag: boil on during boil phase, boil off during static phase */}
       <CornerTag text="boil on" opacity={onOp} />
       <CornerTag text="boil off" opacity={offOp} />
     </div>

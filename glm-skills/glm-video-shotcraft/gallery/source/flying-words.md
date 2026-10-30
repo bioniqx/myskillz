@@ -1,64 +1,43 @@
 ---
 name: flying-words
-一句话: 22 个关键词按黄金角铺在扁椭圆截面上，沿 z 轴从远处飞到相机前擦身而过，透明度走 [0,1,0.5,0.2,0] 生命曲线，跑满 2 整圈首尾无缝
-适用: 关键词云/能力清单的动态背景；片头片尾的"信息量"垫底层；需要纵深穿越感的转场
-时长: 约 6.0s（180f@30fps，2 个完整循环，可无缝接续）
-能量: 高（全屏持续 3D 位移，画面无一刻静止）
+summary: Keywords spawn deep in a perspective tunnel and rush past the camera along the z axis, fading in and out on a lifecycle curve across two seamless loops.
+use: Dynamic background for keyword clouds / capability catalogs; high-information bottom layer for openers and closers; transitions requiring depth-travel sensation
+duration: ~6.0s (180f@30fps, 2 full cycles, seamlessly loopable)
+energy: High (continuous full-screen 3D translation, never static)
 ---
 
-## 意图
-关键词列举最土的做法是堆一屏静态词云。词语隧道把同一批词**摊到时间轴上**：
-远处生成、由小变大、擦过镜头消失，观众永远只在读三五个词，但主观感受是
-"词很多"。它是背景层不是主角层——相机不动、元素动，所以前景压一层标题
-或 UI 完全不打架。词表整体替换成项目关键词即可，不改一行运动逻辑。
+## Intention
+The crudest way to list keywords is piling them into a static word cloud. The word tunnel spreads those same terms **across the time axis**: spawning in the distance, scaling up, and sweeping past the lens to vanish. The audience only actively reads three to five words at any moment, yet the subjective impression is "an enormous wealth of concepts." It serves as a background layer, not the hero — with the camera stationary and elements moving, layering a headline or UI foreground on top causes zero visual conflict. Replacing the word list with project-specific keywords requires zero changes to the underlying motion logic.
 
-## 动效核心
-- 透视（480 设计坐标下）`perspective:1100px`，词沿 z 从 **-1750 → 800px** 线性推进——正值即穿过
-  相机平面，这才有"擦身"。demo 按 1920 原生作画，同一套数值整体 ×4：P=4400、z −7000 → +3200，
-  投影手算 `s = P/(P−z)`（与 CSS perspective 逐点等价）
-- 铺位用黄金角：`a = i·2.39996 + rand(i·7+1)·0.8`，半径 `r = 82 + rand·165`（原生 ×4：330 + rand·660），
-  y 半径再 ×0.6 压成扁椭圆——避开正中、避免近处几个词堆成一团
-- 生命曲线 `OP=[0,1,0.5,0.2,0]` @ `OT=[0,0.25,0.6,0.85,1]`：**前 1/4 猛亮到满，
-  中段降到半透，末段拖尾消失**——不是简单淡入淡出，中段压暗才不遮前景
-- 向外散开 `drift = 0.5 + u·1.35`：远处收拢在中心、越近越往画外甩，
-  和 z 轴推进叠成真透视感
-- 近端糊化：`u > 0.86` 时按 `(u-0.86)` 线性加失焦——词冲到眼前会大到失控，这一层模糊是遮丑；
-  真正的速度感交给按屏幕速度的方向拖尾（demo：沿 −v 方向 6 层渐虚 text-shadow 残影，比给每个词套
-  全屏 SVG 滤镜便宜得多）；远端前 22% 行程再加大气雾失焦
-- demo 另加两层同一条隧道运动的纵深参照：10 道扁椭圆发丝环（隧道壁，近处变粗淡出）+ 56 粒尘埃画成
-  沿径向拉长的光速流线（线长 = 近 2.6 帧的屏幕位移）；整条隧道 `±2.5°·sin(2πt)` 极缓滚转（周期函数，首尾一致）
-- 前景：demo 正中压一组静态字标（mono 眉题 + 112px 标题 + 径向暗幕），飞进字标椭圆区的词透明度压到 20%
-  ——演示"背景层 + 前景标题不打架"的用法；字标静止，循环仍无缝
-- `CYCLES = 2` 是整数圈，demo 取 `t = frame / DURATION`（末帧的下一帧 = 第 0 帧）可无缝 loop；每词相位
-  `ph = i/N` 均分、spawn 全确定性；中心电光蓝光晕 `opacity = 0.82 + sin(t·4π)·0.14` 呼吸 2 次，
-  钉住"隧道尽头"这个视觉锚
+## Motion Core
+- Perspective (in 480 design space): `perspective: 1100px`, with words advancing linearly along z from **-1750 → 800px** — positive values pass behind the camera plane, creating the "fly-by" brush. In native 1920 space (demo), all values scale by 4x: P=4400, z from -7000 to +3200, with manual perspective projection `s = P / (P - z)` (strictly equivalent point-by-point to CSS perspective).
+- Spawning uses the golden angle: `a = i·2.39996 + rand(i·7+1)·0.8`, radius `r = 82 + rand·165` (native 4x: 330 + rand·660), with y-radius compressed by 0.6x into a flat ellipse — clearing screen center and preventing near-field words from clustering into a dense knot.
+- Lifecycle curve `OP=[0,1,0.5,0.2,0]` at `OT=[0,0.25,0.6,0.85,1]`: **surges to full opacity in the first 1/4, dims to half-opacity in the middle, and trails off to zero at the tail** — far more nuanced than a basic fade-in/out, keeping the middle muted so foreground elements remain unobstructed.
+- Outward drift `drift = 0.5 + u·1.35`: tightly clustered at center in the distance, flinging outward toward screen edges as words draw near, combining with z-axis travel for authentic perspective depth.
+- Near-field defocus: when `u > 0.86`, linear blur is applied via `(u - 0.86)` — words expanding uncontrollably right before the lens are masked by this blur; true speed sensation is delivered via velocity-aligned directional motion trails (demo: 6-layer fading text-shadow ghosts along -v, far cheaper than full-screen SVG filters on every word); the initial 22% of travel in the distance adds atmospheric fog blur.
+- The demo adds two additional reference layers sharing tunnel motion: 10 flat elliptical hairline rings (tunnel walls, thickening and fading in near field) + 56 dust motes rendered as radially stretched streaks (streak length = screen travel across ~2.6 frames); the full tunnel executes an ultra-slow roll of `±2.5°·sin(2πt)` (periodic function, seamless start-to-end).
+- Foreground: The demo centers a static wordmark group (monospace eyebrow + 112px headline + radial dark veil); words flying into the elliptical wordmark zone are suppressed to 20% opacity — demonstrating how the background layer leaves foreground titles uncompromised; the wordmark stays stationary while the loop remains seamless.
+- `CYCLES = 2` specifies integer revolutions, evaluated as `t = frame / DURATION` (frame after final frame = frame 0) for seamless looping; each word's phase `ph = i/N` distributes evenly with fully deterministic spawning; a center electric-blue halo breathes twice (`opacity = 0.82 + sin(t·4π)·0.14`), anchoring the "tunnel terminus" as a visual focal point.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 词表 | 22 词，字号 `20 + rand·16`px（20–36；原生 64–120），700 字重 + 6 个衬线斜体词 | 词数与相位 `i/N` 绑定：<12 词画面稀，>30 词近处糊成一片；字号随机是层次感来源，全同号读作贴图 |
-| 纵深行程 | z −1750 → +800px，perspective 1100（原生 ×4） | 起点更远（−2500+）词太小认不出；终点不过 0 就没有"穿过去"只有"飞到脸前停住" |
-| 散开系数 | `drift = 0.5 + u·1.35` | 系数 <1 词全从正中喷出像爆炸；>2 早早飞出画外，隧道变喷泉 |
-| 生命曲线 | `[0,1,0.5,0.2,0]` @ `[0,0.25,0.6,0.85,1]` | 中段那个 0.5 是给前景让位的；改成一路满亮就抢主角，改成早早归零隧道变空 |
-| 循环圈数 | `CYCLES = 2`（必须整数） | 非整数 → t=1 与 t=0 不接，loop 处一跳；圈数越多单词过镜越快 |
-| 近端模糊 | `u>0.86` 起线性失焦 + 速度向方向拖尾 | 阈值提到 0.95 巨大词硬边扎眼；系数 >40 末段成色斑 |
-| 配色 | demo（midnight）：冷白三阶 `#f2f5ff/#c3cbe2/#8a95b5` + 4 个电光蓝强调词 `#86a8ff`（只有强调词带泛光），中心光晕电光蓝 | 深底浅字发光是身份证，白底套本卡直接失效——要浅底得整套重配 |
-| 中心光晕 | ~1040×720 径向渐变、呼吸 2 次/片 | 删了隧道尽头没有焦点，词像随机乱飞；呼吸频率跟 CYCLES 对齐才不打拍 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Vocabulary | 22 words, font size `20 + rand·16`px (20–36; native 64–120), 700 weight + 6 serif italic words | Word count binds to phase `i/N`: <12 feels sparse, >30 clusters into a near-field blur; randomized sizes generate depth, whereas uniform sizes look like flat textures |
+| Depth travel | z -1750 → +800px, perspective 1100 (native 4x) | Starting farther (-2500+) makes words too small to recognize; ending ≤0 gives "stops in your face" rather than "flies through" |
+| Drift factor | `drift = 0.5 + u·1.35` | Factor <1 shoots words straight from center like an explosion; >2 flings them offscreen too early, turning a tunnel into a fountain |
+| Lifecycle curve | `[0,1,0.5,0.2,0]` at `[0,0.25,0.6,0.85,1]` | The 0.5 mid-value yields to foreground elements; staying at 1.0 steals focus, while dropping to 0 early hollows out the tunnel |
+| Cycle count | `CYCLES = 2` (must be an integer) | Non-integers break continuity between t=1 and t=0, causing a jarring pop at loop boundary; higher cycle counts accelerate fly-by speeds |
+| Near blur | Linear blur when `u > 0.86` + velocity directional trails | Raising threshold to 0.95 makes huge hard-edged words jarring; factor >40 creates color blotches at the tail |
+| Color palette | Demo (midnight): cold white 3-step `#f2f5ff/#c3cbe2/#8a95b5` + 4 electric-blue accent words `#86a8ff` (only accent words glow), electric-blue center halo | Dark background with glowing light text is essential; applying this card to white backgrounds fails completely — light palettes require full redesign |
+| Center halo | ~1040×720 radial gradient, breathing 2 cycles/shot | Removing it eliminates the focal anchor at tunnel's end, making words look like random scatter; breathing cadence must sync with CYCLES |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 词表替换要**保持词数与字长量级**（demo 22 词、单词 4–9 字母）：相位是
-  `i/N` 均分的，词数一变密度整体缩放；中文词字宽是英文的两倍以上，
-  换中文关键词须同步下调字号否则近处直接占满画面
-- `CYCLES` 必须是整数，否则首尾不接——这是本卡"可无缝 loop"的唯一前提，
-  想调过镜速度就整数加减，别改小数
-- 只做背景层：中段生命曲线压到 0.5 就是为了给前景让位，把它当主角
-  （拉满亮度）反而读作杂乱
-- 深底专用：`text-shadow` 发光 + 径向暗角是效果的一半，浅底上词会糊成
-  脏点；22 个词元素全程挂在 DOM 里（不销毁重建）只改 transform/opacity，
-  移植 Remotion 时保持这个结构，别改成按帧增删节点
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Replacing the word list requires **maintaining comparable word counts and character lengths** (demo uses 22 words, 4–9 letters each): phase is evenly distributed by `i/N`, so altering word count scales density across the board; CJK characters are twice as wide as Latin characters, requiring smaller font sizes to avoid crowding near-field frames.
+- `CYCLES` must be an integer, otherwise start and end frames will not match — this is the sole prerequisite for seamless looping; adjust flight speed via integer increments/decrements, never fractions.
+- Use strictly as a background layer: the 0.5 dip in the lifecycle curve is explicitly tuned to yield to foreground text; boosting it to full brightness makes the scene read as visual clutter.
+- Dark backgrounds only: `text-shadow` glows and radial vignettes constitute half the effect; on light backgrounds words degrade into muddy smudges. All 22 word elements remain mounted in the DOM throughout (transform/opacity animated without remounting) — preserve this structure in Remotion without dynamically adding/removing nodes per frame.
 
-## 参考实现
+## Reference Implementation
 demos/typography/flying-words/
-（FlyingWords.tsx）
+(FlyingWords.tsx)

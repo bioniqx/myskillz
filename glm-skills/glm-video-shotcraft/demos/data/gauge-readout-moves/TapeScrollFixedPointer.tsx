@@ -1,24 +1,24 @@
-// tape-scroll-fixed-pointer —— 滚带定针（世界动、针不动：数值大小 = 看得见的位移距离）
+// tape-scroll-fixed-pointer — scrolling tape with fixed pointer (world moves, pointer stays fixed: value magnitude = visible displacement distance)
 //
-// 第二轮重设计（瓷白精密仪器 · 航电速度带语法）：
-// - look = porcelain（冷白 + 钴蓝）。主角是一条贯穿全画高、上下渐隐出画的竖向刻度带（每 10 一刻、每 50 一大刻 +
-//   64px 数字），钴蓝读数窗 + 指针缺口钉死在画面中线：窗里是 128px 白色读数，刻度带从窗后滚过。
-//   不再是小盒子里的刻度尺——带子本身就是画面的"世界"。
-// - 叙事：慢爬顶到旧上限（虚线 "Old limit"（140k） 横在窗口正上方，读数被压在 122 停住）→ 升级生效，
-//   旧上限线断开淡出 → 预备回拉一下 → 刻度带冲刺（峰值 ~100px/f，按速度纵向运动模糊）→ 冲过 444 →
-//   弹簧刹车回摆到 416 → 落定 420，新上限标记（钴蓝三角 bug）恰好停进指针。
-// - 左侧排版：品牌眉题（video-shotcraft · frames / hour）+ 124px 标题 "Throughput"，落定后第二行 "tripled." 钴蓝升起
-//   （结论晚于数据到），再弹出 "▲ 200%" 胶囊 + "140k → 420k" 等宽小结。
+// Second redesign pass (porcelain precision instrument / avionics speed tape grammar):
+// - look = porcelain (cool white + cobalt blue). The centerpiece is a vertical scale tape spanning full frame height, fading out top and bottom (minor ticks every 10, major ticks every 50 +
+//   64px numerals). A cobalt blue readout window + pointer notch are pinned to the screen centerline: 128px white readout inside the window, with tape scrolling behind it.
+//   No longer a small boxed ruler — the tape itself is the "world" of the frame.
+// - Narrative: slow climb capped at old limit (dashed "Old limit" (140k) right above window, readout held at 122) -> upgrade takes effect,
+//   old limit line breaks and fades out -> anticipation pull-back -> tape sprint (peak ~100px/f, vertical motion blur with speed) -> overshoots 444 ->
+//   spring brake rebounds to 416 -> settles at 420, new limit marker (cobalt blue triangle bug) aligns precisely with pointer.
+// - Left layout: branded overline (video-shotcraft · frames / hour) + 124px headline "Throughput"; after settling, second line "tripled." rises in cobalt blue
+//   (conclusion follows data arrival), followed by "▲ 200%" chip popup + "140k → 420k" monospace summary.
 //
-// 时间表（30fps，共 150f）：
-//   0–14    预备：舞台、刻度带停在 60、标题第一行升起
-//   10–48   慢爬 60→122（swift：起步加速、贴近上限时减速——"顶住了"，上限线正好压在读数窗上沿）
-//   48–56   停在上限下；52f 旧上限线断开淡出（升级生效）
-//   56–61   预备：回拉 122→117（anticip）
-//   61–83   冲刺 117→444（22f，bezier .55,0,.25,1），刻度带按速度纵向模糊
-//   83–110  弹簧刹车：444→416→420（~16% 一次可见回摆），110f 后锁死常数
-//   96–124  余波："tripled." 升起（98f）、胶囊弹出（108f）、小结淡入（114f）
-//   110–150 hold：整体极缓推近 1.0→1.025，尾帧是完整的结论海报
+// Timeline (30fps, 150f total):
+//   0–14    Anticipation: stage initialized, tape resting at 60, headline first line rises
+//   10–48   Slow climb 60->122 (swift: accelerates out, decelerates near ceiling — "hitting the cap", limit line right at upper edge of readout window)
+//   48–56   Hold beneath upper limit; 52f old limit line breaks and fades out (upgrade active)
+//   56–61   Anticipation: slight pull-back 122->117
+//   61–83   Sprint 117->444 (22f, bezier .55,0,.25,1), tape vertically blurred with speed
+//   83–110  Spring brake: 444->416->420 (~16% single visible rebound), locked to constant after 110f
+//   96–124  Aftermath: "tripled." rises (98f), chip pops up (108f), summary fades in (114f)
+//   110–150 Hold: subtle camera push-in 1.0->1.025, final frame is a complete conclusion poster
 import React from 'react';
 import { AbsoluteFill, spring, useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, bezier, mix, ramp, velocity } from '../../_fixtures/Polish';
@@ -28,27 +28,27 @@ import { BRAND } from '../../_fixtures/Brand';
 export const TAPE_SCROLL_FIXED_POINTER_DURATION = 150;
 
 const L = LOOKS.porcelain;
-const PXU = 5; // px / 单位：每 10 单位一刻 = 50px
-const CY = 540; // 指针中线（屏幕 y）
-const TAPE_X = 1000; // 刻度带左缘
+const PXU = 5; // px / unit: tick mark every 10 units = 50px
+const CY = 540; // Pointer centerline (screen y)
+const TAPE_X = 1000; // Tape left edge
 const TAPE_W = 520;
-const TICK_R = TAPE_X + TAPE_W - 40; // 刻度右端（向左伸）
-const NUM_R = TAPE_X + 310; // 数字右对齐线
-const WIN_X = TAPE_X - 30; // 读数窗
+const TICK_R = TAPE_X + TAPE_W - 40; // Tick right edge (extending leftward)
+const NUM_R = TAPE_X + 310; // Number right-alignment line
+const WIN_X = TAPE_X - 30; // Readout window
 const WIN_W = 400;
 const WIN_H = 150;
-const OLD_LIMIT = 140; // 旧上限 140k ×3 = 新上限 420k（▲200%）
+const OLD_LIMIT = 140; // Old limit 140k x 3 = new limit 420k (+200%)
 const NEW_LIMIT = 420;
 
-const SPRINT = bezier(0.55, 0, 0.25, 1); // 冲刺：猛加速、长刹车
-// 回摆弹簧：444 → 420，回摆到 416（超调 4/24 ≈ 17%）→ 反算阻尼
+const SPRINT = bezier(0.55, 0, 0.25, 1); // Sprint: rapid acceleration, extended deceleration
+// Rebound spring: 444 -> 420, rebounds to 416 (overshoot 4/24 ≈ 17%) -> derived damping
 const SET_STIFF = 140;
 const SET_DAMP = (() => {
   const lp = Math.log(4 / 24);
   return 2 * (-lp / Math.sqrt(Math.PI * Math.PI + lp * lp)) * Math.sqrt(SET_STIFF);
 })();
 
-// 读数时间线（纯帧函数，全部钳位）
+// Readout timeline (pure frame function, clamped throughout)
 const valueAt = (f: number): number => {
   if (f <= 10) return 60;
   if (f <= 48) return mix(60, 122, ramp(f, 10, 38, EASE.swift));
@@ -62,11 +62,11 @@ const valueAt = (f: number): number => {
 export const TapeScrollFixedPointer: React.FC = () => {
   const frame = useCurrentFrame();
   const v = valueAt(frame);
-  const vy = velocity((f) => valueAt(f) * PXU, frame); // 刻度带速度（px/帧）
+  const vy = velocity((f) => valueAt(f) * PXU, frame); // Tape velocity (px/frame)
   const speed = Math.abs(vy);
-  const yOf = (u: number) => CY + (v - u) * PXU; // 单位 u 的屏幕 y（大数在上）
+  const yOf = (u: number) => CY + (v - u) * PXU; // Screen y of unit u (larger numbers on top)
 
-  // 刻度（只画视野内的）
+  // Ticks (render only visible range)
   const ticks: React.ReactNode[] = [];
   const uMin = Math.floor((v - 130) / 10) * 10;
   for (let u = Math.max(0, uMin); u <= v + 130; u += 10) {
@@ -79,7 +79,7 @@ export const TapeScrollFixedPointer: React.FC = () => {
       }} />,
     );
     if (major) {
-      // 数字滑到读数窗背后前淡出（不从窗沿露出半截）
+      // Numbers fade out before sliding behind readout window (avoids clipping at edges)
       const near = Math.min(1, Math.max(0, (Math.abs(y - CY) - WIN_H / 2 - 36) / 30));
       ticks.push(
         <div key={`n${u}`} style={{ opacity: near,
@@ -90,10 +90,10 @@ export const TapeScrollFixedPointer: React.FC = () => {
     }
   }
 
-  // 旧上限线：52f 断开淡出（两半各自向外滑开）
+  // Old limit line: breaks and fades out at 52f (both halves sliding outward)
   const brk = ramp(frame, 52, 14, EASE.out);
   const oldY = yOf(OLD_LIMIT);
-  // 新上限 bug：随带滚动，落定后 bug 与指针重合时亮起
+  // New limit bug: scrolls with tape, lights up when bug aligns with pointer after settle
   const newY = yOf(NEW_LIMIT);
   const locked = ramp(frame, 104, 10, EASE.out);
 
@@ -102,19 +102,19 @@ export const TapeScrollFixedPointer: React.FC = () => {
   const readBlur = Math.min(6, speed * 0.06);
   const chip = ramp(frame, 108, 14, EASE.overshoot);
   const recap = ramp(frame, 114, 16, EASE.out);
-  const glowK = Math.min(1, speed / 60); // 冲刺时读数窗的钴蓝外发光
+  const glowK = Math.min(1, speed / 60); // Cobalt blue outer glow on readout window during sprint
 
   return (
     <AbsoluteFill style={{ fontFamily: FONT.sans, overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.68, y: 0.3 }} fill={null} />
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${push.toFixed(4)})`, transformOrigin: '62% 50%' }}>
-        {/* ── 世界层：刻度带（整体在动）── */}
+        {/* ── World layer: scale tape (moves as a whole) ── */}
         <div style={{
           position: 'absolute', left: TAPE_X, top: 0, width: TAPE_W, height: 1080,
           WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%)',
           maskImage: 'linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%)',
         }}>
-          {/* 带面：微渐变白 + 左右发丝线 */}
+          {/* Tape surface: subtle gradient white + left/right hairlines */}
           <div style={{
             position: 'absolute', inset: 0, background: `linear-gradient(90deg, ${alpha('#ffffff', 0.35)} 0%, ${alpha('#ffffff', 0.85)} 60%, ${alpha('#ffffff', 0.6)} 100%)`,
             borderLeft: `1px solid ${L.line}`, borderRight: `1px solid ${L.line}`,
@@ -127,7 +127,7 @@ export const TapeScrollFixedPointer: React.FC = () => {
         }}>
           <SpeedBlur vx={0} vy={vy} amount={0.12} max={12}>
             {ticks}
-            {/* 旧上限：虚线 + 标签，升级后断开 */}
+            {/* Old limit: dashed line + label, breaks after upgrade */}
             {brk < 1 && oldY > -40 && oldY < 1120 && (
               <>
                 <div style={{
@@ -144,7 +144,7 @@ export const TapeScrollFixedPointer: React.FC = () => {
                 }}>Old limit</div>
               </>
             )}
-            {/* 新上限 bug：钴蓝三角，贴在刻度右缘 */}
+            {/* New limit bug: cobalt blue triangle anchored to right edge of tape */}
             {newY > -60 && newY < 1140 && (
               <>
                 <svg width={44} height={56} style={{ position: 'absolute', left: TICK_R + 6, top: newY - 28, overflow: 'visible' }}>
@@ -160,14 +160,14 @@ export const TapeScrollFixedPointer: React.FC = () => {
           </SpeedBlur>
         </div>
 
-        {/* ── 固定层：读数窗 + 指针缺口（针不动）── */}
+        {/* ── Fixed layer: readout window + pointer notch (fixed pointer) ── */}
         <div style={{
           position: 'absolute', left: WIN_X, top: CY - WIN_H / 2, width: WIN_W, height: WIN_H, borderRadius: 26,
           background: `linear-gradient(180deg, ${L.accent} 0%, #2448d8 100%)`,
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.35), 0 24px 50px -16px ${alpha(L.shadow, 0.45)}, 0 4px 10px ${alpha(L.shadow, 0.16)}, 0 0 ${(30 + 50 * glowK).toFixed(1)}px ${alpha(L.accent, 0.18 + 0.32 * glowK)}`,
           overflow: 'hidden', opacity: head,
         }}>
-          {/* 窗内读数（冲刺时按速度纵向模糊） */}
+          {/* Readout inside window (vertically blurred with speed during sprint) */}
           <div style={{
             position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end',
             paddingRight: 48, paddingTop: 10, boxSizing: 'border-box', color: L.onAccent, whiteSpace: 'nowrap',
@@ -177,17 +177,42 @@ export const TapeScrollFixedPointer: React.FC = () => {
             </span>
             <span style={{ ...type(48, 600), marginLeft: 10, opacity: 0.75 }}>k</span>
           </div>
-          {/* 窗面上沿高光 */}
+          {/* Top highlight on window surface */}
           <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '45%', background: 'linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0))' }} />
         </div>
-        {/* 指针：读数窗右侧伸向刻度的钴蓝细针 + 三角 */}
+        {/* Pointer: cobalt blue needle + triangle extending from right side of window toward ticks */}
         <div style={{ position: 'absolute', left: WIN_X + WIN_W - 2, top: CY - 2, width: TICK_R - (WIN_X + WIN_W) + 2, height: 4, background: L.accent, opacity: head, borderRadius: 2 }} />
         <svg width={40} height={44} style={{ position: 'absolute', left: WIN_X + WIN_W - 6, top: CY - 22, overflow: 'visible', opacity: head }}>
           <path d="M 2 4 L 30 22 L 2 40 Z" fill={L.accent} stroke={L.accent} strokeWidth={4} strokeLinejoin="round" />
         </svg>
       </div>
 
-      {/* ── 左侧排版 ── */}
+      {/* ── Left typography ── */}
+      <div style={{ position: 'absolute', left: 150, top: 300, width: 760 }}>
+        <div style={{ ...type(26, 650, { caps: true }), letterSpacing: '0.24em', color: L.accent, opacity: head, display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ width: 36, height: 3, background: L.accent, borderRadius: 2 }} />
+          <span><span style={{ fontFamily: BRAND.font, fontWeight: 700, textTransform: 'none', letterSpacing: '0.03em' }}>{BRAND.name}</span> · frames / hour</span>
+        </div>
+        <div style={{ marginTop: 34, ...type(124, 750), color: L.ink }}>
+          <TextReveal text="Throughput" by="word" variant="rise" start={2} each={18} gap={5} />
+        </div>
+        <div style={{ ...type(124, 750), color: L.accent, height: 130 }}>
+          <TextReveal text="tripled." by="char" variant="rise" start={98} each={14} gap={1.6} />
+        </div>
+        <div style={{ marginTop: 40, height: 60, display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div style={{
+            height: 60, padding: '0 24px', borderRadius: 30, display: 'flex', alignItems: 'center', background: alpha(L.accent2, 0.12),
+            border: `1px solid ${alpha(L.accent2, 0.35)}`, color: '#00866f', ...type(34, 700), whiteSpace: 'nowrap',
+            opacity: Math.min(1, chip * 1.5), transform: `scale(${mix(0.6, 1, chip).toFixed(4)})`, transformOrigin: '0% 50%',
+          }}>▲ 200%</div>
+          <div style={{ ...type(36, 500, { mono: true }), color: L.ink2, opacity: recap, transform: `translateX(${mix(-16, 0, recap).toFixed(2)}px)`, whiteSpace: 'nowrap' }}>
+            140k → 420k
+          </div>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
       <div style={{ position: 'absolute', left: 150, top: 300, width: 760 }}>
         <div style={{ ...type(26, 650, { caps: true }), letterSpacing: '0.24em', color: L.accent, opacity: head, display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ width: 36, height: 3, background: L.accent, borderRadius: 2 }} />

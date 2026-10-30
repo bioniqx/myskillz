@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""assemble-media.py — 从 gallery-media release 把样片 mp4 组装进一个目录。
+"""assemble-media.py — Assemble sample MP4 videos from gallery-media release into a directory.
 
-release 上样片有两种存法，可以并存：
-  gallery-media.zip   批量更新时整包上传（一次请求换掉一大批样片）
-  <style-key>.mp4     日常单个更新时逐个上传
-组装规则：先解压 zip；再下载两类单个 mp4——上传时间晚于 zip 的（单独补传的新样片，覆盖包里的版本），
-以及 zip 里没有的（包可以只装一部分）。zip 之前上传、且已被 zip 收录的旧单文件自动作废。
-release 上没有 zip 时退化为下载全部单个 mp4（旧行为）。单个 mp4 只下 library.json 用到的
-（release 上去掉的式留下的旧文件不再拉）。
+There are two storage formats for sample videos on release, which can coexist:
+  gallery-media.zip   Bulk upload for batch updates (updates a large batch of samples in one request)
+  <style-key>.mp4     Individual upload for routine incremental updates
+Assembly rules: Extract zip first, then download two categories of individual MP4s:
+those uploaded later than the zip (new standalone additions overriding zip contents),
+and those missing from the zip (which may only package a subset). Older standalone files
+uploaded prior to the zip and packaged within it are automatically invalidated.
+If no zip exists on the release, fallback to downloading all individual MP4s (legacy behavior).
+Only downloads individual MP4s referenced in library.json (ignoring obsolete files on release).
 
-用法：python3 gallery/assemble-media.py <目标目录> [--repo owner/name]
-deploy-pages.yml、pr-checks.yml、fetch-media.sh 共用；需要已登录的 gh（CI 里用 GH_TOKEN）。
+Usage: python3 gallery/assemble-media.py <target_directory> [--repo owner/name]
+Shared by deploy-pages.yml, pr-checks.yml, and fetch-media.sh; requires authenticated gh CLI (uses GH_TOKEN in CI).
 """
 import argparse
 import json
@@ -63,7 +65,7 @@ def main():
                         dst.write(src.read())
                     from_zip += 1
                     in_zip.add(name)
-        # ISO 8601 UTC 时间串可以直接按字符串比较先后
+        # ISO 8601 UTC timestamp strings can be compared directly as strings
         singles = [x for x in singles if x['updatedAt'] > zipped['updatedAt'] or x['name'] not in in_zip]
     if singles:
         args = ['release', 'download', 'gallery-media', '--repo', a.repo, '--dir', a.dest, '--clobber']

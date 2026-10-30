@@ -1,66 +1,43 @@
 ---
 name: pill-chip-slot-cycle-handled
-一句话: 白底句式 "Your `chip` Handled" 里深色胶囊内词竖向滚轮轮换，胶囊宽度按预量文本宽插值平滑伸缩、两侧文字被自然挤开收拢，胶囊上下露出 13% 透明度的灰色幽灵项
-适用: "我们替你搞定 ___" 这类句式卖点；SaaS 功能列举的一句话收口；浅底品牌片主视觉一拍
-时长: 约 5.0s（150f@30fps：静置 → 3 次切换（0.25/0.47/0.69）→ 尾部静置）
-能量: 中（三拍稳定节拍，宽度伸缩是唯一的连续运动）
+summary: A dark chip inside the sentence rolls through feature words, its width easing to each word so the surrounding text is pushed apart while grey ghost items show above and below.
+use: "We handle your ___" value proposition copy; concluding punchlines for SaaS capability enumerations; primary hero moments in light-background brand videos
+duration: ~5.0s (150f@30fps: static hold → 3 transitions (0.25/0.47/0.69) → ending static hold)
+energy: Medium (steady 3-beat rhythm, width expansion/contraction is the sole continuous motion)
 ---
 
-## 意图
-词槽轮换有两派：让句子躲开变化（宽度固定的滚轮），或者让句子**接受**
-变化（胶囊撑宽、两侧文字被挤开）。这卡是后者，代价是必须把宽度算准，
-回报是句子读起来活的——"Your" 和 "Handled" 被推着走，观众感到胶囊里
-的词有分量。上下露出的灰色幽灵项是第二个记号：它明示"这是个可以滚的
-列表"，让观众预期还有下一个词。
+## Intention
+Word slot cycling divides into two schools: insulating the sentence from change (fixed-width reels), or forcing the sentence to **accept** change (capsule expands, pushing adjacent words outward). This card chooses the latter: the cost is requiring precise width calculations, but the reward is a living sentence — "Your" and "Handled" get physically pushed aside, making the audience feel the tangible weight of words within the chip. Grey ghost items revealed above and below serve as a secondary signature: explicitly indicating "this is a scrollable list," setting viewer expectations for subsequent terms.
 
-## 动效核心
-- 宽度预量：setup 期用隐藏 `<span>` 逐词量 `offsetWidth`，各加 74px 内边距
-  存成 `widths[]`（带 `o.w.length·13` 兜底，防 setup 时未挂载量不到）
-- 位置量 `pos` 由 3 段窗累加：切换点 `[0.25, 0.47, 0.69]`，每窗 0.12
-  （≈18f），缓动 `E.inOutCubic`——**两头都缓**，对应"滚轮起步与停稳"
-- 内列 `colIn` 竖移 `-pos·48`px（行高 48 = 胶囊高）；胶囊宽度取
-  `lerp(frac, widths[ci], widths[ci+1])`，**帧内插值**所以伸缩是连续的，
-  两侧 `flex:none` 的文字被 flex 布局自然挤开
-- 幽灵项在胶囊外（chipWrap 内）上 -38px / 下 58px，取 `near = round(pos)`
-  的前后邻居文本，随滚动微移 `(pos-near)·48·0.5`（**半速视差**，比胶囊内
-  的词慢一半，才像"外圈"）
-- 幽灵项透明度 `0.13 · (0.4 + settle·0.6)`，`settle = 1 - min(1, |pos-near|·3)`
-  ——滚动中途更淡、落定时最清楚
-- 每行内是 emoji + 词的两段结构（emoji 18px、词 700 22px 白字），
-  胶囊 `#1a1c24` 底 + `0 8px 24px rgba(20,22,40,.22)` 投影 + `overflow:hidden`
+## Motion Core
+- Width pre-measurement: During setup, a hidden `<span>` measures each word's `offsetWidth`, adding 74px padding to store into `widths[]` (with `o.w.length·13` fallback to prevent zero-measure crashes before DOM mount).
+- Positional progress `pos` accumulates across 3 window segments: transition points `[0.25, 0.47, 0.69]`, each lasting 0.12 (~18f), eased via `E.inOutCubic` — **smooth deceleration at both ends**, representing reel start and stop.
+- Inner column `colIn` translates vertically `-pos·48`px (line height 48 = capsule height); capsule width interpolates via `lerp(frac, widths[ci], widths[ci+1])`, calculating **intra-frame interpolation** so expansion is continuous, with surrounding `flex:none` text naturally pushed apart by the flex layout.
+- Ghost items sit outside the capsule (inside chipWrap) at top -38px / bottom +58px, sampling adjacent neighbor texts around `near = round(pos)` and shifting slightly with scrolling via `(pos-near)·48·0.5` (**half-speed parallax**, moving at half the speed of internal words to suggest an "outer ring").
+- Ghost item opacity `0.13 · (0.4 + settle·0.6)`, where `settle = 1 - min(1, |pos-near|·3)` — dimmer during scroll transit, crispest upon settling.
+- Each row contains an emoji + word two-part structure (18px emoji, 22px / 700 weight white text); capsule uses `#1a1c24` background + `0 8px 24px rgba(20,22,40,.22)` shadow + `overflow:hidden`.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 词表 | 4 词 + emoji（Shots/Camera/Sound/Renders——video-shotcraft 包办的镜头/运镜/音效/渲染），3 次切换 | 词长差决定挤开幅度的观感：demo 最短 5 字母最长 7 字母；差 >2 倍胶囊跳变太猛，句子重心左右甩 |
-| 切换点 | `[0.25, 0.47, 0.69]`，窗 0.12（≈18f） | 段间约 0.10（≈15f）静置读词；起手 0.25 前的静置让观众先认出句式 |
-| 缓动 | `E.inOutCubic` | 两头缓才像滚轮起停；outCubic（只后缓）读作被甩上来，胶囊宽度也会跟着突变 |
-| 胶囊 | 高 48px、圆角 99、`#1a1c24`、宽 = 文本宽 + 74 | +74 是左右内边距 + emoji 位；<50 词贴边，>100 胶囊胖成按钮 |
-| 幽灵项 | 上 -38 / 下 58px，基础透明度 0.13 | 0.13 是"看得见但不抢"的甜点；>0.25 读作三行并列文字，不是幽灵；删了列表暗示就没了 |
-| 幽灵视差 | `(pos-near)·48·0.5`（半速） | 半速是"外圈更远"的立体感来源；同速则三行像一整块滑动，幽灵失去意义 |
-| 句子字号 | 两侧 30px/800、胶囊内 22px/700 | 胶囊内比句子小是正确层级（徽章依附句子）；等大或更大就读作两个标题打架 |
-| 配色 | 底 `#fbfbfd`、句子 `#15171d`、胶囊白字 | 浅底 + 单一深色块是本卡的身份证；深底版会让胶囊消失，需整套重配 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Vocabulary | 4 words + emoji (Shots / Camera / Sound / Renders — the features handled by video-shotcraft), 3 transitions | Length variance governs the feel of outward displacement: demo ranges from shortest 5 letters to longest 7 letters; variation >2x causes jerky capsule jumps, swaying sentence balance |
+| Transition cues | `[0.25, 0.47, 0.69]`, window 0.12 (~18f) | Inter-segment pauses ~0.10 (~15f) for reading; opening pause before 0.25 lets viewers absorb the sentence structure first |
+| Easing | `E.inOutCubic` | Decelerating at both ends simulates mechanical wheel physics; outCubic (decelerating only at end) feels flung up with abrupt width snapping |
+| Capsule | Height 48px, radius 99, `#1a1c24`, width = text width + 74 | +74 accounts for left/right padding + emoji slot; <50 crowds borders, >100 bloats capsule into a generic button |
+| Ghost items | Top -38px / bottom +58px, base opacity 0.13 | 0.13 is the sweet spot for "visible without distracting"; >0.25 reads as three competing lines of text; removing destroys list cues |
+| Ghost parallax | `(pos-near)·48·0.5` (half-speed) | Half-speed produces the depth of an outer drum; full speed makes all three lines slide as a flat card, negating ghost utility |
+| Typography hierarchy | Outer sentence 30px/800, capsule text 22px/700 | Capsule text smaller than outer sentence establishes proper hierarchy (badge attached to sentence); equal or larger size feels like two conflicting headlines |
+| Palette | Canvas `#fbfbfd`, sentence `#15171d`, capsule white text | Light canvas + single dark block is this card's identity; dark backgrounds cause the capsule to disappear, requiring a full redesign |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **宽度靠 setup 期 `offsetWidth` 实测**：字体没加载完时量到的是回退字体
-  的宽度，胶囊会偏窄或偏宽——移植时须确保 webfont 就绪后再量，或改用
-  离屏 canvas `measureText`；`length·13` 那条兜底只保证不崩，不保证准
-- 词长差要控制在 2 倍内：宽度自适应是本卡的卖点也是风险，
-  5→8 字母（如 `Sales`→`Workflow`）这一跳已经是可接受上限，再大句子两侧甩得晃眼
-- 两侧文字必须 `flex:none`：不然 flex 会去压缩它们而不是移动它们，
-  "挤开"变成"字被压扁"
-- 幽灵项文本取 `round(pos)` 的邻居，所以在切换的正中间（pos=x.5）会
-  **跳一次文本**——被 `settle` 压到最淡时发生，肉眼基本不可察；但若把
-  透明度调高到 0.25+，这一跳就会露出来
-- emoji 在不同平台字形宽度不一（尤其 `⚙️` 带变体选择符），会让实测宽度
-  漂移几像素；实战建议换成项目自己的单色图标，别依赖系统 emoji
-- 与 vertical-word-roll-blur-cycle 分工：那卡宽度固定、裸词、带滚筒 blur
-  （词是句子成分），本卡宽度自适应、深色胶囊、带幽灵项（词是徽章）——
-  同片只留一个；声音上三次落定是三个节奏点，配轻质开关/胶囊贴合音，
-  连发交替双样本，配法纪律见 sound-design.md
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **Width relies on `offsetWidth` measurements during setup**: Measuring before webfonts load yields fallback font dimensions, causing incorrect capsule widths — ensure webfonts are ready before measuring, or use offscreen canvas `measureText`; the `length·13` fallback only prevents crashes, not inaccuracy.
+- Constrain word length variance within 2x: adaptive width is both the primary appeal and risk; jumping from 5 to 8 letters (`Sales` → `Workflow`) is the upper tolerance limit — larger deltas cause disorienting swings in surrounding text.
+- Surrounding text must be set to `flex:none`: otherwise flex will compress them instead of shifting them, squashing text instead of pushing it aside.
+- Ghost items sample text around `round(pos)`, triggering a **text swap at exact midpoints (pos=x.5)** — masked by `settle` at maximum dimness so it is imperceptible; raising opacity to 0.25+ will expose this snap.
+- System emoji glyph widths vary across platforms (especially `⚙️` with variation selectors), shifting measured width by several pixels; use custom monochrome SVG icons in production instead of system emojis.
+- Division of labor with vertical-word-roll-blur-cycle: that card uses fixed widths, bare words, and cylindrical blur (words as sentence components); this card uses adaptive widths, dark capsules, and ghost items (words as badges) — use only one per video. Audio: 3 landing points require lightweight switch/capsule latch clicks, alternating two samples; see sound-design.md.
 
-## 参考实现
+## Reference Implementation
 demos/typography/pill-chip-slot-cycle-handled/
-（PillChipSlotCycleHandled.tsx）
+(PillChipSlotCycleHandled.tsx)

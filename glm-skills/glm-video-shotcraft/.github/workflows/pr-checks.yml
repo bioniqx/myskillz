@@ -61,7 +61,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 与 deploy-pages 同一套组装（整包 zip + 晚于它的单个 mp4），查的是部署时真正拿到的文件
+          # Same assembly as deploy-pages (full zip + later individual mp4s), inspecting actual deploy files
           python3 gallery/assemble-media.py /tmp/gallery-media
           python3 - <<'EOF'
           import json, os, re, sys

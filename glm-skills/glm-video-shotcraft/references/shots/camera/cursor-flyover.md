@@ -1,39 +1,39 @@
 ---
 name: cursor-flyover
-一句话: 整页俯瞰后，相机依次飞到四个功能区 zoom-in 特写，SVG 光标先一步到位指点、点击留下涟漪并触发界面响应，最后拉回俯瞰
-适用: 单页产品的功能巡览：一镜带观众看完四个功能区，光标当"导游手指"
-时长: 约 8.0s（240f@30fps；俯瞰 22f · 四站各 44f（飞行 20f + 停留 24f）· 拉回 24f · hold 18f）
-能量: 中（等距巡航，节奏靠点击涟漪打点）
+summary: After an overview fade-in the camera flies to each of four screen corners in turn while an SVG cursor arrives with it, pointing and leaving a click ripple at every stop.
+use: Feature tour of a single-page product: takes the audience through four feature areas in one continuous shot, using the cursor as a "tour guide finger"
+duration: ~8.0s (240f@30fps; overview 22f, four stops 44f each (flight 20f + hold 24f), pull-back 24f, hold 18f)
+energy: Medium (equidistant cruise, rhythmic clicks and ripples setting the cadence)
 ---
 
-## 意图
-替代"四个功能四段剪辑"的省镜方案：一个连续相机把四个角串成一条参观动线，光标是观众的注意力代理——它到哪、点哪，观众就看哪。空间连续让功能之间的位置关系也被顺带记住。
+## Intention
+A shot-saving alternative to "four separate cuts for four features": one continuous camera threads four corners into a single visitor route, with the cursor acting as the viewer's attention proxy—wherever it moves and clicks, the viewer looks. Spatial continuity naturally helps the audience remember the spatial relationships between features.
 
-## 动效核心
-- demo 用 porcelain 亮场（冷白 + 钴蓝），video-shotcraft 工作台总览（顶栏标志 + 字标）按 1:1 原生排版画在 2400×1500 世界画布上：俯瞰 s=0.66 看全貌，特写 s=1.3（世界 32px 字 → 屏幕 42px，可读）
-- 相机是查表步进：CAMS[0] 俯瞰 → 四个模块中心（左上 Frames rendered → 右上 Shot previews → 右下 Release flags → 左下 Top shots），`x/y/s` 三通道用不对称 in-out（bezier 0.55,0,0.18,1：起步干脆、落位很软）插值；站间飞行途中 s 额外拉远 ~8% 再推回（hop），并按屏幕速度加方向性运动模糊（SpeedBlur amount 0.09，封顶 8px）
-- 变换公式 `translate(960 − x·s, 540 − y·s) scale(s)`——x/y 是"相机对准点"（世界 px），改表即换巡览路线
-- **光标是手、相机是眼**：光标先走（swift 16f，一条与位移垂直的轻弧，起止弧度为 0），相机晚 2f 起步、20f 落定；光标在目标上"瞄"一拍后按下（clickAt = 起步 +22f），按下 3f 缩到 0.84 再过冲回弹；光标画在屏幕空间，屏幕上恒为 40px
-- 四个落点各对准一个真实控件，点击即有界面响应：分段控件 30D→90D（滑块平移 + 大数字旧值上滑、新值从下升起 + 12 根柱错峰弹簧到新高度）/ 数据点 tooltip 过冲弹出 + 引导线下落 / 开关弹簧滑动 + 灰度进度条 0→25% / 表格行染色 + 强调条 + 对勾描线
-- 每次点击触发 80px 圆环涟漪（18f，scale 0.3→1.5 淡出）
-- 第 4 站后相机 smooth 24f 拉回俯瞰，四处状态同框（"巡览结束"全家福），尾段极缓推近 1%
+## Motion Core
+- The demo uses a bright porcelain aesthetic (cool white + cobalt blue) for the video-shotcraft workbench overview (top bar logo mark + wordmark) rendered at native 1:1 on a 2400x1500 world canvas: overview at s=0.66 shows full context, close-up at s=1.3 (world 32px text -> screen 42px, comfortably legible).
+- The camera steps through a lookup table: CAMS[0] overview -> four module centers (top-left Frames rendered -> top-right Shot previews -> bottom-right Release flags -> bottom-left Top shots), interpolating `x/y/s` via an asymmetric ease (bezier 0.55, 0, 0.18, 1: crisp takeoff, very soft landing); between stops, s pulls back an extra ~8% then pushes back in (hop), with directional motion blur scaled by screen speed (SpeedBlur amount 0.09, capped at 8px).
+- Transform formula: `translate(960 - x*s, 540 - y*s) scale(s)`—x/y represents the "camera focus point" in world px; modifying the table instantly updates the tour route.
+- **The cursor is the hand, the camera is the eye**: the cursor departs first (swift 16f, a slight arc perpendicular to displacement with zero start/end curvature), while the camera starts 2f later and settles at 20f; the cursor "aims" at the target for one beat before pressing (clickAt = start + 22f), shrinks to 0.84 over 3f, then overshoots on rebound; the cursor is drawn in screen space and stays constant at 40px on screen.
+- Each of the four stops targets a real control, triggering immediate UI feedback on click: segmented control 30D -> 90D (thumb translation + old large number slides up as new number rises from below + 12 bars spring to new staggered heights) / data point tooltip pop-up with overshoot + guide line drop / toggle spring slide + grayscale progress bar 0 -> 25% / table row highlight + accent bar + checkmark draw-in.
+- Each click spawns an 80px ring ripple (18f, scale 0.3 -> 1.5 fade out).
+- After stop 4, the camera smoothly pulls back to overview over 24f, bringing all four updated states into one frame ("tour complete" ensemble poster), ending with an ultra-slow 1% push-in.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 特写倍率 | s=1.3（俯瞰 0.66） | 世界原生排版，倍率按"要读的字 ≥40px 屏幕字高"反推，>1.6 时模块出画 |
-| 步进节奏 | 飞行 20f / 停留 24f | 停留是读功能位，短于 15f 变"扫过"没有"参观" |
-| 光标领先 | 起步早 2f、到位早 6f | 0 = 光标被相机拖着走（像录屏）；>10f 观众先看光标再找画面 |
-| 点击涟漪 | 18f，scale 0.3→1.5 | 涟漪是节拍器，四次点击等距（每 44f）——配 SFX click 四连 |
-| 巡览顺序 | 左上→右上→右下→左下 | 改 CAMS / TARGETS 表即换路线；保持相邻模块相邻访问，对角跳跃会晕 |
-| 收尾拉回 | smooth 24f 回俯瞰 | 不拉回就停在最后一个模块；拉回让四处状态同框成海报 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Close-up zoom | s=1.3 (overview 0.66) | Native world typesetting; reverse-calculate zoom so legible text >=40px on screen; >1.6 pushes modules out of frame |
+| Stepping rhythm | Flight 20f / hold 24f | Hold is the feature reading window; shorter than 15f turns a "tour" into a "glance" |
+| Cursor lead | Starts 2f earlier, arrives 6f earlier | 0 = cursor dragged by camera (feels like a screen recording); >10f makes viewers look at cursor before finding content |
+| Click ripple | 18f, scale 0.3 -> 1.5 | Ripples act as a metronome with 4 equidistant clicks (every 44f)—pairs with SFX 4x click |
+| Tour order | Top-left -> top-right -> bottom-right -> bottom-left | Change CAMS / TARGETS table to alter route; keep adjacent visits between neighbors to avoid disorienting diagonal jumps |
+| Ending pull-back | Smooth 24f back to overview | Without pull-back it stops on the last module; pull-back frames all four states into a hero poster |
 
-## 已知坑
-- 用真实产品截图时，TARGETS 落点要重新标到截图里控件的中心；截图要 ≥1.3 倍特写倍率的原生分辨率（Q2）
-- 相机表的 x/y 是世界 px 坐标，世界画布宽高比变了（如换竖屏）需整表重标
-- 光标与相机已解耦（各自一张表），但两者的起步/到位帧差要成对改，否则点击时相机还在动、界面响应会被运动模糊吃掉
-- 运动模糊别给太多：亮场 UI 在 hop 末段仍高速时，amount > 0.12 会读作"失焦"而不是"运动"
+## Known Pitfalls
+- When using real product screenshots, re-calibrate TARGETS coordinates to the centers of controls in the screenshot; screenshots must have native resolution >=1.3x close-up zoom (Q2).
+- The camera table's x/y are world pixel coordinates; if the canvas aspect ratio changes (e.g. portrait video), the entire table must be re-calibrated.
+- The cursor and camera are decoupled (separate tables), but start/arrival frame offsets must be adjusted in pairs; otherwise the camera may still be moving on click, blurring out UI feedback.
+- Don't overdo motion blur: on bright UI during high-speed hop exits, amount > 0.12 looks like "out of focus" rather than "motion".
 
-## 参考实现
+## Reference Implementation
 demos/camera/cursor-flyover/
-（CursorFlyover.tsx）
+(CursorFlyover.tsx)

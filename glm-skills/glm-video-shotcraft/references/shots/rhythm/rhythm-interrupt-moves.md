@@ -1,38 +1,32 @@
 ---
 name: rhythm-interrupt-moves
-一句话: 打断节奏——jump-cut-punch-in 三级跳切推近：同构图三次无补间硬跳放大，逐级逼近目标
-适用: 用"打断连续性"本身当节奏器：顿挫推近（A）；与 beat-cut-moves（切点排布）互补
-时长: A 135f ≈4.5s
-能量: A 中
+summary: Stepped punch-in jump cuts that break cadence on the same frame.
+use: Using "broken continuity" itself as a rhythm engine: stuttered punch-ins (A); complementary to beat-cut-moves (cut placement)
+duration: A 135f ≈ 4.5s
+energy: A Medium
 ---
 
-## 意图
-库内节奏卡管的都是"怎么切、切多密"；本卡管**怎么断**——观众预期
-连续，你偏打断，打断方式即表达：A 是空间断——同构图三次无补间跳大
-（1x→1.6x→2.6x），戈达尔跳切的顿挫，比连续推近更有"看这里、再近点、
-就是它"的指令感。适合强制聚焦指标。
+## Intention
+Rhythm cards in the library typically govern "how to cut, and how densely to cut"; this card governs **how to break cadence**—viewers anticipate continuity, and breaking that expectation becomes the expression: Variant A breaks space—three zero-tween magnification jumps within the same framing (1x -> 1.6x -> 2.6x), channeling the staccato cadence of Godard jump cuts to deliver the commanding instruction of "look here, closer, that's it" far more forcefully than a continuous camera push. Ideal for forcing attention onto critical metrics.
 
-## 选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A jump-cut-punch-in | transform-origin 钉目标中心，三档 scale 阶梯跳变（零补间），每跳 2f 加深脉冲当 tick | 逐级逼近核心指标；纪录片式盯住 |
+## Variant Selection
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A jump-cut-punch-in | transform-origin anchored to target center, three-step scale magnification (zero tweening), 2f darkening pulse on each jump acting as tick | Progressively zeroing in on key metrics; documentary-style scrutiny |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 跳挡 | 1.0→1.6→2.6，各 hold ≥35f | 挡差 <1.5× 读作画面抖了一下 |
-| A tick | 跳变帧起 2f brightness 0.92 全画面脉冲 | 无 tick 的跳切读作丢帧 |
-| 收尾 | 末挡 ≥45f 真静止 | 打断系事后 hold 从重给 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Step jumps | 1.0->1.6->2.6, holding >=35f per step | Step deltas <1.5x read like frame jitter |
+| A tick | 2f brightness 0.92 canvas pulse starting on jump frame | Jump cuts without tick pulses look like dropped frames |
+| Finale | Final step holds static for >=45f | Cadence-breaking techniques demand generous post-event holds |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 speed-ramp-freeze 都动"时间轴"，同一镜头只能有一个时间
-  操纵者
-- 三挡构图必须同 origin（钉死目标中心）——每挡重新构图就是
-  三个镜头，不是跳切
-- 声音强依赖：每跳一声 tick（sound-design §4.5）
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Manipulates the "timeline" alongside speed-ramp-freeze; only one timeline manipulator may exist within a single shot.
+- All three framing steps must share the exact same `transform-origin` (anchored dead-center on the target)—reframing between steps creates three separate shots rather than jump cuts.
+- Strong audio dependency: audible tick on each jump cut (sound-design §4.5).
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/rhythm-interrupt-moves/
-（JumpCutPunchIn.tsx）
+(JumpCutPunchIn.tsx)

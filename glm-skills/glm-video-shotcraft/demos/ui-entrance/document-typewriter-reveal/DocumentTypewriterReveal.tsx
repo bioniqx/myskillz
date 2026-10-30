@@ -1,26 +1,26 @@
-// document-typewriter-reveal —— 整页真排版文档在光标后自己"写"出来、侧栏跟进、历史条目逐个落入轨道
-// （第二轮重设计 · 极光暗场 · 悬浮应用窗）
-// 手法不变：内容块两两一对按节拍被"写"出（页面底色遮罩右锚收窄，强调色笔尖骑在揭示前沿，永远只有一个笔尖）；
-// 人名标题写完后长出强调色底；左右双栏随后自上而下揭开；尾段 6 条历史周报逐条落入左栏。
+// document-typewriter-reveal — Full typographic document "types" itself out behind a cursor, sidebars follow, historical items drop into track
+// (Redesign v2 · Aurora dark stage · Floating app window)
+// Core technique unchanged: content blocks "typed" out in pairs on beat (page-color mask shrinks right-anchored, accent caret rides leading reveal edge, strictly one caret at any time);
+// name headings sprout an accent background after completion; left and right rails reveal top-down; 6 past weekly reports drop into the left rail in the final segment.
 //
-// 设计决定
-// - look = aurora（紫夜 + 紫/粉光）。真实周报页面截图保留（Q1），但不再铺满全屏：它是一扇悬浮在紫夜舞台上的
-//   应用窗口——圆角、发丝亮边、背后一圈紫色背光、脚下的长投影；暖白纸面在冷紫夜里像一盏灯。
-// - 相机（单调 Hermite 样条，起止无速度突变）：开场 1.42x 斜侧（rotY −18°）特写标题，窗口左上角与舞台光同时入画；
-//   笔尖往下写时相机一路后撤、把斜侧角收小，到全窗（双栏完整入画，Q10）；最后微俯、上移让出底部给一行标语。
-// - 笔尖：深紫 3px caret + 同色柔光；人名标题的强调底改成极光紫 multiply（只染纸不洗字）。
-// - 收尾标语「From screenshot / to showreel.」（video-shotcraft 宣传句：真实截图被拍成镜头）——第二段强调色，底部左对齐窗口左缘。
-//   截图纹理与历史条目是被拍摄的文档本身（与纹理里烤入的条目对齐），保持原样。
+// Design decisions:
+// - look = aurora (violet night + violet/pink light). Retains real weekly report screenshot (Q1), but no longer full-screen: it floats as an app window
+//   on the violet night stage — rounded corners, hairline highlight border, violet backlight, long drop shadow; warm white paper glows like a lamp in the cold violet night.
+// - Camera (monotonic Hermite spline, smooth velocity transitions): starts at 1.42x angled close-up (rotY -18°) on heading, window top-left and stage light enter together;
+//   as caret types downward, camera dollies back and reduces tilt angle to reveal the full window (both rails fully visible, Q10); finally tilts slightly downward and pans up to make room for a bottom tagline.
+// - Caret: deep violet 3px caret + matching soft glow; member name heading accent changed to aurora violet multiply (tints paper without washing out text).
+// - Closing tagline "From screenshot / to showreel." (video-shotcraft slogan: transforming screenshots into cinematic reels) — second segment in accent, bottom-aligned with left window margin.
+//   Screenshot texture and history items represent the captured document itself (aligned with baked-in texture entries), kept intact.
 //
-// 时间表（30fps，共 150f）
-//   0–8     标题特写已在画面（窗口 + 光），笔尖在标题起点
-//   8–58    写入：20 块两两一对，第 g 对 cue = 8 + 4.4g，每块 9f（in-out），最后一对 ~57f 写完
-//   0–64    相机后撤：1.42x 斜侧 → 0.86x 全窗
-//   54/62   左 / 右栏自上而下揭开（10f）+ 内缘强调线生长后淡去
-//   66–100  历史周报 6 条逐条落入左栏（每 5f 一条，9f 轻弹跳 + 空中影）
-//   70–104  相机微俯上移到海报位（0.74x）
-//   100–126 标语逐词升起
-//   126–150 hold：0.8% 极缓推近，光的呼吸
+// Timeline (30fps, 150f total):
+//   0–8     Title close-up framed (window + light), caret rests at title start
+//   8–58    Type-in: 20 blocks in pairs, g-th pair cue = 8 + 4.4g, 9f each (in-out), final pair finishes ~57f
+//   0–64    Camera dollies back: 1.42x angled -> 0.86x full window
+//   54/62   Left / right rails reveal top-down (10f) + inner accent line grows then fades
+//   66–100  6 past weekly reports drop into left rail (one every 5f, 9f gentle bounce + airborne shadow)
+//   70–104  Camera tilts slightly downward and shifts up to poster framing (0.74x)
+//   100–126 Tagline rises word by word
+//   126–150 hold: 0.8% subtle push-in, breathing light
 import React from 'react';
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import { EASE, FONT, ramp } from '../../_fixtures/Polish';
@@ -37,12 +37,12 @@ const rightRail = layout.wbr.rightRail;
 const PAGE_W = 1920;
 const PAGE_H = layout.wbr.pageH;
 
-const PAPER = '#fefcf9'; // 纹理纸面实测色
-const CARET = '#7a4dff'; // 深一档的极光紫：暖白纸上要看得见
+const PAPER = '#fefcf9'; // Measured paper color from texture
+const CARET = '#7a4dff'; // Deeper aurora violet for visibility on warm white paper
 const WASH = 'rgba(196,170,255,0.4)';
 const SANS = 'ui-sans-serif, system-ui, -apple-system, sans-serif';
 
-// ───────────── 相机 ─────────────
+// ───────────── Camera ─────────────
 type Cam = { cx: number; cy: number; zoom: number; rotX: number; rotY: number; sx: number; sy: number };
 type Key = Cam & { frame: number };
 const ANCHORS: Key[] = [
@@ -75,28 +75,28 @@ const hermite = (xs: number[], ys: number[]) => {
 };
 const CURVES = Object.fromEntries(PARAMS.map((p) => [p, hermite(ANCHORS.map((k) => k.frame), ANCHORS.map((k) => k[p]))])) as Record<keyof Cam, (x: number) => number>;
 const camAt = (f: number): Cam => Object.fromEntries(PARAMS.map((p) => [p, CURVES[p](f)])) as Cam;
-// 相机层：缩放走布局级 zoom（Q2），把页面点 (cx,cy) 送到屏幕 (960+sx, 540+sy)
+// Camera layer: layout-level zoom (Q2), mapping page coordinate (cx, cy) to screen (960+sx, 540+sy)
 const PERSP = 2200;
 
-// ───────────── 写入节拍 ─────────────
+// ───────────── Typing rhythm ─────────────
 const REVEAL_EASE = Easing.bezier(0.4, 0, 0.6, 1);
 const cueFor = (i: number) => 8 + Math.floor(i / 2) * 4.4;
 const WIPE = 9;
 
 const PAST_WEEKS = [
-  { week: '2026 第 27 周', date: '7月3日', title: '2026-W27 · Shotcraft Weekly' },
-  { week: '2026 第 26 周', date: '6月26日', title: '2026-W26 · Shotcraft Weekly' },
-  { week: '2026 第 25 周', date: '6月19日', title: '2026-W25 · Shotcraft Weekly' },
-  { week: '2026 第 24 周', date: '6月12日', title: '2026-W24 · Shotcraft Weekly' },
-  { week: '2026 第 23 周', date: '6月5日', title: '2026-W23 · Shotcraft Weekly' },
-  { week: '2026 第 22 周', date: '5月29日', title: '2026-W22 · Shotcraft Weekly' },
+  { week: '2026 Week 27', date: 'Jul 3', title: '2026-W27 · Shotcraft Weekly' },
+  { week: '2026 Week 26', date: 'Jun 26', title: '2026-W26 · Shotcraft Weekly' },
+  { week: '2026 Week 25', date: 'Jun 19', title: '2026-W25 · Shotcraft Weekly' },
+  { week: '2026 Week 24', date: 'Jun 12', title: '2026-W24 · Shotcraft Weekly' },
+  { week: '2026 Week 23', date: 'Jun 5', title: '2026-W23 · Shotcraft Weekly' },
+  { week: '2026 Week 22', date: 'May 29', title: '2026-W22 · Shotcraft Weekly' },
 ];
 const WEEK_Y0 = 228;
 const WEEK_H = 56;
 const WEEK_CUE = (i: number) => 66 + i * 5;
 const WEEK_DROP = Easing.bezier(0.2, 1.15, 0.3, 1);
 
-// 成员名标题（tag=h2，跳过第一个"Jackie's Download"摘要标题）写完后长出强调底
+// Member name headings (tag=h2, skipping first "Jackie's Download" summary header) sprout accent background after typing finishes
 const memberH2 = new Set<number>();
 {
   let seenH2 = 0;
@@ -109,12 +109,12 @@ export const DocumentTypewriterReveal: React.FC = () => {
   const frame = useCurrentFrame();
   const cam = camAt(frame);
 
-  // 只有一个笔尖：跟最新的、仍在写的块
+  // Single caret: tracks the latest block actively being typed
   let caretIdx = -1;
   blocks.forEach((_, i) => {
     if (frame >= cueFor(i) && frame <= cueFor(i) + WIPE + 2) caretIdx = i;
   });
-  // 开场 8f 笔尖在标题起点闪烁待命
+  // Opening 8f: caret blinks on standby at title start
   const idleBlink = frame < cueFor(0) ? (Math.floor(frame / 4) % 2 === 0 ? 1 : 0.25) : 0;
 
   const tagIn = ramp(frame, 100, 20, EASE.out);
@@ -125,7 +125,7 @@ export const DocumentTypewriterReveal: React.FC = () => {
         <Dust look={L} count={24} seed={9} drift={0.16} opacity={0.4} />
       </Stage>
 
-      {/* 3D 相机 */}
+      {/* 3D camera */}
       <AbsoluteFill style={{ transform: `translate(${cam.sx.toFixed(2)}px, ${cam.sy.toFixed(2)}px)` }}>
         <div style={{ position: 'absolute', inset: 0, perspective: `${(PERSP * cam.zoom).toFixed(2)}px`, perspectiveOrigin: '960px 540px' }}>
           <div
@@ -136,7 +136,7 @@ export const DocumentTypewriterReveal: React.FC = () => {
               transformStyle: 'preserve-3d',
             }}
           >
-            {/* 背光：窗口背后的一圈紫光（页面空间，随窗口一起透视） */}
+            {/* Backlight: violet glow halo behind window (page space, perspectives with window) */}
             <div
               style={{
                 position: 'absolute', left: -220, top: -180, width: PAGE_W + 440, height: PAGE_H + 400, pointerEvents: 'none',
@@ -144,7 +144,7 @@ export const DocumentTypewriterReveal: React.FC = () => {
                 transform: 'translateZ(-40px)',
               }}
             />
-            {/* 应用窗口：真实截图 + 写入遮罩 + 栏位 + 历史条目，全部裁进圆角 */}
+            {/* App window: screenshot + type-in masks + rails + history items, all clipped to rounded corners */}
             <div
               style={{
                 position: 'absolute', left: 0, top: 0, width: PAGE_W, height: PAGE_H, borderRadius: 26, overflow: 'hidden',
@@ -167,7 +167,7 @@ export const DocumentTypewriterReveal: React.FC = () => {
                 const nameGrow = memberH2.has(i)
                   ? interpolate(frame, [nameCue, nameCue + 8], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.3, 0, 0.2, 1) })
                   : 0;
-                // 写入中的笔尖只骑在实际文字宽度内（遮罩右侧多盖的空白段不走笔尖）
+                // Active typing caret tracks within actual text width (ignores trailing mask whitespace)
                 const textRight = p.x + p.w + 6;
                 return (
                   <React.Fragment key={i}>
@@ -191,12 +191,12 @@ export const DocumentTypewriterReveal: React.FC = () => {
                   </React.Fragment>
                 );
               })}
-              {/* 开场待命笔尖 */}
+              {/* Opening standby caret */}
               {idleBlink > 0 ? (
                 <div style={{ position: 'absolute', left: blocks[0].x - 4, top: blocks[0].y + 3, width: 3, height: 22, background: CARET, borderRadius: 2, opacity: idleBlink, boxShadow: `0 0 8px ${alpha(CARET, 0.6)}` }} />
               ) : null}
 
-              {/* 双栏揭开：纸面补丁自上而下收走，内缘强调线随揭示生长后淡去 */}
+              {/* Dual-rail reveal: paper patches retract top-down, inner accent line grows with reveal then fades */}
               {[
                 { rail: leftRail, cue: 54, inner: 'right' as const },
                 { rail: rightRail, cue: 62, inner: 'left' as const },
@@ -213,7 +213,7 @@ export const DocumentTypewriterReveal: React.FC = () => {
                 );
               })}
 
-              {/* 历史周报：从上方逐条落入左栏 */}
+              {/* Past weekly reports: drop into left rail from above */}
               {PAST_WEEKS.map((w, i) => {
                 const cue = WEEK_CUE(i);
                 if (frame < cue) return null;
@@ -238,14 +238,14 @@ export const DocumentTypewriterReveal: React.FC = () => {
                   </div>
                 );
               })}
-              {/* 窗口上沿受光：一道极淡的顶部高光（玻璃感） */}
+              {/* Window top specular: subtle edge highlight (glass feel) */}
               <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent)' }} />
             </div>
           </div>
         </div>
       </AbsoluteFill>
 
-      {/* 收尾标语：底部，左对齐窗口左缘 */}
+      {/* Closing tagline: bottom, left-aligned with window margin */}
       <div style={{ position: 'absolute', left: 250, top: 930, display: 'flex', alignItems: 'baseline', gap: 0, ...type(84, 760), color: L.ink, opacity: tagIn > 0 ? 1 : 0 }}>
         <TextReveal text="From screenshot" by="word" variant="rise" start={100} each={16} gap={3} />
         <TextReveal text="to showreel." by="word" variant="rise" start={108} each={16} gap={3} style={{ color: L.accent, marginLeft: '0.26em' }} />

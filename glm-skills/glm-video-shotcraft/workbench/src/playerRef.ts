@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import type { PlayerRef } from "@remotion/player";
 
-/** 全局共享的 Player 句柄：时间轴 seek / 快捷键播放控制都走这里 */
+/** Globally shared Player handle for timeline seek and shortcut playback controls */
 export const playerRef = createRef<PlayerRef>();
 
 export const seekTo = (frame: number) => {

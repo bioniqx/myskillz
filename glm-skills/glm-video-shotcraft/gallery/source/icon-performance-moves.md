@@ -1,42 +1,34 @@
 ---
 name: icon-performance-moves
-一句话: 图标表演——attention-bounce 求关注弹跳（图标连跳递增+落地压扁+镜头被吸引）
-适用: 半屏级 icon 特写段落；新功能引出
-时长: 156f（5.2s）
-能量: 蓄势引入
-标签: interaction
+summary: An escalating attention bounce that compresses on landing to call the eye to an icon.
+use: Half-screen close-up icon showcases; introducing new features
+duration: 156f (5.2s)
+energy: Anticipation build-up
+tags: interaction
 ---
 
-## 意图
-库内图标动画品类首批入库：icon 是镜头怼着拍的表演者，不是 UI 角落的
-微交互。attention-bounce 是 macOS Dock 语汇——Dock 里的 video-shotcraft
-app 图标原地连跳 4 次一次比一次高（0.35→1.2 倍 icon 高），每次落地压扁
-（末跳宽 1.2x 高 0.8x）+涟漪溅点，邻居图标逐渐失焦、跳最高那下镜头向它
-轻推 8%（被吸引），落定后弹开「New in Shotcraft」功能面板——把"用户注意力"
-剪进叙事。
+## Intention
+The first entry in the library's icon animation category: the icon acts as a focal performer under a tight camera, not a passive UI micro-interaction in a corner. Attention-bounce borrows from the macOS Dock vernacular—the video-shotcraft app icon inside the Dock bounces 4 times in place, leaping higher each time (0.35 -> 1.2x icon height), compressing on each landing (final bounce: width 1.2x, height 0.8x) with ripple droplets. Neighboring icons rack-focus out of blur, and on the highest leap the camera gently pushes in 8% (drawn toward it). Once settled, a "New in Shotcraft" feature panel springs open—cutting "user attention" directly into the narrative.
 
-## 做法
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A attention-bounce | 抛体弹跳（时长 ∝ √高度）递增 + 空中速度拉伸 + 落地 2f 挤压 + 涟漪溅点，邻居 rack focus 失焦，峰值跳镜头 scale 1.08 推近，落定触发角标 + 面板弹簧展开 | 新功能引出："看我"→镜头看它→它开面板 |
+## Method
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A attention-bounce | Projectile bounce (duration proportional to sqrt(height)) escalating + airborne velocity stretch + 2f landing squash + ripple droplets, neighboring rack focus, peak leap camera scale 1.08 push-in, landing triggers badge + spring-unfolding panel | Feature introduction: "look at me" -> camera follows -> panel opens |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| icon 尺寸 | 360–400px 高（半屏特写；demo 图标 360） | 角落小图标做表演没人看见——表演者必须占 C 位 |
-| 递增弹跳 | 4 跳 0.35→0.6→0.85→1.2 倍 icon 高，空中 14/18/22/26f（∝ √高度） | 等高连跳读作 loading；递增才是"越喊越大声"；时长不随高度变读作失重 |
-| 落地挤压 | 接触 2f，压扁量 0.1→0.2 递增（末跳宽 1.2x 高 0.8x），末跳阻尼余弦回稳 | squash 缺席=没有重量 |
-| 镜头推近 | 末跳 72–90f smooth 推 8%；邻居 30–96f 失焦到 7px、降饱和 30% | 镜头动作把"被吸引"的观众视角演出来 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Icon size | 360–400px height (half-screen close-up; demo icon 360px) | Small corner icons perform invisibly—performers must own center stage |
+| Escalating bounce | 4 bounces: 0.35 -> 0.6 -> 0.85 -> 1.2x icon height; airtime 14/18/22/26f (proportional to sqrt(height)) | Constant-height bounces read like loaders; escalation conveys "calling louder and louder"; fixed airtime feels weightless |
+| Landing squash | 2f contact, compression 0.1 -> 0.2 escalating (final bounce: 1.2x width, 0.8x height), final bounce damped cosine settling | Missing squash = zero perceived weight |
+| Camera push-in | Final bounce 72–90f smooth push 8%; neighbors 30–96f defocus to 7px, desaturate 30% | Camera motion enacts the viewer's "drawn-in" perspective |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 同批 bell-swing-alert（铃铛甩摆）淘汰无附言——挂点摆动型 icon
-  表演相性存疑，做新 icon 表演优先弹跳/爆发型
-- 首版曾出画框（末跳最高点顶出），弹跳高度与画面上留白先算像素
-  （demo：地面 960、图标 360、末跳顶点 168px，推近 8% 后约 119px）
-- 声音：每次落地一声"duk"音调递升，面板弹出一声轻"叮"
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Discarded bell-swing-alert from the same batch without note—pendulum-style swinging icons show questionable versatility; prioritize bouncing/explosive performance types for icon acting.
+- Early versions breached the frame top (peak of final leap clipping); calculate bounce height against top canvas margins in pixels (demo: ground 960, icon 360, final peak 168px, ~119px after 8% camera push).
+- Audio: ascending pitch "duk" on each landing, light "ding" chime on panel reveal.
 
-## 参考实现
+## Reference Implementation
 demos/effects/icon-performance-moves/
-（AttentionBounce.tsx）
+(AttentionBounce.tsx)

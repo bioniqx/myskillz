@@ -1,57 +1,40 @@
 ---
 name: graze-face-tour
-一句话: 大倾角贴面游走特写——镜头贴着 UI 表面低飞掠过（侧栏树/顶栏/列表当地形），页面文字初始悬浮在界面上空带同形软影，随镜头行进先后加速贴落回界面
-适用: 功能区巡礼（把 UI 当地景飞掠）；配合暗场+霓虹缘光做产品"内部世界"段落；界面内容逐区登场
-时长: 单段 4–5s；可多段接力延长
-能量: 中高（运镜持续推进+元素连续落位，信息密度高）
-标签: ui-entrance
+summary: The camera skims low across the UI surface like terrain while page text hovers above the interface and settles down as the shot advances.
+use: Feature area tour (skimming UI like terrain); paired with dark stages + neon rim lights for a product "inner world" sequence; UI content appearing zone by zone
+duration: Single segment 4–5s; can extend via multi-segment relays
+energy: Medium-high (continuous camera advance + sequential element landings, high information density)
+tags: ui-entrance
 ---
 
-## 意图
-把 UI 拍成地形：大倾角特写让侧栏树、导航、列表行变成掠过的地貌，
-浅景深强化"贴面"。戏眼是**文字空中贴落**：文字/组件不是原地淡入，
-而是悬浮在界面上空（3D z 轴抬高），在空中时往界面投同形软影，
-随镜头行进先后加速贴落、影子随高度收敛消失——观众看见界面在
-镜头经过时"完成自己"。影子是可感命门：没有影子，悬浮读作
-普通位移入场；有影子，空间关系瞬间成立。
+## Intention
+Filming UI as landscape: a steep-angle close-up turns sidebar trees, navigation bars, and list rows into passing terrain, while shallow depth of field reinforces "surface skimming." The dramatic focal point is **text settling onto the page from above**: text/components do not fade in on the spot, but hover above the interface (lifted along the 3D z-axis), casting matching soft shadows onto the surface while aloft; as the camera advances, they accelerate downward and settle, with shadows converging and vanishing with height—the audience watches the interface "complete itself" as the camera glides by. The shadow is essential: without a shadow, hovering reads as a generic translation entrance; with a shadow, the spatial relationship snaps into place instantly.
 
-## 动效核心
-- 机位：CSS perspective + rotateX/rotateY 大倾角（面几乎侧掠），
-  沿界面一条路径持续推进；浅景深＝远处 blur 渐强
-- 悬浮元素：初始悬浮高度 H≈120–180px（沿面法线方向抬起），
-  easeFall 加速下落+软着陆（落地不回弹或极微回弹）
-- 同形软影：元素原位渲染模糊压暗投影，blur/offset/opacity 全部
-  随当前悬浮高度变化（高＝影大而糊而淡，落地＝影与本体重合消失）
-- 错峰贴落：各元素落地时刻按镜头行进方向排布（先经过的先落），
-  界面在镜头前"依次完成"
-- 长镜可拆段接力：段间用相邻段交叉淡化（判例：透明度窗口不重叠
-  会产生黑闪帧）
+## Motion Core
+- Camera: CSS perspective + rotateX/rotateY at a steep angle (glancing almost edge-on), steadily advancing along a path across the interface; shallow depth of field = progressive blur into the distance.
+- Floating elements: Initial hover height H ~ 120–180px (lifted along surface normal), using easeFall for accelerating descent + soft landing (no rebound or micro-rebound on contact).
+- Matching soft shadows: Rendered blurred and darkened in original position, with blur/offset/opacity all scaling linearly with current hover height (high = large, soft, faint shadow; landed = shadow converges onto element and disappears).
+- Staggered settling: Element landing times are distributed along the camera travel direction (elements passed first land first), assembling the interface progressively before the camera.
+- Long shots can be split into relayed segments: adjacent segments blend via crossfade (precedent: non-overlapping opacity windows create black flash frames).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 悬浮高度 | 120–180px | <80px 影子和位移都读不出；>250px 落地砸得太重 |
-| 影子参数 | blur/offset/opacity 随高度线性收敛 | 影子恒定不随高度变＝贴纸感；落地影必须归零 |
-| 贴落错峰 | 按镜头行进方向 0.2→0.85 归一化排布 | 同帧齐落读作开关；乱序落读作 bug；**错峰=错开起点但下落过程重叠并行**，串行等待（一个落完另一个才开始）被裁 |
-| 下落曲线 | easeFall 加速+软着陆 | ease-out 下落读作气球飘落，重力感靠加速 |
-| 段间接力 | 相邻段交叉淡化 ≥8f | 透明度窗口不搭接会黑闪（返工判例 f100 纯黑帧） |
-| 景深 | 远处 blur 渐强 | 全清晰读作平面滚动，浅景深才有"贴面"体感 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Hover height | 120–180px | <80px makes both shadow and displacement imperceptible; >250px lands with excessive weight |
+| Shadow parameters | blur/offset/opacity converge linearly with height | Constant shadows that don't scale with height feel like stickers; landed shadow must reach zero |
+| Landing stagger | Normalized 0.2 -> 0.85 along camera travel direction | Landing all on the same frame feels like a light switch; scrambled order looks like a bug; **staggered = staggered start times but overlapping parallel descents**; serial waiting (one completes before the next starts) is rejected |
+| Descent curve | easeFall acceleration + soft landing | ease-out descent feels like a floating balloon; sense of gravity requires acceleration |
+| Segment relay | Adjacent segments crossfade >=8f | Non-overlapping opacity windows cause black flashes (rework precedent: frame 100 pure black frame) |
+| Depth of field | Progressive blur in the distance | Completely sharp reads as flat scrolling; shallow depth of field provides the physical "skimming" feel |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 悬空元素别被环境压黑带吞掉：空中元素
-  需追光/提亮 ~1.3x，否则悬浮状态不可感等于没做
-- 与 space-camera-moves/tension-camera-moves 分工：那两张是相机
-  语言本身；本卡=贴面机位 **+ 元素贴落** 的组合签名，缺一半就
-  改用相机卡
-- **贴落节奏语义判例**（与 neon-frame-orbit-drop 互为反例）：
-  本卡巡礼镜=错峰并行；整体登场镜必须全体同帧齐落（那张卡的
-  错峰版被裁）。选错语法两边都会被裁
-- 原片（clickup-30）是一条连续上行长镜；复刻用三段接力，段落
-  切换藏在交叉淡化里——实战若做真单长镜，路径规划成本高得多
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Keep hovering elements from being swallowed by dark vignetting: airborne elements need ~1.3x spotlighting/brightening, otherwise the hover state is imperceptible.
+- Distinction from space-camera-moves / tension-camera-moves: those cards represent pure camera language; this card is a combined signature of glancing camera position **+ element landing**; if either half is missing, use a camera card instead.
+- **Rhythm semantic precedent** (counterpart to neon-frame-orbit-drop): this tour shot requires staggered parallel descents; full entrance shots require all elements landing on the exact same frame (the staggered version of that card was rejected). Choosing the wrong syntax will fail review in both directions.
+- The original reference (clickup-30) is a continuous upward single-take; the recreation uses a 3-segment relay with cuts hidden in crossfades—real single-take path planning is significantly more expensive in production.
 
-## 参考实现
+## Reference Implementation
 demos/camera/graze-face-tour/
-（GrazeFaceTour.tsx）
-原片出处：clickup-30.mp4
+(GrazeFaceTour.tsx)
+Original source: clickup-30.mp4

@@ -11,7 +11,7 @@ length: 8s
 
 ## Intent
 
-Animate the existing README workflow: “把这块的展示做炫酷一些，让它动起来”.
+Animate the existing README workflow: "Make this section look more dynamic and bring it to life in motion".
 Keep all seven original stages and the three deliverables.
 
 ## Notes

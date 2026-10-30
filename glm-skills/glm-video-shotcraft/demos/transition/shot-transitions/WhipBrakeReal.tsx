@@ -1,23 +1,23 @@
-// E 式急刹款 whip-brake——真实项目卡排成横向长廊，甩过 7 张卡后在目标卡（card4-hires 高清纹理）
-// 前急刹、长尾滑入落位。适合落点是"要读内容"的镜头：长尾给视线一个追上的坡。
+// whip-brake (hard-brake style) — horizontal gallery of project cards sweeps across 7 cards before target card (card4-hires)
+// executes hard brake with long ease-out tail. Ideal for shots requiring legible text at landing.
 //
-// 第二轮重设计（暖纸 · 索引长廊 + 机械计数器）：
-// - look = paper（暖白纸 · 墨 · 朱红）。画面不再只是一排卡：左上角是**索引计数器**「Nº 02 / 10」，
-//   150px 衬线数字是一只机械滚轮——位数跟着长廊位置连续滚动（个位按滚速竖向运动模糊、到 9 进位），
-//   甩的时候数字飞转、急刹时越转越慢，最后"咔"地停在 09；运动和排版是同一条曲线。
-// - 画面中线上一根固定的朱红"播放头"（顶部三角 + 发丝竖线），长廊底部一条随长廊走的刻度尺
-//   （每卡一个大刻度 + 等宽序号，中间细刻度）：甩动时刻度糊成一片，急刹时播放头"卡"进第 09 格。
-// - 速率：一条速度曲线 v(u) = V0·e^(−6u/60)·smoothstep(0,3,u) 积分而来——3f 起步、之后单调衰减
-//   （前 70% 路程 ≈12f 糊段，后 30% 路程 48f 长尾），全程速度连续不回摆；按瞬时速度做方向性拖影。
-// - 落定：目标卡抬起放大到 1.2×（高清纹理，字可读）、阴影变大变虚，两侧卡退到 45% 并轻微后缩；
-//   播放头下方浮出该卡的分区名「Efficient Models」。
+// Redesign (warm paper: index gallery + mechanical counter):
+// - look = paper (warm white paper, ink, vermilion). Features top-left mechanical counter "No 02 / 10",
+//   150px serif roller wheel counter tracking gallery position with vertical velocity blur,
+//   rapid spinning during whip and decelerating to sharp snap at 09 on shared motion curve.
+// - Fixed vermilion playhead on screen midline (top indicator + hairline), scale ruler along gallery bottom
+//   (major ticks per card + sub-ticks): blurs during whip, snaps playhead into slot 09 on brake.
+// - Velocity: integrated curve v(u) = V0 * exp(-6u/60) * smoothstep(0,3,u) — 3f launch then monotonic decay
+//   (first 70% travel in ~12f blur phase, remaining 30% over 48f tail), continuous velocity with directional motion blur.
+// - Settle: target card elevates and scales to 1.2x (high-res texture, legible text), neighboring cards dim to 45% and recede;
+//   section title "Efficient Models" rises beneath playhead.
 //
-// 时间表（30fps，共 130f）：
-//   0–24    起点 hold：第 02 张卡在播放头下，计数器 02
-//   24–36   全速甩（糊段，峰值 ~300px/f，计数器飞转）
-//   36–84   急刹长尾滑入第 09 格
-//   80–98   目标卡抬起 1→1.2、邻卡退暗；分区名 88f 起升起
-//   98–130  真静止 hold
+// Timeline (30fps, total 130f):
+//   0-24    Start hold: card 02 under playhead, counter reads 02
+//   24-36   Whip phase (blur, peak ~300px/f, counter spins)
+//   36-84   Brake phase: long tail slides into slot 09
+//   80-98   Target card elevates 1->1.2, neighbors dim; section name rises 88f+
+//   98-130  Static hold
 import React from 'react';
 import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion';
 import layout from '../../_textures/live-layout.json';
@@ -28,7 +28,7 @@ export const WHIPBRAKE_DUR = 130;
 
 const L = LOOKS.paper;
 const cards = layout.projects.cards;
-// 长廊顺序：目标卡 card4（高清）排在第 9 位，第 10 位是真实的下一张卡
+// Gallery order: target card card4 (hires) at index 9, followed by next card at 10
 const RAIL = [cards[0], cards[1], cards[2], cards[4], cards[5], cards[6], cards[7], cards[8], null, cards[9]];
 const TARGET_I = 8;
 const START_I = 1;
@@ -37,11 +37,11 @@ const GAP = 64;
 const PITCH = CARD_W + GAP;
 const RAIL_Y = 318;
 const CARD_H = 402; // 460 × 312/357
-const LEFT0 = 960 - CARD_W / 2 - START_I * PITCH; // 起点：第 02 张卡居中
+const LEFT0 = 960 - CARD_W / 2 - START_I * PITCH; // Start: card 02 centered
 const END = (TARGET_I - START_I) * PITCH;
 const T0 = 24;
 
-// 速度曲线积分表（确定性预计算，步长 0.05f）：起步 3f smoothstep、之后 e^(−6u/60) 衰减
+// Precomputed velocity integral table (step 0.05f): 3f smoothstep launch, exp(-6u/60) decay
 const STEP = 0.05;
 const TABLE = (() => {
   const n = Math.round(60 / STEP);
@@ -63,10 +63,10 @@ const progress = (u: number) => {
   return TABLE[i] + (TABLE[i + 1] - TABLE[i]) * (x - i);
 };
 const dxAt = (f: number) => END * progress(f - T0);
-// 计数器值：播放头下的卡序号（连续，1-based）
+// Counter value: card index currently under playhead (continuous, 1-based)
 const indexAt = (f: number) => START_I + 1 + dxAt(f) / PITCH;
 
-// 机械滚轮的一位：竖向数字带，按转速竖向模糊
+// Single mechanical roller digit: vertical number strip with velocity-based motion blur
 const DIGIT = 150;
 const Wheel: React.FC<{ pos: number; speed: number }> = ({ pos, speed }) => {
   const id = React.useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -75,7 +75,7 @@ const Wheel: React.FC<{ pos: number; speed: number }> = ({ pos, speed }) => {
   return (
     <span style={{
       display: 'inline-block', width: '0.6em', height: '1em', overflow: 'hidden', position: 'relative', verticalAlign: 'top',
-      // 滚筒感：上下缘渐隐（数字从筒里转出来，而不是被硬框切掉）
+      // Drum aesthetic: top/bottom edge fade simulating cylindrical rotation
       WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%)',
       maskImage: 'linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%)',
     }}>
@@ -99,13 +99,13 @@ export const WhipBrakeReal: React.FC = () => {
   const dx = dxAt(frame);
   const v = velocity(dxAt, frame);
 
-  // 计数器：个位连续滚，十位只在个位 9→0 时进位
+  // Counter: units digit spins continuously, tens digit advances on 9->0 wrap
   const idx = indexAt(frame);
   const ones = idx % 10;
   const tens = Math.floor(idx / 10) + Math.max(0, ones - 9);
   const iv = Math.abs(velocity(indexAt, frame));
 
-  // 落定聚焦
+  // Landing focus state
   const lift = ramp(frame, 80, 18, EASE.out);
   const dim = ramp(frame, 82, 16, EASE.out);
   const label = ramp(frame, 88, 16, EASE.snappy);
@@ -122,7 +122,7 @@ export const WhipBrakeReal: React.FC = () => {
     <AbsoluteFill style={{ overflow: 'hidden', background: L.bg[1] }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.25 }} fill={null} />
 
-      {/* 长廊（世界）：卡片 + 刻度尺，整体按相机位移，按速度横向拖影 */}
+      {/* Gallery world: cards + ruler translating with motion blur */}
       <SpeedBlur vx={-v} amount={0.085} max={64}>
         <div style={{ position: 'absolute', left: 0, top: 0, transform: `translateX(${(-dx).toFixed(2)}px)` }}>
           {RAIL.map((c, k) => (c ? (
@@ -133,7 +133,7 @@ export const WhipBrakeReal: React.FC = () => {
               boxShadow: softShadow(mix(8, 44, lift), { color: L.shadow, strength: 1.3 }), zIndex: 2,
             }} />
           )))}
-          {/* 刻度尺：每卡一个大刻度 + 序号，中间 4 根细刻度 */}
+          {/* Ruler: major ticks + labels per card with 4 intermediate ticks */}
           <svg width={LEFT0 + RAIL.length * PITCH + 400} height={200} style={{ position: 'absolute', left: 0, top: 812 }}>
             <line x1={LEFT0 - 300} x2={LEFT0 + RAIL.length * PITCH + 200} y1={0} y2={0} stroke={alpha(L.ink, 0.22)} strokeWidth={1.5} />
             {Array.from({ length: (RAIL.length + 1) * 5 + 6 }, (_, j) => {
@@ -154,12 +154,12 @@ export const WhipBrakeReal: React.FC = () => {
         </div>
       </SpeedBlur>
 
-      {/* 固定播放头：顶部朱红三角 + 发丝竖线（穿过刻度尺） */}
+      {/* Fixed playhead: vermilion marker triangle + vertical hairline across ruler */}
       <svg width={40} height={80} style={{ position: 'absolute', left: 940, top: 770 }}>
         <path d="M6 0 L34 0 L20 18 Z" fill={L.accent} />
         <line x1={20} x2={20} y1={16} y2={70} stroke={L.accent} strokeWidth={2} />
       </svg>
-      {/* 落定后：播放头下浮出分区名 */}
+      {/* Section name reveals under playhead after landing */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: 930, textAlign: 'center', ...type(32, 600, { caps: true }), letterSpacing: '0.16em',
         color: L.accent, opacity: label, transform: `translateY(${((1 - label) * 16).toFixed(2)}px)`,
@@ -167,7 +167,7 @@ export const WhipBrakeReal: React.FC = () => {
         Efficient Models
       </div>
 
-      {/* 索引计数器 */}
+      {/* Mechanical index counter */}
       <div style={{ position: 'absolute', left: 120, top: 70 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, ...type(30, 600, { caps: true }), color: L.ink2, letterSpacing: '0.18em' }}>
           <span style={{ width: 12, height: 12, borderRadius: 6, background: L.accent }} />Project index

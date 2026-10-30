@@ -1,25 +1,25 @@
-// word-relay-filmstrip —— 左列证据胶片步进、右侧大词原位接力（名词恒定 + 动词轮换）
+// word-relay-filmstrip — left filmstrip evidence steps while right title relays (constant noun + verb rotation)
 //
-// 第二轮重设计（石墨 · 电影感编辑部）：
-// - look = graphite（近单色暗场 + 金色点缀）。左列 940×530 页面卡黑白强制相间（出版级假页面：
-//   节奏报告 / 分镜脚本 / 渲染流水线 / 成片 PR 评审 / 影像查看器 / 出货表），每个动词停在对应证据上。
-//   主体是 video-shotcraft（句中简称 Shotcraft）：分镜 frames → 渲染 builds → 成片 ships。
-// - 景深：焦点卡（中心在 y=540）全亮全尺寸，邻卡按离焦距离压暗 + 缩到 0.94 + 轻虚化，
-//   胶片步进时邻卡"对焦"进来——证据的主次一眼可见。
-// - 步进制保留：左列平时零位移，只在切词窗口内 18f 不对称 in-out 滚一格，快段叠纵向运动模糊。
-// - 右侧 Didot 140px：第一行名词「Shotcraft」（正体、次级墨）恒定，第二行动词斜体白字原位接力——
-//   旧词先灰化、8f ease-in 从遮罩上沿升出（先出），新词逐字母从遮罩下沿升起（后进，1.2f 错峰）。
-//   词块垂直中心 = 焦点卡中点 y=540（像素级）；一条金色引线从焦点卡右缘指向词块中线，
-//   换词时收回、新证据落定后重新画出；词块下方一行证据注脚随动词同步接力。
+// Redesign (graphite: cinematic editorial room):
+// - look = graphite (near monochrome dark field + gold accent). Left column 940x530 page cards alternate black and white:
+//   rhythm report / storyboard / render pipeline / final review / viewer / manifest, each verb paired with proof.
+//   Subject is video-shotcraft (Shotcraft): frames -> builds -> ships.
+// - Depth of field: focal card (center at y=540) full scale and brightness; neighbors dim + scale 0.94 + subtle blur,
+//   stepping card focuses in as filmstrip advances.
+// - Stepped mechanics: left column static except during 18f switch window, stepping one slot with vertical motion blur.
+// - Right 140px typography: row 1 noun "Shotcraft" constant, row 2 italic white verb rotates in place —
+//   old verb grays and exits top edge (8f ease-in), new verb rises letter-by-letter from bottom (1.2f stagger).
+//   Vertical center = focal card midline y=540; gold leader line extends from focal card to word block,
+//   retracting on switch and redrawing on settle; supporting footnote relays synchronously below word block.
 //
-// 时间表（30fps，共 180f）：
-//   0–16    预备：胶片静止、Shotcraft 与引线已在，序号 00
-//   16–34   第 1 格：胶片滚到「分镜脚本」，frames 逐字升起（23–45）
-//   34–66   hold（胶片零位移；相机 1→1.02 极缓推）
-//   66–84   第 2 格：frames 灰化升出（66–74）→ builds 升起（73–95），胶片滚到「渲染流水线」
+// Timeline (30fps, total 180f):
+//   0-16    Lead-in: filmstrip static, Shotcraft and leader line present, index 00
+//   16-34   Slot 1: filmstrip scrolls to Storyboard, "frames" rises (23-45)
+//   34-66   Hold (filmstrip static; camera slow push 1->1.02)
+//   66-84   Slot 2: "frames" exits (66-74) -> "builds" rises (73-95), filmstrip scrolls to Render Pipeline
 //   84–114  hold
-//   114–132 第 3 格：ships（121–141），胶片停在「成片 PR 评审」
-//   141–180 hold：尾帧是一张完整的图文对位海报
+//   114-132 Slot 3: "ships" (121-141), filmstrip stops on Final Review
+//   141-180 Hold: final poster lock
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, mix, ramp, velocity } from '../../_fixtures/Polish';
@@ -38,8 +38,8 @@ const STEP = CARD_H + GAP;
 const SANS = FONT.sans;
 const SERIF_TXT = '"Iowan Old Style", "Charter", Georgia, serif';
 
-// —— 页面卡集合：黑白相间（奇偶强制交替），内容各异 ——
-// 分镜脚本（亮）——"frames" 的证据：video-shotcraft 的宣传片分镜文档
+// --- Page Card Collection: alternating black and white ---
+// Storyboard (light) — proof for "frames": launch video storyboard document
 const LightArticle: React.FC = () => (
   <div style={{ position: 'absolute', inset: 0, background: '#ffffff', padding: '30px 46px', fontFamily: SANS }}>
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28, paddingBottom: 16, borderBottom: '1px solid #eceae5' }}>
@@ -68,7 +68,7 @@ const LightArticle: React.FC = () => (
         ))}
       </div>
     </div>
-    {/* 图 1：每个镜头时长的小柱图 + 图注 */}
+    {/* Figure 1: bar chart of shot durations + caption */} 
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, marginTop: 20, paddingTop: 14, borderTop: '1px solid #eceae5' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 48 }}>
         {[0.18, 0.24, 0.31, 0.46, 0.58, 0.72, 0.9, 1].map((v, i) => (
@@ -179,7 +179,7 @@ const DarkStats: React.FC = () => (
   </div>
 );
 
-// 渲染流水线（暗）——"builds" 的证据：宣传片从分镜到成片的构建
+// Render Pipeline (dark) — proof for "builds": pipeline build progress
 const DarkBuild: React.FC = () => (
   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #111318 0%, #0c0d11 100%)', padding: '26px 40px', fontFamily: SANS }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -187,7 +187,7 @@ const DarkBuild: React.FC = () => (
       <div style={{ fontSize: 12.5, fontWeight: 600, color: '#9aa1b4', padding: '3px 9px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)' }}>main</div>
       <div style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: '#e8b84a' }}>● Render #1284 running</div>
     </div>
-    {/* 流水线步骤 */}
+    {/* Pipeline stages */} 
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
       {[['Storyboard', 1], ['Shots', 1], ['Sound', 1], ['Render', 1], ['Deliver', 0]].map(([t, ok], i) => (
         <React.Fragment key={t as string}>
@@ -203,7 +203,7 @@ const DarkBuild: React.FC = () => (
       ))}
     </div>
     <div style={{ display: 'flex', gap: 18 }}>
-      {/* 渲染日志 */}
+      {/* Render logs */} 
       <div style={{ flex: 1.6, background: '#08090c', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '14px 18px', fontFamily: FONT.mono, fontSize: 13, lineHeight: 1.75, color: '#7c8293' }}>
         <div><span style={{ color: '#5f6577' }}>$</span> <span style={{ color: '#d4d8e2' }}>npx remotion render Main launch.mp4</span></div>
         <div><span style={{ color: '#5fc38c' }}>✓</span> Bundled 12 shots in 8.3s</div>
@@ -212,7 +212,7 @@ const DarkBuild: React.FC = () => (
         <div><span style={{ color: '#5fc38c' }}>✓</span> Encoded h264 · 1080p · 30 fps</div>
         <div><span style={{ color: '#e8b84a' }}>▲</span> <span style={{ color: '#c9cdd8' }}>Exporting JianYing draft…</span></div>
       </div>
-      {/* 汇总 */}
+      {/* Summary metrics */} 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[['Duration', '42.0s'], ['Frames', '1,260'], ['Render time', '1m 42s']].map(([k, v]) => (
           <div key={k} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '11px 16px' }}>
@@ -225,7 +225,7 @@ const DarkBuild: React.FC = () => (
   </div>
 );
 
-// 成片 PR 评审（亮）——"ships" 的证据：把宣传片接进落地页的 PR
+// Final Review (light) — proof for "ships": launch PR review
 const CODE: { n: number; d?: '+' | '-'; t: [string, string][] }[] = [
   { n: 12, t: [['export function ', '#a626a4'], ['Hero', '#4078f2'], ['(props: ', '#383a42'], ['HeroProps', '#c18401'], [') {', '#383a42']] },
   { n: 13, t: [['  const ', '#a626a4'], ['film', '#383a42'], [' = ', '#0184bc'], ['staticFile', '#4078f2'], ['(', '#383a42'], ["'launch.mp4'", '#50a14f'], [');', '#383a42']] },
@@ -265,7 +265,7 @@ const LightCode: React.FC = () => (
             {r.t.map(([s, c], k) => <span key={k} style={{ color: c, opacity: r.d === '-' ? 0.6 : 1 }}>{s}</span>)}
           </div>
         ))}
-        {/* 评审评论 */}
+        {/* Review comments */} 
         <div style={{ margin: '14px 20px 0 62px', display: 'flex', gap: 12, alignItems: 'flex-start', fontFamily: SANS }}>
           <div style={{ width: 30, height: 30, borderRadius: 15, background: '#e6e9f2', color: '#4a5577', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>MR</div>
           <div style={{ border: '1px solid #e6e8ec', borderRadius: 10, padding: '9px 14px', background: '#fafbfc' }}>
@@ -278,9 +278,9 @@ const LightCode: React.FC = () => (
   </div>
 );
 
-// 黑白相间的固定顺序（奇偶交替）
-// 第 k 个词配第 k+1 张卡：frames→分镜脚本、builds→渲染流水线、ships→成片 PR 评审；
-// 第 0 张是开场的节奏报告，第 4、5 张是上下露边的邻卡
+// Fixed alternating order
+// Word k pairs with Card k+1: frames -> Storyboard, builds -> Pipeline, ships -> Review;
+// Card 0 is rhythm report, Cards 4 & 5 are neighboring margins
 const CARDS: React.FC[] = [DarkStats, LightArticle, DarkBuild, LightCode, DarkMri, LightTable];
 
 const WORDS = ['frames', 'builds', 'ships'];
@@ -289,16 +289,16 @@ const SWITCHES = [16, 66, 114];
 const SW_DUR = 18;
 const SERIF = '"Didot", "Bodoni 72", "Playfair Display", Georgia, serif';
 const FS = 140;
-const LINE = Math.round(FS * 1.1); // 154：每行行盒
-const WX = 1196; // 词块左缘
-const BLOCK_TOP = 540 - LINE; // 两行词块中心 = 540
+const LINE = Math.round(FS * 1.1); // 154: line height per row
+const WX = 1196; // Left edge of word block
+const BLOCK_TOP = 540 - LINE; // Center of two-line word block = 540
 const CARD_L = 100;
 const FOCUS_TOP = 540 - CARD_H / 2; // 275
 
-// 胶片步进：平时静止，只在切词窗口内滚一格（不对称 in-out：起步稍快、落点很软）
+// Filmstrip step: static except during switch window (asymmetric in-out)
 const stepAt = (frame: number) => SWITCHES.reduce((acc, s) => acc + ramp(frame, s, SW_DUR, EASE.swift), 0);
 
-// 动词：逐字母从遮罩下沿升起；出场整词升出上沿
+// Verb: rises letter-by-letter from bottom mask; exits upward across top
 const Verb: React.FC<{ word: string; frame: number; inAt: number; outAt: number | null }> = ({ word, frame, inAt, outAt }) => {
   const grey = outAt !== null ? ramp(frame, outAt - 10, 10, EASE.smooth) : 0;
   const pOut = outAt !== null ? ramp(frame, outAt, 8, EASE.exit) : 0;
@@ -311,7 +311,7 @@ const Verb: React.FC<{ word: string; frame: number; inAt: number; outAt: number 
     }}>
       {Array.from(word + '.').map((ch, i) => {
         const k = ramp(frame, inAt + i * 1.2, 16, EASE.snappy);
-        const dot = i === word.length; // 句点（金）最后一个升起
+        const dot = i === word.length; // Gold period dot rises last
         return (
           <span key={i} style={{ display: 'inline-block', color: dot && grey < 0.5 ? L.accent2 : undefined, transform: `translateY(${((1 - k) * LINE * 0.95).toFixed(2)}px)` }}>{ch}</span>
         );
@@ -327,7 +327,7 @@ export const WordRelayFilmstrip: React.FC = () => {
   const vy = -velocity((f) => stepAt(f) * STEP, frame);
   const cam = mix(1, 1.02, ramp(frame, 0, WORD_RELAY_FILMSTRIP_DURATION, EASE.swift));
 
-  // 卡片：焦点卡顶 y=275；离焦距离 → 压暗 / 缩小 / 虚化
+  // Card positioning: focal card top y=275; distance controls dimming/scale/blur
   const total = CARDS.length * STEP;
   const cards: React.ReactNode[] = [];
   for (let rep = -1; rep < 2; rep++) {
@@ -354,10 +354,10 @@ export const WordRelayFilmstrip: React.FC = () => {
     });
   }
 
-  // 当前词序号
-  const IN_AT = SWITCHES.map((s) => s + 7); // 新词在切点后 7f 起升（旧词先出）
+  // Active word index
+  const IN_AT = SWITCHES.map((s) => s + 7); // New word rises 7f after switch point
   const idx = IN_AT.filter((s) => frame >= s).length; // 0..3
-  // 引线：切词起 6f 收回，新证据落定（切点 +10f）后 16f 重画
+  // Leader line: retracts 6f on switch, redraws 16f after card settles
   const lastS = [...SWITCHES].reverse().find((s) => frame >= s);
   const lineP = lastS === undefined
     ? ramp(frame, 0, 16, EASE.snappy)
@@ -371,15 +371,15 @@ export const WordRelayFilmstrip: React.FC = () => {
       <div style={{ position: 'absolute', inset: 0, transformOrigin: '960px 540px', transform: `scale(${cam.toFixed(4)})` }}>
         <SpeedBlur vx={0} vy={vy} amount={0.22} max={10}>{cards}</SpeedBlur>
 
-        {/* 引线：焦点卡右缘 → 词块中线（y=540） */}
+        {/* Leader line: focal card right edge -> word block midline (y=540) */} 
         <div style={{ position: 'absolute', left: LX0, top: 539, width: (LX1 - LX0) * lineP, height: 2, background: `linear-gradient(90deg, ${L.accent2}, ${alpha(L.accent2, 0.35)})` }} />
         <div style={{ position: 'absolute', left: LX0 - 7, top: 533, width: 14, height: 14, borderRadius: 7, background: L.accent2, opacity: Math.min(1, lineP * 2), boxShadow: `0 0 16px ${alpha(L.accent2, 0.6)}` }} />
 
-        {/* 序号 */}
+        {/* Numeric index */} 
         <div style={{ position: 'absolute', left: WX + 6, top: BLOCK_TOP - 58, fontFamily: FONT.mono, fontSize: 28, color: L.ink3, letterSpacing: '0.04em' }}>
           <span style={{ color: L.accent2 }}>{String(idx).padStart(2, '0')}</span> / 03
         </div>
-        {/* 词块：Shotcraft 恒定 + 动词接力；两行行盒各 154，整块中心 = 540 */}
+        {/* Word block: Shotcraft constant + verb relay */} 
         <div style={{ position: 'absolute', left: WX, top: BLOCK_TOP, fontFamily: SERIF, fontSize: FS, lineHeight: `${LINE}px`, letterSpacing: '-0.01em' }}>
           <div style={{ height: LINE, color: L.ink2, whiteSpace: 'pre' }}>{BRAND.short}</div>
           <div style={{ position: 'relative', height: LINE, width: 760, overflow: 'hidden', fontStyle: 'italic', padding: '0 0.2em 0 0', margin: '0 -0.2em 0 0' }}>
@@ -388,7 +388,7 @@ export const WordRelayFilmstrip: React.FC = () => {
             ))}
           </div>
         </div>
-        {/* 证据注脚：随动词接力 */}
+        {/* Supporting footnote relaying with verb */} 
         {NOTES.map((n, i) => {
           const pIn = ramp(frame, IN_AT[i] + 6, 14, EASE.snappy);
           const pOut = i + 1 < SWITCHES.length ? ramp(frame, SWITCHES[i + 1], 7, EASE.exit) : 0;

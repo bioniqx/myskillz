@@ -1,38 +1,38 @@
 ---
 name: grain-dissolve
-一句话: 整行字爆裂成沸腾颗粒噪点并浮现斜纹选区框，噪点云急速凝聚成更大号发光短字标，位移衰减归零定格
-适用: 收尾"XX. Now Live"式上线宣告；长句信息压缩成品牌短标的能量聚合拍
-时长: 约 2.0s（60f@30fps；砂化 0.26–0.56s · 凝聚 1.2–1.42s · 凝固回落收尾）
-能量: 中高（短促、一次性的能量脉冲，天然的 outro 卡点）
+summary: A clean line of text boils into displaced grain noise inside a hatched selection frame, then the particle cloud condenses into a larger glowing wordmark that locks sharp.
+use: Concluding "XX. Now Live" launch announcements; energy-concentrating beats condensing sentence-level information into a brand shortmark
+duration: ~2.0s (60f@30fps; grain burst 0.26–0.56s, condensation 1.2–1.42s, solidifying settle resolution)
+energy: Medium-high (short, singular energy pulse; natural outro synchronization beat)
 ---
 
-## 意图
-把"一句话浓缩成一个词"拍成物理事件：句子先失稳沸腾成颗粒（信息解体），选区框暗示"正在选中提取"，然后所有颗粒能量向中心坍缩成更大更亮的短字标——观众读到的是"这一切归结为它"。
+## Intention
+Filming "distilling a sentence into a single word" as a physical event: the sentence destabilizes and boils into particles (dissolution of information), the selection bounding box implies "actively selecting and extracting," and then all particle energy collapses inward into a larger, brighter short wordmark—the audience registers that "all of this culminates in this."
 
-## 动效核心
-- 滤镜链是唯一引擎：`feTurbulence`（fractalNoise，baseFrequency 0.9→1.3）+ `feDisplacementMap`（scale 0→52）+ `feGaussianBlur`（0→1.1px），三者由同一条 `burst` 曲线（t=0.13–0.28，outCubic）驱动
-- 噪点"沸腾"靠 `seed = floor(t*46)` 逐帧换种子——每帧一幅新噪声图，颗粒永不静止
-- t=0.60–0.71 交叉淡化：整行字（26px）淡出、短字标（44px 粗体）淡入，两者共用同一滤镜——切换发生在最沸腾时，观众看不到换字
-- t=0.68–0.90 `lock` 曲线把 displacement scale 和 blur 拉回 0，颗粒"凝固"成清晰字形
-- 白辉光三段式：砂化期 0.3 弱光 → 凝聚冲高 0.7 → t=0.88 后回落 0.45，滤镜链内"紧光 + 宽光"两层冷白 bloom（feGaussianBlur → feColorMatrix → feMerge，半径约 4–33px）同步呼吸；SVG 按原生 1920×1080 栅格化，颗粒才细
-- 斜纹选区框（45° 线阵 + 四角像素棋盘手柄）随 burst 浮现、t=0.55–0.64 撤掉——在凝聚前退场，不抢主体
+## Motion Core
+- Filter chain is the sole engine: `feTurbulence` (fractalNoise, baseFrequency 0.9 -> 1.3) + `feDisplacementMap` (scale 0 -> 52) + `feGaussianBlur` (0 -> 1.1px), all three driven by the same `burst` curve (t=0.13–0.28, outCubic).
+- Grain "boiling" relies on frame-by-frame seed switching via `seed = floor(t*46)`—a new noise texture every frame ensures particles are never static.
+- t=0.60–0.71 crossfade: the full sentence (26px) fades out while the short wordmark (44px bold) fades in, both sharing the identical filter—the switch occurs at peak boiling intensity so the font swap is invisible to viewers.
+- t=0.68–0.90 `lock` curve brings displacement scale and blur back to 0, "freezing" particles into crisp typography.
+- Three-stage white bloom: 0.3 subtle glow during grain burst -> surge to 0.7 at condensation peak -> settling back to 0.45 after t=0.88; dual tight and wide cool-white bloom layers inside the filter chain (feGaussianBlur -> feColorMatrix -> feMerge, radius ~4–33px) breathe synchronously; SVG is rasterized at native 1920x1080 to maintain ultra-fine particle fidelity.
+- Hatched selection frame (45 deg diagonal rule array + 4 corner pixel-checkerboard handles) emerges with burst and withdraws at t=0.55–0.64—exiting prior to condensation so as not to upstage the subject.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| displacement scale | 峰值 52 | <30 只是"轻微毛边"；>80 颗粒散到认不出轮廓，"隐约可辨"是砂化质感的底线 |
-| baseFrequency | 0.9 → +0.4 | 越高颗粒越细；低于 0.5 变成大块扭曲不是"砂" |
-| seed 换帧率 | floor(t*46)，2s 内 46 次 | 降低会看出噪声图重复；保持 ≥20 次/秒的换图率 |
-| 砂化窗口 | 0.13–0.28（outCubic） | 前 0.13 的干净字停留是"失稳前的常态"，砍掉则没有对比 |
-| 凝聚交叉 | 0.60–0.71（inOutCubic） | 必须落在最沸腾段内完成换字；提前会穿帮看到两行字叠影 |
-| 辉光包络 | burst·0.3 + cond·0.7 − settle·0.45 | 凝聚冲高是卡点位，压 BGM 重音；回落别到 0，留柔光"余温" |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| displacement scale | Peak 52 | <30 is merely "rough edges"; >80 scatters particles beyond legibility; "faintly discernible" is the aesthetic baseline |
+| baseFrequency | 0.9 -> +0.4 | Higher frequency yields finer grain; below 0.5 creates chunky warping rather than sand grain |
+| seed frame rate | floor(t*46), 46 swaps in 2s | Lower rates reveal repeating noise patterns; maintain >=20 frame updates/sec |
+| Grain burst window | 0.13–0.28 (outCubic) | The initial 0.13s clean text hold establishes normal stability; cutting it destroys the contrast |
+| Condensation crossfade | 0.60–0.71 (inOutCubic) | Must complete the text swap within the peak boiling window; premature crossfades expose overlapping ghost text |
+| Glow envelope | burst * 0.3 + cond * 0.7 - settle * 0.45 | Condensation surge is the musical accent point hitting the BGM downbeat; do not settle to 0, leave warm residual ambient glow |
 
-## 已知坑
-- demo 的文案是 `{ video-shotcraft. Now Live }` → 凝聚成 `video-shotcraft` 字标（全小写）；换项目短标时两行 `<text>` 都要改：整行句式 `{ XX. Now Live }` 与短标 XX 必须指同一对象，否则叙事断裂
-- 短标变长（>6 字符）需同步缩字号或加宽选区框 bw，否则凝聚后超出框位视觉重心偏移——demo 的 15 字符品牌名把整行字从 33px 缩到 26px、短标从 54px 缩到 44px，游离砂粒的落点范围同步放宽到字标字面
-- `feDisplacementMap` 在 Safari 上性能较差，这张卡是 2s 短拍可接受；拉长时长需实测帧率
-- 选区框撤场（0.55–0.64）必须早于凝聚完成（0.71）——框留到凝固后会读作"还没选完"，语义反了
+## Known Pitfalls
+- The demo copy is `{ video-shotcraft. Now Live }` -> condensing into the `video-shotcraft` wordmark (all-lowercase); when swapping project names, update both `<text>` lines: the sentence `{ XX. Now Live }` and the wordmark XX must reference the exact same entity to avoid narrative disconnect.
+- If the shortmark is longer (>6 characters), proportionally reduce font size or widen selection frame bw; otherwise condensation extends beyond frame boundaries, unbalancing the visual center—the demo's 15-character brand name reduced sentence font from 33px to 26px and shortmark from 54px to 44px, widening loose particle settle targets accordingly.
+- `feDisplacementMap` exhibits lower performance in Safari; acceptable for a 2s short take, but longer takes require framerate profiling.
+- Selection frame withdrawal (0.55–0.64) must precede completion of condensation (0.71)—leaving the frame up after condensation reads as "selection still in progress," reversing the intended semantics.
 
-## 参考实现
+## Reference Implementation
 demos/outro/grain-dissolve/
-（GrainDissolve.tsx）
+(GrainDissolve.tsx)

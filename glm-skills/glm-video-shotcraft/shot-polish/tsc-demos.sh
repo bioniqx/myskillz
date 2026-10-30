@@ -1,23 +1,58 @@
 #!/usr/bin/env bash
-# tsc-demos.sh [demos 下相对路径或目录…] — 用工作台 node_modules 按 CI 同口径（strict）类型检查 demo。
-# 不给参数 = 全部 demos。例：shot-polish/tsc-demos.sh camera/crash-zoom-punch data
+# tsc-demos.sh [relative path or directory under demos…] — Type-check demos with workbench node_modules matching CI (strict).
+# No arguments = check all demos. Example: shot-polish/tsc-demos.sh camera/crash-zoom-punch data
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WB="$ROOT/workbench"
-DIR="$WB/.check/tsc-$$"
-mkdir -p "$DIR"
-trap 'rm -rf "$DIR"' EXIT
-targets=("$@"); [ ${#targets[@]} -eq 0 ] && targets=(.)
-files=()
-for t in "${targets[@]}"; do
-  t="${t#demos/}"
-  while IFS= read -r f; do files+=("\"../../demosrc/${f#$ROOT/demos/}\""); done < <(find "$ROOT/demos/$t" -name '*.tsx' | sort)
-done
-list=$(IFS=,; echo "${files[*]}")
-cat > "$DIR/tsconfig.json" <<JSON
-{ "compilerOptions": { "noEmit": true, "strict": true, "skipLibCheck": true, "esModuleInterop": true,
-  "jsx": "react-jsx", "target": "es2022", "module": "esnext", "moduleResolution": "bundler",
-  "lib": ["dom", "es2022"], "resolveJsonModule": true, "preserveSymlinks": true, "types": [] },
-  "files": [$list] }
-JSON
-cd "$DIR" && "$WB/node_modules/.bin/tsc" -p tsconfig.json && echo "tsc OK (${#files[@]} files)"
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKBENCH="$ROOT/workbench"
+TSC="$WORKBENCH/node_modules/.bin/tsc"
+
+if [[ ! -x "$TSC" ]]; then
+  echo "tsc not found under workbench/node_modules. Run: (cd workbench && npm install)" >&2
+  exit 2
+fi
+
+TMP_CONFIG="$(mktemp -t tsc-demos-XXXXXX.json)"
+trap 'rm -f "$TMP_CONFIG"' EXIT
+
+if [[ $# -eq 0 ]]; then
+  INCLUDES='"demos/**/*.tsx", "demos/**/*.ts"'
+else
+  INCLUDES=""
+  for arg in "$@"; do
+    clean="${arg#demos/}"
+    clean="${clean#/}"
+    if [[ -d "$ROOT/demos/$clean" ]]; then
+      pattern="demos/$clean/**/*.tsx\", \"demos/$clean/**/*.ts"
+    elif [[ -f "$ROOT/demos/$clean" ]]; then
+      pattern="demos/$clean"
+    elif [[ -f "$ROOT/demos/$clean.tsx" ]]; then
+      pattern="demos/$clean.tsx"
+    else
+      echo "No such file or directory under demos/: $arg" >&2
+      exit 2
+    fi
+    if [[ -z "$INCLUDES" ]]; then
+      INCLUDES="\"$pattern\""
+    else
+      INCLUDES="$INCLUDES, \"$pattern\""
+    fi
+  done
+fi
+
+cat > "$TMP_CONFIG" <<EOF
+{
+  "extends": "$WORKBENCH/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "workbench/src/vite-env.d.ts",
+    $INCLUDES
+  ]
+}
+EOF
+
+echo "Type-checking with workbench/tsconfig.json..."
+"$TSC" -p "$TMP_CONFIG"
+echo "OK"

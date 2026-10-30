@@ -1,43 +1,35 @@
 ---
 name: panel-grid-moves
-一句话: 分格节奏——comic-panel-split 漫画斜格劈出同一主体的三个机位，咔咔咔三格定格后末格斜边吃屏成海报
-适用: 把"格子"当节奏器：同主体多机位定格并列，逐格踩拍劈出；吃拍点
-时长: 156f ≈5.2s（全屏侧拍 20f + 三刀分格定格 + 吃屏 + 海报 hold）
-能量: 中高
-标签: ui-entrance
+summary: An angled comic-panel split that cuts one moment into three framings before resolving to a poster.
+use: Using panel splits as a metronome: slicing multiple angles of the same subject into frozen panels on the beat; hitting rhythm points
+duration: 156f ≈ 5.2s (full-screen 3/4 angle 20f + 3 slash-cut freeze panels + screen engulf + poster hold)
+energy: Medium-high
+tags: ui-entrance
 ---
 
-## 意图
-与 wall-reveal-moves 的区别是本卡的定位锚：那是"整墙怎么入场"
-（一次性揭示），这是"格子怎么当节奏器"——分格发生在节拍上，格变即鼓点。
-A 是并：画面被三刀斜缝咔咔劈开，同一产品三种机位同时定格，
-停一拍后末格斜边扫过吃掉全屏——Scott Pilgrim 的分屏语言。
-适合单品多视角（demo：一支刻着 video-shotcraft 的定焦镜头，三格旁白框按
-「Shot 01 / 02 / 03」编号，吃屏后落成「Craft the shot.」海报）。
+## Intention
+Distinction from `wall-reveal-moves`: that card addresses "how an entire wall enters" (one-time reveal), whereas this card addresses "how panel grids act as a rhythm engine"—splits land on musical beats, and panel transitions serve as drum kicks. Variant A splits: the screen is slashed by three diagonal seams, freezing three camera angles of the same product simultaneously; after a resting beat, the final panel sweeps across to engulf the full canvas—drawing on the split-screen comic vernacular of Scott Pilgrim. Ideal for multi-angle product showcases (demo: a prime lens engraved with video-shotcraft, three commentary panels numbered "Shot 01 / 02 / 03," resolving into a "Craft the shot." poster after the screen sweep).
 
-## 选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A comic-panel-split | 全屏 3/4 侧拍 20f → 三刀 12° 斜缝每 4f 一刀从上往下劈出，对应格硬切弹入（5f scale 1.07→1 + 白闪）；三格 = 同一主体的全身 / 局部特写 / 微距；定格 29f 靠主体自身动作保活；末格 2f 反向回拉 + 14f 扫屏吃掉全屏成海报 | 同一主体多视角并列；漫画感段落 |
+## Variant Selection
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A comic-panel-split | Full-screen 3/4 angle 20f -> three 12 deg diagonal cuts slash down every 4f, corresponding panels hard-cut popping in (5f scale 1.07->1 + white flash); three panels = wide / detail close-up / macro of the same subject; 29f freeze sustained by subject's own internal motion; final panel 2f reverse anticipation + 14f screen sweep engulfing canvas into poster | Multi-angle presentation of a single subject; graphic comic-styled sequences |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 斜缝 | SVG 双线：墨边 + 奶油纸芯（总宽 18px），12° 斜角，每刀 3f 从上往下画出 | 斜缝纸芯是漫画感命门；直缝读作分屏工具 |
-| A 保活 | 定格期主体自己在动：对焦环转 26°、光圈叶片收拢、全身格极缓推近 | 三格全静读作截图拼贴；"镜头在工作"比缓推更有内容 |
-| A 旁白框 | 奶油底 + 4px 墨描边 + 7px 硬投影，-2° 歪斜盖章弹入，活在格子里随格被盖掉 | 漫画语言的第二个锚点；浮在格子上方会穿帮 |
-| 收尾 | 最后一行字揭示完后 ~50f 海报 hold（只留 1.5% 极缓推近） | R1；摘罩帧与吞屏终值逐像素对齐防跳变 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Diagonal seams | SVG dual-line: ink border + cream paper core (total width 18px), 12 deg angle, each cut draws top-to-bottom over 3f | Cream paper core provides comic book soul; straight vertical seams look like generic split-screen tools |
+| A Keep-alive motion | Subject moves internally during freeze: focus ring turns 26 deg, aperture blades close, wide panel pushes in subtly | Completely static panels read like screenshot collages; "the lens is working" offers richer content than camera pushes |
+| A Narrative captions | Cream background + 4px ink border + 7px hard drop shadow, −2 deg tilted stamp pop-in, lives inside panels and gets cleared with them | Secondary anchor for comic vernacular; floating above panels breaks the illusion |
+| Finale | ~50f poster hold after final copy line reveal (preserving only 1.5% subtle push-in) | R1; align unmasking frames pixel-by-pixel with sweep termination to prevent jumps |
 
-## 已知坑
-- demo 在虚构内容（矢量镜头）上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 三格必须是**同一主体的不同机位**——三格塞不同内容读作 bento
-  排版不是漫画分格，语义就散了
-- 吃拍点、声音强依赖：逐格咔咔三声（sound-design §4.5）；不踩拍的分格只是布局动画
-- 主体用 SVG 矢量画（或高分辨率素材）：三格机位最高放大 2.45x，
-  位图截图放大会糊（Q2）
-- 同片分格系 ≤1 段——格子语言辨识度太强，两段就撞
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- The three panels must present **different camera angles of the same subject**—stuffing different subjects into panels reads like a bento grid rather than comic panels, destroying semantic clarity.
+- Strong audio dependency: three crisp mechanical clicks on each slash (sound-design §4.5); un-synced panel splits are merely layout transitions.
+- Render subject as SVG vectors (or high-resolution assets): panel camera angles zoom up to 2.45x; bitmap screenshots will blur (Q2).
+- Limit panel grid sequences to <=1 per video—panel visual language is extremely distinctive; two occurrences collide.
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/panel-grid-moves/
-（ComicPanelSplit.tsx）
+(ComicPanelSplit.tsx)

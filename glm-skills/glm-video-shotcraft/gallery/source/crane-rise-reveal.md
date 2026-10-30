@@ -1,56 +1,39 @@
 ---
 name: crane-rise-reveal
-一句话: 升降臂拉升揭示——开场怼在一行数据特写，相机沿 Y 轴减速升起后拉，行行涌入直到整面 dashboard 铺满全幅
-适用: "从细节到全局"的开场定场；与 drone-dive-landing（全局→单点俯冲）互为反向
-时长: 5.5s（165f：特写 hold 24f + 拉升 102f + 落定/余波/静止 39f）
-能量: 中高（持续单向运动，无冲击拍）
-标签: camera、data
+summary: The camera starts tight on one data row, rises and pulls back, then reveals a full dashboard filling the frame.
+use: Establishing shot transitioning "from detail to global view"; inverse counterpart to drone-dive-landing (global -> single point dive)
+duration: 5.5s (165f: close-up hold 24f + crane lift 102f + settle/aftermath/hold 39f)
+energy: Medium-High (continuous unidirectional motion, no impact beat)
+tags: camera, data
 ---
 
-## 意图
-开场定场库内已有 drone-dive-landing——从上帝视角砸进 hero 特写，
-"全局→焦点"。本卡是它的镜像："焦点→全局"——先怼在一行真实数据上
-让观众看清"这是什么"，再升降臂式拉升后退，一排排内容涌入画面，
-最后整面产品铺满——"你看到的这一行，只是这一面墙的一格"。
-适合以产品体量/内容丰富度为卖点的开场；两卡同片只用一个方向。
+## Intention
+The library already contains drone-dive-landing for opening establishing shots—slamming into a hero close-up from a bird's-eye perspective ("global -> focus"). This card is its exact mirror: "focus -> global"—first zooming tight onto a single row of real data so viewers parse "what this is," then rising and pulling back like a crane arm as row after row floods into view, until the full product dashboard covers the screen—"the row you just saw is merely one cell in this entire wall." Suited for openings spotlighting product scale and content richness; choose only one direction per film.
 
-## 动效核心
-- transform-origin 固定左上，联动公式 `translate = 屏幕中心 − 对准点×scale`；
-  对准点沿 (追踪行左段)→(页面中心) 与 scale 3.0→1.0 **共用同一条
-  不对称缓动 bezier(0.2,0,0.25,1) 进度**——一条 p = 一台相机一次机动（同 C 式判例）
-- 减速曲线（先快后慢）是"升降臂"的手感：起步有劲、临顶缓停；零速起步、19% 处达峰
-  （≈2.3× 平均速），不从 hold 瞬间跳到最高速；hold 内相机先"吸一口气"推近 1.5% 作预备
-- 对焦：特写 hold 时只有被追踪的那一行是实的（钴蓝底 + 行首呼吸追踪点），其余行压到 38%，
-  起吊后 ~26f 回满——先让观众看清"这一个镜头"，再看全部
-- 逐行洗光：相机可见区上缘 `visTop = fy − 540/s` 首次越过某行顶边时，
-  该行一道强调色洗光从行首掠到行尾（3f 起、6f 后 18f 落，带 1px 强调色描边）——
-  "涌入"的可读性来源；触发帧逐帧解出，与运镜严格同步
-- 体量感：页头 KPI（今日渲染帧数）与拉升同期从 0 数到 48,210（expo-out，与运镜同帧收），窗口阴影随拉开
-  从贴近升到悬浮高度，舞台点阵按 0.35 视差慢移——窗口最后读作舞台上的一件实物
-- 余波：落定后追踪行的状态胶囊由「Rendering」翻成「Rendered」（弹簧 damping 16 + 对勾描画 + 进度条补满），
-  hold 段里唯一的小事件
-- 白底上"提亮"不可见，**加深/上色才可感**（判例：brightness 提亮在白卡上等于没做）
+## Motion Core
+- transform-origin fixed top-left, linked via formula `translate = screenCenter - focusPoint*scale`; focus point moves along (tracked row left segment) -> (page center) sharing **the exact same asymmetric easing bezier(0.2,0,0.25,1) progress** with scale 3.0->1.0—one p = one camera maneuver.
+- Deceleration curve (fast start, slow end) delivers "crane arm" sensation: punchy start, gentle stop at apex; zero initial velocity, peaking at 19% (~2.3x average speed), avoiding instantaneous jump to top speed from hold; during hold, camera first "inhales" and pushes in 1.5% as anticipation.
+- Focus: During close-up hold, only the tracked row is solid (cobalt blue base + pulsing tracking dot at start), with remaining rows crushed to 38%, recovering fully ~26f after lift begins—first let viewers parse "this single shot," then see everything.
+- Row-by-row light wash: When visible camera upper bound `visTop = fy - 540/s` first crosses a row's top edge, an accent wash sweeps from row start to end (starts at 3f, peaks after 6f, settles over 18f, with 1px accent border)—the primary source of legibility for "surging in"; triggered frame-by-frame in strict sync with camera move.
+- Sense of scale: Header KPI (frames rendered today) counts from 0 to 48,210 synchronously with lift (expo-out, settling on same frame as camera); window shadow elevates from surface to floating height as camera widens; stage dot matrix drifts slowly at 0.35 parallax—window ultimately reads as a physical object on stage.
+- Aftermath: After settling, tracked row status capsule flips from "Rendering" to "Rendered" (spring damping 16 + checkmark draw + progress bar filling), providing the sole micro-event within hold segment.
+- "Brightening" is invisible on white backgrounds; **darkening or coloring is required for perceptibility** (benchmark: brightness increase on white cards is imperceptible).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 起点特写 | scale 3.0，对准追踪行左段（镜头号 / 转场 63px 大字；取景下缘停在窗口底边上方，不露窗外） | hold ≥20f 让"这是一行数据"可读再起飞 |
-| 拉升 | 102f bezier(0.2,0,0.25,1)，scale 3.0→1.0 | 快于 80f 行洗光追不上；慢于 130f 中段拖 |
-| 对焦 | 非追踪行 38% → 100%，起吊后 26f | 不压暗时特写里每行同权，观众不知道看哪一行 |
-| 行洗光 | 越线触发，强调色从行首掠过 + 细描边，~24f | 洗光跟不上相机（固定间隔触发）立刻穿帮 |
-| 收尾 | 满幅后不再补推，靠状态翻转让 hold 活着，静止 ≥30f | R1；满幅帧即标准构图 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Initial close-up | scale 3.0, aimed at left segment of tracked row (shot number / transition 63px large type; lower framing rests above window bottom edge without exposing outside) | Hold >=20f so "this is a row of data" is readable before launch |
+| Crane lift | 102f bezier(0.2,0,0.25,1), scale 3.0->1.0 | Faster than 80f causes row wash to lag behind; slower than 130f drags in middle |
+| Focus | Non-tracked rows 38% -> 100%, 26f post-lift | Without dimming, all rows have equal weight in close-up, leaving viewers unsure where to look |
+| Row wash | Triggered upon boundary crossing, accent sweeps from row start + hairline border, ~24f | Wash falling behind camera (fixed interval trigger) immediately ruins illusion |
+| Settle | Do not add secondary push after reaching full frame; rely on status flip to keep hold alive, static hold >=30f | Full frame serves as canonical composition |
 
-## 已知坑
-- demo 在虚构数据的手搓产品窗口（video-shotcraft 渲染队列）上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 起点特写 = 一行内容被放大 3.2 倍盯着看，真实素材先过
-  审美准则 Q2 的高分辨率栅格化技法，低倍截图开场即糊
-- 快速拉升段可包 CameraMotionBlur（参数见 deck-deal-flyin 运动模糊行），
-  但只包前半程快速段——临顶慢速段包了会抹软文字（轮 #8 判例）；
-  半透明洗光叠层别放进 CameraMotionBlur（多重采样叠加出竖条伪影），单独一层同相机
-- 与 drone-dive-landing 同片不并用（一升一降互为镜像，观众读作同一招）；
-  与 crane 语义最近的 tilt-reveal 未入库，别混称
+## Known Pitfalls
+- Demo calibrated on custom product window with fictional data (video-shotcraft render queue)—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- Starting close-up = inspecting a single row of content magnified 3.2x; real assets must first satisfy high-resolution rasterization guidelines, otherwise low-res screenshots blur immediately on opening.
+- Fast lift segment can wrap CameraMotionBlur, but only for the first half's rapid section—wrapping the final slow section blurs and softens typography; do not place translucent light wash overlays inside CameraMotionBlur (multi-sampling creates vertical streak artifacts); keep on separate layer sharing same camera.
+- Do not combine with drone-dive-landing in the same film (one ascending and one descending are mirrors, reading as the same trick); tilt-reveal, which is semantically closest to crane, is not in the library—do not conflate them.
 
-## 参考实现
+## Reference Implementation
 demos/opening/crane-rise-reveal/
-（CraneRiseReveal.tsx）
+(CraneRiseReveal.tsx)

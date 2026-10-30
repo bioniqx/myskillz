@@ -1,48 +1,38 @@
 ---
 name: tear-streak-transitions
-一句话: 撕裂转场——glitch-displace 噪声撕裂（16 横条错位抖动中硬切），数字故障语义的条带级撕裂
-适用: 高能换页：数字故障/断裂语义；页面完整性不破、能量拉满的条带级撕裂
-时长: 前态 ≥40f + 撕裂 16–24f + 收尾 ≥40f，约 4.5s（135f）
-能量: 高
-标签: effects
+summary: A high-energy tear: horizontal glitch strips whose displacement hides the hard cut.
+use: High-energy page transitions: digital glitch / disruption semantics; strip-level tearing that keeps page integrity intact while pushing energy to the max.
+duration: Prior state ≥40f + tear 16–24f + settle ≥40f, approx. 4.5s (135f).
+energy: High
+tags: effects
 ---
 
-## 意图
-本卡管**条带级撕裂**——页面被切成横条高速运动，但每条内容完整。
-这是反复裁决划出的品味分界：碎块系转场三连否（doom-melt 竖条坠落、
-pixel-dissolve 方块翻黑、facade-block 砖块翻飞全部淘汰），条带系过关。碎块读作"页面被破坏"，条带读作"页面在高速
-运动"——完整性不破、能量却拉满。横向撕：条带左右错位抖动 +
-双色剪影重影（RGB split 的克制版：同一页内容的两份单色剪影，只用画面强调色两色，±12px 错开）。
-适用系统故障/瞬间跳变语义——demo 用它做"发布控制台从 Rolling out 99% 跳到 is live"的状态跳变。
+## Intention
+This card governs **strip-level digital tearing**—the page is sliced into horizontal bands moving at high velocity, yet the content within each band remains intact. This represents a taste boundary defined by repeated review rulings: fragmented block transitions were struck down three times in succession (doom-melt vertical drip, pixel-dissolve black tile flips, and facade-block 3D tumbling bricks were all eliminated), whereas strip-based transitions passed. Fragmented blocks read as "the page is being destroyed," whereas horizontal strips read as "the page is undergoing high-velocity motion"—maintaining structural integrity while driving kinetic energy to its peak. Horizontal tear: strips jitter with left/right displacement + dual-color silhouette ghosting (a restrained take on RGB split: two monochromatic silhouette duplicates of the page content rendered strictly in the scene's two accent colors, offset by ±12px). Ideal for system disruption or instantaneous state-flip semantics—the demo applies it to a state transition where a deployment console snaps from "Rolling out 99%" to "is live."
 
-## 单式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A glitch-displace | 16 条不等高水平条带（外层裁剪+内层整页 translateY 对位），每条 translateX 由库标 h(i*31+f*7) 驱动 ±70px 抖动，叠双色剪影重影 + 扫描亮线；54f 满幅抖动中硬切 B 页，再抖 6f 至 60f 归位 | 故障/断裂语义；状态跳变（上线、切换版本）；高潮前的暴力换页 |
+## Variant Selection
+| Variant | Method | Application |
+|---|---|---|
+| A glitch-displace | 16 horizontal strips of unequal height (outer container clip + inner full-page translateY counter-alignment); each strip's translateX is driven by library standard hash h(i*31 + f*7) producing ±70px jitter, layered with dual-color silhouette ghosting + glowing scanlines; hard cuts to Page B at 54f amidst full-amplitude jitter, shaking for 6 more frames until resetting cleanly at 60f | Glitch / disruption semantics; instantaneous state flips (going live, switching releases); violent page transitions before a climax |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 抖幅 | ±70px，按条分能量（约两成不动 / 三成满幅 / 其余轻颤），位移过指数 0.6 推向两端；底层垫完整页防露底缝 | 峰值帧条带错位必须肉眼明显——±12px 级读不出撕裂；全员同幅乱抖像水波 |
-| 包络 | 44–47f out-cubic 冲起 → 平台 → 54–60f 线性消散 | 冲击判例：扩散 out-cubic、消散线性 |
-| 重影 | ±12px 双色剪影（页面内容的强调色单色副本，screen 叠加，随条一起错位，只给错位大的条） | 无重影只是抖不是 glitch；剪影只画内容不画底，暗场上才不发灰 |
-| 切边 / 扫描线 | 错位 >25px 的条上沿 1.5px 亮线、下沿 3px 暗渐变；每帧 2 根随机高度全宽扫描亮线 | 每条都画亮边会读成横格纸——只给重撕条 |
-| 切点掩护 | 54f 曝光 1.28 / 55f 1.12 + 整屏 1.6% 冲击放大 6f 收回；30–31f 两条细条 ±12px 前兆 | 前兆是预备：观众先"感到不对"再撕 |
-| 摘罩 | 60f 起条带、重影、扫描线、filter 全部条件卸载直出裸 B | opacity 0 不算摘；滤镜残留毁真静止 |
-| 收尾 | 75f（余波 40f：区域格青绿波、计数、指标升起 + hold 35f） | R1；余波只在页面内容层，不再有撕裂元素 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Jitter amplitude | ±70px, energy distributed across strips (~20% stationary / ~30% full throw / remainder subtle flutter), displacement mapped through power 0.6 to push values toward extremes; solid background layer underneath prevents revealing gaps | Peak-frame strip displacement must be glaringly obvious—±12px offsets fail to register as a tear; uniform jitter across all strips resembles water ripples |
+| Envelope | 44–47f out-cubic surge → plateau → 54–60f linear dissipation | Impact precedent: out-cubic expansion, linear decay |
+| Ghosting | ±12px dual-color silhouettes (monochromatic copies of page content in scene accent colors, screen blend mode, displaced synchronously with strips, applied only to high-displacement strips) | Jitter without ghosting is just shaking, not a glitch; silhouettes must render only foreground content without background fills to avoid muddying dark stages |
+| Cut edges / Scanlines | 1.5px bright highlight on top edge, 3px dark gradient on bottom edge for strips with >25px displacement; 2 full-width glowing scanlines at random heights per frame | Drawing edge highlights on every strip makes the screen resemble ruled notebook paper—reserve highlights for heavily torn strips |
+| Cut concealment | 54f exposure 1.28 / 55f 1.12 + 1.6% full-screen impact scale impulse recovering over 6f; 30–31f two thin strips twitch ±12px as an omen | Omens act as preparation: the audience senses something unstable before the full tear detonates |
+| Unmasking | At 60f, conditionally unmount strips, ghosting, scanlines, and filters to display raw Page B directly | Setting opacity to 0 does not equal unmounting; lingering filters destroy true static hold |
+| Settle | 75f (aftermath 40f: grid ripple waves in cyan-green, counter ticking, metric card rises + hold 35f) | R1; aftermath motions occur strictly within the page content layer, completely free of tearing elements |
 
-## 已知坑
-- demo 在程序绘制的暗场控制台页（midnight look）上调校——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验；亮底页面上剪影重影改 multiply 才看得见
-- **条带不碎块**——后续同类手法一律做条带：横条各自完整，
-  绝不裂成方块/砖块/独立坠落物（三连否判例，见意图）
-- 高能转场，与 whip-pan/crash 系同片注意能量预算——
-  高能转场挤在一起互相稀释
-- 硬切藏在满幅抖动中（54f 切、60f 归位）——切点暴露在静止帧上
-  就失去了 glitch 的掩护
-- 条带页必须自带不透明底（渐变 + 点阵），暗角与颗粒只在最上层画一次——
-  透明条带会和底层整页叠影，暗角跟着条带错位会露馅
+## Known Pitfalls
+- Demo was calibrated on a procedurally generated dark-mode console page (midnight look)—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use; on light-background pages, switch silhouette ghosting to multiply blend mode to maintain visibility.
+- **Strips, never fragmented blocks**—future variations must strictly adhere to horizontal strips: individual bands remain cohesive and must never shatter into tiles, bricks, or falling debris (three-in-a-row rejection ruling, see Intention).
+- High-energy transition; mind your energy budget when sharing a film with whip-pans or crash zooms—crowding high-energy transitions together dilutes impact across the board.
+- The hard cut is hidden within peak-amplitude jitter (cut at 54f, settled by 60f)—exposing the cut frame on a static hold forfeits the cover of the glitch.
+- Strip layers must possess an opaque background (gradient + dot matrix); vignettes and grain should only be rendered once on the top master layer—transparent strips cause ghosted overlaps with the underlying page, and moving vignettes along with individual strips exposes the seams.
 
-## 参考实现
+## Reference Implementation
 demos/transition/tear-streak-transitions/
-（GlitchDisplace.tsx）
+(GlitchDisplace.tsx)

@@ -1,22 +1,22 @@
-// 升降臂拉升揭示（crane-rise-reveal）——crane shot：焦点 → 全局。
+// Crane rise reveal (crane-rise-reveal) — crane shot: focal point -> wide view.
 //
-// 第二轮重设计（瓷白 SaaS · video-shotcraft 渲染队列）：
-// - look = porcelain（冷白 + 钴蓝，青绿点缀）。世界 = 一扇为镜头设计的产品窗口：顶栏 + 「Render queue」页头
-//   （右侧 104px 的今日渲染帧数 KPI）+ 12 行镜头渲染任务表。开场相机 3.0× 怼在第 10 行任务上——镜头号 / 转场 / 配方卡
-//   在画面里是 63px 的大字，行首一枚钴蓝"正在追踪"标，观众先看清"这是一个具体的镜头"。
-// - 拉升：translate = 屏幕中心 − 对准点×scale，对准点与 scale 共用一条 bezier(0.2,0,0.25,1)（零速起步、
-//   ~19% 处峰速、长尾临顶缓停 = 升降臂手感）。视野上缘每越过一行，该行一道钴蓝洗光从行首掠过（越线触发、
-//   与运镜逐帧同步）——"一行行涌入"；页头 KPI（今日渲染帧数）同步从 0 数到 48,210（体量感），窗口最后整体脱离画框、
-//   落成瓷白舞台上的一件实物（背景点阵按 0.35 视差慢移，读出纵深）。
-// - 余波：落定后被追踪的那一行状态胶囊由「Rendering」翻成青绿「Rendered」+ 对勾——hold 段里唯一的小事件，
-//   结尾帧 = 「你盯着的这一行，只是这面墙的一格」。
+// Iteration 2 redesign (porcelain SaaS · video-shotcraft render queue):
+// - look = porcelain (cool white + cobalt blue, accented with teal). World = a product window designed for shots: top bar + "Render queue" page header
+//   (right-side 104px KPI for today's rendered frames) + 12-row shot render task table. Opening camera is 3.0x tightly cropped on row 10—shot ID / cut / recipe card
+//   display as large 63px text, with a cobalt blue "tracking" dot at the row head so viewers first recognize "this is a specific shot".
+// - Rise: translate = screen center - target * scale, target and scale share a bezier(0.2,0,0.25,1) curve (zero-speed launch,
+//   ~19% peak speed, long-tail gentle deceleration = crane boom feel). As the top of the viewport crosses each row, a cobalt blue sheen sweeps across the row from the head (triggered on crossing,
+//   synced frame-by-frame with camera motion) — "surging in row by row"; header KPI (today's rendered frames) synchronously counts from 0 to 48,210 (sense of volume), and the window detaches from the frame,
+//   landing as a physical artifact on the porcelain stage (background dot grid shifts with 0.35 parallax, conveying depth).
+// - Aftermath: After settling, the tracked row status capsule flips from "Rendering" to teal "Rendered" with a checkmark — the single micro-event in the hold phase,
+//   concluding with: "the row you were focusing on is just one cell in this entire wall."
 //
-// 时间表（30fps，共 165f）：
-//   0–24    特写 hold：相机 +1.5% 预备推近（吸一口气），行首追踪点呼吸
-//   24–126  拉升 102f：前 ~40f 快速段包 CameraMotionBlur；行洗光越线触发；KPI 计数（expo-out，与运镜同期收）
-//   126–138 落定：窗口阴影收到静置高度、KPI 末位落定
-//   134–148 余波：追踪行状态翻 Rendered（弹簧 damping 16）
-//   148–165 hold 干净落定
+// Timeline (30fps, 165f total):
+//   0–24    Close-up hold: camera +1.5% preparatory push-in (taking a breath), row-head tracking point pulses
+//   24–126  Crane rise 102f: early ~40f fast section wrapped in CameraMotionBlur; row sheens triggered on crossing; KPI count (expo-out, finishes with camera move)
+//   126–138 Settle: window shadow retracts to resting elevation, KPI last digit settles
+//   134–148 Aftermath: tracked row status flips to Rendered (spring damping 16)
+//   148–165 Clean hold settle
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { CameraMotionBlur } from '@remotion/motion-blur';
@@ -24,49 +24,49 @@ import { bezier, ramp, mix, EASE, FONT, softShadow } from '../../_fixtures/Polis
 import { LOOKS, Stage, alpha, springAt } from '../../_fixtures/Look';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
-export const CRANE_RISE_REVEAL_DURATION = 165; // 特写 hold 24f + 拉升 102f + 落定/余波/hold 39f
+export const CRANE_RISE_REVEAL_DURATION = 165; // Close-up hold 24f + crane rise 102f + settle/aftermath/hold 39f
 
 const L = LOOKS.porcelain;
 const HOLD = 24;
 const MOVE_END = 126;
-const BLUR_END = 64; // 速度降到峰值 ~35% 以下即撤运动模糊（慢段包了会抹软文字）
-const FLIP = 134; // 追踪行状态翻 Rendered（数据层仍叫 delivered）
+const BLUR_END = 64; // Remove motion blur once speed drops below ~35% peak (blurring slow movement softens text)
+const FLIP = 134; // Tracked row status flips to Rendered (data layer still named delivered)
 const crane = bezier(0.2, 0, 0.25, 1);
 
-// ───────────── 世界几何（终帧 = 世界 1:1）─────────────
-const WX = 120, WY = 90, WW = 1680, WH = 900; // 产品窗口
+// ───────────── World Geometry (Final frame = 1:1 world) ─────────────
+const WX = 120, WY = 90, WW = 1680, WH = 900; // Product window
 const PAD = 48;
-const CX = WX + PAD; // 内容左缘
+const CX = WX + PAD; // Content left edge
 const BAR_H = 72;
-const HEAD_Y = WY + BAR_H; // 页头顶
-const THEAD_Y = WY + 262; // 表头
+const HEAD_Y = WY + BAR_H; // Header top
+const THEAD_Y = WY + 262; // Table header
 const ROW0 = WY + 302;
 const ROW_H = 48;
 const ROWS = 12;
-const TRACK = 9; // 被追踪的那一行
+const TRACK = 9; // Tracked row
 const rowTop = (i: number) => ROW0 + i * ROW_H;
 
-// 列（相对内容左缘）：id = 镜头号、route = 转场（上一镜 → 下一镜）、carrier = 配方卡、kg = 帧数
+// Columns (relative to content left edge): id = shot ID, route = cut (prev shot -> next shot), carrier = recipe card, kg = frames
 const COL = { id: 0, route: 172, carrier: 560, eta: 790, status: 930, prog: 1150, kg: 1480 };
 
-// ───────────── 相机 ─────────────
+// ───────────── Camera ─────────────
 const S0 = 3.0;
 const BREATH = 0.015;
-const F0X = 441; // 特写对准点 x：追踪点落在画面左缘 ~60px，窗口左边框刚好出画
+const F0X = 441; // Close-up focus point x: tracking point sits ~60px from left screen edge, window left border just out of frame
 const F1 = { x: 960, y: 540 };
 const camAt = (frame: number) => {
   const breath = ramp(frame, 0, HOLD, EASE.smooth);
   const e = crane(Math.min(1, Math.max(0, (frame - HOLD) / (MOVE_END - HOLD))));
   const s0 = S0 * (1 + BREATH * breath);
   const s = mix(s0, 1, e);
-  // 特写取景下缘停在窗口底边上方 30px（圆角之上，不露窗外），推近时对准点同步下移保持贴底
+  // Close-up bottom edge stops 30px above window bottom (above rounded corner, no outside bleed); target shifts down with push-in to stay anchored
   const fy0 = WY + WH - 30 - 540 / s0;
   const fx = mix(F0X, F1.x, e);
   const fy = mix(fy0, F1.y, e);
   return { s, e, tx: 960 - fx * s, ty: 540 - fy * s, visTop: fy - 540 / s };
 };
 
-// 每行洗光触发帧：视野上缘首次越过该行顶边（开场已在画内的行不触发）
+// Row sheen trigger frame: viewport top edge crosses row top (rows already in frame at start do not trigger)
 const ROW_TRIG = Array.from({ length: ROWS }, (_, i) => {
   if (camAt(HOLD).visTop <= rowTop(i)) return -1;
   for (let f = HOLD; f <= MOVE_END; f++) if (camAt(f).visTop <= rowTop(i) + 2) return f;
@@ -77,7 +77,7 @@ const HEAD_TRIG = (() => {
   return MOVE_END;
 })();
 
-// ───────────── 数据（虚构的 video-shotcraft 渲染队列；配方卡名取自本库）─────────────
+// ───────────── Data (Mock video-shotcraft render queue; recipe card names from this library) ─────────────
 type Row = { id: string; from: string; to: string; carrier: string; eta: string; status: 'transit' | 'customs' | 'delivered' | 'loading'; prog: number; kg: string };
 const DATA: Row[] = [
   { id: 'SH-0401', from: 'Cold open', to: 'Logo', carrier: 'brand-ink-open', eta: '09:40', status: 'delivered', prog: 1, kg: '104' },
@@ -126,7 +126,7 @@ const Pill: React.FC<{ kind: keyof typeof STATUS; x: number; y: number; scale?: 
   );
 };
 
-// 一行运单
+// Single task row
 const RowView: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const r = DATA[i];
   const top = rowTop(i);
@@ -136,11 +136,11 @@ const RowView: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const prog = tracked ? mix(r.prog, 1, ramp(frame, FLIP - 4, 16, EASE.out)) : r.prog;
   const pillPop = tracked && frame >= FLIP ? 0.86 + 0.14 * flip : 1;
   const check = tracked ? ramp(frame, FLIP + 4, 10, EASE.out) : 0;
-  // 追踪点呼吸（特写 hold 段最明显，之后保持轻呼吸）
+  // Tracking point pulse (most pronounced during close-up hold, maintains subtle pulse afterward)
   const beat = 0.5 + 0.5 * Math.sin(frame / 5.5);
   const ty = top + ROW_H / 2;
   const fg = L.ink;
-  // 对焦：特写 hold 时只有追踪行是实的，其余行压到 38%，起吊后 ~26f 内回满（"先看这一票，再看全部"）
+  // Focus: during close-up hold, only the tracked row is solid, others dimmed to 38%; recovers within ~26f after lift-off ("inspect this item first, then the whole")
   const focus = tracked ? 1 : mix(0.38, 1, ramp(frame, HOLD - 2, 28, EASE.out));
   return (
     <div style={{ opacity: focus }}>
@@ -170,7 +170,7 @@ const RowView: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
       <span style={text(20, 500, L.ink2, { left: CX + COL.carrier, top: ty - 10 })}>{r.carrier}</span>
       <span style={text(20, 500, L.ink2, { left: CX + COL.eta, top: ty - 10 })}>{r.eta}</span>
       <Pill kind={kind} x={CX + COL.status} y={ty - 14} scale={pillPop} check={check} />
-      {/* 进度条 */}
+      {/* Progress bar */}
       <div style={{ position: 'absolute', left: CX + COL.prog, top: ty - 3, width: 260, height: 6, borderRadius: 3, background: 'rgba(15,30,60,0.07)' }}>
         <div style={{
           width: `${prog * 100}%`, height: '100%', borderRadius: 3,
@@ -186,9 +186,9 @@ const RowView: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
-// 产品窗口（世界坐标）
+// Product window (world coordinates)
 const World: React.FC<{ frame: number }> = ({ frame }) => {
-  // 窗口阴影：特写时贴近（几乎不可见），拉开后升到悬浮高度——"它是一件放在舞台上的东西"
+  // Window shadow: tight during close-up (almost invisible), rises to floating height after pull-back — "a physical object resting on the stage"
   const elev = mix(6, 34, ramp(frame, HOLD + 30, MOVE_END - HOLD - 20, EASE.swift));
   const kpi = 48210 * ramp(frame, HOLD + 6, MOVE_END - HOLD + 4, EASE.snappy);
   const headOn = ramp(frame, HEAD_TRIG - 8, 20, EASE.out);
@@ -198,9 +198,9 @@ const World: React.FC<{ frame: number }> = ({ frame }) => {
         position: 'absolute', left: WX, top: WY, width: WW, height: WH, borderRadius: 28, background: L.surface,
         boxShadow: `inset 0 0 0 1px ${L.line}, ${softShadow(elev, { color: L.shadow, strength: 1.15 })}, 0 ${elev * 2}px ${elev * 4}px -${elev}px ${alpha(L.shadow, 0.14)}`,
       }} />
-      {/* 顶栏 */}
+      {/* Top bar */}
       <div style={{ position: 'absolute', left: WX, top: WY, width: WW, height: BAR_H, borderBottom: `1px solid ${L.line}` }} />
-      {/* 品牌：镜刻标志 + video-shotcraft 字标（全小写、品牌字体） */}
+      {/* Brand: mark + video-shotcraft logotype (all-lowercase, brand typography) */}
       <ShotcraftMark size={32} tone="light" style={{ position: 'absolute', left: CX - 3, top: WY + 20 }} />
       <span style={text(22, 700, BRAND.ink, { left: CX + 38, top: WY + 25, fontFamily: BRAND.font, letterSpacing: '0.02em' })}>{BRAND.name}</span>
       <div style={{ position: 'absolute', left: CX + 250, top: WY, height: BAR_H, display: 'flex', gap: 40 }}>
@@ -217,7 +217,7 @@ const World: React.FC<{ frame: number }> = ({ frame }) => {
       </div>
       <div style={{ position: 'absolute', left: WX + WW - PAD - 40, top: WY + 18, width: 36, height: 36, borderRadius: 18, background: 'linear-gradient(135deg, #9fb4ff, #2f5bff)' }} />
 
-      {/* 页头：标题 + KPI */}
+      {/* Page header: Title + KPI */}
       <div style={{ opacity: 0.35 + 0.65 * headOn }}>
         <span style={text(16, 700, L.accent, { left: CX, top: HEAD_Y + 44, letterSpacing: '0.16em' })}>LIVE · RENDER FARM</span>
         <span style={text(64, 700, L.ink, { left: CX - 3, top: HEAD_Y + 76, letterSpacing: '-0.035em' })}>Render queue</span>
@@ -228,7 +228,7 @@ const World: React.FC<{ frame: number }> = ({ frame }) => {
         </span>
       </div>
 
-      {/* 表头 */}
+      {/* Table header */}
       {[['SHOT', COL.id], ['CUT', COL.route], ['RECIPE CARD', COL.carrier], ['ETA', COL.eta], ['STATUS', COL.status], ['PROGRESS', COL.prog]].map(([t, x]) => (
         <span key={t as string} style={text(14, 700, L.ink3, { left: CX + (x as number), top: THEAD_Y + 14, letterSpacing: '0.14em' })}>{t}</span>
       ))}
@@ -240,7 +240,7 @@ const World: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// 相机层：世界 → 屏幕
+// Camera layer: World -> Screen
 const Cam: React.FC<{ frame: number; children: React.ReactNode }> = ({ frame, children }) => {
   const { s, tx, ty } = camAt(frame);
   return (
@@ -250,7 +250,7 @@ const Cam: React.FC<{ frame: number; children: React.ReactNode }> = ({ frame, ch
   );
 };
 
-// 舞台背景点阵：按 0.35 视差跟相机（比窗口"更远"）
+// Stage background dot grid: 0.35 parallax with camera ("further" than window)
 const DOTS = (() => {
   const out: { x: number; y: number }[] = [];
   for (let y = -600; y <= 1700; y += 48) for (let x = -900; x <= 2800; x += 48) out.push({ x, y });
@@ -260,7 +260,7 @@ const BackDots: React.FC<{ frame: number }> = ({ frame }) => {
   const { s, tx, ty } = camAt(frame);
   const k = 0.35;
   const sp = 1 + (s - 1) * k;
-  const px = 960 + (tx + 960 * s - 960) * k - 960 * sp; // 让视差层与主相机同心
+  const px = 960 + (tx + 960 * s - 960) * k - 960 * sp; // Keep parallax layer concentric with main camera
   const py = 540 + (ty + 540 * s - 540) * k - 540 * sp;
   return (
     <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
@@ -271,7 +271,7 @@ const BackDots: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// Page 自己读帧：CameraMotionBlur 靠子树内的 useCurrentFrame 做多重采样，外部传 frame 会把采样冻住
+// Page reads frame internally: CameraMotionBlur relies on useCurrentFrame within subtree for multisampling; passing frame from outside freezes sampling
 const Page: React.FC = () => {
   const frame = useCurrentFrame();
   return (
@@ -286,7 +286,7 @@ const Page: React.FC = () => {
   );
 };
 
-// 行洗光（不进 CameraMotionBlur：半透明色块多重采样会出条带）
+// Row sheen (excluded from CameraMotionBlur: multisampling translucent color blocks causes banding)
 const Sweeps: React.FC<{ frame: number }> = ({ frame }) => (
   <AbsoluteFill style={{ overflow: 'hidden', pointerEvents: 'none' }}>
     <Cam frame={frame}>
@@ -311,7 +311,7 @@ const Sweeps: React.FC<{ frame: number }> = ({ frame }) => (
 export const CraneRiseReveal: React.FC = () => {
   const frame = useCurrentFrame();
   const fast = frame > HOLD + 1 && frame < BLUR_END;
-  // 特写段的取景暗角：压边聚焦那一行，拉开后收掉（舞台自带的极淡暗角接手）
+  // Close-up vignette: darkens edges to focus on tracked row, recedes after pull-back (stage's subtle ambient vignette takes over)
   const vig = 1 - ramp(frame, HOLD, 60, EASE.swift);
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden' }}>

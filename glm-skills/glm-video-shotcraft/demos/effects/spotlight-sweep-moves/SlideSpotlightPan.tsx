@@ -1,7 +1,7 @@
-// slide-spotlight-pan v2 —— 按用户截图 clickup03 重做：
-// 紫色光线贴着 UI 面板边缘泛光（先绕左上角竖缘、再沿顶边横走），
-// 聚光头匀速右移，照到处显影、离开处沉暗；面板匀速左滑（相机右摇感）。
-// 用户裁决："紫色的光线是贴着ui界面泛光的，聚光的移动是匀速的"。
+// slide-spotlight-pan v2 — referenced from clickup03:
+// Purple streak hugs UI panel perimeter (up left vertical edge, then along top horizontal edge),
+// spotlight head moves linearly rightward; panel slides linearly leftward (camera right pan feel).
+// Streak hugs UI edge, spotlight moves with constant linear velocity.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
@@ -12,8 +12,8 @@ const line = '#e4e4e2';
 
 const PW = 3000;
 const PH = 1400;
-const TOP = 150;   // 面板顶边在屏幕座标的 y
-const CR = 60;     // 面板圆角
+const TOP = 150;   // Panel top edge screen y
+const CR = 60;     // Panel corner radius
 
 const SideRow: React.FC<{ w: number }> = ({ w }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 16, height: 44 }}>
@@ -41,7 +41,7 @@ const Col: React.FC<{ accent: string; seed: number; w: number }> = ({ accent, se
   </div>
 );
 
-// 超宽面板内容（放大特写级别）：侧栏（顶部 video-shotcraft 标志 + 字标）+ 顶栏 + 三列看板
+// Extra-wide panel content: sidebar (ShotcraftMark + wordmark) + header + 3-column board
 const WidePanel: React.FC = () => (
   <div style={{
     width: PW, height: PH, background: '#f4f4f3',
@@ -50,7 +50,7 @@ const WidePanel: React.FC = () => (
   }}>
     <div style={{ width: 560, borderRight: `3px solid ${line}`, padding: '52px 48px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 56 }}>
-        {/* 侧栏品牌位：video-shotcraft 标志 + 字标 */}
+        {/* Sidebar brand position: ShotcraftMark + wordmark */}
         <ShotcraftMark size={46} tone="light" />
         <div style={{ fontFamily: BRAND.font, fontSize: 27, fontWeight: 700, letterSpacing: '0.03em', lineHeight: 1, color: ink, whiteSpace: 'nowrap' }}>{BRAND.name}</div>
       </div>
@@ -81,23 +81,23 @@ const WidePanel: React.FC = () => (
 
 export const SlideSpotlightPan: React.FC = () => {
   const frame = useCurrentFrame();
-  // 面板匀速左滑（相机右摇）——严格 linear
+  // Panel slides linearly leftward (camera pan right) — strictly linear
   const slide = interpolate(frame, [0, 132], [180, -1100]);
-  // 聚光头在面板本地座标沿顶边匀速右移——严格 linear
-  // 起点在左上角竖缘（负值=还在左缘竖直段），随后转过角沿顶边走
+  // Spotlight head moves linearly rightward in panel local coordinates — strictly linear
+  // Origin at top-left vertical edge (negative = vertical phase), turns corner along top edge
   const head = interpolate(frame, [0, 132], [-360, 2600]);
-  const onTop = Math.max(0, head);            // 顶边段进度
-  const cornerT = Math.min(1, Math.max(0, (head + 360) / 360)); // 竖缘段 0→1
-  const vertHeadY = TOP + 620 - cornerT * 620; // 左缘光头从下往上爬到角
+  const onTop = Math.max(0, head);            // Top edge phase progress
+  const cornerT = Math.min(1, Math.max(0, (head + 360) / 360)); // Vertical edge phase 0->1
+  const vertHeadY = TOP + 620 - cornerT * 620; // Vertical head ascends toward corner
 
-  // 屏幕座标的光头位置
+  // Spotlight head position in screen coordinates
   const headScreenX = slide + onTop;
-  // 光头在竖缘阶段贴着面板左缘
+  // Head hugs panel left edge during vertical phase
   const leftEdgeX = slide;
 
-  // 竖缘光线强度：角前满、转角后衰减
+  // Vertical streak intensity: full before corner, decays after turn
   const vGlow = head < 0 ? 1 : Math.max(0, 1 - head / 900);
-  // 顶边光线强度：转角后满
+  // Top streak intensity: full after turning corner
   const hGlow = Math.min(1, Math.max(0, (head + 120) / 240));
 
   const grad = (dir: string, c: string) =>
@@ -105,30 +105,30 @@ export const SlideSpotlightPan: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: '#050409', overflow: 'hidden' }}>
-      {/* 面板层：聚光范围内显影 */}
+      {/* Panel layer: revealed within spotlight mask */}
       <div style={{ position: 'absolute', left: 0, top: TOP, transform: `translateX(${slide}px)` }}>
         <WidePanel />
-        {/* 贴面泛光：光头下方的紫光晕染进 UI 顶部（贴着界面泛光的关键层） */}
+        {/* Edge bloom: violet glow spilling into UI top edge below head */}
         <div style={{
           position: 'absolute', left: onTop - 620, top: -30, width: 1240, height: 380,
           background: 'radial-gradient(ellipse 620px 190px at 50% 0%, rgba(168,95,245,0.5), rgba(140,75,235,0.16) 55%, rgba(0,0,0,0) 78%)',
           filter: 'blur(6px)', opacity: hGlow,
         }} />
-        {/* 左缘贴面泛光（竖缘阶段） */}
+        {/* Left edge bloom (vertical phase) */}
         <div style={{
           position: 'absolute', left: -30, top: vertHeadY - TOP - 320, width: 340, height: 780,
           background: 'radial-gradient(ellipse 170px 390px at 0% 50%, rgba(168,95,245,0.45), rgba(140,75,235,0.14) 55%, rgba(0,0,0,0) 78%)',
           filter: 'blur(6px)', opacity: vGlow,
         }} />
-        {/* 聚光范围外压暗：以光头为中心的显影罩（面板本地座标，跟光头走） */}
+        {/* Spotlight reveal mask centered at light head */}
         <div style={{
           position: 'absolute', inset: -60,
           background: `radial-gradient(ellipse 1350px 1000px at ${onTop + 60}px ${(head < 0 ? vertHeadY - TOP : 40) + 260}px, rgba(0,0,0,0) 26%, rgba(0,0,0,0.55) 60%, rgba(5,4,9,0.96) 100%)`,
         }} />
       </div>
 
-      {/* ===== 贴边紫色光线本体（屏幕层，贴着面板边缘） ===== */}
-      {/* 顶边横向光线：三层辉光 + 亮芯，中心=光头 */}
+      {/* ===== Edge-hugging purple streak (screen layer along panel edge) ===== */}
+      {/* Top horizontal streak: 3 glow layers + bright core */}
       <div style={{ opacity: hGlow }}>
         <div style={{
           position: 'absolute', left: headScreenX - 640, top: TOP - 56, width: 1280, height: 112,
@@ -147,7 +147,7 @@ export const SlideSpotlightPan: React.FC = () => {
           background: grad('90deg', '#f6e8ff'), filter: 'blur(1.5px)',
         }} />
       </div>
-      {/* 左上角竖缘光线（起始阶段，贴面板左缘） */}
+      {/* Top-left vertical streak (initial phase along left edge) */}
       <div style={{ opacity: vGlow }}>
         <div style={{
           position: 'absolute', left: leftEdgeX - 52, top: vertHeadY - 420, width: 104, height: 840,
@@ -163,7 +163,7 @@ export const SlideSpotlightPan: React.FC = () => {
         }} />
       </div>
 
-      {/* 顶上方黑檐：光带以上纯黑（截图里顶边之上是黑场） */}
+      {/* Top black margin above light band */}
       <div style={{
         position: 'absolute', left: 0, top: 0, width: 1920, height: TOP - 4,
         background: 'linear-gradient(180deg, #050409 78%, rgba(5,4,9,0) 100%)',

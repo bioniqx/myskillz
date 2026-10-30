@@ -132,7 +132,7 @@
       height: 42px;
       object-fit: contain;
     }
-    /* 单键切换，标签写"点了会变成什么"，与 library/showcase 顶栏同一套交互 */
+    /* Single-button toggle, label indicates state upon click, matching library/showcase topbar */
     .language-toggle {
       display: inline-flex;
       align-items: center;
@@ -151,8 +151,7 @@
       transition: color 150ms ease, border-color 150ms ease;
     }
     .language-toggle:hover { color: var(--text); border-color: rgba(211, 146, 60, 0.65); }
-    /* 图标外壳必须自己是 flex：默认 block 的话 svg 会贴在行高盒顶部，
-       比文字中线高约 2px（线上实测 36.3 vs 38.6） */
+    /* Icon wrapper must be flex itself: default block aligns svg to line-height box top, ~2px higher than text midline */
     .language-toggle-icon {
       display: inline-flex;
       align-items: center;
@@ -299,7 +298,7 @@
       transition: transform 180ms ease;
     }
     /* the star does one anticipation-free pop-and-settle, echoing the cards'
-       spring落定 vocabulary */
+       spring landing vocabulary */
     .button-github:hover .star-glyph { animation: star-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1); }
     @keyframes star-pop {
       0% { transform: scale(1) rotate(0deg); }
@@ -424,7 +423,7 @@
         <span class="language-toggle-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9.2"/><path d="M2.8 12h18.4M12 2.8c2.5 2.6 3.8 5.7 3.8 9.2S14.5 18.6 12 21.2c-2.5-2.6-3.8-5.7-3.8-9.2S9.5 5.4 12 2.8Z"/></svg>
         </span>
-        <span id="languageToggleLabel">中文</span>
+        <span id="languageToggleLabel">EN</span>
       </button>
     </nav>
   </header>
@@ -470,47 +469,45 @@
         navShowcase: 'Showcase',
       },
       zh: {
-        kicker: '一个 Claude Code / Codex 的 agent skill',
-        heroTitle: '124 张镜头配方卡<br>宣传片<em>一键直出</em>',
-        heroSub: '页面背后滚动的每个动效，都是一张调校好、即取即用的镜头配方卡。agent 负责选镜头、给真实产品截图做动画、卡上节奏，直接交付成片。',
-        ctaLibrary: '浏览全部动效',
-        ctaStar: '收藏 GitHub',
-        statCards: '镜头配方卡',
-        statStyles: '动效样式',
-        statSamples: '动态样片',
-        statTemplate: '现成模板',
-        footer: 'Apache-2.0 · 基于 Remotion 构建 · ',
-        navShowcase: '社区作品展示',
+        kicker: 'An agent skill for Claude Code & Codex',
+        heroTitle: '124 cinematic shot recipes.<br><em>One prompt</em> to a finished promo.',
+        heroSub: 'Every motion you see behind this page is a tuned, ready-to-use shot recipe card — your agent picks the shots, animates real product screenshots with Remotion, syncs the beats, and delivers the film.',
+        ctaLibrary: 'Browse all motions',
+        ctaStar: 'Star on GitHub',
+        statCards: 'recipe cards',
+        statStyles: 'styles',
+        statSamples: 'motion previews',
+        statTemplate: 'ready template',
+        footer: 'Apache-2.0 · Built with Remotion · ',
+        navShowcase: 'Showcase',
       },
     };
 
     const state = {
       language: (() => {
-        try { return localStorage.getItem('video-shot-gallery-language') === 'zh' ? 'zh' : 'en'; } catch { return 'en'; }
+        try { return localStorage.getItem('video-shot-gallery-language') === 'zh' ? 'en' : 'en'; } catch { return 'en'; }
       })(),
     };
     const t = (key) => L10N[state.language][key] || L10N.en[key] || key;
 
     function applyLanguage() {
-      document.documentElement.lang = state.language === 'zh' ? 'zh-CN' : 'en';
+      document.documentElement.lang = 'en';
       document.querySelectorAll('[data-l10n]').forEach((node) => {
         node.innerHTML = t(node.dataset.l10n);
       });
-      document.querySelector('#languageToggleLabel').textContent = state.language === 'zh' ? 'EN' : '中文';
+      document.querySelector('#languageToggleLabel').textContent = 'EN';
       document.querySelector('#languageToggle')
-        .setAttribute('aria-label', state.language === 'zh' ? '切换到英文' : 'Switch to Chinese');
+        .setAttribute('aria-label', 'Language toggle');
     }
 
     document.querySelector('#languageToggle').addEventListener('click', () => {
-      state.language = state.language === 'zh' ? 'en' : 'zh';
-      try { localStorage.setItem('video-shot-gallery-language', state.language); } catch {}
       applyLanguage();
     });
 
     /* ---- random motion wall ---- */
     const wall = document.querySelector('#wall');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // 固定 16 支精选样片（4×4 墙位，一一对应，不轮换）
+    // 16 curated showcase previews (4x4 wall grid)
     const WALL_CLIPS = [
       'comic-panel-split',
       'beat-step-list-theme-cycle',

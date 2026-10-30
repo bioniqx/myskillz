@@ -1,11 +1,12 @@
-// bezier-source-converge-merge — Bezier Converge 多源曲线汇流吞并（motion-lab 定稿转原生 Remotion）
-// 左侧四个来源节点各由一条细贝塞尔曲线连向右侧同一汇聚点：曲线先由左向右 draw-on，
-// 节点沿自己的曲线滑向汇聚点并三段式加速缩小（像被吸进去），强调色数据包小圆持续沿
-// 路径滑行，吞并完成后曲线从左端反向擦除，只留 video-shotcraft 镜刻标志 + 逐词加深字幕。
-// 设计坐标 480×270（DesignStage 等比放大），440×240 定尺画布居中排版。
-// 质感层（改版）：柔光浅底 + 颗粒；来源节点换成受光白瓷圆片 + 灰阶线性图标（页面截图/镜头卡/代码/声音四种素材）；
-// 曲线用灰→墨渐变描边；数据包是带彗尾的实心强调色点；汇聚点是 video-shotcraft 标志（亮底版）+ 接收涟漪；
-// 擦除阶段相机平移把徽标收到画面正中，结尾构图居中落定。
+// bezier-source-converge-merge — Multi-source Bezier curve convergence & merge (ported from motion-lab to native Remotion)
+// Four source nodes on the left connect via thin Bezier curves to a single convergence point on the right:
+// curves draw on from left to right; nodes glide along their curves toward the convergence point, shrinking in
+// three stages (as if swallowed); accent-colored data packets glide continuously along paths; after merging,
+// curves erase backward from the left, leaving only the video-shotcraft mark and word-by-word deepened captions.
+// Design canvas: 480x270 (DesignStage proportional scaling), 440x240 fixed-size canvas centered.
+// Texture layer: soft light background + grain; source nodes rendered as lit white porcelain discs with grayscale linear icons (screenshot / shot card / code / audio);
+// Curves use gray-to-ink gradient stroke; data packets are solid accent dots with comet trails; convergence point features video-shotcraft mark (light edition) + reception ripples;
+// During erase phase, camera pans to center the emblem, settling into a balanced final composition.
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
 import { DesignStage, E, lerp, seg, useT } from '../../_fixtures/Motion';
@@ -14,25 +15,25 @@ import { ShotcraftMark } from '../../_fixtures/Brand';
 
 export const BEZIER_SOURCE_CONVERGE_MERGE_DURATION = 168; // 5600ms @30fps
 
-// ---- 本卡共享量（浅灰瑞士极简系配色，与 Phase 0 fixture 令牌协调） ----
+// ---- Shared constants (light-gray Swiss minimalist palette, aligned with Phase 0 fixture tokens) ----
 const SANS = FONT.sans;
-const TXT = '#17181c'; // 主文字近黑（带冷调）
-const DIM = '#c4c6cc'; // 浅灰占位字
-const LINE = 'rgba(20,22,28,0.09)'; // 发丝描边
-const ACCENT = '#5b63d3'; // 唯一强调色（与 fixture G.accent 一致）
+const TXT = '#17181c'; // Primary text near-black (cool-toned)
+const DIM = '#c4c6cc'; // Light gray placeholder text
+const LINE = 'rgba(20,22,28,0.09)'; // Hairline border
+const ACCENT = '#5b63d3'; // Sole accent color (matches fixture G.accent)
 const ACCENT_HI = '#7d84ea';
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const h2r = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-// 颜色插值：mix(p,'#C9C9CE','#111')
+// Color interpolation: mix(p, '#C9C9CE', '#111')
 const mix = (p: number, a: string, b: string) => {
   const A = h2r(a), B = h2r(b), q = clamp01(p);
   return `rgb(${Math.round(A[0] + (B[0] - A[0]) * q)},${Math.round(A[1] + (B[1] - A[1]) * q)},${Math.round(A[2] + (B[2] - A[2]) * q)})`;
 };
 
-const XC = 332, YC = 120; // 汇聚点
+const XC = 332, YC = 120; // Convergence point
 
-// 四路素材来源（灰阶分层，仅用于区分四路）：页面截图 / 镜头配方卡 / 代码 / 声音——汇进同一支片子
+// Four media sources (grayscale tiered to distinguish tracks): screenshot / shot recipe card / code / audio — merging into a single reel
 const SRCS = [
   { y: 36, icon: 'shot', c: '#2a2c33' },
   { y: 92, icon: 'card', c: '#4b4e57' },
@@ -40,9 +41,9 @@ const SRCS = [
   { y: 204, icon: 'wave', c: '#8f929c' },
 ];
 
-// 线性图标（24 视框）
+// Linear icons (24px viewBox)
 const ICON: Record<string, React.ReactNode> = {
-  // 页面截图：浏览器窗口
+  // Screenshot: browser window
   shot: (
     <>
       <rect x="3.5" y="5" width="17" height="14" rx="2.4" />
@@ -50,7 +51,7 @@ const ICON: Record<string, React.ReactNode> = {
       <path d="M6.2 7h.01M8.4 7h.01" />
     </>
   ),
-  // 镜头配方卡：一叠卡片
+  // Shot recipe card: stacked cards
   card: (
     <>
       <rect x="6.5" y="7.5" width="12" height="13" rx="2.2" />
@@ -58,20 +59,20 @@ const ICON: Record<string, React.ReactNode> = {
       <path d="M9.3 12h6.4M9.3 15.5h4" />
     </>
   ),
-  // 代码
+  // Code
   code: (
     <>
       <path d="M8.5 7 3.8 12l4.7 5M15.5 7l4.7 5-4.7 5" />
       <path d="M13.2 5.5 10.8 18.5" />
     </>
   ),
-  // 声音：声波
+  // Audio: sound wave
   wave: <path d="M4 12h.01M7.4 9.2v5.6M10.6 5.8v12.4M13.8 8.4v7.2M17 10.4v3.2M20 12h.01" />,
 };
 
 type Pt = { x: number; y: number };
 
-// 手写 cubic bezier 采样：P0=(74,y0) P1=(186,y0) P2=(214,YC) P3=(XC,YC)
+// Cubic Bezier sampling: P0=(74,y0) P1=(186,y0) P2=(214,YC) P3=(XC,YC)
 const cubic = (y0: number, u: number): Pt => {
   const v = 1 - u;
   return {
@@ -80,9 +81,9 @@ const cubic = (y0: number, u: number): Pt => {
   };
 };
 
-// 路径几何 = 直线段 M -22,y L 74,y（定长 96）+ 上述 cubic。等价 getTotalLength /
-// getPointAtLength：cubic 段建累积弧长表（1600 段折线，误差远低于 0.01px），
-// 二分反查弧长→参数 u；纯模块级预计算，无 DOM 依赖，确定性渲染。
+// Path geometry = straight segment M -22,y L 74,y (fixed length 96) + cubic above. Equivalent to getTotalLength /
+// getPointAtLength: cumulative arc length table built for cubic segment (1600 polyline segments, error < 0.01px),
+// binary search maps arc length -> parameter u; module-level precomputation, DOM-independent, deterministic rendering.
 const SAMPLES = 1600;
 const LINE_LEN = 96;
 const mkPathGeom = (y0: number) => {
@@ -109,41 +110,41 @@ const mkPathGeom = (y0: number) => {
     const u = (i - 1 + (s1 > s0 ? (target - s0) / (s1 - s0) : 0)) / SAMPLES;
     return cubic(y0, u);
   };
-  // 节点静止位置 x=74 恰是直线段终点（弧长 96），直接标定 f0 = 96/len——
-  // 原 40 步扫描精度只有 1/40，四个节点驻留位会左右错开 4–16px，排不成一列
+  // Node resting position x=74 is precisely the line segment endpoint (arc length 96), calibrated directly as f0 = 96/len —
+  // original 40-step scan had 1/40 precision causing resting positions to drift 4-16px and misalign vertically.
   const f0 = LINE_LEN / len;
   return { len, pointAt, f0 };
 };
 
 const GEOMS = SRCS.map((s) => mkPathGeom(s.y));
 
-// 结尾字幕（逐词加深语法，只用到 show + inn 两态）
+// Ending caption (word-by-word deepening syntax, using show + inn states)
 const CAP_WORDS = 'From screenshot to showreel'.split(' ');
 const CAP_ST = 0.78 / CAP_WORDS.length;
 const CAP_WIN = CAP_ST * 1.5;
 
-// 汇聚点：白瓷圆片 + video-shotcraft 镜刻标志（亮底版）
-const BADGE_SIZE = 46; // 汇聚点白瓷圆片直径（= 接收涟漪的起始直径），略大于 44 的来源节点
-const MARK_SIZE = 34; // 标志 viewBox 128 内实形约占 81%，34 → 实形 ≈28，四周留足安全空间
+// Convergence point: white porcelain disc + video-shotcraft mark (light edition)
+const BADGE_SIZE = 46; // Convergence disc diameter (= starting ripple diameter), slightly larger than 44px source nodes
+const MARK_SIZE = 34; // Mark viewBox 128 solid shape takes ~81%, 34 -> solid ~28, leaving adequate margin
 
-// 数据包彗尾：沿路径向后取 TAIL 个采样点，间隔 TAIL_GAP（路径比例），透明度与尺寸递减
+// Packet comet trail: samples TAIL points backward along path at TAIL_GAP intervals (path ratio), decaying opacity and size
 const TAIL = 9;
 const TAIL_GAP = 0.0055;
 
-// 结尾相机平移：擦除同时把画布左移 SHIFT，让徽标落到画面正中（画布左缘 20 + XC = 352 → 240）
+// Final camera pan: shifts canvas left by SHIFT during erase, centering emblem in viewport (canvas left margin 20 + XC = 352 -> 240)
 const SHIFT = 352 - 240;
 
 export const BezierSourceConvergeMerge: React.FC = () => {
   const t = useT();
-  const conv = seg(t, 0.34, 0.74, E.inOutCubic);            // 汇聚主进度
-  const erase = seg(t, 0.78, 0.9, E.outQuad);               // 从起点擦除
-  const pkCycle = (seg(t, 0.1, 0.74, E.linear) * 2) % 1;    // 数据包循环（t=1 时整数周期）
-  const pan = seg(t, 0.76, 0.93, EASE.smooth);              // 结尾居中平移（与擦除并行）
+  const conv = seg(t, 0.34, 0.74, E.inOutCubic);            // Main convergence progress
+  const erase = seg(t, 0.78, 0.9, E.outQuad);               // Erase from start
+  const pkCycle = (seg(t, 0.1, 0.74, E.linear) * 2) % 1;    // Packet cycle (integer period at t=1)
+  const pan = seg(t, 0.76, 0.93, EASE.smooth);              // Final centering pan (parallel with erase)
 
-  // 徽标呼吸：入场淡入 + 吞并完成瞬间 outBack 顶起再回落
+  // Emblem breathing: entrance fade-in + outBack punch and settle upon merge completion
   const bp = seg(t, 0.16, 0.26, E.outCubic);
   const badgeScale = lerp(bp, 0.7, 1) * (1 + seg(t, 0.7, 0.78, E.outBack) * 0.12 - seg(t, 0.78, 0.86, E.outQuad) * 0.12);
-  // 接收涟漪：吞并时刻（0.72）一圈细环扩散淡出，只发一次
+  // Reception ripple: single accent ring expands and fades at merge point (0.72)
   const ripple = seg(t, 0.72, 0.86, EASE.out);
   const capShow = seg(t, 0.84, 0.9, EASE.out);
   const capInn = seg(t, 0.84, 0.95);
@@ -152,7 +153,7 @@ export const BezierSourceConvergeMerge: React.FC = () => {
     <AbsoluteFill>
       <Backdrop tone="light" light={{ x: 0.62, y: 0.3 }} accent={ACCENT} grain={0.05} vignette={0.12} />
       <DesignStage bg="transparent">
-        {/* 页面 + 440×240 定尺画布（居中） */}
+        {/* Page + 440x240 fixed-size canvas (centered) */}
         <div
           style={{
             position: 'absolute',
@@ -173,10 +174,10 @@ export const BezierSourceConvergeMerge: React.FC = () => {
               transform: `translateX(${(-pan * SHIFT).toFixed(2)}px)`,
             }}
           >
-            {/* 四条贝塞尔曲线：dashoffset 正向 draw-on，erase 阶段反向擦除 */}
+            {/* Four Bezier curves: forward draw-on via dashoffset, reverse erase during erase phase */}
             <svg width={440} height={240} viewBox="0 0 440 240" style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}>
               <defs>
-                {/* 描边从浅灰过渡到近黑：来源端轻、汇聚端重，读出"流向" */}
+                {/* Stroke gradient from light gray to near-black: light at source, heavy at convergence to convey flow direction */}
                 <linearGradient id="bscm-stroke" gradientUnits="userSpaceOnUse" x1={-22} y1={0} x2={XC} y2={0}>
                   <stop offset="0" stopColor="#b8bac2" />
                   <stop offset="0.45" stopColor="#7c7f89" />
@@ -203,26 +204,26 @@ export const BezierSourceConvergeMerge: React.FC = () => {
               })}
             </svg>
 
-            {/* 来源节点 + 数据包层 */}
+            {/* Source nodes + packet layer */}
             <div style={{ position: 'absolute', left: 0, top: 0, width: 440, height: 240 }}>
               {SRCS.map((s, i) => {
                 const { len, pointAt, f0 } = GEOMS[i];
-                // 节点沿路径滑向汇聚点，三段式缩小（44→15→0，像被吸进去）
+                // Nodes slide along path to convergence point, shrinking in three stages (44->15->0, as if swallowed)
                 const tt = conv;
                 const frac = f0 + (1 - f0) * tt;
                 const pt = pointAt(len * frac);
                 const size = tt < 0.75 ? lerp(tt / 0.75, 44, 15) : lerp((tt - 0.75) / 0.25, 15, 0);
-                // 入场：轻微过冲弹出（≈8%），比原 outCubic 多一下"落座"
+                // Entrance: subtle overshoot pop (≈8%), providing a clean settling beat compared to plain outCubic
                 const appear = seg(t, 0.02 + i * 0.04, 0.02 + i * 0.04 + 0.1, EASE.overshoot);
                 const appearOp = seg(t, 0.02 + i * 0.04, 0.02 + i * 0.04 + 0.06, EASE.out);
-                // 数据包（相位偏移，恒定尺寸）+ 彗尾
+                // Packet (phase-offset, constant size) + comet trail
                 const ph = (pkCycle + i * 0.13) % 1;
                 const pkOn = seg(t, 0.1, 0.16) * (1 - seg(t, 0.7, 0.76));
                 const pkOp = pkOn * (1 - Math.abs(ph - 0.5) * 0.6);
-                const k = size / 44; // 节点内部元素按尺寸等比
+                const k = size / 44; // Node inner elements scaled proportionally
                 return (
                   <React.Fragment key={i}>
-                    {/* 彗尾：从尾到头画，头部最亮 */}
+                    {/* Comet trail: drawn from tail to head, brightest at head */}
                     {pkOp > 0.01 &&
                       Array.from({ length: TAIL }, (_, j) => TAIL - j).map((j) => {
                         const pj = ph - j * TAIL_GAP;
@@ -265,7 +266,7 @@ export const BezierSourceConvergeMerge: React.FC = () => {
                         />
                       );
                     })()}
-                    {/* 来源节点：白瓷圆片（顶部受光渐变 + 发丝线 + 内高光 + 两层软阴影） */}
+                    {/* Source node: white porcelain disc (top-lit gradient + hairline + inner highlight + dual soft shadows) */}
                     <div
                       style={{
                         position: 'absolute',
@@ -305,7 +306,7 @@ export const BezierSourceConvergeMerge: React.FC = () => {
               })}
             </div>
 
-            {/* 接收涟漪：一圈强调色细环，从徽标边缘扩到 2.1 倍并淡出 */}
+            {/* Reception ripple: thin accent ring expanding to 2.1x from badge edge and fading out */}
             <div
               style={{
                 position: 'absolute',
@@ -321,8 +322,8 @@ export const BezierSourceConvergeMerge: React.FC = () => {
               }}
             />
 
-            {/* 汇聚点：白瓷圆片（与来源节点同材质，盖住曲线与数据包的汇入端）托着 video-shotcraft 镜刻标志（亮底版，
-                标志本身不加渐变/投影）；进场与接收脉冲沿用原徽标的 scale */}
+            {/* Convergence point: white porcelain disc (same material as source nodes, covering curve and packet terminations)
+                holding video-shotcraft mark (light edition, mark itself has no gradient/shadow); entrance and reception pulse share badge scale */}
             <div
               style={{
                 position: 'absolute',
@@ -345,7 +346,7 @@ export const BezierSourceConvergeMerge: React.FC = () => {
               <ShotcraftMark size={MARK_SIZE} tone="light" />
             </div>
 
-            {/* 结尾字幕：逐词加深（浅灰占位 → 近黑），居中于徽标下方，随 show 淡入上浮 */}
+            {/* Ending caption: word-by-word deepening (light gray placeholder -> near-black), centered below emblem, floating up with show fade */}
             <div
               style={{
                 position: 'absolute',

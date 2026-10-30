@@ -1,8 +1,8 @@
-// flip-grid-reflow —— 网格 FLIP 重排
-// 6 张 Card 初始横排一行（marquee 式，屏心偏上）静止 30f，节拍点集体换位：
-// 每卡沿直线飞向 3×2 网格目标位（预写两套坐标表），scale 1→1.28，
-// delay = 卡索引×1.5f 微错峰，16f inOut(cubic) + 落定 3f 过冲 1.02。
-// 全部落定后整体加深脉冲收束。收尾真静止 ≥40f。
+// flip-grid-reflow — Grid FLIP reflow
+// 6 Cards initially arranged in a single horizontal row (marquee style, centered above midline) holding for 30f, collective repositioning at beat:
+// Each card flies along a straight line to its 3×2 grid target slot (precomputed coordinate tables), scale 1 -> 1.28,
+// delay = cardIndex * 1.5f micro-stagger, 16f inOut(cubic) + 3f settle overshoot 1.02.
+// After all cards land, an overall darken pulse concludes the motion. Holds completely static >= 40f at tail.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, Card, TitleBlock } from '../../_fixtures/Fixtures';
@@ -11,38 +11,38 @@ const CARD_W = 280;
 const CARD_H = 170;
 const N = 6;
 
-// ---- 坐标表 A：横排一行（卡间 24px，屏心偏上）----
-// 总宽 6*280 + 5*24 = 1800，x0 = 60；中心 y = 330
+// ---- Coordinate Table A: Horizontal single row (24px card gap, above screen center) ----
+// Total width 6*280 + 5*24 = 1800, x0 = 60; center y = 330
 const ROW_Y = 330;
 const ROW_CENTERS: Array<[number, number]> = Array.from({ length: N }, (_, i) => [
   60 + CARD_W / 2 + i * (CARD_W + 24),
   ROW_Y,
 ]); // x: 200, 504, 808, 1112, 1416, 1720
 
-// ---- 坐标表 B：3×2 网格（卡放大 1.28 → 358.4×217.6，网格间距 30px）----
-// 网格总宽 3*358.4 + 2*30 = 1135.2 → x0 = 392.4；总高 2*217.6 + 30 = 465.2 → y0 = 307.4
-const GC = [571.6, 960, 1348.4]; // 列中心
-const GR = [416.2, 663.8]; // 行中心
-// 交错映射：偶数索引去上排、奇数去下排（每卡直线飞行、互不对穿）
+// ---- Coordinate Table B: 3×2 grid (cards scaled 1.28 -> 358.4×217.6, grid gap 30px) ----
+// Grid total width 3*358.4 + 2*30 = 1135.2 -> x0 = 392.4; total height 2*217.6 + 30 = 465.2 -> y0 = 307.4
+const GC = [571.6, 960, 1348.4]; // Column centers
+const GR = [416.2, 663.8]; // Row centers
+// Interleaved mapping: even indices go to top row, odd to bottom row (straight flight paths, no cross-collisions)
 const GRID_CENTERS: Array<[number, number]> = [
-  [GC[0], GR[0]], // card0 → 上左
-  [GC[0], GR[1]], // card1 → 下左
-  [GC[1], GR[0]], // card2 → 上中
-  [GC[1], GR[1]], // card3 → 下中
-  [GC[2], GR[0]], // card4 → 上右
-  [GC[2], GR[1]], // card5 → 下右
+  [GC[0], GR[0]], // card0 -> top-left
+  [GC[0], GR[1]], // card1 -> bottom-left
+  [GC[1], GR[0]], // card2 -> top-center
+  [GC[1], GR[1]], // card3 -> bottom-center
+  [GC[2], GR[0]], // card4 -> top-right
+  [GC[2], GR[1]], // card5 -> bottom-right
 ];
 
-const BEAT = 30; // 节拍点
-const STAGGER = 1.5; // 每卡延迟
-const MOVE = 16; // 飞行帧数
-const SETTLE = 3; // 落定过冲帧数
+const BEAT = 30; // Beat frame
+const STAGGER = 1.5; // Per-card delay
+const MOVE = 16; // Flight duration (frames)
+const SETTLE = 3; // Settle overshoot duration (frames)
 const SCALE_END = 1.28;
 const OVERSHOOT = 1.02;
-// 末卡完全落定：30 + 5*1.5 + 16 + 3 = 56.5
+// Last card fully settles: 30 + 5*1.5 + 16 + 3 = 56.5
 const ALL_SETTLED = BEAT + (N - 1) * STAGGER + MOVE + SETTLE; // 56.5
 
-// 加深脉冲：f58 → f61 谷值 → f64 回正（谷值 brightness 0.78，spec 4f 放宽到 6f 保可感）
+// Darken pulse: f58 -> f61 trough -> f64 recovery (trough brightness 0.78, spec 4f relaxed to 6f for perceptibility)
 const PULSE_IN = 58;
 const PULSE_MID = 61;
 const PULSE_OUT = 64;
@@ -61,7 +61,7 @@ const FlipCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
     easing: moveEase, extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
 
-  // scale：16f 冲到 1.28*1.02，随后 3f 回落到 1.28
+  // scale: ramps to 1.28*1.02 over 16f, then settles back to 1.28 over 3f
   const sUp = interpolate(frame, [t0, t0 + MOVE], [1, SCALE_END * OVERSHOOT], {
     easing: moveEase, extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
@@ -91,7 +91,7 @@ const FlipCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
 export const FlipGridReflow: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 加深脉冲：仅脉冲窗口内挂载 filter，窗口外完全不挂（摘罩）
+  // Darken pulse: filter attached only inside pulse window, completely unmounted outside (zero overhead)
   const pulsing = frame >= PULSE_IN && frame <= PULSE_OUT;
   const bright = pulsing
     ? interpolate(frame, [PULSE_IN, PULSE_MID, PULSE_OUT], [1, 0.78, 1], {

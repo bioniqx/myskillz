@@ -1,52 +1,46 @@
 ---
 name: ui-to-brand-morph
-一句话: UI 变品牌两式——icon-flip-bloom 图标 Y 轴翻扁成竖线、从竖线撑开成品牌标志（琥珀斜切随后划入）+ wordmark 逐字落定，与 input-morph-assemble 输入框收缩成取景框竖笔、三块图元落进构造槽位拼成完整标志
-适用: 品牌收尾/outro 前最后一拍；"你每天用的那个 UI 就是这个品牌"的视觉论证
-时长: A ~4.3s（130f）/ B ~5.6s（168f）
-能量: 中高（收尾点睛，一次完整变形讲完）
+summary: Two UI-to-brand morphs: an icon flips flat and blooms into a logo mark, and an input field contracts into a capsule as glyphs assemble the logo.
+use: Brand finale / penultimate outro shot; visual argument that "the UI you use every day is this very brand"
+duration: A ~4.3s (130f) / B ~5.6s (168f)
+energy: Medium-high (finishing touch, told through a single complete transformation)
 ---
 
-## 意图
-品牌收尾库里已有两条路：brand-ink-open 是开场描画压印、
-outro-group-photo-launch 是元素围拢合影（聚而不变）。本卡补第三条：
-**产品 UI 元素自己变形成品牌符号**——A 式是图标翻一个身变成 logo
-（同位实体交换），B 式是全片反复出现的输入框在最后一次发送后集结成
-品牌标志（多元素落位拼装）。观众看到的不是"logo 出现了"，而是
-"刚才用的东西原来就是它"，因果链本身就是品牌论证。
+## Intention
+The brand outro library previously provided two main avenues: brand-ink-open is an opening draw-and-stamp, while outro-group-photo-launch gathers elements for an ensemble photo (assembling without morphing). This card adds a third: **product UI elements themselves morph into brand symbols**—Variant A flips an icon flat to become the logo mark (in-place entity exchange); Variant B gathers the input field that appeared repeatedly throughout the film into the brand logo after its final send action (multi-element drop-in assembly). The audience sees not just "a logo appeared," but realizes "the tool we just used is the brand itself"—the causal chain itself serves as the brand argument.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A icon-flip-bloom | 图标 anticipation 晃两下→Y 轴 scaleX 压扁成竖线（双层拖影+blur）→最薄处实体交换、标志按过冲 spring 从竖线撑开、琥珀斜切随后沿 45° 划入→mark 左移让位、wordmark 逐字落定 | 单图标产品；图标与 logo 形态差异大、需要"翻过去变身"的魔术感 |
-| B input-morph-assemble | 光标点发送→文字飞走、标志墨色从发送键漫开灌满输入框→x/y/w/h/r 五量 spring 收成取景框竖笔→上横 / 下横 / 琥珀斜切错峰从画外落进虚线构造槽位拼成标志→让位出字标 | 输入框/卡片等矩形 UI 是全片主角的片子；logo 可拆解为几何图元组合 |
+## Variant Selection
+| Variant | Approach | Use Case |
+|---|---|---|
+| A icon-flip-bloom | Icon anticipation wobble -> Y-axis scaleX flattens into vertical slit (dual ghost trails + blur) -> entity swaps at thinnest frame, mark blooms from slit via overshoot spring, amber chamfer slices in at 45 deg -> mark shifts left to make room, wordmark settles letter by letter | Single-icon products; large morphological difference between icon and logo requiring a magical "flip-to-transform" reveal |
+| B input-morph-assemble | Cursor clicks send -> text flies off, mark ink floods input box from send button -> 5 parameters (x/y/w/h/r) spring-contract into vertical stroke of viewfinder frame -> top crossbar, bottom crossbar, and amber chamfer drop staggered from offscreen into dashed construction slots to assemble the logo -> clears space for wordmark | Films where rectangular UI elements like inputs or cards are the hero; logos decomposable into geometric primitives |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A anticipation | 12–34f 倾斜 -12°/+14°/-18°→0°，inOut(sin)，transformOrigin 钉底部 78%；接地软影随倾斜偏移、翻扁时收窄 | 幅度递增才读作"蓄力"；只晃一下读不出预备动作 |
-| A 翻扁 | 34–46f Easing.in(cubic)，scaleX 1→0.04；两层残影 opacity 0.22/0.14 + blur 6px 滞后 0.12/0.24 | 加速入是"甩"的关键；匀速翻读作 flip 卡片。0.04 是最薄处，实体交换在这帧做 |
-| A 撑开 | 46f 起 spring(damping 11, stiffness 130) 驱动标志 scaleX 0.04→1（带过冲）；53f 起斜切 spring(damping 16, stiffness 170) 沿 45° 划入（cutProgress 0→1） | 标志从闭合竖线撑开才接得住"翻过最薄处"；直接 scale 整个标志会断因果。斜切晚 7f 是第二拍，与取景框同时出现读不出"刻" |
-| A wordmark | mark 64–82f 左移 -471px 让位（字标起点 mark+187，整组居中）；逐字 2.6f 错峰、每字 12f：scale 1.9→1 + blur 14→0（snappy），原点钉基线；字标 112px 品牌字体 700、+0.03em（标志高 ≈ 字号 2.1 倍） | 对照原片：各字母由大变小落位，大的时候模糊、落位时清晰（scale+blur 联动逐字落定），不是横向扫出；错峰 <2.4f 每字的"由大变小"读不清 |
-| B 发送反馈 | 光标 20f 移入按下 scale 0.84 + 按钮闪白 6f；文字 11f ease-in 加速右上飞出（+760,-420）+ rotate -9° + 拖影 | 飞走必须加速——匀速飞读作平移不读作"发出去了" |
-| B 灌色 | 28–40f 标志墨色从发送键位置圆形 clip-path 漫开灌满输入框（全程实色） | 用 opacity 渐变填色会经过一段发灰的半透明态；文字要先飞离再灌色，否则深字压在墨上 |
-| B morph | 30f 起 spring(damping 15, stiffness 95)，1040×132 r34 → 89×330 直角（取景框竖笔，横条直接挤成竖条）五量同步，按 spring 速度加 ≤3px 拖影；输入框投影随 morph 收掉 | 五量必须同一个 spring 驱动，分开插值会中途散架 |
-| B 三块落下 | 上横 / 下横 / 琥珀斜切 58/72/86f 错峰 14f，各自 spring(damping 13) 从画外 -760px 落到槽位；落前 10f 槽位先沿轮廓画出虚线构造框（外扩 10px），落定 14f 后淡出；按速度拉伸 / 回弹压扁（原点钉底部），空中带落影、落定即平 | 错峰是"集结"的节奏感；齐落读作下雨；没有槽位预示，落点读作随机 |
-| B 落定 | 108f 起 mark 20f 左移让位并收到 0.7（给 15 字符字标腾地方）、构造网格退场，字标 110px 逐字（1.5f 错峰）从基线升起、口号逐词；124f 起整组极缓推近 2% | 落定后整段不动即死帧；逐拍 scale 呼吸容易读作抖动 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Anticipation | 12–34f tilts -12 deg / +14 deg / -18 deg -> 0 deg, inOut(sin), transformOrigin pinned at bottom 78%; ground contact shadow shifts with tilt and narrows when flattened | Increasing amplitude communicates windup energy; a single wobble fails to register as preparation |
+| A Flattening | 34–46f Easing.in(cubic), scaleX 1 -> 0.04; dual afterimage layers opacity 0.22/0.14 + blur 6px lagging by 0.12/0.24 | Acceleration is key to the whip-like snap; constant speed feels like a generic card flip; 0.04 is the thinnest moment where the entity swap occurs |
+| A Bloom | From 46f, spring (damping 11, stiffness 130) drives mark scaleX 0.04 -> 1 (with overshoot); from 53f, chamfer spring (damping 16, stiffness 170) slices along 45 deg (cutProgress 0 -> 1) | The mark blooming from a closed vertical slit naturally continues the "flip past thinnest frame" motion; scaling the whole mark directly breaks causality; delaying chamfer by 7f creates the second beat—appearing alongside frame fails to convey "carving" |
+| A Wordmark | Mark shifts left -471px across 64–82f (wordmark starts at mark + 187, centering whole lockup); letter-by-letter 2.6f stagger, 12f per char: scale 1.9 -> 1 + blur 14 -> 0 (snappy), origin on baseline; 112px brand font 700, +0.03em tracking (mark height ~ 2.1x font size) | Matching original: letters settle from large to small, blurred while large, crisp upon landing (coupled scale + blur settling letter-by-letter), not a horizontal wipe; stagger <2.4f makes the scale transition unreadable |
+| B Send feedback | Cursor enters at 20f, presses with scale 0.84 + button flashes white 6f; text flies off top-right with 11f ease-in acceleration (+760, -420) + rotate -9 deg + motion trail | Departure must accelerate—constant speed reads as sliding rather than "sent" |
+| B Color flood | 28–40f mark ink expands from send button via circular clip-path to fill input field (solid color throughout) | Gradient opacity fills pass through muddy semi-transparency; text must fly away before flooding, otherwise dark text clashes on dark ink |
+| B Morph | From 30f, spring (damping 15, stiffness 95): 1040x132 r34 -> 89x330 right angle (viewfinder vertical stroke, squashing horizontal bar directly into vertical bar) synchronizing 5 variables, with <=3px motion streak scaled by spring speed; input box drop shadow withdraws in sync with morph | All 5 variables must be driven by the exact same spring; separate interpolation breaks alignment mid-flight |
+| B Three-piece drop | Top crossbar / bottom crossbar / amber chamfer drop staggered at 58/72/86f (14f intervals), each via spring (damping 13) from -760px offscreen into slots; slots draw dashed construction outlines 10f prior (expanded 10px), fading out 14f after landing; speed-stretched / rebound-squashed (origin on bottom), carrying airborne shadows that flatten on landing | Stagger creates the cadence of "assembling"; simultaneous drop reads as rain; without slot preview, landing positions feel arbitrary |
+| B Settle | From 108f, mark shifts left over 20f and scales to 0.7 (making room for 15-char wordmark), construction grid exits, 110px wordmark rises letter-by-letter (1.5f stagger) from baseline, slogan rises word-by-word; entire group pushes in ultra-slowly by 2% from 124f | Stillness after landing creates dead frames; per-beat scale breathing risks looking like jitter |
 
-## 已知坑
-- demo 终点 logo 是 video-shotcraft「镜刻」标志（A：柔光亮场 + 琥珀斜切；B：瑞士网格亮场 + 钴蓝构造线）——
-  参数是调校起点非实战定稿，首次实战须以真实素材回验
-- A 式实体交换必须发生在 scaleX ≤0.05 的最薄帧——提前换观众看见两个图形叠影，魔术穿帮
-- A 式 wordmark 已改为逐字 scale+blur 落定，错峰 2.2→2.6f；换更长的字标时按可感性判例正常速度看片再定间隔
-- B 式把标志拆成竖笔（= 输入框）+ 上横 + 下横 + 斜切四块——实战换成自家 logo 的图元分解，图元数 3–4 粒为宜，多了读作粒子不读作拼装
-- B 式同色图元叠合处抗锯齿会叠加（边缘那一行像素更深），拼缝出 1px 台阶；拼齐后（108f）把竖笔 + 上下横换成同几何的单一取景框路径
-- 变形中途别叠其他动画：morph 本身是全部信息
-- 与 outro-group-photo-launch 分工：那是全片元素飞来围住字标合影（聚），本卡是 UI 元素自己变成品牌符号（变）；同片收尾二选一
-- 声音：A 翻扁一声"唰"、撑开落定"嗒"；B 发送一声 send、每块落位一声 pop、字标段静
+## Known Pitfalls
+- The demo destination logo is the video-shotcraft glyph (A: soft light bright ground + amber chamfer; B: Swiss grid bright ground + cobalt construction lines)—parameters are calibration baselines, not production finals, and must be re-verified with real assets.
+- In Variant A, entity exchange must occur on the thinnest frame with scaleX <= 0.05—swapping early reveals overlapping ghost shapes, breaking the magic.
+- In Variant A, wordmark uses letter-by-letter scale + blur settling with 2.6f stagger; when adapting longer wordmarks, determine interval after reviewing at normal playback speed according to perceptibility standards.
+- In Variant B, the mark is split into vertical stroke (= input field) + top crossbar + bottom crossbar + chamfer—in production, decompose the target brand logo into 3–4 primitives; too many primitives feels like particle confetti rather than structural assembly.
+- In Variant B, anti-aliasing accumulates where same-color primitives overlap, causing a 1px stepped seam; upon completion (108f), replace vertical stroke + crossbars with a single unified path of identical geometry.
+- Do not stack competing animations during morphing: the transformation itself carries all narrative weight.
+- Division of labor with outro-group-photo-launch: that card gathers all film elements around the wordmark (assembly); this card transforms UI elements into the brand symbol (mutation). Choose one per video.
+- Audio: Variant A gets a whoosh on flattening and crisp snap on bloom; Variant B gets a send click, pop on each landing piece, and silence during wordmark resolution.
 
-## 参考实现
+## Reference Implementation
 demos/outro/ui-to-brand-morph/
-（IconFlipBloomLogo.tsx / InputMorphsIntoLogo.tsx）
-原片出处：A perplexity-promo 88–91.5s / B slack-promo 40–41s
+(IconFlipBloomLogo.tsx / InputMorphsIntoLogo.tsx)
+Original source: A perplexity-promo 88–91.5s / B slack-promo 40–41s
 
-实现状态：两式均有参考实现与 Gallery 动态样片。
+Implementation status: Both variants have reference implementations and dynamic gallery samples.

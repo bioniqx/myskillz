@@ -6,10 +6,10 @@ import { WORKBENCH as RAW } from "@proj/workbench";
 export { unitsOf } from "./manifest";
 export type { UnitKind } from "./manifest";
 
-/** 已链接成片工程的清单（未链接 / 工程没写 workbench.ts 时为 null） */
+/** Linked film project manifest (null if unlinked or manifest missing) */
 export const MANIFEST: WorkbenchManifest | null = (RAW ?? null) as WorkbenchManifest | null;
 
-const KIND_LABEL = { shot: "镜头", transition: "转场", caption: "字幕", overlay: "叠加层" } as const;
+const KIND_LABEL = { shot: "Shot", transition: "Transition", caption: "Caption", overlay: "Overlay" } as const;
 const KIND_ACCENT: Record<keyof typeof KIND_LABEL, string> = {
   shot: "#4c9aff",
   transition: "#f7c948",
@@ -17,8 +17,8 @@ const KIND_ACCENT: Record<keyof typeof KIND_LABEL, string> = {
   overlay: "#8e8e93",
 };
 
-/** 成片单元卡 + 每个单元对应的卡 id（导入器用）。分组来自 manifest.groupUnits——
- *  与内容哈希同一份拓扑，保证「存档没过期」等价于「存档里的 cardId 仍指向同一组单元」 */
+/** Film unit cards + cardId mapping for importer from manifest.groupUnits */
+/** Preserves consistent topology with manifest content hash */
 const build = (m: WorkbenchManifest | null) => {
   const cards: CardDef[] = [];
   const cardIdOfUnit = m ? groupUnits(m) : new Map<ManifestUnit, string>();
@@ -39,9 +39,9 @@ const build = (m: WorkbenchManifest | null) => {
       cards.push({
         id,
         name,
-        category: "成片单元",
+      category: "Film Units",
         durationInFrames: Math.max(2, first.duration),
-        // 成片单元按成片自己的帧率编排（不是卡片库的 30fps）
+      // Film units author at manifest frame rate
         sourceFps: m.fps,
         width: m.width,
         height: m.height,
@@ -57,11 +57,11 @@ const build = (m: WorkbenchManifest | null) => {
 };
 
 const componentName = (c: React.ComponentType<Record<string, unknown>>) =>
-  (c as { displayName?: string }).displayName ?? c.name ?? "组件";
+  (c as { displayName?: string }).displayName ?? c.name ?? "Component";
 
 const built = build(MANIFEST);
 export const PROJECT_CARDS: CardDef[] = built.cards;
 export const cardIdOfUnit = (u: ManifestUnit) => built.cardIdOfUnit.get(u)!;
 
-/** 原成片整条合成（清单可选提供），Studio 注册为 ProjOriginal 供逐帧对照 */
+/** Original film composition registered as ProjOriginal for parity comparison */
 export const ORIGINAL = MANIFEST?.original ?? null;

@@ -1,31 +1,31 @@
-// 慢推压迫（slow-push-in）——studiobinder camera movements。
-// 景 A（帧 0–120）：深色底 + 白色大数字 "10x"，scale 用 Easing.in(Easing.quad)
-// 从 1.00 匀加速推到 1.14——前 2 秒几乎不可察，后段明显可感；同时四角径向
-// 暗角 opacity 0→0.5 同步加深，构成压迫感的第二来源。
-// 帧 120 无任何过渡硬切景 B：满屏亮色 FakeDashboard(A) 真静止 30f——
-// 暗→亮的大反差让"切"这一拍才响。
+// Slow push-in tension (slow-push-in) — StudioBinder camera movements.
+// Shot A (frames 0–120): Dark background + large white text "10x", scale uses Easing.in(Easing.quad)
+// uniformly accelerating from 1.00 to 1.14 — barely perceptible in first 2s, distinctly felt in latter half; simultaneously, 4-corner radial
+// vignette deepens opacity 0 -> 0.5 in sync, establishing secondary source of tension.
+// Frame 120 hard-cuts directly to Shot B with zero transition: fullscreen bright FakeDashboard(A) completely static for 30f —
+// large dark-to-bright contrast delivers a punchy cut on the beat.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, FakeDashboard } from '../../_fixtures/Fixtures';
 
-const CUT = 120; // 硬切帧
+const CUT = 120; // Hard cut frame
 
 export const SlowPushIn: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ---- 景 B：帧 120 起，满屏亮面板，完全静止 ----
+  // ---- Shot B: From frame 120, fullscreen bright panel, completely static ----
   if (frame >= CUT) {
     return <FakeDashboard variant="A" />;
   }
 
-  // ---- 景 A：0–120f 慢推 ----
-  // 匀加速推近：Easing.in(quad)——前段几乎不可察，后段可感
+  // ---- Shot A: 0–120f slow push-in ----
+  // Uniformly accelerated push-in: Easing.in(quad) — imperceptible early on, noticeable late
   const scale = interpolate(frame, [0, CUT], [1.0, 1.14], {
     easing: Easing.in(Easing.quad),
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  // 暗角同步加深：压迫感的第二来源
+  // Vignette darkens synchronously: secondary source of tension
   const vignette = interpolate(frame, [0, CUT], [0, 0.5], {
     easing: Easing.in(Easing.quad),
     extrapolateLeft: 'clamp',
@@ -43,7 +43,7 @@ export const SlowPushIn: React.FC = () => {
         fontFamily: 'Helvetica, Arial, sans-serif',
       }}
     >
-      {/* 被推近的内容层：整体 scale */}
+      {/* Pushed content layer: scaled globally */}
       <div
         style={{
           position: 'absolute',
@@ -80,7 +80,7 @@ export const SlowPushIn: React.FC = () => {
         </div>
       </div>
 
-      {/* 暗角层：四角径向渐变，随推近同步加深 */}
+      {/* Vignette layer: 4-corner radial gradient, darkens in sync with push-in */}
       <div
         style={{
           position: 'absolute',

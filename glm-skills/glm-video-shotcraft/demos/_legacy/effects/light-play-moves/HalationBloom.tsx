@@ -1,8 +1,8 @@
-// halation-bloom —— 高光晕染
-// 深灰底大白字 "10x" crash-zoom 急停入场（2.4→1，7f in-quad + 2f 回弹）。
-// 撞停帧起：底层复制文字（blur+提亮的白色晕层）猛涨一圈（scale 1→1.3，6f out-cubic 扩散），
-// 再 20f 线性回落到 0.35 驻留柔晕（扩散/消散解耦判例），随后 15f 缓收到 0.22 稳态。
-// 深底白字：白底上提亮不可见判例。收尾真静止 ≥40f。
+// halation-bloom — Halation bloom
+// Dark gray background with large white text "10x" crash-zooms to an abrupt stop (2.4 -> 1, 7f in-quad + 2f rebound).
+// From impact frame: bottom duplicate text layer (blurred + brightened white bloom) surges outward (scale 1 -> 1.3, 6f out-cubic diffusion),
+// then decays linearly over 20f to a 0.35 residual soft glow (diffusion/decay decoupled archetype), followed by a 15f ease to 0.22 steady state.
+// Dark bg with white text: brightness boost invisible on pure white archetype. Settle phase true hold >=40f.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 
@@ -10,14 +10,14 @@ const BG = '#2a2a28';
 const WHITE = '#f7f7f5';
 const MID = '#8f8f8d';
 
-// —— 时间轴（30fps）——
-const ZOOM_START = 8; // 入场起始
-const IMPACT = 15; // 撞停帧（7f 急速缩入）
-const REBOUND_END = 17; // 2f 回弹
-const POP_END = IMPACT + 6; // 晕层猛涨 6f → f21
-const FALL_END = POP_END + 20; // 20f 线性回落 → f41
-const SETTLE_END = FALL_END + 15; // 15f 缓收 → f56，此后全静止
-// 总时长 145f → 静止 89f ≥ 40f
+// —— Timeline (30fps) ——
+const ZOOM_START = 8; // Entry start
+const IMPACT = 15; // Impact frame (7f rapid zoom-in)
+const REBOUND_END = 17; // 2f rebound
+const POP_END = IMPACT + 6; // Bloom layer expansion 6f -> f21
+const FALL_END = POP_END + 20; // 20f linear decay -> f41
+const SETTLE_END = FALL_END + 15; // 15f ease settle -> f56, fully static thereafter
+// Total duration 145f -> hold 89f >= 40f
 
 const TextBlock: React.FC<{ color: string }> = ({ color }) => (
   <div
@@ -38,7 +38,7 @@ const TextBlock: React.FC<{ color: string }> = ({ color }) => (
 export const HalationBloom: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // —— crash-zoom 入场：scale 2.4 → 0.94（7f in-quad 加速撞停）→ 1（2f 回弹）——
+  // —— crash-zoom entry: scale 2.4 -> 0.94 (7f in-quad accelerated impact) -> 1 (2f rebound) ——
   const zoomIn = interpolate(frame, [ZOOM_START, IMPACT], [2.4, 0.94], {
     easing: Easing.in(Easing.quad),
     extrapolateLeft: 'clamp',
@@ -55,19 +55,19 @@ export const HalationBloom: React.FC = () => {
     extrapolateRight: 'clamp',
   });
 
-  // —— 晕层：撞停帧起条件挂载 ——
-  // 扩散（scale）：out-cubic，6f 猛涨 1 → 1.3
+  // —— Bloom layer: conditionally mounted from impact frame ——
+  // Diffusion (scale): out-cubic, 6f surge 1 -> 1.3
   const bloomScale = interpolate(frame, [IMPACT, POP_END], [1, 1.3], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  // 消散（opacity）：与扩散解耦——猛涨段保持全亮，随后 20f 线性回落到 0.35
+  // Decay (opacity): decoupled from diffusion — holds full brightness during surge, then decays linearly over 20f to 0.35
   const bloomFall = interpolate(frame, [POP_END, FALL_END], [1, 0.35], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  // 驻留晕 15f 缓收到 0.22 稳态
+  // Residual bloom eases over 15f to 0.22 steady state
   const bloomSettle = interpolate(frame, [FALL_END, SETTLE_END], [0.35, 0.22], {
     easing: Easing.out(Easing.quad),
     extrapolateLeft: 'clamp',
@@ -85,7 +85,7 @@ export const HalationBloom: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* 小标签，全程静态 */}
+      {/* Small badge, static throughout */}
       <div
         style={{
           position: 'absolute',
@@ -102,7 +102,7 @@ export const HalationBloom: React.FC = () => {
         HALATION BLOOM
       </div>
 
-      {/* 晕层：文字复制底层，blur + 提亮，撞停帧起条件挂载 */}
+      {/* Bloom layer: text duplicate on bottom, blur + brightened, conditionally mounted from impact frame */}
       {frame >= IMPACT && (
         <div
           style={{
@@ -120,7 +120,7 @@ export const HalationBloom: React.FC = () => {
         </div>
       )}
 
-      {/* 本体文字：crash-zoom 急停 */}
+      {/* Main text: crash-zoom abrupt stop */}
       <div
         style={{
           position: 'absolute',

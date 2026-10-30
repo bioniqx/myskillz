@@ -1,42 +1,42 @@
 ---
 name: terminal-3d
-一句话: 三个终端窗散布 3D 空间，相机窗间飞行、途中正弦拉远，每到一窗打字机敲命令、结果逐行滑出——命令执行的空间叙事流
-适用: 开发者产品的 CLI/工作流演示：把"三步命令"拍成三站空间旅程
-时长: 约 8.2s（246f@30fps；三站各约 2–3s 停留 + 两段 30f 飞行）
-能量: 中（飞行给动感、打字给节奏，整体是沉稳的技术叙事；收在 ● READY 一记亮点）
+summary: Three terminal windows float at different poses in 3D space; the camera flies between them with a sine pull-back, and at each stop a command types out and its results slide in line by line.
+use: CLI / workflow demos for developer products: turning a "3-step command" into a 3-stop spatial journey
+duration: ~8.2s (246f@30fps; ~2–3s hold at each of the 3 stops + two 30f flight segments)
+energy: Medium (flight provides motion, typing provides cadence, overall steady technical narrative; concluding on a luminous READY beacon)
 ---
 
-## 意图
-终端输出天生是"平面滚动"的反电影语言，这张卡把它空间化：每条命令占据空间中一个实体窗口，相机像穿过机房一样逐窗拜访。飞行途中的拉远让观众瞥见"还有更多窗口"——工作流的全貌感。
+## Intention
+Terminal output is inherently anti-cinematic flat scrolling; this card translates it into spatial storytelling: each command occupies a physical window in 3D space, with the camera visiting each window like walking through a server room. Mid-flight pull-backs give the audience glimpses of surrounding windows—imparting a holistic sense of workflow structure.
 
-## 动效核心
-- 三窗各持 pose（x/y/z/ry，世界坐标 px），相机走**逆变换**：`translateZ(-pull) rotateX(tilt) rotateY(view−ry) translate3d(-x,-y,-z)`——写窗口姿态表即得相机路径；每站留 8–10° 侧视角（VIEW 表），落定时窗口不完全正对，读得清且有体积
-- 窗口按真实屏幕尺寸布局（1180×620，命令 52px / 输出 38px 等宽），相机落定时 1:1 栅格化——不靠外层放大，文字不糊（Q2）
-- 两段飞行各 30f（swift 不对称 in-out），途中 `sin(π·u^0.85)×1250px` 拉远鼓包——峰值处画面缩到 ~0.6，三窗同框，"瞥见全貌"；按相机屏速加横向方向性模糊（只在飞行段生效）
-- 景深：每窗按与当前站点的距离算 focus → `blur 0–3px + brightness 0.62–1 + opacity 0.72–1`；拉远时景深整体变深（离焦量随 pull 收窄），全景里三窗都认得出是终端
-- 空间锚点：地面是按与 world 完全同构的投影公式逐线画出的 SVG 透视网格（线宽恒定不闪）；焦点窗背后一团背光、脚下一摊强调色反光（都按窗心投影到屏幕）；每窗后方立一枚 560px 描边步骤号，飞行时与窗口产生视差
-- 打字机三要素：命令逐字符（每字 0.75–1.65f 确定性抖动、空格多停 0.6f）、块光标紧贴字尾（打字中常亮 / 打完 8f 半周期闪）、敲完停 2f 再回车；输出是终端式快速打印（每行 6f snappy 淡入 + 左移 10px 收回，行距 4f），状态位先转 braille 小菊花 ~6f 再落成 ✓
-- 打字起点 TYPE_AT `[8, 94, 184]` 均在到站后——飞行中不打字，注意力不分裂；全片唯一泛光给第三窗的 ● READY 成片名（Q4）
+## Motion Core
+- Three windows each hold an individual pose (x/y/z/ry in world px), with the camera executing the **inverse transform**: `translateZ(-pull) rotateX(tilt) rotateY(view - ry) translate3d(-x, -y, -z)`—defining the window pose table directly produces the camera flight path; each stop maintains an 8–10 deg glancing perspective (VIEW table) so the landed window is never completely flat, ensuring clear legibility while retaining 3D volume.
+- Windows are laid out at native screen resolution (1180x620, command 52px / output 38px monospace), rasterized 1:1 when the camera settles—no outer container scaling, avoiding blurred text (Q2).
+- Two flight segments of 30f each (swift asymmetric in-out), with a `sin(pi * u^0.85) * 1250px` pull-back bulge mid-flight—at peak elevation the scene scales to ~0.6 with all three windows framed simultaneously, providing an architectural overview; lateral directional blur scales with camera screen velocity (active only during flight segments).
+- Depth of field: each window computes focus based on distance to the current stop -> `blur 0–3px + brightness 0.62–1 + opacity 0.72–1`; during pull-back, overall depth of field deepens (defocus narrows with pull distance), keeping all three windows recognizable as terminals in the wide shot.
+- Spatial anchors: the floor is an SVG perspective grid drawn line-by-line using projection math isomorphic to the world coordinates (constant stroke width without flickering); a backlight pool shines behind the focused window and an accent reflection pools beneath it (both projected to screen space from window center); each window is backed by a 560px outlined step numeral, creating parallax against the window during flight.
+- Typewriter trinity: commands type out character by character (deterministic 0.75–1.65f per character jitter, +0.6f on spaces), block cursor stays glued to the text tail (solid during typing, blinking on an 8f half-cycle when idle), pausing 2f after typing before pressing enter; output uses terminal-style rapid printing (each line fades in snappily over 6f + retracts left by 10px, line spacing 4f), with status indicators spinning a braille spinner for ~6f before settling into a checkmark.
+- Typing trigger TYPE_AT `[8, 94, 184]` occurs exclusively after arrival at each station—no typing during flight to keep viewer attention undivided; the only bloom effect in the entire shot is reserved for the final READY output line (Q4).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 拉远鼓包 | sin(π·u^0.85)×1250px | 砍掉后飞行是"平移"没有"起降"；<800 时飞行中只看得见两窗，全貌感没了 |
-| 飞行/停留 | 飞 30f，站内 ~60–90f | 停留必须容下打字 ~20f + 输出 ~20f + 读秒 ≥14f |
-| 侧视角 | 8–10°（VIEW 表） | 0° 退化成平面截图；>18° 等宽字被透视压扁读不清（Q6） |
-| 景深 | blur ≤3px，拉远时 ×(1−0.45) | 离焦太狠时飞行全程一片糊，空间关系读不出 |
-| 打字节奏 | 0.75–1.65f/字 + 空格 +0.6f | 匀速逐字读作机器回放；>2.5f/字 观众等得不耐烦 |
-| 输出打印 | 6f snappy、行距 4f | 终端是"吐"出来的，慢滑入（>12f）读作 PPT |
-| 窗口姿态 | x 间距 ~1500px，z −220~+260，ry ±14–28° | 角度差与前后错落是"空间散布感"来源；全部朝正前会退化成平面轮播 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Pull-back bulge | sin(pi * u^0.85) * 1250px | Omitting it turns flight into a flat slide without takeoff/landing feel; <800px reveals only two windows mid-flight, losing the overview sensation |
+| Flight / hold | Flight 30f, in-station ~60–90f | Holds must accommodate ~20f typing + ~20f output + >=14f reading window |
+| Glancing angle | 8–10 deg (VIEW table) | 0 deg degenerates into a flat screenshot; >18 deg squashes monospace text under perspective distortion (Q6) |
+| Depth of field | blur <=3px, scaled by (1 - 0.45) during pull-back | Excessive defocus blurs the entire flight sequence, destroying spatial relationships |
+| Typing cadence | 0.75–1.65f/char + 0.6f on spaces | Constant per-char speed feels like robotic playback; >2.5f/char makes viewers impatient |
+| Output printing | 6f snappy, line spacing 4f | Terminals spit output out rapidly; slow slide-ins (>12f) look like slideshow bullets |
+| Window poses | x spacing ~1500px, z -220 to +260, ry +/-14–28 deg | Angular variance and front-back stagger create spatial distribution; facing all windows forward degenerates into a flat carousel |
 
-## 已知坑
-- 相机是逆变换实现，**窗口 transform、world transform、地面/背光的 project() 三处必须同构**——改姿态只改 POSES / VIEW 数据，改相机链就三处一起改，否则地面网格和窗口会"滑"
-- 命令/输出文案是示意的 video-shotcraft 出片流程（shotcraft init / render / export：搭分镜 → 渲染 → 混音导出），换项目真实命令时保持"命令短、输出 3–5 行"的信息结构
-- 光标闪烁按帧取模（8f 半周期），改时长不影响；"打字中常亮、待机慢闪"的对比要保留
-- 第三窗 READY 行在 ~220f 弹出，之后至少留 ~24f hold，否则尾帧没有落定
-- 光标必须紧贴已打出的字符：未打出的字符不要用 opacity 0 占位（会把光标顶到行尾空处悬着）
-- 整摞 SpeedBlur 是全屏 SVG 滤镜，只在飞行段速度 >0 时启用；静止段零开销，别改成常驻
+## Known Pitfalls
+- The camera is driven by inverse transform: **window transform, world transform, and the floor/backlight project() function must remain strictly isomorphic**—to update poses, only modify POSES / VIEW data; changing the camera chain requires updating all three in tandem, otherwise the floor grid and windows will slide relative to each other.
+- The command and output text illustrate video-shotcraft's production pipeline (shotcraft init / render / export: storyboard -> render -> audio mix and export); when adapting to other products, preserve the "short command, 3–5 output lines" information architecture.
+- Cursor blinking uses frame modulo (8f half-cycle) and is independent of shot duration; preserve the contrast between "solid while typing, slow blink on idle."
+- The third window's READY line pops at ~220f; leave at least ~24f hold afterward to ensure the final frame settles properly.
+- The cursor must hug already typed characters: do not use opacity 0 placeholders for untyped characters, which would push the cursor into empty space at the line end.
+- The SpeedBlur stack is a full-screen SVG filter enabled only when flight velocity > 0; it incurs zero overhead during static holds and should never be left enabled permanently.
 
-## 参考实现
+## Reference Implementation
 demos/camera/terminal-3d/
-（Terminal3D.tsx）
+(Terminal3D.tsx)

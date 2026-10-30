@@ -1,5 +1,5 @@
-// ring-diagram-annotation-reveal — 全屏主体收束成同心环图解，再左移让出注释栏。
-// 保留原 motion-blocking 的圆窗收缩、分段外环、向心箭头、旋转、错峰标签与收尾 hold。
+// ring-diagram-annotation-reveal — Fullscreen subject collapses into a concentric ring diagram, then shifts left to make room for the annotation column.
+// Preserves original motion blocking: circular aperture shrink, segmented outer ring, centripetal arrows, rotation, staggered labels, and concluding hold.
 import React from 'react';
 import { Easing, interpolate, useCurrentFrame } from 'remotion';
 import { DesignStage } from '../../_fixtures/Motion';

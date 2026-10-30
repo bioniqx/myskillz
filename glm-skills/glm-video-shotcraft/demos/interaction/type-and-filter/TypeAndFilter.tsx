@@ -1,31 +1,31 @@
-// type-and-filter —— 真实 UI 上打字搜索、网格自己收敛成一张卡、点击穿透进详情页
-// 功能演示的"操作叙事"段：让观众"跟着做一遍"。节奏必须像人手，不能像脚本。
-// 参考实现从 template SceneFlyIn 118–190 段剥离（self-contained）：
-// 相机移到搜索框，逐字符打字（3f/字符，光标常亮→闪烁），打完留一口气（11f），
-// 25 张非目标卡按阅读序错峰淡出+下沉，目标卡滑到首行槽位（途中浮起+阴影变宽），
-// 双圈强调色 ripple 点击确认 + 3px 描边 + 辉光，相机 16f 推进 zoom 2.2 交棒。
-// 网格卡用真实纹理裁片（复用 projects-empty.png 里已有的卡），nano-lab 目标卡
-// 过滤后滑到首行槽位。缺的 float-* 小块用纯色占位，不影响动效读感。
-// 质感升级：相机跟着动作走——打字段贴近搜索框（zoom 2.0，输入字有效字高 ≈30px，读得清），
-// 打完的那口气里拉开到满幅全景（zoom 1.0，页面铺满画框，不再露出页面外的空白带与页眉断边），
-// 再推进点击点；搜索框打字时有强调色聚焦环；补一只 macOS 指针在全景里滑到目标卡再点击
-// （"点了哪里"看得见，屏幕尺寸恒定、推进前淡出）；退场卡加轻微缩小与虚化，目标卡快速
-// 滑位带纵向速度拖影；选中描边与卡片同心圆角、辉光收敛。
+// type-and-filter — type-to-search on UI, grid converges to target card, click dives into detail page
+// Operational narrative demonstrating feature workflow with human-paced cadence.
+// Self-contained reference implementation derived from template SceneFlyIn 118-190f:
+// Camera frames search box, types char-by-char (3f/char, solid cursor -> blinks), pauses 11f,
+// 25 non-target cards fade and sink, target card slides to first-row slot (elevates with wider shadow),
+// dual-ring accent ripple confirms click + 3px outline + glow, camera pushes to zoom 2.2 over 16f.
+// Grid cards use texture clips; nano-lab target card slides to first row on filter.
+
+// Polish pass: camera moves with action — close on search box during typing (zoom 2.0),
+// pulls back to full overview on pause (zoom 1.0, clean edge-to-edge frame),
+// then pushes in on target; focus ring lights up on search input; macOS pointer slides to target card and clicks
+// (constant screen size, fades before transition); dismissed cards scale down and blur slightly; target card
+// slide has vertical motion blur; concentric selection outline and glow.
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import { PageCam2D, CamKey2D } from '../../_fixtures/PageCam2D';
 import { SpeedBlur, velocity } from '../../_fixtures/Polish';
 import layout from '../../_textures/live-layout.json';
 
-export const TYPE_AND_FILTER_DURATION = 73; // 118–190f 落在 shot 内 offset 0
+export const TYPE_AND_FILTER_DURATION = 73; // 118-190f span mapped to shot offset 0
 
 const PAGE_H = layout.projects.pageH;
 const cards = layout.projects.cards;
 const PAPER = '#f9f6f1';
 const FIELD = '#fefcf9';
 const AMBER = 'oklch(58% 0.13 65)';
-const AMBER_RGB = '176,116,40'; // AMBER 的近似 sRGB，用于半透明辉光
+const AMBER_RGB = '176,116,40'; // sRGB approximation of AMBER for glow transparency
 const QUERY = 'nano-lab';
-const TYPE_START = 10; // 118 - 118 = 0 偏移基准：scene-local 从 118 起
+const TYPE_START = 10; // Typing start offset
 const FILTER_START = 42; // 160 - 118
 const CLICK = 58; // 176 - 118
 
@@ -45,7 +45,7 @@ cards.forEach((_, i) => {
   if (i !== nanoIdx) leaveRank.set(i, leaveRank.size);
 });
 
-// camera: 打字段贴近搜索框 → 打完的呼吸位拉开到满幅全景（过滤/滑位全程可见）→ 推进点击卡
+// camera: close-up on search box -> pull back to full overview -> push in on clicked card
 const CAM_KEYS: CamKey2D[] = [
   { frame: 0, cx: 820, cy: 270, zoom: 2.0 },
   { frame: 34, cx: 820, cy: 270, zoom: 2.0 },
@@ -53,7 +53,7 @@ const CAM_KEYS: CamKey2D[] = [
   { frame: 56, cx: 960, cy: 540, zoom: 1.0 },
   { frame: 72, cx: CLICK_C.x, cy: CLICK_C.y, zoom: 2.2 },
 ];
-// 与 PageCam2D 同一缓动/插值，求当前 zoom（指针做反向缩放，保持屏幕尺寸恒定）
+// Matching PageCam2D easing/interpolation to compute zoom (pointer applies inverse scale for constant screen size)
 const CAM_EASE = Easing.bezier(0.33, 0, 0.15, 1);
 const camZoom = (f: number) => {
   for (let i = 0; i < CAM_KEYS.length - 1; i++) {
@@ -67,11 +67,11 @@ const camZoom = (f: number) => {
   return f < CAM_KEYS[0].frame ? CAM_KEYS[0].zoom : CAM_KEYS[CAM_KEYS.length - 1].zoom;
 };
 
-// 指针路径（页面坐标）：全景落定时停在搜索框右下，46–57f 带弧线滑到点击点
+// Pointer path (page coordinates): starts at search box bottom-right, slides along arc to click point (46-57f)
 const PTR_FROM = { x: 1210, y: 214 };
 const ptrAt = (f: number) => {
   const t = interpolate(f, [46, 57], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.45, 0, 0.2, 1) });
-  const arc = Math.sin(t * Math.PI) * 60; // 向下鼓一点的弧，不走死直线
+  const arc = Math.sin(t * Math.PI) * 60; // Arced path rather than straight line
   return {
     x: PTR_FROM.x + (CLICK_C.x - PTR_FROM.x) * t,
     y: PTR_FROM.y + (CLICK_C.y - PTR_FROM.y) * t + arc,
@@ -89,18 +89,18 @@ export const TypeAndFilter: React.FC = () => {
     frame >= TYPE_START - 2 &&
     frame <= 67 &&
     (frame <= TYPE_START + 24 || Math.floor((frame - (TYPE_START + 24)) / 8) % 2 === 0);
-  // 搜索框聚焦环：打字前 4f 亮起，点击后退去
+  // Search box focus ring: lights 4f before typing, fades after click
   const focus = interpolate(frame, [TYPE_START - 6, TYPE_START - 2, CLICK, CLICK + 6], [0, 1, 1, 0], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
 
-  // 指针：全景落定前淡入，点击后在推进中淡出（交棒帧画面干净）
+  // Pointer: fades in before overview settles, fades out during push-in
   const ptr = ptrAt(frame);
   const ptrO = interpolate(frame, [42, 47, 62, 67], [0, 1, 1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const ptrPress = interpolate(frame, [CLICK - 1, CLICK + 1, CLICK + 5], [1, 0.86, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const ptrScale = (1 / camZoom(frame)) * ptrPress;
 
-  // 目标卡滑位
+  // Target card slide translation
   const slideAt = (f: number) =>
     interpolate(f, [FILTER_START, FILTER_START + 10], [0, 1], {
       extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.35, 0, 0.2, 1),
@@ -135,7 +135,7 @@ export const TypeAndFilter: React.FC = () => {
           );
         })}
 
-        {/* ---- nano-lab: slides up to the first-row slot on filter, floating（快段纵向拖影）---- */}
+        {/* ---- nano-lab: slides up to the first-row slot on filter, floating (vertical motion blur during fast phase) ---- */}
         {(() => {
           const slideDy = (NANO_TO.y - nano.y) * slideT;
           const slideDx = (NANO_TO.x - nano.x) * slideT;
@@ -149,7 +149,7 @@ export const TypeAndFilter: React.FC = () => {
                   position: 'absolute', left: nano.x, top: nano.y, width: nano.w, height: nano.h,
                   transform: `translate3d(${slideDx}px, ${slideDy}px, ${slideZ}px) scale(${slideScale})`,
                   transformOrigin: 'center center',
-                  // 两层影：近地实影 + 随浮起变宽变淡的环境影
+                  // Dual shadows: crisp contact shadow + broader diffuse ambient shadow on elevation
                   boxShadow: `0 ${1 + 2 * float}px ${2 + 4 * float}px rgba(60,45,30,${0.07 + 0.03 * float}), 0 ${4 + 18 * float}px ${12 + 30 * float}px -${4 + 6 * float}px rgba(60,45,30,${0.09 + 0.12 * float})`,
                   borderRadius: 16, overflow: 'hidden',
                 }}
@@ -168,7 +168,7 @@ export const TypeAndFilter: React.FC = () => {
             background: FIELD, opacity: 1, pointerEvents: 'none',
           }}
         />
-        {/* 聚焦环：1px 强调色描边 + 3px 浅色外环（与输入框同圆角，跟着输入状态亮/灭） */}
+        {/* Focus ring: 1px accent stroke + 3px outer ring tracking input focus */} 
         <div
           style={{
             position: 'absolute', left: SEARCH.x - 1, top: SEARCH.y - 1, width: SEARCH.w + 2, height: SEARCH.h + 2,
@@ -213,7 +213,7 @@ export const TypeAndFilter: React.FC = () => {
           );
         })}
 
-        {/* ---- selected-card amber outline, lit from the click（与卡片同心圆角 16+6）---- */}
+        {/* ---- selected-card amber outline, lit from the click (concentric radius 16+6) ---- */}
         {frame >= CLICK + 2 ? (
           <div
             style={{
@@ -228,7 +228,7 @@ export const TypeAndFilter: React.FC = () => {
           />
         ) : null}
 
-        {/* ---- macOS 指针（页面坐标定位、按相机 zoom 反向缩放 → 屏幕上恒定 ~44px）---- */}
+        {/* ---- macOS pointer (page coordinates, inversely scaled with zoom -> constant ~44px on screen) ---- */}
         {ptrO > 0.001 ? (
           <svg
             width={28}

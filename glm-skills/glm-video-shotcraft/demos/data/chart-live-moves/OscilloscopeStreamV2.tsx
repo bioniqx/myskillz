@@ -1,23 +1,23 @@
-// oscilloscope-stream-v2 —— 示波流线：曲线写入点钉在右侧上下起伏，旧数据向左流出画；
-// 中途一次突发尖峰（振幅 2.2×，读数跳大变强调色），最后刹停真静止。
+// oscilloscope-stream-v2 — oscilloscope stream: curve write-head anchored on the right oscillating vertically while past data scrolls off to the left;
+// midway burst spike (amplitude 2.2x, readout jumps larger and turns accent color), finally braking to true freeze.
 //
-// 第二轮重设计（深蓝夜 · 满版示波监控墙）：
-// - look = midnight（深蓝夜 · 电光蓝），事件色单独给一抹珊瑚红（只给尖峰）。不再是"卡片里的小图"：
-//   整个画面就是一块示波器屏——1728×520 的满版绘图区，示波器式刻度网（主格实线 + 次格点阵 + 中心十字刻度），
-//   电光蓝磷光迹线（实线 + 两层泛光），写入头在 86% 处：竖向扫描线 + 光斑 + 一条横向读数参考线。
-// - 文字层级：左上 video-shotcraft 标志 + 字标眉题（渲染农场 · 帧/秒）+ LIVE 灯、168px 实时读数（每 3 帧采样保持，像真的仪表）；
-//   右上 p99 延迟 / 错误率两枚副读数，跟着尖峰一起跳。
-// - 尖峰事件：写入头经过时迹线该段整段变珊瑚红并加粗，大读数放大 + 变珊瑚红，p99 跳到 3 位数；
-//   写完后峰顶钉一枚「Burst」事件标签 + 竖向落线，随流向左带走。
-// - 刹停：流速 out-cubic 刹车（初速与流速相同，无速度跳变），LIVE → PAUSED，写入头光斑熄灭；
-//   之后相机缓推 3% 对准尖峰（有明确目标与落点），真静止 hold。
+// Second redesign pass (midnight dark blue / full-bleed oscilloscope monitoring wall):
+// - look = midnight (deep blue night + electric blue), with coral red reserved exclusively for events (spikes only). No longer "a small chart in a card":
+//   the entire frame is an oscilloscope screen — 1728x520 full-bleed plot area, graticule grid (major solid lines + minor dot matrix + center reticle),
+//   electric blue phosphor trace (solid line + two-layer bloom), write-head at 86%: vertical scanline + glow dot + horizontal readout reference line.
+// - Typography hierarchy: top-left video-shotcraft mark + wordmark overline (render farm · fps) + LIVE indicator, 168px live readout (sample-and-hold every 3 frames like a real instrument);
+//   top-right p99 latency / error rate secondary readouts, jumping along with the spike.
+// - Spike event: as write-head passes, trace turns coral red and thickens, large readout scales up + turns coral red, p99 jumps to 3 digits;
+//   after writing, a "Burst" event badge + vertical drop-line pins to the peak and drifts leftward with the stream.
+// - Braking: flow rate brakes with out-cubic (initial velocity matches flow rate, no velocity jump), LIVE -> PAUSED, write-head dot turns off;
+//   camera then gently pushes in 3% aimed at the spike (clear focus and destination), followed by true freeze hold.
 //
-// 时间表（30fps，共 165f）：
-//   0–16    屏幕点亮：刻度网从中心展开、迹线已在流动（直播感，第 1 帧即有内容）、读数/眉题浮入
-//   0–104   匀速流动 8px/f（采样窗平移是机械语义，刻意匀速）
-//   46–68   尖峰写入（读数/副读数随包络跳变）；~70f 事件标签 overshoot 弹出
-//   104–118 刹停 14f（out-cubic）
-//   118–165 hold 47f：相机 1 → 1.03 缓推向尖峰（smooth），其余静止
+// Timeline (30fps, 165f total):
+//   0–16    Screen lights up: graticule expands from center, trace already streaming (live broadcast feel, content present at frame 1), readout/overline float in
+//   0–104   Constant flow 8px/f (sample window translation is mechanical semantic, intentionally constant speed)
+//   46–68   Spike write-in (readout / secondary readouts jump with envelope); ~70f event tag pops up with overshoot
+//   104–118 Braking 14f (out-cubic)
+//   118–165 Hold 47f: camera gently pushes in 1 -> 1.03 toward the peak (smooth), all else frozen
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -27,30 +27,30 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const OSCILLOSCOPE_STREAM_V2_DURATION = 165;
 
 const L = LOOKS.midnight;
-const TRACE = L.accent; // 电光蓝
-const HOT = '#ff6b5b'; // 事件色：珊瑚红（只给尖峰）
+const TRACE = L.accent; // Electric blue
+const HOT = '#ff6b5b'; // Event color: coral red (reserved for spike)
 
-// 绘图区
+// Plot area
 const PX = 96;
 const PW = 1728;
 const PY = 404;
 const PH = 520;
-const HEAD = Math.round(PW * 0.86); // 写入头位置（绘图区内 x）
+const HEAD = Math.round(PW * 0.86); // Write-head position (plot area x)
 
 const SPEED = 8;
 const FREEZE0 = 104;
 const FREEZE1 = 118;
-const OFFSET = 1400; // 世界坐标偏移：第 0 帧时窗口里已有完整历史
+const OFFSET = 1400; // World coordinate offset: window already contains complete history at frame 0
 
-// 有效时间（世界 x）：匀速，FREEZE 段 out-cubic 刹停；刹车距离 = SPEED×dur/3（初速连续）
+// Effective time (world x): constant speed, out-cubic braking during FREEZE; braking distance = SPEED*dur/3 (continuous initial speed)
 const worldAt = (f: number) => {
   if (f <= FREEZE0) return OFFSET + f * SPEED;
   const brake = (SPEED * (FREEZE1 - FREEZE0)) / 3;
   return OFFSET + FREEZE0 * SPEED + brake * ramp(f, FREEZE0, FREEZE1 - FREEZE0, (x) => 1 - Math.pow(1 - x, 3));
 };
 
-// 尖峰：写入头在 f46 起经过 worldX [S0, S0+SW]；主峰是一记尖锐的高斯脉冲（+2.2× 常态振幅），
-// 前后各带一个小的前兆 / 余震，峰段内原波形抖动加倍
+// Spike: write-head passes worldX [S0, S0+SW] starting at f46; main peak is a sharp Gaussian pulse (+2.2x normal amplitude),
+// flanked by minor precursor / aftershock peaks, with baseline jitter doubled within the spike segment
 const S0 = OFFSET + 46 * SPEED;
 const SW = 176;
 const SC = S0 + SW * 0.5;
@@ -61,7 +61,7 @@ const wave = (x: number) =>
   0.34 * Math.sin(x * 0.019) + 0.27 * Math.sin(x * 0.047 + 1.7) + 0.18 * Math.sin(x * 0.011 + 4.2) + 0.11 * Math.sin(x * 0.083 + 2.3);
 const inSpike = (x: number) => gauss(x, SC, SW * 0.45);
 const signal = (x: number) => wave(x) * (1 + 0.6 * inSpike(x)) + bump(x);
-const valueOf = (x: number) => 1350 + signal(x) * 560; // fps（渲染帧 / 秒）
+const valueOf = (x: number) => 1350 + signal(x) * 560; // fps (rendered frames / second)
 const MAXV = 3000;
 const yOf = (x: number) => PH - (valueOf(x) / MAXV) * PH;
 
@@ -81,10 +81,10 @@ const hexMix = (a: string, b: string, t: number) => {
 
 export const OscilloscopeStreamV2: React.FC = () => {
   const frame = useCurrentFrame();
-  const T = worldAt(frame); // 写入头的世界 x
+  const T = worldAt(frame); // Writehead world x
   const worldOf = (px: number) => T - (HEAD - px);
 
-  // 迹线采样（写入头以左）
+  // Trace sampling (left of writehead)
   const STEP = 4;
   const pts: Array<[number, number, number]> = [];
   for (let px = 0; px <= HEAD; px += STEP) pts.push([px, yOf(worldOf(px)), worldOf(px)]);
@@ -97,9 +97,9 @@ export const OscilloscopeStreamV2: React.FC = () => {
   const headY = yOf(T);
   const freshD = toD(pts.filter(([x]) => x >= HEAD - 284));
 
-  // 读数：每 3 帧采样保持（真仪表的刷新感）；尖峰包络驱动放大 + 变色
+  // Readout: sample & hold every 3 frames; peak envelope drives scale + color
   const held = worldAt(Math.floor(frame / 3) * 3);
-  // 读数热度：写入头附近 ±40px 的尖峰强度（峰前两帧就开始升温，峰后缓降）
+  // Readout heat: peak intensity within +-40px of writehead
   const spikeK = Math.max(burstK(T), 0.8 * burstK(T - 30), 0.5 * burstK(T - 60));
   const hot = EASE.out(Math.min(1, spikeK * 1.6));
   const readScale = 1 + 0.08 * spikeK;
@@ -109,17 +109,17 @@ export const OscilloscopeStreamV2: React.FC = () => {
   const live = 1 - ramp(frame, FREEZE0, FREEZE1 - FREEZE0, EASE.out);
   const pulse = 0.5 + 0.5 * Math.cos((frame / 24) * Math.PI * 2);
 
-  // 事件标签：写入头越过峰顶后弹出，钉在峰顶随流向左
+  // Event tag: pops up as writehead passes peak, pinned to peak drifting left
   const peakPx = HEAD - (T - PEAK_X);
   const peakY = yOf(PEAK_X);
   const passF = (PEAK_X - OFFSET) / SPEED;
   const tagIn = ramp(frame, passF + 3, 14, EASE.overshoot);
 
-  // 屏幕点亮
+  // Screen illumination
   const on = ramp(frame, 0, 16, EASE.snappy);
   const headIn = ramp(frame, 2, 16, EASE.out);
 
-  // 刹停后缓推向尖峰
+  // Gentle push toward peak after brake
   const push = ramp(frame, FREEZE1 - 4, 165 - FREEZE1 + 4, EASE.smooth);
   const cam = mix(1, 1.025, push);
   const camOX = PX + mix(HEAD, peakPx, 0.6);
@@ -133,7 +133,7 @@ export const OscilloscopeStreamV2: React.FC = () => {
       <Stage look={L} keyLight={{ x: 0.62, y: 0.55 }} fill={{ x: 0.08, y: 0.1 }} intensity={0.8} breathe={0.4} />
 
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${cam.toFixed(5)})`, transformOrigin: `${camOX}px ${camOY}px` }}>
-        {/* 眉题 + LIVE */}
+        {/* Eyebrow + LIVE */}
         <div style={{ position: 'absolute', left: PX, top: 92, display: 'flex', alignItems: 'center', gap: 22, opacity: headIn }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ShotcraftMark size={40} tone="dark" />
@@ -154,7 +154,7 @@ export const OscilloscopeStreamV2: React.FC = () => {
           </span>
         </div>
 
-        {/* 大读数 */}
+        {/* Large readout */}
         <div style={{
           position: 'absolute', left: PX - 8, top: 140, display: 'flex', alignItems: 'baseline', gap: 22,
           transform: `scale(${readScale.toFixed(4)})`, transformOrigin: 'left bottom', opacity: headIn,
@@ -166,7 +166,7 @@ export const OscilloscopeStreamV2: React.FC = () => {
           <span style={{ ...type(48, 500), color: hexMix('#a9b4d0', HOT, hot) }}>fps</span>
         </div>
 
-        {/* 右上副读数 */}
+        {/* Top-right secondary readout */}
         <div style={{ position: 'absolute', right: 1920 - PX - PW, top: 150, display: 'flex', gap: 72, opacity: ramp(frame, 6, 14, EASE.out) }}>
           {[
             { k: 'p99 frame time', v: `${p99}`, u: 'ms', hotK: hot },
@@ -182,7 +182,7 @@ export const OscilloscopeStreamV2: React.FC = () => {
           ))}
         </div>
 
-        {/* 示波屏 */}
+        {/* Oscilloscope screen */}
         <div style={{ position: 'absolute', left: PX, top: PY, width: PW, height: PH }}>
           <svg width={PW} height={PH + 80} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}>
             <defs>
@@ -211,7 +211,7 @@ export const OscilloscopeStreamV2: React.FC = () => {
               </linearGradient>
             </defs>
 
-            {/* 刻度网：主格线 + 次格点阵 + 中心十字刻度；从中心展开 */}
+            {/* Grid: major lines + minor dot grid + center crosshair; expands from center */}
             <g opacity={on}>
               {Array.from({ length: gridV + 1 }, (_, i) => {
                 const x = (i / gridV) * PW;
@@ -228,13 +228,13 @@ export const OscilloscopeStreamV2: React.FC = () => {
               ))}
             </g>
 
-            {/* 迹线：面积 + 两层泛光 + 实线（左端渐隐出画） */}
+            {/* Trace: area fill + two-layer glow + solid line (fades off left edge) */}
             <g mask="url(#osMask)">
               <path d={areaD} fill="url(#osArea)" />
               <path d={lineD} fill="none" stroke={TRACE} strokeWidth={10} opacity={0.5} filter="url(#osGlowB)" />
               <path d={lineD} fill="none" stroke={TRACE} strokeWidth={5} opacity={0.75} filter="url(#osGlowA)" />
               <path d={lineD} fill="none" stroke="#cfdcff" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" />
-              {/* 最新 280px：磷光最亮的"新鲜"段 */}
+              {/* Newest 280px: bright phosphor fresh segment */}
               <path d={freshD} fill="none" stroke="url(#osFresh)" strokeWidth={4.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.4 + 0.6 * live} />
               {spikeD && (
                 <>
@@ -244,13 +244,13 @@ export const OscilloscopeStreamV2: React.FC = () => {
               )}
             </g>
 
-            {/* 写入头：竖向扫描线 + 横向读数参考线 + 光斑 */}
+            {/* Writehead: vertical scanline + horizontal reference + beam spot */}
             <line x1={HEAD} x2={HEAD} y1={0} y2={PH} stroke={hexMix('#5b8cff', HOT, hot)} strokeOpacity={0.45 * live + 0.12} strokeWidth={1.5} />
             <line x1={HEAD} x2={PW} y1={headY} y2={headY} stroke={hexMix('#cfdcff', HOT, hot)} strokeOpacity={0.4} strokeWidth={1.5} strokeDasharray="4 6" />
             <circle cx={HEAD} cy={headY} r={70} fill="url(#osHead)" opacity={0.55 * live} />
             <circle cx={HEAD} cy={headY} r={9} fill={hexMix('#ffffff', HOT, hot * 0.6)} stroke={L.bg[1]} strokeWidth={3} />
 
-            {/* 事件：峰顶标记 + 竖向落线 */}
+            {/* Event: peak marker + vertical drop line */}
             {tagIn > 0 && peakPx > 40 && (
               <g opacity={Math.min(1, tagIn * 1.5)}>
                 <line x1={peakPx} x2={peakPx} y1={peakY + 14} y2={PH} stroke={HOT} strokeOpacity={0.5} strokeWidth={1.5} strokeDasharray="3 5" />
@@ -258,19 +258,19 @@ export const OscilloscopeStreamV2: React.FC = () => {
               </g>
             )}
 
-            {/* 时间轴 */}
+            {/* Timeline */}
             {['−50s', '−40s', '−30s', '−20s', '−10s', 'now'].map((t, i) => (
               <text key={t} x={(HEAD * (i + 1)) / 6} y={PH + 52} textAnchor="middle" fill={i === 5 ? L.ink2 : L.ink3}
                 style={{ ...type(32, 500), fontFamily: FONT.sans }} opacity={headIn}>{t}</text>
             ))}
           </svg>
 
-          {/* y 轴刻度（屏内左上，压在主格线上方） */}
+          {/* Y-axis ticks (in-screen top-left, atop grid lines) */}
           {['3k', '2k', '1k'].map((t, i) => (
             <div key={t} style={{ position: 'absolute', left: 14, top: (i * 2 * PH) / 6 + 8, ...type(28, 600), color: L.ink3, opacity: on }}>{t}</div>
           ))}
 
-          {/* 事件标签 */}
+          {/* Event tag */}
           {tagIn > 0 && peakPx > 40 && (
             <div style={{
               position: 'absolute', left: peakPx + 22, top: peakY - 36, height: 72, padding: '0 26px 0 20px',

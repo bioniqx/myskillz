@@ -1,15 +1,15 @@
-// clipcard-looping —— ClipCard 交叉淡化循环回归卡
-// 覆盖维护者 review 点名的三个边界场景：
-//   1) 未静音(muted=false)的交叉淡化循环——出层/入层音量互补淡入,不在重叠区
-//      叠加两条全量音轨;
-//   2) startFrom>0 与 loop 组合——有效循环步长 = loopDurationInFrames - startFrom,
-//      否则每层从 startFrom 起播、按全长步进,会在素材尾部冻结;
-//   3) 短 Sequence 嵌在长 Composition 里——层数按 shot 时长(durationInFrames prop)
-//      计算,而非 Composition 总时长,不会生成永远不会被看见的层。
+// clipcard-looping — ClipCard crossfade looping regression card
+// Covers three edge-case scenarios identified in maintainer review:
+//   1) Unmuted (muted=false) crossfade loop — complementary fade-in/out volume without overlapping two full audio tracks in the transition zone;
+
+//   2) startFrom>0 combined with loop — effective loop step = loopDurationInFrames - startFrom,
+//      otherwise layers start playing from startFrom but step by full length, freezing at clip tail;
+//   3) Short Sequence nested inside long Composition — layer count calculated from shot duration (durationInFrames prop)
+//      rather than Composition total duration, avoiding rendering layers that are never visible.
 //
-// 素材：ClipCard 的 src 是 public/ 下的真实 mp4。渲染本 demo 前先把一段
-// 短视频放到项目的 public/clips/clipcard-demo.mp4（建议 30fps、方形）。
-// 三个场景共用同一段素材,但用不同参数驱动,方便对照回放。
+// Asset: ClipCard src is a real mp4 under public/. Before rendering this demo, place a short video clip
+// at public/clips/clipcard-demo.mp4 (recommended 30fps, square aspect ratio).
+// All three scenarios share the same footage driven by different parameters for comparison.
 import React from 'react';
 import { AbsoluteFill, Sequence } from 'remotion';
 import { ClipCard } from '../../../assets/lib/ClipCard';
@@ -29,7 +29,7 @@ export const ClipCardLooping: React.FC = () => {
         gap: 36,
       }}
     >
-      {/* 场景 1：muted=false + loop —— 音量互补淡入,不出双音叠层 */}
+      {/* Scenario 1: muted=false + loop — complementary audio fade-in, no doubled audio tracks */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
         <ClipCard
           src={CLIP}
@@ -41,7 +41,7 @@ export const ClipCardLooping: React.FC = () => {
           caption="muted=false · loop"
           captionSize={11}
         />
-        {/* 场景 2：startFrom=12 + loop —— 有效步长 60-12=48 */}
+        {/* Scenario 2: startFrom=12 + loop — effective step 60-12=48 */}
         <ClipCard
           src={CLIP}
           muted
@@ -55,9 +55,9 @@ export const ClipCardLooping: React.FC = () => {
         />
       </div>
 
-      {/* 场景 3：短 Sequence(120f)嵌进长 Composition(未传 durationInFrames,
-          层数从 useVideoConfig 的 composition 时长算 → 需显式传 durationInFrames;
-          这里用 Sequence 包一层模拟"短 shot 长工程"的结构) */}
+      {/* Scenario 3: Short Sequence (120f) nested inside long Composition (if durationInFrames omitted,
+          layer count calculated from useVideoConfig composition duration -> pass durationInFrames explicitly;
+          wrapped in Sequence here to simulate short-shot-in-long-project structure) */}
       <Sequence name="short-shot" from={0} durationInFrames={120} layout="none">
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <ClipCard

@@ -1,20 +1,20 @@
-// 三连咔哒特写（wright-triple-cut）——Edgar Wright《僵尸肖恩》流程三连快切:
-// 帧 0–24 全景 hold(FakeDashboard A);随后三个 10f 特写硬切连打,每个特写
-// 前 4f 静止、中 3f 动作、后 3f 静止:①25–34 光标按下按钮(圆点缩一圈+按钮变深)
-// ②35–44 开关左拨右(圆钮 3f 滑动+轨道 G.mid→G.ink) ③45–54 大数字 rotateX 翻牌 0→1;
-// 帧 55 甩回全景:6f whip translateX 滑入,高速段 3 层错帧副本模拟运动模糊,
-// 中上卡片提亮泛光+大 "1" 标记结果;帧 ~68 起全静止到 130(真静止 ≥60f)。
+// Edgar Wright triple-cut (wright-triple-cut) — Shaun of the Dead style rapid 3-cut montage:
+// Frames 0–24 wide shot hold (FakeDashboard A); followed by three 10f close-up hard cuts,
+// each with 4f hold, 3f action, 3f settle: (1) 25–34 cursor presses button (dot shrinks + button darkens)
+// (2) 35–44 toggle flips left-to-right (knob slides 3f + track G.mid -> G.ink) (3) 45–54 large digit rotateX flips 0 -> 1;
+// Frame 55 whip pans back to wide: 6f whip translateX slide-in, high-speed phase uses 3 offset ghost layers for motion blur,
+// top-center card brightens with glow + large "1" flags result; frame ~68 to 130 fully settled (true hold >=60f).
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard, G } from '../../_fixtures/Fixtures';
 
-const HOLD_END = 25; // 全景 hold 结束
-const C1 = 25; // 特写一:光标按下
-const C2 = 35; // 特写二:开关
-const C3 = 45; // 特写三:翻牌
-const WHIP = 55; // 甩回全景
+const HOLD_END = 25; // Wide shot hold ends
+const C1 = 25; // Close-up 1: cursor press
+const C2 = 35; // Close-up 2: toggle switch
+const C3 = 45; // Close-up 3: digit flip
+const WHIP = 55; // Whip back to wide shot
 
-// 特写统一舞台:G.panel 底 + 居中大白卡,主体屏心、同倍率感
+// Unified close-up stage: G.panel base + centered large white card, subject centered at consistent scale
 const CloseupStage: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{ width: 1920, height: 1080, background: G.panel, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <div style={{
@@ -27,26 +27,26 @@ const CloseupStage: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   </div>
 );
 
-// 结果卡片(3×2 网格中上格)的几何:sidebar 220 + padding 36,列宽 524,行高 454
+// Result card geometry (top-center cell of 3x2 grid): sidebar 220 + padding 36, col width 524, row height 454
 const RESULT = { left: 808, top: 108, w: 524, h: 454 };
 
 export const WrightTripleCut: React.FC = () => {
   const f = useCurrentFrame();
 
-  // ===== 帧 0–24:全景 hold =====
+  // ===== Frames 0–24: wide shot hold =====
   if (f < HOLD_END) {
     return <FakeDashboard variant="A" />;
   }
 
-  // ===== 特写一(25–34):光标从悬停到按下,按钮变深 =====
+  // ===== Close-up 1 (25–34): cursor hovers then presses, button darkens =====
   if (f < C2) {
-    const t = f - C1; // 局部 0–9;动作窗 4–6
+    const t = f - C1; // Local 0–9; action window 4–6
     const p = interpolate(t, [4, 7], [0, 1], {
       easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     });
-    const cursorScale = 1 - 0.3 * p; // 1 → 0.7 缩一圈
-    const btnBg = p < 0.5 ? G.bar : '#5c5c5a'; // 按下瞬间变深
-    const btnY = 8 * p; // 按钮被压下 8px
+    const cursorScale = 1 - 0.3 * p; // 1 -> 0.7 shrink
+    const btnBg = p < 0.5 ? G.bar : '#5c5c5a'; // Darkens on press
+    const btnY = 8 * p; // Button pressed down by 8px
     return (
       <CloseupStage>
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -58,7 +58,7 @@ export const WrightTripleCut: React.FC = () => {
           }}>
             <div style={{ width: 260, height: 30, borderRadius: 15, background: p < 0.5 ? G.card : G.line }} />
           </div>
-          {/* 圆形光标点:悬停在按钮中心,按下缩一圈 */}
+          {/* Circular cursor dot: hovers at button center, shrinks on press */}
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             width: 96, height: 96, marginLeft: -48, marginTop: -48 + btnY,
@@ -71,14 +71,14 @@ export const WrightTripleCut: React.FC = () => {
     );
   }
 
-  // ===== 特写二(35–44):开关从左拨到右 =====
+  // ===== Close-up 2 (35–44): toggle switch flips left to right =====
   if (f < C3) {
     const t = f - C2;
     const p = interpolate(t, [4, 7], [0, 1], {
       easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     });
     const trackW = 560; const trackH = 240; const knob = 192; const pad = 24;
-    const knobX = pad + p * (trackW - knob - pad * 2); // 左 → 右
+    const knobX = pad + p * (trackW - knob - pad * 2); // Left -> right
     const trackBg = p < 0.5 ? G.mid : G.ink;
     return (
       <CloseupStage>
@@ -96,14 +96,14 @@ export const WrightTripleCut: React.FC = () => {
     );
   }
 
-  // ===== 特写三(45–54):大数字翻牌 0 → 1(rotateX) =====
+  // ===== Close-up 3 (45–54): large digit flips 0 -> 1 (rotateX) =====
   if (f < WHIP) {
     const t = f - C3;
     const p = interpolate(t, [4, 7], [0, 1], {
       easing: Easing.inOut(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     });
     const showOne = p >= 0.5;
-    const angle = showOne ? (1 - p) * 2 * 90 : -p * 2 * 90; // 0→-90 折走,90→0 翻入
+    const angle = showOne ? (1 - p) * 2 * 90 : -p * 2 * 90; // 0 -> -90 fold away, 90 -> 0 fold in
     const digit = showOne ? '1' : '0';
     return (
       <CloseupStage>
@@ -126,15 +126,15 @@ export const WrightTripleCut: React.FC = () => {
     );
   }
 
-  // ===== 帧 55 起:甩回全景 + 结果卡片亮起 =====
+  // ===== Frame 55 onward: whip back to wide shot + result card lights up =====
   const t = f - WHIP;
-  // whip:6f 从右侧 900px 高速滑入,poly(5) out 急减速;t≥6 恒为 0(真静止)
+  // Whip: 6f slides in at high speed from 900px right, poly(5) out sharp deceleration; t>=6 stays 0 (true hold)
   const whipX = t >= 6 ? 0 : interpolate(t, [0, 6], [900, 0], {
     easing: Easing.out(Easing.poly(5)), extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
-  const speeding = t < 4; // 高速段:3 层错帧副本模拟模糊感
+  const speeding = t < 4; // High-speed phase: 3 offset ghost layers simulate motion blur
 
-  // 结果卡片:泛光 57–84 缓升后恒定(帧 84 起真静止);弹一下 57–64 后恒为 1
+  // Result card: glow ramps 57–84 then stays constant (true hold from frame 84); pops 57–64 then stays 1
   const glow = interpolate(f, [57, 84], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const pop = f >= 64 ? 1 : interpolate(f, [57, 60, 64], [1, 1.07, 1], {
     easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
@@ -151,7 +151,7 @@ export const WrightTripleCut: React.FC = () => {
       {speeding && dash(whipX + 220, 0.18, 'echo2')}
       {speeding && dash(whipX + 110, 0.35, 'echo1')}
       {dash(whipX, 1, 'main')}
-      {/* 结果卡片提亮泛光 */}
+      {/* Result card glow highlight */}
       <div style={{
         position: 'absolute',
         left: RESULT.left, top: RESULT.top, width: RESULT.w, height: RESULT.h,

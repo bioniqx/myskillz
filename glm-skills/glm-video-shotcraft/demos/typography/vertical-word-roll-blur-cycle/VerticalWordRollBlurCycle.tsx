@@ -1,10 +1,10 @@
-// vertical-word-roll-blur-cycle — Word Roll 竖向词条滚轮（motion-lab 定稿转原生 Remotion）
-// 标语（video-shotcraft 卖点句 "Crafted for ___"）后半词用竖向滚轮循环 Launches→Demos→Promos→Every Shot：中心词清晰上色，相邻行浅灰带
-// 垂直 blur（滚轮景深），每步 outQuint 前快后慢带轻微过冲，落定瞬间中心词从灰染成强调色。
-// 质感：blur 改为真·纵向高斯（SVG feGaussianBlur 只在 y 向，横向笔画不糊），转动时再按滚轮
-// 速度叠一层纵向运动模糊（静止为 0）；离中心越远的行按滚筒曲面轻微压扁；视窗上下沿柔边渐隐，
-// 不再是硬裁切；底景柔光 + 颗粒。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// vertical-word-roll-blur-cycle — Vertical word reel (ported from finalized motion-lab to native Remotion)
+// The second half of tagline (video-shotcraft value prop "Crafted for ___") rotates through Launches->Demos->Promos->Every Shot on a vertical reel: center word sharp and tinted, adjacent rows light gray with
+// vertical blur (simulating reel depth-of-field); each step uses outQuint (fast start, slow settle) with subtle overshoot; on settling, the center word transitions from gray to accent color.
+// Rendering polish: blur uses true vertical Gaussian (SVG feGaussianBlur in y-axis only, keeping horizontal strokes crisp); reel rotation
+// overlays an additional vertical motion blur proportional to velocity (0 when static); rows farther from center are slightly compressed along the cylinder surface; viewport edges fade softly at top and bottom,
+// eliminating hard clipping; background features soft lighting + grain.
+// Design canvas: 480x270 (DesignStage scales proportionally); values in parameter table are calibrated to this coordinate space.
 import React from 'react';
 import { DesignStage, E, seg, useT } from '../../_fixtures/Motion';
 import { Backdrop, FONT, Grain } from '../../_fixtures/Polish';
@@ -13,14 +13,14 @@ export const VERTICAL_WORD_ROLL_BLUR_CYCLE_DURATION = 150; // 5000ms @30fps
 
 const ROW = 44;
 const WORDS = ['Launches', 'Demos', 'Promos', 'Every Shot'];
-// 3 次换词，每次 0.11（≈0.55s）
+// 3 word transitions, each taking 0.11 (~0.55s)
 const STEPS = [0.16, 0.36, 0.56];
 
 const ACCENT = '#5b63d3';
 const ACCENT_DIM = '#B9B9BE';
 const INK = '#17181c';
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-// 十六进制颜色按 k 混合（与原 effect.js 的 mixHex 等价）
+// Mix two hex colors by factor k (equivalent to original mixHex in effect.js)
 const mixHex = (a: string, b: string, k: number) => {
   k = clamp01(k);
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
@@ -29,7 +29,7 @@ const mixHex = (a: string, b: string, k: number) => {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 };
 
-// 滚轮进度 p：每步 0.7·outQuint + 0.3·outBack（前快后极慢 + 轻微过冲回落）
+// Reel progress p: 0.7 * outQuint + 0.3 * outBack per step (fast start, very slow finish + subtle overshoot settle)
 const reelAt = (t: number) => {
   let p = 0;
   for (const s of STEPS) {
@@ -38,12 +38,12 @@ const reelAt = (t: number) => {
   }
   return p;
 };
-const DT = 0.5 / (VERTICAL_WORD_ROLL_BLUR_CYCLE_DURATION - 1); // 半帧对应的 t
+const DT = 0.5 / (VERTICAL_WORD_ROLL_BLUR_CYCLE_DURATION - 1); // Normalized t corresponding to half a frame
 
 export const VerticalWordRollBlurCycle: React.FC = () => {
   const t = useT();
   const p = reelAt(t);
-  // 滚轮速度（行/帧）→ 纵向运动模糊（设计 px），静止时为 0
+  // Reel speed (rows/frame) -> vertical motion blur (design px), 0 when static
   const speed = Math.abs(reelAt(t + DT) - reelAt(t - DT));
   const motionBlur = Math.min(4, speed * ROW * 0.22);
 
@@ -66,7 +66,7 @@ export const VerticalWordRollBlurCycle: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 14,
-            // 结束整组淡出
+            // Entire group fades out at the end
             opacity: 1 - seg(t, 0.9, 0.985) * 0.999,
           }}
         >
@@ -80,7 +80,7 @@ export const VerticalWordRollBlurCycle: React.FC = () => {
           >
             Crafted for
           </div>
-          {/* 三行高的视窗，滚轮列在其中滑动，中心行 = 第二行；上下沿柔边渐隐 */}
+          {/* Three-row viewport containing the sliding word reel, center row = row 2; top and bottom edges fade softly */}
           <div
             style={{
               position: 'relative',
@@ -101,10 +101,10 @@ export const VerticalWordRollBlurCycle: React.FC = () => {
             >
               {WORDS.map((w, i) => {
                 const d = Math.abs(i - p);
-                // 相邻行纵向 blur：距中心 1 行内线性 0→3px，更远 3→5px；转动时叠运动模糊
+                // Vertical blur for adjacent rows: linear 0->3px within 1 row from center, 3->5px farther out; adds motion blur during rotation
                 const blur = (d < 1 ? 3 * d : 3 + 2 * Math.min(d - 1, 1)) + motionBlur;
                 const op = d < 1 ? 1 - 0.65 * d : Math.max(0.1, 0.35 - 0.23 * (d - 1));
-                // 滚筒曲面：离中心越远越扁（最多 14%）
+                // Cylinder curvature: squashes more with distance from center (up to 14%)
                 const squash = 1 - 0.14 * Math.min(1, d / 1.4);
                 const fid = `vroll-${i}`;
                 return (
@@ -122,11 +122,11 @@ export const VerticalWordRollBlurCycle: React.FC = () => {
                         fontSize: 30,
                         fontWeight: 800,
                         letterSpacing: -0.5,
-                        whiteSpace: 'nowrap', // 末词 "Every Shot" 带空格，禁止折行
+                        whiteSpace: 'nowrap', // Final item "Every Shot" contains space, prevent wrapping
                         filter: blur > 0.05 ? `url(#${fid})` : undefined,
                         opacity: op,
                         transform: `scaleY(${squash.toFixed(4)})`,
-                        // 落定染色：中心词灰→强调色（d 越小越彩）
+                        // Settling tint: center word transitions from gray to accent color (smaller d = more saturated)
                         color: mixHex(ACCENT_DIM, ACCENT, clamp01(1 - d * 2.4)),
                       }}
                     >
@@ -140,7 +140,7 @@ export const VerticalWordRollBlurCycle: React.FC = () => {
         </div>
       </div>
     </DesignStage>
-    {/* 颗粒放在设计坐标容器外，按成片像素取样，不随 4× 放大变粗 */}
+    {/* Grain sits outside the design coordinate container, sampled at output resolution so it doesn't scale up 4x */}
     <Grain opacity={0.05} />
     </div>
   );

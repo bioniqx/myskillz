@@ -1,9 +1,9 @@
-// paper-title-card —— 一句话逐词 letterpress 压印上纸字卡
-// 章节转场/价值主张呼吸位：单句文案逐词压印入场（scale 大→1 + blur→0），
-// 每句恰一个强调色斜体重点词，强调色下划线 scaleX 收束，尾部整卡淡出。
-// 全片多张字卡统一 50–55f；纸底+中心暖光与纸墨风格产品画面同色系。
-// 参数化：words/sub/subDigits 可换成目标产品文案；subDigits 走 DigitRoll
-// 数字滚动（必须在本卡淡出前落定）。渲染本 demo 前把 text 复制进项目即可。
+// paper-title-card — word-by-word letterpress title card on paper
+// Section transition / value proposition breath: single sentence letterpress entrance (large scale -> 1 + blur -> 0),
+// exactly one accent-colored italic keyword per line, accent underline scaleX resolve, full card fade out at tail.
+// Uniform 50-55f card duration across video; warm paper background with central light matching editorial palette.
+// Parameterized: words/sub/subDigits customizable; subDigits driven by DigitRoll
+// odometer roll (settles prior to card fade). Ready to copy into project.
 import React from 'react';
 import { AbsoluteFill, interpolate, useCurrentFrame, Easing } from 'remotion';
 
@@ -12,8 +12,8 @@ export const PAPER_TITLE_CARD_DURATION = 55; // ≈1.8s @30fps
 const SERIF = 'ui-serif, Georgia, "Times New Roman", serif';
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-// 每句恰好一个 accent：功能名/收益词（C2）
-// br：该词后强制换行（让两行长度接近原版 "All your team’s research, / one place to go." 的分行，避免孤词）
+// Exactly one accent keyword per sentence: feature name / value proposition (C2)
+// br: forced line break after keyword to balance line lengths and avoid orphans
 const WORDS: { text: string; accent?: boolean; br?: boolean }[] = [
   { text: 'Direct' },
   { text: 'the' },
@@ -24,12 +24,12 @@ const WORDS: { text: string; accent?: boolean; br?: boolean }[] = [
   { text: 'shoot', accent: true },
   { text: 'it.' },
 ];
-// 副行：video-shotcraft 的渲染队列语境（示意数据）
+// Subtitle: video-shotcraft render queue context (mock demo data)
 const SUB = 'shots rendered today';
 const SUB_DIGITS = '12';
 
-// 数字滚动列（odometer 风格，复制自 template DigitRoll，数字带双份拼接保证
-// 任何目标位都有滚感；tabular-nums 防横向抖）
+// Odometer digit roller column (duplicated strips ensure smooth scroll to any target digit;
+// tabular-nums prevents horizontal jitter)
 const DIGITS = '0123456789';
 const DigitColumn: React.FC<{ ch: string; delay: number; lineH: number; color: string }> = ({ ch, delay, lineH, color }) => {
   const frame = useCurrentFrame();

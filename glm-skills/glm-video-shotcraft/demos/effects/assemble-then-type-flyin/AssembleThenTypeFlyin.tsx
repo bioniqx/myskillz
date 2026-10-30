@@ -1,26 +1,26 @@
-// assemble-then-type-flyin — 先骨架后文字：页面"自己长出来"
+// assemble-then-type-flyin — Skeleton first, typography second: Page "builds itself"
 //
-// 第二轮重设计（石墨暗场 · 胶片金 · 发布页）：
-// - look = graphite（近单色暗场，accent2 胶片金作唯一强调色）。成形后的画面是 video-shotcraft 的
-//   发布页：玻璃导航条（镜刻标志 + video-shotcraft 字标）、112px 衬线大标题「Frame motion. / Craft the shot.」
-//   （shot. 为金色斜体）、说明句、金色 CTA + 描边次按钮、三枚指标块；右侧是一张 640×760 的「调色台」卡
-//   （上半是一帧胶片画面，下半是 LIFT / GAMMA / GAIN 三只色轮）。
-// - 两段式手法不变、维度分开：
-//   ① 骨架段 6–50f：10 个无字骨架件（框、色块、分隔线、色轮圈）从画外 120–420px 平面飞入，
-//      overshoot 过冲贴合 + ±7° 旋转回正，按真实速度给方向性运动模糊；开场画面里先有 12 栏版式参考线。
-//   ② 文字段 58–128f：每个字符带确定性种子的 dx ±260 / dy ±200 / dz −200→−760 / rotateX/Y/Z ±120–190°，
-//      perspective(900px) 下翻滚着落位，远处虚近处实；先大标题、后导航与说明、最后 mono 小标注。
-//      块内字间隔按字数自适应，保证全部在 128f 前落定。
-// - 收尾一笔（落定后的"定稿"信号）：CTA 由描边通电成金色实底；胶片画面从扁平的 log 灰片被一道竖向
-//   擦除线"调色"成暖金成片 —— 呼应标题。
+// Second-round redesign (Graphite dark field · Film gold · Release page):
+// - look = graphite (near-monochrome dark field, accent2 film gold as sole accent color). The assembled composition is video-shotcraft's
+//   release page: Glass navbar (Mirror Cut emblem + video-shotcraft wordmark), 112px serif headline "Frame motion. / Craft the shot."
+//   ("shot." in gold italic), explanatory line, gold primary CTA + outlined secondary button, three metric blocks; on the right is a 640×760 "Color Grading Console" card
+//   (top half displays a film frame, bottom half houses LIFT / GAMMA / GAIN color wheels).
+// - Preserves two-phase choreography with decoupled dimensions:
+//   ① Skeleton phase 6–50f: 10 textless skeleton parts (frames, color blocks, dividers, color wheel rings) fly in planarly from 120–420px off-screen,
+//      overshoot snap-lock + ±7° rotational alignment, with directional motion blur scaled to true velocity; opening frame begins with a 12-column typographic grid guide.
+//   ② Typography phase 58–128f: Each glyph carries deterministic seeded offsets dx ±260 / dy ±200 / dz −200->−760 / rotateX/Y/Z ±120–190°,
+//      tumbling into place under perspective(900px), blurred in distance and crisp near focus; headline first, then navbar and description, ending with mono callouts.
+//      Inter-character stagger self-adapts to block length, ensuring all glyphs settle before 128f.
+// - Concluding cadence ("finalized" state signal): CTA energizes from outlined to solid gold fill; film frame wipes vertically from flat log grey
+//   to graded warm gold footage via wipe transition — echoing the headline.
 //
-// 时间表（30fps，共 168f）：
-//   0–8     版式参考线就位（第 1 帧即有画面）
-//   6–50    骨架飞入（10 件，起飞间隔先密后疏）
-//   50–58   停半拍：骨架齐了、参考线退淡（两段之间的语义断点）
-//   58–128  文字 3D 逐字落位（大字 58/66 → 导航/说明 76–92 → 指标 96–102 → 小标注 104–114）
-//   118–146 CTA 通电、胶片画面调色擦除（124–146），色轮控制点同步从中性推到偏色位
-//   128–168 hold（40f）：整页 1.5% 极缓推近
+// Timeline (30fps, total 168f):
+//   0–8     Typographic grid guides present (visuals active from frame 1)
+//   6–50    Skeleton fly-in (10 elements, takeoff intervals dense then relaxed)
+//   50–58   Half-beat pause: Skeleton complete, guides fade (semantic breakpoint between phases)
+//   58–128  Typography 3D per-glyph landing (hero text 58/66 -> navbar/copy 76–92 -> metrics 96–102 -> small callouts 104–114)
+//   118–146 CTA energizes, film frame grade wipe (124–146), color wheel control points slide from neutral to graded offsets
+//   128–168 Hold (40f): Subtle 1.5% whole-page camera push
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, ramp } from '../../_fixtures/Polish';
@@ -37,7 +37,7 @@ const rand = (seed: number) => {
   return x - Math.floor(x);
 };
 
-// ───────────── 骨架件（无字）：from = 飞入起点位移，rot = 起始旋转，at = 起飞帧 ─────────────
+// ───────────── Skeleton Elements (textless): from = fly-in starting displacement, rot = initial rotation, at = takeoff frame ─────────────
 type Shell = { from: [number, number]; rot: number; at: number };
 const SHELL_DUR = 16;
 const SH: Record<string, Shell> = {
@@ -53,7 +53,7 @@ const SH: Record<string, Shell> = {
   stat3: { from: [220, 280], rot: 6, at: 44 },
 };
 
-// ───────────── 文字块：逐字 3D 落位 ─────────────
+// ───────────── Text Blocks: Per-glyph 3D landing ─────────────
 type Seg = { s: string; color?: string; italic?: boolean };
 type Block = { x: number; y: number; start: number; style: React.CSSProperties; segs: Seg[]; w?: number; align?: 'center' | 'right' };
 const MONO = FONT.mono;
@@ -80,7 +80,7 @@ const BLOCKS: Block[] = [
   { x: 1373, y: 908, w: 214, align: 'center', start: 113, style: { fontFamily: MONO, fontSize: 22, letterSpacing: '0.14em', color: L.ink2 }, segs: [{ s: 'GAMMA' }] },
   { x: 1587, y: 908, w: 213, align: 'center', start: 114, style: { fontFamily: MONO, fontSize: 22, letterSpacing: '0.14em', color: L.ink2 }, segs: [{ s: 'GAIN' }] },
 ];
-const TEXT_END = 128; // 每块最后一字落定上限
+const TEXT_END = 128; // Settlement deadline for final glyph of each block
 const CHAR_DUR = 16;
 
 type CharP = { dx: number; dy: number; dz: number; rx: number; ry: number; rz: number };
@@ -113,7 +113,7 @@ const FlyBlock: React.FC<{ b: Block; bi: number; frame: number }> = ({ b, bi, fr
             const a = ramp(frame, ft, CHAR_DUR, EASE.snappy);
             const far = (1 - a) * (1 - a);
             const blur = far * (1 + (-c.dz / 760) * 7);
-            const glyph = ch === ' ' ? '\u00a0' : ch; // 空格塞成不换行空格，否则 inline-block 空 span 宽度归零
+            const glyph = ch === ' ' ? '\u00a0' : ch; // Non-breaking space prevents inline-block empty span width collapse
             return (
               <span key={k} style={{
                 display: 'inline-block', opacity: a > 0 ? Math.min(1, a * 1.8) : 0,
@@ -132,14 +132,14 @@ const FlyBlock: React.FC<{ b: Block; bi: number; frame: number }> = ({ b, bi, fr
   );
 };
 
-// 面板材质：带色相的深色 + 低透明度白描边 + 顶部内高光 + 两层软阴影
+// Panel material: Tinted deep tone + low-opacity white outline + top inner highlight + dual soft drop shadows
 const PANEL: React.CSSProperties = {
   background: 'linear-gradient(180deg, #1d1e22 0%, #16171a 100%)',
   border: '1px solid rgba(255,255,255,0.09)',
   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 4px rgba(0,0,0,0.5), 0 30px 60px -24px rgba(0,0,0,0.85)',
 };
 
-// 胶片画面：暮色天空 + 低悬的太阳 + 三层山影 + 水面反光（纯渐变 / SVG，graded 控制 log 灰片 ↔ 成片）
+// Film frame: Dusk sky + low sun + three mountain silhouettes + water reflection (pure gradient / SVG, graded controls log grey <-> final grade)
 const FilmStill: React.FC<{ graded: boolean }> = ({ graded }) => (
   <div style={{
     position: 'absolute', inset: 0,
@@ -202,13 +202,13 @@ export const AssembleThenTypeFlyin: React.FC = () => {
 
   const guides = 1 - 0.75 * ramp(frame, 48, 14, EASE.out);
   const ctaOn = ramp(frame, 118, 14, EASE.out);
-  const wipe = ramp(frame, 124, 22, EASE.swift); // 胶片调色擦除 0→1（左→右）
+  const wipe = ramp(frame, 124, 22, EASE.swift); // Film grade wipe 0->1 (left->right)
   const push = 1 + 0.015 * ramp(frame, 120, 48, EASE.smooth);
 
   return (
     <div style={{ width: 1920, height: 1080, position: 'relative', overflow: 'hidden', fontFamily: FONT.sans, background: L.bg[2] }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.05 }} fill={{ x: 0.85, y: 0.55 }} intensity={0.75} breathe={0.3}>
-        {/* 12 栏版式参考线：第 1 帧就在，骨架齐后退淡 */}
+        {/* 12-column layout grid guides: Present from frame 1, fading after skeleton completes */}
         <div style={{ position: 'absolute', inset: 0, opacity: guides }}>
           {Array.from({ length: 13 }, (_, i) => (
             <div key={i} style={{ position: 'absolute', left: 120 + i * 140, top: 0, width: 1, height: 1080, background: 'rgba(255,255,255,0.045)' }} />
@@ -220,7 +220,7 @@ export const AssembleThenTypeFlyin: React.FC = () => {
       </Stage>
 
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${push.toFixed(5)})`, transformOrigin: '50% 50%' }}>
-        {/* ── 骨架段 ── */}
+        {/* ── Skeleton Phase ── */}
         {shelled(SH.nav, { ...PANEL, left: 120, top: 64, width: 1680, height: 80, borderRadius: 24, background: 'linear-gradient(180deg, rgba(40,41,46,0.75), rgba(26,27,30,0.75))' },
           <div style={{
             position: 'absolute', right: 12, top: 12, width: 202, height: 56, borderRadius: 16, boxSizing: 'border-box',
@@ -228,7 +228,7 @@ export const AssembleThenTypeFlyin: React.FC = () => {
           }} />,
         )}
         {shelled(SH.logo, { left: 140, top: 84, width: 40, height: 40 },
-          // 品牌标志（镜刻）：作为一件无字骨架件飞入，暗底反白版
+          // Brand emblem (Mirror Cut): Flies in as a textless skeleton element, dark-base reversed white
           <ShotcraftMark size={40} tone="dark" />,
         )}
         {shelled(SH.card, { ...PANEL, left: 1160, top: 220, width: 640, height: 760, borderRadius: 30, overflow: 'hidden' }, <>
@@ -245,7 +245,7 @@ export const AssembleThenTypeFlyin: React.FC = () => {
           <div style={{ position: 'absolute', left: 0, top: 500, width: 640, height: 1, background: 'rgba(255,255,255,0.08)' }} />
         </>)}
         {shelled(SH.wheels, { left: 1160, top: 744, width: 640, height: 150 }, <>
-          {/* 色轮控制点：log 灰片时居中（中性），调色擦除时同步推到各自的偏色位置 */}
+          {/* Color wheel control points: Centered at neutral during log grey, sliding to graded positions during wipe */}
           <Wheel cx={106} hue="#7fb2ff" dot={[-16, 22]} k={wipe} />
           <Wheel cx={320} hue="#f2d9a8" dot={[12, -10]} k={wipe} />
           <Wheel cx={534} hue={GOLD} dot={[24, -20]} k={wipe} />
@@ -262,9 +262,9 @@ export const AssembleThenTypeFlyin: React.FC = () => {
           <React.Fragment key={k}>{shelled(SH[k], { ...PANEL, left: 120 + i * 338, top: 836, width: 314, height: 144, borderRadius: 22 })}</React.Fragment>,
         )}
 
-        {/* ── 文字段：逐字 3D 翻滚落位 ── */}
+        {/* ── Typography Phase: Per-glyph 3D tumbling settlement ── */}
         {BLOCKS.map((b, bi) => {
-          const text = bi === 9 ? { ...b, style: { ...b.style, color: ctaOn > 0.5 ? '#16120a' : '#f0d6a2' } } : b; // CTA 字随通电由金转深
+          const text = bi === 9 ? { ...b, style: { ...b.style, color: ctaOn > 0.5 ? '#16120a' : '#f0d6a2' } } : b; // CTA text flips gold to dark upon energizing
           return <FlyBlock key={bi} b={text} bi={bi} frame={frame} />;
         })}
       </div>

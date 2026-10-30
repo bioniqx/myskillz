@@ -1,35 +1,32 @@
 ---
 name: fui-hud-moves
-一句话: FUI/HUD 准星咬合——reticle-lock-on 四个 L 形角标组成的取景框从画外飞入、超调回弹后咬合锁定目标
-适用: 任何"看这里"的目标点名（替代箭头圈红，画面不冻结）
-时长: 2–3s（demo 90f）
-能量: 中高（咬合帧是打击点）
-标签: ui-entrance
+summary: A reticle that assembles itself around a target and locks on.
+use: Calling attention to any target element (replacing red arrows and circles without freezing the frame)
+duration: 2–3s (demo 90f)
+energy: Medium-high (lock-on frame serves as impact beat)
+tags: ui-entrance
 ---
 
-## 意图
-科幻虚构界面（Jarvis/Territory）里可中性化的母题：运动中的捕获。
-四个 L 形角标从画外冲入、超调回弹、"咔"地咬合到目标元素四角+弹标签
-——与 freeze-annotate 分工：那卡冻结画面标注，本卡在流动中点名。
+## Intention
+A versatile motif borrowed from sci-fi fictional UI (Jarvis / Territory): in-motion target acquisition. Four L-shaped corner brackets rush in from off-screen, overshoot and rebound, then snap firmly into place around the target element accompanied by a popping label—division of labor with freeze-annotate: that card freezes the screen for annotations, whereas this card singles out targets mid-flow.
 
-## 式
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A reticle-lock-on | 四 L 角=同一对矩形四份镜像，飞入（10f out cubic）与收缩（2.2×→0.94×→1 超调回弹）解耦；咬合帧目标微亮+标签 back 弹出 | 目标点名；踩音效重拍 |
+## Variants
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A reticle-lock-on | Four L-brackets = four mirrored instances of the same rectangle pair; fly-in (10f out-cubic) decoupled from convergence (2.2x -> 0.94x -> 1x overshoot rebound); lock-on frame triggers slight target flash + label back-pop | Target highlight; landing on heavy audio beats |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 飞入行程 | 画外 ≥1000px 冲入 | 行程短读作"角标出现"不是"扑过来" |
-| 超调 | 收缩过头到 0.94× 再回弹 1 | 无超调没有"咔"的咬合感 |
-| 咬合帧 | 目标白 overlay 快闪 0.55→停 0.28 + 标签同帧弹出 | 微亮与标签错帧就散了 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Fly-in travel | Rush in from off-screen >=1000px | Short travel reads as "brackets appearing" rather than "swooping in" |
+| Overshoot | Compress past target to 0.94x before rebounding to 1x | Without overshoot there is no crisp mechanical snap |
+| Lock-on frame | Target white overlay flash 0.55 -> resting 0.28 + label pops on same frame | Misaligning the highlight flash and label breaks cohesion |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 一支片 ≤2 次：连用读作军事模板；两次锁定目标必须不同
-- 声音：咬合帧一声"咔"（机械 click 而非游戏 UI 音，S1 边界内）
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Use <=2 times per video: consecutive uses read like generic sci-fi templates; lock-on targets must differ each time.
+- Audio: crisp mechanical click on the lock-on frame (mechanical tactile click rather than arcade game UI blip, staying within S1 boundaries).
 
-## 参考实现
+## Reference Implementation
 demos/effects/fui-hud-moves/
-（ReticleLockOn.tsx）
+(ReticleLockOn.tsx)

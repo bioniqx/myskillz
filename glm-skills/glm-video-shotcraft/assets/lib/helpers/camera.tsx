@@ -1,4 +1,4 @@
-// origin: 模板片源仓库 helpers
+// origin: template source helpers
 import { useThree, useFrame } from '@react-three/fiber';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import * as THREE from 'three';

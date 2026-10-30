@@ -7,7 +7,7 @@ import { MANIFEST } from '../cards/projectCards';
 import { themedProps } from '../theme';
 import { cardName, tx, useT, useTx } from "../i18n";
 
-/** 单个属性控件：按 schema 字段类型渲染 */
+/** Single property control: rendered based on schema field type */
 const PropControl: React.FC<{
   field: PropField;
   value: unknown;
@@ -130,7 +130,7 @@ export const Inspector: React.FC = () => {
   const commit = useStore((s) => s.commit);
 
   const hit = selectedClipId ? findClip(project, selectedClipId) : null;
-  // 连续编辑合并为一步撤销：间隔 >800ms 才压新快照
+  // Debounce rapid edits into single undo step: pushes snapshot after >800ms
   const lastBeginRef = useRef(0);
 
   if (!hit) {
@@ -156,12 +156,12 @@ export const Inspector: React.FC = () => {
   const { track, clip } = hit;
   const card = CARDS[clip.cardId];
   const fps = project.fps;
-  // 卡片编排帧率 ≠ 工程帧率（只有逐帧编排的卡需要提示；媒体卡按墙钟走无此问题）
+  // Card source fps != project fps (only affects frame-by-frame timed cards; media cards unaffected)
   const srcFps = card ? cardFps(card) : fps;
   const fpsMismatch = !!card && card.timing !== "realtime" && srcFps !== fps;
-  // 裁入点按源帧计（见 inOffsetFps），秒数换算不能一律用工程 fps
+  // In-point is counted in source frames (inOffsetFps), convert seconds using source fps
   const inFps = inOffsetFps(card, fps);
-  // 每次编辑手势开始压一次撤销快照；短时间内的连续输入合并为一步
+  // Push undo snapshot on editing gesture start; coalesce consecutive inputs
   const begin = () => {
     const now = Date.now();
     if (now - lastBeginRef.current > 800) commit();

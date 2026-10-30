@@ -1,24 +1,24 @@
-// scanline-annotate-focus — 扫描分析取景标注：一条扫描线自上而下匀速掠过一张已存在的品牌官网，
-// 扫过哪个区块的下缘，哪块就被一组取景角标"收拢对准"，随后贴一枚机器标签把它命名；顶部状态行实时计数。
+// scanline-annotate-focus — Scanline analysis and viewfinder annotation: A scanline sweeps top-to-bottom at constant velocity over an existing brand website;
+// as it crosses the bottom boundary of each content block, that block is enclosed and aligned by a viewfinder bracket, followed by a machine label identifying it; top status bar tracks live count.
 //
-// 第二轮重设计（暖沙官网 × 钴蓝机器视线）：
-// - look = sand（米色 · 赤陶）。被分析的是 video-shotcraft 的官网：镜刻标志 + 字标、大号粗黑体 H1「Your product, in motion.」、
-//   一支样片（陶器品牌 Tide Vase 的发布片封面，手绘感陶瓶）、赤陶色 CTA、四色色板——页面本身就是一张好看的品牌页。
-// - 两套颜色严格分工：赤陶 = 品牌（页面内容），钴蓝 = 机器（扫描线 / 角标 / 标签 / 状态行）。
-//   标签照设计工具的选中标签惯例做成钴蓝底白字小签，32px 等宽字，任何底上都读得清。
-// - 页面放进一扇有两层软阴影的浏览器窗（1560×840），状态行在窗外上方；全程 1.000→1.035 极缓推镜。
-// - 扫描线严格匀速（机器的视线，不加缓动）：3px 钴蓝光芯 + 身后 140px 渐隐的"已读"淡蓝余晖与点阵；
-//   窗框两侧各一枚随线滑动的游标，左侧读出当前 Y 坐标。
-// - 取景框：四个 L 角从外扩 76px 处按弹簧（damping 15，一次可见过冲）收拢到 bbox，臂长晚 3f 收一档（跟随）；
-//   对准瞬间框内钴蓝对焦闪；标签 5f 后从左擦出、文字逐字打出（机器在写）。
+// Second-round redesign (Warm sand website x Cobalt blue machine vision):
+// - look = sand (beige · terracotta). The analyzed subject is video-shotcraft's website: Mirror Cut emblem + wordmark, bold H1 "Your product, in motion.",
+//   a showcase hero card (launch film cover for pottery brand Tide Vase, hand-crafted ceramic vase), terracotta CTA, 4-color palette swatch — page itself is a polished brand layout.
+// - Strict dual color roles: Terracotta = Brand (website content), Cobalt blue = Machine (scanline / brackets / labels / status bar).
+//   Labels adopt design tool conventions with cobalt blue base and white text, 32px monospace, crisp on any background.
+// - Page sits within a dual drop-shadow browser window (1560×840), with status bar positioned above outside the window; subtle 1.000->1.035 camera push throughout.
+// - Scanline is strictly constant velocity (machine vision line, zero easing): 3px cobalt core + 140px fading "read" light blue afterglow and dot matrix in its wake;
+//   two rail cursors slide synchronously along window frame edges, left rail displaying current Y coordinate.
+// - Viewfinder brackets: Four L-brackets spring-collapse (damping 15, single visible overshoot) from 76px outer margin to bbox, arm length tightens one notch 3f later (follow-through);
+//   upon alignment, inside bracket triggers a cobalt focus flash; 5f later label wipes from left, text types character by character (machine drafting).
 //
-// 时间表（30fps，共 150f）：
-//   0–6     页面已在场（它本来就存在），状态行亮起 READING
-//   6–80    扫描线匀速 −20→860（74f）；越过 bbox 下缘即触发（≥4f 最小间隔）：
+// Timeline (30fps, total 150f):
+//   0–6     Page already present (pre-existing layout), status bar illuminates READING
+//   6–80    Scanline constant velocity −20->860 (74f); triggers as bbox bottom boundary is crossed (>=4f minimum interval):
 //           LOGO ~19f · NAV ~23f · H1 ~47f · CTA ~66f · HERO ~70f · PALETTE ~75f
-//   ft+0–14 角标弹簧收拢；ft+5–14 标签擦出 + 打字
-//   80–88   扫描线淡出；状态行切 BRAND READ · 6 SIGNALS（钴蓝）
-//   88–150  hold：全部标注就位，极缓推镜让画面活着，尾帧是一张完整海报
+//   ft+0–14 Bracket spring collapse; ft+5–14 label wipe + typing
+//   80–88   Scanline fades out; status bar switches to BRAND READ · 6 SIGNALS (cobalt blue)
+//   88–150  Hold: All annotations locked in place, subtle camera push keeps scene breathing, ending on full poster composition
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, ramp, softShadow } from '../../_fixtures/Polish';
@@ -28,18 +28,18 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const SCANLINE_ANNOTATE_FOCUS_DURATION = 150;
 
 const L = LOOKS.sand;
-const MACHINE = '#2b4fd8'; // 机器色（钴蓝）：扫描线 / 角标 / 标签 / 状态行专用，页面内容不用
-const TERRA = L.accent; // 品牌色（赤陶）：只在页面内容里出现
+const MACHINE = '#2b4fd8'; // Machine color (cobalt blue): Scanline / brackets / labels / status bar only, never in page content
+const TERRA = L.accent; // Brand color (terracotta): Appears only within page content
 const MONO = FONT.mono;
 
-// 浏览器窗（帧坐标）
+// Browser window (frame coordinates)
 const WX = 180;
 const WY = 168;
 const WW = 1560;
 const WH = 840;
 const CHROME = 52;
 
-// 扫描线（页面坐标，窗内 y）：严格匀速
+// Scanline (page coordinates, window y): Strictly constant speed
 const SCAN0 = 6;
 const SCAN1 = 80;
 const Y0 = -20;
@@ -47,7 +47,7 @@ const Y1 = 860;
 const scanY = (f: number) => Y0 + (Y1 - Y0) * Math.min(1, Math.max(0, (f - SCAN0) / (SCAN1 - SCAN0)));
 const frameAtY = (y: number) => SCAN0 + ((y - Y0) / (Y1 - Y0)) * (SCAN1 - SCAN0);
 
-// ───────────── 分析目标（页面坐标；tag = 标签相对 bbox 的放置） ─────────────
+// ───────────── Analysis Targets (page coordinates; tag = placement relative to bbox) ─────────────
 type Tag = 'right' | 'above' | 'below' | 'belowRight';
 type Target = { key: string; x: number; y: number; w: number; h: number; head: string; detail: string; tag: Tag; ft: number };
 const TARGETS: Target[] = (() => {
@@ -59,7 +59,7 @@ const TARGETS: Target[] = (() => {
     { key: 'hero', x: 892, y: 216, w: 620, h: 532, head: 'HERO', detail: 'Sample film', tag: 'below', ft: 0 },
     { key: 'palette', x: 48, y: 756, w: 220, h: 66, head: 'PALETTE', detail: '4 swatches', tag: 'right', ft: 0 },
   ];
-  // 触发 = 扫描线越过 bbox 下缘的那一帧；按下缘排序后钳制最小间隔 4f（两块同高的不会同帧弹）
+  // Trigger = frame when scanline crosses bbox bottom boundary; sorted by bottom boundary with clamped >=4f spacing (preventing same-frame triggers)
   let prev = -99;
   for (const t of [...ts].sort((a, b) => a.y + a.h - (b.y + b.h))) {
     t.ft = Math.max(frameAtY(t.y + t.h), prev + 4);
@@ -69,7 +69,7 @@ const TARGETS: Target[] = (() => {
 })();
 const LAST_FIRE = Math.max(...TARGETS.map((t) => t.ft));
 
-// ───────────── 页面内容：video-shotcraft 官网（产品图位放一支样片封面：陶器品牌的发布片） ─────────────
+// ───────────── Page Content: video-shotcraft website (product hero features launch film cover: pottery brand) ─────────────
 const Vase: React.FC = () => (
   <svg width={620} height={580} viewBox="0 0 620 580" style={{ position: 'absolute', left: 0, top: 0 }}>
     <defs>
@@ -96,10 +96,10 @@ const Vase: React.FC = () => (
         <stop offset="0.25" stopColor="#fff" stopOpacity="0" />
       </linearGradient>
     </defs>
-    {/* 接触影 */}
+    {/* Contact shadow */}
     <ellipse cx={268} cy={470} rx={150} ry={22} fill="url(#haf-shadow)" />
     <ellipse cx={452} cy={478} rx={98} ry={15} fill="url(#haf-shadow)" />
-    {/* 陶瓶：窄口 · 鼓腹 · 收足 */}
+    {/* Ceramic vase: Narrow neck · Bulged belly · Tapered foot */}
     <path
       d="M228 118 C226 150 214 168 196 196 C150 262 142 336 168 398 C186 444 214 466 268 468 C322 466 350 444 368 398 C394 336 386 262 340 196 C322 168 310 150 308 118 Z"
       fill="url(#haf-vase)"
@@ -110,15 +110,15 @@ const Vase: React.FC = () => (
     />
     <ellipse cx={268} cy={118} rx={40} ry={9} fill="#5e260f" />
     <ellipse cx={268} cy={116} rx={40} ry={8} fill="none" stroke="#e7a073" strokeWidth={2} opacity={0.7} />
-    {/* 拉坯留下的轮纹：几道极淡的横向弧线，手作感 */}
+    {/* Wheel-throwing spiral ridges: Subtle horizontal curvature lines, handcrafted texture */}
     <g clipPath="url(#haf-clip)">
       {[176, 222, 270, 320, 370, 420].map((y, i) => (
         <path key={i} d={`M60 ${y} Q268 ${y + 14} 476 ${y}`} fill="none" stroke="#3e1608" strokeWidth={1.6} opacity={0.09} />
       ))}
     </g>
-    {/* 釉面流挂的一道亮痕 */}
+    {/* Glaze drip specular highlight */}
     <path d="M232 210 C214 262 206 330 222 400" fill="none" stroke="#ffd2b0" strokeWidth={6} strokeLinecap="round" opacity={0.28} />
-    {/* 骨白小碗 */}
+    {/* Bone white small bowl */}
     <path d="M362 402 C366 452 404 478 452 478 C500 478 538 452 542 402 Z" fill="url(#haf-bowl)" />
     <ellipse cx={452} cy={402} rx={90} ry={14} fill="#efe6d8" />
     <ellipse cx={452} cy={404} rx={78} ry={9} fill="#cdbfa9" />
@@ -127,7 +127,7 @@ const Vase: React.FC = () => (
 
 const Page: React.FC = () => (
   <div style={{ position: 'absolute', inset: 0, background: '#f8f2e9', fontFamily: FONT.sans, color: L.ink }}>
-    {/* 浏览器顶栏 */}
+    {/* Browser top bar */}
     <div style={{ position: 'absolute', left: 0, top: 0, width: WW, height: CHROME, background: '#efe7db', borderBottom: `1px solid ${L.line}` }}>
       {[0, 1, 2].map((i) => (
         <div key={i} style={{ position: 'absolute', left: 24 + i * 22, top: 20, width: 12, height: 12, borderRadius: 6, background: alpha(L.ink, 0.16) }} />
@@ -136,12 +136,12 @@ const Page: React.FC = () => (
         {BRAND.repo}
       </div>
     </div>
-    {/* logo：镜刻标志 + video-shotcraft 字标（标志 svg 四周有 16/128 留白，左移 7px 让可见框对齐 64） */}
+    {/* logo: Mirror Cut emblem + video-shotcraft wordmark (emblem svg has 16/128 margin, shift left 7px to align visible frame to 64) */}
     <div style={{ position: 'absolute', left: 57, top: 70, display: 'flex', alignItems: 'center', gap: 12 }}>
       <ShotcraftMark size={56} tone="light" />
       <div style={{ font: `700 34px ${BRAND.font}`, letterSpacing: '0.01em', color: BRAND.ink, whiteSpace: 'nowrap' }}>{BRAND.name}</div>
     </div>
-    {/* 导航 */}
+    {/* Navigation */}
     <div style={{ position: 'absolute', right: 64, top: 84, display: 'flex', gap: 46, font: `550 28px ${FONT.sans}`, color: L.ink2, letterSpacing: '-0.01em' }}>
       <span>Recipes</span>
       <span>Gallery</span>
@@ -154,7 +154,7 @@ const Page: React.FC = () => (
       <br />
       in <span style={{ color: TERRA }}>motion.</span>
     </div>
-    {/* 正文 */}
+    {/* Body text */}
     <div style={{ position: 'absolute', left: 64, top: 512, width: 700, font: `450 34px ${FONT.sans}`, lineHeight: 1.36, color: L.ink2, letterSpacing: '-0.012em' }}>
       Cinematic product videos, crafted by your agent. From screenshot to showreel.
     </div>
@@ -162,13 +162,13 @@ const Page: React.FC = () => (
     <div style={{ position: 'absolute', left: 64, top: 644, height: 64, padding: '0 34px', borderRadius: 32, background: TERRA, color: L.onAccent, display: 'flex', alignItems: 'center', gap: 14, font: `650 30px ${FONT.sans}`, letterSpacing: '-0.01em', boxShadow: `0 10px 24px -10px ${alpha('#7a2a10', 0.55)}, inset 0 1px 0 rgba(255,255,255,0.25)` }}>
       Render a launch film <span style={{ fontWeight: 500 }}>→</span>
     </div>
-    {/* 釉色板 */}
+    {/* Glaze palette swatches */}
     <div style={{ position: 'absolute', left: 64, top: 768, display: 'flex', alignItems: 'center', gap: 12 }}>
       {['#ebe5da', '#5d6c4f', TERRA, '#d6c3a5'].map((c, i) => (
         <div key={i} style={{ width: 42, height: 42, borderRadius: 21, background: `radial-gradient(circle at 35% 30%, ${alpha('#ffffff', 0.45)}, ${alpha('#ffffff', 0)} 55%), ${c}`, boxShadow: `inset 0 0 0 1px ${alpha(L.ink, 0.12)}` }} />
       ))}
     </div>
-    {/* 产品图卡 */}
+    {/* Product hero card */}
     <div style={{ position: 'absolute', left: 900, top: 224, width: 604, height: 516, borderRadius: 22, overflow: 'hidden', background: 'linear-gradient(180deg, #ecdcc7 0%, #e2cbae 62%, #d4b896 62.2%, #cdb08c 100%)' }}>
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 60% 55% at 70% 18%, rgba(255,248,236,0.75) 0%, rgba(255,248,236,0) 70%)' }} />
       <div style={{ position: 'absolute', left: -8, top: -24 }}>
@@ -181,14 +181,14 @@ const Page: React.FC = () => (
   </div>
 );
 
-// ───────────── 取景框 + 标签 ─────────────
+// ───────────── Viewfinder Brackets + Labels ─────────────
 const Bracket: React.FC<{ t: Target; frame: number }> = ({ t, frame }) => {
   const f = frame - t.ft;
   if (f < 0) return null;
-  const s = springAt(frame, t.ft, { damping: 15, stiffness: 210 }); // 0→1（过冲 ~1.06）
-  const pad = 76 * (1 - s); // 外扩 76px → 0（过冲时略收进 bbox）
+  const s = springAt(frame, t.ft, { damping: 15, stiffness: 210 }); // 0->1 (~1.06 overshoot)
+  const pad = 76 * (1 - s); // Outer margin 76px -> 0 (slightly tucks into bbox on overshoot)
   const op = Math.min(1, f / 3);
-  const arm = 40 - 14 * ramp(frame, t.ft + 3, 12, EASE.out); // 臂长晚一拍收一档
+  const arm = 40 - 14 * ramp(frame, t.ft + 3, 12, EASE.out); // Arm length tightens one beat later
   const flash = ramp(frame, t.ft + 3, 3, EASE.out) * (1 - ramp(frame, t.ft + 6, 12, EASE.out));
   const x = t.x - pad;
   const y = t.y - pad;
@@ -211,7 +211,7 @@ const Bracket: React.FC<{ t: Target; frame: number }> = ({ t, frame }) => {
 };
 
 const TAG_H = 50;
-const CHAR_W = 0.6 * 32; // 32px 等宽字步进
+const CHAR_W = 0.6 * 32; // 32px monospace char step
 const tagWidth = (t: Target) => Math.round((t.head.length + 3 + t.detail.length) * CHAR_W + 34);
 
 const Label: React.FC<{ t: Target; frame: number }> = ({ t, frame }) => {
@@ -220,10 +220,10 @@ const Label: React.FC<{ t: Target; frame: number }> = ({ t, frame }) => {
   const rise = ramp(frame, s0, 12, EASE.out);
   const pop = ramp(frame, s0, 4, EASE.out);
   const full = `${t.head} · ${t.detail}`;
-  const typedF = Math.min(full.length, (frame - s0) * 2.2 + 1); // 机器在写：~2 字/帧
+  const typedF = Math.min(full.length, (frame - s0) * 2.2 + 1); // Machine typing: ~2 chars/frame
   const typed = Math.floor(typedF);
-  const w = tagWidth(t); // 定位用的最终宽度
-  const wNow = Math.min(w, typedF * CHAR_W + 34); // 签条随字长出来（右缘略领先于字）
+  const w = tagWidth(t); // Final layout width for positioning
+  const wNow = Math.min(w, typedF * CHAR_W + 34); // Tag expands with text growth (right edge slightly leads characters)
   const typing = typed < full.length;
   let x = t.x;
   let y = t.y;
@@ -255,7 +255,7 @@ export const ScanlineAnnotateFocus: React.FC = () => {
   const lineOn = ramp(frame, SCAN0 - 4, 5, EASE.out) * (1 - ramp(frame, SCAN1, 8, EASE.exit));
   const fired = TARGETS.filter((t) => frame >= t.ft).length;
   const done = ramp(frame, LAST_FIRE + 8, 8, EASE.out);
-  const push = 1 + 0.035 * ramp(frame, 0, SCANLINE_ANNOTATE_FOCUS_DURATION, EASE.swift); // 极缓推镜
+  const push = 1 + 0.035 * ramp(frame, 0, SCANLINE_ANNOTATE_FOCUS_DURATION, EASE.swift); // Subtle camera push
   const statusIn = ramp(frame, 0, 10, EASE.out);
   const scanProg = Math.min(1, Math.max(0, (frame - SCAN0) / (SCAN1 - SCAN0)));
 
@@ -263,7 +263,7 @@ export const ScanlineAnnotateFocus: React.FC = () => {
     <AbsoluteFill>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.05 }} fill={{ x: 0.9, y: 0.95 }} vignette={0.2} />
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${push.toFixed(5)})`, transformOrigin: '50% 54%' }}>
-        {/* ── 状态行（窗外上方）── */}
+        {/* ── Status bar (above window) ── */}
         <div style={{ position: 'absolute', left: WX, top: 84, width: WW, height: 48, opacity: statusIn, font: `600 30px ${MONO}`, color: L.ink, display: 'flex', alignItems: 'center' }}>
           <div style={{ width: 14, height: 14, borderRadius: 7, marginRight: 16, background: done > 0.5 ? MACHINE : alpha(MACHINE, 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(frame / 3))), boxShadow: `0 0 0 6px ${alpha(MACHINE, 0.12)}` }} />
           <span style={{ color: done > 0.5 ? MACHINE : L.ink, letterSpacing: '0.06em' }}>{done > 0.5 ? 'BRAND READ' : 'READING'}</span>
@@ -280,10 +280,10 @@ export const ScanlineAnnotateFocus: React.FC = () => {
           </div>
         </div>
 
-        {/* ── 浏览器窗：页面 + 扫描余晖（裁进窗内）── */}
+        {/* ── Browser window: Page + scan afterglow (clipped inside window) ── */}
         <div style={{ position: 'absolute', left: WX, top: WY, width: WW, height: WH, borderRadius: 20, overflow: 'hidden', boxShadow: `${softShadow(30, { color: L.shadow, strength: 1.1 })}, 0 0 0 1px ${alpha(L.ink, 0.08)}` }}>
           <Page />
-          {/* 已读余晖：扫描线身后 140px 的淡蓝洗色 + 点阵（机器"读过"的痕迹） */}
+          {/* Read afterglow: 140px light blue wash + dot matrix trailing scanline (machine read trace) */}
           {lineOn > 0.01 && (
             <>
               <div style={{
@@ -303,7 +303,7 @@ export const ScanlineAnnotateFocus: React.FC = () => {
           )}
         </div>
 
-        {/* ── 窗框两侧游标：随线滑动，左侧读出 Y ── */}
+        {/* ── Window side rail cursors: Slide with line, left rail displays Y coord ── */}
         {lineOn > 0.01 && (
           <div style={{ opacity: lineOn }}>
             <svg width={22} height={26} viewBox="0 0 22 26" style={{ position: 'absolute', left: WX - 30, top: WY + ly - 13 }}>
@@ -318,7 +318,7 @@ export const ScanlineAnnotateFocus: React.FC = () => {
           </div>
         )}
 
-        {/* ── 取景框与标签（页面坐标，叠在窗上；不裁切，标签可略出框）── */}
+        {/* ── Viewfinder brackets and labels (page coordinates, overlay window; unclipped, tags may exceed frame) ── */}
         <div style={{ position: 'absolute', left: WX, top: WY, width: WW, height: WH }}>
           {TARGETS.map((t) => <Bracket key={t.key} t={t} frame={frame} />)}
           {TARGETS.map((t) => <Label key={t.key} t={t} frame={frame} />)}

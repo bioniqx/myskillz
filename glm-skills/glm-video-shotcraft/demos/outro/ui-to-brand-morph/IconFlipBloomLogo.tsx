@@ -1,11 +1,11 @@
-// icon-flip-bloom-logo —— 图标 Y 轴翻转压扁成竖线，绽放成花形 mark + wordmark 扫出
-// 源：perplexity-promo 88–91.5s。笑脸 laptop 图标 anticipation 晃两下 →
-// 沿 Y 轴翻转压扁成竖线（拖影/模糊）→ 翻过最薄处绽放花形 mark（花瓣张开）→
-// wordmark 逐字由大变小落位（大时模糊、落位清晰，scale+blur 联动）。
-// 质感：柔光亮场背景 + 图标的接地软影（随晃动/翻扁变化）。
-// 品牌轮：终点 logo 换成 video-shotcraft「镜刻」标志——翻过最薄处，标志从竖线按同一个过冲 spring
-// 撑开（取景框），随后琥珀斜切沿 45° 划入（替代原花瓣张开的第二拍）；字标 video-shotcraft 全小写、
-// 品牌字体，逐字由大变小落定；全片唯一强调色是标志的琥珀斜切。
+// icon-flip-bloom-logo — Icon flips on Y-axis flattening into vertical line, blooming into brand mark + wordmark sweep
+// Source: perplexity-promo 88–91.5s. Smiley laptop icon anticipatory wobble ->
+// flips on Y-axis flattening into a vertical line (motion blur / trailing ghosts) -> blooms past thinnest point into mark (petals opening) ->
+// wordmark letters settle scaling down from large to small (blurred when large, sharp when settled, coupled scale + blur).
+// Polish: soft-light bright field + grounded contact shadow (adapts with wobble and flip).
+// Brand cycle: final logo is video-shotcraft mark — past the thinnest point, mark expands from vertical line using overshoot spring
+// (viewfinder frame), followed by amber diagonal cut sliding in at 45° (replacing the original second beat of blooming petals);
+// video-shotcraft wordmark in lowercase brand font, letters settling large-to-small; only accent color is the mark's amber cut.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing, spring, useVideoConfig } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -13,7 +13,7 @@ import { Backdrop, EASE, ramp } from '../../_fixtures/Polish';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
 export const ICON_FLIP_BLOOM_LOGO_DURATION = 130;
-const MARK = 300; // 标志尺寸（viewBox 128 → 可见取景框约 244×225）
+const MARK = 300; // Mark size (viewBox 128 -> visible viewfinder frame approx 244×225)
 
 const SmileLaptop: React.FC<{ size: number }> = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 40 40">
@@ -31,21 +31,21 @@ export const IconFlipBloomLogo: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // ---- 时间轴 ----
-  // 0–10: 图标登场（淡入微弹）
-  // 12–34: anticipation 倾斜蓄力晃两下
-  // 34–46: Y 轴翻转压扁成竖线（scaleX -> 0.04，带拖影）
-  // 46–62: 翻过最薄处标志撑开（bloom 0->1 带过冲），53 起琥珀斜切划入
-  // 64–100: mark 左移让位 + wordmark 逐字符方向模糊扫出
+  // ---- Timeline ----
+  // 0–10: Icon entrance (fade-in with slight spring)
+  // 12–34: Anticipation tilt wobble
+  // 34–46: Y-axis flip flattens to vertical line (scaleX -> 0.04, with trails)
+  // 46–62: Past thinnest point mark expands (bloom 0->1 with overshoot); amber cut slides in from 53
+  // 64–100: Mark shifts left + wordmark directional blur sweep
   const FLIP_START = 34;
   const FLIP_MID = 46;
   const BLOOM_END = 62;
   const WORD_START = 66;
 
-  // 登场
+  // Entrance
   const inT = spring({ frame, fps, config: { damping: 13, stiffness: 140, mass: 0.8 } });
 
-  // anticipation：两次倾斜摆动，幅度递增（-10° / +14°），最后向反方向压一下蓄力
+  // Anticipation: two tilt wobbles with increasing amplitude (-10° / +14°), leaning back to build tension
   const wobble =
     interpolate(frame, [12, 18, 24, 30, FLIP_START], [0, -12, 14, -18, 0], {
       extrapolateLeft: 'clamp',
@@ -53,7 +53,7 @@ export const IconFlipBloomLogo: React.FC = () => {
       easing: Easing.inOut(Easing.sin),
     });
 
-  // 翻转前半：scaleX 1 -> 0.04（加速入），伴随拖影
+  // First half of flip: scaleX 1 -> 0.04 (accelerated entry), accompanied by ghost trails
   const flipIn = interpolate(frame, [FLIP_START, FLIP_MID], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -61,35 +61,35 @@ export const IconFlipBloomLogo: React.FC = () => {
   });
   const iconScaleX = interpolate(flipIn, [0, 1], [1, 0.04]);
 
-  // 绽放：spring 过冲
+  // Bloom: spring overshoot
   const bloomSpring = spring({
     frame: frame - FLIP_MID,
     fps,
     config: { damping: 11, stiffness: 130, mass: 0.9 },
   });
   const bloom = frame < FLIP_MID ? 0 : bloomSpring;
-  // mark 从竖线厚度撑开：scaleX 0.04 -> 1
+  // Mark expands from line width: scaleX 0.04 -> 1
   const markScaleX = interpolate(bloom, [0, 1], [0.04, 1]);
-  // 第二拍：琥珀斜切沿自身 45° 方向划入（取景框撑开过半后起步）
+  // Second beat: amber cut slides in along its 45° angle (starts after viewfinder expands past halfway)
   const cut = frame < FLIP_MID + 7 ? 0 : spring({ frame: frame - FLIP_MID - 7, fps, config: { damping: 16, stiffness: 170 } });
 
-  // mark 左移让位（wordmark 登场时）
+  // Mark shifts left to make room (as wordmark enters)
   const shift = interpolate(frame, [WORD_START - 2, WORD_START + 16], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.out(Easing.cubic),
   });
-  const markX = interpolate(shift, [0, 1], [0, -471]); // 与字标起点 +187 耦合：lockup 整组视觉居中
+  const markX = interpolate(shift, [0, 1], [0, -471]); // Coupled with wordmark start +187: visually centers lockup group
 
   const showIcon = frame < FLIP_MID;
 
-  // 拖影帧（翻转期间画 2 个残影）
+  // Ghost trail frames (draws 2 ghost frames during flip)
   const ghosts = frame >= FLIP_START && frame < FLIP_MID ? [0.12, 0.24] : [];
 
   return (
     <AbsoluteFill style={{ background: G.bg, alignItems: 'center', justifyContent: 'center' }}>
       <Backdrop tone="light" light={{ x: 0.5, y: 0.36 }} accent={BRAND.amber} />
-      {/* 接地软影：图标阶段随晃动偏移、翻扁时收窄，绽放后淡去（logo 是平面符号，不需要落地影） */}
+      {/* Contact soft shadow: offsets with wobble, narrows during flip, fades after bloom (flat logo needs no contact shadow) */}
       <div style={{
         position: 'absolute', left: 960 + markX - 150 * (showIcon ? iconScaleX : markScaleX) + wobble * 2.2, top: 540 + 150,
         width: 300 * (showIcon ? iconScaleX : markScaleX), height: 26, borderRadius: '50%',
@@ -97,7 +97,7 @@ export const IconFlipBloomLogo: React.FC = () => {
         opacity: inT * (1 - ramp(frame, FLIP_MID, 14, EASE.out)),
       }} />
       <div style={{ position: 'relative', width: 1920, height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {/* 图标 / mark 容器 */}
+        {/* Icon / mark container */}
         <div
           style={{
             position: 'absolute',
@@ -144,7 +144,7 @@ export const IconFlipBloomLogo: React.FC = () => {
           )}
         </div>
 
-        {/* wordmark：逐字由大变小落位——大时模糊、落位清晰（scale + blur 联动），原点钉在基线 */}
+        {/* Wordmark: letters scale down from large to small — blurred when large, sharp when settled (scale + blur coupled), anchored at baseline */}
         <div
           style={{
             position: 'absolute',
@@ -162,7 +162,7 @@ export const IconFlipBloomLogo: React.FC = () => {
           }}
         >
           {WORD.split('').map((ch, i) => {
-            const st = WORD_START + i * 2.6; // 每字独立的"由大变小"动作，错峰拉到 2.6f 才读得清
+            const st = WORD_START + i * 2.6; // Independent scale-down per letter, staggered by 2.6f for legibility
             const cT = ramp(frame, st, 12, EASE.snappy);
             const op = ramp(frame, st, 5, EASE.out);
             return (

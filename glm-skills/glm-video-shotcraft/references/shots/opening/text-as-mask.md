@@ -1,59 +1,44 @@
 ---
 name: text-as-mask
-一句话: 文字视频遮罩——瓷白舞台上切出超粗大标题字，字内部透出缓慢平移的暗色实时产品面板，结尾吸一口气后字形指数冲入放大 46 倍溢出、内部画面接管全屏
-适用: 品牌词/口号与产品画面二合一的开场或章节卡；字是门、产品在门里
-时长: 165f（入场 18f + 字内漂移 78f + 吸气 8f + 冲入接管 24f + 落定/hold 37f）
-能量: 中高（漂移段沉稳，接管段一次爆发）
-标签: typography
+summary: Product footage moves inside oversized title letters before the type expands until the footage takes over the frame.
+use: Opening or chapter cards merging brand tagline and product footage; typography acts as the doorway, product lives inside
+duration: 165f (entrance 18f + intra-glyph drift 78f + inhale 8f + plunge takeover 24f + settle/hold 37f)
+energy: Medium-High (composed drift, explosive single burst during takeover)
+tags: typography
 ---
 
-## 意图
-标题和产品画面抢屏幕是老问题——先字后画慢，画上压字挤。这一式让
-两者同体：字形就是遮罩，产品只透过笔画显形，观众同时读到词和画面
-质感；结尾字形胀开溢出画幅，产品自然接管全屏——"从品牌词走进产品"
-一条镜头说完，兼任章节转场（与 transition-travel A 字腔穿越同族：
-那边是镜头钻进字腔，这边是字形自己胀开，前者相机动、后者门动）。
+## Intention
+Typography and product footage competing for screen space is an age-old challenge—displaying typography before footage is slow, while overlaying typography on footage feels cluttered. This technique unifies both: glyphs act as masks, revealing product footage exclusively through strokes, allowing viewers to absorb copy and product texture simultaneously; at the conclusion, glyphs expand past frame boundaries, letting footage naturally take over the full screen—telling the story of "stepping through the brand into the product" in a single continuous shot while doubling as a chapter transition. (Shares lineage with transition-travel Style A counter-tunnel: there the camera dives into letter counters, whereas here letterforms expand outward—former moves camera, latter moves doorway).
 
-## 动效核心
-- 亮场舞台（porcelain 冷白 + 主光 + 暗角）+ SVG 白字黑底 data-URI 交给 CSS `mask-image`，遮罩层套住产品画面；
-  字形下垫一层同字形、带色相的模糊投影（同样走 data-URI 图片），字像被"挖"进舞台的窗
-- 窗里的内容要有大块饱和色与亮线：demo 是 video-shotcraft 的暗色渲染看板（钴蓝→青流式面积图持续向左流、渲染帧数计数、渲染队列柱状图呼吸；眉题是 video-shotcraft 字标，副题 From one prompt to a finished launch film.），
-  漂移期面板上移 110px 让亮线正好穿过字的腰线、面积渐变铺满字的下半截——白卡/浅色 UI 透进白底字里会读成普通字
-- 入场：遮罩从基线向上擦出（clip-path 底边收起，16f）+ 1.04→1 落定；眉题字距收拢、副题升起
-- 字内漂移：产品层 scale 1.32 + translateX +150→-150（f18–96，bezier(0.3,0,0.7,1) 两端轻缓）——
-  字形静止、内容流动，"窗外有世界"的错觉即手法本体
-- 吸气：f96–104 字 1→0.965（swift），眉题/副题 ease-in 退场——大动作前的预备
-- 冲入 24f（f104–128）：mask wrapper `scale(0.965→46)`，对数空间里按 t^1.8 插值
-  （`S = s0·(46/s0)^(t^1.8)`，每帧放大比例越来越大 = 越冲越快）；
-  **transform-origin 必须钉在实心笔画内**（demo 取 L 竖笔中线 1236,546）——钉在字腔空洞里则放大后透出的是底色；
-  冲入同时 wrapper 平移 `(960−Ox, 540−Oy)·t`，把竖笔拉回画面中线（否则偏右的竖笔要到 30× 才盖住左缘）
-- 内容层反向补偿：套一层 `scale(1/S) translate(−d)`（同一 origin）抵消 wrapper 的放大与平移，产品画面
-  不随遮罩几何畸变；面板同时 1.32→1、漂移归零（expo-out，f104–132，比冲入晚 4f 收敛 = 跟随）
-- 接管保险：另叠一个共享同一 translate/scale 变换的无遮罩全屏层，只在竖笔已撑满全屏（t^1.8 ∈ [0.86, 0.95]，S≈24×）
-  之后淡入——更早淡入会在亮底上叠出一层半透明灰纱
-- 收尾：f132–165 全屏面板 hold，流式图仍缓慢流动（产品活着，不是死帧）
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 字号/字重 | 470px / 900（system-ui Black，字距 −22） | 笔画就是视口——细字重等于把产品塞进门缝；字宽占画幅 ~72% |
-| 漂移速度 | ~3.8px/f（300px/78f） | 快了字内画面读不清；漂移方向选画面信息密的轴 |
-| 吸气 | 8f，1→0.965 | 没有吸气的冲入读作"突然胀开"；>0.94 读作字在缩小退场 |
-| 放大倍率 | 46×（按竖笔宽/画幅比配：88px 竖笔需 ≥24× 才撑满） | 不足则接管帧还看得到字边残影 |
-| 冲入曲线 | 对数空间 t^1.8，24f | 线性对数 = 匀速冲入；指数 >2.5 前半段几乎不动、最后 3f 猛胀 |
-| 收尾 | 接管后 hold ≥30f | R1；接管完成帧产品应落在标准构图 |
-## 已知坑
-- demo 用的是为镜头设计的 video-shotcraft 渲染看板（Render throughput，侧栏是品牌标志）——实战换真实截图时先看笔画里透出的是不是大块色与亮线，
-  浅色页面要先调暗或换暗色主题，否则字读不出"窗"
-- 别给字形做描边高光：system-ui 等可变字体的字形由重叠轮廓拼成，描边会画出 A 的横杠/顶角等内部轮廓线
-- 字内透出的产品画面全程被特写盯着看——真实素材先过
-  审美准则 Q2 的高分辨率栅格化技法，低倍截图在笔画里糊成一片
-- 换词/换字体后 origin 手推值必失效——渲后看放大方向，洞不对中就微调
-  origin（同 transition-travel A 字腔穿越的腔心漂移坑）
-- 与 transition-travel A 字腔穿越同片不并用——同为"字里长出世界"，
-  观众读作同一招使两次（P4）
-- mask 层与内容层的 transform 必须分离驱动（wrapper 放大/内容反向补偿），
-  合在一层则产品跟着字形一起胀成 26 倍废片
+## Motion Core
+- Bright stage (porcelain cold white + key light + vignette) + SVG white-text black-background data-URI assigned to CSS `mask-image`, clipping product footage; matching blurred drop shadow layered beneath glyphs (also via data-URI), making typography feel like a carved window into the stage.
+- Window content requires saturated color blocks and bright lines: demo features video-shotcraft dark render dashboard (cobalt->cyan streaming area chart flowing left, frame counter, pulsing render queue histogram; eyebrow is video-shotcraft logo, subtitle "From one prompt to a finished launch film."); during drift, dashboard shifts up 110px so bright lines cross glyph waistline while area gradient fills lower half of letters—white cards or light UI behind white letters read as plain typography.
+- Entrance: mask wipes upward from baseline (clip-path bottom edge retracts, 16f) + 1.04->1 settle; eyebrow letterspacing tightens, subtitle rises.
+- Intra-glyph drift: product layer scale 1.32 + translateX +150->-150 (f18–96, bezier(0.3,0,0.7,1) soft terminals)—static glyphs, flowing content: the illusion of "a world outside the window" is the technique itself.
+- Inhale: f96–104 text scales 1->0.965 (swift), eyebrow/subtitle ease-in exit—anticipation before the major action.
+- Plunge 24f (f104–128): mask wrapper `scale(0.965->46)`, interpolating in logarithmic space via t^1.8 (`S = s0*(46/s0)^(t^1.8)`, increasing scale multiplier per frame = accelerating plunge); **transform-origin must anchor within a solid stroke** (demo uses center line of letter L vertical stroke at 1236,546)—anchoring in counter cavities reveals background upon magnification; during plunge, wrapper translates `(960-Ox, 540-Oy)*t`, pulling stroke back to screen midline (otherwise off-center strokes require 30x to cover left edge).
+- Content inverse compensation: outer `scale(1/S) translate(-d)` layer (sharing identical origin) offsets wrapper magnification and translation, keeping product visuals free from geometric distortion; dashboard simultaneously settles 1.32->1 with drift zeroing out (expo-out, f104–132, converging 4f after plunge = follower).
+- Takeover safety: secondary unmasked full-screen layer sharing identical transform fades in only after stroke fully covers screen (t^1.8 in [0.86, 0.95], S~24x)—fading in earlier casts translucent grey haze over bright background.
+- Settle: f132–165 full-screen dashboard holds, streaming chart continuing gentle flow (product alive, not a freeze frame).
 
-## 参考实现
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Font size / weight | 470px / 900 (system-ui Black, letterSpacing -22) | Strokes are viewports—thin weights choke product visuals inside narrow slits; word width spans ~72% frame |
+| Drift speed | ~3.8px/f (300px/78f) | Too fast blurs internal footage; orient drift along information-dense axis |
+| Inhale | 8f, 1->0.965 | Plunging without inhale reads as sudden expansion; >0.94 reads as shrinking exit |
+| Magnification | 46x (matched to vertical stroke width to frame ratio: 88px stroke requires >=24x to fill frame) | Insufficient magnification leaves stroke edge ghosts visible on takeover frame |
+| Plunge curve | Logarithmic space t^1.8, 24f | Linear logarithmic = constant-speed plunge; exponent >2.5 remains static in first half before exploding in final 3 frames |
+| Settle | Hold >=30f post-takeover | Takeover completion frame should land on canonical layout |
+
+## Known Pitfalls
+- Demo uses video-shotcraft render dashboard designed for shot (Render throughput, sidebar logo)—when replacing with real screenshots, ensure strokes reveal rich colors and bright lines; light pages must be dimmed or switched to dark theme, otherwise letters fail to read as "windows."
+- Do not apply stroke outlines or specular highlights to glyphs: variable fonts like system-ui assemble from overlapping contours; strokes draw internal boundary lines across letters like A crossbars.
+- Internal product visuals are viewed in extreme close-up—real assets must pass high-resolution rasterization guidelines; low-res screenshots blur inside strokes.
+- Changing words or fonts invalidates manual origin coordinates—observe zoom direction post-render and nudge origin if cavity is off-center (same pitfall as counter-drift in transition-travel A).
+- Do not combine with transition-travel Style A counter-tunnel in the same film—both embody "a world growing from within letters," reading as repeating the same trick.
+- Mask layer and content layer transforms must be driven separately (wrapper expands, content applies inverse compensation); combining into one layer magnifies product visuals 26x into unusable distortion.
+
+## Reference Implementation
 demos/opening/text-as-mask/
-（TextAsMask.tsx）
+(TextAsMask.tsx)

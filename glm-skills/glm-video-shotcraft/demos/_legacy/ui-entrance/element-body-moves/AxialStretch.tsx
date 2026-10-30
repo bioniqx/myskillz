@@ -1,7 +1,7 @@
-// axial-stretch —— 轴向拉伸速度感
-// 三张 Card 从右外依次横向飞入落位，飞行途中沿运动轴速度驱动拉伸
-// （scaleX 峰值 ≈2.2 / scaleY ≈0.72，糖稀拉丝感），落点 Back.out 式回弹。
-// 速度用位置差分 p(f)-p(f-1) 驱动，低于阈值不拉伸。收尾真静止 ≥35f。
+// axial-stretch — Axial stretch motion feel
+// Three cards fly in horizontally from off-screen right into place, stretching along the motion axis driven by velocity
+// (scaleX peak ~2.2 / scaleY ~0.72, taffy-like elongation), settling with a Back.out rebound.
+// Velocity driven by finite position difference p(f)-p(f-1); no stretch below threshold. True hold >=35f at tail.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, Card, TitleBlock } from '../../_fixtures/Fixtures';
@@ -14,18 +14,18 @@ const ROW_W = 3 * CARD_W + 2 * GAP; // 1260
 const ROW_X0 = (W - ROW_W) / 2; // 330
 const ROW_Y = (1080 - CARD_H) / 2; // 425
 
-const START_X = 1980; // 完全在画面右外
-const FLIGHT = 36; // 飞行帧数
-const STAGGER = 12; // 错峰
-const FIRST = 10; // 首卡起飞帧
-const SQUASH = 8; // 落点回弹帧数
+const START_X = 1980; // Completely off-screen right
+const FLIGHT = 36; // Flight frames
+const STAGGER = 12; // Stagger interval
+const FIRST = 10; // First card launch frame
+const SQUASH = 8; // Landing rebound frames
 
-const VEL_MIN = 2; // px/frame，低于此不拉伸
-const VEL_REF = 140; // px/frame，达到此速度即满拉伸
-const STRETCH_X = 1.2; // scaleX 峰值 1 + 1.2 = 2.2
-const SQUISH_Y = 0.28; // scaleY 谷值 1 - 0.28 = 0.72
+const VEL_MIN = 2; // px/frame, no stretch below this
+const VEL_REF = 140; // px/frame, maximum stretch reached at this velocity
+const STRETCH_X = 1.2; // scaleX peak 1 + 1.2 = 2.2
+const SQUISH_Y = 0.28; // scaleY trough 1 - 0.28 = 0.72
 
-// poly(4) in-out：中段速度峰值 ≈ 4× 平均速度，够冲
+// poly(4) in-out: mid-flight peak velocity ~4x average velocity for punchy speed
 const flightEase = Easing.inOut(Easing.poly(4));
 
 const posAt = (f: number, start: number, targetX: number): number =>
@@ -41,14 +41,14 @@ const FlyCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const land = start + FLIGHT;
 
   const x = posAt(frame, start, targetX);
-  // 速度 = 位置差分（帧时间解耦，纯由位置函数决定）
+  // Velocity = position difference (frame-time decoupled, purely determined by position function)
   const v = Math.abs(posAt(frame, start, targetX) - posAt(frame - 1, start, targetX));
   const s = Math.min(Math.max((v - VEL_MIN) / (VEL_REF - VEL_MIN), 0), 1);
 
   const stretchX = 1 + STRETCH_X * s;
   const stretchY = 1 - SQUISH_Y * s;
 
-  // 落点回弹：scaleX 过冲到 0.85 再回 1（横向被"撞停"压扁），8f
+  // Landing rebound: scaleX overshoots to 0.85 then returns to 1 (horizontal squash on impact), 8f
   const sqX = interpolate(frame, [land, land + SQUASH / 2, land + SQUASH], [1, 0.85, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: 'clamp',
@@ -66,7 +66,7 @@ const FlyCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
         position: 'absolute',
         left: 0,
         top: ROW_Y,
-        // 顺序：先 translate 再 scale；transformOrigin 设运动后缘（向左飞 → 右缘）
+        // Order: translate first then scale; transformOrigin at trailing motion edge (flying left -> right edge)
         transform: `translateX(${x}px) scaleX(${stretchX * sqX}) scaleY(${stretchY * sqY})`,
         transformOrigin: '100% 50%',
       }}
@@ -88,7 +88,7 @@ export const AxialStretch: React.FC = () => {
       <div style={{ position: 'absolute', top: 120, width: '100%', textAlign: 'center', opacity: titleOp }}>
         <TitleBlock text="AXIAL STRETCH" size={72} />
       </div>
-      {/* 落位虚线槽，标出目标位置 */}
+      {/* Dashed landing slot markers indicate target positions */}
       {[0, 1, 2].map((i) => (
         <div
           key={`slot-${i}`}

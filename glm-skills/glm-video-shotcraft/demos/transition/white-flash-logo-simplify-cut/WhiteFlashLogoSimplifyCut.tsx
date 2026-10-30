@@ -1,27 +1,27 @@
-// white-flash-logo-simplify-cut — White Flash Simplify 冲白降维切换
-// 液态金属质感的彩色词标静置流光，蓄力后从字心炸出一记白闪过曝，曝光回落时同一位置已是扁平版字标——
-// 一次闪白完成"华丽演出 → 正式形象"的降维。
+// white-flash-logo-simplify-cut — White Flash Simplify transition
+// Liquid metal chromatic wordmark flows with light, charges energy, then detonates a white-flash overexposure from center; as exposure recovers, flat wordmark occupies exact position —
+// single flash executes dimension reduction from "spectacle -> brand identity".
 //
-// 第二轮重设计（极光 · 液态金属 → 纸面定妆）：
-// - look = aurora（暗场演出段）；冲白后落到 video-shotcraft 的剪辑纸面（品牌色收编：纸 / 墨 / 琥珀）。
-//   词标是品牌字标「video-shotcraft」（全小写、字标字体 700 字重，15 字符故字号压到 FS），
-//   两个版本同字号同位置——观众读到的是"同一个字标被净化了"，不是换了一张图。
-// - 液态段的质感是"真材质"而不是一条渐变：①流动的虹彩底色（紫 → 粉 → 桃 → 冰蓝，background-size 300% 缓流）
-//   ②纵向明暗（顶亮底暗，读作有体积）③横贯字腰的镀铬地平线反光带 ④一次斜向高光扫过（Q4：只给主角一次，
-//   裁进字形）⑤字下柔光 bloom + 地面倒影（翻转、渐隐）。背后一抹极光余光 + 浮尘。
-// - 白闪不是整屏均匀淡入，而是"光从字里炸出来"：蓄力段字标提亮、一条横向变形镜头眩光从字心拉开，
-//   随后白色径向光团从字心 6f 内撑满全屏（二次 ease-in，越来越快）。
-// - 定妆段用"曝光回落"代替淡入：白层 22f 内 quint-out 退去，像眼睛适应强光——底下扁平字标早已在位，
-//   只带 1.03→1 的对焦收束；随后字标上方镜刻标志描出（取景框先揭开、琥珀斜切后划入）、
-//   一根琥珀短线画出、品牌短句逐词升起，完成锁定画面（标志本身不上液态质感——品牌规范禁渐变/发光）。
+// Redesign (aurora: liquid metal -> paper final look):
+// - look = aurora (dark spectacle); flash lands onto editing paper (brand palette: paper / ink / amber).
+//   Wordmark is "video-shotcraft" (all-lowercase, 700 weight, 15 chars scaled to FS),
+//   both versions share identical size and placement — perceived as "same wordmark purified" rather than an image swap.
+// - Tactile liquid texture: 1) flowing iridescent base (violet -> pink -> peach -> ice blue, background-size 300%),
+//   2) vertical volume lighting, 3) chrome horizon reflection streak across center waist, 4) diagonal sheen sweep (single hero pass,
+//   clipped to glyphs), 5) bloom glow + floor reflection (inverted fade). Aurora backlight + dust motes.
+// - Flash detonates from within typography: brightness surges, horizontal anamorphic flare expands from center,
+//   radial white glare expands to fill entire frame within 6f (quadratic ease-in).
+// - Recovery uses exposure decay rather than fade-in: white layer clears over 22f (quint-out) as eyes adjust — flat mark already in place,
+//   settling 1.03->1 into focus; ShotcraftMark draws above (frame opens first, amber slash enters),
+//   amber rule draws, tagline rises word-by-word to lock final composition.
 //
-// 时间表（30fps，共 120f）：
-//   0–34    演出：液态词标在场（第 0 帧即有）、虹彩缓流、高光 6–34f 扫过一次、整幅 1→1.035 缓推
-//   34–46   蓄力：字标 brightness 1→1.7、bloom 加强、横向眩光拉开（ease-in）
-//   44–50   冲白：径向白团从字心撑满（二次 ease-in），50–54 纯白 hold（呼吸位）
-//   54–76   曝光回落：白层 1→0（quint-out）；扁平字标 1.03→1 对焦
-//   72–96   锁定：琥珀短线 72–86 画出、标志 74–96 描出、品牌短句 78f 起逐词升起
-//   96–120  hold：极缓前推 1→1.01 定格
+// Timeline (30fps, total 120f):
+//   0-34    Spectacle: liquid mark present from frame 0, iridescent flow, sheen sweeps 6-34f, frame slow push 1->1.035
+//   34-46   Charge: brightness 1->1.7, bloom surges, anamorphic flare expands (ease-in)
+//   44-50   White-out: radial white glare expands from center (quadratic ease-in), 50-54 solid white hold
+//   54-76   Exposure recovery: white layer 1->0 (quint-out); flat wordmark settles 1.03->1
+//   72-96   Lock: amber rule 72-86, mark draws 74-96, tagline rises 78f+
+//   96-120  Hold: slow drift 1->1.01 to resting lock
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, Grain, Vignette, mix, ramp } from '../../_fixtures/Polish';
@@ -31,25 +31,25 @@ import { BRAND, PITCH, ShotcraftMark } from '../../_fixtures/Brand';
 export const WHITE_FLASH_LOGO_SIMPLIFY_CUT_DURATION = 120;
 
 const L = LOOKS.aurora;
-const WORD = BRAND.name; // 字标全小写
-const FS = 190; // 15 字符的字标按画宽压字号（原 4 字母占位字标是 300）
-const CY = 500; // 词标中心 y
+const WORD = BRAND.name; // Wordmark all-lowercase
+const FS = 190; // Scaled for 15-character wordmark width
+const CY = 500; // Wordmark center y
 const FLASH0 = 44;
-const WHITE = 50; // 全白、换场帧
+const WHITE = 50; // Full whiteout cut frame
 const RECOVER = 54;
 
-// 扁平版的三个颜色：纸面 / 墨 / 强调色（换品牌时只改这三个）——video-shotcraft：剪辑纸 / 片场墨 / 镜琥珀
+// Three brand colors: paper / ink / accent (video-shotcraft: edit paper / studio ink / mirror amber)
 const PAPER: [string, string] = ['#f7f5f0', '#ebe7de'];
 const FLAT_INK: string = BRAND.ink;
 const FLAT_ACCENT: string = BRAND.amber;
-const MARK = 124; // 锁定段字标上方的镜刻标志尺寸
+const MARK = 124; // ShotcraftMark dimensions in lock phase
 
 const wordStyle: React.CSSProperties = {
   fontFamily: BRAND.font, fontSize: FS, fontWeight: 700, letterSpacing: '0.03em', lineHeight: 1, whiteSpace: 'nowrap',
 };
 
-// 字标文本：「ft」处 f 后不加字距，让两道横笔重叠——+0.03em 字距下两道横笔恰好相接，
-// 大字号时接缝会露出一条抗锯齿亮线
+// Wordmark text: omit tracking after f in ft so crossbars merge cleanly without seam artifacts
+
 const wordText = (
   <>{WORD.slice(0, WORD.lastIndexOf('f'))}<span style={{ letterSpacing: 0 }}>f</span>{WORD.slice(WORD.lastIndexOf('f') + 1)}</>
 );
@@ -60,19 +60,19 @@ const centered = (y: number): React.CSSProperties => ({
   position: 'absolute', left: 0, right: 0, top: y - FS * 0.5, height: FS, display: 'flex', justifyContent: 'center', alignItems: 'center',
 });
 
-// 液态词标（一个 span 上叠多层背景并全部 clip 到字形）
+// Liquid wordmark (layered backgrounds clipped to text)
 const LiquidWord: React.FC<{ frame: number; bright: number }> = ({ frame, bright }) => {
   const flow = (frame * 1.1) % 300;
-  const sheen = ramp(frame, 6, 28, EASE.swift); // 斜向高光一次扫过
+  const sheen = ramp(frame, 6, 28, EASE.swift); // Diagonal sheen single pass
   const sx = mix(-30, 130, sheen);
   const layers = [
-    // 斜向高光（只在 6–34f 出现）
+    // Diagonal sheen (visible 6-34f)
     sheen > 0 && sheen < 1
       ? `linear-gradient(105deg, rgba(255,255,255,0) ${sx - 10}%, rgba(255,255,255,0.85) ${sx}%, rgba(255,255,255,0) ${sx + 10}%)`
       : 'linear-gradient(0deg, transparent, transparent)',
-    // 镀铬地平线：字腰一道亮带 + 其下一道暗带
+    // Chrome horizon: bright band + dark band across character waist
     'linear-gradient(180deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.34) 49%, rgba(255,255,255,0.1) 52%, rgba(40,10,70,0.28) 56%, rgba(40,10,70,0) 68%)',
-    // 纵向体积：顶亮底暗
+    // Vertical volume: lit top, shadowed bottom
     'linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 38%, rgba(20,5,40,0) 60%, rgba(20,5,40,0.45) 100%)',
     IRIS,
   ];
@@ -92,24 +92,24 @@ const LiquidWord: React.FC<{ frame: number; bright: number }> = ({ frame, bright
 export const WhiteFlashLogoSimplifyCut: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ── 演出段 ──
+  // --- Spectacle phase ---
   const push = 1 + 0.035 * ramp(frame, 0, FLASH0, EASE.smooth);
-  const charge = ramp(frame, 34, 12, EASE.exit); // 蓄力 0→1（越来越快）
+  const charge = ramp(frame, 34, 12, EASE.exit); // Charge surge 0->1
   const bright = 1 + 0.7 * charge;
   const flare = ramp(frame, 34, 14, EASE.exit);
 
-  // ── 冲白 ──
-  const burst = ramp(frame, FLASH0, WHITE - FLASH0, (t) => t * t); // 径向白团半径（二次 ease-in：后 3 帧肉眼可见地吞掉字标）
+  // --- Whiteout phase ---
+  const burst = ramp(frame, FLASH0, WHITE - FLASH0, (t) => t * t); // Radial white expansion (quadratic ease-in)
   const whiteHold = frame >= WHITE && frame < RECOVER ? 1 : 0;
-  const recover = 1 - ramp(frame, RECOVER, 22, EASE.out); // 曝光回落 1→0
+  const recover = 1 - ramp(frame, RECOVER, 22, EASE.out); // Exposure recovery 1->0
   const whiteA = frame < WHITE ? burst : frame < RECOVER ? 1 : recover;
 
-  // ── 定妆段 ──
+  // --- Lock phase ---
   const focus = ramp(frame, RECOVER - 2, 26, EASE.snappy);
   const flatScale = mix(1.03, 1, focus) * (1 + 0.01 * ramp(frame, 96, 24, EASE.smooth));
   const rule = ramp(frame, 72, 14, EASE.snappy);
-  const mark = ramp(frame, 74, 14, EASE.snappy); // 标志取景框揭开
-  const cut = ramp(frame, 84, 12, EASE.snappy); // 琥珀斜切划入
+  const mark = ramp(frame, 74, 14, EASE.snappy); // Mark viewfinder reveal
+  const cut = ramp(frame, 84, 12, EASE.snappy); // Amber slash enters
 
   const dark = frame < WHITE;
 
@@ -119,7 +119,7 @@ export const WhiteFlashLogoSimplifyCut: React.FC = () => {
         <>
           <Stage look={L} keyLight={{ x: 0.5, y: 0.2 }} fill={{ x: 0.82, y: 0.85 }} breathe={0.6}>
             <Dust look={L} count={36} seed={4} drift={0.2} opacity={0.5} />
-            {/* 字后极光余光 */}
+            {/* Aurora backlight behind text */}
             <div style={{
               position: 'absolute', left: 360, right: 360, top: CY - 260, height: 520,
               background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#a78bfa', 0.28 + 0.25 * charge)} 0%, ${alpha('#f472b6', 0.08)} 45%, rgba(0,0,0,0) 72%)`,
@@ -127,11 +127,11 @@ export const WhiteFlashLogoSimplifyCut: React.FC = () => {
           </Stage>
 
           <div style={{ position: 'absolute', inset: 0, transform: `scale(${push.toFixed(5)})`, transformOrigin: `50% ${CY}px` }}>
-            {/* bloom：同色模糊副本 */}
+            {/* Bloom: colored blurred duplicate */}
             <div style={{ ...centered(CY), opacity: 0.42 + 0.4 * charge, filter: 'blur(38px)' }}>
               <span style={{ ...wordStyle, backgroundImage: IRIS, backgroundSize: '300% 100%', backgroundPosition: `${(frame * 1.1) % 300}% 0`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{wordText}</span>
             </div>
-            {/* 地面倒影：翻转 + 渐隐 */}
+            {/* Floor reflection: flipped + faded */}
             <div style={{
               ...centered(CY + FS * 0.86), transform: 'scaleY(-1)', opacity: 0.22,
               WebkitMaskImage: 'linear-gradient(0deg, #000 0%, rgba(0,0,0,0.4) 30%, transparent 62%)',
@@ -139,14 +139,14 @@ export const WhiteFlashLogoSimplifyCut: React.FC = () => {
             }}>
               <LiquidWord frame={frame} bright={bright} />
             </div>
-            {/* 主词标 */}
+            {/* Main wordmark */}
             <div style={centered(CY)}>
               <LiquidWord frame={frame} bright={bright} />
             </div>
-            {/* 横向变形眩光：从字心拉开 */}
+            {/* Anamorphic flare expanding from wordmark center */}
             {flare > 0 && (
               <>
-                {/* 眩光：宽而软的光晕 + 细亮核（核的两端渐隐，不加描边阴影——否则亮线会带一圈暗边） */}
+                {/* Flare: soft outer halo + sharp bright core without drop shadow */}
                 <div style={{
                   position: 'absolute', left: 960 - 1100 * flare, width: 2200 * flare, top: CY - 24, height: 48,
                   background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#e9e2ff', 0.55 * flare)} 0%, rgba(233,226,255,0) 100%)`,
@@ -165,7 +165,7 @@ export const WhiteFlashLogoSimplifyCut: React.FC = () => {
         </>
       ) : (
         <>
-          {/* 纸面：冷白带一丝紫 + 顶部柔光 + 轻暗角 + 颗粒 */}
+          {/* Paper background: cool white with soft top light + vignette + grain */}
           <AbsoluteFill style={{ background: `linear-gradient(180deg, ${PAPER[0]} 0%, ${PAPER[1]} 100%)` }} />
           <AbsoluteFill style={{ background: 'radial-gradient(ellipse 60% 55% at 50% 40%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%)' }} />
           <Vignette strength={0.1} inner={0.5} color="#2a2620" />
@@ -173,7 +173,7 @@ export const WhiteFlashLogoSimplifyCut: React.FC = () => {
             <div style={centered(CY)}>
               <span style={{ ...wordStyle, color: FLAT_INK, paddingBottom: 20 }}>{wordText}</span>
             </div>
-            {/* 锁定：镜刻标志（取景框揭开 → 琥珀斜切划入）+ 琥珀短线 + 品牌短句 */}
+            {/* Lock phase: ShotcraftMark + amber rule + brand tagline */}
             <div style={{ position: 'absolute', left: 960 - MARK / 2, top: CY - FS * 0.5 - 44 - MARK }}>
               <ShotcraftMark size={MARK} tone="light" frameProgress={mark} cutProgress={cut} />
             </div>
@@ -189,7 +189,7 @@ export const WhiteFlashLogoSimplifyCut: React.FC = () => {
         </>
       )}
 
-      {/* 白闪：先是从字心撑开的径向白团，满屏后整层白，再随曝光回落退去 */}
+      {/* White flash: radial expansion from center, full-screen whiteout, decaying with recovery */}
       {whiteA > 0.001 && (
         frame < WHITE ? (
           <AbsoluteFill style={{

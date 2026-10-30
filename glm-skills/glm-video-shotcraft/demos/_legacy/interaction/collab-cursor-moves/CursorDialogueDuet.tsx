@@ -1,6 +1,6 @@
-// cursor-dialogue-duet —— figma-devmode 0:16–0:20
-// 纯暗场上 Designer(蓝)/Developer(绿) 两枚具名光标做"对话式"双人舞：
-// 相互靠近 → 绕位交换 → 名牌一亮一暗交接 → 一枚放大成巨箭头当转场。
+// cursor-dialogue-duet — figma-devmode 0:16–0:20
+// Designer (blue) and Developer (green) named cursors perform a "dialogue" duet on a dark canvas:
+// approach each other → orbit and swap places → badge lighting handoff (one dims, one lights) → one scales into a giant arrow transition.
 import React from 'react';
 import { useCurrentFrame, interpolate } from 'remotion';
 
@@ -15,7 +15,7 @@ const easeInCubic = (t: number) => t * t * t;
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
-// 三次贝塞尔单段位移
+// Cubic Bezier single-segment displacement
 const bez = (
   t: number,
   p0: [number, number], c1: [number, number], c2: [number, number], p3: [number, number],
@@ -28,7 +28,7 @@ const bez = (
 
 const Cursor: React.FC<{
   x: number; y: number; scale: number; color: string; name: string;
-  badgeLit: number; // 0 压暗 1 点亮
+  badgeLit: number; // 0 dimmed, 1 lit
   badgeOpacity?: number;
 }> = ({ x, y, scale, color, name, badgeLit, badgeOpacity = 1 }) => (
   <div style={{ position: 'absolute', left: x, top: y, transform: `scale(${scale})`, transformOrigin: '0 0' }}>
@@ -56,59 +56,59 @@ export const CursorDialogueDuet: React.FC = () => {
   const CX = 960; const CY = 520;
   const R = 270;
 
-  // ---------- Designer(蓝) 轨迹 ----------
+  // ---------- Designer (Blue) trajectory ----------
   let dx = 0; let dy = 0;
-  // 入场：画外左 → 左位（弹性减速）
+  // Entrance: off-screen left → left position (elastic decel)
   {
     const t = easeOutCubic(clamp01(f / 24));
     [dx, dy] = bez(t, [-140, 260], [300, 300], [520, 620], [CX - R, CY]);
   }
-  // 靠近：向 Developer 探身（26–56）
+  // Approach: leans toward Developer (26–56)
   if (f > 26) {
     const t = easeInOutCubic(clamp01((f - 26) / 30));
     const [nx, ny] = bez(t, [CX - R, CY], [CX - R + 120, CY - 150], [CX - 90, CY - 120], [CX - 120, CY - 24]);
     dx = nx; dy = ny;
   }
-  // 绕位：从左侧经上方绕到右侧（60–98）
+  // Orbit: loops from left side over the top to the right side (60–98)
   if (f > 60) {
     const t = easeInOutCubic(clamp01((f - 60) / 38));
-    const a = Math.PI + t * Math.PI; // 180° → 360°(上半弧)
+    const a = Math.PI + t * Math.PI; // 180° → 360° (upper arc)
     dx = CX + Math.cos(a) * (R - 40) * (1 - t * 0.15) - 0;
     dy = CY + Math.sin(a) * (R - 110);
-    if (t < 0.08) { // 与靠近段衔接的小混合
+    if (t < 0.08) { // Blend transition with approach segment
       const m = t / 0.08;
       dx = (CX - 120) * (1 - m) + dx * m;
       dy = (CY - 24) * (1 - m) + dy * m;
     }
   }
-  // 退场：加速甩出画面左下（104–128）
+  // Exit: accelerates out to lower left off-screen (104–128)
   if (f > 104) {
     const t = easeInCubic(clamp01((f - 104) / 24));
     dx = interpolate(t, [0, 1], [dx, -320]);
     dy = interpolate(t, [0, 1], [dy, 1240]);
   }
 
-  // ---------- Developer(绿) 轨迹 ----------
+  // ---------- Developer (Green) trajectory ----------
   let gx = 0; let gy = 0;
   {
     const t = easeOutCubic(clamp01((f - 4) / 24));
     [gx, gy] = bez(clamp01(t), [2080, 820], [1700, 760], [1420, 420], [CX + R, CY]);
   }
-  // 回应：微微后仰再前倾（30–58）
+  // Response: leans back slightly then tilts forward (30–58)
   if (f > 30) {
     const t = easeInOutCubic(clamp01((f - 30) / 28));
     const sway = Math.sin(t * Math.PI) * 70;
     gx = CX + R + sway * 0.6;
     gy = CY - Math.sin(t * Math.PI * 2) * 40;
   }
-  // 绕位：从右侧经下方绕到左侧（60–98）
+  // Orbit: loops from right side along the bottom to the left side (60–98)
   if (f > 60) {
     const t = easeInOutCubic(clamp01((f - 60) / 38));
-    const a = 0 + t * Math.PI; // 0° → 180°(下半弧)
+    const a = 0 + t * Math.PI; // 0° → 180° (lower arc)
     gx = CX + Math.cos(a) * (R - 40);
     gy = CY + Math.sin(a) * (R - 110);
   }
-  // 终场：冲向中心并放大成巨箭头（100–140）
+  // Finale: charges toward center and scales into giant arrow (100–140)
   const blow = easeInCubic(clamp01((f - 100) / 34));
   if (f > 100) {
     gx = interpolate(blow, [0, 1], [gx, -160]);
@@ -116,20 +116,20 @@ export const CursorDialogueDuet: React.FC = () => {
   }
   const gScale = 2.8 + blow * 66;
 
-  // ---------- 名牌灯光交接 ----------
-  // 前半 Designer 点亮，绕位中段(f≈78)交接给 Developer
+  // ---------- Badge lighting handoff ----------
+  // Designer lit in first half, hands off to Developer midway through orbit (f≈78)
   const handoff = easeInOutCubic(clamp01((f - 70) / 14));
   const dLit = f < 24 ? easeOutCubic(clamp01(f / 24)) : 1 - handoff;
   const gLit = handoff;
   const dBadgeIn = easeOutCubic(clamp01((f - 12) / 14));
   const gBadgeIn = easeOutCubic(clamp01((f - 18) / 14));
 
-  // 对话"脉冲"——靠近对话时轻微缩放呼吸
+  // Dialogue "pulse" — subtle breathing scale during proximity dialogue
   const dPulse = f > 26 && f < 60 ? 1 + Math.sin((f - 26) * 0.5) * 0.05 : 1;
 
   return (
     <div style={{ width: 1920, height: 1080, background: DARK, position: 'relative', overflow: 'hidden' }}>
-      {/* 暗场微光晕，给纯黑一点空间感 */}
+      {/* Dark background subtle glow to add spatial depth to pure black */}
       <div style={{
         position: 'absolute', inset: 0,
         background: `radial-gradient(ellipse 1100px 700px at 50% 48%, rgba(255,255,255,0.045), transparent 70%)`,

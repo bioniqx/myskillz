@@ -1,26 +1,26 @@
-// magician-card-flourish —— 魔术师甩牌：蓝色星芒闪现，卡片从光里被"变"出来，
-// 极速自旋弧线飞向镜头，到位瞬间硬定格，定格后一次 sheen 扫光。
+// magician-card-flourish — Magician card flourish: blue starburst flashes, conjuring a card from light,
+// spinning rapidly on an arc toward camera, snapping into a hard freeze, followed by a sheen sweep.
 //
-// 第二轮重设计（午夜蓝 · 发布会邀请函）：
-// - look = midnight。卡片不再是白底小字海报，而是一张深海军蓝的 video-shotcraft「Launch Film」首映票：
-//   中心徽记 = video-shotcraft 标志，托在开场星芒"留在卡上"的同心细环 + 交叉针线上，大字 Launch / Film +
-//   场次编号；卡面有一层随自旋角变色的全息箔（飞行中流光、定格即冻结）。卡背是纹章 + 标志。
-// - 构图：卡片落在画面左 1/3（cx=700，卡高 ≈ 86% 画高），右侧留给一组 video-shotcraft 宣传文案——
-//   定格后才逐行揭示，hold 段有内容在走、画面像一张完整的邀请海报。
-// - 星芒（用户逐轮定值，保留）：X 形对角针状光束 + 中心小亮点/辉光/放射短刺，9f 内转 90°。
-//   闪光点 = 卡片落点：观众先看到光在哪，卡就从哪"变"出来，绕一圈弧线再回到这里定格。
-// - 弹射：slow-in（前 14% 时间只走 6%）→ 斜率跳变踢出 → cubic ease-out 弧线减速；
-//   沿卡片对角线轴自旋 13 整圈，后 60% 角速度 2.4 次幂衰减；整圈数保证定格恰为正面。
-// - 定格 = 全量冻结零回弹（魔术感）。落定瞬间：一圈蓝色光脉冲从卡边向外扩散（"啪"的一下）、
-//   卡后背光亮起、舞台主光从暗到亮；8f 后 sheen 斜带扫过一次（裁进圆角，Q4）。
+// Iteration 2 redesign (midnight blue · premiere invitation):
+// - look = midnight. The card is designed as a deep navy video-shotcraft "Launch Film" premiere ticket:
+//   center emblem = video-shotcraft mark resting upon concentric rings and cross needles inherited from the starburst, bold Launch / Film typography +
+//   ticket numbering; holographic foil shifts color with rotation angle (iridescent during flight, freezing on landing). Card back features crest + mark.
+// - Composition: Card lands at screen left 1/3 (cx=700, height ≈ 86% viewport), right side dedicated to promotional copy —
+//   revealed line-by-line after lock-in, creating a cohesive invitation poster during hold.
+// - Starburst: X-shaped diagonal needle beams + central specular pip / blue glow / radial spikes, rotating 90 deg over 9f.
+//   Flash point = card landing position: viewers locate the flash, card emerges from it, loops on an arc, and returns to lock in place.
+// - Ejection: slow-in (first 14% time covers 6% path) -> explosive kickoff -> cubic ease-out arc deceleration;
+//   13 full rotations along diagonal axis, with angular velocity decaying at power 2.4 over the final 60%; integer turns guarantee front-facing freeze.
+// - Freeze = zero-rebound lock (magical snap). On landing: blue optical pulse ripples outward from card borders,
+//   backlight strikes up, stage key light lifts; 8f later a diagonal sheen sweeps across the card (clipped to border radius).
 //
-// 时间表（30fps，共 156f）：
-//   0–9     星芒闪现（9f，渐亮 2.5f → 微闪 → 坍缩，转 90°）；舞台压暗只留一点冷光
-//   9–57    飞行 48f：slow-in 7f → 弹射 → 弧线减速；CameraMotionBlur 只包飞行段
-//   57      硬定格；光脉冲 57–79、背光与舞台光 53–85 亮起
-//   65–91   sheen 扫光一次（26f）
-//   62–100  右侧文案：眉题字距收拢 63 → 标题两行升起 67/74 → 副文逐词 86
-//   104–156 hold：背光极缓呼吸、浮尘漂移，最后 ~1.7s 是一张完整邀请海报
+// Timeline (30fps, 156f total):
+//   0–9     Starburst flash (9f, ramp 2.5f -> shimmer -> collapse, 90 deg rotation); stage dimmed to cool ambient
+//   9–57    Flight 48f: slow-in 7f -> eject -> arc ease-out; CameraMotionBlur wraps flight only
+//   57      Hard freeze; optical pulse 57–79, backlight and stage light 53–85 ramp up
+//   65–91   Single sheen sweep (26f)
+//   62–100  Right-side typography: eyebrow letter-spacing collapse 63 -> 2-line title rises 67/74 -> body copy by word 86
+//   104–156 Hold: subtle backlight breathing, floating dust motes, settling into final ~1.7s invitation poster
 import React, { useId } from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { CameraMotionBlur } from '@remotion/motion-blur';
@@ -32,28 +32,28 @@ const L = LOOKS.midnight;
 
 const CARD_W = 380;
 const CARD_H = 540;
-// 对角线轴（卡片自身对角线方向，归一化）
+// Diagonal axis (card diagonal direction, normalized)
 const AX = CARD_W / Math.hypot(CARD_W, CARD_H);
 const AY = CARD_H / Math.hypot(CARD_W, CARD_H);
 
-// —— 时间轴（30fps / 156 帧）——
+// —— Timeline (30fps / 156 frames) ——
 export const MAGICIAN_CARD_FLOURISH_DURATION = 156;
-const TAKEOFF = 9; // 开场光效 0.3s（9f）后卡片才起飞
-const FLASH_END = 12; // 闪光尾焰完全消失（坍缩略拖 3 帧）
-const FLIGHT = 48; // 飞行帧数
-const LAND = TAKEOFF + FLIGHT; // f=57 硬定格
-const SHEEN_START = LAND + 8; // 定格稳住 8 帧后开始扫光
-const SHEEN_DUR = 26; // 扫光时长（一次性）
-const TURNS = 13; // 飞行总圈数（整数→定格瞬间恰好正面朝镜头）
-const FINAL_SCALE = 1.72; // 终态：卡高 540×1.72≈929 ≈ 86% 画面高
-const CX = 700; // 落点（= 闪光点）
+const TAKEOFF = 9; // Card lifts off after 0.3s (9f) intro light flash
+const FLASH_END = 12; // Flash tail fades completely (collapse trails 3 frames)
+const FLIGHT = 48; // Flight duration (frames)
+const LAND = TAKEOFF + FLIGHT; // f=57 hard freeze
+const SHEEN_START = LAND + 8; // Sheen begins 8 frames after freeze
+const SHEEN_DUR = 26; // Sheen duration (single pass)
+const TURNS = 13; // Total flight rotations (integer -> lands exactly front-facing)
+const FINAL_SCALE = 1.72; // Final scale: card height 540*1.72 ≈ 929 ≈ 86% frame height
+const CX = 700; // Landing center (= flash point)
 const CY = 540;
-const TEXT_X = 1130; // 右侧文案左缘
+const TEXT_X = 1130; // Right copy left margin
 
-// 卡片正面：380×540 设计坐标；外层按 ×FINAL_SCALE 布局后用 zoom 栅格化（定格帧原生锐利，Q2）
+// Card front: 380x540 design coordinates; rasterized via zoom at FINAL_SCALE for native sharpness on freeze
 const CardFace: React.FC<{ theta: number }> = ({ theta }) => {
   const gid = useId().replace(/[^a-zA-Z0-9]/g, '');
-  // 全息箔：色相随自旋角滚动（飞行中流光，定格后 theta 冻结 → 静止）
+  // Holographic foil: hue scrolls with spin angle (iridescent in flight, static once theta freezes)
   const holo = (theta * 0.9) % 360;
   return (
     <div style={{
@@ -63,19 +63,19 @@ const CardFace: React.FC<{ theta: number }> = ({ theta }) => {
       boxShadow: 'inset 0 0 0 1px rgba(170,200,255,0.16), inset 0 1px 0 rgba(255,255,255,0.22)',
       display: 'flex', flexDirection: 'column',
     }}>
-      {/* 全息箔：只在徽记区上方一抹，screen 叠加 */}
+      {/* Holographic foil: sweep over emblem area, screen blend */}
       <div style={{
         position: 'absolute', inset: 0, mixBlendMode: 'screen', opacity: 0.28,
         background: `conic-gradient(from ${holo}deg at 50% 40%, rgba(91,140,255,0.0), rgba(62,230,208,0.5), rgba(91,140,255,0.0), rgba(167,139,250,0.45), rgba(91,140,255,0.0))`,
         WebkitMaskImage: 'radial-gradient(ellipse 70% 46% at 50% 40%, #000 0%, transparent 75%)',
       }} />
-      {/* 品牌行 */}
+      {/* Brand row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
         <ShotcraftMark size={22} tone="dark" />
         <div style={{ fontFamily: BRAND.font, fontSize: 14, fontWeight: 700, letterSpacing: '0.03em' }}>{BRAND.name}</div>
         <div style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 11, color: L.ink2, letterSpacing: '0.04em' }}>SC 01 · TAKE 01</div>
       </div>
-      {/* 徽记：同心细环 + 交叉针线（开场星芒的"化石"）+ video-shotcraft 标志（标志本身不加光，背后的光晕是舞台光） */}
+      {/* Emblem: concentric rings + cross needles (starburst motif) + video-shotcraft mark */}
       <div style={{ flex: 1, position: 'relative' }}>
         <svg viewBox="-190 -150 380 300" width={332} height={262} style={{ position: 'absolute', left: 0, top: 6 }}>
           <defs>
@@ -89,7 +89,7 @@ const CardFace: React.FC<{ theta: number }> = ({ theta }) => {
             </linearGradient>
           </defs>
           <circle r={130} fill={`url(#halo${gid})`} />
-          {/* 环与针线都从标志外缘（≈56 单位）往外起：标志是开口取景框，线不许从开口里穿过去 */}
+          {/* Rings and needles originate outside mark border (≈56 units) to avoid intersecting viewfinder aperture */}
           {[68, 94, 120].map((r, i) => (
             <circle key={r} r={r} fill="none" stroke={`rgba(170,200,255,${0.18 - i * 0.04})`} strokeWidth={0.8} />
           ))}
@@ -97,16 +97,16 @@ const CardFace: React.FC<{ theta: number }> = ({ theta }) => {
             <path key={d} transform={`rotate(${d})`} d={`M 62 -0.9 L ${i % 2 ? 110 : 180} 0 L 62 0.9 Z`} fill={`url(#ray${gid})`} />
           ))}
         </svg>
-        {/* 标志压在 svg 中心（svg 332×262 @ top 6，viewBox 原点在中心 → 屏幕中心 (166, 137)） */}
+        {/* Mark centered in SVG (viewBox centered at origin) */}
         <ShotcraftMark size={112} tone="dark" style={{ position: 'absolute', left: 166 - 56, top: 6 + 131 - 56 }} />
       </div>
-      {/* 标题 */}
+      {/* Title */}
       <div style={{ position: 'relative' }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.24em', color: L.accent, marginBottom: 8 }}>PREMIERE · REEL 01</div>
         <div style={{ fontSize: 58, fontWeight: 760, letterSpacing: '-0.045em', lineHeight: 0.92 }}>Launch</div>
         <div style={{ fontSize: 58, fontWeight: 300, letterSpacing: '-0.04em', lineHeight: 0.98, color: '#c9d6f5' }}>Film</div>
       </div>
-      {/* 底部票根行 */}
+      {/* Bottom ticket stub row */}
       <div style={{
         position: 'relative', display: 'flex', alignItems: 'center', marginTop: 18, paddingTop: 12,
         borderTop: '1px dashed rgba(170,200,255,0.22)', fontFamily: FONT.mono, fontSize: 11, color: L.ink2, letterSpacing: '0.06em',
@@ -118,7 +118,7 @@ const CardFace: React.FC<{ theta: number }> = ({ theta }) => {
   );
 };
 
-// 卡背：深海军蓝 + 细纹章 + 中心 video-shotcraft 标志
+// Card back: deep navy + delicate filigree + centered video-shotcraft mark
 const CardBack: React.FC = () => (
   <div style={{
     position: 'absolute', inset: 0, borderRadius: 24, overflow: 'hidden',
@@ -140,8 +140,8 @@ const CardBack: React.FC = () => (
   </div>
 );
 
-// —— 开场星芒（用户参考图 IMG_2505 逐轮收敛的形态，保留）——
-// X 形对角针状光束（长轴 840 / 短轴 420）+ 中心小亮点 + 蓝辉光 + 放射短刺；9f 内转 90°。
+// —— Intro Starburst ——
+// X-shaped diagonal needle beams (major 840 / minor 420) + center pip + blue bloom + radial spikes; 90 deg rotation over 9f.
 const SpawnFlash: React.FC<{ f: number }> = ({ f }) => {
   const SPIKE_ID = `mcf-needle-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   if (f > FLASH_END) return null;
@@ -199,19 +199,19 @@ const SpawnFlash: React.FC<{ f: number }> = ({ f }) => {
   );
 };
 
-// 飞行状态（帧的纯函数；定格后 tEff=1 全量冻结）
+// Flight trajectory (pure function of frame; freezes fully at tEff=1)
 const flight = (f: number) => {
   const tEff = Math.min(1, Math.max(0, (f - TAKEOFF) / FLIGHT));
-  // 自旋：前 40% 近匀速极快，之后 2.4 次幂衰减；spinP(1)=1 → 整圈 → 定格正面
+  // Spin: rapid near-linear first 40%, power-2.4 decay thereafter; spinP(1)=1 -> exact full rotations -> front-facing freeze
   const spinP = tEff < 0.4 ? tEff * 1.55 : 0.62 + 0.38 * (1 - Math.pow(1 - (tEff - 0.4) / 0.6, 2.4));
   const theta = TURNS * 360 * Math.min(1, spinP);
-  // 行程：slow-in（前 14% 时间 6% 行程）→ 弹射 → cubic ease-out 减速
+  // Path progress: slow-in (first 14% time covers 6% path) -> ejection -> cubic ease-out deceleration
   const tp = tEff < 0.14 ? 0.06 * (tEff / 0.14) ** 2 : 0.06 + 0.94 * (1 - Math.pow(1 - (tEff - 0.14) / 0.86, 3));
-  // 弧线：从落点出发向右上荡出（经过日后文案的位置），再收回落点
+  // Arc: swings out toward upper-right from landing point, returning to dock
   const arc = Math.sin(tp * Math.PI);
   const cx = CX + arc * 470;
   const cy = CY - arc * 230;
-  // 纵深：真透视 scale=F/(F+z)，z 从极远推近到 0
+  // Depth: perspective scale=F/(F+z), z pulls in from distance to 0
   const FOCAL = 900;
   const z = 14000 * (1 - tp);
   const scale = FINAL_SCALE * (FOCAL / (FOCAL + z));
@@ -238,21 +238,21 @@ const Card: React.FC = () => {
         <div style={{
           width: '100%', height: '100%', position: 'relative', borderRadius: R,
           transform: `perspective(${1300 * FINAL_SCALE}px) rotate3d(${AX}, ${AY}, 0, ${theta}deg)`, transformOrigin: '50% 50%',
-          // 定格后：深色带色相的两层投影 + 一圈极淡的蓝色轮廓光
+          // Post-freeze: dual-layer colored shadows + subtle blue rim glow
           boxShadow: landed
             ? `0 40px 90px -20px rgba(0,2,10,0.9), 0 12px 30px rgba(0,2,10,0.6), 0 0 0 1px rgba(140,175,255,0.18), 0 0 80px ${alpha(L.accent, 0.22)}`
-            : `0 0 70px ${alpha(L.accent, 0.55)}, 0 0 0 1px rgba(160,195,255,0.35)`, // 飞行中：卡还带着变出来时的光（被运动模糊拖成光尾）
+            : `0 0 70px ${alpha(L.accent, 0.55)}, 0 0 0 1px rgba(160,195,255,0.35)`, // In flight: retains conjuring glow (trails under motion blur)
         }}>
           <div style={{ position: 'absolute', inset: 0, zoom: FINAL_SCALE }}>
             <CardFace theta={theta} />
             <div style={{ opacity: facingBack ? 1 : 0, position: 'absolute', inset: 0 }}><CardBack /></div>
           </div>
-          {/* 转动中的动态侧光（贴在卡面上）；定格后随 theta 冻结 */}
+          {/* Dynamic side rim light during rotation; freezes with theta */}
           <div style={{
             position: 'absolute', inset: 0, borderRadius: R, pointerEvents: 'none', mixBlendMode: 'screen',
             background: `linear-gradient(${115 + sin * 30}deg, rgba(255,255,255,0) 30%, rgba(200,220,255,${0.08 + 0.16 * Math.abs(sin)}) 50%, rgba(255,255,255,0) 70%)`,
           }} />
-          {/* 定格后的一次性 sheen：斜高光带左→右（裁进圆角，Q4） */}
+          {/* Single sheen post-freeze: diagonal highlight sweeps left to right (clipped to border radius) */}
           {sheenOn && (
             <div style={{ position: 'absolute', inset: 0, borderRadius: R, overflow: 'hidden', pointerEvents: 'none' }}>
               <div style={{
@@ -268,7 +268,7 @@ const Card: React.FC = () => {
   );
 };
 
-// 落定瞬间的光脉冲：一圈与卡同形的圆角框从卡边向外扩散并淡出（一次）
+// Landing optical pulse: rounded contour ripples outward from card perimeter and fades
 const LandPulse: React.FC = () => {
   const f = useCurrentFrame();
   if (f < LAND || f > LAND + 24) return null;
@@ -285,7 +285,7 @@ const LandPulse: React.FC = () => {
   );
 };
 
-// 右侧文案：定格后才出现（眉题字距收拢 → 标题两行升起 → 副文逐词）
+// Right typography: reveals post-freeze (eyebrow tracking collapse -> 2-line title rises -> body word-by-word)
 const Copy: React.FC = () => {
   const f = useCurrentFrame();
   const rule = ramp(f, 62, 22, EASE.snappy);
@@ -310,13 +310,13 @@ const TYPE_LABEL = 24;
 export const MagicianCardFlourish: React.FC = () => {
   const f = useCurrentFrame();
   const moving = f >= TAKEOFF && f <= LAND;
-  // 舞台光：闪光时压暗（让星芒成为唯一光源），落定前后亮起，hold 段极缓呼吸
+  // Stage light: dimmed during starburst (solitary key light), illuminates around landing, subtle breathing during hold
   const lit = ramp(f, LAND - 6, 30, EASE.out);
   const back = lit * (1 + 0.06 * Math.sin((f - LAND) / 16));
   return (
     <AbsoluteFill style={{ background: L.bg[2] }}>
       <Stage look={L} keyLight={{ x: CX / 1920, y: 0.1 }} fill={null} intensity={0.25 + 0.75 * lit} vignette={0.6}>
-        {/* 卡后背光：落定后亮起的一团蓝光 */}
+        {/* Card backlight: blue halo striking up after landing */}
         <div style={{
           position: 'absolute', left: CX - 620, top: CY - 560, width: 1240, height: 1120, opacity: back,
           background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha(L.light, 0.38)} 0%, ${alpha(L.light, 0.1)} 42%, ${alpha(L.light, 0)} 70%)`,
@@ -332,7 +332,7 @@ export const MagicianCardFlourish: React.FC = () => {
       )}
       <LandPulse />
       <Copy />
-      {/* 闪光层独立于 CameraMotionBlur（细针光束旋转会被采样拆成条纹分身） */}
+      {/* Starburst excluded from CameraMotionBlur to prevent multisampling ghosting on fine needle rays */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
         <SpawnFlash f={f} />
       </div>

@@ -1,6 +1,6 @@
-/* —— ShotCraft Workbench · Apple 风格暗色工作台（源出 video-talkcraft/workbench） ——
-   参照 macOS 专业应用（Final Cut / Logic）的暗色 chrome：
-   近黑分层底 + 发丝线分隔 + SF 字系 + 单一 accent（#0a84ff）+ 克制的圆角与投影。 */
+/* —— ShotCraft Workbench · Apple-style dark workbench ——
+   Modeled after macOS pro apps (Final Cut / Logic) dark chrome:
+   Near-black layered background + hairline dividers + SF font family + single accent (#0a84ff) + restrained radius & shadows. */
 :root {
   --bg: #121215;
   --panel: #1d1d20;
@@ -33,7 +33,7 @@ body {
 .app { display: flex; flex-direction: column; height: 100%; }
 .dim { color: var(--text-dim); }
 
-/* —— 顶栏 —— */
+/* —— Top bar —— */
 .topbar {
   display: flex; align-items: center; gap: 8px;
   height: 50px; padding: 0 16px;
@@ -51,7 +51,7 @@ body {
   border-color: var(--line); background: var(--inset); outline: none;
 }
 
-/* —— 按钮 —— */
+/* —— Buttons —— */
 .btn {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.06));
   color: var(--text);
@@ -88,7 +88,7 @@ body {
 .mini:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
 .mini.preset.on { color: var(--accent); background: rgba(10, 132, 255, 0.14); }
 
-/* —— 主区三栏 —— */
+/* —— Main three-column area —— */
 .main { display: flex; flex: 1; min-height: 0; }
 
 .panel-title {
@@ -96,7 +96,7 @@ body {
   border-bottom: 1px solid var(--line); flex: none;
 }
 
-/* 可调尺寸面板容器 + 分隔条 */
+/* Resizable panel container + divider */
 .panel-wrap { flex: none; display: flex; min-width: 0; min-height: 0; }
 .panel-wrap > * { flex: 1; min-width: 0; min-height: 0; }
 .splitter { flex: none; background: transparent; transition: background 0.15s; z-index: 20; }
@@ -104,12 +104,12 @@ body {
 .splitter.h { height: 5px; cursor: row-resize; margin: -1px 0; }
 .splitter:hover, .splitter:active { background: var(--accent-soft); }
 
-/* —— 素材库 —— */
+/* —— Asset library —— */
 .library {
   width: 100%; display: flex; flex-direction: column;
   background: var(--panel); border-right: 1px solid var(--line);
 }
-/* 分段控件式 tab（macOS segmented control） */
+/* Segmented control tabs (macOS segmented control) */
 .lib-tabs {
   display: flex; gap: 2px; flex: none;
   margin: 10px 10px 8px; padding: 2px;
@@ -130,7 +130,7 @@ body {
   padding: 12px 2px 6px; font-size: 11px; font-weight: 600;
   letter-spacing: 0.4px; color: var(--text-dim);
 }
-/* 列表行（音效等无画面素材）：无框，悬停浮起 */
+/* List row (sound effects without visual preview): borderless, hover float */
 .lib-card {
   display: flex; align-items: center; gap: 8px; width: 100%;
   background: transparent; border: 0; border-radius: 7px;
@@ -146,7 +146,7 @@ body {
   padding: 10px 14px; font-size: 11px; border-top: 1px solid var(--line); line-height: 1.6;
 }
 
-/* 分类标题：纯文字行，无框 */
+/* Category header: plain text line, borderless */
 .lib-cat-toggle {
   display: flex; align-items: center; gap: 6px; width: 100%;
   background: transparent; border: 0; border-radius: var(--r-s);
@@ -159,7 +159,7 @@ body {
 .caret { display: inline-block; transition: transform 0.15s; color: var(--text-dim); font-size: 10px; }
 .caret.open { transform: rotate(90deg); }
 
-/* 素材网格（循环视频/实时卡片预览） */
+/* Asset grid (looping video / live card preview) */
 .lib-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; margin-bottom: 10px; }
 .lib-cell { cursor: grab; min-width: 0; }
 .lib-thumb {
@@ -180,7 +180,7 @@ body {
 .lib-cell-meta { padding: 1px 2px 0; font-size: 10px; font-variant-numeric: tabular-nums; }
 .lib-card:active, .lib-cell:active { cursor: grabbing; }
 
-/* —— 素材预览模式 —— */
+/* —— Asset preview mode —— */
 .preview-media { max-width: 100%; max-height: 100%; border-radius: var(--r-m); }
 .preview-audio {
   display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -191,7 +191,7 @@ body {
   padding: 3px 10px; font-size: 11px; font-weight: 600;
 }
 
-/* —— 预览 —— */
+/* —— Preview —— */
 .preview-panel {
   flex: 1; min-width: 0; display: flex; flex-direction: column;
   background: #0a0a0c;
@@ -215,7 +215,7 @@ body {
 }
 .loop-toggle input { accent-color: var(--accent); }
 
-/* —— 属性面板 —— */
+/* —— Inspector —— */
 .inspector {
   width: 100%; display: flex; flex-direction: column;
   background: var(--panel); border-left: 1px solid var(--line);
@@ -261,7 +261,7 @@ body {
 }
 .color-text { flex: 1; }
 
-/* —— 时间轴 —— */
+/* —— Timeline —— */
 .timeline {
   height: 100%; width: 100%; display: flex; flex-direction: column;
   background: var(--panel); border-top: 1px solid var(--line);
@@ -308,7 +308,7 @@ body {
 .track-actions { display: flex; gap: 2px; flex: none; }
 .track-actions .mini { padding: 2px 6px; }
 
-/* 轨道拖拽排序 */
+/* Track drag reorder */
 .tl-row.dragging { opacity: 0.45; }
 .timeline.track-dragging, .timeline.track-dragging * { cursor: grabbing !important; user-select: none; }
 .track-drop-line {
@@ -366,7 +366,7 @@ body {
 .trim-l::after { left: 3px; }
 .trim-r::after { right: 3px; }
 
-/* 播放头（Apple 系统红） */
+/* Playhead (Apple system red) */
 .playhead {
   position: absolute; top: 0; bottom: 0; width: 1px;
   background: var(--danger); z-index: 4; pointer-events: none;
@@ -376,7 +376,7 @@ body {
   border: 5px solid transparent; border-top: 7px solid var(--danger);
 }
 
-/* —— 滚动条 —— */
+/* —— Scrollbar —— */
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.14); border-radius: 5px;

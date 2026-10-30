@@ -1,23 +1,23 @@
-// neon-triple-marquee —— 三行对向霓虹跑马灯 recap（clickup-30 61–64.5s 的手法）
+// neon-triple-marquee — Three-row counter-directional neon marquee recap (technique inspired by clickup-30 61–64.5s)
 //
-// 第二轮重设计（夜里的灯牌墙 · 斜拍 + 湿地面反光）：
-// - look = custom「neon」：蓝黑砖墙 + 三色灯管（冰青 / 洋红 / 钠灯琥珀）。不再是平铺的彩色描边字，
-//   而是一面真实的霓虹灯牌墙：机位斜拍（墙面 rotateY −17°→−9° 极缓摇近，透视让词流有纵深），
-//   墙下是一条湿地面，亮着的那行在地上投出倒影与色光池。
-// - 灯管三层：暗态玻璃管（同色、低亮、常亮——三行结构永远在）→ 通电彩色管体 + 双层辉光 → 近白热芯；
-//   亮行的光同时溢到身后砖墙上（砖缝被照出来），这是"灯在墙上"而不是"字在屏上"。
-// - 字体换成粗体窄体（Avenir Next Condensed Heavy），三连词 FRAME / CRAFT / SHIP（video-shotcraft 的
-//   "取景 → 刻镜头 → 交片"，取自品牌短句 Frame motion. Craft the shot.，recap 用）；
-//   词距按 canvas 实测宽度排，分隔用空心菱形 ◇。
-// - 轮唱：周期 42f、相位差 14f，一亮俩暗；每次点亮先打 2 帧点火闪烁（真霓虹的启辉），再余弦软包络。
-//   开场三行按 0/5/10f 依次点火闪烁上电；尾段 124f 起自上而下逐行"断电"（闪两下熄灭），
-//   落到只剩暗态玻璃管的熄灯海报（墙仍可见），不淡到死黑。
+// Second redesign (Night sign wall · oblique angle + wet pavement reflection):
+// - look = custom "neon": blue-black brick wall + tri-color neon tubes (ice cyan / magenta / sodium amber). Rather than flat outlined text,
+//   this models a physical neon sign wall: oblique camera angle (wall rotateY -17° -> -9° slow pan-in, perspective adds depth to word streams);
+//   below the wall lies wet ground where active rows cast reflections and color pools.
+// - Three tube layers: unlit glass tube (matching color, dim, persistent — keeping 3-row structure visible) -> energized colored tube + dual bloom -> near-white hot core;
+//   light spills onto the brick wall behind (revealing mortar seams), grounding "tubes on a wall" rather than "text on a screen".
+// - Typography: bold condensed font (Avenir Next Condensed Heavy), repeating FRAME / CRAFT / SHIP (video-shotcraft's
+//   "Frame -> Craft -> Ship", adapted from brand motto "Frame motion. Craft the shot." as recap);
+//   spacing measured via canvas text width, delimited by hollow diamonds (◇).
+// - Round-robin cycle: 42f period, 14f phase offset, one lit and two dim; each activation strikes a 2-frame ignition flicker (authentic neon strike), followed by cosine envelope.
+//   Three rows ignite sequentially at 0/5/10f; from 124f onward, rows power off top-to-bottom (two flickers then off),
+//   settling into an unlit sign poster showing dark glass tubes against the wall, avoiding fade to black.
 //
-// 时间表（30fps，共 150f）：
-//   0–18     上电：三行依次点火闪烁（0/5/10f 起），暗态玻璃管亮起
-//   18–124   轮唱：42f 周期、14f 相位差，奇偶行反向匀速滚动（marquee 豁免 linear）
-//   124–142  断电：自上而下每行错峰 6f 闪两下熄灭
-//   142–150  熄灯 hold：暗态灯管 + 墙面余光
+// Schedule (30fps, 150f total):
+//   0–18     Ignition: three rows strike sequentially (from 0/5/10f), unlit glass tubes glow
+//   18–124   Round-robin: 42f period, 14f phase offset, odd/even rows scroll in opposite directions at constant speed
+//   124–142  Power down: rows power off top-to-bottom staggered by 6f with dual flickers
+//   142–150  Dark hold: unlit glass tubes + wall ambient glow
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, Grain, Vignette, ramp, mix } from '../../_fixtures/Polish';
@@ -29,12 +29,12 @@ const FONT = '"Avenir Next Condensed", "DIN Condensed", "Arial Narrow", Impact, 
 const WEIGHT = 800;
 const SIZE = 286;
 const GAP = SIZE * 0.36;
-const PLANE_W = 2900; // 墙面宽（透视斜拍时两侧不露边）
-const FLOOR_Y = 900; // 墙脚 / 地面线（墙面坐标）
+const PLANE_W = 2900; // Wall width (avoids exposing edges during oblique perspective shot)
+const FLOOR_Y = 900; // Baseboard / floor line (wall coordinates)
 const ROW_Y = [28, 318, 608];
 
 const WALL = '#0a0b14';
-// 砖墙纹理：两行错缝砖（SVG 小图平铺），砖缝极淡——被灯光照到才看得见
+// Brick texture: two-row running bond pattern (tiled SVG), subtle mortar lines revealed under illumination
 const BRICK = `url("data:image/svg+xml;utf8,${encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='300' height='120'>" +
   "<rect width='300' height='120' fill='none'/>" +
@@ -44,7 +44,7 @@ const BRICK = `url("data:image/svg+xml;utf8,${encodeURIComponent(
   "<line x1='76.5' y1='60' x2='76.5' y2='120'/><line x1='226.5' y1='60' x2='226.5' y2='120'/></g></svg>",
 )}")`;
 
-// 实测文本宽度（同字体同字号，确定性）；无 DOM 时退回估宽
+// Measured text width (deterministic across same font/size); falls back to estimation when DOM unavailable
 const widthCache = new Map<string, number>();
 const measure = (text: string) => {
   const hit = widthCache.get(text);
@@ -68,14 +68,14 @@ const ROWS: Row[] = [
   { word: 'SHIP', color: '#ffae34', core: '#fff3dc', dir: 1, speed: 9 },
 ];
 
-// 点火闪烁序列（确定性）：0/1 门，6 帧后恒 1
+// Ignition flicker sequence (deterministic): 0/1 gating, holds at 1 after 6 frames
 const IGNITE = [0, 1, 0.15, 0, 0.9, 0.6];
 const ignite = (f: number, at: number) => {
   const k = Math.floor(f - at);
   if (k < 0) return 0;
   return k < IGNITE.length ? IGNITE[k] : 1;
 };
-// 断电序列：闪两下熄灭
+// Power-down sequence: two flickers then off
 const KILL = [1, 0.2, 0.85, 0.1, 0.5, 0];
 const kill = (f: number, at: number) => {
   const k = Math.floor(f - at);
@@ -84,15 +84,15 @@ const kill = (f: number, at: number) => {
 };
 
 const PERIOD = 42;
-const SLOT = PERIOD / 3; // 每行 14f
-// 轮唱亮度：每行在自己的 14f 槽里点亮——前 2 帧启辉闪烁、3f 升满、平台、最后 4f ease-in 熄灭并与下一行
-// 重叠 2f 交接（任意时刻总有一行在亮，"一亮俩暗"不出现全暗空拍）
+const SLOT = PERIOD / 3; // 14f per row
+// Round-robin brightness: each row illuminates in its 14f slot — 2f ignition flicker, 3f rise, plateau, 4f ease-in extinction
+// overlapping 2f with next row (at least one row remains active, avoiding dark pauses)
 const pulse = (f: number, i: number) => {
   if (f < 18) return 0;
   const ph = ((((f - 18) - i * SLOT) % PERIOD) + PERIOD) % PERIOD;
   const len = SLOT + 2;
   if (ph >= len) return 0;
-  const fl = ph < 1 ? 0.6 : ph < 2 ? 0.25 : 1; // 启辉
+  const fl = ph < 1 ? 0.6 : ph < 2 ? 0.25 : 1; // Ignition strike
   const up = ramp(ph, 1, 3, EASE.out);
   const down = 1 - ramp(ph, len - 5, 5, EASE.exit);
   return Math.max(up * down, 0) * fl;
@@ -110,7 +110,7 @@ const MarqueeRow: React.FC<{ row: Row; f: number; y: number; lit: number; glass:
     transform: `translateX(${offset.toFixed(2)}px)`,
     fontFamily: FONT, fontWeight: WEIGHT, fontSize: SIZE, letterSpacing: '0.02em', lineHeight: 1, color: 'transparent',
   };
-  // 分隔：空心菱形（边框色 / 粗细与同层灯管一致，字本身只描边不填色）
+  // Delimiter: hollow diamond (border color/width match tube layer, glyphs stroked without fill)
   const text = (sep: string, bw: number) => Array.from({ length: copies }).map((_, i) => (
     <span key={i} style={{ position: 'absolute', left: i * unitW, top: 0, whiteSpace: 'nowrap' }}>
       {row.word}
@@ -124,16 +124,16 @@ const MarqueeRow: React.FC<{ row: Row; f: number; y: number; lit: number; glass:
   const core = 2 + lit * 1.8;
   return (
     <>
-      {/* 暗态玻璃管：同色低亮，三行结构永远在 */}
+      {/* Unlit glass tube: matching dim color, keeps 3-row layout visible */}
       <div style={{ ...base, WebkitTextStroke: `6px ${alpha(row.color, 0.3 * glass)}` }}>{text(alpha(row.color, 0.3 * glass), 6)}</div>
       {lit > 0.02 && (
         <>
-          {/* 通电管体 + 双层辉光 */}
+          {/* Energized tube body + dual bloom */}
           <div style={{
             ...base, WebkitTextStroke: `${tube.toFixed(2)}px ${row.color}`, opacity: Math.min(1, lit * 1.1),
             filter: cheap ? undefined : `drop-shadow(0 0 ${(3 + lit * 6).toFixed(1)}px ${row.color}) drop-shadow(0 0 ${(14 + lit * 22).toFixed(1)}px ${row.color}) drop-shadow(0 0 ${(40 + lit * 50).toFixed(1)}px ${alpha(row.color, 0.9)})`,
           }}>{text(row.color, tube)}</div>
-          {/* 热芯：近白细线，只在通电时亮——"霓虹"而不是"彩色描边"的关键 */}
+          {/* Hot core: near-white thin line illuminated only when energized — key to authentic neon look */}
           <div style={{ ...base, WebkitTextStroke: `${core.toFixed(2)}px ${row.core}`, opacity: Math.min(1, lit * 1.3), filter: cheap ? undefined : `drop-shadow(0 0 2px ${alpha(row.core, 0.9)})` }}>
             {text(row.core, core)}
           </div>
@@ -146,18 +146,18 @@ const MarqueeRow: React.FC<{ row: Row; f: number; y: number; lit: number; glass:
 export const NeonTripleMarquee: React.FC = () => {
   const f = useCurrentFrame();
 
-  // 每行供电：上电点火 × 断电
+  // Power per row: ignition * shutdown
   const power = ROWS.map((_, i) => ignite(f, i * 5) * kill(f, 124 + i * 6));
-  // 暗态玻璃：上电后常亮，断电后仍留 0.6（熄灯海报：灯管看得见）
+  // Unlit glass: persistent after ignition, retains 0.6 after shutdown (unlit sign poster: tubes remain visible)
   const glass = ROWS.map((_, i) => Math.max(ignite(f, i * 5), f >= 124 ? 1 : 0) * (1 - 0.25 * ramp(f, 124 + i * 6 + 4, 8, EASE.out)));
-  // 亮度：开场上电时全行点火亮一下（0.7）→ 轮唱
+  // Brightness: all rows flash on boot (0.7) -> round-robin cycle
   const lit = ROWS.map((_, i) => {
     const boot = f < 18 ? 0.7 * ignite(f, i * 5) * (1 - ramp(f, 12, 6, EASE.out)) : 0;
     const killFlash = f >= 124 ? 0.55 * kill(f, 124 + i * 6) * (f < 124 + i * 6 ? 0 : 1) : 0;
     return Math.max(boot, pulse(f, i) * power[i], killFlash);
   });
 
-  // 机位：墙面斜拍，rotateY −17° → −9° 极缓摇近（smooth），整体轻推
+  // Camera: oblique angle on wall, rotateY -17° -> -9° slow pan-in (smooth), subtle overall push
   const cam = ramp(f, 0, 150, EASE.smooth);
   const rotY = mix(-17, -9, cam);
   const scale = mix(1.0, 1.05, cam);
@@ -169,12 +169,12 @@ export const NeonTripleMarquee: React.FC = () => {
           position: 'absolute', left: (1920 - PLANE_W) / 2, top: 40, width: PLANE_W, height: 1200,
           transform: `rotateY(${rotY.toFixed(3)}deg) scale(${scale.toFixed(4)})`, transformOrigin: '50% 40%',
         }}>
-          {/* 砖墙：底色 + 极淡砖缝（被灯光照到才看得见） */}
+          {/* Brick wall: base color + subtle mortar lines (illuminated by light spill) */}
           <div style={{
             position: 'absolute', left: 0, top: -40, width: PLANE_W, height: FLOOR_Y + 40, background: WALL,
             backgroundImage: BRICK, backgroundSize: '300px 120px',
           }} />
-          {/* 墙面溢光：每行身后一条同色柔光带，随亮度呼吸（screen 叠在砖墙上） */}
+          {/* Wall light spill: soft colored band behind each row, breathing with intensity (screen blend on brick) */}
           {ROWS.map((r, i) => (
             <div key={`spill${i}`} style={{
               position: 'absolute', left: 0, right: 0, top: ROW_Y[i] - 200, height: SIZE + 400, mixBlendMode: 'screen',
@@ -185,7 +185,7 @@ export const NeonTripleMarquee: React.FC = () => {
           {ROWS.map((r, i) => (
             <MarqueeRow key={r.word} row={r} f={f} y={ROW_Y[i]} lit={lit[i]} glass={glass[i]} />
           ))}
-          {/* 湿地面：墙脚以下一条深色反光面，倒影只取最下一行（翻转、虚化、渐隐） */}
+          {/* Wet pavement: dark reflective plane below wall base, reflecting bottom row (flipped, blurred, faded) */}
           <div style={{ position: 'absolute', left: 0, top: FLOOR_Y, width: PLANE_W, height: 300, background: 'linear-gradient(180deg, #08080e 0%, #040407 100%)' }} />
           <div style={{
             position: 'absolute', left: 0, top: FLOOR_Y, width: PLANE_W, height: 300, overflow: 'hidden',
@@ -193,12 +193,12 @@ export const NeonTripleMarquee: React.FC = () => {
             maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%)',
             filter: 'blur(3px)',
           }}>
-            {/* 镜像：墙面 y_w 处的点映到地面下 (FLOOR_Y − y_w)；内层 600 高、绕自身中心翻转 → 行放在 y_w − 300 */}
+            {/* Mirror: point y_w on wall reflects below floor at (FLOOR_Y - y_w); inner layer 600px tall flipped on center -> row at y_w - 300 */}
             <div style={{ position: 'absolute', left: 0, top: 0, width: PLANE_W, height: 600, transform: 'scaleY(-1)', transformOrigin: '50% 50%' }}>
               <MarqueeRow row={ROWS[2]} f={f} y={ROW_Y[2] - 300} lit={lit[2]} glass={glass[2]} cheap />
             </div>
           </div>
-          {/* 地面色光池：每行的光落在地上（远行更弱） */}
+          {/* Floor color pool: light pool on pavement for each row (dimmer for distant rows) */}
           {ROWS.map((r, i) => (
             <div key={`pool${i}`} style={{
               position: 'absolute', left: 0, right: 0, top: FLOOR_Y - 40, height: 220, mixBlendMode: 'screen',
@@ -206,7 +206,8 @@ export const NeonTripleMarquee: React.FC = () => {
               opacity: lit[i] * [0.18, 0.28, 0.5][i],
             }} />
           ))}
-          {/* 墙脚接缝：一条发丝高光，把墙和地分开 */}
+          {/* Baseboard seam: hairline highlight separating wall and floor */}
+          <div style={{ position: 'absolute', left: 0, top: FLOOR_Y, width: PLANE_W, height: 2, background: 'rgba(255,255,255,0.06)' }} />
           <div style={{ position: 'absolute', left: 0, top: FLOOR_Y, width: PLANE_W, height: 2, background: 'rgba(255,255,255,0.06)' }} />
         </div>
       </div>

@@ -1,50 +1,38 @@
 ---
 name: impact-feedback
-一句话: 命中反馈两式——hit-counter 连招计数（顿帧+伤害数字+combo 跳字）、anime-impact 动漫打击帧（负片+集中线+色散）
-适用: 元素落位/撞击的"命中一瞬"——给砸入、撞停加游戏级手感；按强度阶梯选式
-时长: n/a（元素级技法，寄生在落位动作上；各式占用帧数见参数表）
-能量: 高（瞬时冲击）
+summary: Two impact layers: a combo counter with damage feedback, and a full anime-style impact frame.
+use: The "hit instant" when elements slam into place or collide—adding arcade-grade juice to drops and crash stops; select variant along the intensity ladder
+duration: n/a (element-level technique piggybacking on landing actions; frame budgets detailed in parameter table)
+energy: High (instantaneous impact)
 ---
 
-## 意图
-元素砸到位却没有"砸到了"的一瞬，落位读作 PPT 飞入。游戏 juice
-（Vlambeer screenshake 理论）与动漫演出 impact frames 给了同一答案：
-命中的那几帧把时间咬住，冲量才传到观众手上。两式是一条强度阶梯：
-B 用局部顿帧叠伤害数字和 combo 跳字，把功能清单剪成一套连招，
-叙事感最强；C 是最重的一拳——撞停 3 帧翻负片炸集中线，强调级最高、
-最风格化。
+## Intention
+When elements slam into place without a tactile "impact moment," landings feel like bland slide-deck fly-ins. Game juice (Vlambeer's screen-shake philosophy) and anime impact frames offer the same answer: bite into time during those few hit frames to transmit kinetic impulse to the viewer. The two variants form an intensity ladder: Variant B uses local freeze frames layered with damage numbers and jumping combo counters, turning a feature list into a fighting-game combo with strong narrative clarity; Variant C delivers the heaviest punch—a 3f negative color inversion with radiating focus lines upon crash-stop, representing the highest, most stylized emphasis.
 
-## 两式选型表
-| 式 | 做法 | 适用 |
-|----|------|------|
-| B hit-counter 连招计数 | 三卡接连砸入，每命中 = 顿帧 2f + 伤害数字上浮 + ×N 计数跳字逐次加码；demo 把"伤害"写成 video-shotcraft 每项功能省下的制作时间，飘走后落进卡片页脚 | 功能点连打段——"功能很多"用连招讲；游戏化语言浓 |
-| C anime-impact 打击帧 | crash-zoom 撞停的 3f 整幅负片反色 + 放射集中线 + 红青色散，第 4f 全撤 | 全片唯一高潮的那一拳；强调级封顶 |
+## Variant Selection Table
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| B hit-counter combo count | Three cards slam in sequentially; each hit = 2f freeze frame + floating damage numbers + xN combo counter escalating in size; demo frames "damage" as production hours saved by each video-shotcraft feature, drifting into card footers | Feature combo sequences—framing "many capabilities" as combo hits; rich gamified language |
+| C anime-impact frame | 3f full-canvas negative inversion + radial focus lines + chromatic aberration on crash-zoom stop, withdrawing completely on frame 4 | The single climactic blow of the entire video; peak emphasis tier |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| B 节奏 | 三卡各隔 28f（动画时间 30/58/86），命中前 10f ease-in(quad) 砸落；每命中全局冻结 2f（背景斜纹滚动也一起冻） | 间隔均匀才有"连招"节拍感 |
-| B 伤害数字 | 打在卡面中下部，scale 1.45→1 + 上浮 150px 出卡沿，4f 后 12f 渐隐；字号逐击 88/104/124px，黄色斜体 + 硬投影 | 渐隐 >16f 拖泥带水，遮住下一击；从卡顶上方起跳会撞上角落计数器 |
-| B 计数器 | 脉冲峰值 1.3/1.45/1.6、rotate −2/−4/−6°、字号 140/166/196px，`exp(−t/2.4)` 回落；三格热度条逐格点亮 | 逐次加码是命门——三次一样大读不出"越打越狠" |
-| C 急推撞停 | 先 6f 预备回拉到 0.985，再 crash-zoom 6f ease-in(cubic) 推到 2.25x（卡高 454×2.25≈画高 95%，描边不被画框切半），卡心收敛到画面正中；飞行帧做时间采样运动模糊 + 中心锐利副本 | 急推参数走 crash-zoom-punch 卡 |
-| C 冲击帧 | 撞停起 3f：`invert(1) grayscale(1) contrast(1.45)` + 34 粗楔 + 22 细针集中线（每帧换形态，内端被径向渐隐吃掉留出焦点）+ 红/青负片副本 screen 叠加 ±8px 错位；第 4f 全撤，卡外页面压暗一拍 | 3f 是甜点——4f 起观众开始"看清"负片，魔术就穿帮 |
-| C 恢复震屏 | 第 4f 起 6px 指数衰减（τ≈2.2f），~12f 收干 | 幅度须过肉眼阈值（可感性判例） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| B Cadence | Three cards spaced 28f apart (anim time 30/58/86), 10f ease-in(quad) drop before hit; 2f global freeze on each hit (background diagonal scroll freezes concurrently) | Uniform spacing establishes the rhythmic cadence of a "combo" |
+| B Damage numbers | Hits lower-middle of card, scale 1.45->1 + floats up 150px past card edge, fades over 12f after 4f; font size escalates 88/104/124px, yellow italic + hard drop shadow | Fading >16f drags, obscuring the next hit; launching above card top collides with corner counters |
+| B Counter | Pulse peak 1.3/1.45/1.6, rotate −2/−4/−6 deg, font size 140/166/196px, exp(-t/2.4) decay; three heat bars illuminate step-by-step | Escalating intensity is vital—identical sizes fail to communicate "hitting progressively harder" |
+| C Crash-stop | 6f anticipation pullback to 0.985, then crash-zoom 6f ease-in(cubic) to 2.25x (card height 454x2.25 approx 95% canvas height, borders avoiding frame clipping), card center converging to dead center; motion blur temporal sampling + sharp center copy | Crash-zoom parameters follow crash-zoom-punch card |
+| C Impact frame | 3f from crash-stop: invert(1) grayscale(1) contrast(1.45) + 34 thick wedges + 22 fine needle focus lines (updating pattern each frame, inner tips radially faded to clear focal point) + red/cyan negative copies screen-blended with ±8px offset; full retreat on frame 4, outer canvas dimmed for one beat | 3f is the sweet spot—at 4f viewers start deciphering the negative image, breaking the illusion |
+| C Recovery shake | 6px exponential decay starting at frame 4 (tau approx 2.2f), settling within ~12f | Amplitude must cross the visual perception threshold (perceptibility precedent) |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- B 式顿帧**必须全局**——背景滚动也要一起冻，否则读不出"时间被
-  咬住"，只像那张卡掉帧。demo 用统一 remap 帧 df 驱动所有层是命门；
-  唯闪白等"冻结期间也要发生"的效果用真实帧 f 驱动
-- 帧 remap 与 speed-ramp-freeze 同技术根，同一镜头别叠用两卡——
-  两套 remap 互相打架，节奏读作故障
-- C 式负片帧在纸墨审美的片子里非常抢戏——限高潮一次，且必须与
-  impact 音效同帧落地（拟音走 sound-design），无声的负片帧读作闪坏
-- B 式游戏化语言浓（伤害数字/combo 是明晃晃的游戏梗），产品调性
-  偏严肃时慎用
-- B 式多次顿帧后真实帧比动画时间多出累计冻结帧，排镜头预算时
-  按 `真实命中帧 = 动画命中帧 + 已冻结帧数` 折算（demo HITS_REAL）
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Variant B freeze frame **must be global**—background scrolling must freeze concurrently, otherwise time does not feel "suspended" and the card simply looks like it dropped frames. Driving all layers via a unified remapped frame `df` is essential; only effects that must continue during freeze (such as flash frames) run on raw frame `f`.
+- Frame remapping shares technology with speed-ramp-freeze; avoid stacking both cards in the same shot—conflicting remappings distort rhythm into glitching.
+- Variant C negative frames are intensely aggressive in ink-and-paper aesthetics—limit to one climax per video, and lock frame-accurately with impact SFX (foley via sound-design); a silent negative frame looks like a rendering bug.
+- Variant B carries strong arcade gaming vernacular (damage figures and combo multipliers are explicit gaming tropes); use cautiously when product tone is formal.
+- In Variant B, cumulative freeze frames push real clock frames beyond animated frame numbers; budget shots using `real_hit_frame = anim_hit_frame + accumulated_frozen_frames` (demo `HITS_REAL`).
 
-## 参考实现
+## Reference Implementation
 demos/effects/impact-feedback/
-（AnimeImpact.tsx / HitCounter.tsx）
+(AnimeImpact.tsx / HitCounter.tsx)

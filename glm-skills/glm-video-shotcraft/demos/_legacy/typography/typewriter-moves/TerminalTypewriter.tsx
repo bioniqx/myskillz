@@ -1,32 +1,32 @@
-// terminal-typewriter —— 终端打字机触发
-// 深色终端窗居中，"$ acme deploy --prod" 逐字符敲出（2f/字符，帧确定
-// substring），方块光标 12f 方波闪 → 敲完停 12f → 回车帧：整场景 6f
-// Easing.in(cubic) 急推 scale 1→3.2 向命令行推入（末 2f 加 blur）硬切到
-// FakeDashboard A 全屏，1.06→1 回稳 4f 落定。收尾真静止 ≥40f。
+// terminal-typewriter — Terminal typewriter trigger
+// Dark terminal window centered, types "$ acme deploy --prod" char by char (2f/char, frame-deterministic
+// substring), block cursor blinks in 12f square wave -> 12f hold after typing -> Enter key frame: 6f
+// Easing.in(cubic) snap-push scale 1 -> 3.2 into command line (last 2f adds blur) hard-cutting to
+// full-screen FakeDashboard A, settles 1.06 -> 1 over 4f. Settle phase true hold >=40f.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, FakeDashboard } from '../../_fixtures/Fixtures';
 
 const CMD = 'acme deploy --prod';
 
-// 时间轴（30fps，共 145f）
+// Timeline (30fps, 145f total)
 const T = {
-  typeStart: 10,                       // 开始敲字
-  typeEnd: 10 + CMD.length * 2,        // 46：18 字符 × 2f
-  enter: 58,                           // 敲完停 12f 后回车
-  pushEnd: 64,                         // 6f 急推结束，硬切帧
-  settleEnd: 68,                       // dashboard 1.06→1 回稳 4f
-  total: 145,                          // f68 起真静止 77f
+  typeStart: 10,                       // Typing starts
+  typeEnd: 10 + CMD.length * 2,        // 46: 18 characters x 2f
+  enter: 58,                           // Enter pressed after 12f pause
+  pushEnd: 64,                         // 6f snap-push ends, hard-cut frame
+  settleEnd: 68,                       // Dashboard settles 1.06 -> 1 over 4f
+  total: 145,                          // True hold 77f from f68
 };
 
-// 终端窗几何
+// Terminal window geometry
 const TW = 1100;
 const TH = 620;
 const TL = (1920 - TW) / 2; // 410
 const TT = (1080 - TH) / 2; // 230
 const TITLEBAR = 52;
 const PAD = 34;
-// 命令行基线（推入焦点）：标题栏下第二行文字中心
+// Command-line baseline (push focus): center of second text line below titlebar
 const FOCUS_X = 960;
 const FOCUS_Y = TT + TITLEBAR + PAD + 92; // ≈ 408
 
@@ -36,7 +36,7 @@ const TerminalWindow: React.FC<{ chars: number; cursorOn: boolean }> = ({ chars,
     boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
     overflow: 'hidden', boxSizing: 'border-box',
   }}>
-    {/* 标题栏：三圆点窗控（灰阶） */}
+    {/* Titlebar: 3 window control dots (grayscale) */}
     <div style={{
       height: TITLEBAR, background: '#2a2a28', borderBottom: '1px solid #3a3a38',
       display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px',
@@ -48,12 +48,12 @@ const TerminalWindow: React.FC<{ chars: number; cursorOn: boolean }> = ({ chars,
       <div style={{ margin: '0 auto', height: 10, width: 200, background: '#4a4a48', borderRadius: 5 }} />
       <div style={{ width: 72 }} />
     </div>
-    {/* 内容区 */}
+    {/* Content area */}
     <div style={{
       padding: PAD, fontFamily: 'Menlo, Consolas, monospace', fontSize: 40,
       color: '#d8d8d6', lineHeight: 1.5,
     }}>
-      {/* 一行历史输出做上下文 */}
+      {/* Single-line historical output for context */}
       <div style={{ color: '#7a7a78', fontSize: 32, marginBottom: 18 }}>~/acme-app (main)</div>
       <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'pre' }}>
         <span style={{ color: '#9f9f9d' }}>{'$ '}</span>
@@ -70,26 +70,26 @@ const TerminalWindow: React.FC<{ chars: number; cursorOn: boolean }> = ({ chars,
 export const TerminalTypewriter: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 帧确定打字：2f/字符
+  // Frame-deterministic typing: 2f/character
   const chars = Math.min(CMD.length, Math.max(0, Math.floor((frame - T.typeStart) / 2)));
 
-  // 方块光标 12f 周期方波闪（全程）
+  // Block cursor 12f square-wave blink (throughout)
   const cursorOn = frame % 12 < 6;
 
-  // 回车急推：整场景 scale 1→3.2，6f Easing.in(cubic)，向命令行推入
+  // Enter snap push: entire scene scale 1 -> 3.2, 6f Easing.in(cubic), pushes toward command line
   const pushScale = interpolate(frame, [T.enter, T.pushEnd], [1, 3.2], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.in(Easing.cubic),
   });
-  // 末 2f 运动模糊（f62–f64），硬切后摘罩=条件挂载
+  // Last 2f motion blur (f62–f64), unmounted after hard cut
   const pushBlur = interpolate(frame, [T.pushEnd - 2, T.pushEnd], [0, 10], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
 
-  // 硬切：f64 起终端场景整体卸载，dashboard 挂载
+  // Hard cut: terminal unmounts and dashboard mounts from f64
   const cut = frame >= T.pushEnd;
 
-  // dashboard 落定：1.06→1 回稳 4f
+  // Dashboard settle: 1.06 -> 1 stabilization over 4f
   const dashScale = interpolate(frame, [T.pushEnd, T.settleEnd], [1.06, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.out(Easing.cubic),

@@ -1,37 +1,38 @@
-// chip-lift-to-user-pill — Chip Lift 选中 chip 长成人名药丸（motion-lab 定稿转原生 Remotion）
-// 网格里的目标 chip 先 3 帧硬切反色成黑底白字，其余 chip 按到它的距离交错淡出并缩到 0.9；
-// 黑 chip 保持左缘不动向右生长成药丸，内部逐字打出人名并点亮绿点，再拉一条 1px 连接线
-// 接到圆形徽标，最后走逐词加深字幕。
-// 设计坐标 480×270（DesignStage 等比放大），440×240 定尺画布居中排版。
+// chip-lift-to-user-pill — Selected chip grows into user pill (ported from motion-lab to native Remotion)
+// Target chip in grid hard-cuts to inverted black background with white text over 3 frames,
+// while remaining chips stagger fade out and scale to 0.9 based on distance from target;
+// Black chip anchors its left edge and expands rightward into a pill, revealing the name letter-by-letter
+// and lighting up a green dot, then draws a 1px connector line to a circular badge, ending with progressive caption darkening.
+// Design space 480x270 (DesignStage proportional scaling), 440x240 fixed canvas centered.
 import React from 'react';
 import { DesignStage, E, lerp, seg, useT } from '../../_fixtures/Motion';
 
 export const CHIP_LIFT_TO_USER_PILL_DURATION = 150; // 5000ms @30fps
 
-// ---- 本卡共享量（浅灰瑞士极简系配色 / 字体；BG/DIM/h2r 取自 motion-lab/fx/b09.js 同批定义） ----
+// ---- Shared constants (Swiss minimal light gray palette / typography; BG/DIM/h2r from motion-lab/fx/b09.js) ----
 const SANS = '-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif';
-const BG = '#F1F1F3'; // 页面浅灰
-const INK = '#0B0B0C'; // 纯黑
-const TXT = '#111111'; // 正文黑
-const DIM = '#C9C9CE'; // 浅灰占位字
-const LINE = '#E6E6EA'; // 描边
+const BG = '#F1F1F3'; // Page light gray
+const INK = '#0B0B0C'; // Pure black
+const TXT = '#111111'; // Body text black
+const DIM = '#C9C9CE'; // Light gray placeholder text
+const LINE = '#E6E6EA'; // Stroke / border
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const h2r = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-// 颜色插值：mix(p,'#C9C9CE','#111')
+// Color interpolation: mix(p,'#C9C9CE','#111')
 const mix = (p: number, a: string, b: string) => {
   const A = h2r(a), B = h2r(b), q = clamp01(p);
   return `rgb(${Math.round(A[0] + (B[0] - A[0]) * q)},${Math.round(A[1] + (B[1] - A[1]) * q)},${Math.round(A[2] + (B[2] - A[2]) * q)})`;
 };
 
-// ---- 网格参数（与 effect.js 完全一致） ----
+// ---- Grid parameters (matches effect.js) ----
 const COLS = 4, ROWS = 3, CW = 40, CH = 24, GX = 10, GY = 9, GX0 = 8, GY0 = 70;
-const TC = 1, TR = 1; // 目标 chip 的列/行
+const TC = 1, TR = 1; // Target chip column/row
 const LABELS = ['JD', 'MK', 'CD', 'RL', 'AV', 'TP', 'KN', 'BW', 'CE', 'HR', 'LM', 'DQ'];
-// 目标 chip 左上角坐标（左缘锚定，生长时不动）
+// Target chip top-left coordinates (left edge anchored, stays fixed during growth)
 const TX = GX0 + TC * (CW + GX); // 58
 const TY = GY0 + TR * (CH + GY); // 103
-// 其余 chip：位置 + 到目标的曼哈顿距离（交错淡出用）
+// Remaining chips: position + Manhattan distance to target (for staggered fade-out)
 const OTHERS = Array.from({ length: ROWS * COLS }, (_, i) => {
   const r = Math.floor(i / COLS), c = i % COLS;
   return {
@@ -43,31 +44,31 @@ const OTHERS = Array.from({ length: ROWS * COLS }, (_, i) => {
   };
 }).filter((o) => !o.isT);
 
-const PW0 = CW, PW1 = 190; // 药丸生长的起止宽度
-const NAME_CHARS = 'Casey Doe'.split(''); // 药丸内逐字打出的人名
+const PW0 = CW, PW1 = 190; // Start and end width for pill expansion
+const NAME_CHARS = 'Casey Doe'.split(''); // Name typed character-by-character inside the pill
 
-// 结尾字幕（逐词加深语法，只用到 show + inn 两态）
+// Ending caption (progressive word darkening syntax, only uses show + inn states)
 const CAP_WORDS = 'Starting with Casey'.split(' ');
 const CAP_ST = 0.78 / CAP_WORDS.length;
 const CAP_WIN = CAP_ST * 1.5;
 
-// 徽标尺寸（白底圆 + 四角星）
+// Badge size (white circular base + four-point star)
 const BADGE_SIZE = 26;
 const BADGE_SVG = Number((BADGE_SIZE * 0.52).toFixed(1)); // 13.5
 
 export const ChipLiftToUserPill: React.FC = () => {
   const t = useT();
 
-  // A 反色硬切（3 帧感）：进度台阶化到 0 / 0.5 / 1 → 硬切质感
+  // A Invert hard-cut (3-frame feel): stepped progress to 0 / 0.5 / 1 -> hard-cut feel
   const a = seg(t, 0.04, 0.085, E.linear);
   const aq = a < 0.34 ? 0 : a < 0.67 ? 0.5 : 1;
 
-  // C 药丸从左缘生长 + 逐字 + 绿点
+  // C Pill expands from left edge + character stagger + green dot
   const g = seg(t, 0.26, 0.44, E.outCubic);
   const w = lerp(g, PW0, PW1);
   const dq = seg(g, 0.85, 1, E.outBack);
 
-  // D 连接线 → 徽标 → 字幕
+  // D Connector line -> badge -> caption
   const cw = seg(t, 0.47, 0.57, E.outQuad);
   const bp = seg(t, 0.56, 0.63, E.outCubic);
   const capShow = seg(t, 0.6, 0.66);
@@ -75,7 +76,7 @@ export const ChipLiftToUserPill: React.FC = () => {
 
   return (
     <DesignStage bg={BG}>
-      {/* 页面 + 440×240 定尺画布（居中） */}
+      {/* Page + 440x240 fixed canvas (centered) */}
       <div
         style={{
           position: 'absolute',
@@ -87,7 +88,7 @@ export const ChipLiftToUserPill: React.FC = () => {
         }}
       >
         <div style={{ position: 'absolute', left: '50%', top: '50%', width: 440, height: 240, margin: '-120px 0 0 -220px' }}>
-          {/* B 其余 chip：按到目标的曼哈顿距离交错淡出 + scale .9 */}
+          {/* B Remaining chips: staggered fade-out by Manhattan distance to target + scale 0.9 */}
           {OTHERS.map((o, i) => {
             const d0 = 0.10 + o.dist * 0.022;
             const p = seg(t, d0, d0 + 0.075, E.outQuad);
@@ -133,7 +134,7 @@ export const ChipLiftToUserPill: React.FC = () => {
             );
           })}
 
-          {/* 目标 chip（最上层）：反色硬切 → 左缘锚定向右生长成药丸 */}
+          {/* Target chip (top layer): hard-cut inversion -> left-edge anchored growth to pill */}
           <div
             style={{
               position: 'absolute',
@@ -151,7 +152,7 @@ export const ChipLiftToUserPill: React.FC = () => {
               boxShadow: '0 1px 3px rgba(0,0,0,.04)',
             }}
           >
-            {/* 原缩写标签：反色后随生长淡出 */}
+            {/* Original abbreviated label: fades out as pill expands after inversion */}
             <div
               style={{
                 position: 'absolute',
@@ -170,7 +171,7 @@ export const ChipLiftToUserPill: React.FC = () => {
             >
               CD
             </div>
-            {/* 人名逐字打出（stagger 跑在生长进度 g 上） */}
+            {/* Name typed character-by-character (staggered on growth progress g) */}
             <div
               style={{
                 position: 'absolute',
@@ -202,7 +203,7 @@ export const ChipLiftToUserPill: React.FC = () => {
                 );
               })}
             </div>
-            {/* 在线绿点：outBack 弹出，钉在药丸右缘内侧 */}
+            {/* Online green indicator: pops out with outBack, pinned inside the right edge of the pill */}
             <div
               style={{
                 position: 'absolute',
@@ -219,7 +220,7 @@ export const ChipLiftToUserPill: React.FC = () => {
             />
           </div>
 
-          {/* 1px 连接线：从药丸右缘拉到徽标 */}
+          {/* 1px connector line: runs from pill's right edge to badge */}
           <div
             style={{
               position: 'absolute',
@@ -231,7 +232,7 @@ export const ChipLiftToUserPill: React.FC = () => {
             }}
           />
 
-          {/* AI 徽标（白底圆 + 四角星） */}
+          {/* AI badge (white circular base + four-point star) */}
           <div
             style={{
               position: 'absolute',
@@ -256,7 +257,7 @@ export const ChipLiftToUserPill: React.FC = () => {
             </svg>
           </div>
 
-          {/* 结尾字幕：逐词加深（浅灰占位 → 黑），整行透明度随 show 淡入 */}
+          {/* Ending caption: word-by-word darkening (light gray placeholder -> black), line opacity fades in with show */}
           <div
             style={{
               position: 'absolute',

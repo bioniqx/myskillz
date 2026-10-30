@@ -1,30 +1,30 @@
-// integration-hub-map v5 —— 批次 14 单点节奏修正：
-// 用户意见（逐字）"动作对了，但是需要翻的时候很快，最后快完成的时候变慢下来"
-// → rotateY 0→180° 改为快翻+尾段减速：强 ease-out（cubic），前 ~40% 时间
-//   完成 ~80% 角度，尾段明显减速缓着陆；仍一次连贯完成、无分段停顿
-//   （判例："匀速"=无停顿≠字面 linear，本条已被用户亲自纠正为快翻尾缓）。
-//   90° 侧棱时刻随之提前到 ~f28，白热爆发峰值同步前移对齐。其余全保留。
-// —— 以下为 v3 说明（结构沿用）：
-// ① 开头不是"转一个角度"，而是页面整个 rotateY 翻转 180° 翻到背面，
-//    得到一张新的页面（双面卡：正面=近景旧页，背面=翻正后的新中枢页），
-//    翻到侧棱（~90°）时白热爆发吞没画面（对应截图 3/4）。
-// ② 五图标光管连上后有"输送感"：亮脉冲沿管线方向（图标→中枢）持续
-//    循环流动，直到片尾不停。
-// 运动结构对照截图：S1 近景正视可读 → S2 翻转中+拉远+泛光起 →
-// S3/S4 侧棱白热爆发+图标浮现 → S5/S6 新页转正、光管连入 → S7/S8 稳定输送。
-// —— 质感层（改版）：
-// · 相机推拉/平移从 4 段关键帧（每段 inOut，关键帧处速度归零）改为一条连续曲线，前摇缓、无顿点
-// · 面板推拉改走 CSS zoom（布局级缩放），2.05x 近景与落定 1x 文字都按原生分辨率栅格化（Q2）；正面旧页换成出版级文档
-// · 图标瓷贴弹现带一次过冲、连通后染上本管末端色的霓虹余光；品牌轮把五枚第三方 logo 换成 video-shotcraft 的五种输入
-//   （页面实拍 / 代码仓库 / 镜头配方卡 / 配乐 / 音效库）线性图标
-// · 光管：彩虹管体收细 + 白热芯 + 生长头火花，输送脉冲改成"亮头+拖尾"彗星形；管口接入瞬间一圈小涟漪
-// · 背景霓虹框去掉闪烁、减细减淡并随相机做弱视差，颗粒 + 暗角压住大面积暗场
+// integration-hub-map v5 — single-point rhythm refinement:
+// Design intent: "The motion is right, but the flip needs to start fast and decelerate toward completion"
+// -> rotateY 0->180 deg updated to fast flip + tail deceleration: strong ease-out (cubic), first ~40% duration
+//   covers ~80% rotation, tail eases out smoothly into landing; continuous motion with no stepped pauses
+//   (fast-flip deceleration curve).
+//   90 deg edge-on point advances to ~f28 with white flash peak aligned. Rest preserved.
+// --- v3 Architecture description (structure retained): ---
+// 1. Initial motion flips page rotateY 180 deg to reveal back side,
+//    revealing new page (double-sided card: front = close-up old page, back = new hub page),
+//    reaching 90 deg edge-on triggers white flash wash over screen.
+// 2. Five icon conduits connect with data flow: light pulses stream along pipelines (icon -> hub)
+//    looping continuously through end.
+// Motion structure: S1 close-up readable -> S2 flipping + zoom out + bloom rises ->
+// S3/S4 edge-on flash + icons appear -> S5/S6 new page settles + conduits connect -> S7/S8 steady flow.
+// --- Polish pass: ---
+// - Camera push/pan converted to single continuous curve, smooth lead-in without pauses
+// - Panel scale uses CSS zoom so text rasters at native resolution at both 2.05x and 1x
+// - Tile popup has overshoot spring; conduits tint tiles on connect; 5 input icons represent video-shotcraft inputs
+//   (Page Capture / Code Repo / Shot Recipe / BGM / SFX Library) line icons
+// - Conduits: slender rainbow tube + white-hot core + leading sparks, comet flow pulses with ripple at connection
+// - Background neon frames: subtle parallax with grain + vignette on dark background
 import React, { useId } from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { Grain, Vignette, bezier } from '../../_fixtures/Polish';
 import { ShotcraftWordmark } from '../../_fixtures/Brand';
 
-export const INTEGRATION_HUB_MAP_DURATION = 150; // 前摇 0.5s + 快翻 1.2s + 两拍接入 0.7s + 输送呼吸 ~2.6s
+export const INTEGRATION_HUB_MAP_DURATION = 150; // Lead-in 0.5s + fast flip 1.2s + 2-beat connect 0.7s + stream 2.6s
 
 const mulberry32 = (a: number) => () => {
   let t = (a += 0x6d2b79f5);
@@ -39,10 +39,10 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Ne
 const INK = '#1d1e25', INK2 = '#5f616b', INK3 = '#a0a2ab', HAIR = 'rgba(20,22,28,0.08)';
 const ACC = '#5b55c8';
 
-// 面板推拉走 CSS zoom（布局级缩放）而非 transform scale：任意推拉量下文字都按显示尺寸原生栅格化（Q2）
+// Panel zoom uses CSS zoom for native text rasterization at all zoom levels
 const PW = 820, PH = 520;
 
-// ---------- 中枢面板（video-shotcraft 工作区：版式对照截图 1/7，内容换成镜头/渲染的世界） ----------
+// ---------- Hub Panel (video-shotcraft workspace: layout matches design, content set in shots/renders domain) ----------
 const LIST: { icon: string; title: string; sub: string }[] = [
   { icon: '#4a9fd8', title: 'Launch Film v3', sub: 'Storyboard · 12 shots · 0:45' },
   { icon: '#4a9fd8', title: 'Shot 04 · Crash Zoom Punch', sub: 'Recipe card · Camera · 36f' },
@@ -53,7 +53,7 @@ const LIST: { icon: string; title: string; sub: string }[] = [
   { icon: '#c8c8c6', title: 'Render launch film - 1080p', sub: 'In Progress · In Render Queue · Yesterday' },
 ];
 
-// 面板外观：发丝线 + 顶部受光沿 + 投在暗场上的深影 + 一圈随 glow 增强的冷紫环境光（只给主角）
+// Panel styling: hairline border + top lit edge + deep drop shadow + cool violet ambient light
 const panelShell = (glow: number): React.CSSProperties => ({
   width: PW,
   height: PH,
@@ -75,7 +75,7 @@ const panelShell = (glow: number): React.CSSProperties => ({
 const HubPanel: React.FC<{ glow: number }> = ({ glow }) => (
   <div style={{ ...panelShell(glow), padding: '26px 30px', display: 'flex', gap: 26 }}>
     <div style={{ flex: 2 }}>
-      {/* 工作区标题 = 产品字标（亮底反色版标志） */}
+      {/* Workspace header = product wordmark */}
       <ShotcraftWordmark size={25} tone="light" color={INK} markScale={1.3} gap={10} style={{ height: 32 }} />
       <div style={{ display: 'flex', gap: 16, marginTop: 12, borderBottom: `1px solid ${HAIR}`, paddingBottom: 8 }}>
         {['All', 'Shots', 'Cards', 'Storyboards', 'Renders', 'Audio', 'Captures', 'Exports'].map((t, i) => (
@@ -127,7 +127,7 @@ const HubPanel: React.FC<{ glow: number }> = ({ glow }) => (
   </div>
 );
 
-// ---------- 翻转前的旧页面（正面）：另一张页面，翻面后才得到中枢页 ----------
+// ---------- Pre-flip initial page (front face): previous page before flipping to hub ----------
 const PARAS = [
   'A 45-second launch film for the new pricing page, cut from real page captures. video-shotcraft drafted the storyboard from twelve shot recipe cards; the beat grid is locked to the soundtrack.',
   'Camera moves are 2.5D push-ins with a crash zoom on the hero. Sound design lands a whoosh on every cut, and the first full render is already queued for review in the workbench.',
@@ -147,7 +147,7 @@ const FrontPanel: React.FC<{ glow: number }> = ({ glow }) => (
       ))}
     </div>
     <div style={{ height: 1, background: HAIR, marginTop: 18 }} />
-    {/* 关键字段 */}
+    {/* Key fields */}
     <div style={{ display: 'flex', gap: 34, marginTop: 16 }}>
       {[['Duration', '0:45'], ['Stage', 'Rendering'], ['Ships', 'Sep 28'], ['Director', 'Dana Whitfield']].map(([k, v]) => (
         <div key={k}>
@@ -170,8 +170,8 @@ const FrontPanel: React.FC<{ glow: number }> = ({ glow }) => (
   </div>
 );
 
-// ---------- 输入源图标瓷贴（video-shotcraft 自己的五种素材输入，无第三方标志） ----------
-// 线性图标：墨色描边 + 琥珀点睛（品牌唯一强调色）；48 视框、显示 54px
+// ---------- Input source icon tiles (video-shotcraft native asset inputs) ----------
+// Line icons: ink stroke + amber accent (primary brand accent); 48 viewBox, 54px display
 const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, tint }) => {
   const AMBER = '#D3923C';
   const ln = { fill: 'none', stroke: INK, strokeWidth: 3, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -179,7 +179,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
   const glyph = (() => {
     switch (kind) {
       case 'capture':
-        // 页面实拍：浏览器框 + 内容区里一枚取景角标
+        // Page Capture: browser frame with viewfinder reticle
         return (
           <svg width={54} height={54} viewBox="0 0 48 48">
             <rect x={5} y={8} width={38} height={32} rx={5} {...ln} />
@@ -191,7 +191,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
           </svg>
         );
       case 'code':
-        // 代码仓库：</> 尖括号
+        // Code Repo: </> brackets
         return (
           <svg width={54} height={54} viewBox="0 0 48 48">
             <path d="M16 14 L6 24 L16 34" {...ln} strokeWidth={3.4} />
@@ -200,7 +200,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
           </svg>
         );
       case 'recipe':
-        // 镜头配方卡：卡片 + 播放三角 + 两行配方
+        // Shot Recipe: card + play triangle + recipe lines
         return (
           <svg width={54} height={54} viewBox="0 0 48 48">
             <rect x={8} y={5} width={32} height={38} rx={6} {...ln} />
@@ -209,7 +209,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
           </svg>
         );
       case 'music':
-        // 配乐 BGM：波形
+        // Music BGM: waveform
         return (
           <svg width={54} height={54} viewBox="0 0 48 48">
             {[6, 14, 24, 32, 18, 26, 10].map((h, k) => (
@@ -217,7 +217,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
             ))}
           </svg>
         );
-      default: // sfx：音效库——扬声器 + 声波
+      default: // SFX: sound library — speaker + soundwaves
         return (
           <svg width={54} height={54} viewBox="0 0 48 48">
             <path d="M7 19 H14 L23 11 V37 L14 29 H7 Z" {...ln} />
@@ -242,7 +242,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
           'inset 0 -2px 4px rgba(20,22,40,0.08)',
           '0 0 0 1px rgba(255,255,255,0.4)',
           '0 18px 40px -12px rgba(0,0,0,0.7)',
-          // 连通后染上本管末端色的霓虹余光
+          // Neon tint from conduit terminal after connection
           `0 0 ${18 + on * 40}px ${tint}${Math.round(Math.min(1, on) * 0x70).toString(16).padStart(2, '0')}`,
         ].join(', '),
       }}
@@ -252,7 +252,7 @@ const Tile: React.FC<{ kind: string; on: number; tint: string }> = ({ kind, on, 
   );
 };
 
-// ---------- 光管（彩虹渐变霓虹管） ----------
+// ---------- Conduits (rainbow gradient neon tubes) ----------
 type Pipe = { kind: string; icon: [number, number]; path: string; len: number; tIcon: number; tPipe: number; tint: string };
 const PIPES: Pipe[] = [
   { kind: 'capture', icon: [452, 262], path: 'M 452 322 L 452 440 Q 452 480 492 480 L 552 480', len: 300, tIcon: 52, tPipe: 62, tint: '#ffd44d' },
@@ -261,11 +261,11 @@ const PIPES: Pipe[] = [
   { kind: 'music', icon: [1512, 272], path: 'M 1512 332 L 1512 440 Q 1512 480 1472 480 L 1372 480', len: 290, tIcon: 52, tPipe: 62, tint: '#ffd44d' },
   { kind: 'sfx', icon: [1702, 618], path: 'M 1640 618 L 1372 618', len: 270, tIcon: 52, tPipe: 62, tint: '#ffd44d' },
 ];
-const GROW = 9; // v8（批次 17）：用户意见"翻转过来后，5个app同时出现，然后同时连接"——两拍制：五图标 tIcon 统一 52 同帧出现，五管 tPipe 统一 62 同帧连接
-const FLOW_SPEED = 4.6; // 输送脉冲速度 px/f
-const FLOW_PERIOD = 74; // 脉冲间距（px）
+const GROW = 9; // 2-beat timing: 5 icons appear at frame 52 simultaneously, 5 conduits connect at frame 62 simultaneously
+const FLOW_SPEED = 4.6; // Flow pulse velocity px/f
+const FLOW_PERIOD = 74; // Pulse spacing (px)
 
-// 路径上按弧长取点（只含直线段与一段二次曲线，生长头火花用）
+// Arc-length point sampling on path for sparks
 const pointAt = (path: string, dist: number): [number, number] => {
   const tok = path.match(/[MLQ]|-?[\d.]+/g)!;
   let i = 0, cx = 0, cy = 0, rest = dist;
@@ -297,7 +297,7 @@ const pointAt = (path: string, dist: number): [number, number] => {
   return last;
 };
 
-// ---------- 背景霓虹矩形轮廓 ----------
+// ---------- Background neon rectangle outlines ----------
 const RECTS = Array.from({ length: 9 }, (_, i) => ({
   x: [150, 660, 1740, 250, 1150, 700, 1660, 90, 1330][i],
   y: [255, 355, 545, 850, 935, 985, 830, 555, 760][i],
@@ -307,20 +307,20 @@ const RECTS = Array.from({ length: 9 }, (_, i) => ({
   ph: NOISE[i * 3 + 2] * Math.PI * 2,
 }));
 
-// 相机：一条连续曲线（前摇段自然很慢，无关键帧顿点）
+// Camera: continuous smooth trajectory without abrupt keyframe stops
 const CAM = bezier(0.55, 0, 0.18, 1);
 
 export const IntegrationHubMap: React.FC = () => {
   const frame = useCurrentFrame();
-  // 滤镜/渐变 ID 按实例生成，多实例同场不串引（useId 的 «:» 在 url() 里非法，需清洗）
+  // Instance-unique filter/gradient IDs (sanitized for url() syntax)
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
 
-  // --- 相机/面板轨迹：近景正视旧页 → 整体翻转 180°（翻到背面=新页）+ 拉远落定 ---
+  // --- Camera/panel path: close-up initial page -> 180 deg flip -> zoom out and settle ---
   const cam = CAM(Math.min(1, Math.max(0, frame / 96)));
   const zoom = 2.05 + (1.0 - 2.05) * cam;
-  // v6（批次 15）：用户意见"翻转再快1倍"——翻面窗口 f14–84（70 帧）
-  // 压半到 f14–49（35 帧），快翻+尾段减速曲线形状保持；
-  // 90° 侧棱相应提前到 ~f21.2（easeOut=0.5 → t≈0.206）。
+  // Flip window: f14-49 (35 frames), fast flip with ease-out tail;
+  // 90 deg edge-on at ~f21.2 (easeOut=0.5 -> t ~ 0.206).
+  
   const rotY = interpolate(frame, [14, 49], [0, 180], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -329,27 +329,27 @@ export const IntegrationHubMap: React.FC = () => {
   const panX = 130 + (0 - 130) * cam;
   const panY = 120 + (25 - 120) * cam;
 
-  // v6：用户意见"中间不需要长时间的光晕，翻到中间闪一下就行"——
-  // 长光晕平台删除，改为 90° 侧棱时刻（~f21）2 帧脉冲亮闪即回落
+  // Flash timing: at 90 deg edge-on (~f21) brief 2-frame pulse flash
+  
   const bloom = interpolate(frame, [19, 21, 23, 27], [0, 1, 0.25, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
   const noise = NOISE[Math.min(frame, NOISE.length - 1)];
 
-  // 全连通后呼吸
+  // Ambient pulse after all connections established
   const allOn = Math.max(...PIPES.map((p) => p.tPipe)) + GROW;
   const breathe = frame > allOn ? 0.5 + 0.5 * Math.sin((frame - allOn) * 0.16) : 0;
   const panelGlow = bloom * 1.1 + breathe * 0.16;
 
-  // 星图元素（图标/光管/矩形）整体可见度
+  // Hub map overall visibility (icons, conduits, rects)
   const mapIn = interpolate(frame, [34, 60], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 背景层弱视差：跟随相机 18% 的位移与 10% 的推拉
+  // Background subtle parallax: 18% translation and 10% zoom tracking camera
   const bgPar = `translate(${(panX * 0.18).toFixed(2)}px, ${(panY * 0.18).toFixed(2)}px) scale(${(1 + (zoom - 1) * 0.1).toFixed(4)})`;
 
   return (
     <AbsoluteFill style={{ background: '#09080e' }}>
-      {/* 暗紫底：中心冷紫柔光 + 左下品红余光 */}
+      {/* Deep violet base: center cold violet glow + bottom-left magenta rim light */}
       <AbsoluteFill
         style={{
           background:
@@ -357,7 +357,7 @@ export const IntegrationHubMap: React.FC = () => {
         }}
       />
 
-      {/* 背景霓虹矩形轮廓：细、淡、轻微失焦，作远景衬场 */}
+      {/* Background neon rectangle outlines: thin, subtle, softly defocused */}
       <AbsoluteFill style={{ transform: bgPar, transformOrigin: '50% 50%' }}>
         {RECTS.map((r, i) => {
           const on = interpolate(frame, [36 + i * 4, 56 + i * 4], [0, 1], {
@@ -386,11 +386,11 @@ export const IntegrationHubMap: React.FC = () => {
         })}
       </AbsoluteFill>
 
-      {/* 光管层 */}
+      {/* Conduit layer */}
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, opacity: mapIn }}>
         <defs>
-          {/* 每条管一个 userSpaceOnUse 渐变（沿管起终点），彩虹沿管线方向铺开。
-              objectBoundingBox 在纯水平/垂直线上宽或高为 0 会禁用 paint，必须用户坐标。 */}
+          {/* Each conduit uses userSpaceOnUse gradient along endpoints, expanding rainbow along pipeline.
+              objectBoundingBox on pure horizontal/vertical lines has zero dimension disabling paint. */}
           {PIPES.map((p, i) => {
             const nums = p.path.match(/-?[\d.]+/g)!.map(Number);
             const [x1, y1] = [nums[0], nums[1]];
@@ -405,8 +405,8 @@ export const IntegrationHubMap: React.FC = () => {
               </linearGradient>
             );
           })}
-          {/* userSpaceOnUse：纯水平/垂直直线管的 bbox 为零，百分比滤镜区域会
-              坍缩成 0 导致整条管不渲染（左 / 上中 / 右三条直管消失） */}
+          {/* userSpaceOnUse prevents filter collapse on straight horizontal/vertical pipes */}
+              
           <filter id={`pipeGlow-${uid}`} filterUnits="userSpaceOnUse" x="0" y="0" width="1920" height="1080">
             <feGaussianBlur stdDeviation="9" result="b" />
             <feMerge>
@@ -427,7 +427,7 @@ export const IntegrationHubMap: React.FC = () => {
           if (grow <= 0) return null;
           const dashOn = p.len * grow;
           const pulse = frame > allOn ? 0.84 + 0.16 * Math.sin((frame - allOn) * 0.16 + i) : 1;
-          // 输送感：亮脉冲沿管线方向（图标→中枢）持续循环流动
+          // Flow pulses: bright pulses loop along pipeline toward hub
           const flowOffset = -((frame - p.tPipe) * FLOW_SPEED + i * 37);
           const flowIn = interpolate(frame, [p.tPipe + GROW, p.tPipe + GROW + 8], [0, 1], {
             extrapolateLeft: 'clamp',
@@ -448,7 +448,7 @@ export const IntegrationHubMap: React.FC = () => {
                   opacity={0.9 * pulse}
                 />
               </g>
-              {/* 白热芯：细而亮，管体读作"发光的管"而不是色带 */}
+              {/* White-hot core: thin and luminous giving tube appearance */}
               <path
                 d={p.path}
                 fill="none"
@@ -458,7 +458,7 @@ export const IntegrationHubMap: React.FC = () => {
                 strokeDasharray={`${dashOn} ${p.len + 60}`}
                 opacity={0.8 * pulse}
               />
-              {/* 生长头火花：只在 9f 生长期内出现 */}
+              {/* Leading sparks: visible only during 9f growth window */}
               {growing && (
                 <>
                   <circle cx={head[0]} cy={head[1]} r={16} fill="rgba(255,240,255,0.5)" filter={`url(#soft-${uid})`} />
@@ -467,7 +467,7 @@ export const IntegrationHubMap: React.FC = () => {
               )}
               {grow >= 1 && flowIn > 0 && (
                 <>
-                  {/* 彗星拖尾：较长、较暗，柔化 */}
+                  {/* Comet tail: elongated, soft fade */}
                   <path
                     d={p.path}
                     fill="none"
@@ -479,7 +479,7 @@ export const IntegrationHubMap: React.FC = () => {
                     opacity={0.38 * flowIn}
                     filter={`url(#soft-${uid})`}
                   />
-                  {/* 彗星亮头：位于拖尾前端（朝中枢方向） */}
+                  {/* Comet head: leading bright point oriented toward hub */}
                   <path
                     d={p.path}
                     fill="none"
@@ -497,14 +497,14 @@ export const IntegrationHubMap: React.FC = () => {
         })}
       </svg>
 
-      {/* 图标瓷贴：同帧弹现（一次过冲），连通后染色余光 */}
+      {/* Icon tiles: pop up in same frame (overshoot spring), tinted after connection */}
       {PIPES.map((p, i) => {
         const appear = interpolate(frame, [p.tIcon, p.tIcon + 13], [0, 1], {
           extrapolateLeft: 'clamp',
           extrapolateRight: 'clamp',
         });
         if (appear <= 0) return null;
-        const pop = Easing.bezier(0.34, 1.5, 0.64, 1)(appear); // 过冲 ~8% 再回落
+        const pop = Easing.bezier(0.34, 1.5, 0.64, 1)(appear); // Overshoot ~8% then settle
         const on = interpolate(frame, [p.tPipe + GROW - 2, p.tPipe + GROW + 8], [0, 1], {
           extrapolateLeft: 'clamp',
           extrapolateRight: 'clamp',
@@ -526,7 +526,7 @@ export const IntegrationHubMap: React.FC = () => {
         );
       })}
 
-      {/* 中枢面板：双面卡整体翻转 180°（正面旧页 → 背面新中枢页） */}
+      {/* Hub panel: double-sided card 180 deg flip (front initial page -> back hub page) */}
       <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', perspective: 1500 }}>
         <div
           style={{
@@ -538,19 +538,19 @@ export const IntegrationHubMap: React.FC = () => {
             flexShrink: 0,
           }}
         >
-          {/* 正面：翻转前的旧页面 */}
+          {/* Front: initial page before flip */}
           <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
             <div style={{ zoom }}>
               <FrontPanel glow={panelGlow} />
             </div>
           </div>
-          {/* 背面：翻正后得到的新中枢页（预转 180° 使翻完时朝向镜头且不镜像） */}
+          {/* Back: new hub page (pre-rotated 180 deg so face forward when flipped) */}
           <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
             <div style={{ zoom }}>
               <HubPanel glow={panelGlow} />
             </div>
           </div>
-          {/* 面板过曝罩：爆发期盖白 */}
+          {/* White flash overlay during burst peak */}
           <div
             style={{
               position: 'absolute',
@@ -567,7 +567,7 @@ export const IntegrationHubMap: React.FC = () => {
         </div>
       </AbsoluteFill>
 
-      {/* 管口接入：五管同帧抵达中枢边缘时各起一圈小涟漪（在面板之上） */}
+      {/* Port ripples: ripple rings emit as all five pipes reach hub edge */}
       {PIPES.map((p, i) => {
         const nums = p.path.match(/-?[\d.]+/g)!.map(Number);
         const [ex, ey] = [nums[nums.length - 2], nums[nums.length - 1]];
@@ -586,7 +586,7 @@ export const IntegrationHubMap: React.FC = () => {
         );
       })}
 
-      {/* 全屏白热眩光（S3/S4）：白核+品红/粉翼+青蓝斑 */}
+      {/* Full-screen white-hot glare: white core + magenta wings + cyan flare */}
       {bloom > 0.02 && (
         <AbsoluteFill style={{ pointerEvents: 'none' }}>
           <div
@@ -626,7 +626,7 @@ export const IntegrationHubMap: React.FC = () => {
               opacity: bloom * 0.85,
             }}
           />
-          {/* 横向紫白光痕（S2 左侧光痕），只随侧棱闪出现 */}
+          {/* Horizontal violet-white streak on edge-on flash */}
           <div
             style={{
               position: 'absolute',

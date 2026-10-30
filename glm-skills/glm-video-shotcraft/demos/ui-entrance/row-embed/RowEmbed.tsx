@@ -1,17 +1,17 @@
-// row-embed —— 内容行从空中降下、rotateX 收平、嵌入瞬间底边亮强调色缝
-// "结构化数据长进页面"的详情页/列表镜头。参考实现从 template SceneDetail 剥离：
-// 行按节拍逐条从上空飞入（perspective translateY(−120·air) + rotateX(16°·air) +
-// scale 略过冲后 press 回弹），行位先盖页面底色补丁占位、落地后消失让纹理透出，
-// 嵌入瞬间行底边 2px 强调色缝从中心向两侧展开后淡出，相机同时缓缓下摇。
-// 节拍（质感改版）：cue = 12/22/31/39/46（间隔 10→7 递减，行雨越落越快），飞行 12f，
-// 末行 58f 落地、强调色缝 66f 收尾 ≤ 镜头 68f 预算。
-// 飞行体 = 整页截图 backgroundImage 负偏移裁片（Q1：裁片不重绘内容）。
-// 质感改版要点：
-// - 空槽补丁取页面真实底色 #f9f6f1（原 #fdfcfa 偏白，五个槽位读成一整块白板），并画一道
-//   极淡的槽位虚线框——观众看得见"这里有个空位在等"，落地就是"扣进去"（Q9）；
-// - 下落改为"加速砸进槽位"（末段仍有速度）+ press 回弹，飞行段按速度加纵向运动模糊；
-// - 槽位接触影随行接近而收紧变实（近地小而实），离地时是大而虚的环境影；
-// - 相机取景改为全程被页面铺满（原起点露出页顶外空白、终点露出页底外 160px 空白）。
+// row-embed — Content rows drop from air, rotateX flattens, bottom edge flashes accent seam on embed
+// Detail/list shot conveying "structured data growing into the page". Reference implementation extracted from template SceneDetail:
+// Rows fly in from above beat-by-beat (perspective translateY(−120·air) + rotateX(16°·air) +
+// slight scale overshoot followed by press rebound), row slots initially covered by page background patches as placeholders, fading upon touchdown to reveal texture,
+// 2px accent seam at row's bottom expands from center to sides on touchdown then fades out, while camera tilts down slowly.
+// Rhythm (revised polish): cue = 12/22/31/39/46 (intervals decrease 10→7, row cascade accelerates), flight 12f,
+// final row lands at 58f, accent seam wraps up at 66f ≤ shot budget 68f.
+// Flying element = whole-page screenshot cropped via negative backgroundImage offset (Q1: cropped slice without re-rendering content).
+// Polish revision highlights:
+// - Empty slot patch samples true page background #f9f6f1 (previous #fdfcfa was too bright, reading 5 slots as a monolithic white board), accented with
+//   faint dashed slot outline — viewers perceive "a slot waiting here", landing feels like "snapping into place" (Q9);
+// - Descent changed to "accelerating into slot" (retaining terminal velocity) + press rebound, with vertical motion blur proportional to speed during flight;
+// - Slot contact shadow tightens and darkens as row nears (small & sharp close to surface), diffused ambient shadow while airborne;
+// - Framing framed edge-to-edge by page throughout (original start revealed void above header; finish revealed 160px void below footer).
 import React from 'react';
 import { AbsoluteFill, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import { PageCam2D, CamKey2D } from '../../_fixtures/PageCam2D';
@@ -22,10 +22,10 @@ export const ROW_EMBED_DURATION = 68;
 
 const DETAIL_H = layout.detail.pageH;
 const rows = layout.detail.rows;
-const PAGE_BG = '#f9f6f1'; // 截图里内容区的真实底色（逐像素采样）
+const PAGE_BG = '#f9f6f1'; // True background color of content area from screenshot (per-pixel sampled)
 
-// 起点 cy=500@1.12：页顶刚好出画；终点 cy=740@1.25：边下摇边微推近，页底贴住画框下沿，
-// 画框上沿落在「编辑元数据」分隔线与「项目资料」之间（不切半行字）
+// Start cy=500@1.12: Page top just moves out of frame; end cy=740@1.25: pans down while slightly pushing in, page bottom hugs viewport lower edge,
+// Viewport upper edge lands between "Edit Metadata" divider and "Project Info" (avoiding half-cut text)
 const DETAIL_CAM: CamKey2D[] = [
   { frame: 0, cx: 960, cy: 500, zoom: 1.12 },
   { frame: 68, cx: 960, cy: 740, zoom: 1.25 },
@@ -33,7 +33,7 @@ const DETAIL_CAM: CamKey2D[] = [
 
 const CUES = [12, 22, 31, 39, 46];
 const FLY = 12;
-// 下落：起步慢、末段仍带速度砸进槽位（终点斜率≈1.25），由 press 回弹吸收冲击
+// Descent: slow start, slams into slot with residual velocity (terminal slope≈1.25), impact absorbed by press rebound
 const FLY_EASE = Easing.bezier(0.5, 0, 0.8, 0.75);
 const detailSrc = staticFile('textures/live/detail-full.png');
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
@@ -50,9 +50,9 @@ export const RowEmbed: React.FC = () => {
           const cue = CUES[i];
           const land = cue + FLY;
 
-          // 空槽补丁（真实底色）+ 虚线槽位框，落地后 2f 消失
+          // Empty slot patch (true background color) + dashed slot box, disappears 2f after landing
           const patchOpacity = interpolate(frame, [land, land + 2], [1, 0], clamp);
-          // 槽位框在行飞来时略微提亮（"这里"），落地即随补丁消失
+          // Slot box subtly brightens when row approaches ("here"), vanishing with patch upon landing
           const slotHint = interpolate(frame, [cue - 6, cue + 4], [0.55, 1], clamp);
 
           // flying row: texture-crop dropping in from the air
@@ -66,7 +66,7 @@ export const RowEmbed: React.FC = () => {
               frame < land
                 ? 1.06 - 0.065 * p
                 : interpolate(frame, [land, land + 4], [0.995, 1], { ...clamp, easing: Easing.out(Easing.quad) });
-            // 纵向速度（页面 px/帧）→ 运动模糊，落地为 0
+            // Vertical velocity (page px/frame) → motion blur, drops to 0 upon landing
             const vy = 120 * (airOf(frame - 0.5, cue) - airOf(frame + 0.5, cue));
             const mb = frame < land ? Math.min(3.2, vy * 0.22) : 0;
             flyer = (
@@ -92,7 +92,7 @@ export const RowEmbed: React.FC = () => {
                     backgroundImage: `url(${detailSrc})`,
                     backgroundSize: `1920px ${DETAIL_H}px`,
                     backgroundPosition: `-${r.x}px -${r.y}px`,
-                    // 两层影：离地时大而虚的环境影 + 随高度变淡的近地影；顶部 1px 受光
+                    // Two shadow tiers: large diffused ambient shadow when airborne + ground contact shadow fading with elevation; top 1px highlight
                     boxShadow:
                       `inset 0 1px 0 rgba(255,255,255,${(0.9 * air).toFixed(3)}), ` +
                       `0 0 0 1px rgba(60,45,25,${(0.07 * air).toFixed(3)}), ` +
@@ -102,7 +102,7 @@ export const RowEmbed: React.FC = () => {
                 />
               </div>
             );
-            // 槽位接触影：行越近越实越小（落地前 4f 最浓），落地后 3f 淡掉
+            // Slot contact shadow: sharpens and shrinks as row nears (densest 4f before landing), fades over 3f after landing
             const near = interpolate(air, [0, 0.5], [1, 0], clamp);
             const contactOp = frame < land ? near * 0.5 : interpolate(frame, [land, land + 3], [0.5, 0], clamp);
             contact = (
@@ -118,7 +118,7 @@ export const RowEmbed: React.FC = () => {
           }
 
           // embed flash: 2px amber seam at the row's bottom edge, expanding from
-          // the center on touchdown, then fading out（两端羽化，裁在行宽内）
+          // the center on touchdown, then fading out (feathered ends, clipped within row width)
           let seam: React.ReactNode = null;
           if (frame >= land && frame < land + 8) {
             const spread = interpolate(frame, [land, land + 5], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });

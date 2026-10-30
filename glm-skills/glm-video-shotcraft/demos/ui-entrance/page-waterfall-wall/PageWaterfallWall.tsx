@@ -1,24 +1,24 @@
-// page-waterfall-wall —— 页面瀑布墙：真实页面截图切片排成 3 列，在后仰墙面上差速反向无限滚动，
-// 外层镜头缓推，做"内容多到流不完"的一览。
-// 质感层（改版）：
-// · 素材只用卡片级切片（card1–10，列间不复用）；原先混入的整页空白截图 projects-empty 与
-//   2032×88 的搜索条细长切片在墙里读作空白卡 / 碎条，已去掉
-// · 3 列 420px 列宽、整墙收进画内（原 560 列宽 × 1.2 两侧列被画框切掉一半，左右列文字透视歪斜严重）
-// · 墙的放大与缓推改走 CSS zoom（布局级缩放），切片文字按显示尺寸栅格化（Q2），不再被放大发软
-// · 纯色 #101014 + 实色渐变遮罩换成：冷调暗场柔光底（墙后一团微弱靛蓝余光）+ 上下羽化
-//   （渐变取底色上下缘的实际色）+ 顶部远端轻微压暗（空气透视）+ 暗角 + 颗粒
-// · 切片卡加发丝线与顶部受光沿，投影改两层（接触影 + 环境影）
-// 素材路径统一读 textures/live/（与工作台 / 模板 public 一致）。
+// page-waterfall-wall — Page Waterfall Wall: Real page screenshot slices arranged into 3 columns, infinitely scrolling in alternating directions at differential speeds on a tilted wall,
+// with outer camera slow push-in, offering an overview of "endlessly flowing content".
+// Polish layer (revision):
+// · Assets use only card-level slices (card1–10, no inter-column reuse); previously mixed full-page blank screenshot projects-empty and
+//   2032x88 search bar slivers (which read as blank cards / fragmented strips on the wall) have been removed
+// · 3 columns of 420px width, fitting entire wall within frame (original 560px width x 1.2 cut side columns in half, heavily distorting perspective on outer text)
+// · Wall scaling and slow push-in rely on CSS zoom (layout-level scaling), rasterizing card text at display size (Q2), preventing blurry upscaling
+// · Solid #101014 + opaque gradient mask replaced with: cool-toned dark soft-light backdrop (subtle indigo afterglow behind wall) + top/bottom feathering
+//   (gradients match actual edge colors of background) + slight darkening at top distant edge (aerial perspective) + vignette + grain
+// · Card slices gain hairline border and top specular edge, shadows upgraded to two tiers (contact shadow + ambient shadow)
+// Asset paths standardized to textures/live/ (matching workbench / template public).
 import React from 'react';
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Backdrop, Grain } from '../../_fixtures/Polish';
 import { VerticalTicker, TickerColumn } from './VerticalTicker';
 
-export const PAGE_WATERFALL_WALL_DURATION = 150; // 5s（无限循环体，按段落需要裁）
+export const PAGE_WATERFALL_WALL_DURATION = 150; // 5s (infinite loop, trim according to section needs)
 
 const BG = '#0d0e13';
-const ZOOM = 1.2; // 补透视收缩的底值（配方 scale 1.2）
-const PUSH = 0.06; // 镜头缓推 1→1.06
+const ZOOM = 1.2; // Baseline zoom compensating for perspective foreshortening (recipe scale 1.2)
+const PUSH = 0.06; // Camera slow push 1→1.06
 
 const shot = (file: string) => (
   <div
@@ -31,7 +31,7 @@ const shot = (file: string) => (
     }}
   >
     <Img src={staticFile(`textures/live/${file}`)} style={{ width: '100%', display: 'block' }} />
-    {/* 发丝线 + 顶部受光沿（裁在圆角内） */}
+    {/* Hairline border + top specular edge (clipped within rounded corners) */}
     <div
       style={{
         position: 'absolute', inset: 0, borderRadius: 20, pointerEvents: 'none',
@@ -41,7 +41,7 @@ const shot = (file: string) => (
   </div>
 );
 
-// 3 列差速反向（配方卡参数：loop 12/9/14s，中列反向）；10 张卡片切片 4/3/3 分配，列间不复用
+// 3 columns at differential speeds in alternating directions (recipe card params: loop 12/9/14s, center column reversed); 10 card slices distributed 4/3/3, no reuse across columns
 export const buildColumns = (loops: [number, number, number]): TickerColumn[] => [
   {
     items: ['card1.png', 'card2.png', 'card3.png', 'card10.png'].map(shot),
@@ -60,17 +60,17 @@ export const buildColumns = (loops: [number, number, number]): TickerColumn[] =>
   },
 ];
 
-// 上下羽化：渐变色取暗场底在上 / 下缘的实际色（远端顶部羽化更长），行软进软出
+// Top/bottom feathering: gradients sample actual colors at stage top/bottom edges (longer feathering on distant top edge), soft row enter/exit
 const FADE_TOP = 'linear-gradient(to bottom, #111319 0%, rgba(17,19,25,0.85) 10%, rgba(17,19,25,0) 30%)';
 const FADE_BOTTOM = 'linear-gradient(to top, #08090c 0%, rgba(8,9,12,0.8) 8%, rgba(8,9,12,0) 22%)';
 
 const Wall: React.FC<{ loops: [number, number, number]; zoom: number }> = ({ loops, zoom }) => (
   <AbsoluteFill>
-    {/* zoom 让墙按显示尺寸布局与栅格化；内部 1920/zoom 宽的 css 画布居中排 3 列 */}
+    {/* zoom ensures wall is laid out and rasterized at display resolution; internal 1920/zoom CSS canvas centers 3 columns */}
     <div style={{ position: 'absolute', left: 0, top: 0, width: 1920 / zoom, height: 1080 / zoom, zoom }}>
       <VerticalTicker columns={buildColumns(loops)} backgroundColor="transparent" maskHeight={0} scale={1} columnWidth={420} gap={26} />
     </div>
-    {/* 空气透视：墙的远端（画面上部）轻微压暗 */}
+    {/* Aerial perspective: subtle darkening at distant wall edge (upper frame) */}
     <AbsoluteFill style={{ background: 'linear-gradient(to bottom, rgba(13,14,19,0.5) 0%, rgba(13,14,19,0) 50%)', pointerEvents: 'none' }} />
     <AbsoluteFill style={{ background: FADE_TOP, pointerEvents: 'none' }} />
     <AbsoluteFill style={{ background: FADE_BOTTOM, pointerEvents: 'none' }} />
@@ -80,7 +80,7 @@ const Wall: React.FC<{ loops: [number, number, number]; zoom: number }> = ({ loo
 export const PageWaterfallWall: React.FC = () => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  // 镜头缓推寄生在外层，墙自身循环、镜头单向（线性铺满全镜，配方定义）
+  // Camera push-in hosted on outer layer: wall loops continuously, camera moves monotonically (linear span across entire shot, recipe definition)
   const push = interpolate(frame, [0, durationInFrames], [1, 1 + PUSH], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
@@ -93,7 +93,7 @@ export const PageWaterfallWall: React.FC = () => {
   );
 };
 
-// 接缝自检用：短 loop（3s=90f）、无镜头推，f0 与 f90 应逐像素一致
+// Seam self-test: short loop (3s=90f), no camera push; f0 and f90 should match pixel-for-pixel
 export const SeamTest: React.FC = () => (
   <AbsoluteFill style={{ backgroundColor: BG }}>
     <Wall loops={[3, 3, 3]} zoom={ZOOM} />

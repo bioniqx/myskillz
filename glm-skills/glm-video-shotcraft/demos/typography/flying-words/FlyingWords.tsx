@@ -1,22 +1,22 @@
-// flying-words — 词语纵深隧道：关键词在远处纵深生成，沿 z 轴向相机飞来擦身而过，透明度按
-// [0,1,0.5,0.2,0] 生命周期曲线变化；相机不动、元素动，spawn 完全确定性、跑满 2 整圈首尾无缝。
+// flying-words — depth tunnel typography: keywords spawn at deep z-distance, flying toward camera along z-axis,
+// opacity follows lifecycle curve [0,1,0.5,0.2,0]; stationary camera, deterministic spawn, seamless 2-cycle loop.
 //
-// 第二轮重设计（深蓝夜 · 光速隧道 + 前景字标）：
-// - look = midnight（深蓝黑 · 电光蓝）。按 1920×1080 原生作画（不再 480×270 放大），透视手算
-//   s = P/(P−z)（P=4400，z −7000→+3200，与 CSS perspective 逐点等价），所以每个元素都能按屏幕速度做效果。
-// - 三层纵深：① 隧道壁——10 道扁椭圆发丝环同速朝镜头推进（隧道的"结构"，近处变粗变淡出画）；
-//   ② 光速流线——56 粒尘埃画成沿径向拉长的线段（长度 = 本帧屏幕位移，越近越长），速度感的主力；
-//   ③ 22 个产品能力关键词：黄金角铺位、远小近大、远端大气雾失焦、近端按速度沿运动方向拖出 6 层渐虚残影
-//   （text-shadow 方向拖尾，比全屏 SVG 滤镜便宜得多）+ 冲到眼前时失焦。
-// - 字的层次：冷白三阶 sans 700 为主，6 个关键词用衬线斜体，4 个强调词电光蓝带泛光（光只给强调词）。
-// - 隧道尽头：中心电光蓝光晕按 2 次/片呼吸（与 CYCLES 对齐），整条隧道以 sin(2πt) 极缓滚转 ±2.5°，
-//   画面无一刻静止但不晃（滚转是周期的，首尾一致）。
-// - 前景：中段生命曲线压到 0.5 就是为前景让位——demo 在正中压一组静态字标（mono 眉题 + 112px 标题 +
-//   一层径向暗幕；飞进字标椭圆区的词压到 20%），证明隧道作背景层不打架；字标静止 = 循环无缝。
-// - 品牌：眉题 = 镜刻标志 + video-shotcraft 小字，标题 = 品牌短句；词表混入 video-shotcraft 的能力词。
+// Redesign (deep blue night: lightspeed tunnel + foreground wordmark):
+// - look = midnight (dark blue-black, electric blue). Native 1920x1080 rendering with explicit perspective math:
+//   s = P/(P-z) (P=4400, z -7000->+3200), allowing per-element screen-velocity effects.
+// - Three depth layers: 1) Tunnel walls — 10 hairline elliptical rings advancing toward camera (tunnel structure);
+//   2) Lightspeed streaks — 56 radial particle streaks (length proportional to screen velocity);
+//   3) 22 capability keywords: golden angle layout, distance scale/fog, directional 6-layer text-shadow trails near camera
+//   plus defocus on near-camera flyby.
+// - Typographic hierarchy: cool white sans 700 base, 6 serif italic keywords, 4 electric blue accented words with bloom.
+// - Vanishing point: center electric blue glow breathes 2 cycles per video, tunnel rolls +/-2.5 deg along sin(2*pi*t).
+//   Continuous motion with seamless cyclic roll.
+// - Foreground: lifecycle curve dips to 0.5 to yield to centered static mark (mono kicker + 112px title +
+//   radial vignette; keywords passing through center dim to 20%), demonstrating background viability.
+// - Brand: kicker = ShotcraftMark + video-shotcraft, title = brand motto; keywords reflect shotcraft capabilities.
 //
-// 时间轴：t = frame / DURATION（末帧的下一帧 = 第 0 帧，真正无缝 loop）；CYCLES = 2 整圈。
-//   每个元素 u = (t·CYCLES + 相位) mod 1：0 远处生成 → 0.25 亮到满 → 0.6 压到半透 → 1 擦身出画。
+// Timeline: t = frame / DURATION (seamless cyclic loop); CYCLES = 2.
+//   Per-element u = (t*CYCLES + phase) mod 1: 0 distant spawn -> 0.25 full brightness -> 0.6 mid dip -> 1 exit.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { FONT } from '../../_fixtures/Polish';
@@ -26,9 +26,9 @@ import { BRAND, PITCH, ShotcraftMark } from '../../_fixtures/Brand';
 export const FLYING_WORDS_DURATION = 180; // 6000ms @30fps
 
 const L = LOOKS.midnight;
-const CYCLES = 2; // 整数圈 → 首尾一致
+const CYCLES = 2; // Integer cycles for seamless loop
 
-// 关键词表：换成项目自己的关键词即可，词数/字长接近就不影响节奏（这里是 video-shotcraft 的能力词）
+// Capability keyword vocabulary (customizable per project)
 const WORDS = ['Timeline', 'Keyframes', 'Easing', 'Camera', 'Depth', 'Parallax', 'Motion blur', 'Springs',
   'Layers', 'Shot cards', 'Typography', 'Lighting', 'Grain', 'Remotion', 'Beat grid', 'Stagger',
   'Transitions', 'Color', 'Workbench', 'Audio sync', 'Storyboard', 'Orbit'];
@@ -37,7 +37,7 @@ const ACCENT = new Set([3, 7, 12, 19]); // Camera / Springs / Grain / Audio sync
 const SERIF_IDX = new Set([1, 5, 10, 14, 17, 21]);
 const INKS = ['#f2f5ff', '#c3cbe2', '#8a95b5'];
 
-const P = 4400; // 透视距离
+const P = 4400; // Perspective distance
 const Z0 = -7000;
 const Z1 = 3200;
 const CX = 960;
@@ -49,7 +49,7 @@ const rand = (n: number) => {
 };
 
 const ITEMS = WORDS.map((w, i) => {
-  // 黄金角铺开 + 半径避开正中（近处不堆成一团）
+  // Golden-angle distribution avoiding center cluster
   const a = i * 2.39996 + rand(i * 7 + 1) * 0.8;
   const r = 330 + rand(i * 13 + 2) * 660;
   const accent = ACCENT.has(i);
@@ -69,7 +69,7 @@ const DUST = Array.from({ length: 56 }, (_, i) => {
 
 const RINGS = Array.from({ length: 10 }, (_, k) => ({ ph: k / 10 }));
 
-// 生命周期透明曲线 [0,1,0.5,0.2,0] @ [0,0.25,0.6,0.85,1]，分段线性
+// Lifecycle opacity curve [0,1,0.5,0.2,0] piecewise linear
 const OP = [0, 1, 0.5, 0.2, 0];
 const OT = [0, 0.25, 0.6, 0.85, 1];
 const curve = (u: number) => {
@@ -79,7 +79,7 @@ const curve = (u: number) => {
   return 0;
 };
 
-// z 线性推进；drift = 0.5 + u·1.35（远处收拢、越近越向外散开）；roll = 整条隧道的滚转角
+// Linear z advancement; drift = 0.5 + u*1.35; roll = tunnel angular rotation
 const project = (x: number, y: number, u: number, roll: number, drift = true) => {
   const z = Z0 + (Z1 - Z0) * u;
   const d = drift ? 0.5 + u * 1.35 : 1;
@@ -93,20 +93,20 @@ export const FlyingWords: React.FC = () => {
   const frame = useCurrentFrame();
   const t = frame / FLYING_WORDS_DURATION;
   const roll = (2.5 * Math.PI / 180) * Math.sin(t * Math.PI * 2);
-  const du = CYCLES / FLYING_WORDS_DURATION; // 每帧 u 的增量
+  const du = CYCLES / FLYING_WORDS_DURATION; // Delta u per frame
   const glowB = 0.82 + 0.14 * Math.sin(t * Math.PI * 4);
 
   return (
     <AbsoluteFill>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.5 }} fill={null} intensity={0.5} vignette={0.7} grain={0.08}>
-        {/* 隧道尽头光晕：呼吸 2 次/片，与 CYCLES 对齐 */}
+        {/* Tunnel terminus glow: breathes twice per loop */} 
         <div style={{
           position: 'absolute', left: CX - 520, top: CY - 360, width: 1040, height: 720, borderRadius: '50%', opacity: glowB,
           background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha(L.light, 0.42)} 0%, ${alpha(L.light, 0.12)} 38%, ${alpha(L.light, 0)} 70%)`,
         }} />
       </Stage>
 
-      {/* ① 隧道壁 + ② 光速流线（一张 SVG） */}
+      {/* 1. Tunnel walls + 2. Lightspeed streaks */} 
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
         {RINGS.map((rg, k) => {
           const u = (t * CYCLES + rg.ph) % 1;
@@ -134,13 +134,13 @@ export const FlyingWords: React.FC = () => {
         })}
       </svg>
 
-      {/* ③ 关键词：远端雾、中段清晰、近端方向拖尾 + 失焦 */}
+      {/* 3. Keywords: distant fog, mid clarity, near directional trail + blur */} 
       {ITEMS.map((it, i) => {
         const u = (t * CYCLES + it.ph) % 1;
         const p = project(it.x, it.y, u, roll);
         const q = project(it.x, it.y, Math.max(0, u - du), roll);
-        const vx = p.sx - q.sx, vy = p.sy - q.sy; // 屏幕速度 px/帧
-        // 前景字标区（椭圆）里的词压到 20%：像被暗幕遮住，不和标题打架
+        const vx = p.sx - q.sx, vy = p.sy - q.sy; // Screen velocity px/frame
+        // Keywords dimmed to 20% within foreground title ellipse zone
         const k = ((p.sx - CX) / 760) ** 2 + ((p.sy - CY) / 190) ** 2;
         const occl = k < 1 ? 0.2 + 0.8 * k * k : 1;
         const op = curve(u) * occl;
@@ -171,7 +171,7 @@ export const FlyingWords: React.FC = () => {
         );
       })}
 
-      {/* 前景字标：静态（循环无缝），一层极淡径向暗幕把它和隧道分开 */}
+      {/* Foreground title: static for seamless loop, separated by subtle radial vignette */}
       <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
         <div style={{
           position: 'absolute', left: CX - 760, top: CY - 260, width: 1520, height: 520, borderRadius: '50%',

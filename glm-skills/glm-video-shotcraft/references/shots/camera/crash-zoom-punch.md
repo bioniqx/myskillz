@@ -1,52 +1,37 @@
 ---
 name: crash-zoom-punch
-一句话: 全景一拍急推到目标特写（6f），落位二选一——过冲回弹（弹性）或撞停震屏（重量）
-适用: 功能段"点名"镜头——把观众视线一拍按到目标卡/模块上；强调级用撞停
-时长: 约 0.5s 动作 + 前后 hold（动作 6–11f，前 hold ≥30f 建立全景、后 hold ≥45f 读特写）
-能量: 高（瞬时冲击，非持续高能）
-标签: effects
+summary: A six-frame push races from a wide view to a target close-up, ending with either an elastic overshoot or a heavy impact stop.
+use: Feature section "calling out" shot—pins the viewer's gaze instantly onto the target card/module; use impact stop for highest emphasis level
+duration: ~0.5s action + holds before and after (6–11f action, hold >=30f before to establish overview, hold >=45f after to read close-up)
+energy: High (instant impact, not sustained high energy)
+tags: effects
 ---
 
-## 意图
-慢推近（spotlight-hero-card）是"请看"，急推是"看这个！"——一拍之内
-从全景砸到特写，视线没有选择余地。落位质感分两款：回弹是弹性
-（"看这个"），撞停震屏是重量（"就是它"），按强调级选。
+## Intention
+A slow push-in (spotlight-hero-card) says "please look", while a crash zoom says "LOOK AT THIS!"—slamming from overview to close-up in a single beat, leaving the viewer no choice. Landing styles come in two variants: elastic rebound conveys bounce ("look here"), while impact shake conveys weight ("this is the one"), chosen by emphasis level.
 
-## 动效核心
-- zoom 6f ease-in 急加速（如 1→2.6），cx/cy 同步 ease-in 收敛到目标中心
-- 回弹款：zoom 过冲后 5f 回收 3–6%（2.6→2.45）
-- 撞停款：到位帧起机位高频抖 + 指数衰减（amp 14px、τ≈1.8f、6f 收干），
-  不回弹
-- 运动模糊**只包急推段**（撞停震屏段保持清晰抖动）：demo 用自写时间采样
-  （快门 ≈200°，子帧逐层 opacity 1/(i+1) 等权叠加，子帧数按本帧位移自适应、
-  上限 40），采样按"回波间距 ≤ 字高"配（轮 A 判例）；`<CameraMotionBlur>`
-  亦可，但其半透明叠层在近静止帧会让底色发灰偏黄。CrashZoomReal 的页面小字只有 ~14px，
-  回波间距压到 ≤6px（上限 44 层），高速帧再按间距给每层补 ≤4px 微模糊，把离散回波抹成连续拖影
-- 急推前 6–8f 预备回拉 ~3–4%（先退后冲），全景 hold 段给 ~2–3% 的极缓 creep
-- 回弹款 demo（CrashZoomReal）的舞台化：暖黑 ember 舞台上的浏览器窗口（后仰 11°、橙色背光 +
-  地面反光），急推前四只橙色角标从外扩 150px 收拢锁定目标卡（先在全景里点名），急推同曲线把后仰
-  拉正；到位帧一记暖色曝光闪（指数衰减 ~8f），周边压暗 86% + 目标卡轮廓光；回弹收干后相机平滑
-  左移 320px 把卡让到左侧，右栏落一组大号读数（232px 数字 + 说明），尾帧是完整海报
-- 撞停款 demo（CrashImpactReal）的舞台化：lime 暗场"战术 HUD"——真实页面裁成一块正视监视屏、舞台铺淡网格；
-  荧光取景框在全景里扫描跳格（card1 → card5 → card4，各 8f snappy）、28f 收紧锁定并亮出 LOCK 标签后才急推
-  （0.76→2.35，子帧间距 ≤8px、上限 36）；到位帧是"冲击帧"——卡外 1f 荧光 → 1f 余辉 → 近黑（全片唯一一处整画面冲击），
-  两道荧光冲击波环从卡缘外扩；卡不浮起不发光（砸实）。震屏收干后一道扫描线扫过卡面一次，左右两栏 HUD 读数
-  （TARGET / OWNER / STATE 与 250px 等宽「P0」）错峰落位，126f 尾段 hold 42f
+## Motion Core
+- Zoom accelerates rapidly with 6f ease-in (e.g. 1 -> 2.6), while cx/cy simultaneously ease-in to converge on the target center.
+- Rebound variant: zoom overshoots, then recovers 3–6% over 5f (2.6 -> 2.45).
+- Impact variant: high-frequency camera shake + exponential decay starting from the impact frame (amp 14px, tau ~ 1.8f, settling dry in 6f), no rebound.
+- Motion blur **only covers the crash zoom phase** (impact shake stays crisp): the demo uses custom time-sampling (shutter ~ 200 deg, subframes stacked with equal weighting opacity 1/(i+1), subframe count adapting to current frame displacement, capped at 40), configured with "echo spacing <= text height" (Round A precedent); `<CameraMotionBlur>` also works, but its semi-transparent stacking makes background colors look muddy/yellowish on near-static frames. CrashZoomReal's small page text is only ~14px, so echo spacing is compressed to <=6px (up to 44 layers), and high-speed frames add <=4px micro-blur between layers to smooth discrete echoes into continuous streaks.
+- 6–8f anticipation pull-back ~3–4% before the push (recoil before the charge); wide hold phase adds ~2–3% ultra-slow creep.
+- Rebound variant demo (CrashZoomReal) staging: browser window on a warm black ember stage (tilted back 11 deg, orange backlight + floor reflection); before the crash zoom, four orange corner brackets converge from +150px out to lock the target card (calling it out in the wide view first); the crash zoom uses the same curve to pull the tilt back to square; on the landing frame, a warm exposure flash fires (exponential decay ~8f) with 86% perimeter darkening + target card rim light; after the rebound settles, the camera smoothly pans left 320px to move the card aside, revealing large readouts on the right rail (232px numbers + captions), ending on a complete poster frame.
+- Impact variant demo (CrashImpactReal) staging: lime dark tactical HUD—a real page cropped into a front-facing monitor screen on a subtle grid stage; a fluorescent reticle scans and hops in the wide view (card1 -> card5 -> card4, 8f snappy each), tightens over 28f to lock and displays a LOCK tag before the crash zoom fires (0.76 -> 2.35, subframe spacing <=8px, capped at 36); the impact frame is a true shock frame—1f fluorescent flash outside the card -> 1f afterglow -> near black (the only full-screen impact in the entire film), with two fluorescent shockwave rings expanding from the card perimeter; the card does not float or glow (slammed solid). After shake settles, a scanline sweeps across the card face once, and left/right HUD readouts (TARGET / OWNER / STATE and a 250px monospace "P0") stagger into place, holding for 42f at frame 126.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 急推时长 | 6f（4–8f） | >10f 读作普通推近，冲击感消失 |
-| 目标 zoom | 2.4–2.8 | 终点构图以目标卡占画面 60–75% 为准 |
-| 回弹幅度 | zoom 的 3–6% | 过大读作弹簧玩具 |
-| 震屏包络 | 14px·e^(−t/1.8) | 幅度须过肉眼阈值（可感性判例），>20px 读作故障 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Crash zoom duration | 6f (4–8f) | >10f reads like a standard push-in, losing impact |
+| Target zoom | 2.4–2.8 | Final framing should place the target card at 60–75% of screen area |
+| Rebound amplitude | 3–6% of zoom | Too large reads like a bouncy toy |
+| Shake envelope | 14px * e^(-t/1.8) | Amplitude must exceed visual threshold (perceptibility precedent); >20px reads like a glitch |
 
-## 已知坑
-- 终点必须是高清纹理槽位（card4-hires 级）——急推后全程特写它，
-  低倍截图糊字（Q2）；终点先按 Q2 的高分辨率栅格化技法处理
-- 两款别混用：回弹后再震屏读作穿帮；一支片急推 ≤2 次（P4 手法去重精神）
-- 参数经占位素材调校转正，非实战定稿，首次实战后回验
+## Known Pitfalls
+- The endpoint must be a high-resolution texture slot (card4-hires level)—it remains in tight close-up after the zoom; low-res screenshots blur text (Q2); prepare the endpoint using Q2 high-resolution rasterization first.
+- Do not mix the two variants: rebounding followed by screen shake looks like a mistake; use crash zoom <=2 times per video (P4 deduplication principle).
+- Parameters were calibrated on placeholder assets and require re-verification upon first production use.
 
-## 参考实现
+## Reference Implementation
 demos/camera/crash-zoom-punch/
-（CrashImpactReal.tsx / CrashZoomReal.tsx）
+(CrashImpactReal.tsx / CrashZoomReal.tsx)

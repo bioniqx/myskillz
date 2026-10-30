@@ -1,21 +1,21 @@
-// confetti-crossfire —— 双侧礼炮交叉喷洒
-// 中央大 KPI 卡 scale 落定（f0–14），揭晓帧 f16 左下+右下两门炮各射 50 颗矩形彩屑：
-// 闭式弹道（初速 ~18px/f + spread 55° + 重力 + decay 0.9 的位移闭式解），每帧翻转 8–15°，
-// 灰阶为主 + 1/3 琥珀。全部彩屑 ~f100 前落出画外（越界即条件卸载），结尾真静止 ≥55f。
-// 帧确定性：sin 散列伪随机派生每颗初速/角度/翻转率，弹道 = 纯 age 的函数。
+// confetti-crossfire — Dual-cannon confetti crossfire
+// Center giant KPI card scales down and settles (f0–14); at reveal frame f16, dual cannons at bottom-left and bottom-right each fire 50 rectangular confetti flakes:
+// Closed-form ballistic trajectory (initial velocity ~18px/f + spread 55° + gravity + decay 0.9 displacement closed-form solution), tumbling 8–15° per frame,
+// mostly grayscale with 1/3 amber. All confetti falls off-screen before ~f100 (unmounted on bounds exit); tail holds completely static >= 55f.
+// Frame determinism: sin-hash pseudo-randomness derives per-particle initial velocity/angle/flip rate; trajectory = pure function of age.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, TitleBlock } from '../../_fixtures/Fixtures';
 
 const AMBER = '#b45309';
-const FIRE = 16; // 揭晓帧 = 发射帧
+const FIRE = 16; // Reveal frame = launch frame
 const DECAY = 0.9;
-const GRAV = 1.5; // px/f² （等效重力；decay 下终端落速 = GRAV/(1-d) = 15px/f）
+const GRAV = 1.5; // px/f² (equivalent gravity; terminal velocity under decay = GRAV/(1-d) = 15px/f)
 
 const frac = (x: number) => x - Math.floor(x);
 const rnd = (i: number, salt: number) => frac(Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453);
 
-// decay 弹道闭式解：v 每帧 ×0.9 → 位移 = v0·(1-d^age)/(1-d)；重力项同样按衰减序列累积
+// Closed-form decay trajectory: v *= 0.9 each frame -> displacement = v0·(1-d^age)/(1-d); gravity term accumulates over identical decay series
 const decaySum = (age: number) => (1 - Math.pow(DECAY, age)) / (1 - DECAY);
 
 type Confetto = {
@@ -26,13 +26,13 @@ type Confetto = {
 const makeGun = (originDeg: number, saltBase: number): Confetto[] =>
   Array.from({ length: 50 }).map((_, i) => {
     const ang = ((originDeg + (rnd(i, saltBase) - 0.5) * 55) * Math.PI) / 180;
-    // decay 0.9 下初速总位移只有 10×v0（velocity 6.6f 减半），18px/f 只够 180px 完全不可感
-    // → 加码到 70–95px/f：最陡颗峰值升到 y≈390（画面上 1/3），弹幕跨越中央卡，~f96 全部落出
+    // Under decay 0.9, total displacement from initial velocity is only 10×v0 (velocity halves in 6.6f); 18px/f yields only 180px, barely noticeable
+    // -> boosted to 70–95px/f: steepest particle peaks at y≈390 (top 1/3 of frame), trajectory clears center card, all exit by ~f96
     const speed = 70 + rnd(i, saltBase + 1) * 25;
     const grays = ['#6d6d6b', '#8f8f8d', '#4a4a48', '#b0b0ae'];
     return {
       vx: Math.cos(ang) * speed,
-      vy: -Math.sin(ang) * speed, // 屏幕坐标向下为正，射向斜上
+      vy: -Math.sin(ang) * speed, // Screen coords y-down is positive, shoots upward at angle
       w: 14 + rnd(i, saltBase + 2) * 12,
       h: 8 + rnd(i, saltBase + 3) * 8,
       spin: 8 + rnd(i, saltBase + 4) * 7, // 8–15°/f
@@ -42,8 +42,8 @@ const makeGun = (originDeg: number, saltBase: number): Confetto[] =>
     };
   });
 
-const LEFT_GUN = makeGun(60, 3);   // 左下炮朝 60°（偏右上）
-const RIGHT_GUN = makeGun(120, 9); // 右下炮朝 120°（偏左上）
+const LEFT_GUN = makeGun(60, 3);   // Bottom-left cannon aimed at 60° (up-right)
+const RIGHT_GUN = makeGun(120, 9); // Bottom-right cannon aimed at 120° (up-left)
 const LEFT_POS = { x: 140, y: 1040 };
 const RIGHT_POS = { x: 1780, y: 1040 };
 
@@ -51,7 +51,7 @@ export const ConfettiCrossfire: React.FC = () => {
   const frame = useCurrentFrame();
   const age = frame - FIRE;
 
-  // KPI 卡 scale 入场落定
+  // KPI card scale entry and settle
   const cardScale = interpolate(frame, [0, 14], [0.6, 1], {
     easing: Easing.out(Easing.back(1.8)),
     extrapolateRight: 'clamp',
@@ -63,11 +63,11 @@ export const ConfettiCrossfire: React.FC = () => {
       if (age <= 0) return null;
       const s = decaySum(age);
       const x = origin.x + c.vx * s;
-      // 重力：每帧速度 +GRAV 再统一衰减 → 位移闭式 Σ 可整理为 GRAV·(age - s·d)/(1-d) 的近似；
-      // 直接用精确序列和：g 项位移 = GRAV · Σ_{k=1..age} (1-d^k)/(1-d) = GRAV·(age-(d-d^{age+1})/(1-d))/(1-d)
+      // Gravity: velocity increases by +GRAV each frame then decays -> closed-form displacement Σ approximates GRAV·(age - s·d)/(1-d);
+      // exact series sum used directly: g-term displacement = GRAV · Σ_{k=1..age} (1-d^k)/(1-d) = GRAV·(age-(d-d^{age+1})/(1-d))/(1-d)
       const gDisp = (GRAV * (age - (DECAY - Math.pow(DECAY, age + 1)) / (1 - DECAY))) / (1 - DECAY);
       const y = origin.y + c.vy * s + gDisp;
-      // 落出画外即卸载（左右也裁）
+      // Unmount once off-screen (clipped horizontally as well)
       if (y > 1140 || x < -80 || x > 2000) return null;
       const rot = c.phase + c.spin * age;
       return (
@@ -77,7 +77,7 @@ export const ConfettiCrossfire: React.FC = () => {
             position: 'absolute', left: x, top: y, width: c.w, height: c.h,
             background: c.amber ? AMBER : c.shade,
             borderRadius: 2,
-            // rotateX 造翻牌式 3D 翻转（宽度不变、高度压扁），再加平面 rotate
+            // rotateX produces card-flip 3D tumble (width preserved, height squashed), plus in-plane rotate
             transform: `rotate(${rot}deg) rotateX(${rot * 2.3}deg)`,
           }}
         />
@@ -90,7 +90,7 @@ export const ConfettiCrossfire: React.FC = () => {
         <TitleBlock text="CONFETTI CROSSFIRE" size={72} />
       </div>
 
-      {/* 中央 KPI 卡 */}
+      {/* Center KPI card */}
       <div style={{
         position: 'absolute', left: 660, top: 400, width: 600, height: 320,
         background: G.card, border: `2px solid ${G.border}`, borderRadius: 16,

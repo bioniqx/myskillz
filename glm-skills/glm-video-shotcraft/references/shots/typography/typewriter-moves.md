@@ -1,42 +1,39 @@
 ---
 name: typewriter-moves
-一句话: 打字机 error-retype——误删重打的"改口"三幕剧：打出平庸词 → 犹豫 → 退格删掉 → 更快打出卖点词
-适用: slogan/卖点字卡、否定式文案；文字自带时间性的入场
-时长: ~5.3s（160f）
-能量: 中低
-标签: opening
+summary: A three-act typing narrative: a plain word, a hesitation and deletion, then a faster retype of the selling point.
+use: Slogan/value-prop title cards, negative framing copy; text entrance with built-in temporality
+duration: ~5.3s (160f)
+energy: Medium-low
+tags: opening
 ---
 
-## 意图
-打字是唯一自带时间性的文字入场——字符一个个到来本身就是节奏，
-不需要额外动效。A 式把打字当**独白**：逐字打出平庸词
-（demo 眉题 Introducing video-shotcraft 下的 "just a slideshow"）→ 停顿犹豫
-→ 退格删掉 → 更快打出卖点词（"your cinematic crew"），犹豫-否定-宣言的
-三幕剧，戏全在三档速度差里。
+## Intention
+Typing is the only text entrance with built-in temporality — characters arriving one by one is rhythm itself,
+requiring no auxiliary motion effects. Variant A treats typing as a **monologue**: typing out a mediocre word
+(in demo: "just a slideshow" beneath the eyebrow Introducing video-shotcraft) → pausing in hesitation
+→ backspacing to delete → retyping the true selling point ("your cinematic crew") with greater speed. This hesitation-negation-declaration
+three-act drama draws all its emotional punch from the speed differentials between the three gears.
 
-## 式
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A error-retype | 打 2f/字符 → 停顿 16f 光标闪两下 → 退 1.5f/字符 → 重打 1.5f/字符无犹豫；光标打删常亮、停顿才闪 | slogan 字卡的"改口"戏；否定式文案 |
+## Variants
+| Variant | Technique | Use Case |
+|---|---|---|
+| A error-retype | Types at 2f/char → pauses 16f with cursor blinking twice → deletes at 1.5f/char → retypes at 1.5f/char without hesitation; cursor stays solid during typing/deleting and blinks only during pauses | "Second-thought" correction drama for slogan cards; negative-framing copy |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 字符节奏 | substring(0, floor((f-起点)/步长))，帧确定无插值 | 任何缓动打字都读作加载动画 |
-| 三档速度 | 打 2f/字符、删 1.5f、重打 1.5f 且零犹豫 | 三档差必须可感——等速改口读作 bug 不是戏，命门 |
-| 光标三态 | 打删常亮＝果断；停顿 4f 半周期闪两下＝犹豫；完稿闪两下后条件摘除 | 光标就是演员的脸，全程等速闪就没有"犹豫" |
-| 排版 | 逐字符固定宽 span（60px 等宽槽），左缘锚定 | 变宽字体/整串测宽会逐帧重排抖动 |
-| 收尾 | 静止 ≥50f | 光标残留 0.05 opacity 都毁真静止 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Character cadence | substring(0, floor((f - start)/step)), frame-deterministic with zero interpolation | Any smoothly eased typing reads as a generic software loading animation |
+| Three-tier speed | Types at 2f/char, deletes at 1.5f, retypes at 1.5f with zero hesitation | The speed differential must be palpable — uniform typing speed reads as a bug rather than drama; this is critical |
+| Cursor three states | Solid during typing/deleting = decisive; blinking twice across 4f half-cycles during pauses = hesitating; blinking twice after completion before conditional removal | The cursor acts as the actor's expressive face; blinking at constant speed throughout completely eliminates hesitation |
+| Typography | Fixed-width span per character (60px monospace slot), left-edge anchored | Proportional fonts or full-string width measurement causes jittery reflow on every frame |
+| Resolution | Static rest ≥50f | Even 0.05 residual cursor opacity destroys true static rest |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 声音强依赖：键击声逐字符对齐、退格音调更低（sound-design
-  §4.5）——无声打字机只剩字幕机
-- 全片 ≤1 次——改口是一次性的戏剧转折，改两次口是口吃
-- 等宽字体或逐字符 span 二选一必须占一个，否则字符到来时
-  整行重排，打字变成抽搐
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Strict audio dependency: Keystroke clicks must align frame-accurately per character, with lower pitch on backspaces (sound-design §4.5) — silent typing machines degrade into plain subtitle players.
+- ≤1 time per film — rethinking and correcting is a one-time dramatic pivot; doing it twice sounds like stuttering.
+- Must use either monospace fonts or character-by-character fixed-width spans; otherwise, the full line reflows as each character arrives, causing the text to spasm.
 
-## 参考实现
+## Reference Implementation
 demos/typography/typewriter-moves/
-（TypewriterErrorRetype.tsx）
+(TypewriterErrorRetype.tsx)

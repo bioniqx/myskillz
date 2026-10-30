@@ -1,66 +1,46 @@
 ---
 name: beat-step-list-theme-cycle
-一句话: 三通道节拍器——深色场形容词列表逐拍上移一行，视口中央固定胶囊"接住"下一个词并换色，整场底色同拍跟换；行、色、场三通道锁死同一拍点
-适用: "同一产品多种气质/多主题展示"段落（modern/playful/expressive 式形容词连打）；全片节奏最密的一段；音乐段对拍
-时长: 铺垫 30f + 每拍 18f × 拍数 + 收尾 hold；4 拍约 4.7s（demo 140f）
-能量: 高（0.6s 一拍三通道齐跳，密度型高能）
-标签: typography
+summary: An adjective list steps up one row per beat while a fixed center pill catches each word and the background recolors on the same beat.
+use: "One product, many personalities / themes" showcases (adjective runs like modern / playful / expressive); the highest rhythmic density section in the film; syncing to musical beats
+duration: Setup 30f + 18f per beat x beat count + ending hold; 4 beats ≈ 4.7s (demo 140f)
+energy: High (three channels jumping in unison every 0.6s delivers high density energy)
+tags: typography
 ---
 
-## 意图
-换一次主题色是功能演示；0.6 秒换一次、连换三次、每次"选中行+胶囊色
-+全场底色"三件事同帧齐跳——就成了节拍器。用最便宜的变量切换做出
-全片最高的节奏密度。命门有二：一是**三通道必须锁同一拍点**，任何
-一通道慢半拍，"齐跳"退化成三个各自为政的动画；二是**跳与滑的分界**
-——跳变只占拍头 6f，其余 12f 完全静置，拍点要"跳"不要"滑"，
-匀速滚动的列表就只是列表。
+## Intention
+Switching a theme color once is a feature demo; switching every 0.6 seconds three times in a row—with "selected row + pill color + canvas background" jumping in unison on the exact same frame—creates a metronome. It produces the highest rhythmic density in the entire video using the most economical variable switches. Two requirements are non-negotiable: first, **all three channels must lock to the exact same beat**—if any channel lags by even half a beat, the synchronized jump degenerates into three disjointed animations; second, **the boundary between jumping and sliding**—the jump window occupies only the first 6f of the beat, with the remaining 12f resting completely static. Beats must "jump," not "slide"; a smoothly scrolling list is merely a list.
 
-## 动效核心
-- 胶囊固定在视口中央行**不动**，列表 translateY 逐拍步进——视觉上
-  读作"胶囊跳到下一行接住新词"，实际动的是世界不是胶囊
-- 拍长 18f（0.6s @30fps ≈ 100BPM），跳变窗仅拍头 6f：
-  `snap(t) = 1-(1-x)^3.2`（陡 ease-out），其余帧静置
-- 三通道同源驱动：同一个 tInBeat 同时喂列表位移、胶囊/底色
-  rgb 逐通道 cross-mix、胶囊 squash——一个时钟，不许各挂各的曲线
-- 主题表逐拍换对（demo「Make it modern → playful → expressive → BOLD → yours.」：
-  骨白/深浓缩→橘/深梅→鸢尾紫/深靛→薄荷/深青→向日葵黄/深海军蓝），胶囊色与
-  底色是配好的深浅对，不是独立随机色；每个主题还带一套选中词字体（无衬线 / 圆体 /
-  衬线斜体 / 全大写 Futura），同拍换——换肤读作"多种气质"而不只是换色
-- 胶囊 = 透镜：胶囊外是统一暗白列表，胶囊里是同一列表的裁切副本（深色字 + 主题字体），
-  词越过胶囊边缘那一刻才换色换体；胶囊宽度 = 选中词实测字宽 + 边距，跟同一个 tInBeat 插值
-- 胶囊落位 squash：竖向 1.14→0.96→1、横向反相 0.97→1.01→1，随拍头 6f 走完；接住瞬间
-  胶囊提亮 + 同色辉光涨一下（指数 ~3f 收回）
-- 非选中词按离视口中心的行距衰减（相邻行 42% 白、每远一行 −15%，字号微缩、远行虚化）；
-  上下底色渐变羽化收视口——羽化色必须跟 bgColor 实时同步，写死颜色换场时穿帮
-- 元素层回声（可选）：角落主题计数 03/05、色票行挂同一个整数拍换态，不加任何整画面冲击
-- 开拍前 30f 静置铺垫——先让观众看清"这是个列表"，再开始打拍
+## Motion Core
+- The pill remains **fixed** at viewport center row, while the list's translateY steps up one row per beat—visually reading as "the pill leaps to the next row to catch a new word," while physically the world moves around the pill.
+- Beat length is 18f (0.6s @ 30fps ≈ 100 BPM), with the snap window occupying only the initial 6f: `snap(t) = 1 - (1 - x)^3.2` (steep ease-out), remaining frames resting static.
+- Unified single-source driver across all three channels: a single `tInBeat` drives list translation, pill/canvas RGB cross-mix, and pill squash—one clock, forbidding independent curves.
+- Theme pairs cycle beat-by-beat (demo: "Make it modern -> playful -> expressive -> BOLD -> yours.": bone white/espresso -> orange/plum -> iris/indigo -> mint/teal -> sunflower/navy); pill color and canvas color are curated light/dark pairs, not random colors. Each theme also carries a distinct font for the selected word (sans-serif / rounded / italic serif / all-caps Futura) switching on beat—communicating "diverse personalities" rather than just color swaps.
+- Pill = optical lens: outside the pill sits the uniform muted white list; inside sits a clipped duplicate of the same list (dark text + theme font); words switch color and typeface only when crossing the pill's boundary. Pill width = measured word width + padding, interpolated with the same `tInBeat`.
+- Pill landing squash: vertical 1.14->0.96->1, horizontal inverse 0.97->1.01->1, completing within the initial 6f; catching moment triggers pill brightening + colored glow pulse (exponential decay over ~3f).
+- Unselected words attenuate based on distance from viewport center (adjacent rows 42% white, −15% per additional row distance, slight font scale-down, distant rows defocused); top and bottom canvas color gradient masks fade the viewport edges—gradient colors must sync dynamically with `bgColor`, as hardcoded colors expose seams during transitions.
+- Element layer echoes (optional): corner theme counter `03 / 05` and color swatch rows advance on the integer beat, without applying any full-screen canvas impacts.
+- 30f static setup before the first beat—let viewers clearly absorb that "this is a list" before the metronome begins striking.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 拍长 | 18f（BEAT_LEN，改它即改 BPM 对音轨） | <12f 观众来不及读词只见闪色；>26f 拍感散成逐个展示 |
-| 跳变窗 | 拍头 6f，ease-out 指数 3.2 | 窗 >10f 或缓曲线，"跳"变"滑"，节拍器塌成滚动列表 |
-| 拍数 | 3–4 拍 | 5+ 拍观众适应了节奏开始走神；1–2 拍立不起"节拍器"人设 |
-| squash | 竖 1.14→0.96→1 / 横反相 0.97→1.01→1 | 去掉它胶囊像贴图换色；>1.2 弹跳抢了换色的戏 |
-| 底色跨度 | 相邻主题底色须同明度不同色相（都深色） | 明度跳变（深→浅）会读作闪屏而非换肤 |
-| 铺垫/收尾 | 前 30f 静置；末拍后 hold ≥30f | 没铺垫第一拍读作 bug；末拍即切没有"停在最终色"的确认 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Beat duration | 18f (BEAT_LEN, tune to match audio track BPM) | <12f viewers cannot read words amid color flashes; >26f the cadence scatters into isolated displays |
+| Snap window | Initial 6f of beat, ease-out exponent 3.2 | Windows >10f or gentle curves turn "jumps" into "slides," collapsing the metronome into a scrolling list |
+| Beat count | 3–4 beats | 5+ beats leads to viewer fatigue; 1–2 beats fails to establish the "metronome" persona |
+| squash | Vertical 1.14->0.96->1 / Horizontal inverse 0.97->1.01->1 | Without it, the pill feels like flat texture recoloring; >1.2 bounce overpowers the color change |
+| Canvas color delta | Adjacent theme backgrounds must share lightness with contrasting hues (all dark) | Lightness jumps (dark -> light) read as screen strobes rather than theme shifts |
+| Setup / Finale | 30f static hold upfront; hold >=30f after final beat | Missing setup causes the first beat to look like a bug; cutting immediately after final beat lacks resolution |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 theme-switch-moves 分工：那卡是单次换肤的仪式（扫场/涟漪，换一次
-  讲一次故事），本卡是连续多次换肤当节拍用——讲"深色模式功能"用那卡，
-  讲"多气质/多主题体量"用本卡
-- **声音强依赖**：拍点对齐鼓点（换 BEAT_LEN 对 BPM），无声版三通道
-  齐跳读作界面抽风
-- 词表长度 ≥ 拍数+2——列表底部要留未选中的词垫着，最后一拍就停在
-  列表末行会露出"下面没了"
-- 选中态别用"整数拍判定反白"：跳变 6f 里新词还在胶囊下方就先变黑，读作穿帮。
-  demo 用胶囊透镜（裁切副本）——字色 / 字体由几何边界决定，颜色仍跟 tInBeat 小数走
-- 胶囊宽度按选中词实测字宽写死（换字体 / 字号要重量），否则字贴边或胶囊半空
-- 主题字体用系统栈：Chrome 不认 `ui-rounded`，圆体走 Arial Rounded MT Bold，缺字体回落无衬线
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Division of labor with `theme-switch-moves`: that card handles the ceremony of a single theme shift (sweeps / ripples, telling a story once), whereas this card uses rapid consecutive theme shifts as a metronome—use that card for "dark mode feature," use this card for "creative breadth / theme diversity."
+- **Strong audio dependency**: beat points must align with drum kicks (adjust `BEAT_LEN` for BPM); silent three-channel jumps look like erratic interface glitches.
+- List length must exceed beat count by >=2—leave unselected words below the list as padding; stopping on the final beat with an empty bottom row exposes raw layout boundaries.
+- Do not evaluate selected states using "integer beat checks": during the 6f snap window, incoming words below the pill turn dark prematurely, exposing seams. The demo uses a pill lens (clipped duplicate)—word color and font are governed by geometry boundaries, while color transitions track decimal `tInBeat`.
+- Pill width is hardcoded to measured word widths (re-measure when changing fonts/sizes), preventing words from clipping edges or floating in empty space.
+- Use system font stacks: Chrome does not recognize `ui-rounded`, use Arial Rounded MT Bold for rounded fonts with sans-serif fallback.
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/beat-step-list-theme-cycle/
-（BeatStepListThemeCycle.tsx）
-原片出处：bear-app 22.3–24.6s
+(BeatStepListThemeCycle.tsx)
+Original source: bear-app 22.3–24.6s

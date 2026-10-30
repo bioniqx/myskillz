@@ -1,50 +1,38 @@
 ---
 name: beat-cut-moves
-一句话: 硬切当节拍乐器——连闪定格：三次白闪各硬切同一画面的一个裁切（全景→卡片→特写），快门余韵沉降后停在特写收束
-适用: 高光段落把"切"本身打成鼓点；颁奖连拍式的仪式感、关键信息的加冕
-时长: 全程 140f ≈4.7s（活素材 30f + 三闪 + hold 70f）
-能量: 高
-标签: transition
+summary: A three-flash freeze montage: white flashes hard-cut through different crops of the same subject and settle on the key number.
+use: Highlight sequences turning the "cut" itself into a drumbeat; award-style paparazzi ceremony, crowning key metrics
+duration: Total 140f ≈ 4.7s (live asset 30f + 3 flashes + 70f hold)
+energy: High
+tags: transition
 ---
 
-## 意图
-库内节奏词汇一直只管"一条运动内"的速率（speed-ramp-freeze 是同一条 take
-里定格再解冻）和"落定后停多久"（R 系呼吸判例），没有词管**多镜之间切点
-怎么排**。本卡补这一块：硬切不做任何过渡，切点间隔本身就是乐谱——
-三次白闪、间隔渐紧（22f→18f），读作快门连拍（A）。与 R 系不
-冲突：R 管落定后的停，本卡管切点排布，切串结束必须接足量 hold 把
-呼吸还回去。注意这是刻意的例外——节奏偏好判例是单向"放慢"，硬切
-串切得越狠，切完的 hold 要比平常更长。
+## Intention
+The library's rhythm vocabulary historically governed velocities "within a single continuous movement" (speed-ramp-freeze pauses and unfreezes a single take) and "hold durations after settling" (R-series breathing precedents), with no terms governing **how cut points are arranged across multiple shots**. This card fills that void: hard cuts employ zero transition easing, turning the cut intervals themselves into musical notation—three white flashes with tightening intervals (22f -> 18f), reading as a paparazzi shutter burst (Variant A). It does not conflict with R-series precedents: R governs pauses after settling, whereas this card governs cut arrangement; the cutting flurry must conclude with an ample resting hold to restore breathing space. Note that this is a deliberate exception: the pace preference precedent mandates "slowing down," so the harder the cutting flurry strikes, the longer the concluding hold must be.
 
-## 选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A paparazzi-flash 连闪定格 | 三次白闪各硬切同素材不同裁切（全景→卡片特写→「Take 1」特写），闪前对焦框锁定下一张裁切，快门余韵沉降，第三闪停在特写收束（demo：video-shotcraft 的「Shot of the Year」奖牌卡，背板是 video-shotcraft 标志 / 字标平铺） | 高光时刻仪式感：颁奖连拍、关键数字 / 关键句的加冕 |
+## Variant Selection
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A paparazzi-flash freeze | Three white flashes each hard-cut to different crops of the same asset (wide -> card close-up -> "Take 1" macro), focus bracket locking the next crop before flash, shutter aftershocks settling, third flash resting on macro close-up (demo: video-shotcraft "Shot of the Year" medal card against tiled video-shotcraft logo/wordmark backdrop) | Highlight ceremonial moments: award-style paparazzi bursts, crowning key numbers and pivotal phrases |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 三闪切点 | 30/52/70（间隔 22f→18f 渐紧），闪前 30f 慢推"活素材"（背板上别家相机的小闪光）衬托闪后定格 | 闪前必须是活的，全片死素材三闪读不出"定格" |
-| 白闪层 | 每闪 opacity 0.95→0 走 4f ease-out 衰减；闪帧 ±2px seed 哈希全屏抖动 | 0.95 起步才有闪光灯的爆点；衰减 >6f 变柔光转场，失去快门感 |
-| 快门余韵 | 切入视图 scale 1.03→1 走 6f ease-out 回落 + −16px 沉降归零 | 余韵是"被拍到晃了一下"；去掉后三闪读作幻灯片翻页 |
-| 三裁切 | 同一画面换 CSS zoom 焦点：1.0 全景 / 1.6 卡片 / 2.8 特写（「Take 1」） | 层层逼近有叙事方向；乱序（特写→全景→特写）读作剪错；裁切边缘别切到半行字 |
-| 对焦预备 | 下一闪前 8f 对焦框从 1.3 倍收到下一张裁切范围（屏幕坐标投影），闪前 3f 转香槟色锁定 | 这是"预备拍"：观众提前知道下一张拍哪里，闪光才像被按下的快门 |
-| 末段收束 | 第三闪后特写 hold 70f，只有 1→1.015 极缓推近 + HUD「SAVED」淡入 | 三闪是重击，hold 要给足平常两倍以上；定格是照片，不加画内运动 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Three flash cuts | 30/52/70 (tightening interval 22f->18f); 30f slow push on "live asset" (subtle flashes on backdrop cameras) pre-flash highlights post-flash freeze | Pre-flash state must be alive; static assets before flashes fail to register as a "freeze" |
+| White flash layer | Each flash opacity 0.95->0 with 4f ease-out decay; flash frame ±2px seed hash full-screen jitter | Starting at 0.95 delivers photographic flash pop; decay >6f turns into soft glow transition, losing shutter feel |
+| Shutter aftershock | Incoming view scale 1.03->1 over 6f ease-out recovery + −16px settling to zero | Aftershock conveys "camera recoil from the snapshot"; without it, flashes look like slideshow slide changes |
+| Three crops | CSS zoom focal changes on identical frame: 1.0 wide / 1.6 card / 2.8 macro ("Take 1") | Progressive push provides narrative direction; scrambled order (macro -> wide -> macro) reads like an editing mistake; avoid slicing mid-line text |
+| Focus prep | Reticle contracts from 1.3x to target crop bounds (screen coordinate projection) 8f before next flash, locking champagne gold 3f pre-flash | Acts as an "anticipation beat": viewers know where the next snapshot will land, making the flash feel like a shutter click |
+| Finale | Macro holds 70f after third flash, with only 1->1.015 subtle push-in + HUD "SAVED" fading in | Three flashes deliver heavy impact; provide more than double standard hold duration; frozen stills are photos, avoid internal motion |
 
-## 已知坑
-- **demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验**
-- **声音强依赖**手法：切点必须钉在音轨拍点上，每闪一声快门咔嚓，
-  无声版只剩画面乱跳；钉帧走 sound-design.md §4.5 相对 shot 起点，不钉绝对帧
-- 三个裁切要是"同一画面的层层逼近"而非三个无关画面——观众要在连闪
-  中始终认得这是谁；跨产品/跨场景的素材别用这式
-- 切串全片 ≤1 次（P4 克制原则）：这是全片最响的一记，第二次出现
-  第一次就白打了
-- 节奏偏好判例是单向"放慢"，本卡是刻意例外——切完的 hold（70f）
-  是底线不是建议，宁多勿少
-- 真硬切 = frame 落区间渲染对应视图，无任何过渡帧；手滑加 2f 交叉
-  淡化就不是硬切了，节拍感立即糊掉
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- **Strong audio dependency**: cut points must pin strictly to music beat markers with shutter clicks on every flash; silent versions degenerate into visual jitter; pin frames per sound-design.md §4.5 relative to shot start, not absolute timeline frames.
+- The three crops must be "progressive zooms of the same frame" rather than three unrelated images—viewers must maintain visual recognition throughout; do not use across disparate products or scenes.
+- Flash cutting flurries occur <=1 time across the entire video (P4 restraint principle): this is the loudest punch in the film; repeating it invalidates the first.
+- The pace preference precedent mandates "slowing down"; this card is a deliberate exception—the concluding hold (70f) is a hard floor, not a suggestion: more is better than less.
+- True hard cuts = render corresponding views based on frame intervals with zero transition frames; slipping in even 2f crossfades destroys hard cuts, immediately muddying the rhythmic cadence.
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/beat-cut-moves/
-（PaparazziFlash.tsx）
+(PaparazziFlash.tsx)

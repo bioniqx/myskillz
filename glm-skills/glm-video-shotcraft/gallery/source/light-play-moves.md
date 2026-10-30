@@ -1,46 +1,38 @@
 ---
 name: light-play-moves
-一句话: 光效两式——spotlight-sweep 聚光扫字、sheen 单点扫光
-适用: 把光当另一种笔触（扫/擦）：暗场标题揭示（A）、主角卡加冕（B）
-时长: A 170f ~5.7s / B 150f ~5s
-能量: A 中 / B 低
-标签: typography
+summary: Two controlled light effects: a spotlight sweep that reveals the title and a single sheen pass across a card.
+use: Treating light as an expressive brushstroke (sweeping / brushing): dark title reveals (A), crowning hero cards (B)
+duration: A 170f ~5.7s / B 150f ~5s
+energy: A Medium / B Low
+tags: typography
 ---
 
-## 意图
-库内"光"一直只有 spotlight-hero-card 一个点射手法；这两式把光做成
-体系，两种笔触两种职责：A 是**扫**——暗场里几乎不可见的标题被锥形
-光摆动扫亮，光到哪哪亮，与 spotlight-hero-card 的区别是那个打卡片、
-这个扫文字；B 是**擦**——深墨主角卡上一道 45° 高光带缓扫一次，被
-圆角裁住，无声的加冕。
-全部深底或深主角——**白底上提亮不可见**（判例）是这整张卡的地基。
+## Intention
+The library previously treated "light" solely through spotlight-hero-card as a single pin-point highlight. These two variants systematize light into two brushstrokes with distinct responsibilities: Variant A is **sweeping**—a swinging conical beam illuminates a headline that is barely visible in the dark, lighting up wherever it travels (distinguished from spotlight-hero-card, which highlights a card, whereas this sweeps text); Variant B is **brushing**—a 45 deg specular sheen glides gently across a deep ink hero card once, clipped by rounded corners as a silent coronation.
+All variations require dark canvases or dark hero elements—**brightening is invisible on white backgrounds** (precedent), which serves as the bedrock of this entire card.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A spotlight-sweep | 双层同文本：暗版 0.07 常驻，亮版 radial mask 随光斑走，钟摆式追光摆两个半来回阻尼停在正中，iris 张开全亮定格（demo 标题「Craft the shot.」，收在 video-shotcraft 字标） | 暗场大标题揭示开场 |
-| B sheen-sweep | 深墨卡（demo：钛黑金属卡，蚀刻 video-shotcraft 单色标志与字标）转向光源的同时，115° 高光带扫一次，overflow hidden 圆角裁剪 | 主角卡静止段的一次加冕 |
+## Variant Selection
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A spotlight-sweep | Dual-layer identical text: dim version 0.07 persistent, bright version radial masked to light spot, pendulum spotlight swings 2.5 cycles before damped settling at center, iris expands to full illumination (demo headline "Craft the shot.", concluding on video-shotcraft wordmark) | Dark headline reveal opening |
+| B sheen-sweep | Deep ink card (demo: titanium black metal card, etched with monochrome video-shotcraft logo and wordmark) turns toward light source while 115 deg specular band sweeps once, clipped by overflow hidden rounded corners | Single coronation moment during a hero card's static hold |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 反差 | 暗版 0.07 vs 全亮 1.0；demo 为暖白 #f8efe2 衬线字对酒红黑天鹅绒幕布（#1a0a0d→#070203），幕布本身也只在光斑里被照亮 | 反差是本式全部；暗版 >0.15 就没有"点亮"了 |
-| A 光斑 | ellipse 360px（硬芯+长软边），钟摆：x = 960+600·sin θ·env，θ 从 −π/2（最左）起、周期 50f、走 2.25 个周期至 f121；y 走下凹弧（中心最低 44px）；env 第一来回后 smooth 收到 0，x 与速度在 f121 同时归零（纯 sin 会在中心最快时急刹）；开灯 4–10f 钨丝预热闪两下 | f121–141 iris 张开 360→1080px 全亮（out-cubic）、光锥线性收成柔和顶光（扩散/消散解耦判例） |
-| B 高光带 | 宽 2×卡宽，115° 渐变：宽柔光 0.14 + 窄亮芯 0.5（暖白，screen），58–90f swift 扫一次；同段卡 rotateY 21°→14°（转向光源 = 扫光的物理动机）；光带下拉丝纹与蚀刻字的亮版副本被同一遮罩揭开 | 0.5 芯在钛黑上足够响又不糊；双向 clamp + 条件挂载保证只扫一次 |
-| 摘罩 | 扫光（B）条件挂载，扫完即卸载；A 光锥收成常驻柔和顶光 | opacity 0 残留层照样每帧合成——不用的光效层直接卸载 |
-| 收尾 | A ~30f / B ~55f hold；hold 段只留极缓运动（A 浮尘与顶光呼吸、B 卡 rotateY 再转 1.5°） | 不加手持抖动（Q3） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Contrast | Dim version 0.07 vs full bright 1.0; demo pairs warm white #f8efe2 serif against burgundy-black velvet backdrop (#1a0a0d->#070203), backdrop itself illuminated only within the beam | Contrast is everything in this variant; dim version >0.15 eliminates the "illuminated" magic |
+| A Light beam | 360px ellipse (hard core + wide soft penumbra), pendulum: x = 960 + 600*sin(theta)*env, theta begins at -pi/2 (far left), 50f period, runs 2.25 cycles to f121; y follows concave downward arc (lowest point 44px at center); envelope smoothly decays to 0 after first round-trip, x and velocity zeroing out at f121 concurrently (pure sin halts abruptly at maximum center velocity); light warmup flashes twice over 4–10f | f121–141 iris opens 360->1080px to full brightness (out-cubic), light cone collapses linearly into soft top ambient light (decoupled expansion/dissipation precedent) |
+| B Specular sheen | 2x card width, 115 deg gradient: broad soft glow 0.14 + narrow bright core 0.5 (warm white, screen blend), swift single pass across 58–90f; card rotates Y 21 deg -> 14 deg concurrently (turning toward light = physical motivation for sweep); brushed metal texture and etched logo bright copy revealed under same mask | 0.5 core rings loud and clear against titanium black without blooming; bidirectional clamp + conditional mounting ensure exactly one pass |
+| Unmounting masks | Sheen sweep (B) is conditionally mounted and unmounted immediately after pass; Variant A light cone dissolves into permanent soft top light | Opacity 0 residual layers still trigger per-frame compositing—unmount unused lighting layers directly |
+| Finale | A ~30f / B ~55f hold; hold segment preserves only subtle micro-motion (A dust motes and top light breathing, B card rotates Y another 1.5 deg) | No handheld camera shake (Q3) |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **全片光效合计 ≤2 次**——光是最快掉价的手法，每个卡都闪一下
-  等于廉价模板
-- B 式是高标准重试通过：旧否决（2026-07-13 判例）针对当时实现不好看，
-  非路径不可行；四约束 = 单点+主角+圆角裁剪+只扫一次，违反任何
-  一条回到否决区
-- 深底是地基：两式全部依赖深底/深主角，白底上做光效直接跳过本卡
-- A 与 spotlight-hero-card 同片二选一，都是"聚光"语汇
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- **Total lighting effects across video <=2 occurrences**—light degrades perceived quality faster than anything else; flashing on every card reduces work to cheap templates.
+- Variant B passed high-standard retry: prior rejection (2026-07-13 precedent) addressed poor execution at the time, not an unviable path; four rigid constraints = single focal point + hero element + rounded corner clipping + single sweep only; violating any single constraint returns to the rejection zone.
+- Dark backdrop is foundational: both variants strictly require dark backgrounds or dark hero elements; skip this card on white backgrounds.
+- Variant A and spotlight-hero-card are mutually exclusive in the same video, as both share the "spotlight" vocabulary.
 
-## 参考实现
+## Reference Implementation
 demos/effects/light-play-moves/
-（SheenSweepRetry.tsx / SpotlightSweepReveal.tsx）
+(SheenSweepRetry.tsx / SpotlightSweepReveal.tsx)

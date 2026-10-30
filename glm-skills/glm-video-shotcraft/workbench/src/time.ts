@@ -1,6 +1,6 @@
 export const FPS = 30;
 
-/** 帧 → "mm:ss.ff" */
+/** Frames → "mm:ss.ff" */
 export const fmtFrames = (frames: number, fps = FPS) => {
   const f = Math.max(0, Math.round(frames));
   const totalSec = Math.floor(f / fps);

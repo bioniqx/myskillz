@@ -1,38 +1,33 @@
 ---
 name: trailer-grammar-moves
-一句话: 预告片语法一式——trailer-bumper 前置速剪钩子：三镜 9f 速剪 + 黑场静默一拍，再开场标题
-适用: 预告片的开场钩子（cold open）：正片前先塞三个最抓眼的镜头，再静默一拍正式开场
-时长: A ~4.7s（140f）
-能量: A 高
-标签: opening、transition
+summary: A trailer bumper hook: three 9-frame rapid cuts, a beat of black silence, then the opening title card.
+use: Opening hook for trailers (cold open): packing three attention-grabbing shots before the main film, followed by a silent beat before the formal title
+duration: A ~4.7s (140f)
+energy: A High
+tags: opening, transition
 ---
 
-## 意图
-库内节奏卡各管一段：beat-cut 管切点排布、rhythm-interrupt 管打断。
-本卡管**预告片的结构性时刻**——不是某个
-镜头怎么动，是整片的关节怎么接：A 是开场钩——正片前 0.9 秒塞
-三个最抓眼镜头速剪 + 黑场静默一拍再开场，预告片的"预告"。
+## Intention
+Rhythm cards in the library manage distinct segments: beat-cut governs cut placement, and rhythm-interrupt governs interruptions. This card governs **structural trailer moments**—not how an individual shot moves, but how major joints of the entire film connect: Variant A serves as the opening hook—stuffing three hyper-engaging shots into 0.9 seconds before the main feature, followed by a silent beat of black void before opening the title—a "trailer for the trailer."
 
-## 式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A trailer-bumper | 三镜头各 9f 等长硬切（0/9/18），每镜内部 scale 1→1.04 微推保活；27–33f 纯黑静默，33f 起标题 16f 淡入 + 44px out-cubic 微升（demo 标题是 video-shotcraft 字标 + 品牌 tagline） | 正片开场前的钩子；cold open |
+## Variant Selection
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A trailer-bumper | Three 9f equal-length hard cuts (0/9/18), each shot carrying internal scale 1->1.04 slow push to stay alive; 27–33f pure black silence, title fading in over 16f at 33f with 44px out-cubic rise (demo title features video-shotcraft wordmark + brand tagline) | Opening hook before main feature; cold open |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 速剪 | 三镜等长 9f，零过渡；镜头 3 对焦中列 Top pages 卡放大 2.2x 怼脸特写（CSS zoom，字不糊） | 节拍感靠等长；三镜构图必须明显不同 |
-| A 微推 | 每镜内部 scale 1→1.04 线性 | 静帧三连读作幻灯片——命门 |
-| A 黑场 | 27–33f 纯黑 #000 空 div，6f | 黑场里放任何东西都毁掉"静默一拍" |
-| 收尾 | A 静止 77f（≥40f） | 字距收拢完（63f）后整帧冻结，真静止 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Rapid cuts | Three equal 9f cuts, zero transition; Shot 3 zooms into center Top pages card at 2.2x close-up (CSS zoom, preserving crisp text) | Cadence relies on equal durations; all three shot compositions must differ noticeably |
+| A Subtle push | Linear scale 1->1.04 within each shot | Three consecutive static frames look like a slideshow—critical core |
+| A Blackout | 27–33f pure black #000 empty div, 6f duration | Placing anything inside the blackout destroys the "beat of silence" |
+| Finale | Variant A rests static for 77f (>=40f) | Frame freezes completely after letter tracking settles (63f), achieving true rest |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- A 黑场必须纯黑无物（drop-blackout 判例同族）——黑场是喘息，
-  不是又一张字卡
-- A 三连切每切一声打点、黑场全消音（sound-design §4.5）
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Variant A blackout must remain purely black and empty (sharing lineage with drop-blackout precedent)—the blackout is a breathing pause, not another title card.
+- In Variant A, an audio hit strikes on each cut, with total silence across the blackout (sound-design §4.5).
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/trailer-grammar-moves/
-（TrailerBumper.tsx）
+(TrailerBumper.tsx)

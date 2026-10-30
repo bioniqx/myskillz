@@ -1,51 +1,42 @@
 ---
 name: type-rhythm-sync
-一句话: 文字随声同步两式——font-weight-pump 字重脉冲（笔画随鼓点变粗弹回）与 karaoke-fill-sync 卡拉OK填色（词随旁白逐个点亮）
-适用: 标题/标语与音轨强绑定的段落；A 绑节拍（鼓点），B 绑语音（旁白逐词）
-时长: A FontWeightPump 165f / B KaraokeFillSync 150f；A 128 BPM 每拍 14f、衰减窗 9–13f，B 每词按语速 18–33f
-能量: A 高（蹦迪感）/ B 中（跟读引导）
-标签: rhythm
+summary: Two voice-and-beat synchronizations: font weight pulsing on percussion and spoken words filling like karaoke.
+use: Sections where headlines / slogans bind tightly to audio tracks; Variant A binds to musical tempo (drum hits), Variant B binds to voiceover (spoken word tracking)
+duration: A FontWeightPump 165f / B KaraokeFillSync 150f; A 128 BPM 14f per beat with 9–13f decay window; B 18–33f per word based on speech cadence
+energy: A High (dance-floor pulse) / B Medium (guided reading flow)
+tags: rhythm
 ---
 
-## 意图
-文字动效库内此前全是"入场怎么进"，没有词管"在场的字怎么跟着声音活"。
-这两式补上：A 让标题变成节奏器官——笔画随低音鼓抽动变粗又弹回，
-文字在蹦迪，适合高能段落的视觉低音炮；B 让标语变成跟读字幕——
-旁白读到哪个词哪个词从左到右填色点亮，视线被牵着走，适合口播/
-标语强调段。共同点是**字不动、属性动**：无位移、无入退场，
-纯粹是字重/颜色在声音的拍点上呼吸。
+## Intention
+Previous typography cards in the library focused entirely on "how text enters the frame," offering nothing for "how text already on screen lives and breathes with the audio." These two variants provide the answer: Variant A turns headlines into rhythmic organs — letter strokes swell into heavy weights on bass hits and snap back, dancing to the beat as a visual subwoofer for high-energy segments; Variant B turns slogans into guided subtitles — words fill with color from left to right as the voiceover speaks them, pulling the viewer's gaze along during spoken emphasis segments. Their common principle: **text remains stationary while properties animate** — zero displacement, zero entrance/exit, purely font-weight and color breathing in lockstep with the sound track.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A font-weight-pump 字重脉冲 | 命中帧细体字瞬间撑成黑体（可变字重连续插值），9–13f 衰减弹回；重音拍额外撑宽 6%；第 2 小节长出上下描边回声行跟拍，drop 拍落定成粗体渐变海报 | 音乐驱动的高能段；标题当低音炮 |
-| B karaoke-fill-sync 填色随读 | 浅底两行标语（demo「FRAME MOTION / CRAFT SHOTS」），每词从左到右柔边填亮，进度跟语速，正在读的词填强调色、读完退成主墨色并保持；活跃词下带读指下划线 | 旁白/口播强调段；多词标语的视线引导 |
+## Variant Selection
+| Variant | Technique | Use Case |
+|---|---|---|
+| A font-weight-pump weight pulse | Fine-weight text snaps instantly to black weight on hit frames (continuous variable-weight interpolation), decaying back over 9–13f; accent beats expand 6% wider; bar 2 spawns stroke echo rows above/below, with drop beat settling into bold gradient poster | Music-driven high-energy sequences; titles acting as visual subwoofers |
+| B karaoke-fill-sync voice tracking | Light-background two-line slogan (demo: "FRAME MOTION / CRAFT SHOTS"), each word filling left-to-right with soft edge matching speech speed; active word highlights in accent color, receding to primary ink after spoken; active word carries tracking underline | Voiceover / spoken pitch sequences; visual focus guidance across multi-word slogans |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 脉冲包络 | `env=(1−t/D)^0.8`（t=命中后帧数；demo 逐字中心 9f→边缘 13f 错开回弹，≥D 精确归 0）；fontWeight `250+650·env` 连续插值（SF Pro 可变字重）；每个字钉在 **900 字重**排好的槽位里——静止时细体字间留缝、命中时笔画撑满槽位"合拢"，整行不重排；无可变字体时退回 env>0.15 窗口 300↔900 跳变 + `-webkit-text-stroke` 连续衰减补过渡 | 槽位按最粗字重排是关键：按常规字重排，峰值时字会互相挤压重叠 |
-| A 节拍 | 128 BPM 每 14f 一拍（16/30/…/114）+ 第 9 拍 drop（128f）；每小节第 1 拍重音 `scaleX = 1+0.06·env` 并染粉；drop 冲到 900 后不回细，~16f 回落定格在 780 字重 + 紫→粉逐字渐变 + 一道横向光带 | 拍距必须 > 最长衰减窗（14>13），两拍重叠读作抽搐 |
-| A 回声行 | 第 2 小节起上下各一行 2px 描边同字，晚 2f 跟拍脉冲、每拍被推开 26px（drop 推开 60px 后归位） | 递进靠"加层"而不是加大幅度；第 1 小节就上回声，后面没牌可打 |
-| A 节拍参照物 | 画面下方 8+1 格步进音序器（两小节 + DROP 格），命中哪拍哪格亮起放大 12%，已过的格保留暗亮 | 静音环境（预览/静帧）没有这排格子就读不出"在跟拍"；只让格子和字动，不做整画面逐拍泵 |
-| B 词级时间表 | 逐词 [start,end] 帧区间，词内 linear 填充；词间留 4–10f 停顿（换气） | 时间戳实战来自旁白打点表；均匀分配读作机器朗读 |
-| B 词级时间表（demo） | FRAME 20–38、MOTION 42–75（长词慢读）、CRAFT 85–103、SHOTS 107–130；0–19f 预备、130–149f 真静止 | 长词给更长的读窗，读作真人语速 |
-| B 填色实现 | 每词双层同文本叠放：底层浅灰（13% 透明墨色）+ 上层按进度揭开：`mask-image: linear-gradient(90deg, #000 e−4%, transparent e+4%)`，e=p·108−4（±4% 柔边前沿；硬切可用 `clipPath: inset(0 (1−p)·100% 0 0)`）；正在读的词填强调色，读完 10f 退成主墨色 | 逐词独立叠层免量测词宽占比；整行单层 clip 需精确像素表、易漂 |
-| B 读指 | 活跃词下 8px 圆角下划线（demo 用强调色），宽度 = p·100%；读完 6f 从左往右收掉 | 4px 浅灰在 1080p 缩略下不可见（本批实渲踩坑）；读完的词不留线 |
-| B 旁白参照物 | 标语下方 48 根竖条旁白波形：读词处起伏、换气处回落，已播部分染强调色 | 静音预览/静帧没有这条波形就读不出"在跟读" |
-| 收尾 | A 末拍衰减归零后 / B 末词填完后真静止 ≥20f | R1 呼吸判例 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Variant A pulse envelope | `env = (1 - t/D)^0.8` (t = frames since hit; demo staggers rebound from center 9f to edges 13f, exactly 0 when t≥D); fontWeight `250 + 650·env` continuous interpolation (SF Pro variable font); each glyph anchored in slots sized for **900 weight** — fine glyphs leave air at rest, closing gaps as strokes swell on impact without reflowing line; fallback when variable font unavailable: env>0.15 snaps 300↔900 with `-webkit-text-stroke` decay | Sizing slots for maximum font weight is vital: sizing for standard weight causes letters to collide and overlap at peak swell |
+| Variant A tempo | 128 BPM at 14f per beat (16/30/…/114) + 9th beat drop (128f); beat 1 of each bar accentuates `scaleX = 1 + 0.06·env` and tints pink; drop hits 900 without receding, settling over ~16f at 780 weight + purple→pink gradient + horizontal light streak | Beat interval must exceed longest decay window (14>13); overlapping beats read as erratic spasm |
+| Variant A echo rows | Starting bar 2, identical text with 2px stroke spawns above/below, pulsing 2f after main hit, pushed 26px outward per beat (pushed 60px on drop before snapping home) | Progression relies on "layering," not cranking amplitude; introducing echoes in bar 1 leaves nothing for subsequent escalation |
+| Variant A beat reference | 8+1 step sequencer below screen (two bars + DROP cell); active cell lights up and scales 12%, past cells retain muted glow | In silent preview environments, this sequencer is required to communicate rhythm; animate only cells and text, never pumping the full screen |
+| Variant B word schedule | Per-word [start, end] frame intervals with linear intra-word fill; 4–10f pause between words (breathing) | Production timestamps come from voiceover cue sheets; equal distribution sounds like synthetic machine speech |
+| Variant B demo schedule | FRAME 20–38, MOTION 42–75 (long word spoken slowly), CRAFT 85–103, SHOTS 107–130; 0–19f prep, 130–149f static rest | Longer words get wider reading windows, reflecting natural human cadence |
+| Variant B fill technique | Dual-layer identical text: bottom layer light grey (13% transparent ink) + top layer unmasked by progress: `mask-image: linear-gradient(90deg, #000 e-4%, transparent e+4%)`, e = p·108 - 4 (±4% soft leading edge; hard cut uses `clipPath: inset(0 (1-p)·100% 0 0)`); active word fills accent color, fading to primary ink over 10f once read | Dual layers per word avoid calculating full-row text width ratios; single-row masks require exact coordinate tables and drift easily |
+| Variant B tracking bar | 8px rounded underline below active word (demo uses accent color), width = p·100%; retracts left-to-right over 6f once read | 4px light grey is invisible in 1080p thumbnails (lesson learned); remove underline once word is finished |
+| Variant B voice reference | 48 vertical waveform bars below slogan: surging with speech, dipping during breath pauses, completed portions tinted accent | Silent preview environments require this waveform to signal that text is tracking speech |
+| Resolution | True static rest ≥20f after Variant A final decay / Variant B final word fill | Rule R1: Breathing room requirement |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 两式都是**声音强依赖**手法：A 命中帧必须与鼓点同帧、B 填色区间必须
-  跟旁白词边界（钉帧走 sound-design §4.5 相对起点）——无声上片则 A 读作
-  抽风、B 读作莫名变色，别在无音轨段落用
-- A 式依赖系统可变字体（macOS SF Pro）做 wght 连续插值；换字体或在无可变字体的渲染机上
-  会退成几档跳变，先确认字体加载与渲染器支持，不行就走 stroke+跳变兜底
-- A 式全片 ≤1 段（P4）——标题蹦迪是抢戏大户，两段同片互相拆台
-- B 式词数 ≤6/屏：更多词时填色进度读不过来，拆行或拆镜
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Both variants have **strict audio dependencies**: Variant A hit frames must match drum hits exactly; Variant B fill intervals must match voiceover word boundaries (anchor cues relative to audio start via sound-design §4.5) — without audio, Variant A looks like a glitch and Variant B looks like arbitrary color cycling; never use in silent segments.
+- Variant A relies on system variable fonts (macOS SF Pro) for continuous wght interpolation; switching fonts or rendering on servers lacking variable font support degrades motion into stepped jumps — verify font loader and renderer support upfront, or fall back to stroke + stepped weights.
+- Variant A is restricted to ≤1 segment per video (P4) — headlines dancing to the beat heavily dominate attention; running two segments creates conflicting visual noise.
+- Variant B should contain ≤6 words per screen: larger word counts outpace comfortable reading speeds; break into multiple lines or shots.
 
-## 参考实现
+## Reference Implementation
 demos/typography/type-rhythm-sync/
-（FontWeightPump.tsx / KaraokeFillSync.tsx）
+(FontWeightPump.tsx / KaraokeFillSync.tsx)

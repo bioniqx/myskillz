@@ -1,63 +1,46 @@
 ---
 name: vertical-word-roll-blur-cycle
-一句话: 句尾词换成竖向滚轮，3 次换词各 0.55s（outQuint 七成 + outBack 三成，前快后极慢带微过冲），相邻行按距离上垂直 blur 与灰度，中心词落定瞬间从灰染成强调色
-适用: "Crafted for ___" / "Built for ___" 这类句干 + 受众/对象列举的一句话卖点；浅底品牌片的干净一拍
-时长: 约 5.0s（150f@30fps：静置 → 3 次换词 → 尾部整组淡出）
-能量: 中（稳定三拍，无峰值）
+summary: The closing word of a tagline rolls vertically through a three-line reel, neighbouring rows blurring into grey depth while the settled word takes the accent color.
+use: "Crafted for ___" / "Built for ___" sentence stems + audience/target enumeration value props; crisp, clean beat in light-background brand videos
+duration: ~5.0s (150f@30fps: static hold → 3 word cycles → full group fade-out at tail)
+energy: Medium (steady 3-beat cadence, no peak)
 ---
 
-## 意图
-句尾换词的最优解是滚轮而不是淡入淡出：滚轮自带**方向**（往上翻页），
-观众知道"还有下一个"。这卡的两个身份记号是相邻行的**垂直 blur**
-（滚轮景深，模拟机械转筒的失焦）和落定时的**染色**（灰→强调色，
-"这个才是答案"）。句干（demo `Crafted for`）全程纹丝不动——眼睛钉在滚轮上，
-句干一晃列举感就散。
+## Intention
+Swapping the concluding word of a sentence works best via a vertical reel rather than crossfading: a reel carries inherent **directionality** (flipping upward like pages), signaling to the audience that "more is coming." This card's two identity signatures are the **vertical blur** on neighboring rows (simulating cylindrical depth of field and mechanical defocus) and the **landing tint** (grey → accent color, declaring "this is the answer"). The sentence stem (demo: `Crafted for`) remains completely motionless throughout — the viewer's eyes stay fixed on the reel; any movement in the stem dissolves the sense of enumeration.
 
-## 动效核心
-- 位置量 `p` 由 3 段窗累加：`STEPS = [0.16, 0.36, 0.56]`，每段窗 0.11
-  （≈16f，约 0.55s），段间留 0.09 静置给观众读词
-- 每段缓动是**混合曲线**：`0.7·E.outQuint(u) + 0.3·E.outBack(u)`——
-  outQuint 给"前快后极慢"的机械减速，outBack 那三成给落定的微过冲回落
-- reel 定位 `translateY(ROW - p·ROW)`，ROW=44px，mask 高 `ROW·3`=132px
-  （露三行）——中心行恒定是 mask 第二行
-- 距离驱动的三通道，`d = |i - p|`：
-  - blur：`d<1` 时 `3d`，`d≥1` 时 `3 + 2·min(d-1,1)`（最远 5px）；demo 用 SVG
-    `feGaussianBlur stdDeviation="0 b"` 只糊纵向，转动时再按滚轮速度叠 ≤4px 纵向运动模糊（静止为 0）
-  - opacity：`d<1` 时 `1 - 0.65d`，否则 `max(0.1, 0.35 - 0.23(d-1))`
-  - 颜色：`mixHex(ACCENT_DIM, ACCENT, clamp01(1 - 2.4d))` —— **d>0.42 就完全
-    是暗色**，所以只有真正落定的那一刻才是强调色，滚动中途全程灰
-- 收尾 `seg(t, 0.9, 0.985)` 整组（句干 + 滚轮）淡出，不留残影给下一镜
+## Motion Core
+- Positional progress `p` accumulates across 3 window segments: `STEPS = [0.16, 0.36, 0.56]`, each window lasting 0.11 (~16f, ~0.55s), with 0.09 static holds between segments for reading words.
+- Each segment uses a **blended easing curve**: `0.7·E.outQuint(u) + 0.3·E.outBack(u)` —
+  outQuint provides "fast-start, ultra-slow finish" mechanical deceleration, while the 30% outBack contribution delivers a subtle landing overshoot and settle.
+- Reel position `translateY(ROW - p·ROW)`, ROW=44px, mask height `ROW·3`=132px (revealing three rows) — the active center row is perpetually the second row of the mask.
+- Three distance-driven channels, `d = |i - p|`:
+  - blur: `3d` when `d<1`, `3 + 2·min(d-1,1)` when `d≥1` (max 5px); demo uses SVG `feGaussianBlur stdDeviation="0 b"` blurring strictly along the vertical axis, with additional ≤4px vertical motion blur layered during rotation based on reel speed (0 at rest).
+  - opacity: `1 - 0.65d` when `d<1`, otherwise `max(0.1, 0.35 - 0.23(d-1))`.
+  - color: `mixHex(ACCENT_DIM, ACCENT, clamp01(1 - 2.4d))` — **strictly dark when d>0.42**, so the accent color ignites solely at the exact instant of settling; remaining muted grey throughout transit.
+- Tail resolution `seg(t, 0.9, 0.985)` fades out the entire group (stem + reel), leaving no ghost artifacts for the next shot.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 词表 | 4 词（Launches→Demos→Promos→Every Shot），3 次换词 | 末词是结论（最宽那个词），前三个是例子；>5 词观众开始数，<3 词读不出"列举" |
-| 拍点 | `[0.16, 0.36, 0.56]`，窗 0.11（≈16f） | 段间 0.09（≈13f）静置是给读词的，读不完的拍子等于没换；窗 >0.18 新旧同屏太久 |
-| 缓动配方 | `0.7·outQuint + 0.3·outBack` | outQuint 是机械减速的来源；outBack 那三成给落定"咔"一下，纯 outQuint 读作电子屏滑动 |
-| 行高/视窗 | ROW 44px、mask `44×3`px、词宽 190px | 露三行才有滚筒感（露一行读作淡入淡出）；宽度写死 190 是为不挤句干，词更长要同步加 |
-| 相邻行 blur | 邻行 3px，最远 5px，**仅垂直向感知** | blur 是"滚筒景深"的身份证，删了退化成词条平移；>8px 邻行糊成灰条看不出是字 |
-| 落定染色 | `1 - 2.4d` 映射 ACCENT_DIM→ACCENT | 系数 2.4 让染色只发生在落定瞬间；<1.5 滚动中途就上色，答案感散掉 |
-| 字号字重 | 句干与滚轮同为 30px/800、`letter-spacing:-.5px` | 必须完全一致——滚轮词比句干大就读作两个元素，不是一句话 |
-| 收尾淡出 | `seg(t, 0.9, 0.985)` 整组 | 末词落定后约 40f 静置再淡出；不 hold 等于白列举 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Vocabulary | 4 words (Launches → Demos → Promos → Every Shot), 3 transitions | Final word is the conclusion (widest word), first three are examples; >5 words make viewers count beats; <3 words fail to establish an enumeration |
+| Beat timing | `[0.16, 0.36, 0.56]`, window 0.11 (~16f) | Inter-segment pauses 0.09 (~13f) allow reading words; beats that are too fast to read are useless; window >0.18 overlaps old and new too long |
+| Easing blend | `0.7·outQuint + 0.3·outBack` | outQuint supplies mechanical braking; the 30% outBack gives a tactile landing "latch"; pure outQuint feels like sliding on glass |
+| Row height / viewport | ROW 44px, mask `44×3`px, word width 190px | Revealing three rows provides cylindrical depth (one row reads as a fade); width hardcoded to 190 to avoid pushing stem; widen if words are longer |
+| Neighbor row blur | Neighbor 3px, farthest 5px, **perceived strictly vertically** | Blur is the proof of cylindrical depth; removing it degrades the motion into flat sliding text; >8px smears neighbor text into unreadable grey bars |
+| Landing tint | `1 - 2.4d` mapping ACCENT_DIM → ACCENT | Factor 2.4 restricts color change strictly to the landing instant; <1.5 shifts color mid-scroll, diluting the punchline feel |
+| Typography | Stem and reel both use 30px/800, `letter-spacing:-.5px` | Must match identically — reel words larger than the stem read as two separate elements rather than one sentence |
+| Tail fade-out | `seg(t, 0.9, 0.985)` full group | Holds static for ~40f after final word settles before fading; cutting immediately wastes the enumeration |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **mask 宽度写死 190px**：换词表时最长词（demo `Every Shot`，带空格的词组要 `white-space: nowrap`）必须能装进去，
-  否则被裁字；反之词都很短则右侧留大片空白，句子重心偏左——换词表必须
-  重量一次宽度
-- 词长差别不宜过大：mask 宽度是固定的（本卡不做宽度自适应，那是
-  pill-chip-slot-cycle-handled 的活），词长差 >2 倍时短词在框里显得孤立
-- 句干必须钉死：demo 用 `flex + gap:14px` 是因为 mask 宽度恒定不会推挤
-  句干——一旦改成宽度自适应的滚轮，就必须换成绝对定位锚左端，
-  否则句干随词宽左右甩
-- `p` 是三段窗**累加**出来的，所以三段窗不能重叠：重叠会让 p 在一帧内
-  跨越一整行，滚轮"跳格"
-- 与 pill-chip-slot-cycle-handled 分工：那卡是深色胶囊 + 宽度自适应挤开
-  （词是徽章），本卡是裸词滚轮（词是句子成分）——同片只留一个
-- 声音：每次落定是一个节奏点，配轻机械/开关音；三连发要交替双样本
-  防机枪感，配法纪律见 sound-design.md
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **Mask width is hardcoded at 190px**: When updating copy, the longest phrase (demo: `Every Shot`, multi-word strings require `white-space: nowrap`) must fit inside to prevent clipping; conversely, if all words are very short, excessive blank space on the right shifts the sentence center leftward — measure width when swapping copy.
+- Avoid large variances in word length: Mask width is fixed (this card does not use adaptive widths; that belongs to pill-chip-slot-cycle-handled); deltas >2x leave short words looking isolated.
+- The sentence stem must remain pinned: The demo uses `flex + gap:14px` because constant mask width never exerts force on the stem — if modified into an adaptive-width reel, the stem must switch to absolute left-anchoring, or it will sway left and right.
+- Progress `p` is **accumulated** across the three window segments, so segments must never overlap: overlapping causes p to jump an entire row in a single frame, resulting in skipped steps.
+- Division of labor with pill-chip-slot-cycle-handled: that card uses dark capsules with adaptive expansion (words as badges); this card uses bare words in a reel (words as sentence components) — keep only one per film.
+- Audio: Each landing is a rhythm point paired with a light mechanical switch sound; use alternating samples across the three landings to prevent machine-gun repetition; see sound-design.md.
 
-## 参考实现
+## Reference Implementation
 demos/typography/vertical-word-roll-blur-cycle/
-（VerticalWordRollBlurCycle.tsx）
+(VerticalWordRollBlurCycle.tsx)

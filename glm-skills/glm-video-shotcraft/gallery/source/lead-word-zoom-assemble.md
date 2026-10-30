@@ -1,91 +1,62 @@
 ---
 name: lead-word-zoom-assemble
-一句话: 首词以 2.3 倍字号占据画面中央、hold 期间继续推近 6%，随后一条曲线同时完成「缩回终字号」与「整行左滑归位」，后续词各自从槽位右侧 0.5em 被推进来；支点横向钉首词中心、纵向钉基线（挂载时实测），整行上移的同一时窗副行浮出，停一拍后整幕 crash-zoom 推近失焦交棒
-适用: 品牌名/产品名的 Introducing 字卡；发布会式开场第二镜；一句话主张需要"先让一个词占满画面、再把整句补齐"的场合
-时长: 约 2.8s（84f@30fps；组句 f36 完成、上移与副行 f32–46、静止 26f、末 12f crash）
-能量: 中高（起手就是满画面的大字，但全程只有一次运动，没有二次冲击）
-标签: opening
+summary: The lead word fills the frame at 2.3x and keeps drifting toward the viewer, then a single curve recedes it to size while the line slides left and the trailing words are pushed into their slots — pivoting on the lead word centre and the measured baseline.
+use: "Introducing" title cards for brand/product names; keynote-style opening second shot; single-sentence claims requiring "let one word fill the frame first, then assemble the full sentence"
+duration: ~2.8s (84f@30fps; sentence assembled at f36, shift up and subtitle at f32–46, hold 26f, final 12f crash)
+energy: Medium-high (opens with frame-filling large type, but features only one motion arc throughout with no secondary shock)
+tags: opening
 ---
 
-## 意图
-字卡最容易犯的错是"整句一起淡入"——观众同时收到 5 个词，一个都没记住。这张卡把
-阅读顺序做成**物理顺序**：先只给一个词，而且大到占满画面、还在继续朝观众推近，观众
-被迫先读它；然后这个词退回自己在句子里的尺寸和位置，整句围绕它长出来。落定时观众
-已经读过两遍主词。
+## Intention
+The most common mistake with title cards is fading in the entire sentence at once — the viewer receives five words simultaneously and remembers none of them. This card turns reading order into a **physical sequence**: first showing a single word so massive it fills the frame while continuously pushing toward the viewer, forcing them to read it; then that word recedes to its final scale and position within the sentence as the rest of the line grows around it. By the time it settles, the viewer has registered the key term twice.
 
-真正的手感命门不是缩放曲线，而是**支点**。首词从"画面正中"走到"行内第三个字符的
-位置"，如果支点取行盒中心，缩放和左滑会各自把字往两边拽，末尾几帧基线抖得肉眼可见。
-把 `transform-origin` 横向钉在首词中心、纵向钉在基线，这两点全程不动，整行就只是
-"收小"，没有任何漂移。
+The true secret to the tactile feel is not the easing curve, but the **pivot anchor**. As the lead word travels from screen center to the third character position in the row, anchoring `transform-origin` at the row box center causes scaling and sliding to pull the text in opposing directions, producing visible baseline jitter in the final frames. Anchoring `transform-origin` horizontally at the lead word's center and vertically at the baseline locks those two coordinates completely, ensuring the row merely recedes in size with zero wobble.
 
-## 动效核心
-- **两段缩放叠加成一条 scale**：
-  `scale = interpolate(f, [0,12], [2.3, 2.3·1.06], PUSH_EASE)
-         + interpolate(f, [12,24], [0, 1-2.3·1.06], ZOOM_EASE)`。
-  第一段是 hold 期间的推近（`cubic-bezier(.25,1,.5,1)`，减速后挂在峰值），第二段是缩回
-  （从峰值一路减到终字号 1）。写成相加而不是分段判断，两段之间没有速度断点
-- **缩回与左滑共用 ZOOM_EASE**（`cubic-bezier(.5,0,.05,1)`，重 ease-in-out、零回弹）：
-  `translate = interpolate(f, [12,36], [slideDistance, 0], ZOOM_EASE)`。两个动作必须读作
-  **一次**运动；各走各的曲线时会读成"先缩小、再滑走"两拍
-- **偏心距怎么来**：`slideDistance = lineWidth · (0.5 - leadRatio)`，`leadRatio` =
-  首词中心在整行里的占比。首词要停在画面正中，整行就得先向右偏这么多
-- **支点实测**：挂载时 `delayRender` 挂起渲染，量三个值——整行 `offsetWidth`、
-  首词 `offsetLeft + offsetWidth/2`、基线。基线用一个**零尺寸 inline-block 尺子**读出
-  （`<span style={{display:'inline-block',width:0,height:0}}>` 的 `offsetTop` 就是基线），
-  比 `lineHeight × 0.8` 之类的估算准得多。量到之后 `continueRender`，`transform-origin`
-  写成 `${leadRatio*100}% ${baseline}px`
-- **后续词是被推进来的，不是淡进来的**：第 i 词（i≥1）在
-  `pushStart = 12 + 6 + (i-1)·4` 起，`translate` 从 `0.5em → 0`
-  （`cubic-bezier(.22,.8,.36,1)`，起步快、落地长），透明度只用 2f 淡完。淡入必须极短，
-  否则词会"浮现"而不是"被塞进槽位"
-- **词间空格必须放在 inline-block 之外**。跟在词 span 内部尾随时会被行盒裁掉，
-  落定后所有词黏成一团（上游原组件的 bug，这里已修）
-- **场景层的三拍收尾**：f32–46 整行 `translateY 0→−56px`（outCubic），副行在**同一时窗**
-  淡入 + 上移 16px——上移让出的空间当帧被副行填掉，没有空当；f46–72 完全静止 26f；
-  f72–83 整幕 `scale 1→1.2` + `blur 0→9px` + `opacity 1→0.45`（ease-in-quad），推近失焦
-  交棒下一镜
-- **质感（demo）**：首词入场 6f 内带 8px→0 失焦；缩回段按 scale 速度给瞬时失焦（≤3.5px，停稳归零）；
-  底为靛蓝主光 + 一抹暖色余光的低对比 mesh + 颗粒 + 暗角
-- **强调词**：精确匹配某个词换强调色（demo 里是品牌名 `video-shotcraft`）。品牌词推入落位那一下自带
-  高亮，不用再加第二个动作
+## Motion Core
+- **Two scaling phases combined into a single scale curve**:
+  `scale = interpolate(f, [0,12], [2.3, 2.3·1.06], PUSH_EASE) + interpolate(f, [12,24], [0, 1-2.3·1.06], ZOOM_EASE)`.
+  Phase 1 is the hold push-in (`cubic-bezier(.25,1,.5,1)`, decelerating to peak); Phase 2 is the recede (decelerating from peak to final scale 1). Writing these as additive terms rather than branching conditionals eliminates velocity discontinuities.
+- **Receding and sliding share ZOOM_EASE** (`cubic-bezier(.5,0,.05,1)`, heavy ease-in-out, zero bounce):
+  `translate = interpolate(f, [12,36], [slideDistance, 0], ZOOM_EASE)`. Both actions must read as **one cohesive movement**; using separate curves makes them feel like two disjointed beats: "scale down first, then slide over."
+- **Calculating off-center distance**: `slideDistance = lineWidth · (0.5 - leadRatio)`, where `leadRatio` = horizontal center of the lead word as a fraction of full line width. For the lead word to sit dead center initially, the full line must be offset rightward by this distance.
+- **Measured pivot anchor**: At mount time, `delayRender` suspends rendering to measure three values: row `offsetWidth`, lead word `offsetLeft + offsetWidth/2`, and the baseline. The baseline is measured via a **zero-sized inline-block ruler**
+  (the `offsetTop` of `<span style={{display:'inline-block',width:0,height:0}}>`), which is far more accurate than heuristic approximations like `lineHeight × 0.8`. Once measured, `continueRender` unblocks, setting `transform-origin` to `${leadRatio*100}% ${baseline}px`.
+- **Subsequent words are pushed in, not faded in**: Word i (i≥1) starts pushing in at
+  `pushStart = 12 + 6 + (i-1)·4`, with `translate` moving `0.5em → 0`
+  (`cubic-bezier(.22,.8,.36,1)`, quick start, long landing), and opacity fading in over just 2 frames. Fade-in must be extremely short; otherwise, words appear to "dissolve in" rather than being "pushed into their slots."
+- **Inter-word spaces must be placed outside inline-block elements**. Appending spaces inside word spans causes row boxes to collapse them, resulting in words colliding after settling (an upstream bug fixed here).
+- **Three-act scene resolution**: At f32–46, the full row executes `translateY 0→-56px` (outCubic), while the subtitle fades in and rises 16px **within the exact same window** — the vertical space yielded by the row is immediately occupied by the subtitle with zero dead air; f46–72 holds completely static for 26f; f72–83 executes a full-scene `scale 1→1.2` + `blur 0→9px` + `opacity 1→0.45` (ease-in-quad), crash-zooming into defocus to hand off to the next shot.
+- **Texture (demo)**: The lead word enters with 8px→0 defocus in the first 6 frames; the receding phase applies transient defocus proportional to scale velocity (≤3.5px, returning to 0 when settled); background uses a low-contrast mesh of indigo main light + warm ambient reflection, with grain and subtle vignetting.
+- **Accent word**: Swap accent color for an exact matched word (in demo: the brand name `video-shotcraft`). The brand word naturally commands emphasis upon slotting into place, requiring no secondary animations.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 首词起手倍数 | initialScale 2.3 | 2.3 让首词横向溢出画面一点点（读作"太大了装不下"）；<1.8 只是"稍大的字"，冲击消失 |
-| 推近 | pushScale 1.06，占满 hold 12f | 6% 是"还在朝观众来"的最小可感量；>1.15 会在缩回时读作反向弹跳 |
-| hold | 12f | 首词独占画面的时长；<8f 观众读不完一个长单词，>20f 整句节奏塌 |
-| 缩回 | 12f，ZOOM_EASE | 与左滑同曲线；单独给缩回一条更快的曲线会让整行"先缩完再滑"，断成两拍 |
-| 左滑 | assembleDuration 24f | 比缩回长一倍：字号已经落定、位置还在走，这段"滑行尾巴"是电影感的来源 |
-| 后续词延迟 | wordDelay 6f（缩回起点之后） | 首词开始缩回才放后续词；同帧放会挤在一起看不清谁在动 |
-| 词间错峰 | wordStagger 4f | 4f 读作"依次被推进"；0 则整段后缀一起进，回到"整句淡入" |
-| 单词推入 | wordDuration 12f，wordPush 0.5em | 0.5em 是"刚从槽位外面"；>1em 会读作从画外飞入，与首词的收束方向打架 |
-| 词淡入 | wordFade 2f | 刻意极短。>6f 词会读作"浮现"，推入的力学感消失 |
-| 字号/字重/字距 | 96px / 600 / −0.03em | 负字距在放大 2.3 倍时才不会散架；正字距的大字会读作"标语横幅" |
-| 上移 + 副行 | f34–50，−56px，副行同窗 | 两件事必须同窗：先上移再出副行会多出一个空当拍 |
-| 静止 | 22f | 落定后的可读时间，低于 15f 观众来不及读副行 |
-| crash | 末 12f，scale→1.2，blur→9px | 这是转场的**前半**，动机要和下一镜的第一帧对上；单独播时看起来像"没结束"是正常的 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Lead word initial scale | initialScale 2.3 | 2.3 lets the lead word slightly overflow horizontally (reading as "too massive to fit"); <1.8 feels like "slightly large text," losing impact |
+| Push-in | pushScale 1.06, fills 12f hold | 6% is the minimum perceptible amount of "still advancing toward viewer"; >1.15 reads as a reverse bounce during recession |
+| Hold duration | 12f | Duration the lead word owns the screen; <8f is insufficient to read a long word; >20f breaks sentence rhythm |
+| Recede duration | 12f, ZOOM_EASE | Shares curve with leftward slide; giving recede a faster independent curve causes the row to shrink first and slide second, breaking into two beats |
+| Leftward slide | assembleDuration 24f | Twice as long as recede: text scale settles while position continues drifting; this "gliding tail" provides cinematic polish |
+| Subsequent word delay | wordDelay 6f (after recede begins) | Release subsequent words only after the lead word begins receding; releasing at same frame clusters words into visual clutter |
+| Word stagger | wordStagger 4f | 4f reads as "sequentially pushed into place"; 0 brings the entire tail at once, reverting to a generic sentence reveal |
+| Word push-in | wordDuration 12f, wordPush 0.5em | 0.5em represents "just outside its slot"; >1em reads as flying in from offscreen, clashing with the lead word's inward momentum |
+| Word fade-in | wordFade 2f | Deliberately brief; >6f makes words dissolve in softly, destroying physical mechanics |
+| Typography | 96px / 600 / -0.03em | Negative kerning keeps large type tight when scaled 2.3x; positive kerning on large type looks like an outdoor banner |
+| Upward shift + subtitle | f34–50, -56px, subtitle in same window | Both actions must share the same window: shifting first and showing subtitle second creates an awkward dead pause |
+| Static hold | 22f | Readability pause after settling; under 15f viewers cannot finish reading the subtitle |
+| Crash-zoom | Final 12f, scale→1.2, blur→9px | This is the first half of a transition; its momentum must match frame 1 of the next shot; looking "unfinished" in isolation is expected |
 
-## 已知坑
-- **支点错了就抖基线**。`transform-origin` 必须是「首词中心 % + 基线 px」这一对。
-  取行盒中心（默认 `50% 50%`）时缩放与左滑互相拉扯，末尾几帧基线肉眼可见地跳
-- 基线别估算。`lineHeight × 0.8` 这类经验值在不同字体上差几像素，放大 2.3 倍后就是
-  十几像素的抖动。零尺寸 inline-block 尺子的 `offsetTop` 是唯一可靠的读法
-- `delayRender` 期间整行 `opacity: 0`——**必须**如此。否则未量到支点的第一帧会闪一下
-  错位的大字，成片里就是一帧脏帧
-- 布局是挂载时实测的，所以**结果随渲染环境的字体而变**：跨平台字体回退不同时整行宽度
-  会整体漂移（首词占比也跟着变）。介意的话把量到的三个值写死成常量
-- `scale` / `translate` 用的是独立 CSS 属性（不是 `transform` 简写）。混用会让其中一个
-  被覆盖；要合并成 `transform` 就必须自己保证 `translate → scale` 的顺序
-- 词间空格放进词 span 内部会被行盒裁掉（见上）。这个 bug 在小字号下不明显，96px 时
-  所有词会明显黏连
-- 首词必须是**短词**。"Introducing" 这类 10 字符左右刚好；首词超过 14 字符时 2.3 倍
-  放大会溢出画面两侧，观众读不到词尾
-- 强调色只给一个词。两个词都上色时观众不知道该记哪个，而且推入落位的高亮变成了
-  "彩色标题"，动作的意义被抹掉
-- 末段 crash 是转场的前半式，不是收尾。单独当片尾用会显得"断了"——要收尾就把
-  crash 换成静止 hold 或淡出
+## Known Pitfalls
+- **Incorrect pivot anchor causes baseline jitter**: `transform-origin` must strictly be the pair "lead word center % + baseline px." Using row box center (`50% 50%`) causes scaling and sliding to pull against each other, producing jarring baseline jumps in the final frames.
+- Never estimate the baseline: Heuristic rules like `lineHeight × 0.8` vary by several pixels across fonts, which magnifies into a ten-pixel wobble when scaled 2.3x. Reading `offsetTop` from a zero-sized inline-block ruler is the only reliable method.
+- The entire line **must** maintain `opacity: 0` during `delayRender`: Otherwise, frame 0 before measurement flashes an unaligned giant word, creating a dirty glitch frame in the final video.
+- Layout is measured dynamically at mount time, meaning **results depend on fonts in the rendering environment**: Cross-platform font fallback shifts line width and lead-word ratio; hardcode the three measured values as constants if cross-environment variance is unacceptable.
+- `scale` and `translate` are written as separate CSS properties (not the `transform` shorthand); mixing them causes one to overwrite the other. Merging into `transform` requires enforcing `translate → scale` execution order manually.
+- Placing inter-word spaces inside word spans causes row boxes to collapse them; this bug is subtle at small sizes, but at 96px words visibly collide.
+- The lead word must be a **short word**: ~10 characters like "Introducing" is ideal; words exceeding 14 characters overflow screen edges at 2.3x scale, cutting off the ends.
+- Apply accent color to only one word: Colorizing multiple words confuses visual focus and degrades the landing punch into generic "colored titles."
+- The final crash-zoom is the first half of a transition, not a resolution. Used alone at the end of a video, it feels abrupt — replace crash with a static hold or fade-out if ending a sequence.
 
-## 参考实现
+## Reference Implementation
 demos/typography/lead-word-zoom-assemble/
-（LeadWordZoomAssemble.tsx）
+(LeadWordZoomAssemble.tsx)

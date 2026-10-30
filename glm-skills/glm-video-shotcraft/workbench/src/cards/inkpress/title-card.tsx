@@ -3,14 +3,14 @@ import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import type { CardDef } from "../types";
 import { DigitRoll } from "./digit-roll";
 
-// 字卡 · Ink Press —— 参数化版（源出 template/src/aifl/PaperTitleCard.tsx，动效逐字同式）
-// 开放：文案（*词* 标强调）、副标、数字副标、纸底/墨色/琥珀色、字号、下划线宽。
-// 节奏命门 FIXED：逐词 4f 错峰 / 9f 入场、下划线 16–34f、尾 8f 淡出。
+// Title Card · Ink Press — parameterized version (from template/src/aifl/PaperTitleCard.tsx)
+// Configurable: copy (*word* for emphasis), subtitle, digits, paper/ink/amber colors, font size, underline.
+// Key rhythm FIXED: word-by-word 4f stagger / 9f entrance, underline 16-34f, tail 8f fade-out.
 
 const SERIF = 'ui-serif, Georgia, "Times New Roman", serif';
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
-/** 文案 DSL：空格分词，`*词*` 为琥珀斜体强调词 */
+/** Copy DSL: space-delimited words, `*word*` indicates amber italic emphasis */
 export const parseWords = (text: string) =>
   text
     .split(/\s+/)
@@ -120,21 +120,21 @@ const TitleCard: React.FC<Props> = ({
 
 export const titleCardCard: CardDef = {
   id: "inkpress-title-card",
-  name: "字卡 · Ink Press",
-  category: "工作台",
+  name: "Title Card · Ink Press",
+  category: "Workbench",
   durationInFrames: 55,
   accent: "#b5651d",
   durationProp: "duration",
   component: TitleCard as React.ComponentType<Record<string, unknown>>,
-  summary: "衬线大字逐词压印入场，*词* 标琥珀斜体强调，下划线生长；尾 8 帧淡出",
+  summary: "Large serif type stamping in word-by-word with *word* amber italic emphasis and growing underline; fades out last 8 frames",
   schema: [
-    { type: "textarea", key: "text", label: "文案（*词* = 强调）", default: "All your team’s research, *one* place to go." },
-    { type: "text", key: "sub", label: "副标（等宽小字）", default: "" },
-    { type: "text", key: "subDigits", label: "副标滚动数字", default: "" },
-    { type: "color", key: "bg", label: "纸底", default: "#f7f4ee" },
-    { type: "color", key: "ink", label: "墨色", default: "#1c1a17" },
-    { type: "color", key: "accent", label: "强调色", default: "#b5651d" },
-    { type: "slider", key: "fontSize", label: "字号", default: 116, min: 60, max: 160, step: 1, unit: "px" },
-    { type: "slider", key: "underlineWidth", label: "下划线宽", default: 220, min: 0, max: 600, step: 10, unit: "px" },
+    { type: "textarea", key: "text", label: "Copy (*word* = emphasis)", default: "All your team’s research, *one* place to go." },
+    { type: "text", key: "sub", label: "Subtitle (monospace)", default: "" },
+    { type: "text", key: "subDigits", label: "Subtitle Rolling Digits", default: "" },
+    { type: "color", key: "bg", label: "Paper Color", default: "#f7f4ee" },
+    { type: "color", key: "ink", label: "Ink Color", default: "#1c1a17" },
+    { type: "color", key: "accent", label: "Accent Color", default: "#b5651d" },
+    { type: "slider", key: "fontSize", label: "Font Size", default: 116, min: 60, max: 160, step: 1, unit: "px" },
+    { type: "slider", key: "underlineWidth", label: "Underline Width", default: 220, min: 0, max: 600, step: 10, unit: "px" },
   ],
 };

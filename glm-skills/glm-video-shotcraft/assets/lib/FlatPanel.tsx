@@ -1,4 +1,4 @@
-// origin: 模板片源仓库（本库模板未包含 3D 版，需 three + @react-three/fiber + @remotion/three）
+// origin: template source repo (3D version requires three + @react-three/fiber + @remotion/three)
 import * as THREE from 'three';
 import { useMemo } from 'react';
 

@@ -1,55 +1,39 @@
 ---
 name: neon-frame-forerun
-一句话: 强透视直角霓虹框自左缘两头奔画先行成型，页面在框内由暗转亮，同时框内组件/文字从 3D 上空带同形软影错峰贴落、随页面点亮同步完成贴合，背景霓虹群（demo 为同形框纵深回声隧道）终段熄灭让位
-适用: 暗场品牌片里给 UI 面板做"登场仪式"（框先到、内容后落）；功能区首次亮相；霓虹/赛博调性的段落开场
-时长: 框奔画 ~0.7s + 点亮&贴落 ~2.7s + 背景熄灭收束 ~1s；全段 4–4.7s（demo 140f）
-能量: 中高（三层动作叠进，但都服务同一次登场）
-标签: effects
+summary: A neon frame races ahead to outline the scene in steep perspective while components drop from above and the page brightens as they land.
+use: Ceremonial entrance for UI panels in dark brand films (frame arrives first, content drops in after); debut of primary feature sections; openers for neon/cyber aesthetics.
+duration: Frame trace ~0.7s + brighten & drop ~2.7s + background extinction settle ~1s; full segment 4–4.7s (demo 140f)
+energy: Medium-High (Three layered motions compounding, all serving a unified entrance)
+tags: effects
 ---
 
-## 意图
-先立框后填肉：霓虹线框像跑道灯一样两头奔画圈出位置，宣告
-"这里要出现东西"；页面在框内由暗转亮的同时，组件从空中带影
-贴落——观众看见界面被"安放"进框里。三层动作（框奔画/页面点亮/
-组件贴落）必须**同步咬合**：贴落进程与点亮进程同步推进、稍滞后
-收尾，框光最终并入面板辉光。背景霓虹管群终段熄灭，把亮度让给
-主角完成收束。
+## Intention
+Frame first, fill second: the neon outline races around the boundary like runway lights to stake out real estate, proclaiming "content is arriving here." As the page brightens from pitch black inside the frame, components drop in from above with shadows—viewers watch the interface being seated into the frame. The three motion layers (frame trace / page illumination / component drop) must **lock into tight synchronization**: component landing progresses in lockstep with page illumination, concluding slightly after, with frame glow merging into panel rim glow. Background neon tube echoes extinguish during the final phase, handing full luminosity to the hero element.
 
-## 动效核心
-- 霓虹框：强透视直角框，自左缘中点两颗白热亮头上下分头奔画（20f，swift 起步快、
-  在右缘中点制动相撞并闪一下）；灯管用四层描边叠辉光（宽软晕 / 中晕 / 色芯 / 白热芯），
-  不用模糊滤镜，便宜且锐；成型后芯线退成发丝、框光并入面板 rim 辉光
-- 页面点亮：框合拢后页面才从黑里浮出（16–30f），再由暗转亮（24–84f smooth），
-  同时一层冷紫暗罩自左缘向右退去，读作"霓虹把页面点亮"
-- 组件贴落：**真 3D 悬空**——面板与组件都在 preserve-3d 里，组件 translateZ 120–170px，
-  面板上落同形剪影软影（越高越大越虚越淡、偏向右下）；亮度用叶子节点 brightness，
-  不在 3D 父级上加 filter/opacity（会把 3D 压平）。每件 24f 加速下落 + 软着陆，
-  落点 54→104f 按"侧栏自上而下 → 主区自上而下"错峰（先密后疏），比点亮晚 ~20f 收尾
-- 背景：同一个框在纵深里的 5 层回声（translateZ 递退、逐层放大）组成霓虹隧道，
-  框合拢后由近到远逐层"打火"（荧光管启辉的确定性闪烁）；终段中段先熄、两端后熄（94–118f）
-- 机位：rotateY −30° → −12°（0–96f EASE.out 长减速），hold 段再极缓转 1.5°
+## Motion Core
+- Neon frame: steep perspective rectangular frame; two white-hot leading heads race outward top-and-bottom from left-edge center (20f, swift takeoff, braking to collide at right-edge center with a flash). Tubing uses 4-tier layered strokes for glow (wide soft bloom / medium bloom / color core / white-hot core) avoiding blur filters for sharp, cheap rendering; upon completion, core line reduces to hairline as frame glow merges into panel rim glow.
+- Page illumination: page surfaces from black only after frame closes (16–30f), transitioning from dark to bright (24–84f smooth) as a cool-purple shadow mask sweeps away from left to right, conveying "neon light charging the page."
+- Component drop: **true 3D suspension**—panel and components sit within preserve-3d; components translateZ 120–170px, casting matching soft silhouette shadows onto the panel (higher elevation yields larger, softer, fainter shadows cast toward bottom-right). Brightness adjusts via leaf node brightness filters without applying filter/opacity to 3D parents (which would flatten 3D context). Each item drops over 24f with acceleration + cushioned landing; landing cues span 54→104f staggered from sidebar top-down to main panel top-down (dense to sparse), settling ~20f after illumination.
+- Background: five echoing frames stepping backward in depth (translateZ stepping back, scaling outward) form a neon tunnel; frames ignite sequentially from near to far after outer frame closes (deterministic fluorescent flicker); mid-section tubes extinguish first, followed by outer tubes during 94–118f.
+- Camera: rotateY −30° → −12° (0–96f EASE.out long deceleration), drifting 1.5° during hold phase.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 框奔画 | 20f 两头对奔（swift） | 单头描画读作画图；>30f 观众等不及内容 |
-| 悬浮高度 | translateZ 120–170px、影随高度收敛 | 判例：高度过小+启动过早=影子不可感（v3 第 1 轮返工加大 1.7x 并延后） |
-| 贴落窗口 | 每件 24f；落点 54→104f，比点亮晚 ~20f 收尾 | 贴落先于点亮完＝黑屋子里落家具；滞后太多读作两段戏 |
-| 错峰 | 错开起点、下落重叠并行（EASE.out 分布，先密后疏） | 串行等待被裁（掉落节奏通用判例） |
-| 背景熄灭 | 中亮尾熄，每层 6f 闪烁熄灭、层间隔 7f | 不熄灭主角不突出；同帧全熄读作断电 |
-| 贴落粒度 | 卡/行级（品牌、4 项导航、问候、3 张数字卡、4 行任务） | 粒度越细越贵；元素越少每件越大越好读 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Frame trace | 20f dual-head race (swift) | Single-head trace reads as illustration; >30f leaves viewers waiting |
+| Suspension elevation | translateZ 120–170px, shadow tracks elevation | Review rule: insufficient height + premature start = imperceptible shadow (amplified 1.7x and delayed in v3 revision) |
+| Drop window | 24f per item; landings 54→104f, settling ~20f after page lit | Landing before page is lit = dropping furniture in a pitch-black room; lagging too far reads as disjointed scenes |
+| Stagger | Staggered starts, overlapping parallel descents (EASE.out distribution, dense to sparse) | Sequential serial waiting rejected across all drop rulings |
+| Background extinction | Mid-segment bright, tail extinguishes; each tier flickers off in 6f with 7f tier gap | Omitting extinction fails to isolate hero; extinguishing on same frame reads as a blackout |
+| Drop granularity | Card/row tier (brand, 4 navigation items, greeting, 3 metric cards, 4 task rows) | Finer granularity increases rendering cost; fewer, larger elements enhance readability |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 悬空贴落=clickup 语言核心签名（已验证的口味信号），本卡
-  与 graze-face-tour 共用 FloatWrap 模式——影子不可感等于没做
-- 与 brand-frame-snap 分工：那张是品牌框咔哒定位的
-  节拍戏；本卡是框先行+内容贴落的登场仪式，框只是序幕
-- 衍生方向备忘：视角旋转变体（镜头左→右弧线旋转+同时贴落）
-  曾被裁"改改再看"（要求所有组件同时贴落），已收敛进 neon-frame-orbit-drop 卡
+## Known Pitfalls
+- Demo calibrated on grayscale placeholder assets—parameters serve as calibration baseline, not final production specs; verify against real assets in production.
+- Suspended component dropping is a signature technique; this card shares FloatWrap pattern with graze-face-tour—imperceptible shadows render the technique pointless.
+- Division with brand-frame-snap: that card focuses on crisp snapping cadence of a brand frame; this card is an entrance ceremony combining precursory framing with component seating, where the frame serves as prologue.
+- Derivative variation note: camera rotation variant (curved left-to-right orbit + concurrent drops) was refined to require all components dropping synchronously, converging into neon-frame-orbit-drop.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/neon-frame-forerun/
-（NeonFrameForerun.tsx）
-原片出处：clickup-30.mp4
+(NeonFrameForerun.tsx)
+Source clip: clickup-30.mp4

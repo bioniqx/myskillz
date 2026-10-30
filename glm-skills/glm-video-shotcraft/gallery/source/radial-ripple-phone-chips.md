@@ -1,56 +1,43 @@
 ---
 name: radial-ripple-phone-chips
-一句话: 暖沙底四层同心圆错相呼吸如水波，中央手机 mockup 屏内 feed 自动缓滚，两侧白色 chip 先后 spring pop 入场并悬浮
-适用: 移动端产品的"这就是它"定格镜头；功能点分列两侧的介绍段；片头/片尾的产品全景
-时长: 约5.6s（168f@30fps）
-能量: 低（安静、有呼吸感，靠同心圆的持续起伏撑住不冷场）
+summary: Four concentric grey circles breathe out of phase like water ripples while a centered phone mockup auto-scrolls its feed and two white feature chips spring in and hover.
+use: The "here it is" hero freeze-frame for mobile products; feature breakdown sections flanking both sides; opening or closing product overviews
+duration: ~5.6s (168f @ 30fps)
+energy: Low (serene, breathing feel, sustained by the continuous ripple motion to keep the shot alive)
 ---
 
-## 意图
-用最少的动作把手机放在画面正中并让它"活着"：同心圆负责氛围呼吸，
-屏内自动滚屏负责证明"里面有内容在跑"，两侧 chip 负责点出功能名。
-三层动作各自极慢，叠起来才不会显得静止——这是产品定格镜头的标准配法。
+## Intention
+Anchor a mobile phone at screen center with minimal motion while keeping it undeniably "alive": concentric circles provide atmospheric breathing, in-screen auto-scrolling proves "live content is running inside," and flanking chips highlight feature names. All three motion layers run at deliberate, slow paces, combining so the composition never feels frozen—the gold standard for product hero beauty shots.
 
-## 动效核心
-- demo 画面（look = sand，手机里是 video-shotcraft 的镜头库 feed）：1080p 原生尺寸布局（不走 DesignStage 放大），
-  手机 430×900 占画高 83%，左下角镜刻标志 + video-shotcraft 字标在两枚 chip 落定后升起，收尾是一张产品海报
-- 4 层同心圆（2240/1760/1280/840px，#dccbb4→#f2eadf 由深到浅，最外两层出画铺满）各自
-  `scale 1 ± 0.06`，全片走 1.5 个正弦周期，相邻层相位差 1.7 rad
-  ——错相是"水波"而不是"整体缩放"的关键；每层带受光上沿 + 白色发丝外缘，中心一团暖白柔光托住手机
-- 手机：暖钛金属边框 12px + 黑边 9px、70px 圆角、灵动岛/侧键/玻璃斜反光，两层落地投影；
-  0–26f 从下方 90px snappy 升起，投影随落位收紧
-- 屏内为镜头设计的 feed：大标题 + 精选大卡 + 8 条单集卡（几何插画封面 / 标题 / 时长·节目 / 收听进度），
-  底部常驻迷你播放条（进度匀速推进、波形确定性轻跳），状态栏与播放条下方各一层屏幕底色渐隐
-- feed `translateY 0→−560px`，窗口 `t 0.08→0.98` **匀速无缓动**
-- chip pop：`springAt(t0, damping 13, stiffness 190)` 驱动 scale 0.8→1（一次可见过冲），
-  同时从手机一侧 snappy 外移 28px、opacity 5f 跳满；左 chip 起 37f、右 chip 起 67f
-- pop 完接 `sin` 悬浮 ±8px（2 周期/全片），并由 pop 后 18f 起 24f 的 smooth 渐渐介入
-  ——不是一落位就开始飘
+## Motion Core
+- Demo framing (look = sand, phone displays video-shotcraft shot library feed): 1080p native layout coordinates (bypassing DesignStage scaling), phone 430x900 occupying 83% canvas height; engraved mark + video-shotcraft wordmark rise in the bottom-left after both chips settle, concluding on a product poster.
+- 4 concentric circles (2240/1760/1280/840px, #dccbb4->#f2eadf from dark to light, outer two layers spilling beyond canvas) each scale 1 ± 0.06 over 1.5 sine cycles, with a 1.7 rad phase offset between adjacent layers—phase offset is crucial for "ripples" rather than "monolithic scaling"; each layer features illuminated upper rims + white hairline outer edges, with warm white soft light cradling the phone at center.
+- Phone: warm titanium metal frame 12px + 9px bezel, 70px corner radius, dynamic island / side buttons / diagonal glass specular reflection, two-tier contact shadows; rises snappy 90px from below over 0–26f, shadows tightening upon landing.
+- Custom feed designed for the shot: large title + featured hero card + 8 episode cards (geometric illustration covers / titles / duration & show / progress), fixed mini player bar at bottom (constant progress bar advance, deterministic waveform pulses), status bar and player bar underlaid with canvas color gradients.
+- Feed translateY 0->-560px across window t 0.08->0.98 **constant linear velocity with zero easing**.
+- Chip pop: springAt(t0, damping: 13, stiffness: 190) drives scale 0.8->1 (single visible overshoot), simultaneously shifting outward 28px snappy from phone edge, opacity jumping to full in 5f; left chip starts at 37f, right chip at 67f.
+- Following pop, chips engage sine hover ±8px (2 cycles across shot), phasing in smoothly over 24f starting 18f post-pop—floating does not start abruptly upon landing.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 同心圆层数/尺寸 | 4 层 2240/1760/1280/840px（1080p） | 3 层撑不满画面；最外层要出画，否则读作一块圆形色板 |
-| 呼吸幅度 | scale 1±0.06，1.5 周期/全片 | 0.06 已是上限；到 0.1 就读作"脉冲动画"而非水波 |
-| 相位差 | 相邻层 1.7 rad | 相位全同 = 整块放大缩小；差 1.7 才有波从中心荡开的错觉 |
-| 手机投影 | 贴近实影 0 4px 10px + 远影 0 40px 80px -20px + 环境影 0 90px 140px -40px（sand.shadow 带色相） | 投影是手机"浮在波上"的唯一依据，去掉就贴平了 |
-| 自动滚屏 | translateY 0→−560px，t 0.08→0.98 匀速 | 加 ease 立刻读作"有人在滑"；匀速才是自动播放 |
-| chip pop | spring damping 13 / stiffness 190，scale 0.8→1，外移 28px | 过冲量是"弹出"的全部质感，damping >20 就平了 |
-| chip 时序 | 左 37f / 右 67f（1s 差） | 同时出现读作两个标签；错开才有"一个一个说"的节奏 |
-| chip 悬浮 | ±8px、2 周期，pop 后 18f 起 24f 渐入 | 幅度超过 ~12px 就和同心圆的呼吸抢戏 |
-| chip 字号 | 36px / 600 字重 + 60px 强调色图标圆 | 1080p 下 chip 是要读的字，别回到 12–20px 的贴纸尺寸 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Concentric circle layers / sizes | 4 layers: 2240/1760/1280/840px (1080p) | 3 layers fail to fill the frame; outer layer must bleed off-canvas, or it looks like a round color swatch |
+| Breathing amplitude | scale 1 ± 0.06, 1.5 cycles across shot | 0.06 is the ceiling; 0.1 reads as a "pulsing animation" rather than water ripples |
+| Phase offset | 1.7 rad between adjacent layers | Identical phase = uniform scale pulse; 1.7 offset creates the illusion of outward radiating waves |
+| Phone shadows | Crisp contact shadow 0 4px 10px + ambient shadow 0 40px 80px -20px + environment shadow 0 90px 140px -40px (sand.shadow tinted) | Shadows provide the sole anchor for the phone "floating above ripples"; removing them flattens depth |
+| Auto-scroll | translateY 0->-560px, t 0.08->0.98 linear | Adding easing immediately reads as "someone swiping"; linear speed conveys automated playback |
+| Chip pop | spring damping 13 / stiffness 190, scale 0.8->1, 28px outward shift | Overshoot delivers the entire tactile pop sensation; damping >20 feels flat |
+| Chip timing | Left 37f / Right 67f (1s stagger) | Simultaneous arrival reads like two labels; staggering creates an unhurried "one by one" narrative cadence |
+| Chip hover | ±8px, 2 cycles, smoothly fading in over 24f starting 18f post-pop | Amplitudes over ~12px compete with the concentric ripples |
+| Chip font size | 36px / 600 weight + 60px accent icon circle | Under 1080p, chips must be readable words, not tiny 12–20px sticker tags |
 
-## 已知坑
-- chip 用 `right: 1920 − PX + CHIP_GAP` / `left: PX + PW + CHIP_GAP` 贴着手机外缘定位；
-  改手机宽度 PW 后两侧 chip 自动跟随，但要确认长文案 chip 的外缘仍在 96px 安全边距内
-- 屏内 feed 是假条目的占位内容，落地换真实截图时总高必须
-  大于「560px + 屏高」，否则滚到底露白
-- 手机屏只有 ~390px 宽：单集卡标题控制在 ~18 个字符、元信息 `nowrap + ellipsis`，否则折行把卡片撑高
-- 同心圆是实色叠放（不是描边圆环），层序必须由大到小 append，
-  顺序反了就只看得见最大那层
-- ACCENT（默认 sand 的赤陶 #c4552d）作用于屏内封面/进度条/播放键与 chip 图标，
-  换项目品牌色只改这一个变量即可换肤
+## Known Pitfalls
+- Chips anchor against the phone's outer edge via `right: 1920 − PX + CHIP_GAP` / `left: PX + PW + CHIP_GAP`; modifying phone width PW updates chip positions automatically, but verify that longer text chips stay inside the 96px safety margins.
+- In-screen feed contains mock placeholder items; when substituting real product screenshots, total content height must exceed `560px + screen_height`, otherwise scrolling exposes blank voids.
+- Mobile display width is only ~390px: constrain episode card titles to ~18 characters with `nowrap + ellipsis` on metadata, preventing text wrap from breaking card heights.
+- Concentric circles are stacked solid surfaces (not stroke rings); layers must be appended in order from largest to smallest, otherwise the largest layer conceals smaller ones.
+- ACCENT (default sand terracotta `#c4552d`) governs in-screen covers, progress bars, play buttons, and chip icons; reskinning requires modifying only this single variable.
 
-## 参考实现
+## Reference Implementation
 demos/effects/radial-ripple-phone-chips/
-（RadialRipplePhoneChips.tsx）
+(RadialRipplePhoneChips.tsx)

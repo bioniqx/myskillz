@@ -1,30 +1,30 @@
-// 落拍黑场爆开（drop-blackout-slam）——EDM concert blackout 的节奏手法：
-// 帧 0–49:假面板正常"播放"(scale 呼吸 1.0↔1.02)+右下角节拍点每 12f 闪一下;
-// 帧 50–61:一帧切纯黑 #0c0c0c,整整 12f 死寂,屏上完全无物(蓄力全靠这一拍静默);
-// 帧 62:白色大标题 "DROP" 从 scale 1.35 撞到 1.0(5f cubic out),同帧整屏
-// 10px 震屏指数衰减(τ≈2.5f,约 12f 收干),底色变 G.ink 并从中心泛出一圈
-// 快速消散的亮环;帧 ~80 起全静止到 130,收尾 ≥40f 真静止。
+// Drop blackout slam (drop-blackout-slam) — EDM concert blackout rhythmic technique:
+// Frames 0–49: faux dashboard "plays" normally (scale breathing 1.0 <-> 1.02) + lower-right beat dot flashes every 12f;
+// Frames 50–61: hard cut to pure black #0c0c0c for 12f dead silence, screen completely empty (anticipation built via silence);
+// Frame 62: large white title "DROP" slams from scale 1.35 to 1.0 (5f cubic out), simultaneous 10px full-screen
+// exponential shake (tau ≈ 2.5f, settles in ~12f), background turns to G.ink with an expanding bright ring
+// rapidly dissipating from center; frame ~80 to 130 completely static, >= 40f true static hold at finish.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard, G } from '../../_fixtures/Fixtures';
 
-// 帧确定伪随机(硬规矩:禁 Math.random)
+// Frame-deterministic pseudorandom (strict rule: no Math.random)
 const h = (n: number) => {
   const s = Math.sin(n * 127.3) * 43758.5453;
   return s - Math.floor(s);
 };
 
-const BLACK_IN = 50; // 切黑帧
-const SLAM = 62; // 爆入帧
+const BLACK_IN = 50; // Cut to black frame
+const SLAM = 62; // Slam frame
 
 export const DropBlackoutSlam: React.FC = () => {
   const f = useCurrentFrame();
 
-  // ===== 段 1:帧 0–49 正常播放 =====
+  // ===== Phase 1: frames 0–49 normal playback =====
   if (f < BLACK_IN) {
-    // scale 呼吸 1.0↔1.02,周期 48f
+    // Scale breathing 1.0 <-> 1.02, 48f period
     const breathe = 1.01 + 0.01 * Math.sin((f / 48) * Math.PI * 2);
-    // 节拍点:每 12f 闪一下(亮 4f 衰减)
+    // Beat indicator: flashes every 12f (4f decay)
     const beatPhase = f % 12;
     const beatOn = interpolate(beatPhase, [0, 1, 5], [0.25, 1, 0.25], {
       extrapolateLeft: 'clamp',
@@ -39,7 +39,7 @@ export const DropBlackoutSlam: React.FC = () => {
         <div style={{ width: 1920, height: 1080, transform: `scale(${breathe})`, transformOrigin: '50% 50%' }}>
           <FakeDashboard variant="B" />
         </div>
-        {/* 右下角节拍点 */}
+        {/* Lower-right beat indicator */}
         <div
           style={{
             position: 'absolute',
@@ -57,27 +57,27 @@ export const DropBlackoutSlam: React.FC = () => {
     );
   }
 
-  // ===== 段 2:帧 50–61 纯黑死寂,屏上完全无物 =====
+  // ===== Phase 2: frames 50–61 pure black silence, screen completely empty =====
   if (f < SLAM) {
     return <div style={{ width: 1920, height: 1080, background: '#0c0c0c' }} />;
   }
 
-  // ===== 段 3:帧 62 起爆入 =====
+  // ===== Phase 3: frame 62 onward slam =====
   const t = f - SLAM;
 
-  // 标题:scale 1.35 → 1.0,5f cubic out
+  // Title: scale 1.35 -> 1.0, 5f cubic out
   const slamScale = interpolate(t, [0, 5], [1.35, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
 
-  // 震屏:10px 指数衰减,τ≈2.5f,~12f 收干;t≥14 强制归零保证结尾真静止
+  // Screen shake: 10px exponential decay, tau ≈ 2.5f, settles in ~12f; clamped to 0 at t >= 14 for true static hold
   const amp = t >= 14 ? 0 : 10 * Math.exp(-t / 2.5);
   const shakeX = amp === 0 ? 0 : (h(f * 3.7 + 1) - 0.5) * 2 * amp;
   const shakeY = amp === 0 ? 0 : (h(f * 7.1 + 2) - 0.5) * 2 * amp;
 
-  // 亮环:从中心快速扩散并消散,~16f 走完(t≥16 后 opacity=0 且不再画)
+  // Shockwave ring: expands from center and dissipates, completes in ~16f (opacity = 0 and unrendered for t >= 16)
   const ringR = interpolate(t, [0, 16], [80, 900], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: 'clamp',
@@ -101,7 +101,7 @@ export const DropBlackoutSlam: React.FC = () => {
           position: 'relative',
         }}
       >
-        {/* 亮环:快速扩散消散 */}
+        {/* Shockwave ring: rapid expansion and dissipation */}
         {t < 16 && (
           <div
             style={{

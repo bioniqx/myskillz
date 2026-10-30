@@ -1,41 +1,41 @@
 ---
 name: basic-3d-scene
-一句话: impress.js 式空间演示：卡片以不同位置/旋转/缩放散布 3D 空间，相机取各步姿态之逆依次飞行对齐，末步拉到 OVERVIEW 总览
-适用: 概念/路线图/三步法的空间化讲述；替代平面 slides 的"每一步都换个空间视角"
-时长: 约 7.5s（225f@30fps；四站，三段飞行 28/32/32f，每站停留 ≥30f）
-能量: 中（每次转场有空间惊喜，停留段安静读卡）
+summary: Impress-style spatial slides: cards sit at scattered 3D poses and the camera flies to align with each one by inverting its transform, ending on a pulled-back overview where every card lights up.
+use: Spatial storytelling for concepts, roadmaps, or a 3-step framework; replaces flat 2D slides with a "different spatial perspective for every step"
+duration: ~7.5s (225f@30fps; four stops, three flight segments 28/32/32f, hold >=30f per stop)
+energy: Medium (spatial surprise on each transition, quiet card reading during hold)
 ---
 
-## 意图
-把"翻页"变成"在想法的空间里旅行"：每张卡不仅有位置还有姿态（第二站世界左转 38°、第三站整个画框侧躺 90°），相机对齐它时观众的世界也跟着转——空间变化本身成为"进入新章节"的仪式感。
+## Intention
+Turn "page flipping" into "traveling through an idea space": each card has not only a position but also a 3D pose (the second stop tilts the world left by 38°, the third stop lays the frame on its side by 90°), and as the camera aligns to each card, the viewer's world rotates with it—the spatial transformation itself creates a sense of ceremony for entering each new chapter.
 
-## 动效核心
-- 核心配方一行：**camera = stepTransform.inverse()**。每站只写卡片自己的 pose（x/y/z/rx/ry/rz/s），相机变换按 `scale(1/s) rotateZ(-rz) rotateY(-ry) rotateX(-rx) translate3d(-x,-y,-z)` 取逆，顺序严格相反
-- demo 用 graphite 暗场（近单色 + 香槟金点缀），video-shotcraft 的三章节卡 Frame / Craft / Ship（品牌短句拆成三章，卡头右侧挂标志 + 字标）：卡片 1240×700 **原生 1:1 排版**（对位时就是屏幕像素，不经设计坐标放大，字不糊），156px 标题 + 44px 说明 + 被卡边裁切的 560px 细体章节数字
-- 四站姿态各有戏剧点：STEP01 原点正视 → STEP02 (1690,−260,−650) + ry−38° → STEP03 (2590,830,−850) + rz90°（画框侧躺，相机跟着转正它）→ OVERVIEW s=2.7（相机 1/2.7 拉远），总览站位置按"三卡落在右上、左下留给落版"反解
-- 飞行链式插值：三段飞行 36–64 / 96–128 / 158–190（帧），不对称 in-out bezier(0.62,0,0.16,1)；站间飞行途中相机额外拉远 30%（hop，sin 包络）让观众看见空间里的其他卡；飞行段做时间采样运动模糊（快门 0.5f，子帧 1–8 按相机位移自适应）
-- 停留段不死：落位后相机极缓推近 1.5%（下一段起飞时同曲线还原），卡底金色进度线走满当前段；标题在落位前 8f 逐字从线下升起，每张卡只揭示一次
-- 空间参照：70 颗真 3D 浮尘挂在世界坐标里（各有 z），视差全部来自相机；enter/exit 聚焦按"站距"`d = |af − i|` 给 `opacity 0.22–1 + blur 0–7px`，总览段全员回到 0.85
-- OVERVIEW 落版挂在总览站姿态上（放大 2.7 倍排版，相机 1/2.7 看回来 = 屏幕 1:1）：眉题是 video-shotcraft 标志 + 字标，"Craft the shot." 150px 衬线逐词升起，尾段 hold 推近 1.5%
+## Motion Core
+- One-line core recipe: **camera = stepTransform.inverse()**. Each stop only defines the card's own pose (x/y/z/rx/ry/rz/s). The camera transform takes the exact inverse in strictly reverse order: `scale(1/s) rotateZ(-rz) rotateY(-ry) rotateX(-rx) translate3d(-x,-y,-z)`.
+- The demo uses a graphite dark background (near-monochrome with champagne gold accents) for video-shotcraft's three chapter cards: Frame / Craft / Ship (a brand punchline split into three chapters, with the logo mark + wordmark pinned at the top-right of each card): cards use **native 1:1 typesetting** at 1240x700 (matching screen pixels when aligned, no upscaling from design coordinates, keeping text crisp), with a 156px headline + 44px description + 560px light-weight chapter numeral cropped by the card border.
+- Four stops, each with its own dramatic note: STEP01 front-facing at the origin -> STEP02 (1690, -260, -650) + ry -38° -> STEP03 (2590, 830, -850) + rz 90° (frame on its side, camera rotates to right it) -> OVERVIEW s=2.7 (camera pulls back by 1/2.7); the overview position is reverse-calculated so the three cards land in the upper right, leaving the lower left for the end lockup.
+- Chained flight interpolation: three flight segments at frames 36–64 / 96–128 / 158–190, using an asymmetric ease bezier(0.62, 0, 0.16, 1); the camera pulls back an extra 30% mid-flight (hop, sine envelope) to reveal surrounding cards in the space; flight segments use time-sampled motion blur (shutter 0.5f, adaptive 1–8 subframes based on camera velocity).
+- Holds remain alive: after settling, the camera executes an ultra-slow 1.5% push-in (reverted along the same curve upon takeoff for the next segment), while a golden progress line at the card base fills across the current segment; headlines rise word-by-word from beneath the line 8f before landing, revealing each card only once.
+- Spatial reference: 70 true 3D dust particles suspended in world coordinates (each with its own z), with all parallax driven by camera motion; enter/exit focus applies `opacity 0.22–1 + blur 0–7px` based on distance `d = |af - i|`, with all cards returning to 0.85 opacity in the overview stage.
+- The OVERVIEW lockup is anchored to the overview pose (typeset at 2.7x scale, viewed by the camera at 1/2.7 = 1:1 on screen): eyebrow title with video-shotcraft logo + wordmark, "Craft the shot." 150px serif title rising word-by-word, ending with a 1.5% push-in hold.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 站点姿态 | 每站至少一个新变换维度 | 只挪 x/y 是平移幻灯片；rz 站（画框旋转）是记忆点，一支片用一次 |
-| 飞行时长 | 28–32f | 有旋转的段别短于 28f，观众需要时间理解"世界在转" |
-| 停留时长 | ≥30f | 读卡位；卡内文字多时优先加停留而不是减飞行 |
-| hop 拉远 | 30% | 0 = 贴着卡面平移，看不到空间；>50% 每段都像总览 |
-| OVERVIEW 缩放 | s=2.7 | 值越大总览越"高空"；先定总览海报构图，再反解各站世界坐标 |
-| 聚焦衰减 | opacity 0.22 底 + blur 7px 峰 | 底值别低于 0.2——离焦卡要"在场"，纯黑会丢空间感 |
-| perspective | 2600px | 与最大 |z|（850）比值约 3:1；更深的 z 需同步加大 persp 防畸变 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Stop poses | At least one new transform dimension per stop | Moving only x/y is just a 2D slide pan; an rz stop (frame roll) creates a visual memory anchor—use once per video |
+| Flight duration | 28–32f | Don't go shorter than 28f for segments with rotation; viewers need time to register "the world is turning" |
+| Hold duration | >=30f | Reading window; when a card has heavy text, prioritize lengthening the hold rather than shortening flight |
+| Hop pull-back | 30% | 0 = flat panning across card surface with no spatial depth; >50% makes every transition feel like an overview |
+| OVERVIEW scale | s=2.7 | Higher values mean higher altitude overview; lock in the overview poster composition first, then reverse-engineer world coordinates for each stop |
+| Focus falloff | Opacity 0.22 floor + blur 7px peak | Keep the floor above 0.2—out-of-focus cards must remain present, pure black destroys the sense of space |
+| Perspective | 2600px | Ratio to maximum |z| (850) is ~3:1; deeper z requires larger perspective to prevent distortion |
 
-## 已知坑
-- 逆变换的旋转顺序（Z→Y→X 反着正变换的 X→Y→Z）不能乱——乱序在单轴旋转时看不出来，多轴复合站会歪
-- 卡片 pose 写在卡自身 transform 和相机公式两处消费，加站只改 POSES 表，两处 transform 字符串别动
-- rz90° 站的卡内文字会跟着躺倒，相机转正后才可读——这是设计（转正瞬间"啊看懂了"），但该站文案要短
-- 落版挂在世界里时，最后一段飞行中它是斜的：显影要晚（飞行过半再淡入），逐字揭示等落位前 6f 再开始
-- OVERVIEW 后无返程，作段落收尾用；要循环回 STEP01 就在末尾加一段 fly back（cam 再 lerp 回 POSES[0]）
+## Known Pitfalls
+- The reverse rotation order (Z -> Y -> X inverting forward X -> Y -> Z) cannot be swapped; misordering won't show on single-axis rotation, but multi-axis compound stops will skew out of place.
+- Card poses are consumed in two places: the card's own transform and the camera formula; to add stops, only edit the POSES table and leave both transform strings intact.
+- Text inside the rz 90° card lies sideways and only becomes readable once the camera rights it—this is by design (the "aha, I get it" moment upon righting), but keep copy short for this stop.
+- When the final lockup lives in the 3D world, it appears tilted during the final flight segment: fade it in late (after mid-flight), and delay the word-by-word reveal until 6f before settling.
+- There is no return flight after OVERVIEW; it serves as a section finale. To loop back to STEP01, add a fly-back segment at the end (cam lerps back to POSES[0]).
 
-## 参考实现
+## Reference Implementation
 demos/camera/basic-3d-scene/
-（Basic3DScene.tsx）
+(Basic3DScene.tsx)

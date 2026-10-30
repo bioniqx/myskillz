@@ -1,26 +1,25 @@
-// brace-expand — Brace Expand Reveal 括号拉幕
-// 一对紧贴的花括号先小字号出现在正中，随即带一次过冲向左右弹开并放大到标题级，括号之间的标题像被拉开的幕布
-// 一样从中间露出（clip 宽度严格绑括号间距），落定后字距再细微松弛。
+// brace-expand — Brace Expand Reveal (bracket curtain reveal)
+// A tight pair of curly braces appears centered at small scale, then springs open left and right with an overshoot while scaling up to title size; the title between the braces reveals from the center like a parted curtain (clip width strictly bound to brace distance), with tracking relaxing slightly after settling.
 //
-// 第二轮重设计（午夜 · 开发者发布会字卡）：
-// - look = midnight。画面是一张技术产品发布字卡：等宽 300px 电光蓝花括号（带泛光）夹住 164px 800 字重的
-//   品牌名「video-shotcraft」（全小写，字宽贴满括号内腔）；上方等宽眉题「// shot recipes for your agent」、
-//   下方副标（品牌短句 Frame motion. Craft the shot.）逐词浮现。背景是编辑器式点阵网格
-//   （径向渐隐）+ 顶光 + 地平线光带，括号下方一道冷光反射。
-// - 开场：第 0 帧画面中心已有一个闪烁的输入光标（编辑器语感，不是空帧）；6f 光标被一对紧贴的 0.4 倍小括号
-//   "{}" 硬切替换（符号啪地在那儿，不淡入）——先建立"这是一对括号"。
-// - 主动作：14f 起物理弹簧 ex（damping 14 / stiffness 130：起跳后 ~8f 到位、~11f 过冲峰 ≈9%、一次回弹）；
-//   sc = mix(0.4, 1, ex)，幕布半宽 x = (HALF−内缘)·ex·sc，位移与放大乘在一起（放大本身也在推开括号）；
-//   括号中心 = ±(x + 内缘·sc)，文字 clip 宽度 = 2x，严格绑括号内缘，括号与文字共用同一个 sc。括号按水平速度加方向性运动模糊，落定为 0。
-// - 余波：落定后字距 −0.05em → −0.03em 松弛（呼一口气）、括号泛光从峰值回落；眉题与副标随后入场。
+// Round 2 redesign (midnight / developer keynote title card):
+// - look = midnight. Composition is a tech product launch title card: monospace 300px electric blue braces (with glow) framing 164px weight-800
+//   brand name "video-shotcraft" (all lowercase, text width flush with brace inner cavity); monospace kicker "// shot recipes for your agent" above,
+//   subtitle below (brand motto Frame motion. Craft the shot.) revealing word-by-word. Background features an editor-style dot matrix grid
+//   (radial fade) + top light + horizon light ribbon, with a cool specular reflection below the braces.
+// - Opening: frame 0 has a blinking input cursor at the center (editor feel, not an empty frame); at 6f, the cursor is hard-cut replaced by a tight 0.4x pair of brackets
+//   "{}" (snapping into place without fading) — first establishing "this is a pair of braces".
+// - Primary action: physical spring ex starting at 14f (damping 14 / stiffness 130: reaches target in ~8f, overshoot peak ~11f ≈9%, one rebound);
+//   sc = mix(0.4, 1, ex), curtain half-width x = (HALF - innerEdge) * ex * sc, displacement multiplied with scaling (scale itself pushes braces outward);
+//   brace center = ±(x + innerEdge * sc), text clip width = 2x, strictly bound to brace inner edge, sharing the same sc. Braces add directional motion blur from horizontal velocity, settling to 0.
+// - Aftermath: tracking relaxes from -0.05em -> -0.03em after settling (breathing room), brace glow decays from peak; kicker and subtitle enter afterwards.
 //
-// 时间表（30fps，共 120f）：
-//   0–6     光标闪烁（中心，第 0 帧即在）
-//   6–14    小括号 "{}" 硬切出现、静置 8f
-//   14–38   弹开：弹簧 ~22f 到位、~25f 过冲峰 ≈9%、~38f 收敛；文字从中间被"拉"出来
-//   40–64   松弛：字距 −0.05→−0.03em（smooth）、泛光回落
-//   44–80   眉题字距收拢入场（44f）、副标逐词浮现（54f 起）
-//   80–120  hold：整幅极缓前推 1→1.012
+// Schedule (30fps, 120f total):
+//   0–6     Cursor blinking (centered, present from frame 0)
+//   6–14    Small braces "{}" hard-cut appear, hold for 8f
+//   14–38   Spring expand: spring reaches target in ~22f, overshoot peak ~25f ≈9%, settles by ~38f; text is "pulled" out from center
+//   40–64   Relaxation: tracking -0.05 -> -0.03em (smooth), glow decays
+//   44–80   Kicker tracking closes in (44f), subtitle reveals word-by-word (from 54f)
+//   80–120  Hold: subtle camera push-in 1 -> 1.012
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, mix, ramp } from '../../_fixtures/Polish';
@@ -30,17 +29,17 @@ import { BRAND, PITCH } from '../../_fixtures/Brand';
 export const BRACE_EXPAND_DURATION = 120;
 
 const L = LOOKS.midnight;
-const CY = 520; // 标题中线
-const HALF = 676; // 括号中心最终半距（px）
-const BRACE_FS = 300; // 括号最终字号
-const BRACE_INNER = 64; // 括号字形中心到内缘的距离（×sc），clip 从这里起算
-const TITLE = BRAND.name; // 字标全小写
-const TITLE_FS = 164; // 字宽 ≈ 内腔宽 2·(HALF−内缘)：幕布拉到头才露全（换文案要同步调 HALF 或字号）
+const CY = 520; // Headline center line
+const HALF = 676; // Final half-distance between brace centers (px)
+const BRACE_FS = 300; // Final brace font size
+const BRACE_INNER = 64; // Distance from brace glyph center to inner edge (* sc), clip starts here
+const TITLE = BRAND.name; // Wordmark lowercase
+const TITLE_FS = 164; // Text width ≈ inner cavity width 2*(HALF - innerEdge): fully revealed only at full stretch (adjust HALF or font size if changing copy)
 const APPEAR = 6;
 const EXPAND = 14;
 
 const expandAt = (f: number) => (f < EXPAND ? 0 : springAt(f, EXPAND, { damping: 14, stiffness: 130 }));
-// 幕布半宽 x = (HALF − 内缘)·ex·sc；括号中心 = ±(x + 内缘·sc)——ex=0 时两只括号内缘相贴成 "{}"
+// Curtain half-width x = (HALF - innerEdge) * ex * sc; brace center = ±(x + innerEdge * sc) — when ex=0 inner edges touch forming "{}"
 const braceX = (f: number) => {
   const ex = expandAt(f);
   return (HALF - BRACE_INNER) * ex * mix(0.4, 1, ex);
@@ -62,20 +61,20 @@ export const BraceExpand: React.FC = () => {
   const ex = expandAt(frame);
   const sc = mix(0.4, 1, ex);
   const x = braceX(frame);
-  const v = braceX(frame + 0.5) - braceX(frame - 0.5); // 括号水平速度（px/帧）
+  const v = braceX(frame + 0.5) - braceX(frame - 0.5); // Brace horizontal velocity (px/frame)
 
-  // 文字揭示宽度：严格绑括号内缘（= 2x），两侧 14px 羽化（窄时跟着收）
+  // Text reveal width: strictly bound to brace inner edges (= 2x), 14px feathering on both sides (collapses when narrow)
   const clipW = Math.max(0, 2 * x);
-  const bx = x + BRACE_INNER * sc; // 括号中心
+  const bx = x + BRACE_INNER * sc; // Brace center
   const feather = Math.min(14, clipW / 4);
   const mask = `linear-gradient(90deg, transparent 0px, #000 ${feather}px, #000 calc(100% - ${feather}px), transparent 100%)`;
 
-  // 落定后字距松弛 + 泛光回落（泛光峰值跟着过冲走）
+  // Post-settle tracking relaxation + glow decay (glow peak tracks overshoot)
   const relax = ramp(frame, 40, 24, EASE.smooth);
   const ls = mix(-0.05, -0.03, relax);
   const glowK = Math.min(1, ex) * (1 - ramp(frame, 34, 30, EASE.out));
 
-  // 光标：0–6f 闪烁
+  // Cursor: 0-6f blinking
   const caretOn = !on && Math.floor(frame / 3) % 2 === 0;
 
   const cam = 1 + 0.012 * ramp(frame, 70, 50, EASE.smooth);
@@ -83,7 +82,7 @@ export const BraceExpand: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.02 }} fill={null} horizon={0.66} breathe={0.4}>
-        {/* 编辑器点阵：32px 栅格，中心亮、四周隐去 */}
+        {/* Editor dot matrix: 32px grid, bright center, fading toward edges */}
         <div style={{
           position: 'absolute', inset: 0,
           backgroundImage: `radial-gradient(circle, ${alpha('#a9bcff', 0.16)} 1.4px, transparent 1.8px)`,
@@ -91,7 +90,7 @@ export const BraceExpand: React.FC = () => {
           WebkitMaskImage: 'radial-gradient(ellipse 60% 55% at 50% 48%, #000 0%, rgba(0,0,0,0.35) 55%, transparent 85%)',
           maskImage: 'radial-gradient(ellipse 60% 55% at 50% 48%, #000 0%, rgba(0,0,0,0.35) 55%, transparent 85%)',
         }} />
-        {/* 括号下方的冷光反射带（随弹开展宽） */}
+        {/* Cool specular reflection ribbon below braces (broadens as braces expand) */}
         <div style={{
           position: 'absolute', left: 960 - (x + 120), width: 2 * (x + 120), top: CY + 150, height: 90,
           background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha(L.accent, 0.22 * Math.min(1, ex))} 0%, ${alpha(L.accent, 0)} 70%)`,
@@ -99,14 +98,14 @@ export const BraceExpand: React.FC = () => {
       </Stage>
 
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${cam.toFixed(5)})`, transformOrigin: `50% ${CY}px` }}>
-        {/* 眉题：等宽注释 */}
+        {/* Kicker: monospace comment */}
         <div style={{
           position: 'absolute', left: 0, right: 0, top: CY - 248, textAlign: 'center', color: L.accent2,
           ...type(32, 500, { mono: true }), letterSpacing: `${mix(0.5, 0.08, ramp(frame, 44, 20, EASE.snappy)).toFixed(3)}em`,
           opacity: ramp(frame, 44, 14, EASE.out),
         }}>// shot recipes for your agent</div>
 
-        {/* 标题：clip 宽度绑括号间距（幕布感，不是淡入/打字） */}
+        {/* Headline: clip width bound to brace gap (curtain effect, not fade or typewriter) */}
         {on && (
           <div style={{
             position: 'absolute', left: 960 - clipW / 2, width: clipW, top: CY - 110, height: 220, overflow: 'hidden',
@@ -125,7 +124,7 @@ export const BraceExpand: React.FC = () => {
         {on && <Brace ch="{" x={-bx} sc={sc} v={-v} glowK={glowK} />}
         {on && <Brace ch="}" x={bx} sc={sc} v={v} glowK={glowK} />}
 
-        {/* 开场光标 */}
+        {/* Opening cursor */}
         {caretOn && (
           <div style={{
             position: 'absolute', left: 960 - 4, top: CY - 60, width: 8, height: 120, borderRadius: 2,
@@ -133,7 +132,7 @@ export const BraceExpand: React.FC = () => {
           }} />
         )}
 
-        {/* 副标 */}
+        {/* Subtitle */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: CY + 170, textAlign: 'center', color: L.ink2, ...type(44, 450) }}>
           <TextReveal text={PITCH.en.motto} by="word" variant="blur" start={54} each={16} gap={3} />
         </div>

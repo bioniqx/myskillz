@@ -1,39 +1,39 @@
 ---
 name: outro-group-photo-launch
-一句话: 全片元素从四面八方飞来围住字标合影，crane 落机位+舞台光+金尘做成发布会收场
-适用: outro/品牌收尾；多功能产品的"全家福"式终镜
-时长: 约 4.8s（145f）
-能量: 峰值（全片最高点）
+summary: Elements from the film assemble around the wordmark as a crane settle, stage light, and gold dust create a launch-event finale.
+use: Outro / brand finale; "family portrait" closing shot for multi-feature products
+duration: ~4.8s (145f)
+energy: Peak (highest energy point of the entire video)
 ---
 
-## 意图
-把看过的每个功能各抽一个代表元素叫回来合影，字标压轴登场——观众离场前最后记住的是"这些东西属于同一个产品"。规格必须是发布会级：能量推到全片最高。
+## Intention
+Recalling one representative element from every featured function for a group photo, with the wordmark taking center stage as the grand finale—before exiting, the audience remembers that "all of these capabilities belong to a single product." Execution must be keynote-grade: energy pushed to the absolute peak of the video.
 
-## 动效核心
-- 9 个页面元素（nav/卡片/内容条/搜索框/统计条/文档头）从四方带旋转飞入，飞行段按速度做方向性运动模糊，落地压实（接触影收紧 + 1.5% 轻压，不逐个发光，Q4）
-- 字标（demo：video-shotcraft 标志 + 字标，眉题是品牌短句）letterpress 逐字登场，全员"退后排"让主角；rule 长出、延长线射出
-- crane 运镜：合影层整体 rotateX 4°→0 + scale 落下，之后缓推
-- 发布会氛围三件套：开场光带扫过、字标背后舞台光、金尘上飘
-- 背景页面 blur 化作景深
+## Motion Core
+- 9 page elements (nav / cards / content rows / search bar / metric bar / doc header) fly in with rotation from all four quadrants; flight paths apply speed-scaled directional blur, landing solid on contact (tightening contact shadow + 1.5% micro-compression, no individual glowing, Q4).
+- Wordmark (demo: video-shotcraft logo + wordmark, with brand motto eyebrow) enters via letterpress letter-by-letter; ensemble elements "step back" to yield focus; divider rule draws out with extension rays shooting from ends.
+- Crane camera move: photo layer assembly drops into frame via rotateX 4 deg -> 0 + scale, transitioning into an ultra-slow push-in.
+- Keynote atmosphere trinity: opening light streak sweep, stage backlight behind wordmark, and ascending gold dust particles.
+- Background page blurs into depth-of-field environment.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 元素飞入 | 9 元素 cue 从 4 起每 3f 一个，各飞 12f；起点偏移 ±360–500px；渲染顺序=cue 顺序，后到者叠上 | 每个已展示过的功能都要有代表元素（Q8 自检项），缺谁观众都会察觉 |
-| 飞入缓动 | bezier(0.34,1.4,0.44,1) | 代码注释点名教训：旧 bezier(0.25,0.9,0.3,1) "never crossed 1" 没有真过冲——落地要弹 y1 必须 >1 |
-| 飞行姿态 | 飞行中 rot×2→settled rot（±5° 内）、scale ×1.12→1；按屏幕速度的方向性运动模糊（0.3×px/帧，封顶 22）；落地 cue+9→16f 接触影收紧 + 1.5% 轻压 | 落定角度收进 ±5° 内——合影要整齐但不刻板 |
-| 退后排 | 字标登场时 42–50f 全员 opacity −12%、saturate −8% | 主角登场配角必须让位，不让位字标压不住 9 个元素 |
-| crane 运镜 | `perspective(1400px) rotateX(4°→0) scale(1.06→1)` 前 40f 落下，之后缓推 +0.035（36f 起 in-out 零速起步，接 crane 不突变） | crane 幅度就这么小（4°）已经够"落机位"读感，大了会晕（推测） |
-| 氛围三件套 | 光带 2–14f（600px 宽 overlay 峰值 opacity 0.12）；舞台光 42→50→58f 0→0.5→0.25；金尘 20 颗 2.4–4.2px 带暖光晕、opacity 0.35–0.7 微闪 + 6 颗前景失焦光斑、全参数 index 派生确定性 | 粒子/光效参数必须确定性派生（硬规则：渲染必须可复现）；金尘超过 30 颗开始像雪（推测） |
-| 字标 | demo 为 video-shotcraft 标志 + 全小写字标（品牌字体 118px）：标志 38f 先压，字母 delay=42+i·1.8、8f，同一套 letterpress；rule 58→70f 长出、两端 190px 延长线 8f 射出 6f 淡去；字距 62–66f 呼吸；背景页 24f 内 blur 0→14；落定后 sign-off hold 30f | 字标落定 hold 满 1 秒（R1 定案）；outro 不加解说 caption 保持干净（C1 例外项） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Element fly-in | 9 elements cued from frame 4 every 3f, flying 12f each; origin offsets +/-360–500px; render order = cue order so later arrivals stack on top | Every showcased feature must have a representative element (Q8 self-check item); viewers will notice any omission |
+| Fly-in easing | bezier(0.34, 1.4, 0.44, 1) | Code comment lesson: old bezier(0.25, 0.9, 0.3, 1) "never crossed 1" and had no real overshoot—landing requires y1 > 1 to rebound |
+| Flight posture | Flight rot x 2 -> settled rot (within +/-5 deg), scale x 1.12 -> 1; directional blur scaled by screen speed (0.3 x px/frame, capped at 22); landing contact shadow tightens + 1.5% micro-compression at cue+9 -> 16f | Settled angles bounded within +/-5 deg—the ensemble must look organized without being rigid |
+| Step back | Ensemble opacity -12%, saturation -8% across 42–50f when wordmark enters | Supporting cast must yield focus to the lead; otherwise 9 elements overwhelm the wordmark |
+| Crane move | `perspective(1400px) rotateX(4 deg -> 0) scale(1.06 -> 1)` drops over first 40f, transitioning into slow push +0.035 (in-out launching from zero velocity at 36f for seamless handover) | Crane amplitude is subtle (4 deg), which is sufficient to convey camera descent; larger swings cause disorientation |
+| Atmosphere trinity | Light streak 2–14f (600px wide overlay, peak opacity 0.12); stage backlight 42 -> 50 -> 58f at 0 -> 0.5 -> 0.25; gold dust: 20 warm-glow particles 2.4–4.2px, opacity 0.35–0.7 subtle sparkle + 6 foreground defocused bokeh orbs, all parameters index-derived deterministically | Particle and lighting parameters must be derived deterministically (hard rule: renders must be 100% reproducible); >30 dust particles starts looking like snow |
+| Wordmark | Demo uses video-shotcraft glyph + lowercase wordmark (brand font 118px): glyph stamps at 38f, letters delay = 42 + i * 1.8 over 8f with letterpress; rule grows 58 -> 70f with 190px extension lines shooting over 8f and fading over 6f; letter tracking breathes 62–66f; background page blurs 0 -> 14 within 24f; 30f sign-off hold after landing | Hold wordmark lockup motionless for at least 1 full second (R1 rule); keep outro clean with no explanatory captions (C1 exception) |
 
-## 声音
-固定三拍句式：riser-cine 铺进组装（模板片钉在 f945）→ impact-deep-whoosh 钉字标 stamp（f980，vol 0.55 全片峰值）→ sparkle 点 rule（f1005）。这是模板片定稿后唯一从未改动的段落句式（S2；详见 sound-design 4.3）。
+## Audio
+Fixed three-beat phrasing: cinematic riser leads into the assembly (pinned at f945 in template) -> deep whoosh impact nails the wordmark stamp (f980, volume 0.55, full-film peak) -> sparkle pings the rule extension (f1005). This is the only structural phrase never modified since template lock (S2 rule; see sound-design 4.3).
 
-## 已知坑
-- 初版收尾几乎总是偏保守（Q8：安静签名式→合影→发布会三级加码）——起稿就按"像一个产品发布"的规格给足 crane/舞台光/粒子
-- 结构先于特效：先有"四方飞入合影"结构再加码氛围；直接堆特效没有骨架
-- outro tagline 与字标下方文案查重（P4 dedupe 判例），同一句话全片只出现一次
+## Known Pitfalls
+- Initial outro drafts are almost always too conservative (Q8: quiet signature -> group photo -> keynote finale 3-tier escalation)—begin drafting directly with keynote specifications: full crane motion, stage backlight, and dust particles.
+- Architecture precedes effects: establish the "fly in from all quadrants into group photo" structure before layering atmosphere; stacking effects without skeleton fails.
+- Cross-check outro tagline against copy beneath the wordmark (P4 deduplication rule); a single phrase should only appear once in the film.
 
-## 参考实现
-demos/outro/outro-group-photo-launch/OutroGroupPhotoLaunch.tsx（原 template/src/aifl/live/SceneOutroLive.tsx；30f sign-off hold 时长见 template/src/aifl/Main.tsx 时间线）
+## Reference Implementation
+demos/outro/outro-group-photo-launch/OutroGroupPhotoLaunch.tsx (formerly template/src/aifl/live/SceneOutroLive.tsx; see template/src/aifl/Main.tsx timeline for the 30f sign-off hold duration)

@@ -1,87 +1,55 @@
 ---
 name: orbit-ring-title-open
-一句话: 石墨暗场上八张 16:9 暗色内容卡按 45° 均布在 720×380 椭圆上匀速公转（卡身永不倾斜，纵深只由 sin θ 给出 ±12% 缩放、z 序与远处压暗失焦），环撑开期间卡内容冻结首帧、f24 之后八张一起开播；居中两级标题逐字解糊下沉落定，关键词到位那一刻荧光马克块自左横扫铺满、扫过处字反白为墨，mono 副行随后浮出；可选末段整行失焦淡出、环继续转着交棒下一镜
-适用: 开场第一镜 = 「这个产品有一整套东西」；素材库/模板库/功能矩阵/案例集的门面拍；需要用真实运动的产品画面托住一句主张，而不是把截图摆成静态九宫格
-时长: 150f（5s@30fps；马克块 f64 落定后 2.9s 稳态巡回 + 极缓推近；开 HANDOFF_EXIT 时 f118 起退场交棒）
-能量: 中（唯一的持续运动是匀速公转，全片只有马克块横扫一次冲击）
-标签: ui-entrance
+summary: Eight 16:9 content cards orbit an ellipse at a constant rate with their contents frozen on the first frame, then all start playing together while the centred headline de-blurs into place and a marker block sweeps across the key phrase.
+use: Opening establishing shot = "this product offers an entire ecosystem"; flagship showcase for asset libraries, template hubs, feature matrices, or case studies; grounds a central claim with authentic living product visuals rather than a static grid of screenshots
+duration: 150f (5s@30fps; marker block settles at f64 followed by 2.9s steady orbit + slow push-in; HANDOFF_EXIT triggers exit handoff from f118)
+energy: Medium (constant orbit is the sole ongoing motion; marker sweep is the single punch beat)
+tags: ui-entrance
 ---
 
-## 意图
-开场想说"我们有一整套东西"，最常见的做法是把截图排成网格——但网格是静止的，观众
-读到的是"一堆图片"，不是"一套会动的产品"。这张卡把陈列改成**环形巡回**：八张卡沿
-椭圆匀速公转，永远有卡在进画、有卡在出画，画面自带"还有更多"的暗示，而标题稳稳
-钉在正中间不受影响。
+## Intention
+When opening with "we offer an entire suite," the common approach arranges screenshots into a grid—yet grids are static, reading as "a pile of pictures" rather than "a living product." This card transforms display into an **orbital carousel**: eight cards orbit an ellipse at constant speed, with cards perpetually entering and leaving the frame, implying "there is always more," while the headline anchors immovably in the center.
 
-关键的取舍是**卡内容要真的在播**。静态截图上环，观众只会认出"轮播图"；卡里跑着真
-动效，同一个环立刻变成"产品在工作"。但八张卡同时开播会八个动效抢戏，谁也读不进去
-——所以入场期把卡内容**冻结在首帧**，等环撑开、标题起手之后再统一开播。观众的注意
-力顺序因此是：先认出这是一圈产品画面 → 读标题 → 才注意到卡里都在动。
+The key design choice is that **card contents must truly play**. Static screenshots on a ring look like a generic carousel; running authentic animations turns the ring into "products actively working." However, eight cards playing immediately would overwhelm viewer attention—so cards are **frozen on their initial frame** during entrance, beginning playback in unison only after the ring expands and the headline commences. Viewers first recognize a ring of product surfaces -> read the headline -> then discover all cards are alive.
 
-## 动效核心
-- **环上定位**：`θ = -π/2 + i·2π/8 + t·0.3`，`x = 960 + cos θ·RX·ringScale`、
-  `y = 540 + sin θ·RY·ringScale`。RY/RX ≈ 0.53 的椭圆读作"俯视的环"；正圆会读作转盘。
-  椭圆轨道本身画成一圈 16% 透明度的强调色发丝线，入场 0–30f 用 pathLength 描出来
-- **卡身永不倾斜**：卡只跟着 θ 换位置，自身 transform 只有缩放，没有任何旋转。
-  纵深完全交给 `depth = sin θ`（+1 = 画面下方，近；−1 = 上方，远）：
-  `scale = 1 + 0.12·depth`、`zIndex = 10 + round(depth·5)`；远处（depth<0）再叠
-  `blur(1.6·|depth|px)` + 压暗层（景深 + 空气透视），近处带一点顶光。缩放、z 序、
-  明暗必须由同一个 depth 驱动，否则会出现"远处的卡压住近处的卡"
-- **环入场**：f0–24 `ringScale 0.62→1`（expo-out，前 1/3 时间走完八成）从中心撑开；
-  同时逐卡淡入，第 i 张从 `2+1.5i` 帧起 11f 淡入并 0.9→1 长大。撑开与淡入叠在一起，
-  读作"环长出来"而不是"卡片一张张贴上来"
-- **冻结首帧再开播**：卡内容包在 `<Freeze frame={max(0, frame - 24)}>` 里。f24 之前
-  八张卡都停在自己的第 0 帧，f24 起同时进入正常时间轴
-- **卡内坐标解耦**：卡内容按 960×540 作画，外层用 `scale((CW·s)/960)` 缩到卡宽 +
-  `transform-origin: top left`。内容组件不需要知道自己被缩小了，落地换成真实截图或
-  库内其他镜头卡组件时不用改一行。描线类卡用 `pathLength={1}` 做 dash，路径长短不影响首帧
-- **两级标题 blur-slide 逐字**：上行 64px 次级灰（f10 起、错峰 1f、单字 27f），下行
-  156px 主角大字（f18 起、错峰 2f、单字 32f——更重更慢）。每字两条通道同起不同终：
-  解糊走满单字时长（`blur (1-p)·fontSize/6`），下沉只占前 1/3（`translateY (1-p)·fontSize·0.22`），
-  缓动 quint-out。位移先停、模糊后停，字才有"落定后继续对上焦"的手感
-- **马克块横扫 + 反白**：`spring(frame-50, damping 20, stiffness 190)` 驱动 `scaleX`
-  （封顶 1.03），`transform-origin: left center`，块比字宽出左右各 0.14em 垫在字底下。
-  字画两层：白字层裁掉块前沿左侧、墨字层（onAccent）裁掉前沿右侧，前沿位置按
-  `(m·(W+0.28em) − 0.14em)/W` 换算到字盒——扫过即反白，读作"被荧光笔划过"
-- **标题 scrim**：卡层之上、字层之下垫一团暗色径向 scrim，近处卡从标题背后经过时被压暗
-- **hold**：f40–150 整个画面 smooth 推近 2.5%，环继续匀速公转
-- **退场（可选，HANDOFF_EXIT）**：f118 起 10f 整行 `opacity 1→0` + `blur 0→6.5px`，
-  之后只有环在转——成片里接 crash-zoom / 穿浅场直切时打开；单镜头演示停在完整海报
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 椭圆半径 | RX=720 / RY=380（卡 400×225） | RY/RX≈0.53 是"俯视环"的甜点；比值 →1 读作正圆转盘，→0.3 卡会在上下缘挤成一条 |
-| 卡数 | 8（方位角间隔 45°） | 8 张在这个半径上任意转角互不遮挡；≥10 张必须同步加大 RX/RY，否则近处卡压边 |
-| 公转速度 | 0.3 rad/s（5s 转约 86°） | **别因为"看起来慢"就调快**：>0.5 rad/s 时卡扫过画面边缘会有频闪感，且喧宾夺主 |
-| 环入场 | f0–24，scale .62→1，expo-out | <15f 像弹窗；>30f 标题起手时环还在长，两件事互相盖 |
-| 逐卡淡入 | 第 i 张 `2+1.5i` 帧起 11f | 步长 1.5f 刚够读出"依次"；>3f 最后一张会晚到标题之后 |
-| 开播帧 | PLAY_START=24f | 必须 ≥ 环撑开结束帧；提前会让八个动效在入场期一起抢戏 |
-| 纵深 | 缩放 ±12%，远处失焦 ≤1.6px + 压暗 | 缩放 >15% 顶部卡会缩成图标，环读作"透视隧道"；失焦 >3px 远处卡读作脏 |
-| 标题 | 上行 64px/500 灰 + 下行 156px/600 白 | 环一直在动，主角行必须够大够重才压得住；两行同字号会失去层级 |
-| 逐字节奏 | 上行错峰 1f/单字 27f；下行错峰 2f/单字 32f | 错峰 1–2f 是"整体解糊"的手感；≥3f 会读成逐字打字机 |
-| 马克块 | f50 起，spring damping 20，荧光黄绿 #c6f432 | damping <14 会回弹出色块边缘；暗场里它是唯一高饱和色块，别给第二处 |
-| 副行 | video-shotcraft 标志 + 小写字标 30px + mono 26px「SHOT RECIPE CARDS」（字距 0.2em），f60 起 16f 浮出 | 大字距 mono 是"产品代号"的读法；跟标题同字体会读作第二行标题；别写卡片数这类会过时的数字 |
-| 退场（可选） | f118–128，blur 0→6.5px | 整行统一失焦；**逐字退场会读作第二次入场** |
-## 已知坑
-- **卡不能跟着 θ 倾斜**。给卡加 `rotate(θ)` 后环立刻从"陈列"变成"过山车"，而且卡内
-  文字会歪，可读性直接归零。卡只换位置，不换角度
-- 卡内容首帧必须自带静态骨架（底色/边框/标签/暗底轨迹）。冻结期显示的就是第 0 帧，
-  如果卡的动效是"从零画出来"，入场那 24f 就是八张空白卡。demo 里每个占位卡都补了
-  暗底 sparkline / 淡稿线 / 常驻提示符，就是为了让首帧不空
-- `zIndex` 必须跟着 depth 走。只做缩放不排 z 序时，DOM 顺序会让后面的卡压住前面的，
-  近大远小的立体感当场作废
-- 马克色块和字的层级是一对：色块 `zIndex:0` + 字 `position:relative; zIndex:1`。漏掉
-  字上的 relative，色块会盖住字（stacking context 里 static 元素排在 positioned 之后）
-- 标题 `white-space: nowrap` 是马克块的前提——块的左右外扩 0.14em 与反白裁切都假设高亮
-  词组在同一行盒里。换行后色块会跨行断裂成两截。改了高亮词的字数要同步改前沿换算里的 W
-- 环是背景层但它一直在动，所以**不要在环上再叠第二个动的东西**（粒子、扫光、渐变
-  呼吸）。已经有一个持续运动在场，第二个会让画面读不出主次
-- 与 `carousel-3d` 的分工：那张卡是真 3D（`rotateY + translateZ` + backface-hidden），
-  卡会转到环背面，适合无缝 loop 的纯陈列；这张卡是 2D 椭圆伪纵深，卡永远正面朝观众，
-  适合"环托底 + 前景标题"的开场。要卡片翻面用前者，要标题压得住用后者
-- demo 的八张卡是原创通用 DOM 占位（暗色产品卡 + 唯一荧光强调色，卡框阴影/明暗随纵深变化），不含任何产品截图；
-  落地时整块替换成你自己的镜头卡组件或真实页面截图即可，环的语法一行都不用改
+## Motion Core
+- **Orbital positioning**: `theta = -pi/2 + i*2pi/8 + t*0.3`, `x = 960 + cos(theta)*RX*ringScale`, `y = 540 + sin(theta)*RY*ringScale`. RY/RX ~ 0.53 creates an "overhead tilted ellipse"; a true circle reads like a flat dial. Orbital track rendered as a 16% opacity accent hairline, drawn over 0–30f via pathLength.
+- **Cards never tilt**: Cards track theta for position only, with transforms restricted to scale without rotation. Depth is governed by `depth = sin(theta)` (+1 = foreground bottom, -1 = background top): `scale = 1 + 0.12*depth`, `zIndex = 10 + round(depth*5)`; background (depth<0) layers `blur(1.6*|depth|px)` + dimming layer (DoF + atmospheric perspective), with foreground catching subtle top light. Scale, z-order, and luminance must derive from the exact same depth to prevent distant cards occluding near cards.
+- **Ring entrance**: f0–24 `ringScale 0.62->1` (expo-out, 80% complete in first 1/3) expands from center; cards fade in sequentially, card i fading in over 11f and growing 0.9->1 from frame `2+1.5i`. Expanding while fading reads as "the ring growing" rather than "cards being pasted on."
+- **Freeze initial frame then play**: Card content wrapped in `<Freeze frame={max(0, frame - 24)}>`. Before f24, all eight cards hold frame 0; from f24, all enter normal timeline simultaneously.
+- **Decoupled internal coordinates**: Card content authored at 960x540, scaled externally via `scale((CW*s)/960)` with `transform-origin: top left`. Components need no awareness of scale reduction, allowing seamless substitution with real screenshots or other library cards without editing component code. Line-drawing cards use `pathLength={1}` so stroke lengths do not alter initial frames.
+- **Two-tier headline blur-slide word-by-word**: Top line 64px secondary grey (starts f10, 1f stagger, 27f per word), bottom line 156px hero white (starts f18, 2f stagger, 32f per word—heavier and slower). Each word runs two channels starting together with distinct finishes: de-blur spans full duration (`blur (1-p)*fontSize/6`), while descent completes in first 1/3 (`translateY (1-p)*fontSize*0.22`), quint-out easing. Displacement halting before blur creates tactile "landing then snapping into focus."
+- **Marker sweep + color invert**: `spring(frame-50, damping 20, stiffness 190)` drives `scaleX` (capped at 1.03), `transform-origin: left center`, block extending 0.14em beyond word bounds underneath text. Text rendered in two layers: white layer clips left of marker front, ink layer (onAccent) clips right of marker front, mapped via `(m*(W+0.28em) - 0.14em)/W`—sweeping inverts color instantly, reading as "highlighted by marker."
+- **Headline scrim**: Dark radial scrim between card layer and text layer dims foreground cards passing behind headline.
+- **Hold**: Entire composition smoothly pushes in 2.5% across f40–150 while ring continues steady orbit.
+- **Exit (optional, HANDOFF_EXIT)**: Across f118–128, entire headline layer fades `opacity 1->0` + `blur 0->6.5px`, leaving only the rotating ring—enable when connecting to crash-zoom or clean cuts in full videos.
 
-## 参考实现
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Ellipse radii | RX=720 / RY=380 (cards 400x225) | RY/RX~0.53 is the sweet spot for an overhead tilted ring; ratio -> 1 reads like a flat turntable; ratio -> 0.3 squashes cards into a line |
+| Card count | 8 (azimuth interval 45 deg) | 8 cards rotate without mutual overlap at this radius; >=10 cards requires expanding RX/RY |
+| Orbital velocity | 0.3 rad/s (5s rotates ~86 deg) | **Do not accelerate because it looks slow**: >0.5 rad/s creates strobe flicker at frame edges and distracts from headline |
+| Ring entrance | f0–24, scale .62->1, expo-out | <15f feels like a popup; >30f overlaps ring expansion with headline arrival |
+| Card fade-in | Card i starts at frame `2+1.5i` over 11f | Step 1.5f provides clear sequence; >3f pushes final card past headline start |
+| Playback start | PLAY_START=24f | Must be >= ring expansion finish; starting earlier allows eight animations to clash during entrance |
+| Depth | Scale +-12%, background blur <=1.6px + dimming | Scale >15% turns top cards into icons; blur >3px makes background look muddy |
+| Headline | Top line 64px/500 grey + bottom line 156px/600 white | Hero line must be large and heavy to dominate active ring; equal sizes destroys hierarchy |
+| Word cadence | Top line 1f stagger / 27f word; bottom line 2f stagger / 32f word | 1–2f stagger conveys collective de-blurring; >=3f reads like a typewriter |
+| Marker block | Starts f50, spring damping 20, fluorescent yellow-green #c6f432 | Damping <14 bounces outside bounds; keep as sole high-saturation element on dark stage |
+| Subtitle line | video-shotcraft logo + 30px lowercase wordmark + 26px mono "SHOT RECIPE CARDS" (tracking 0.2em), floats up over 16f from f60 | Wide mono tracking reads as product code; matching headline font looks like a redundant third line; avoid transient counters |
+| Exit (optional) | f118–128, blur 0->6.5px | Full line de-focuses uniformly; **staggered word exit reads like a secondary entrance** |
+
+## Known Pitfalls
+- **Cards must never tilt with theta**. Adding `rotate(theta)` turns the display into a roller coaster, distorting text and zeroing legibility. Cards change position only, not orientation.
+- Card contents must carry static skeletons on frame 0 (background, borders, labels, muted tracks). The freeze phase displays frame 0; if animations draw from nothing, viewers see eight empty cards during the first 24 frames.
+- `zIndex` must follow depth strictly. Scaling without z-sorting allows DOM order to let background cards occlude foreground cards, breaking perspective.
+- Marker block and text form a strict stacking context: block `zIndex:0` + text `position:relative; zIndex:1`. Omitting relative positioning places block over text.
+- Headline `white-space: nowrap` is required for marker math—calculations assume highlighted phrase occupies a single line box. Wrapping causes highlight block to fracture across lines.
+- The ring is an active background; **do not layer secondary ambient motion on top** (particles, sweeps, breathing gradients). Competing motions ruin visual hierarchy.
+- Division of labor with `carousel-3d`: that card uses true 3D (`rotateY + translateZ` + backface-hidden) where cards rotate to reverse, ideal for seamless looping showcases; this card uses 2D pseudo-depth where cards perpetually face forward, ideal for supporting foreground typography.
+- Demo cards are generic DOM placeholders (dark cards + singular neon accent, shadows shifting with depth) with zero screenshots; replace with custom components or real screenshots in production without changing orbital logic.
+
+## Reference Implementation
 demos/opening/orbit-ring-title-open/
-（OrbitRingTitleOpen.tsx）
+(OrbitRingTitleOpen.tsx)

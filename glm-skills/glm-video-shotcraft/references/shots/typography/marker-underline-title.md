@@ -1,51 +1,39 @@
 ---
 name: marker-underline-title
-一句话: 大标题落定后，关键词下方马克笔下划线从左到右快速描画——变宽笔形、毛糙边缘、微上斜跟随斜体字势，贴着字底
-适用: 标题里强调单个关键词（new/free/AI…）；手写感/人味的品牌调性；正文标注式强调
-时长: 标题落定 +4~8f 后起笔，划线 8–12f，总 1–1.5s
-能量: 低（一笔点睛，不抢标题的戏）
+summary: After the headline settles, a marker stroke draws itself under the keyword — tapered, rough-edged, and slightly tilted to follow the italic.
+use: Emphasizing a single keyword in a headline (new / free / AI…); brand tone with handcrafted/human warmth; editorial annotation-style emphasis
+duration: Starts +4–8f after headline settles, draws in 8–12f, total 1–1.5s
+energy: Low (single-stroke flourish, does not compete with headline)
 ---
 
-## 意图
-打印体标题里突然出现一笔手绘马克笔，用材质反差把一个词从
-排版里拎出来——像人拿笔在海报上圈重点。命门有三：**快**
-（8–12f 一笔呵成，慢了读作加载条）、**近**（贴着字底，离远了
-读作分隔线不是强调）、**跟字势**（斜体词的划线必须左低右高
-微上斜——斜向画反是最容易犯且一眼假的错，判例见已知坑）。
+## Intention
+A hand-drawn marker stroke suddenly appears beneath printed headline typography, using textural contrast to pull a single word out of the composition — like someone circling a key point on a printed poster. Three critical rules:
+**Fast** (drawn in 8–12f in a single continuous stroke; any slower reads as a progress bar), **Close** (hugging the text baseline; too far away reads as a divider line rather than emphasis), **Following letter posture** (the stroke beneath italic text must tilt slightly upward from lower-left to upper-right — drawing the tilt in reverse is the most common and immediately fake mistake; see Known Pitfalls).
 
-## 动效核心
-- SVG path 描画（strokeDashoffset 或裁剪窗），从左到右 8–12f，
-  ease-out 微收尾（起笔快收笔略缓＝手劲）
-- 笔形：路径变宽（中段最宽）、边缘毛糙（轻微噪声扰动/粗糙笔刷
-  贴图），首尾略细＝起笔收笔
-- 位置：贴字底（bottom 偏移 ≈ -0.1em），中轴微上斜跟随斜体字势
-- 时机：标题完全落定后 +4~8f 起笔——划线是"看完标题后的强调"，
-  与标题同动就抢戏
-- 质感（demo）：笔画过一道确定性干笔滤镜——低频 feTurbulence 位移（1.8px）做毛糙边、
-  沿笔向拉长的高频噪声阈值做细碎飞白；墨色暖调近黑 multiply 进纸面
-- demo 导出 `MARKER_UNDERLINE_TITLE_DURATION = 75`：标题两行错峰 22f 落定 → f32–42 划线 → 静止 33f
+## Motion Core
+- SVG path drawing (strokeDashoffset or clip window), 8–12f left-to-right, with ease-out finish (fast start, slightly softer end = natural hand pressure).
+- Stroke shape: variable-width path (thickest in the middle), rough edges (subtle noise displacement / rough brush texture), tapered ends representing pen touchdown and release.
+- Placement: hugs the baseline (bottom offset ≈ -0.1em), with central axis slightly upward-slanted to follow italic posture.
+- Timing: begins drawing +4–8f after the headline settles completely — underlining represents "emphasis applied after reading the headline"; moving simultaneously with the headline steals its focus.
+- Texture (demo): The stroke passes through a deterministic dry-brush filter — low-frequency feTurbulence displacement (1.8px) creates jagged edges, while high-frequency noise thresholds stretched along the stroke axis generate delicate dry-brush streaks; ink color uses warm, near-black tone multiplied into the paper surface.
+- Demo exports `MARKER_UNDERLINE_TITLE_DURATION = 75`: two staggered headline lines settle in 22f → underline draws at f32–42 → static hold for 33f.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 划线时长 | 10f（原片实测节奏；14f 版被裁偏慢） | >14f 读作进度条；<6f 看不见笔迹方向 |
-| 字底距离 | ≈-0.1em（从 -40 收到 -20@1080p 才贴住字势） | 离远读作分隔线；碰到字底降部又乱 |
-| 斜向 | 左低右高微上斜（跟斜体） | **画反（左高右低）一眼假**——返工判例 |
-| 笔宽 | 中段 ~0.12em，首尾 ~0.6x | 等宽读作机器线；差异>2x 读作书法 |
-| 毛糙度 | 边缘轻噪声 | 太糙读作故障；全平滑读作 CSS border |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Draw duration | 10f (measured cadence from reference; 14f version was rejected as sluggish) | >14f reads as a progress bar; <6f makes stroke direction imperceptible |
+| Baseline offset | ≈-0.1em (tightened from -40 to -20 @1080p to hug letter posture) | Too far reads as a divider line; colliding with descenders creates mess |
+| Slant direction | Upward slant from lower-left to upper-right (matches italic) | **Drawing reversed (upper-left to lower-right) looks instantly fake** — rework precedent |
+| Stroke width | Midpoint ~0.12em, ends ~0.6x | Uniform width looks like a machine vector; variation >2x reads as calligraphy |
+| Roughness | Subtle edge noise | Overly rough looks like video glitch; fully smooth looks like a CSS border |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 draw-svg-trace 撞领域（有意单列为两卡）：那张是通用
-  SVG 描画（图标/插画/任意线稿）；本卡专做**文字强调**的马克笔
-  质感（变宽+毛糙+跟字势），做图形描画去用那张
-- 斜向判例：v1 左高右低被比对环节抓出——划线斜向必须跟字势，
-  正体字则水平微抖
-- 残余差距：原片（notion-ai）笔头飞白颗粒感更细碎，实战可加
-  更细的笔刷噪点
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Overlaps with draw-svg-trace (deliberately split into two cards): that card covers general SVG path drawing (icons / illustrations / arbitrary line art); this card is dedicated specifically to the marker texture of **text emphasis** (variable width + roughness + matching letter posture); use that card for graphic linework.
+- Slant precedent: v1 drawn with high-left and low-right was flagged in review — underline slant must strictly track italic slant, or stay horizontal with subtle organic jitter for roman upright type.
+- Residual gap: In the original reference (notion-ai), the dry-brush particles at the tip were even finer; production implementations can layer finer brush grain.
 
-## 参考实现
+## Reference Implementation
 demos/typography/marker-underline-title/
-（MarkerUnderlineTitle.tsx）
-原片出处：notion-ai.mp4
+(MarkerUnderlineTitle.tsx)
+Original source: notion-ai.mp4

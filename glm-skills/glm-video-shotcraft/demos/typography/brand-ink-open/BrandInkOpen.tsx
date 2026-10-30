@@ -1,10 +1,10 @@
-// brand-ink-open —— 墨线十字准星描画 → 字标逐字 letterpress → 打字机副标
-// → 满一秒静止 → 上浮消散。品牌开场第一拍：任何产品画面出现前先立名号。
-// 参考实现从 template SceneOpen 帧 0–83 段剥离，self-contained：
-// 十字准星 SVG pathLength dashoffset 描画后淡出；字标逐字从大 scale 压到 1 +
-// blur→0（入场三件套定式），字底强调色 glint 短划闪过；kicker mono 打字机
-// 逐字符 + 强调色块光标周期闪；46–76f 整整 1s 静止 hold；退场 7f 上浮+缩+淡。
-// 品牌名/副标/强调色可换成目标品牌。demo 立的是 video-shotcraft：字标全小写（保留纸墨 letterpress 的衬线字），副标打品牌短句。
+// brand-ink-open — Ink crosshair stroke draw-on -> wordmark letterpress by glyph -> typewriter subtitle
+// -> full 1-second static hold -> float up and dissolve. Brand opening beat: establish brand presence before any product footage.
+// Reference implementation extracted from template SceneOpen frames 0–83, self-contained:
+// Crosshair SVG pathLength dashoffset draws on then fades out; wordmark glyphs compress from large scale to 1 +
+// blur->0 (classic entrance formula), with an accent-color glint slash flashing under the text; monospace kicker typewriter
+// character-by-character + blinking accent color block cursor; 46–76f holds completely static for 1 full second; exit in 7f with lift + shrink + fade.
+// Brand name, subtitle, and accent color can be customized. Demo showcases video-shotcraft: wordmark in lowercase (retaining serif letterpress feel), subtitle typing brand motto.
 import { AbsoluteFill, interpolate, useCurrentFrame, Easing } from 'remotion';
 import { BRAND, PITCH } from '../../_fixtures/Brand';
 
@@ -17,7 +17,7 @@ const AMBER = 'oklch(52% 0.115 65)';
 const INK2 = 'oklch(50% 0.006 82)';
 
 const WORDMARK = BRAND.name; // 'video-shotcraft'
-const KICKER = PITCH.en.motto; // 'Frame motion. Craft the shot.'（textTransform 转大写）
+const KICKER = PITCH.en.motto; // 'Frame motion. Craft the shot.' (uppercase via textTransform)
 
 export const BrandInkOpen: React.FC = () => {
   const frame = useCurrentFrame();
@@ -49,7 +49,7 @@ export const BrandInkOpen: React.FC = () => {
   // --- brand group rests fully-on for ~1s (wordmark completes ~64f; the last
   // glyph is done at 10+14*3+12=64), then dissolves out (97 → 104): lift +
   // shrink + fade. This leaves a clean ~33-frame hold of the COMPLETE title
-  // (64→97), per the card's "完整标题停留 ~30 帧" requirement. ---
+  // (64->97), per the card's "hold complete title ~30 frames" requirement. ---
   const brandOut = interpolate(frame, [97, 104], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.4, 0, 0.5, 1),
   });

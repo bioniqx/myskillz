@@ -1,58 +1,38 @@
 ---
 name: circle-match-iris
-一句话: 圆心匹配光圈切——光圈从页面上圆形元素的圆心炸开，圈内新页的圆形图表接在同一个圆上；匹配剪辑给光圈一个语义锚点
-适用: 前景有圆形元素（头像/图标/圆钮）、后景有圆形主体（donut 图/圆环进度）的接缝；转场技法卡
-时长: 5.5s / 165f（入场+定睛 40f + 蓄力 7f + 接圆开圈 37f + sweep 58f + 静止 47f）
-能量: 中高
+summary: An iris expands from a circular UI element and lands on a matching circle in the next scene.
+use: Seams between scenes where the foreground has a circular element (avatar/icon/circular button) and the background has a circular hero subject (donut chart/circular progress ring); transition technique card.
+duration: 5.5s / 165f (entrance + focal lock 40f + anticipation 7f + circle match & iris bloom 37f + sweep 58f + static hold 47f).
+energy: Medium-high
 ---
 
-## 意图
-普通 iris 光圈（词汇表原条目）从任意点开圈，观众只读到"换页了"。
-本卡把它和 match-cut 焊死：光圈必须从前景一个**真实圆形元素**的圆心
-炸开，圈内长出的新页里有个圆形图表恰好接在同一个圆上——观众看到的
-是"头像的圆变成了图表的圆"，圆形本身完成叙事（这个人→这个人的数据）。
-这是 match-cut 在 UI 语境里的落地形态：不靠构图巧合，靠语义圆对圆。
-与穿越三式同属"后景在前景里预先在场"，但锚点是抽象形状而非容器。
+## Intention
+A standard iris wipe opens from an arbitrary point on screen, communicating nothing more to the audience than "the page changed." This card fuses the iris wipe with a **match cut**: the iris must detonate outward from the exact center of a **real circular element** in the foreground, expanding to reveal a circular chart in the incoming scene that anchors onto that exact same circle. The audience perceives that "the avatar circle transformed into the chart circle," allowing the geometry itself to carry the narrative progression (this person → this person's metrics). This is the UI-native realization of the match cut: grounded not in visual coincidence, but in semantic circle-to-circle alignment. Like the travel transition trio, the incoming scene is pre-present within the outgoing foreground, but anchored by an abstract geometry rather than a container.
 
-## 动效核心
-- **两景的圆严格同心是命门**：锚点圆心写死为一组常量（demo：CX=540,
-  CY=540，= 榜单行左缘 + 内边距 + 名次列 + 头像半径），头像、涟漪、
-  clip-path circle、新景圆环、刻度盘全部引用同一组常量——坐标各算各的必然错心
-- 定睛引导：其余行压到 ~32% 亮度、锚点所在行抬亮；头像两次放大脉冲 +
-  两道扩散光环（18f / 30f）；相机以锚点为 transform-origin 缓推 3%
-  （锚点在屏幕上不动），40–47f 头像收到 0.9 做预备
-- **接圆 = 实心圆镂空成圆环**：开圈瞬间新景圆环的描边宽 = 直径（看上去
-  就是那颗实心头像），28f 内半径 36→300、描边收到 44px（expo-out），
-  颜色由荧光实心退成暗轨；光圈半径 = 圆环外沿 + 一段 ease-in 加速外扩
-  （54–84f 加 2400px），所以是"圆环把光圈撑开"——接圆必然发生在吃满屏之前
-- 旧页同时以锚点为心放大 1.03→1.22 并压暗（ease-in），光圈外沿一圈落影 +
-  一道只在开圈初段出现的荧光受光环——新景"压"在旧页之上
-- 圆环 sweep：strokeDasharray = sweep×周长，rotate(-90) 从顶部起笔，
-  60–118f 慢起长尾到 87%，中央 200px 数字随 sweep 同步计数，弧头柔光跟笔尖
+## Motion Core
+- **Strict concentric alignment between scenes is non-negotiable**: The anchor center coordinates are hardcoded as a unified set of constants (demo: `CX=540, CY=540`, calculated as leaderboard row left edge + padding + rank column width + avatar radius). The avatar, ripple rings, `clip-path circle`, incoming scene ring, and dial scale all reference this identical constant pair—calculating coordinates independently inevitably leads to visible concentricity drift.
+- **Focal Guidance**: Competing rows are dimmed to ~32% brightness while the anchor row is highlighted; the avatar performs two scale pulses + emits two expanding halo rings (initiating at 18f / 30f); the camera applies an ultra-slow 3% push-in using the anchor center as its `transform-origin` (keeping the anchor stationary on screen), followed by the avatar contracting to 0.9 across 40–47f as an anticipation prep.
+- **Circle Match = Solid Disc Hollowing into a Ring**: At the instant the iris opens, the incoming scene's ring stroke width equals its diameter (visually indistinguishable from the solid avatar disc). Across 28f, the radius expands from 36 → 300 while the stroke width contracts to 44px (`expo-out`), its color transitioning from fluorescent solid fill to a dark track; the iris radius equals the ring's outer perimeter + an ease-in accelerated outward bloom (+2400px across 54–84f), meaning "the expanding ring forces open the iris"—the circle match must lock in place before the iris consumes the full screen.
+- The outgoing page simultaneously scales up from 1.03 → 1.22 centered on the anchor while dimming (`ease-in`), bordered by an outer drop shadow along the iris perimeter + a fluorescent rim sheen that appears exclusively during the initial bloom window—making the incoming scene visibly "press down" onto the outgoing page.
+- **Ring Sweep**: `strokeDasharray = sweep × circumference`, starting from the top with `rotate(-90deg)`. Across 60–118f, it ramps from a slow start into a long tail reaching 87%; a 200px center counter increments in lockstep with the sweep, accompanied by a soft glow trailing the stroke tip.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 锚点脉冲 | 2 次 scale 1→1.16 + 光环扩两道（18f / 30f 起，各 22f） | 没有定睛引导，开圈瞬间观众找不到圆心 |
-| 接圆 | 实心盘→圆环：r 36→300、描边 72→44px / 28f expo-out | 圆环与光圈各长各的，"头像变成图表"就读不出来 |
-| 光圈扩张 | 圆环外沿 + 0→2400px / 30f bezier(.62,0,.32,1) | 快于 20f 接圆读不到；圆心偏移 >10px 一眼穿帮 |
-| 旧页推远 | scale 1.03→1.22 + 亮度 1→0.45 / 34f ease-in | 旧页不动，新景像贴在上面的圆形贴纸 |
-| sweep | 60–118f 到 87%，bezier(.4,0,.12,1)，数字同步计数 | 数字与 sweep 异步读作两个动画；太快（<40f）数字读不出在爬 |
-| 收尾 | sweep 完成后静止 47f（只留刻度盘 0.06°/f 慢转 + 弧光呼吸） | R1 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Anchor pulse | 2x scale 1 → 1.16 + dual halo expansion (starts 18f / 30f, 22f each) | Without focal guidance, the audience cannot locate the origin center when the iris opens |
+| Circle match | Solid disc → ring: r 36 → 300, stroke 72 → 44px / 28f expo-out | If the ring and iris grow independently, "avatar transforms into chart" becomes illegible |
+| Iris expansion | Ring outer edge + 0 → 2400px / 30f bezier(.62,0,.32,1) | Faster than 20f makes the circle match unreadable; center offset >10px immediately shatters the illusion |
+| Outgoing pushback | scale 1.03 → 1.22 + brightness 1 → 0.45 / 34f ease-in | If the outgoing page stays static, the incoming scene looks like an overlaid round sticker |
+| Sweep | 60–118f reaching 87%, bezier(.4,0,.12,1), synchronized numeric counter | If numbers and sweep desync, they read as two detached animations; too fast (<40f) makes digits blur past unreadably |
+| Outro settle | 47f static hold after sweep completes (retaining only 0.06°/f dial drift + arc breathing) | R1 |
 
-## 已知坑
-- demo 是手搓的 video-shotcraft 出片周榜（暗场荧光绿；景 A 创作者排行 → 景 B 本周出片目标圆环）——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 真实素材上锚点坐标从截图量测（devtools/标尺），量到的是元素盒不是
-  视觉圆心——带内边距的头像取内容圆心；量完渲一帧对不齐就调常量，
-  别信第一次量的数（同 transition-travel A 字腔穿越的腔心判例）
-- 前景锚点必须是**真圆**：圆角方块（border-radius < 50%）当锚点，
-  开圈瞬间方圆错型一眼假；真实截图里锚点是圆角方块时，先用同色补丁盖住再叠真圆
-- 语义要成对：头像→个人数据、产品图标→产品指标——圆对圆只是形，
-  "这个圆的内容变成它的展开"才是匹配剪辑成立的因
-- 一缝一式规矩同 shot-transitions；本卡自带图表生长段，圈内新景
-  别再叠入场动效
+## Known Pitfalls
+- The demo is a handcrafted weekly video-shotcraft publishing leaderboard (dark stage with fluorescent green; Scene A creator ranking → Scene B weekly production goal ring)—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- On real production assets, measure anchor coordinates via devtools/rulers; what you measure is often the element box rather than the visual center—for padded avatars, extract the content disc center; if a test render shows slight misalignment, adjust constants directly rather than blindly trusting the initial measurement (same precedent as the letterform counter center in `transition-travel`).
+- The foreground anchor must be a **true circle**: using a rounded rectangle (`border-radius < 50%`) produces an obvious shape mismatch the moment the circular iris blooms; if a production screenshot uses a rounded rectangle, patch it with matching solid background before overlaying a true circle.
+- Semantics must align as a pair: avatar → personal data, product icon → product metrics—matching circle to circle is merely the form; "the contents of this circle expanding into its detailed manifestation" is the underlying justification that makes the match cut succeed.
+- Adhere to the single-technique-per-seam rule from `shot-transitions`; because this card includes an integrated chart growth sequence, do not layer additional entrance animations onto the incoming scene inside the circle.
 
-## 参考实现
+## Reference Implementation
 demos/transition/circle-match-iris/
-（CircleMatchIris.tsx）
+(CircleMatchIris.tsx)

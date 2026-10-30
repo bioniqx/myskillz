@@ -1,46 +1,38 @@
 ---
 name: scroll-brake-moves
-一句话: 长卷急刹两式——changelog-scroll-brake 基本款（高速长卷指数减速精准停位+目标抬升）与 brake-reticle-lock 组合款（急刹帧同帧准星咬合）
-适用: changelog/发布史/长列表段落："一直在发货，今天这条最大"；要给停点更强打击感用 B
-时长: A 4–5s / B 5s
-能量: 高开中收（速度对比型）
-标签: rhythm
+summary: Two fast-scroll stops: a long page decelerating precisely onto a target, and the same stop paired with a locking reticle.
+use: Changelog, release history, or long list sections: "we ship continuously, and today's entry is the biggest"; use Variant B when the stop requires higher impact
+duration: A 4–5s / B 5s
+energy: High start, medium resolution (speed-contrast profile)
+tags: rhythm
 ---
 
-## 意图
-Linear changelog 视频语法：一整年的更新日志作为长卷高速掠过
-（糊成色带），指数减速精准急刹停在本次发布那条上，该条抬升离面
-高亮、其余退暗——密度感讲"一直在发货"，急停讲"今天这条最大"。
-B 是组合变异：急刹帧**同帧**四个 L 角标从画外飞入咬合锁定停点
-条目——急刹的"哐"与咬合的"咔"叠在同一帧共振（组合命门：
-角标起跳帧=列表首停帧，错开退化成两招并置）。
+## Intention
+Linear changelog video grammar: an entire year's release log rushes past as a long ribbon at high speed (smearing into a colored band), then exponentially decelerates with razor precision onto the current release entry, which lifts off the page surface, highlights, and dims surrounding items—density says "we never stop shipping," while the abrupt brake says "today's release is the monumental one."
+Variant B is a compound mutation: on the **exact same frame** the scroll brakes, four L-brackets fly in from offscreen and clamp onto the target entry—the thud of the brake and the click of the clamp resonate on the exact same frame (composite requirement: bracket takeoff frame must match the list's initial halt frame; offsetting them degrades it into two uncoordinated effects).
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A changelog-scroll-brake | translateY 扫 ~2400px（cubic-bezier(.45,0,.06,1)：~5f 拉满速再长尾指数式减速，共 50f），纵向方向性 blur 由帧间位移差分驱动（×0.32 封顶 30px，停稳自动清零）；停点行 scale 1.03 抬升+阴影+2px 强调色描边，其余 opacity 退 0.38 | changelog 段落基本款 |
-| B brake-reticle-lock | 滚动三段：sin-in 加速→cubic-out 猛减速冲过头 +30px→回弹落定；纵向方向性 blur=v×0.15 封顶 32px；角标从 ±620/±320 画外 Easing.back(2.4) 飞入咬合，高亮 6f 内完成、标签 back(2.6) 弹出 | 停点需要更强打击感的高光段 |
+## Variant Selection
+| Variant | Approach | Use Case |
+|---|---|---|
+| A changelog-scroll-brake | translateY sweeps ~2400px (cubic-bezier(.45, 0, .06, 1): full speed reached in ~5f followed by an extended exponential decay, 50f total); vertical directional blur driven by frame displacement differential (x0.32, capped at 30px, zeroing automatically when stopped); target row lifts with scale 1.03 + shadow + 2px accent border, other rows dim to opacity 0.38 | Baseline recipe for changelog segments |
+| B brake-reticle-lock | Three-stage scroll: sin-in acceleration -> cubic-out aggressive deceleration overshooting +30px -> rebound to rest; vertical directional blur = v * 0.15 capped at 32px; brackets fly in from +/-620 / +/-320 offscreen via Easing.back(2.4) to clamp; highlight completes in 6f, badge pops with back(2.6) | High-impact highlight moments requiring heavier punch at landing |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 减速曲线 | A 快起步 + 长尾减速（bezier .45,0,.06,1）；B 加"冲过头 30px 回弹" | 匀速滚读作跑马灯；B 的过头回弹是"哐"的来源 |
-| blur 驱动 | 帧间位移差分 `|p(f)-p(f-1)|`×系数 | 手排模糊关键帧必然对不上速度；差分法帧确定（模式已沉为 assets/lib/helpers/motion.ts velocityAt） |
-| 行高节奏 | 72/94/116 三档错落 | 等高行高速掠过时色带无节奏 |
-| 停位 | 目标行停画面纵向正中 | 停偏读作事故 |
-| B 共振帧 | 角标挂载起跳帧 = 列表首次停住帧（严格同帧） | 组合命门，错 2f 以上就散 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Deceleration curve | A fast launch + long-tail deceleration (bezier .45, 0, .06, 1); B adds "+30px overshoot rebound" | Uniform scrolling feels like a stock ticker; Variant B overshoot rebound is the source of the physical thud |
+| Blur driver | Inter-frame displacement differential `|p(f) - p(f-1)|` * factor | Hand-keying blur frames inevitably desyncs from speed; differential method is frame-deterministic (pattern formalized in assets/lib/helpers/motion.ts velocityAt) |
+| Row height cadence | Staggered 72 / 94 / 116px tiers | Uniform row heights smear into a monotonous ribbon at high speed |
+| Stop position | Target row centers vertically in frame | Landing off-center looks like an error |
+| B Resonance frame | Bracket takeoff frame = list initial halt frame (strictly same frame) | Composite requirement; splitting by >=2f dissolves the cohesion |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 timeline-travel 分工：本卡纵向列表急刹停"最新"，
-  那卡横向时间轴旅行看"历史"——同片双用时先后错开且各 ≤1 次
-- 高速段条目内容不用真实可读文本——反正糊成色带，占位灰块即可；
-  停点条目必须出版级真内容（Q10）
-- 停点后其余行退暗 0.38 是构图动作：别退到 0（上下文消失）
-- 声音：高速段低频 riser 铺垫，急刹一声 impact；B 咬合帧
-  再叠一声"咔"（与 impact 同帧不同声部）
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Division of labor with timeline-travel: this card is a vertical list braking on "the latest"; that card is a horizontal timeline journey reviewing "history"—if using both in one video, space them apart and limit each to <=1 occurrence.
+- Entries during the high-speed transit phase do not need readable copy—they blur into ribbons anyway, so grayscale placeholders suffice; the target entry at rest must contain publication-grade real content (Q10).
+- Dimming non-target rows to 0.38 after landing is a compositional move: do not drop to 0, which destroys the surrounding context.
+- Audio: low-frequency riser swells during high-speed transit, braking on a heavy impact; Variant B layers a mechanical click on the clamping frame (same frame, distinct audio voice).
 
-## 参考实现
+## Reference Implementation
 demos/data/scroll-brake-moves/
-（BrakeReticleLock.tsx / ChangelogScrollBrake.tsx）
+(BrakeReticleLock.tsx / ChangelogScrollBrake.tsx)

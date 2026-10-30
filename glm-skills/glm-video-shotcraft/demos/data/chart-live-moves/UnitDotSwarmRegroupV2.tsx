@@ -1,21 +1,21 @@
-// unit-dot-swarm-regroup-v2 —— 单位点阵重组：320 个点（每点 ≈ 40 次渲染）三幕迁徙——
-// 散布 → 按片型聚成三簇 → 列队成柱 → 拼成大数字「12,847」。同一批点，观众能跟着某一颗看它归队。
+// unit-dot-swarm-regroup-v2 — unit dot swarm regroup: 320 dots across 3 acts —
+// scattered -> 3 clusters -> columns -> composite headline digits "12,847".
 //
-// 第二轮重设计（瓷白 · 信息图发布镜头）：
-// - look = porcelain（冷白 · 钴蓝）。三组配色只用一个强调色：Promo 雾蓝灰 / Launch film 钴蓝（主角）/ Explainer 深海军蓝。
-// - 点改成 20px 实心小珠（顶部受光微渐变 + 贴地软影），高速迁徙时按速度沿运动方向拉成胶囊（速度感），停下变回圆。
-// - 文字层级：左上眉题（video-shotcraft 标志 + 字标 · Renders · Q3 2026）+ 84px 叙事标题，每幕换一句
-//   （Every dot is 40 renders → Split by format → Stacked by format → Total renders），旧句上推出、新句从线下升起；
-//   簇标签 / 柱顶数值 60px，片型名 32px。
-// - 终幕：数字点按弧长连续分配给三组（Promo 拼出 12,8 / Launch film 接上 4 / Explainer 收尾 7），
-//   数字本身就是一根构成条；下方三枚图例把颜色含义留在海报上。
+// Round 2 redesign (porcelain infographic launch shot):
+// - look = porcelain (cool white + cobalt blue). Single accent color.
+// - 20px spheres with directional velocity stretch, reverting to circle at rest.
+// - Typography: top-left eyebrow + 84px narrative title swapping per act
+//   (Every dot is 40 renders -> Split by format -> Stacked by format -> Total renders);
+//   cluster labels / column values 60px, format names 32px.
+// - Final act: dots allocated along arc length across 3 sets;
+//   digits form composition bar with legend below.
 //
-// 时间表（30fps，共 192f）：
-//   0–20    开场：点从画面中心向外逐颗弹出（按距中心错峰，先密后疏）并缓慢漂浮；标题升起
-//   24–48   第一幕迁徙 → 三簇（随机错峰 8f，spring stiffness 150 / damping 13）；38f 起簇标签浮现
-//   62–86   第二幕 → 三根柱（按行自底向上码放，越往上越快）；76f 起柱顶数值 + 套餐名
-//   100–128 第三幕 → 数字（按目标 x 自左向右扫入）；118f 起图例与标题落定
-//   128–192 hold 64f：极缓推镜 1 → 1.02
+// Timeline (30fps, 192f total):
+//   0-20    Intro: dots pop outward from center with slow drift; title rises
+//   24-48   Act 1 migration -> 3 clusters (stagger 8f, spring); 38f cluster labels fade in
+//   62-86   Act 2 -> 3 columns (bottom-up stacking); 76f column values + tier names
+//   100-128 Act 3 -> digits sweep in left-to-right; 118f legend and title settle
+//   128-192 hold 64f: gentle camera push 1 -> 1.02
 import React from 'react';
 import { AbsoluteFill, spring, useCurrentFrame } from 'remotion';
 import { EASE, mix, ramp } from '../../_fixtures/Polish';
@@ -26,7 +26,7 @@ export const UNIT_DOT_SWARM_REGROUP_V2_DURATION = 192;
 
 const L = LOOKS.porcelain;
 const N = 320;
-const R = 10; // 点半径
+const R = 10; // Dot radius
 
 const M1 = 24;
 const M2 = 62;
@@ -34,14 +34,14 @@ const M3 = 100;
 const DUR = 24;
 const STAG = 8;
 
-// 三组：Promo 180 / Launch film 102 / Explainer 38
+// 3 groups: Promo 180 / Launch film 102 / Explainer 38
 const GROUP_N = [180, 102, 38];
 const GROUP_NAME = ['Promo', 'Launch film', 'Explainer'];
 const GROUP_VAL = ['7,210', '4,102', '1,535'];
 const COL: Array<[string, string]> = [
-  ['#b9c3da', '#97a3c0'], // Promo：雾蓝灰
-  ['#5b80ff', '#2348e8'], // Launch film：钴蓝（主角）
-  ['#2b3554', '#121a33'], // Explainer：深海军蓝
+  ['#b9c3da', '#97a3c0'], // Promo: mist blue-gray
+  ['#5b80ff', '#2348e8'], // Launch film: cobalt blue (hero)
+  ['#2b3554', '#121a33'], // Explainer: deep navy
 ];
 const groupOf = (i: number) => (i < 180 ? 0 : i < 282 ? 1 : 2);
 const idxIn = (i: number) => (i < 180 ? i : i < 282 ? i - 180 : i - 282);
@@ -52,16 +52,16 @@ const rnd = (i: number, salt: number) => {
 };
 type P2 = [number, number];
 
-// 第 0 幕：散布（中心略密）
+// Act 0: scattered (denser at center)
 const scatter = (i: number): P2 => [
   200 + ((rnd(i, 1) + rnd(i, 11)) / 2) * 1520,
   330 + ((rnd(i, 2) + rnd(i, 12)) / 2) * 640,
 ];
 const drift = (i: number, f: number): P2 => [9 * Math.sin(f / 21 + rnd(i, 8) * 6.28), 7 * Math.cos(f / 27 + rnd(i, 9) * 6.28)];
 
-// 第 1 幕：三簇（向日葵螺旋紧密排布：等面积、不重叠，读起来是"一团被码好的人"）
+// Act 1: 3 clusters (sunflower spiral non-overlapping packing)
 const CC: P2[] = [[520, 650], [1000, 650], [1420, 650]];
-const VOGEL = 12.6; // r_k = VOGEL·√k ≈ 每点占 500px²
+const VOGEL = 12.6; // r_k = VOGEL * sqrt(k) ~= 500px^2 per dot
 const CR = GROUP_N.map((n) => VOGEL * Math.sqrt(n) + R);
 const cluster = (i: number): P2 => {
   const g = groupOf(i);
@@ -71,7 +71,7 @@ const cluster = (i: number): P2 => {
   return [CC[g][0] + r * Math.cos(a), CC[g][1] + r * Math.sin(a)];
 };
 
-// 第 2 幕：三根柱（8 列网格自底向上）
+// Act 2: 3 columns (8-col grid bottom-up)
 const BASE = 900;
 const BX = [520, 1000, 1420];
 const SP = 23;
@@ -79,13 +79,13 @@ const row = (i: number) => Math.floor(idxIn(i) / 8);
 const bar = (i: number): P2 => [BX[groupOf(i)] + ((idxIn(i) % 8) - 3.5) * SP, BASE - R - row(i) * SP];
 const barTop = (g: number) => BASE - R - (Math.ceil(GROUP_N[g] / 8) - 1) * SP;
 
-// 第 3 幕：数字 "12,847" —— 单线骨架等弧长 160 采样 → 法向 ±10.5 双排 = 320 点
+// Act 3: digits "12,847" — 160 centerline samples -> normal +-10.5 dual row = 320 dots
 const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 48): P2[] =>
   Array.from({ length: n + 1 }, (_, k) => {
     const a = ((a0 + ((a1 - a0) * k) / n) * Math.PI) / 180;
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
   });
-const GS = 1.08; // 字形放大
+const GS = 1.08; // Glyph scale
 const GLYPHS: Array<{ x0: number; strokes: P2[][] }> = [
   { x0: 0, strokes: [[[58, 64], [112, 22], [112, 258]], [[52, 258], [172, 258]]] },
   { x0: 228, strokes: [[...arc(100, 86, 64, 198, 378), [36, 258], [172, 258]]] },
@@ -135,7 +135,7 @@ const mixHex = (a: string, b: string, t: number) => {
 };
 const lerp2 = (a: P2, b: P2, t: number): P2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-// 每颗点每幕的错峰
+// Per-dot stagger per act
 const stagOf = (i: number, phase: 0 | 1 | 2) => {
   if (phase === 0) return rnd(i, 7) * STAG;
   if (phase === 1) {
@@ -157,14 +157,14 @@ const posAt = (i: number, f: number): P2 => {
   return p;
 };
 
-// 开场弹出顺序：按距中心
+// Pop sequence: by distance from center
 const popDelay = (i: number) => {
   const s = scatter(i);
   const d = Math.hypot(s[0] - 960, (s[1] - 650) * 1.6) / 900;
   return EASE.out(Math.min(1, d)) * 10;
 };
 
-// 一段叙事标题：in 帧升起、out 帧上推出
+// Narrative title: rises on inFrame, pushes up on outFrame
 const Headline: React.FC<{ text: string; inF: number; outF?: number }> = ({ text, inF, outF }) => (
   <div style={{ position: 'absolute', left: 0, top: 0, whiteSpace: 'nowrap' }}>
     <TextReveal text={text} by="word" variant="rise" start={inF} each={16} gap={3} out={outF !== undefined ? { start: outF, dur: 10 } : undefined} />
@@ -184,7 +184,7 @@ export const UnitDotSwarmRegroupV2: React.FC = () => {
       <Stage look={L} keyLight={{ x: 0.5, y: 0.3 }} fill={null} />
 
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${cam.toFixed(5)})`, transformOrigin: '50% 52%' }}>
-        {/* 眉题 + 叙事标题 */}
+        {/* Eyebrow + narrative title */}
         <div style={{ position: 'absolute', left: 96, top: 92, display: 'flex', alignItems: 'center', gap: 12, ...type(32, 650, { caps: true }), color: L.ink3, opacity: ramp(frame, 0, 12, EASE.out) }}>
           <ShotcraftMark size={38} tone="light" style={{ marginTop: -2 }} />
           <span style={{ fontFamily: BRAND.font, fontWeight: 700, textTransform: 'none', letterSpacing: '0.03em', color: L.ink }}>{BRAND.name}</span>
@@ -197,7 +197,7 @@ export const UnitDotSwarmRegroupV2: React.FC = () => {
           <Headline text="Total renders" inF={M3 + 14} />
         </div>
 
-        {/* 簇标签 */}
+        {/* Cluster labels */}
         {clusterOp > 0.01 && GROUP_NAME.map((n, g) => (
           <div key={n} style={{
             position: 'absolute', left: CC[g][0] - 200, top: CC[g][1] - CR[g] - 128, width: 400, textAlign: 'center',
@@ -208,7 +208,7 @@ export const UnitDotSwarmRegroupV2: React.FC = () => {
           </div>
         ))}
 
-        {/* 柱：基线 + 柱顶数值 + 套餐名 */}
+        {/* Columns: baseline + top value + tier name */}
         <div style={{
           position: 'absolute', left: 300, width: 1340, top: BASE + 2, height: 3, borderRadius: 2, background: L.ink,
           transform: `scaleX(${Math.min(ramp(frame, M2 + 4, 18, EASE.snappy), 1 - ramp(frame, M3 - 2, 10, EASE.exit))})`, transformOrigin: '0% 50%',
@@ -227,19 +227,19 @@ export const UnitDotSwarmRegroupV2: React.FC = () => {
           </React.Fragment>
         ))}
 
-        {/* 点 */}
+        {/* Dots */}
         {Array.from({ length: N }, (_, i) => {
           const p = posAt(i, frame);
           const q = posAt(i, frame - 1);
           const vx = p[0] - q[0];
           const vy = p[1] - q[1];
           const sp = Math.hypot(vx, vy);
-          const stretch = Math.min(sp * 0.45, 20); // 速度拉伸（px）
+          const stretch = Math.min(sp * 0.45, 20); // Velocity stretch (px)
           const ang = (Math.atan2(vy, vx) * 180) / Math.PI;
           const pop = spring({ frame: frame - popDelay(i), fps: 30, config: { damping: 12, stiffness: 200 } });
           const g = groupOf(i);
           const w = 2 * R + stretch;
-          // 落进数字后统一收拢成钴蓝（数字是终幕主角；构成信息交给下方图例）
+          // Harmonizes to cobalt blue once inside digits (hero element; legend explains makeup)
           const land = ramp(frame, M3 + stagOf(i, 2) + 10, 12, EASE.out);
           const c0 = land > 0 ? mixHex(COL[g][0], '#6a8bff', land) : COL[g][0];
           const c1 = land > 0 ? mixHex(COL[g][1], '#2348e8', land) : COL[g][1];
@@ -253,7 +253,7 @@ export const UnitDotSwarmRegroupV2: React.FC = () => {
           );
         })}
 
-        {/* 图例 */}
+        {/* Legend */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 790, display: 'flex', justifyContent: 'center', gap: 64 }}>
           {GROUP_NAME.map((n, g) => (
             <div key={n} style={{

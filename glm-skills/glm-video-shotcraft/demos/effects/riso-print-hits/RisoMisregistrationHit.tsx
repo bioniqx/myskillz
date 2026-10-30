@@ -1,24 +1,24 @@
-// 套印错位冲击帧（riso-misregistration-hit）——标题撞停瞬间裂成两份单色"印版"
-// （mix-blend-mode: multiply 叠在纸上），像 riso 印刷没对准版；两版反向错位（x 为主 y 少量）
-// 做衰减震荡 offset = A·cos(ωt)·exp(-t/τ) 抖两下，帧 72 啪地硬切回套准，带 4f scale 脉冲收束。
+// riso-misregistration-hit — Risograph misregistration impact frame: Headline slam-stops and splits instantly into two monochrome "plates"
+// (mix-blend-mode: multiply over paper), mimicking risograph printing plates drifting out of alignment; two plates diverge in opposite directions (predominantly x, slight y)
+// undergoing damped oscillation offset = A·cos(ωt)·exp(-t/τ) over two shakes, snapping hard back into perfect register at frame 72 with a 4f scale impulse settle.
 //
-// 第二轮重设计（双色 riso 演出海报 · 荧光粉 × 蓝）：
-// - 配色 custom：再生新闻纸 #f3eee2 + riso 两色油墨——荧光粉 FLUO #ff4fa3 与 蓝 BLUE #1f5fc4。
-//   两版套准时 multiply 叠成深紫墨色（同一字形两版重合），错开时一侧粉、一侧蓝的彩边——经典 riso 毛边。
-// - 版式：瑞士网格海报（video-shotcraft 的 riso 宣传海报）。左对齐 300px 黑体两行「CRAFT IT / LOUD.」压在右侧
-//   一只半调网点大太阳上（粉版，点径随离心距离变小 = 真半调），顶部版记、底部三栏卖点信息（蓝版）。只有标题两版会错，
-//   背景元素保持套准（整画面全裂读作故障而非印刷）。
-// - 节奏：开场太阳像被墨辊滚上纸（自上而下的擦入 0–16f）、信息栏错峰落位 → 标题 8f ease-in 撞入
-//   → 命中同帧裂版 + 整页一记 1.2% 的顿挫 → 44f 衰减震荡 → 72f 硬切套准 + 「ON REGISTER」圆章盖下
-//   （圆章中心是单色版镜刻标志——BRAND.md 规定单色印刷用 mono 版，蓝版一色印出）
-//   → 44f 干净 hold（极缓推进）。
+// Second-round redesign (Two-color risograph gig poster · Fluorescent pink x Blue):
+// - Custom palette: Recycled newsprint #f3eee2 + two risograph inks — Fluorescent pink FLUO #ff4fa3 and Blue BLUE #1f5fc4.
+//   In perfect register they multiply into deep purple ink (identical letterforms aligned); when displaced, they reveal pink and blue fringe edges — quintessential riso misregistration.
+// - Layout: Swiss grid poster (video-shotcraft riso promo poster). Left-aligned 300px bold two-line headline "CRAFT IT / LOUD." stamped over a large halftone dot sun on the right
+//   (pink plate, dot size decreasing radially = genuine halftone), top colophon, bottom 3-column feature highlights (blue plate). Only headline plates separate;
+//   background elements remain pinned in register (full-frame misregistration reads as video glitch rather than print defect).
+// - Rhythm: Opening sun wipes down like an ink roller across paper (0–16f), info columns stagger into place -> Headline slams in with 8f ease-in
+//   -> Impact frame triggers plate separation + 1.2% whole-page screen recoil -> 44f damped oscillation -> 72f hard snap back to register + "ON REGISTER" circular seal stamps down
+//   (seal center houses monochrome Mirror Cut emblem — BRAND.md mandates mono edition for single-ink reproduction, printed on blue plate)
+//   -> 44f clean hold (subtle camera push).
 //
-// 时间表（30fps，共 120f）：
-//   0–18    预备：纸面、版记第 1 帧就在；太阳墨辊擦入 0–16f；底部信息栏 4–18f 错峰升起
-//   20–28   主动作：标题从右画外 ease-in(cubic) 撞入（速度方向性模糊），28f 命中
-//   28–71   余波：两版反向衰减震荡（周期 18f、τ 60f，72f 前仍余 ~11px 单版残差）
-//   72–76   套准：硬切归零 + 4f scale 1.03→1；圆章 72f 盖下（scale 1.5→1，4f）
-//   76–120  hold 44f：相机 smooth 极缓推进 1.000→1.012（~110f 收敛），尾段逐帧近乎相同
+// Timeline (30fps, total 120f):
+//   0–18    Preparation: Paper substrate and colophon present from frame 1; sun ink-roller wipe 0–16f; bottom info columns stagger 4–18f
+//   20–28   Main action: Headline slams in from off-screen right with ease-in(cubic) (directional velocity blur), impacts at 28f
+//   28–71   Aftermath: Dual plates oscillate in counter-phase (period 18f, τ 60f, ~11px single-plate residual remaining prior to 72f)
+//   72–76   Register snap: Hard cut to zero offset + 4f scale 1.03->1; circular seal stamps at 72f (scale 1.5->1, 4f)
+//   76–120  Hold 44f: Camera smoothly pushes 1.000->1.012 (converging ~110f), ending frames nearly static
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, SpeedBlur, Vignette, bezier, mix, ramp, velocity } from '../../_fixtures/Polish';
@@ -26,20 +26,20 @@ import { MARK_PATHS } from '../../_fixtures/Brand';
 
 export const RISO_MISREGISTRATION_HIT_DURATION = 120;
 
-const HIT = 28; // 撞停命中帧
-const SNAP = 72; // 套准合一帧
-const AX = 20; // 单版 x 错位振幅（两版反向 → 总分离 ~40px；300px 大字下才可感）
-const AY = 8; // 单版 y 错位振幅（少量，更像没对准版）
-const OMEGA = (2 * Math.PI) / 18; // 震荡周期 18f，44f 内抖两下半
-const TAU = 60; // 缓衰减：帧 72 前仍余可见残差，被"啪地"硬切归零
+const HIT = 28; // Impact touchdown frame
+const SNAP = 72; // Snap-to-register frame
+const AX = 20; // Single-plate x misregistration amplitude (plates counter-offset -> total ~40px separation; noticeable under 300px type)
+const AY = 8; // Single-plate y misregistration amplitude (subtle, authenticating plate misalignment)
+const OMEGA = (2 * Math.PI) / 18; // Oscillation angular frequency 18f, 2.5 cycles across 44f window
+const TAU = 60; // Slow decay: visible residual offset remains prior to frame 72, then snaps cleanly to zero
 
-const PAPER = '#f3eee2'; // 再生新闻纸
-const FLUO = '#ff4fa3'; // riso 荧光粉版
-const BLUE = '#1f5fc4'; // riso 蓝版
+const PAPER = '#f3eee2'; // Recycled newsprint
+const FLUO = '#ff4fa3'; // Risograph fluorescent pink ink plate
+const BLUE = '#1f5fc4'; // Risograph blue ink plate
 const inCubic = bezier(0.55, 0.055, 0.675, 0.19);
 const SANS = FONT.sans;
 
-// 单色印版：同字形、可调色、可错位，multiply 叠到纸上
+// Monochrome ink plate: Shared glyphs, tinted and offset independently, multiplied over paper
 const Plate: React.FC<{ color: string; dx: number; dy: number; scale?: number }> = ({ color, dx, dy, scale = 1 }) => (
   <div style={{
     position: 'absolute', left: 120, top: 250,
@@ -47,13 +47,13 @@ const Plate: React.FC<{ color: string; dx: number; dy: number; scale?: number }>
     mixBlendMode: 'multiply', color, fontFamily: SANS, fontWeight: 900, fontSize: 300, lineHeight: 0.84,
     letterSpacing: '-0.045em', whiteSpace: 'nowrap',
   }}>
-    {/* F 与 T 顶横在 −0.045em 字距下恰好相接，抗锯齿会留一条发丝缝——F 后再收 0.01em 让两笔重叠 */}
+    {/* Top bars of F and T meet exactly under -0.045em tracking; anti-aliasing leaves a hairline seam — tighten 0.01em after F to overlap strokes */}
     <div>CRA<span style={{ marginRight: '-0.01em' }}>F</span>T IT</div>
     <div>LOUD.</div>
   </div>
 );
 
-// 半调网点太阳：粉版，点按网格排布，点径随离心距离缩小（真半调，而非等大点阵）
+// Halftone sun: Pink plate, dots arranged on grid, dot diameter scales down with radial distance (genuine halftone, not uniform dot matrix)
 const SUN_R = 372;
 const SUN_STEP = 22;
 const SUN_DOTS = (() => {
@@ -61,12 +61,12 @@ const SUN_DOTS = (() => {
   const n = Math.ceil(SUN_R / SUN_STEP);
   for (let iy = -n; iy <= n; iy++) {
     for (let ix = -n; ix <= n; ix++) {
-      // 45° 网角：奇数行错半格
+      // 45° screen angle: Odd rows offset by half cell
       const x = ix * SUN_STEP + (iy % 2 ? SUN_STEP / 2 : 0);
       const y = iy * SUN_STEP * 0.866;
       const d = Math.hypot(x, y) / SUN_R;
       if (d > 1) continue;
-      const tone = 1 - Math.pow(d, 2.4); // 中心实、边缘点径收到 0（轮廓是圆，不是网格的六边形）
+      const tone = 1 - Math.pow(d, 2.4); // Solid core, dot size tapers to 0 at perimeter (circular silhouette rather than hexagonal grid)
       const r = (SUN_STEP / 2) * 1.1 * Math.sqrt(tone);
       if (r > 0.9) out.push({ x, y, r });
     }
@@ -78,7 +78,7 @@ const Sun: React.FC<{ reveal: number }> = ({ reveal }) => (
   <svg width={SUN_R * 2 + 40} height={SUN_R * 2 + 40} viewBox={`${-SUN_R - 20} ${-SUN_R - 20} ${SUN_R * 2 + 40} ${SUN_R * 2 + 40}`}
     style={{
       position: 'absolute', left: 1090, top: 108, mixBlendMode: 'multiply',
-      // 墨辊擦入：自上而下的硬边遮罩（印刷是一次滚过，不是淡入）
+      // Ink roller wipe: Top-to-bottom hard-edge mask (printing rolls across once, never dissolves)
       clipPath: `inset(0 0 ${((1 - reveal) * 100).toFixed(2)}% 0)`,
     }}>
     <g fill={FLUO}>
@@ -87,7 +87,7 @@ const Sun: React.FC<{ reveal: number }> = ({ reveal }) => (
   </svg>
 );
 
-// 套准十字（印刷对位标）：静止布景锚点
+// Registration mark crosshair: Static layout anchor
 const RegMark: React.FC<{ x: number; y: number }> = ({ x, y }) => (
   <svg width={40} height={40} viewBox="0 0 40 40" style={{ position: 'absolute', left: x - 20, top: y - 20, mixBlendMode: 'multiply' }}>
     <g fill="none" stroke={BLUE} strokeWidth={1.6} opacity={0.75}>
@@ -97,7 +97,7 @@ const RegMark: React.FC<{ x: number; y: number }> = ({ x, y }) => (
   </svg>
 );
 
-// 圆章：套准那一帧盖下的「ON REGISTER」（蓝版，环形字 + 中心单色镜刻标志；标志反向转回 14° 保持正立）
+// Circular seal: "ON REGISTER" stamped on registration frame (blue plate, circular typography + central monochrome Mirror Cut emblem; emblem counter-rotates 14° to stay upright)
 const Stamp: React.FC<{ s: number; o: number }> = ({ s, o }) => (
   <svg width={300} height={300} viewBox="-130 -130 260 260"
     style={{ position: 'absolute', left: 1480, top: 500, mixBlendMode: 'multiply', opacity: o, transform: `rotate(-14deg) scale(${s.toFixed(4)})` }}>
@@ -111,7 +111,7 @@ const Stamp: React.FC<{ s: number; o: number }> = ({ s, o }) => (
     <text fill={BLUE} style={{ fontFamily: FONT.mono, fontSize: 28, fontWeight: 700 }}>
       <textPath href="#rmh-ring" textLength={540} lengthAdjust="spacing">ON REGISTER ✶ SHOTCRAFT ✶</textPath>
     </text>
-    {/* 标志内容框 x16–120 / y16–112，中心 (68,64)；缩到 ~66px 宽放进内圈 r66 */}
+    {/* Emblem bounding box x16–120 / y16–112, center (68,64); scaled to ~66px wide inside inner radius r66 */}
     <g transform="rotate(14) scale(0.64) translate(-68 -64)" fill={BLUE}>
       <path d={MARK_PATHS.frame} />
       <path d={MARK_PATHS.cut} />
@@ -119,7 +119,7 @@ const Stamp: React.FC<{ s: number; o: number }> = ({ s, o }) => (
   </svg>
 );
 
-// 撞入位移：右画外 1700px → 0，8f ease-in(cubic)（加速撞停）
+// Impact displacement: Off-screen right 1700px -> 0, 8f ease-in(cubic) (accelerated slam-stop)
 const slideAt = (f: number) => mix(1700, 0, ramp(f, 20, HIT - 20, inCubic));
 
 export const RisoMisregistrationHit: React.FC = () => {
@@ -129,21 +129,21 @@ export const RisoMisregistrationHit: React.FC = () => {
   const slideX = frame < HIT ? slideAt(frame) : 0;
   const vx = frame >= 20 && frame < HIT ? velocity(slideAt, frame) : 0;
 
-  // 错位震荡包络：t 自命中起，衰减余弦；帧 72 硬切归零
+  // Misregistration oscillation envelope: Damped cosine starting from impact; hard cut to zero at frame 72
   const t = frame - HIT;
   const m = split ? Math.cos(OMEGA * t) * Math.exp(-t / TAU) : 0;
   const dx = AX * m;
   const dy = AY * m;
 
-  // 套准脉冲：72f 起 4f scale 1.03 → 1
+  // Registration pulse: 4f scale 1.03 -> 1 starting at frame 72
   const pulse = frame >= SNAP && frame < SNAP + 4 ? 1 + 0.03 * (1 - (frame - SNAP) / 4) : 1;
-  // 命中顿挫：整页 1.2% 一帧到位、指数回落（10f 窗口外精确 1）
+  // Impact recoil: 1.2% page jolt on single frame, exponential recovery (strictly 1 outside 10f window)
   const th = frame - HIT;
   const kick = th >= 0 && th < 10 ? 1 + 0.012 * Math.exp(-th / 2.5) : 1;
-  // 相机：smooth 极缓推进，110f 收敛
+  // Camera: Smooth subtle push, converging at 110f
   const cam = 1 + 0.012 * ramp(frame, 0, 110, EASE.smooth);
 
-  // 圆章：72f 盖下，4f 由 1.5 压到 1（ease-out），之后静止
+  // Circular seal: Stamps at 72f, compressed from 1.5 to 1 over 4f (ease-out), static thereafter
   const sp = ramp(frame, SNAP, 4, EASE.out);
   const stampS = frame < SNAP ? 1.5 : mix(1.5, 1, sp);
   const stampO = frame < SNAP ? 0 : Math.min(1, sp * 2.5);
@@ -157,13 +157,13 @@ export const RisoMisregistrationHit: React.FC = () => {
   return (
     <div style={{ width: 1920, height: 1080, background: PAPER, position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${(cam * kick).toFixed(5)})`, transformOrigin: '40% 50%' }}>
-        {/* 纸面：中心略亮 + 静态纸纤维（multiply） */}
+        {/* Paper substrate: Center illumination + static paper fibers (multiply) */}
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 72% 70% at 42% 44%, #f8f4ea 0%, #f3eee2 58%, #e8e1d1 100%)' }} />
         <Grain opacity={0.11} step={100000} scale={2.4} freq={0.55} blend="multiply" />
 
         <Sun reveal={sunReveal} />
 
-        {/* 版记：四角套准十字 + 顶栏（蓝版） */}
+        {/* Colophon: Four-corner registration crosshairs + top bar (blue plate) */}
         <RegMark x={64} y={64} />
         <RegMark x={1856} y={64} />
         <RegMark x={64} y={1016} />
@@ -178,7 +178,7 @@ export const RisoMisregistrationHit: React.FC = () => {
         </div>
         <div style={{ position: 'absolute', left: 120, right: 120, top: 150, height: 4, background: BLUE, mixBlendMode: 'multiply', transformOrigin: '0 50%', transform: `scaleX(${ramp(frame, 0, 18, EASE.snappy).toFixed(4)})` }} />
 
-        {/* 底部三栏演出信息（蓝版） */}
+        {/* Bottom 3-column performance info (blue plate) */}
         <div style={{ position: 'absolute', left: 120, right: 120, top: 878, height: 4, background: BLUE, mixBlendMode: 'multiply', transformOrigin: '0 50%', transform: `scaleX(${ramp(frame, 2, 18, EASE.snappy).toFixed(4)})` }} />
         <div style={{ position: 'absolute', left: 120, right: 120, top: 906, display: 'grid', gridTemplateColumns: '1.25fr 1fr 1fr', gap: 48, color: BLUE, mixBlendMode: 'multiply' }}>
           {[
@@ -193,7 +193,7 @@ export const RisoMisregistrationHit: React.FC = () => {
           ))}
         </div>
 
-        {/* 撞入：两版重合（套准态）整体横飞，带方向性运动模糊 */}
+        {/* Impact fly-in: Both plates merged (registered state) flying across screen with directional motion blur */}
         {frame >= 20 && frame < HIT && (
           <SpeedBlur vx={vx} amount={0.09} max={34}>
             <div style={{ position: 'absolute', inset: 0, transform: `translateX(${slideX.toFixed(1)}px)` }}>
@@ -203,7 +203,7 @@ export const RisoMisregistrationHit: React.FC = () => {
           </SpeedBlur>
         )}
 
-        {/* 双版错位：粉版与蓝版反向偏移，multiply 叠出"重影套印"；套准后两版归零重合成深紫 */}
+        {/* Dual-plate misregistration: Pink and blue plates counter-offset, multiplied to produce riso ghosting; zeroed out to deep purple after registration */}
         {frame >= HIT && (
           <>
             <Plate color={FLUO} dx={-dx} dy={dy} scale={pulse} />
@@ -214,7 +214,7 @@ export const RisoMisregistrationHit: React.FC = () => {
         <Stamp s={stampS} o={stampO} />
       </div>
 
-      {/* 油墨颗粒：screen 细噪让墨块带 riso 那种不均匀的白点（静态）+ 暖褐暗角 */}
+      {/* Ink grain: Fine screen noise gives ink fills authentic riso white pinhole texture (static) + warm sepia vignette */}
       <Grain opacity={0.2} step={100000} freq={1.25} blend="screen" />
       <Vignette strength={0.13} inner={0.55} color="#5a4a32" />
     </div>

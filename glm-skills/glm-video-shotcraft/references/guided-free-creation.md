@@ -1,199 +1,146 @@
-# guided-free-creation — 共同创作引导流程
+# guided-free-creation — Guided Co-Creation Workflow
 
-共同创作模式用于用户希望参与产品短片的关键业务与创意决策。它把产品简报、
-需求决策、视觉方向、镜头映射和最终分镜交给用户确认，把视频工程细节交给
-Agent 执行。自主自由创作不读本文件，也不使用这里的逐阶段确认节点。
+The Co-Creation mode is designed for scenarios where the user wishes to participate in key business and creative decisions for the product promo video. It delegates product briefing, requirements decisions, visual direction, shot mapping, and the final storyboard to the user for explicit sign-off, leaving video engineering and execution to the Agent. Autonomous Free Creation mode does not read this file and bypasses these step-by-step confirmation gates.
 
-## 目录
+## Table of Contents
 
-- 产品简报与安全素材预检
-- 需求到执行决策表
-- 视觉方向与 styleframe
-- 功能到镜头映射
-- Gallery 镜头名称解析
-- 分镜确认与制作放行
+- Product Brief and Safe Asset Preflight
+- Requirements-to-Execution Decision Table
+- Visual Direction and Styleframes
+- Feature-to-Shot Mapping
+- Gallery Shot Name Resolution
+- Storyboard Sign-Off and Production Gate
 
-## 1. 产品简报
+## 1. Product Brief
 
-先只读检查项目，不写视频代码、不修改业务项目、不采集或导出敏感内容。检查技术栈、
-入口、启动命令、页面路由、主要组件、交互状态、API、页面文案、CSS 视觉 token、
-外部依赖和数据风险，并判断哪些功能能通过真实页面状态清楚表达。
+Begin with a read-only audit of the target project without authoring video code, modifying project files, or capturing sensitive content. Inspect the tech stack, entrypoints, start commands, routes, primary components, interactive states, APIs, UI copy, CSS visual tokens, external dependencies, and data risks. Determine which product features can be conveyed clearly through real UI states.
 
-输出一张由 Agent 先填写的产品简报表。每一行都必须先给出判断或推荐，
-再写明依据；不要把所有字段原样丢给用户填写。
+Output a pre-filled Product Brief table authored by the Agent. Each row must provide an initial assessment or recommendation alongside explicit justification; do not leave fields blank for the user to fill out from scratch.
 
 ```text
-当前阶段：产品理解
+Current Stage: Product Understanding
 
-| 项目 | Agent 的判断或推荐 | 依据 |
+| Dimension | Agent Assessment or Recommendation | Justification |
 |---|---|---|
-| 项目定位 |  |  |
-| 目标用户 |  |  |
-| 视频用途 |  |  |
-| 核心卖点 |  |  |
-| 必须展示的功能 |  |  |
-| 可用页面/状态 |  |  |
-| 首屏主张 |  |  |
-| 期望时长/画幅/语言 |  |  |
-| 音乐/配音 |  |  |
-| 数据合规口径 |  |  |
-| 视觉线索 |  |  |
+| Project Positioning |  |  |
+| Target Audience |  |  |
+| Video Purpose |  |  |
+| Core Value Proposition |  |  |
+| Mandatory Features to Showcase |  |  |
+| Available Pages / UI States |  |  |
+| Above-the-Fold Value Hook |  |  |
+| Target Duration / Aspect Ratio / Language |  |  |
+| Music / Voiceover |  |  |
+| Data Compliance Policy |  |  |
+| Visual Cues |  |  |
 
-需要确认：
-1. 只列出无法从项目或用户已有描述中确定的事项。
-2. 对可以推荐但仍需用户拍板的事项，先写“推荐方案＋依据”，再在此处提问。
+Requires Confirmation:
+1. List only items that cannot be determined from existing project materials or user statements.
+2. For items with clear recommendations that still require user approval, present "Recommendation + Justification" first, then formulate the targeted question.
 ```
 
-填写规则：
+Field Completion Rules:
 
-- 能从 README、源码、路由、页面状态、文案或 computed styles 确定的，直接填写
-  判断和证据，不再询问；
-- 无法完全确定但可以根据项目合理推荐的，填写动态推荐、推荐依据和需要用户
-  拍板的选项；
-- 完全无法判断的，明确写“无法从当前材料判断”，只把它放到下方问题中；
-- 每轮只追问 1–3 个最影响视频结果的问题；不显示“置信度”字段；
-- 推荐必须来自当前上传项目或页面，不得使用固定答案。
+- If determined from README, codebase, routing, page states, copy, or computed styles, fill in the assessment and evidence directly without asking;
+- If reasonably inferred from project context, provide a dynamic recommendation, rationale, and specific options for user selection;
+- If impossible to assess from existing materials, state "Cannot be determined from current materials" and include it in the confirmation questions below;
+- Ask only 1–3 high-impact questions per turn; omit artificial "confidence score" metrics;
+- Recommendations must derive directly from the target project or UI pages, avoiding generic cookie-cutter answers.
 
-用户确认简报后，先按数据口径进行一次**临时安全素材预检**：只采集制作
-styleframe 所需的少量页面截图或 token，不做完整切片、全量导出或最终素材入库。
-公开演示数据只有在简报明确确认后可保留；客户、个人、内部、密钥、实时或其他
-敏感数据必须先替换、脱敏或冻结。已经明确提供的信息不要重复询问。
+Once the user approves the brief, conduct an **initial safe asset preflight**: capture only the minimal screenshots or CSS tokens required to construct styleframes. Do not perform full cutouts, bulk exports, or final asset ingestion yet. Public demo data may be retained only if explicitly approved in the brief; customer, personal, internal, credential, realtime, or sensitive data must be replaced, desensitized, or frozen first. Avoid re-asking for clearly established information.
 
-## 2. 需求到执行决策表
+## 2. Requirements-to-Execution Decision Table
 
-把已确认的用户需求、项目证据和 Agent 的执行选择写成同一张可追溯表。它不是
-固定的“受众→风格”规则表：每行都必须写明当前项目与用户材料带来的依据，
-并允许 Agent 提出与常见套路不同的推荐。
+Consolidate confirmed user requirements, project evidence, and the Agent's execution choices into a single traceable table. This is not a static "audience -> style" mapping: every row must articulate evidence grounded in the current project and user inputs, allowing non-standard, creative recommendations.
 
 ```text
-当前阶段：从需求到制作决策
+Current Stage: From Requirements to Production Decisions
 
-| 已确认需求 | 项目/用户依据 | 受影响的执行范围 | Agent 推荐 | 需要确认项 |
+| Confirmed Requirement | Project / User Evidence | Affected Execution Scope | Agent Recommendation | Needs Confirmation |
 |---|---|---|---|---|
-| 视频用途 |  | 叙事结构、信息量、CTA |  |  |
-| 目标受众及其情境 |  | 场景、语言、节奏、功能优先级 |  |  |
-| 核心卖点与必须展示功能 |  | 页面状态、镜头、文案 |  |  |
-| 时长/画幅/语言 |  | 镜头数、字幕密度、构图 |  |  |
-| 音乐/配音 |  | 节奏、停顿、SFX 留白 |  |  |
-| 数据合规口径 |  | 采集、mock、打码、终检 |  |  |
-| 视觉方向 |  | tokens、材质、转场语气 |  |  |
+| Video Purpose |  | Narrative structure, information density, CTA |  |  |
+| Target Audience & Context |  | Scenarios, language, pacing, feature priority |  |  |
+| Core Proposition & Mandatory Features |  | UI states, shot selection, copy |  |  |
+| Duration / Aspect Ratio / Language |  | Shot count, caption density, composition |  |  |
+| Music / Voiceover |  | Rhythm, pauses, SFX headroom |  |  |
+| Data Compliance Policy |  | Capture, mocking, masking, final audit |  |  |
+| Visual Direction |  | Design tokens, textures, transition tone |  |  |
 ```
 
-表只记录对当前视频会产生实际影响的项。无法确定的项保留在“需要确认项”，
-每轮合计只问 1–3 个；已经确认的项不得再次提问。后续的视觉方向、镜头映射、
-分镜、素材采集、声音设计与终检都必须能追溯回此表，并在设计 spec 中保存。
+Record only rows that directly impact the current video. Keep unresolved items under "Needs Confirmation" (limiting questions to 1–3 per round); never re-prompt for previously confirmed items. All downstream visual direction, shot mapping, storyboards, asset capture, sound design, and final review must trace back to this table and remain documented in the design spec.
 
-## 3. 视觉方向
+## 3. Visual Direction
 
-从页面、源码或 computed styles 提取字体、色板、圆角、信息密度、光感和动效
-性格。视觉方向分两轮确认：
+Extract typography, color palette, border radii, information density, lighting mood, and motion personality from pages, source code, or computed styles. Confirm visual direction in two rounds:
 
-1. 先给出最多 3 个根据当前项目生成的文字方向。每个方向说明：名称、一句话
-   视觉主张、3–5 个关键词、字体/色彩/材质、镜头运动性格、适合原因和取舍。
-   只有产品确实适合纸张、编辑部或叙事质感时，才把 Ink Press 列为候选；不能
-   因为仓库里有它就固定加入。
-2. 用户选出 1–2 个入围方向，或明确授权 Agent 自选。对入围方向制作一个纯
-   HTML/CSS 的实际 styleframe 对比页：每个方向展示 2–3 张 1920×1080 的
-   静态关键画面（例如品牌开场、核心功能、品牌收尾），使用当前产品的真实
-   页面素材或已提取的视觉 token，不写 Remotion 代码、不渲染完整视频。
-3. 用 Playwright/Puppeteer 截出 styleframe 对比图，展示并列方向的字体、色板、
-   材质、构图、光感和信息密度。用户确认最终方向后，才能进入功能到镜头映射。
+1. Propose up to 3 textual visual directions tailored to the target project. For each direction specify: Name, one-line visual thesis, 3–5 keywords, typography / color / textures, motion personality, justification, and design trade-offs. Include Ink Press as a candidate only if the product genuinely fits editorial, paper, or narrative textures; never include it solely because it exists in the repository.
+2. The user selects 1–2 shortlisted directions or delegates the decision to the Agent. Build a standalone HTML/CSS styleframe comparison page for the shortlisted directions: present 2–3 static 1920×1080 keyframes per direction (e.g. Brand Open, Core Feature, Brand Close), leveraging real product assets or extracted tokens, without writing Remotion code or rendering video.
+3. Capture side-by-side styleframe screenshots using Playwright/Puppeteer to showcase typography, palette, textures, composition, lighting, and density. Obtain user approval on the final visual direction before proceeding to feature-to-shot mapping.
 
-Styleframe 用来确认静态视觉语言，不能单独证明缓动、运镜速度或节奏；这些仍需
-结合动效 tokens、Gallery 参考样片判断。若动效差异无法靠文字和样片判断，再做
-短的运动测试。用户已经提供严格品牌规范、明确参考片、直接选定 Ink Press，或
-明确授权 Agent 自选并跳过视觉确认时，可以记录理由后跳过 styleframe 对比。
+Styleframes validate static visual grammar; they do not independently prove easing curves, camera velocities, or rhythm, which must be judged via motion tokens and Gallery reference samples. If motion differences cannot be decided textually, generate brief motion tests. When the user provides strict brand guidelines, explicit reference videos, selects Ink Press directly, or explicitly delegates visual choice to the Agent, styleframe comparison may be skipped provided the rationale is documented.
 
-## 4. 功能到镜头映射
+## 4. Feature-to-Shot Mapping
 
-先列产品功能，再扫描 `references/shots/` 各卡 frontmatter 的用途、能量、建议
-时长和限制。给每个必须展示的功能推荐首选和备选镜头：
+List product features first, then scan frontmatter across `references/shots/` for purpose, energy, recommended durations, and constraints. Recommend primary and secondary shot choices for each mandatory feature:
 
-| 功能 | 首选镜头 | 备选镜头 | 画面要表达什么 | 需要的页面状态 |
+| Feature | Primary Shot Card | Secondary Shot Card | Visual Intent | Required UI State |
 |---|---|---|---|---|
 
-用户可以接受、替换、删除或授权 Agent 自选。确定映射后，必须完整读取选中卡片，
-并按其“参考实现”定位准确 demo 源码；没有合适镜头时可以新写，但要说明新写范围
-和验证风险。Gallery 标为“仅供参考，需要自定义实现”的样式不默认推荐；用户明确
-点名后才允许自定义实现，并把风险写进设计 spec。
+The user may accept, substitute, remove, or authorize the Agent to select. Once mapping is settled, read the selected cards in full and locate the exact demo TSX source via the card's "Reference Implementation". New shots may be authored if no existing card fits, but scope and verification risks must be documented. Gallery styles marked "For reference only, requires custom implementation" are not recommended by default; they may be authored only upon explicit user request with risks documented in the spec.
 
-这张映射表不是完整分镜，不得在用户确认映射后直接开始制作。它只确定“哪个
-产品功能使用哪一种镜头语法”，之后还必须进入第 5 节，展开镜头顺序、时长、
-页面状态、具体动作、素材、字幕、转场和声音。
+This mapping table is not a storyboard and does not authorize production kickoff upon confirmation. It merely establishes "which feature uses which shot grammar". Proceed to Section 5 to elaborate sequence, durations, UI states, specific actions, assets, captions, transitions, and audio.
 
-## 5. Gallery 镜头名称解析
+## 5. Gallery Shot Name Resolution
 
-Gallery（https://vincentwei1021.github.io/video-shotcraft/）只是用户浏览和挑选
-动态样片的界面，镜头定义和实现源码已经包含在本仓库。用户不需要描述动画，
-只需复制并提供镜头名。
+The Gallery (https://vincentwei1021.github.io/video-shotcraft/) serves as a visual index for browsing and selecting motion samples; all shot definitions and reference implementations reside directly in this repository. Users do not need to describe animations manually; they can copy and provide the shot name.
 
-收到镜头名后按以下顺序处理：
+Process incoming shot names in this exact sequence:
 
-1. 读取 `gallery/api/library.json`，用其中的 `cards[].name` 校验 `card-name`，
-   用该卡的 `styles[].key` 校验 `style-key`；不要用模糊猜测代替索引校验；
-2. 用索引中的 `source` 定位并完整读取 `references/shots/*.md`；
-3. 按卡片“参考实现”的明确路径，把具体样式解析到准确的 demo TSX；若文档只写
-   demo 目录，读取目录文件并根据导出名、注释和样式语义确定对应文件；
-4. 将索引中的 `styles[].media.url` 解析为参考样片（本地 `gallery/media/`
-   若无 mp4，先跑 `gallery/fetch-media.sh` 从 release 拉取，或直接用在线
-   Gallery 对应链接），并在设计 spec 记录：卡名、style-key、卡片文档、
-   准确 demo TSX、参考样片；
-5. 如卡片需要通用组件，再读取并复制 `assets/lib/` 的对应文件；
-6. 保留 demo 中已经调校的缓动、时值配比、遮罩时机和“已知坑/命门”参数；
-7. 只替换目标产品的截图、布局坐标、文案、品牌 token 和必要的构图参数。
+1. Read `gallery/api/library.json`, validate `card-name` against `cards[].name`, and validate `style-key` against `styles[].key`; do not substitute fuzzy guesses for index validation;
+2. Locate and read the full `references/shots/*.md` file using the `source` field in the index;
+3. Resolve the specific style variant to the exact demo TSX file using the path in the card's "Reference Implementation"; if only a directory is listed, inspect exports, comments, and style semantics to pinpoint the file;
+4. Resolve `styles[].media.url` to the reference sample video (if local MP4 is absent in `gallery/media/`, run `gallery/fetch-media.sh` or refer to the online Gallery URL); log Card Name, `style-key`, Card Document, Exact Demo TSX, and Reference Sample in the design spec;
+5. If the card depends on shared components, read and copy the relevant files from `assets/lib/`;
+6. Preserve tuned easing curves, timing ratios, matte timing, and "Known Pitfalls / Critical Vulnerabilities" from the demo;
+7. Replace only target product screenshots, layout coordinates, UI copy, brand tokens, and necessary framing parameters.
 
-Gallery 可能复制出两种形式：
+Names copied from the Gallery generally take two forms:
 
 ```text
 spotlight-hero-card
 shot-transitions · whip-pan
 ```
 
-- 只有卡名：使用卡片默认变体；如果同一卡的多个变体表达差异明显，Agent 先按
-  前后镜头和产品气质推荐一个具体变体，并说明原因，必要时让用户确认。
-- `卡名 · 样式名`：优先使用用户点名的具体变体，读取对应实现，不擅自换式。
-- 名称不存在：报告无法匹配，并给出仓库中最接近的真实卡名；不要凭名字臆造。
-- 索引标为“仅供参考，需要自定义实现”：不主动推荐；用户明确点名后，明确说明
-  该样式没有可复用的完整实现，按配方参数和参考样片制作，并把实现风险写进设计 spec。
-- 索引标为“缺少预览”：可读取准确源码并用于制作，但不得声称已对照动态样片。
+- Card Name Only: Use the card's default variant; if variants diverge substantially, recommend a specific variant matching context and product personality, explaining why;
+- `CardName · StyleName`: Prioritize the exact variant specified by the user; read its implementation without substituting another style;
+- Non-Existent Name: Report the mismatch and provide the closest valid card name in the repository; never invent animations based on name strings;
+- Marked "For reference only, requires custom implementation": Do not proactively recommend. If requested, clearly state that no reusable implementation exists, build per recipe parameters and sample video, and note risks in the spec;
+- Marked "Missing preview": Source code can be read and used, but do not claim verification against dynamic samples.
 
-严禁只根据卡名含义重新写一套近似动画。卡片文件提供语义，demo 源码才是参数
-真相。用户选中多个镜头后，把它们与产品功能映射，再继续生成完整分镜。
+Never re-implement approximate animations from card name semantics alone. Card documents provide semantics; demo source code holds parameter ground truth. After the user selects multiple shots, map them to features before generating the full storyboard.
 
-## 6. 分镜确认
+## 6. Storyboard Sign-Off and Production Gate
 
-把确认的功能和镜头组合成分镜，并至少包含：
+Assemble confirmed features and shots into a detailed storyboard containing at least:
 
 ```text
-| # | 时间/帧 | 功能信息 | 镜头卡 | 主动作 | 素材来源 | 字幕/SFX |
+| # | Time / Frames | Feature Context | Shot Card | Hero Action | Asset Source | Caption / SFX |
 ```
 
-检查每镜只讲一个主要动效，品牌字标 hold 至少 1 秒，批量动效收尾至少静止
-0.5 秒，避免重复 tagline 或让同一种动效反复当主角。用户确认分镜与最终设计 spec
-后，二者共同构成**制作放行**：不重新打开此前已确认的业务或创意问题，只补实现
-必要的未决项。此时再做最终全量素材采集（整页 2x 截图、元素切片、layout.json），
-把批准分镜转成帧级时间轴，再进入 `pipeline.md` 阶段 4 的最终素材采集、阶段 5
-逐镜头实现、阶段 6 声音设计和阶段 7 终检。
+Verify that each shot focuses on a single hero movement, brand wordmarks hold for ≥1 second, batch motion rests for ≥0.5 seconds, and duplicate taglines or repeated hero animations are eliminated. User sign-off on the storyboard and final design spec forms the **Production Gate**: previously agreed business or creative choices are locked, resolving only unresolved implementation details.
+Perform final full-scale asset capture (full-page 2x screenshots, element cutouts, layout.json), translate the approved storyboard into a frame-accurate timeline, and proceed through `pipeline.md` Stage 4 (Final Asset Capture), Stage 5 (Shot-by-Shot Implementation), Stage 6 (Sound Design), and Stage 7 (Final Review).
 
-将用户确认后的产品简报、需求到执行决策表、视觉方向/tokens、styleframe 或跳过理由、
-功能到镜头映射、Gallery 卡名与具体变体、最终分镜和数据合规口径保存为稳定的设计 spec
-（或在终检交接时完整提供），作为 `final-review.md` 的审查基准。不要让独立
-审查 Agent 依赖零散聊天记录猜测用户确认过什么。
+Persist the approved Product Brief, Requirements-to-Execution Decision Table, Visual Direction / Tokens, Styleframes (or skip justification), Feature-to-Shot Mapping, Gallery Cards / Variants, Final Storyboard, and Data Compliance Policy as a stable design spec (or pass in full during final review handoff) to serve as the evaluation baseline for `final-review.md`. An independent reviewer Agent must not be left guessing user approvals from fragmented chat transcripts.
 
-## 默认与跳过规则
+## Defaults and Fallback Rules
 
-用户授权 Agent 全权决定时，仍须根据产品内容动态推导：从视觉 token 生成方向，
-从核心功能与页面状态选择镜头，从发布渠道、功能数量和阅读密度推荐时长/画幅/
-语言，从品牌能量与节奏推荐音乐。只有项目和用户描述都没有相关线索时，才使用
-30–38 秒、1920×1080 作为兜底。数据口径按项目风险决定：公开演示数据可沿用，
-客户、个人或内部数据改用虚构/脱敏内容。首次整片渲染前仍需提交分镜备案，除非
-用户明确要求不看中间产物。
+When the user grants full creative delegation, derive parameters dynamically from product materials: generate visual directions from CSS tokens, select shots from core features and page states, recommend duration / aspect ratio / language from distribution channels and reading density, and recommend music from brand energy. Fall back to 30–38 seconds at 1920×1080 only if the project and user inputs contain zero relevant clues. Determine data policies by project risk: retain public demo data; fictionalize or desensitize customer, personal, or internal data. Submit the storyboard for record before initial rendering unless the user explicitly requests skipping intermediate reviews.
 
-## 每轮回复格式
+## Per-Turn Response Format
 
 ```text
-当前阶段：
-已确认：
-本轮需要确认：
-确认后交付：
+Current Stage:
+Confirmed:
+Needs Confirmation This Turn:
+Deliverable Upon Confirmation:
 ```

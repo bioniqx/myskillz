@@ -1,24 +1,24 @@
-// list-reveal — 菜单逐项找位 + 整体慢漂移（两层不相干的运动）
+// list-reveal — itemized menu entrance + continuous drift (two decoupled motion layers)
 //
-// 第二轮重设计（石墨暗场 · 侧边栏海报）：
-// - look = graphite（近单色暗场，白为强调、香槟金只做点缀）。主体是一列 700×92 的侧边栏条目
-//   （Home / Shots / Renders / Reviews / Settings / Sign out——video-shotcraft 工作台侧栏），46px 字、34px 线性图标、
-//   26px 等宽快捷键；当前项 Home 是一块受光的瓷白实心条（全片唯一的高亮），未读徽章用香槟金。
-//   右侧一句 120px 标题「Every shot, within reach.」+ 36px 副句，构成左列表右标题的发布片海报。
-// - 手法本身（保留并做清楚）：两层运动完全解耦——
-//   ① 逐项找位：每项 24f，scale 0.82→1 + 上移 44→0 + 对焦模糊 8px→0，软 back 过冲（~1.5%，
-//      几乎读不出，只把落位那一帧"扣住"）；错峰 10f（"逐项读得完"的间隔），相邻约 2–3 项同时在动；
-//      图标晚 2f、快捷键晚 4f 落定（跟随）。
-//   ② 整体漂移：列表容器全程匀速上移 96px（≈0.8px/f），量级是单项位移的 2 倍、速度却慢一个数量级，
-//      所以读作"画面在呼吸"而不是"一起往上飘"。末帧不回位（与卡片定义一致）。
-// - 标题等列表铺到一半才进（Q5：开场只给列表一个主角），逐行从线下升起。
+// Redesign (graphite dark field: sidebar poster layout):
+// - look = graphite (near monochrome dark field, white as accent, champagne gold as highlight). Subject is a column of 700x92 sidebar items
+//   (Home / Shots / Renders / Reviews / Settings / Sign out — video-shotcraft workbench sidebar), 46px text, 34px line icons,
+//   26px monospace shortcuts; active item Home is a lit solid porcelain bar (sole highlight), unread badge in champagne gold.
+//   Right side features a 120px headline "Every shot, within reach." + 36px subhead, creating a launch poster composition.
+// - Core motion technique: two decoupled layers —
+//   1. Item entrance: 24f per item, scale 0.82->1 + translateY 44->0 + focus blur 8px->0, soft overshoot (~1.5%),
+//      staggered by 10f, 2-3 items in motion simultaneously;
+//      icons settle +2f later, shortcuts +4f later (follow-through).
+//   2. Continuous drift: list container moves upward at steady velocity 96px (~0.8px/f),
+//      reading as ambient breathing rather than upward motion. End frame stays offset.
+// - Headline enters halfway through list reveal (single focal point at opening), lines rise from baseline.
 //
-// 时间表（30fps，共 120f）：
-//   0–2     舞台光已在，容器开始漂移
-//   2–26    Home 找位（瓷白条，第一拍）
-//   12–86   其余五项按 10f 错峰找位（Sign out 前的分隔线随之显现）
-//   46–80   右侧标题逐行升起、副句淡入
-//   86–120  hold：漂移继续、光呼吸，尾帧是完整海报
+// Timeline (30fps, total 120f):
+//   0-2     Stage light established, container starts drifting
+//   2-26    Home item enters (porcelain bar, beat 1)
+//   12-86   Remaining 5 items enter staggered by 10f (divider before Sign out reveals)
+//   46-80   Headline rises line by line, subhead fades in
+//   86-120  Hold: drift continues, light breathes, tail frame settles as poster
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, bezier, ramp } from '../../_fixtures/Polish';
@@ -41,13 +41,13 @@ const ROW_W = 700;
 const ROW_H = 92;
 const GAP = 14;
 const LIST_X = 170;
-const LIST_Y = 236; // 漂移中点处的列表顶
-const DRIFT = 96; // 全程总漂移（+48 → −48）
+const LIST_Y = 236; // List top at drift midpoint
+const DRIFT = 96; // Total drift distance (+48 -> -48)
 
-const START = 2; // 首项起点
+const START = 2; // First item start frame
 const STAGGER = 10;
 const EACH = 24;
-const softBack = bezier(0.3, 1.18, 0.5, 1); // 软过冲 ~1.5%
+const softBack = bezier(0.3, 1.18, 0.5, 1); // Soft overshoot ~1.5%
 
 const Icon: React.FC<{ i: number; color: string }> = ({ i, color }) => {
   const p = { fill: 'none', stroke: color, strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -65,7 +65,7 @@ const Icon: React.FC<{ i: number; color: string }> = ({ i, color }) => {
 
 export const ListReveal: React.FC = () => {
   const frame = useCurrentFrame();
-  // 整体漂移：全程匀速（"呼吸"层，故意线性，与逐项曲线无关）
+  // Overall drift: constant velocity throughout (ambient layer, linear, decoupled from item ease)
   const drift = DRIFT / 2 - (DRIFT * frame) / (LIST_REVEAL_DURATION - 1);
 
   return (
@@ -74,7 +74,7 @@ export const ListReveal: React.FC = () => {
         <Dust look={L} count={22} seed={7} drift={0.12} opacity={0.3} />
       </Stage>
 
-      {/* 列表：整体漂移层 */}
+      {/* List: overall drift layer */}
       <div style={{ position: 'absolute', left: LIST_X, top: LIST_Y, width: ROW_W, transform: `translateY(${drift.toFixed(3)}px)` }}>
         {ITEMS.map((it, i) => {
           const t0 = START + i * STAGGER;
@@ -106,7 +106,7 @@ export const ListReveal: React.FC = () => {
                 transform: `translateY(${((1 - p) * 44).toFixed(2)}px) scale(${(0.82 + 0.18 * p).toFixed(4)})`,
                 transformOrigin: '30% 50%', overflow: 'hidden',
               }}>
-                {/* 当前项落位后一次扫光（Q4：只给主角一次，裁进圆角） */}
+                {/* Single sheen sweep after active item settles (clipped to rounded corners) */}
                 {active && <Sheen progress={ramp(frame, 22, 26, EASE.swift)} strength={0.6} width={0.18} />}
                 <div style={{
                   width: 56, height: 56, borderRadius: 16, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -133,7 +133,7 @@ export const ListReveal: React.FC = () => {
         })}
       </div>
 
-      {/* 右侧标题：列表铺到一半才进 */}
+      {/* Right headline: enters after list is halfway revealed */}
       <div style={{ position: 'absolute', left: 1010, top: 336, width: 780 }}>
         <div style={{ ...type(24, 600, { mono: true }), letterSpacing: '0.16em', color: L.accent2, opacity: ramp(frame, 40, 16, EASE.out) }}>
           video-shotcraft · workbench

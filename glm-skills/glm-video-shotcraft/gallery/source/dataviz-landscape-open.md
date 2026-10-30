@@ -1,56 +1,44 @@
 ---
 name: dataviz-landscape-open
-一句话: 暗场支流线束地景开场——多条流线汇入主干、虚构 ID 标签浮在线上、相机重景深低速飞越
-适用: 品牌级抽象开场（"数据宇宙"隐喻），接亮场产品段或字标；与 glow-flyline-moves 分工：那卡是段落内卡片之间的连线叙事，本卡是开场专用的全画幅地景
-时长: 5–8s（开场氛围段，一支片 ≤1 次；demo 180f）
-能量: 低开缓升（起步位，为后续爬升留空间）
-标签: data、camera
+summary: Streams of light merge across a dark data landscape while labels hover and a shallow-depth camera glides forward.
+use: Brand-level abstract opening ("data universe" metaphor), leading into light-themed product segments or wordmark; division of labor with glow-flyline-moves: that card handles connecting line narratives between cards within a segment, while this card is a full-frame landscape dedicated to openings
+duration: 5–8s (opening ambient segment, <=1 time per film; demo 180f)
+energy: Low start building slowly (starting position, preserving room for subsequent ascent)
+tags: data, camera
 ---
 
-## 意图
-Linear Releases 发布片开场实证的品牌级开场品类：把产品背后的数据世界
-拍成一片**暗场地景**——支流线束从画面深处汇入一条主干（"无数工作流
-汇成一个产品"的隐喻），真实感来自三样东西：①虚构 issue/任务 ID 标签
-浮在线上（demo 用 video-shotcraft 的镜头号 + 运镜名：每条支流是一个镜头，汇成一支成片）（观众认出"这是我每天看到的那种东西"）；②重景深——近景大虚焦
-流过、中景标签清晰可读、远景渐隐，三层纵深让平面 SVG 读作空间；
-③相机低速匀稳飞越——这是氛围段不是炫技段，速度感交给后面的镜头。
-手搓 UI 合规依据：非复刻场景（页面上不存在此画面），按核心理念 1
-修订版走质量+表达明确性门槛。
+## Intention
+A brand-level opening category proven by the Linear Releases launch film: framing the data universe behind the product as a **dark-stage landscape**—tributary light bundles converging from screen depths into a central trunk (metaphor for "countless workflows merging into one product"). Realism stems from three pillars: (1) Fictional issue/task ID tags floating along lines (demo uses video-shotcraft shot numbers + camera move names: each tributary represents a shot merging into a finished film), prompting viewers to recognize "that's what I see every day"; (2) Heavy depth of field—foreground sweeping past in heavy blur, midground tags crisp and legible, background fading into haze, with three-tier depth transforming flat SVG into physical space; (3) Slow, steady camera flyover—this is an ambient establishing sequence rather than a technical showcase; leave high velocity for later shots.
 
-## 动作阶段
-| 阶段 | 帧段（@30fps 参考，demo 180f） | 内容 |
-|------|------|------|
-| 1 生长 | f0–70 | 主干由近及远 draw-on 奔向消失点（36f out-cubic，笔尖光点），支流从两侧画外错峰 4–6f 生长、切向汇入 |
-| 2 飞越 | f0–180 | 相机低空沿河道前飞 + 横向缓移（与生长期跨骑），标签 f44–96 非均匀错峰立起，生长完的线上亮脉冲流向汇点 |
-| 3 交棒 | f104–180 | 标签停止新增；消失点亮起一团强调色光，天空落一行大标题；相机 bezier 减速缓停，hold ≥30f |
+## Motion Stages
+| Stage | Frame Segment (@30fps reference, demo 180f) | Content |
+|---|---|---|
+| 1 Growth | f0–70 | Trunk draws on from near to far rushing toward vanishing point (36f out-cubic, glowing tip), tributaries grow staggered by 4–6f from off-screen on both sides, merging tangentially |
+| 2 Flyover | f0–180 | Camera flies forward low along channel + gentle lateral pan (straddling growth phase), tags erect irregularly staggered across f44–96, bright pulses stream toward confluence along completed lines |
+| 3 Handoff | f104–180 | New tags cease appearing; accent glow blooms at vanishing point as headline settles from sky; camera decelerates via Bezier to gentle stop, holding >=30f |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 线束规模 | 支流 8–14 条汇入 1 条主干（demo 11 条，含 1 条贴镜头掠过的近景支流） | 超过 ~16 条读作屏保/科技模板；主干必须唯一（单主角原则的地景版） |
-| 地景投影 | 线画在真透视地平面上：针孔投影 `sx = 960 + F·(X−camX)/Z'`、`sy = 地平线 + F·camH/Z'`，F 1100、相机高 220、地平线 0.39 帧高 | 平面 SVG 横移要手工凑三层视差；真投影的近大远小、视差、汇聚全部白给 |
-| 汇流拓扑 | 支流以 bezier 切向汇入主干（汇入点切线 = 主干切线），主干走向让消失点落在画面右 1/3 | 垂直相交读作电路图不是水系；消失点居中构图死板 |
-| 景深 | 按投影深度逐段分层：Z' <~1000 进模糊层（blur 11px、线宽 ×1.3）、中景锐利、Z' >2600 起雾化变淡；线宽 = 世界线宽·F/Z' | 近景不虚焦则读作线框图；远景不雾化会在地平线挤成一团亮 |
-| 相机飞越 | 前飞 950 世界单位 / 180f，bezier(0.3,0.3,0.55,1)：开场即在飞、尾段减速缓停；叠横向缓移 −140→110 | 快了变追逐镜头（那是 crash-zoom 的活）；只前推不横移时远近错动弱 |
-| 线段绘制 | 每条线按弧长等距采样后逐段画（逐段线宽/透明度），**butt 端帽** | round 端帽在半透明线上每个接缝叠一圈，整条线读成串珠 |
-| 流动感 | 生长完成后沿线窄峰亮脉冲低速漂向汇点，只在中远景显形（近处一段在屏上很长，逐段明暗读成台阶） | 生长期结束后无流动元素，后半段退化成"路线图飞越"不是"数据流" |
-| 标签 | 中景 5–9 枚（demo 6）：强调色方块图钉落在线上 + 短立杆 + 等宽 ID 胶囊，按 1500/Z' 透视缩放（钳 0.7–1.7）；远的先画近的后画 | **立杆世界高度要远低于相机高度**——杆高≈相机高时所有标签都投影到地平线上挤成一排；位置要逐帧投影核过起止两端都不叠 |
-| 生长节奏 | 主干 30–40f out-cubic 先行，支流每条错峰 3–6f | 全部同帧生长读作 loading 动画 |
-| 收尾 | 交棒帧前 ≥15f 标签停止新增、相机减速不急刹；标题（眉题 + 两行 108px）逐词升起 | 氛围段急刹是一次可见的顿挫（glow-orb 收敛判例同源） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Bundle scale | 8–14 tributaries merging into 1 main trunk (demo 11 lines, including 1 near-field line brushing past lens) | More than ~16 lines reads like a screensaver/tech template; trunk must remain unique (single-hero principle applied to landscape) |
+| Ground projection | Lines drawn on authentic perspective ground plane: pinhole projection `sx = 960 + F*(X-camX)/Z'`, `sy = horizon + F*camH/Z'`, F 1100, camera height 220, horizon 0.39 frame height | Planar SVG panning requires manually faking three parallax tiers; true projection delivers foreshortening, parallax, and convergence out of the box |
+| Confluence topology | Tributaries merge tangentially into trunk via Bezier (confluence tangent = trunk tangent); trunk path positions vanishing point in right 1/3 of frame | Perpendicular intersections read like circuit boards rather than waterways; centered vanishing point results in stiff composition |
+| Depth of field | Segmented by projected depth: Z' <~1000 enters blur layer (blur 11px, stroke width x1.3), midground sharp, Z' >2600 fogs into fade; stroke width = worldWidth * F/Z' | Without foreground blur it reads like a wireframe; without background fogging it clumps into a bright knot on horizon |
+| Camera flyover | Forward 950 world units / 180f, bezier(0.3,0.3,0.55,1): moving from start, decelerating to soft stop at tail; layered with lateral drift -140->110 | Too fast becomes a chase shot (crash-zoom territory); forward push without lateral drift weakens depth separation |
+| Stroke drawing | Each line sampled equidistantly along arc length and drawn segment-by-segment (per-segment width/opacity), **butt end caps** | Round caps overlap at each joint on translucent strokes, turning entire line into a string of beads |
+| Sense of flow | Narrow-peak bright pulses drift slowly toward confluence along line post-growth, visible only in mid/far depth (near segments span wide on screen, stepping discretely) | Lacking flowing elements after growth phase degrades second half into a "static route flyover" rather than a "data stream" |
+| Tags | Midground 5–9 tags (demo 6): accent square pin pinned to line + short post + monospace ID pill, scaled by 1500/Z' perspective (clamped 0.7–1.7); distant drawn first, near drawn last | **Post world height must be well below camera height**—when post height ~ camera height, all tags project onto horizon in a crowded row; verify start/end coordinates frame-by-frame |
+| Growth rhythm | Trunk 30–40f out-cubic leads, tributaries stagger by 3–6f each | All lines growing simultaneously reads like a loading spinner |
+| Settle | Stop adding tags >=15f before handoff; camera decelerates smoothly without abrupt braking; title (eyebrow + two 108px lines) rises word-by-word | Abrupt braking during ambient sequences creates jarring visual hiccups |
 
-## 已知坑
-- 借鉴来源：Linear Releases 开场（进化轮 #3 breakdown #7），单例样本
-  ——参数给区间不给教条，首次实战以真实素材回验
-- 与 glow-flyline-moves 别混用在相邻段落：两卡都是"暗场发光线"，
-  背靠背出现读作全片只会一招；同片都要用时中间隔 ≥2 个亮场镜头
-- 暗场进出成本同 glow 卡：接亮场产品段用 shot-transitions 藏切族垫，
-  别生切明暗
-- 线条纯白全亮会糊成蛛网——亮度按层拉开（见参数表），中景才是主角层；
-  主干/支流给 1–2px 微辉光（soft glow）压出"发光线"氛围，全无辉光读作线框图（Q4 单点光效许可内）
-- 标签字号在目标画幅下 ≥18px 等效，否则"可读"沦为装饰噪点（Q6 同源）
-- 声音：铺 riser/低频 pad 底噪，标签浮现不逐枚打点（批量不逐个发声，
-  S2 同源）；交棒帧一次 whoosh/impact 交给下一镜头
+## Known Pitfalls
+- Reference provenance: Linear Releases opening, single exemplar sample—parameters are guidelines rather than dogma; re-verify against real assets in production.
+- Do not use in adjacent segments with glow-flyline-moves: both are "dark-stage glowing lines"; appearing back-to-back makes the film feel repetitive; separate by >=2 light-stage shots if both are used.
+- Dark-stage entry and exit costs mirror glow cards: use hidden-cut families from shot-transitions when connecting to light-stage product segments; avoid raw cuts between dark and light.
+- Pure white full-brightness lines blur into a spiderweb—separate luminance across tiers (see parameter table); midground is the hero tier; apply 1–2px soft glow to trunk/tributaries for illuminated line atmosphere; zero glow reads like a raw wireframe.
+- Tag font size must maintain >=18px equivalent at target resolution, otherwise legibility degenerates into decorative noise.
+- Audio: layer risers and low-frequency pad room tone; do not ping tags individually (avoid per-item audio in batches); single whoosh/impact at handoff frame transitions to next shot.
 
-## 参考实现
+## Reference Implementation
 demos/opening/dataviz-landscape-open/
-（DatavizLandscapeOpen.tsx）
+(DatavizLandscapeOpen.tsx)

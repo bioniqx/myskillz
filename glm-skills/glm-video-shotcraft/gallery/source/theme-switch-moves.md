@@ -1,47 +1,39 @@
 ---
 name: theme-switch-moves
-一句话: 主题切换两式——theme-sweep 斜向扫场（边界扫过处就地换肤）与 palette-ripple 组合款（⌘K 面板收缩成点、涟漪从点荡开换肤）
-适用: 深色模式/主题功能的叙事段落；同一 UI "在你眼前变色"而非切到新场景
-时长: A 140f（4.7s）/ B 156f（5.2s）
-能量: A 中 / B 中高（组合款有完整因果链）
+summary: Two theme-change patterns: a diagonal sweep that recolors content in place, and a command-palette ripple with a clear cause and effect.
+use: Narrative segments for dark mode / theme switching; identical UI "changing colors before your eyes" rather than cutting to a new scene
+duration: A 140f (4.7s) / B 156f (5.2s)
+energy: A Medium / B Medium-High (combo variant features complete causal chain)
 ---
 
-## 意图
-深浅模式切换的两种拍法。A（Notion/Figma/Linear 惯用）：15° 斜向
-边界带亮线扫过全画面（demo 从开关所在的右侧扫向左侧），边界经过处浅色**就地**变深色，同布局
-双主题共存一瞬——观众看到的是"同一个 UI 换肤"，不是转场。
-B（组合变异）：⌘K 面板输入 "dark" 回车，面板收缩成一个亮点，
-深色涟漪**从该点**荡开扫过全 UI——"命令引发换肤"的因果链完整可读。
-组合命门：涟漪圆心必须是面板收缩点、起始帧必须是收缩完成帧。
+## Intention
+Two filming methods for dark/light mode switching. A (standard in Notion/Figma/Linear): a 15-degree diagonal boundary with bright light sweeps across the screen (in demo, sweeping from switch on right toward left); as boundary passes, light elements switch to dark **in place**, with dual themes briefly coexisting across identical layout—viewers witness "the same UI reskinning," not a transition. B (combo variant): Cmd+K palette receives "dark" and Enter is pressed; palette collapses into a bright dot, and dark ripples **radiate from that dot** across full UI—establishing a fully legible causal chain of "command triggers reskin." Critical combo requirement: ripple origin must match palette collapse point, and trigger frame must be collapse completion frame.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A theme-sweep-toggle | 特写顶栏日夜开关（zoom 2.0）：指针按下、旋钮弹簧拨到月亮（太阳收光芒长出月牙）→ 深色世界 clip-path polygon 15° 斜边从开关一侧扫过（64f，bezier(.3,0,.35,1)），同时相机 30f 拉开到全景；边界 = 晨昏线：白热核心线 + 亮侧随速度变宽的落日橙暮光带 + 夜侧冷蓝辉；扫完"开灯"（今日胶囊 / 此刻线 / 窗口轮廓光依次亮起）坐实 | 主题功能直接展示 |
-| B palette-theme-ripple | 面板弹簧落下→人手节奏逐字输入→回车面板 CRT 关机式收缩（先纵向压成亮线、再横向收成亮点）+ 亮点与横向余辉钉住 5f→圆形 clip 半径 6→1260px 强 ease-out 荡开，3px 白热环 + 珊瑚外辉 / 白色内辉 + 晚 4f 回声环，深色版 1.035→1 坐实、相机顺势呼气退回 | 命令面板+主题联动的高光段 |
+## Variant Selection
+| Variant | Approach | Use |
+|---|---|---|
+| A theme-sweep-toggle | Close-up on header day/night toggle (zoom 2.0): cursor presses, knob springs to moon (sun retracts rays and grows crescent) -> dark world clip-path polygon sweeps diagonally at 15 deg from switch side (64f, bezier(.3,0,.35,1)), while camera pulls back to full overview over 30f; boundary = twilight line: white-hot core line + sunset orange twilight band widening with speed on light side + cool blue glow on dark side; "lights on" finishes sweep (today pill / current time line / window rim light illuminate sequentially) to settle | Direct demonstration of theme features |
+| B palette-theme-ripple | Palette drops via spring -> human-cadence character input -> Enter triggers CRT shutdown collapse (vertically squashing into bright line, then horizontally into bright dot) + dot and horizontal afterglow hold 5f -> circular clip radius 6->1260px ripples outward with strong ease-out, 3px white-hot ring + coral outer glow / white inner glow + echo ring lagging by 4f, dark version settles at 1.035->1, camera exhales and pulls back in rhythm | Highlight beat linking command palette and theme |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 深色版制作 | 对色板逐键手工映射（bg/card/border 各自定深色值） | 滤镜反转出来的深色是错的（图像/头像全反） |
-| A 斜边超扫 | 斜线在世界坐标外扩 400px 计算多边形，终点越过左下角 | 不超扫角落残留浅色三角 |
-| A 因果 | 扫场起点紧贴开关、按下后 ~6f 边界就扫过开关；相机从开关特写拉开 | 边界从远处出现或晚 10f 以上，读不出"是这个开关引起的" |
-| A 海报帧 | 相机全景到位（40f）早于晨昏线过中线（~44–50f） | 拉开太晚 → 全景里看不到昼夜同屏，手法只剩特写 |
-| A 坐实 | 扫完后夜里才有的光依次亮起（今日胶囊 / 此刻线 / 窗口轮廓光） | 比 scale 0.99 更有语义；不要再叠全屏闪白 |
-| B 因果钉扎 | 亮点在收缩点挂 5f（+ 横向余辉），涟漪圆心=该点坐标、起始帧=亮点结束帧 | 圆心错位/错帧就断了"命令→换肤"因果（组合命门） |
-| B 涟漪半径 | 终值 ≈ 圆心到最远角距离 × 1.1（demo 1260px） | 终值给太大（如 2000+）曲线前段一闪而过，圆形读不出来 |
-| B 浅色层 | 扫场完成后条件卸载 | 真静止前提 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Dark mode creation | Manual key-by-key mapping against palette (custom dark values for bg/card/border) | Filter-inverted dark modes are incorrect (images/avatars become negatives) |
+| A Diagonal over-sweep | Diagonal line expanded 400px in world coordinates for polygon calculation, endpoint crossing bottom-left | Failing to over-sweep leaves residual light triangles in corners |
+| A Causality | Sweep origin hugs switch; boundary crosses switch ~6f after press; camera pulls out from switch close-up | Boundary appearing from afar or lagging by >10f fails to convey "triggered by this switch" |
+| A Poster frame | Camera reaches full overview (40f) before twilight line crosses midline (~44–50f) | Pulling back too late prevents viewing day and night coexisting on screen, reducing technique to plain close-up |
+| A Settle | Post-sweep night-only lights turn on sequentially (today pill / current time line / window rim light) | More semantic than scale 0.99; avoid stacking full-screen white flashes |
+| B Causal anchoring | Bright dot rests at collapse point for 5f (+ horizontal afterglow); ripple origin = point coordinates, start frame = dot end frame | Offset origin or desynced frame severs "command -> reskin" causality (critical combo requirement) |
+| B Ripple radius | End value ~ distance from center to furthest corner x 1.1 (demo 1260px) | Excessive end value (e.g. 2000+) flashes through early curve, making circular shape illegible |
+| B Light layer | Conditionally unmounted upon sweep completion | Prerequisite for true static hold |
 
-## 已知坑
-- demo 在为镜头设计的 video-shotcraft UI（A 发布周制作排期 / B 样片画廊）上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 两版布局必须逐像素一致——布局有出入就读作"切换到另一个页面"，
-  手法即失效
-- 真实页面实战：深浅两版分别真实截图（Q1），不做滤镜假深色
-- 一支片主题切换 ≤1 次：它是功能叙事不是转场，反复切读作演示事故
-- 声音：A 扫场一声长 whoosh；B 回车一声确认 + 涟漪荡开接 whoosh
-  （S4 拟音优先）
+## Known Pitfalls
+- Demo calibrated on video-shotcraft UI designed for shot (A release week production schedule / B sample gallery)—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- Both versions must match layout pixel-for-pixel—any layout discrepancy reads as "switching to another page," invalidating technique.
+- Production on real pages: capture authentic screenshots for light and dark versions separately, avoiding fake inverted filters.
+- Use theme switching <=1 time per film: it is a feature narrative rather than a transition; repeated switching reads like a demo accident.
+- Audio: Style A sweep uses a long whoosh; Style B Enter uses confirmation click + ripple expansion into whoosh (Foley prioritization).
 
-## 参考实现
+## Reference Implementation
 demos/interaction/theme-switch-moves/
-（PaletteThemeRipple.tsx / ThemeSweepToggle.tsx）
+(PaletteThemeRipple.tsx / ThemeSweepToggle.tsx)

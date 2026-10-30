@@ -1,26 +1,26 @@
-// diagram-cascade-build —— miro-promo 104–116s
-// prompt 打字 → 结构图逐层级联生成（根 → 2 子 → 4 孙），连线先于节点生长，成树后整棵呼吸一拍。
+// diagram-cascade-build — miro-promo 104–116s
+// Prompt typing -> hierarchical diagram generation (root -> 2 children -> 4 grandchildren). Connectors precede node emergence; entire tree pulses on completion.
 //
-// 第二轮重设计（极光暗场 · AI 画布"一句话长出一棵树"）：
-// - look = aurora（深紫夜 · 紫粉光）。主角是"生长"本身：每条连线都带一颗发光的彗星头领跑，
-//   线头到达子端口的那一帧子节点才从端口处"被拉出来"（缩放原点 = 节点顶边中点）——线牵节点，因果可见。
-// - 生成源头清楚：prompt 条（video-shotcraft 的 AI 命令条，36px 大字）提交后描边变成流动的紫粉渐变（生成中），
-//   从 prompt 条底部先滴下一条线接到根节点——树是从这句话里长出来的；生成完毕描边落定、右侧状态变成"7 tables"。
-// - 节点做成为镜头设计的 ER 表卡：34px 表名 + 两行 mono 字段（PK/FK 小签），根节点用渐变描边当主角；
-//   其余是带色相的深紫玻璃面板 + 发丝线 + 顶部内高光 + 两层软阴影。
-// - 相机：开场推近在 prompt 条上（1.3× 居中，读字），提交后随树生长 smooth 拉远到 1.0 揭示整体结构（crane-back），
-//   全程平滑无速度突变；成树后以树心为原点呼吸 1→1.03→1，背后极光同步亮一档。
+// Iteration 2 redesign (aurora dark field · AI canvas generative tree):
+// - look = aurora (deep violet night · magenta-violet glow). The centerpiece is generative growth: each connector leads with a glowing comet head,
+//   and the child node is pulled out from its port the moment the connector arrives (transform origin = top-center of node).
+// - Clear causal origin: prompt bar (video-shotcraft AI command bar, 36px type) stroke transitions into flowing magenta gradient on submit;
+//   a connector drops from the prompt bar into the root node, anchoring the tree to the prompt; upon completion, stroke settles and status reads "7 tables".
+// - Nodes styled as ER table cards: 34px entity header + two mono fields with PK/FK tags; root node features gradient accent stroke;
+//   other nodes feature tinted dark-violet glass with hairline borders + top inner specular + dual-layer soft shadows.
+// - Camera: starts zoomed in on prompt bar (1.3x centered for readability), pulling back smoothly to 1.0 (crane-back) as tree expands;
+//   tree performs a 1->1.03->1 pulse from center on finish, background aurora brightening in sync.
 //
-// 时间表（30fps，共 180f）：
-//   0–10    舞台 + prompt 条落下（空条 + 光标闪）
-//   8–44    打字 "Map the data model for Shotcraft"（每字 1–2f 不均匀，像真人敲）
-//   46–50   敲完：描边转紫确认；48f 按下提交键（scale 0.9 → 回弹）
-//   50–136  生成中：描边流光；50f 起相机 1.3→1.0 拉远（smooth，72f），prompt 条从画面中心升到顶部
-//   54      prompt 底部滴线 → 62f 根节点从端口拉出（spring damping 14）
-//   82/104  第 1 / 2 层：线先行 10f（16f ease-out + 彗星头），同层兄弟错峰 5f
-//   ~128    末节点落定 → 状态 "7 tables · 6 links"、描边流光收束
-//   138–166 整棵呼吸一拍 + 极光亮一档
-//   166–180 落定 hold：完整海报
+// Timeline (30fps, 180f total):
+//   0–10    Stage + prompt bar settles (empty bar + pulsing caret)
+//   8–44    Typing "Map the data model for Shotcraft" (1–2f per char human cadence)
+//   46–50   Typing complete: stroke turns purple; submit key pressed at 48f (scale 0.9 -> rebound)
+//   50–136  Generating: animated gradient stroke; camera dollies back 1.3->1.0 (smooth 72f), prompt bar rises to top
+//   54      Connector drops from prompt bottom -> root node emerges at 62f (spring damping 14)
+//   82/104  Tiers 1 & 2: connectors lead by 10f (16f ease-out + comet head), sibling nodes stagger 5f
+//   ~128    Final node settles -> status "7 tables · 6 links", stroke animation resolves
+//   138–166 Whole tree pulses + aurora brightens
+//   166–180 Settled hold: complete poster frame
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -29,12 +29,12 @@ import { Dust, LOOKS, Stage, alpha, springAt, type } from '../../_fixtures/Look'
 export const DIAGRAM_CASCADE_BUILD_DURATION = 180;
 
 const L = LOOKS.aurora;
-const A1 = L.accent; // 紫
-const A2 = L.accent2; // 粉（点缀：渐变另一端）
+const A1 = L.accent; // Purple
+const A2 = L.accent2; // Pink accent (gradient opposite end)
 
-const PROMPT = 'Map the data model for Shotcraft'; // 与原句同节奏：提交帧仍是 50f
+const PROMPT = 'Map the data model for Shotcraft'; // Matches pacing: submit frame remains 50f
 const TYPE_START = 8;
-// 每个字符的敲击间隔（帧）：确定性"人手节奏"——词间空格多停半拍
+// Per-character stroke delay: deterministic human cadence with brief pause at spaces
 const charGap = (i: number) => (PROMPT[i] === ' ' ? 1.7 : 0.95 + 0.25 * Math.abs(Math.sin(i * 2.17)));
 const CHAR_T: number[] = [];
 {
@@ -47,13 +47,13 @@ const CHAR_T: number[] = [];
 const TYPE_END = CHAR_T[CHAR_T.length - 1];
 const SUBMIT = Math.round(TYPE_END) + 4;
 
-// ── 树布局（画布坐标，节点中心）──
+// ── Tree layout (canvas coordinates, node centers) ──
 const NODE_W = 344;
 const NODE_H = 158;
 type Field = [string, string, '' | 'PK' | 'FK'];
 type Node = { id: number; x: number; y: number; level: number; parent: number; name: string; fields: Field[] };
 const NODES: Node[] = [
-  // video-shotcraft 自己的数据模型：成片工程 → 分镜 / 渲染任务 → 镜头、配方卡、输出、预设
+  // video-shotcraft data model: Project -> Storyboard / Render Queue -> Shots, Recipe Cards, Export, Presets
   { id: 0, x: 960, y: 372, level: 0, parent: -1, name: 'Project', fields: [['id', 'uuid', 'PK'], ['title', 'text', '']] },
   { id: 1, x: 540, y: 608, level: 1, parent: 0, name: 'Storyboard', fields: [['id', 'uuid', 'PK'], ['proj_id', 'uuid', 'FK']] },
   { id: 2, x: 1380, y: 608, level: 1, parent: 0, name: 'RenderJob', fields: [['id', 'uuid', 'PK'], ['proj_id', 'uuid', 'FK']] },
@@ -62,13 +62,13 @@ const NODES: Node[] = [
   { id: 5, x: 1160, y: 852, level: 2, parent: 2, name: 'Output', fields: [['job_id', 'uuid', 'FK'], ['codec', 'text', '']] },
   { id: 6, x: 1600, y: 852, level: 2, parent: 2, name: 'Preset', fields: [['id', 'uuid', 'PK'], ['fps', 'int', '']] },
 ];
-const PROMPT_Y = 96; // prompt 条顶
+const PROMPT_Y = 96; // Prompt bar top
 const PROMPT_H = 100;
-const ROOT_DRIP = SUBMIT + 6; // 滴线起笔
-const CASCADE_START = SUBMIT + 14; // 根节点出现
+const ROOT_DRIP = SUBMIT + 6; // Drip line start
+const CASCADE_START = SUBMIT + 14; // Root node appears
 const LEVEL_GAP = 22;
 const SIBLING_STAGGER = 5;
-const LEAD = 10; // 线比子节点早到
+const LEAD = 10; // Connector leads child node arrival
 const EDGE_DUR = 16;
 
 const nodeStart = (n: Node) => {
@@ -80,7 +80,7 @@ const LAST = nodeStart(NODES[NODES.length - 1]);
 const DONE = LAST + 12;
 const BREATHE = DONE + 10;
 
-// ── 圆角折线（父底端口 → 下探 → 横移 → 下探到子顶端口），用 SVG 圆弧，长度可精确计算 ──
+// ── Rounded orthogonal connector (parent bottom -> drop -> horizontal -> drop to child top) via SVG arcs ──
 const R = 22;
 const edgeGeom = (p: Node, c: Node) => {
   const x1 = p.x, y1 = p.y + NODE_H / 2 + 8, x2 = c.x, y2 = c.y - NODE_H / 2 - 8;
@@ -92,7 +92,7 @@ const edgeGeom = (p: Node, c: Node) => {
   const d = `M ${x1} ${y1} L ${x1} ${my - r} A ${r} ${r} 0 0 ${sweep1} ${x1 + dir * r} ${my} L ${x2 - dir * r} ${my} A ${r} ${r} 0 0 ${sweep2} ${x2} ${my + r} L ${x2} ${y2}`;
   const s1 = my - r - y1, a = (Math.PI * r) / 2, h = Math.abs(x2 - x1) - 2 * r, s3 = y2 - my - r;
   const len = s1 + a + h + a + s3;
-  // 沿路径弧长 u（px）取点：给彗星头定位
+  // Sample point along arc length u (px) for comet head positioning
   const at = (u: number) => {
     if (u <= s1) return { x: x1, y: y1 + u };
     u -= s1;
@@ -107,7 +107,7 @@ const edgeGeom = (p: Node, c: Node) => {
   return { d, len, at };
 };
 
-// ── 小图标 ──
+// ── Icons ──
 const SparkIcon: React.FC<{ c: string; size?: number }> = ({ c, size = 34 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M12 2.5l2.1 6.4 6.4 2.1-6.4 2.1L12 19.5l-2.1-6.4L3.5 11l6.4-2.1z" fill={c} />
@@ -121,7 +121,7 @@ const TableIcon: React.FC<{ c: string }> = ({ c }) => (
   </svg>
 );
 
-// ── ER 表卡 ──
+// ── ER Table Card ──
 const EntityCard: React.FC<{ n: Node; t: number }> = ({ n, t }) => {
   const root = n.level === 0;
   const head = ramp(t, 3, 8, EASE.out);
@@ -169,14 +169,14 @@ export const DiagramCascadeBuild: React.FC = () => {
   const promptIn = ramp(frame, 0, 14, EASE.snappy);
   const generating = ramp(frame, SUBMIT, 8, EASE.out) * (1 - ramp(frame, DONE, 12, EASE.out));
   const doneIn = ramp(frame, DONE, 14, EASE.snappy);
-  const flow = Math.max(0, frame - SUBMIT) * 0.012; // 描边流光相位
+  const flow = Math.max(0, frame - SUBMIT) * 0.012; // Stroke gradient animation phase
 
-  // ── 相机：推近 prompt → 提交后拉远揭示全树 ──
+  // ── Camera: pushed in on prompt -> pulls back post-submit to reveal tree ──
   const pull = ramp(frame, SUBMIT + 2, 72, EASE.smooth);
   const cam = mix(1.3, 1, pull);
-  const camY = mix(340, 0, pull); // 推近时把 prompt 条拉到画面正中
+  const camY = mix(340, 0, pull); // Centers prompt bar in viewport during close-up
 
-  // ── 成树呼吸 ──
+  // ── Completed tree pulse ──
   const br = ramp(frame, BREATHE, 14, EASE.smooth) - ramp(frame, BREATHE + 14, 14, EASE.smooth);
   const breathe = 1 + 0.03 * br;
   const auroraUp = ramp(frame, BREATHE - 6, 24, EASE.out);
@@ -189,13 +189,13 @@ export const DiagramCascadeBuild: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden', fontFamily: FONT.sans }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.05 }} fill={{ x: 0.82, y: 0.95 }} breathe={0.5}>
-        {/* 树后的极光：随生成逐渐亮起，成树时再亮一档 */}
+        {/* Aurora behind tree: brightens with generation, lifting a notch on completion */}
         <div style={{
           position: 'absolute', left: 260, right: 260, top: 380, height: 640,
           background: `radial-gradient(ellipse 50% 50% at 35% 55%, ${alpha(A1, 0.1 + 0.12 * auroraUp)} 0%, transparent 70%), radial-gradient(ellipse 45% 45% at 70% 60%, ${alpha(A2, 0.05 + 0.08 * auroraUp)} 0%, transparent 70%)`,
           opacity: ramp(frame, SUBMIT, 60, EASE.out),
         }} />
-        {/* 画布点阵 */}
+        {/* Canvas dot grid */}
         <AbsoluteFill style={{
           backgroundImage: `radial-gradient(${alpha(L.ink, 0.12)} 1.4px, transparent 1.7px)`,
           backgroundSize: '40px 40px', backgroundPosition: '0 16px',
@@ -206,7 +206,7 @@ export const DiagramCascadeBuild: React.FC = () => {
       </Stage>
 
       <AbsoluteFill style={{ transform: `translateY(${camY.toFixed(2)}px) scale(${cam.toFixed(4)})`, transformOrigin: '50% 14%' }}>
-        {/* ── prompt 条：渐变描边（生成中流动）+ 内面板 ── */}
+        {/* ── Prompt bar: gradient stroke (flows during generation) + inner panel ── */}
         <div style={{
           position: 'absolute', left: 960 - 560, top: PROMPT_Y, width: 1120, height: PROMPT_H, borderRadius: 50,
           padding: 2, boxSizing: 'border-box',
@@ -214,7 +214,7 @@ export const DiagramCascadeBuild: React.FC = () => {
           boxShadow: `0 0 ${(30 + 40 * generating).toFixed(1)}px ${alpha(A1, 0.1 + 0.25 * generating)}, ${softShadow(24, { color: L.shadow, strength: 2.4 })}`,
           opacity: promptIn, transform: `translateY(${((1 - promptIn) * -20).toFixed(2)}px)`,
         }}>
-          {/* 生成中：流动的紫粉渐变描边；完成后留一道静止的渐变边 */}
+          {/* Generating: animated magenta-violet gradient border; settles static upon finish */}
           <div style={{
             position: 'absolute', inset: 0, borderRadius: 50,
             background: `linear-gradient(90deg, ${A1}, ${A2}, ${A1}, ${A2}, ${A1})`, backgroundSize: '300% 100%',
@@ -236,7 +236,7 @@ export const DiagramCascadeBuild: React.FC = () => {
                 background: A1, opacity: caretOn ? 1 : 0,
               }} />
             </span>
-            {/* 右侧：提交键 → 生成中 → 完成状态 */}
+            {/* Right side: submit button -> generating -> complete state */}
             <div style={{ marginLeft: 'auto', position: 'relative', height: 68, display: 'flex', alignItems: 'center' }}>
               <div style={{
                 position: 'absolute', right: 0, top: 0, whiteSpace: 'nowrap', height: 68, display: 'flex', alignItems: 'center', gap: 12,
@@ -264,7 +264,7 @@ export const DiagramCascadeBuild: React.FC = () => {
           </div>
         </div>
 
-        {/* ── 树（呼吸以树心为原点） ── */}
+        {/* ── Tree (pulses radially from tree center) ── */}
         <div style={{ position: 'absolute', inset: 0, transform: `scale(${breathe.toFixed(4)})`, transformOrigin: '960px 620px' }}>
           <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
             <defs>
@@ -278,7 +278,7 @@ export const DiagramCascadeBuild: React.FC = () => {
                 <stop offset="1" stopColor={A1} stopOpacity={0} />
               </radialGradient>
             </defs>
-            {/* prompt → 根的滴线 */}
+            {/* Connector from prompt bar to root node */}
             {drip > 0 && (
               <g>
                 <line x1={960} y1={dripY1} x2={960} y2={mix(dripY1, dripY2, drip)} stroke="url(#dcbEdge)" strokeWidth={2.5} strokeLinecap="round" strokeDasharray="2 7" />
@@ -295,7 +295,7 @@ export const DiagramCascadeBuild: React.FC = () => {
               const port = ramp(frame, start + EDGE_DUR - 6, 10, EASE.overshoot);
               return (
                 <g key={n.id}>
-                  {/* 柔光底线 + 实线 */}
+                  {/* Soft halo stroke + solid line */}
                   <path d={g.d} stroke={A1} strokeOpacity={0.18} strokeWidth={9} fill="none" strokeLinecap="round"
                     strokeDasharray={`${g.len} ${g.len}`} strokeDashoffset={g.len * (1 - grow)} />
                   <path d={g.d} stroke="url(#dcbEdge)" strokeWidth={2.5} fill="none" strokeLinecap="round"
@@ -305,13 +305,13 @@ export const DiagramCascadeBuild: React.FC = () => {
                 </g>
               );
             })}
-            {/* 父端口：第一条出线起笔时出现 */}
+            {/* Parent port: appears when first outgoing connector begins */}
             {NODES.filter((n) => n.level < 2).map((n) => {
               const firstChild = NODES.find((c) => c.parent === n.id)!;
               const port = ramp(frame, nodeStart(firstChild) - LEAD - 4, 8, EASE.overshoot);
               return <circle key={`p${n.id}`} cx={n.x} cy={n.y + NODE_H / 2 + 8} r={6 * port} fill={L.bg[1]} stroke={A1} strokeWidth={2.5} />;
             })}
-            {/* 根的顶端口（接滴线） */}
+            {/* Root top port (receives prompt connector) */}
             <circle cx={960} cy={dripY2} r={6 * ramp(frame, ROOT_DRIP + 4, 8, EASE.overshoot)} fill={L.bg[1]} stroke={A1} strokeWidth={2.5} />
           </svg>
 
@@ -320,7 +320,7 @@ export const DiagramCascadeBuild: React.FC = () => {
             if (frame < start) return null;
             const pop = springAt(frame, start, { damping: 14, stiffness: 190 });
             const op = ramp(frame, start, 5, EASE.linear);
-            const lift = (1 - Math.min(1, pop)) * 22; // 弹出时离地更高，落定阴影收紧
+            const lift = (1 - Math.min(1, pop)) * 22; // Elevated elevation on pop, shadow contracts on settle
             const isRoot = n.level === 0;
             return (
               <div key={n.id} style={{
@@ -329,7 +329,7 @@ export const DiagramCascadeBuild: React.FC = () => {
                 background: isRoot ? `linear-gradient(135deg, ${A1}, ${A2})` : undefined,
                 boxShadow: `${softShadow(10 + lift, { color: L.shadow, strength: 2.6 })}${isRoot ? `, 0 0 50px ${alpha(A1, 0.25 + 0.2 * br)}` : ''}`,
                 opacity: op,
-                // 从顶端口"拉出"：缩放原点 = 顶边中点
+                // Pulled down from top port: scale origin = top-center
                 transform: `translateY(${((1 - pop) * -18).toFixed(2)}px) scale(${(0.7 + 0.3 * pop).toFixed(4)})`, transformOrigin: '50% 0%',
               }}>
                 <div style={{

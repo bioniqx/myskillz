@@ -29,23 +29,23 @@ def parse_card(path):
             if ':' in line:
                 k, v = line.split(':', 1)
                 fm[k.strip()] = v.strip()
-    im = re.search(r'^## 意图\n(.*?)(?=\n## )', text, re.S | re.M)
+    im = re.search(r'^## Intention\n(.*?)(?=\n## )', text, re.S | re.M)
     intention = re.sub(r'\s*\n\s*', ' ', im.group(1).strip()) if im else None
     return fm, intention
 
 
-# 功能类别（目录名 → 中/英标签）；references/shots/<类别>/<卡名>.md
+# Functional categories (directory name -> labels); references/shots/<category>/<card_name>.md
 CATEGORIES = {
-    'opening': {'zh': '开场与品牌', 'en': 'Opening & Brand'},
-    'typography': {'zh': '文字与字卡', 'en': 'Typography & Title Cards'},
-    'ui-entrance': {'zh': '界面登场与陈列', 'en': 'UI Entrance & Showcase'},
-    'camera': {'zh': '运镜与空间', 'en': 'Camera & Space'},
-    'data': {'zh': '数据与指标', 'en': 'Data & Metrics'},
-    'interaction': {'zh': '交互与功能演示', 'en': 'Interaction & Feature Demo'},
-    'transition': {'zh': '转场', 'en': 'Transitions'},
-    'rhythm': {'zh': '节奏与蒙太奇', 'en': 'Rhythm & Montage'},
-    'effects': {'zh': '光效与强调', 'en': 'Light & Emphasis'},
-    'outro': {'zh': '收尾', 'en': 'Outro'},
+    'opening': {'zh': 'Opening & Brand', 'en': 'Opening & Brand'},
+    'typography': {'zh': 'Typography & Title Cards', 'en': 'Typography & Title Cards'},
+    'ui-entrance': {'zh': 'UI Entrance & Showcase', 'en': 'UI Entrance & Showcase'},
+    'camera': {'zh': 'Camera & Space', 'en': 'Camera & Space'},
+    'data': {'zh': 'Data & Metrics', 'en': 'Data & Metrics'},
+    'interaction': {'zh': 'Interaction & Feature Demo', 'en': 'Interaction & Feature Demo'},
+    'transition': {'zh': 'Transitions', 'en': 'Transitions'},
+    'rhythm': {'zh': 'Rhythm & Montage', 'en': 'Rhythm & Montage'},
+    'effects': {'zh': 'Light & Emphasis', 'en': 'Light & Emphasis'},
+    'outro': {'zh': 'Outro', 'en': 'Outro'},
 }
 
 
@@ -80,29 +80,28 @@ def main():
             missing.append(card['name'])
             continue
         fm, intention = parse_card(p)
-        if fm.get('一句话'):
-            card['summary'] = fm['一句话']
-        if fm.get('适用'):
-            card['use'] = fm['适用']
-        if fm.get('时长'):
-            card['duration'] = fm['时长']
-        if fm.get('能量'):
-            card['energy'] = fm['能量']
+        if fm.get('summary'):
+            card['summary'] = fm.get('summary')
+        if fm.get('use'):
+            card['use'] = fm.get('use')
+        if fm.get('duration'):
+            card['duration'] = fm.get('duration')
+        if fm.get('energy'):
+            card['energy'] = fm.get('energy')
         if intention:
             card['intention'] = intention
         card['category'] = card_category[card['name']]
-        # 多类别标签：frontmatter 的「标签:」列出这张卡也成立的其他类别；
-        # 目录名永远是主类别（分组归属），标签只扩大筛选命中面
-        extra = [t.strip() for t in re.split(r'[,，、\s]+', fm.get('标签', '')) if t.strip()]
+        # Multi-category tags: frontmatter "tags" lists additional matching categories
+        raw_tags = fm.get('tags') or ''
+        extra = [t.strip() for t in re.split(r'[,\s]+', raw_tags) if t.strip()]
         bad = [t for t in extra if t not in CATEGORIES]
         if bad:
-            raise SystemExit(f"{card['name']}: unknown 标签 {bad} (must be CATEGORIES keys)")
+            raise SystemExit(f"{card['name']}: unknown tags {bad} (must be CATEGORIES keys)")
         card['tags'] = [card['category']] + [t for t in extra if t != card['category']]
         card['source'] = f"references/shots/{card['category']}/{card['name']}.md"
         if card['name'] in touched:
             card['updatedAt'] = now
-        # 新卡首次入 library.json 时打 addedAt（NEW 徽标的数据源，之后不再变；
-        # 徽标显示窗口见 app.js 的 NEW_WINDOW_MS）
+        # addedAt recorded when new card first enters library.json
         card.setdefault('addedAt', now)
         if len(card.get('styles', [])) == 1:
             card['styles'][0]['description'] = card['summary']
@@ -113,7 +112,7 @@ def main():
             else:
                 style.pop('implementationStatus', None)
     lib['categories'] = CATEGORIES
-    # All 视图直接按 cards 顺序平铺渲染，这里就是排序的唯一权威
+    # All view rendered flat in cards order; this is authoritative sort order
     lib['cards'].sort(key=lambda card: card['name'])
 
     # stats are the single source of truth every page and llms.txt reads;
@@ -128,8 +127,6 @@ def main():
     print(f"synced {len(lib['cards'])} cards ({lib['stats']['styleCount']} styles, "
           f"{lib['stats']['previewCount']} previews); missing card files: {missing or 'none'}")
     if missing:
-        # 卡的 md 已删但 library.json 还留着条目 = Gallery 会渲染一张
-        # source 链接指向虚空的卡；硬失败让删卡 PR 在 CI 就暴露
         raise SystemExit(f'orphan library.json entries (card md deleted): {missing}')
 
 

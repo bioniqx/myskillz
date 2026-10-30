@@ -1,26 +1,26 @@
 /**
- * DatavizLandscapeOpen — 暗场支流线束地景开场
- * 配方卡: references/shots/opening/dataviz-landscape-open.md
+ * DatavizLandscapeOpen — Dark tributary wireframe landscape opening
+ * Recipe card: references/shots/opening/dataviz-landscape-open.md
  *
- * 第二轮重设计（石墨 · 荧光黄绿 · 真透视地景）：
- * - look = lime。不再是平面 SVG 横移：整片线束画在一张真透视的地平面上（针孔投影，相机高 220、焦距 1100），
- *   一条荧光黄绿主干从镜头脚下蜿蜒奔向画面右 1/3 处的消失点（汇点），11 条灰绿支流从两侧画外切向汇入。
- *   景深 / 视差 / 雾全部由投影深度算出来：近处线条又宽又虚（按深度分进模糊层）、中景锐利、远处变细隐入地平线。
- * - 相机低空沿河道前飞 + 横向缓移（dolly + truck），整段 bezier 减速：开场即在飞、收尾缓停接字标，不急刹。
- * - 中景支流上钉 6 枚 video-shotcraft 镜头标签（立杆图钉 + 等宽镜头号胶囊 + 运镜名），随透视逐渐变大、向两侧散开；
- *   隐喻：每条支流是一个镜头，汇成主干这一支成片；
- *   生长完成后沿线有亮脉冲低速流向汇点（数据在流）。
- * - 收尾：消失点亮起一团黄绿光（交棒亮部），天空里落一行大标题「Every shot, / one film.」（眉题 video-shotcraft 字标小写），
- *   结尾帧是完整的海报。
+ * Iteration 2 redesign (graphite · lime · true perspective landscape):
+ * - look = lime. Replaces flat SVG panning with a true-perspective ground plane (pinhole projection, camera height 220, focal length 1100).
+ *   A fluorescent lime trunk snakes forward toward a vanishing point at screen right 1/3, joined by 11 sage-gray tributaries merging tangentially from off-screen.
+ *   Depth of field, parallax, and atmospheric fog derive directly from projection depth: near strokes are wide and soft (routed to blur layer), midground remains sharp, and distant paths taper into the horizon.
+ * - Low-altitude camera flies along the river channel with gentle lateral shift (dolly + truck), easing out via bezier deceleration into final titles without abrupt braking.
+ * - 6 video-shotcraft shot labels (pin post + monospaced shot ID capsule + camera move label) anchor to midground tributaries, scaling with perspective and spreading outward;
+ *   Metaphor: each tributary represents an individual shot converging into the master film trunk;
+ *   Post-growth, bright data pulses stream along paths toward the confluence.
+ * - Outro: Vanishing point illuminates with yellow-green bloom (handoff focal point), with a bold title "Every shot, / one film." descending into the sky (eyebrow video-shotcraft logotype in lowercase),
+ *   concluding on a complete hero poster.
  *
- * 时间表（30fps，共 180f）：
- *   0–10    从深场浮出（地平线光带首帧就在）
- *   0–36    主干由近及远 draw-on（out-cubic），笔尖光点
- *   8–70    支流错峰生长（每条 4–6f，近处先），笔尖光点
- *   44–104  标签非均匀错峰立起（图钉过冲 → 立杆 → 胶囊去模糊），104f 后不再新增
- *   60–180  流动脉冲；相机全程前飞，140f 后明显减速
- *   104–140 标题：眉题 + 两行逐词升起；汇点光 120f 起升亮
- *   140–180 hold：相机缓停、脉冲流动，海报落定
+ * Timeline (30fps, 180f total):
+ *   0–10    Fade up from dark field (horizon streak present from frame 0)
+ *   0–36    Trunk draw-on from near to far (out-cubic) with leading glow tip
+ *   8–70    Staggered tributary growth (4–6f each, near first) with leading glow tips
+ *   44–104  Non-uniform staggered label reveal (pin overshoot -> stem post -> capsule de-blur), none added after 104f
+ *   60–180  Streaming pulses; camera flies throughout, decelerating noticeably after 140f
+ *   104–140 Headline: eyebrow + 2-line word-by-word reveal; confluence bloom lifts from 120f
+ *   140–180 Hold: camera settles gently, pulses continue, poster frame locks
  */
 import React from 'react';
 import {AbsoluteFill, useCurrentFrame} from 'remotion';
@@ -32,19 +32,19 @@ const DUR = 180; // 6s @30fps
 export const DATAVIZ_LANDSCAPE_OPEN_DURATION = DUR;
 
 const L = LOOKS.lime;
-const HY = 420; // 地平线（屏幕 y）
-const F = 1100; // 焦距
-const CAM_H = 220; // 相机离地高度
-const SLOPE = 0.29; // 主干总体走向（dX/dZ）→ 消失点 x = 960 + F*SLOPE ≈ 1279（右 1/3）
+const HY = 420; // Horizon (screen y)
+const F = 1100; // Focal length
+const CAM_H = 220; // Camera elevation above ground
+const SLOPE = 0.29; // Main trunk direction (dX/dZ) -> vanishing point x = 960 + F*SLOPE ≈ 1279 (right 1/3)
 const VPX = 960 + F * SLOPE;
 
-// ───────────── 相机 ─────────────
-const camPath = bezier(0.3, 0.3, 0.55, 1); // 匀速起步、尾段减速缓停
+// ───────────── Camera ─────────────
+const camPath = bezier(0.3, 0.3, 0.55, 1); // Constant velocity start, gentle tail deceleration
 const CAM_DIST = 950;
 const camAt = (frame: number) => {
   const t = Math.min(1, Math.max(0, frame / (DUR - 1)));
   const z = CAM_DIST * camPath(t);
-  const lat = mix(-140, 110, EASE.smooth(t)); // 横向缓移：近远景相对错动 = 视差
+  const lat = mix(-140, 110, EASE.smooth(t)); // Gentle lateral shift: foreground/background relative displacement = parallax
   return {z, x: SLOPE * z + lat};
 };
 
@@ -54,17 +54,17 @@ const project = (p: P3, cam: {x: number; z: number}) => {
   return {sx: 960 + (F * (p.x - cam.x)) / zr, sy: HY + (F * CAM_H) / zr, zr};
 };
 
-// ───────────── 世界几何（地平面 X/Z）─────────────
+// ───────────── World Geometry (Ground plane X/Z) ─────────────
 const trunkX = (z: number) => SLOPE * z - 160 + 150 * Math.sin(z / 950);
 const trunkDX = (z: number) => SLOPE + (150 / 950) * Math.cos(z / 950);
 
-// 主干：-300 → 14000，近密远疏采样
+// Main trunk: -300 -> 14000, dense near / sparse far sampling
 const TRUNK: P3[] = Array.from({length: 261}, (_, i) => {
   const z = -300 + Math.pow(i / 260, 1.7) * 14300;
   return {x: trunkX(z), z};
 });
 
-// 三次贝塞尔按弧长等距重采样
+// Cubic bezier resampled equidistantly along arc length
 const bez = (a: P3, b: P3, c: P3, d: P3, t: number): P3 => {
   const u = 1 - t;
   return {
@@ -88,7 +88,7 @@ const resample = (at: (t: number) => P3, n: number) => {
   return out;
 };
 
-// 支流：起点在两侧画外，切向汇入主干（汇入点切线 = 主干切线）
+// Tributaries: origin off-screen on sides, merging tangentially into trunk (merge tangent = trunk tangent)
 type TribSpec = {side: number; z0: number; off: number; zm: number; lm: number; grow: number; w: number};
 const TRIB_SPECS: TribSpec[] = [
   {side: -1, z0: -260, off: 700, zm: 1500, lm: 520, grow: 8, w: 5},
@@ -101,7 +101,7 @@ const TRIB_SPECS: TribSpec[] = [
   {side: 1, z0: 3100, off: 3200, zm: 6100, lm: 1150, grow: 38, w: 4.2},
   {side: -1, z0: 4100, off: 3600, zm: 7100, lm: 1250, grow: 43, w: 4.2},
   {side: 1, z0: 5000, off: 3900, zm: 8200, lm: 1350, grow: 47, w: 4.2},
-  {side: 1, z0: -420, off: 260, zm: 980, lm: 380, grow: 4, w: 6}, // 贴着镜头右下方掠过的近景支流（大虚焦）
+  {side: 1, z0: -420, off: 260, zm: 980, lm: 380, grow: 4, w: 6}, // Foreground tributary skimming bottom-right of camera (heavy defocus)
 ];
 const TRIBS = TRIB_SPECS.map((s) => {
   const end: P3 = {x: trunkX(s.zm), z: s.zm};
@@ -113,7 +113,7 @@ const TRIBS = TRIB_SPECS.map((s) => {
   return {...s, pts: resample((t) => bez(p0, p1, p2, end, t), 90)};
 });
 
-// ───────────── 线段渲染：按深度分层（近虚 / 中实 / 远雾）─────────────
+// ───────────── Line Segment Rendering: Depth layered (near blurred / mid sharp / far fog) ─────────────
 const smooth01 = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -138,19 +138,19 @@ const emitLine = (
     if ((pa.sx < -200 && pb.sx < -200) || (pa.sx > 2120 && pb.sx > 2120) || (pa.sy > 1300 && pb.sy > 1300)) continue;
     const zr = (pa.zr + pb.zr) / 2;
     const u = (k + 0.5 * f) / n;
-    const fog = 1 - smooth01(2600, 11000, zr); // 远处雾化
-    const lift = opts.ramp ? 0.3 + 0.7 * Math.pow(u, 0.8) : 1; // 支流：源头淡、汇入处亮
-    // 脉冲只在中远景显形：近处一段线在屏幕上很长，逐段明暗会读成台阶
+    const fog = 1 - smooth01(2600, 11000, zr); // Distant fog
+    const lift = opts.ramp ? 0.3 + 0.7 * Math.pow(u, 0.8) : 1; // Tributaries: dim origin, bright merge
+    // Pulse manifests only in mid-far depth: near line segments span long screen distance, per-segment brightness would read as stepping
     const pv = opts.pulse(u);
     const o = opts.base * fog * lift * mix(1, pv, smooth01(500, 1400, zr));
     if (o < 0.01) continue;
     const w = Math.max(0.9, Math.min(46, (opts.w * F) / zr));
-    const nearW = 1 - smooth01(420, 1050, zr); // 近景权重 → 进模糊层
+    const nearW = 1 - smooth01(420, 1050, zr); // Near-depth weight -> route to blur layer
     const seg = {x1: pa.sx, y1: pa.sy, x2: pb.sx, y2: pb.sy, w, c: opts.color};
     if (nearW < 0.98) sharp.push({...seg, o: o * (1 - nearW)});
     if (nearW > 0.02) near.push({...seg, w: w * 1.3, o: o * nearW * 0.7});
   }
-  // 笔尖
+  // Stroke tip
   if (g > 0 && g < 1) {
     const k = Math.min(n - 1, Math.floor(reach));
     const f = reach - k;
@@ -160,8 +160,8 @@ const emitLine = (
   return null;
 };
 
-// ───────────── 标签（中景，video-shotcraft 的镜头号 + 运镜名；字数与原 issue 标签相当，投影位置不变）─────────────
-// 位置按投影逐帧核过：起止两端都错开（不叠、不压汇点、不出画），近处一枚随前飞明显变大
+// ───────────── Labels (Midground, video-shotcraft shot ID + camera move name) ─────────────
+// Screen positions calibrated frame-by-frame: both endpoints offset (no overlap, no occlusion of merge point, within bounds), nearest label scales visibly during push-in
 type LabelSpec = {trib: number; u: number; id: string; note: string; appear: number};
 const LABELS: LabelSpec[] = [
   {trib: 2, u: 0.6, id: 'SHOT-01', note: 'dolly in', appear: 44},
@@ -179,29 +179,29 @@ const LABEL_PTS = LABELS.map((l) => {
 const Label: React.FC<{spec: LabelSpec; at: P3; frame: number; cam: {x: number; z: number}}> = ({spec, at, frame, cam}) => {
   const pr = project(at, cam);
   if (pr.zr < 200) return null;
-  const k = Math.min(1.7, Math.max(0.7, 1500 / pr.zr)); // 透视缩放（近大远小），钳住可读区间
+  const k = Math.min(1.7, Math.max(0.7, 1500 / pr.zr)); // Perspective scale (near-large / far-small), clamped to legible range
   const fog = 1 - smooth01(3600, 8000, pr.zr);
   const pin = ramp(frame, spec.appear, 10, EASE.overshoot);
   const pinOp = ramp(frame, spec.appear, 4, EASE.out);
   const stem = ramp(frame, spec.appear + 2, 12, EASE.snappy);
   const tag = ramp(frame, spec.appear + 6, 14, EASE.snappy);
-  // 立杆世界高度远低于相机高度 → 标签落在地平线以下、按深度上下错开（杆高≈相机高时所有标签都投影到地平线上挤成一排）
+  // Post world height well below camera height -> labels project below horizon and stagger vertically by depth
   const stemH = 44 * k;
   const fs = 25 * k;
   return (
     <div style={{position: 'absolute', left: 0, top: 0, opacity: fog}}>
-      {/* 图钉（落在线上） */}
+      {/* Pin (anchored to line) */}
       <div style={{
         position: 'absolute', left: pr.sx - 6 * k, top: pr.sy - 6 * k, width: 12 * k, height: 12 * k, borderRadius: 2.5 * k,
         background: L.accent, opacity: pinOp, transform: `scale(${pin})`,
         boxShadow: `0 0 0 ${3 * k}px ${alpha(L.bg[2], 0.9)}, 0 0 ${18 * k}px ${alpha(L.accent, 0.7)}`,
       }} />
-      {/* 立杆 */}
+      {/* Stem post */}
       <div style={{
         position: 'absolute', left: pr.sx - 0.75, top: pr.sy - 8 * k - stemH * stem, width: 1.5, height: stemH * stem,
         background: `linear-gradient(0deg, ${alpha(L.accent, 0.7)}, ${alpha(L.ink, 0.25)})`,
       }} />
-      {/* ID 胶囊 */}
+      {/* ID capsule */}
       <div style={{
         position: 'absolute', left: pr.sx - 2 * k, top: pr.sy - 8 * k - stemH - 46 * k + (1 - tag) * 14 * k,
         height: 46 * k, padding: `0 ${14 * k}px 0 ${12 * k}px`, borderRadius: 10 * k, boxSizing: 'border-box',
@@ -218,7 +218,7 @@ const Label: React.FC<{spec: LabelSpec; at: P3; frame: number; cam: {x: number; 
   );
 };
 
-// ───────────── 组件 ─────────────
+// ───────────── Component ─────────────
 export const DatavizLandscapeOpen: React.FC = () => {
   const frame = useCurrentFrame();
   const cam = camAt(frame);
@@ -228,7 +228,7 @@ export const DatavizLandscapeOpen: React.FC = () => {
   const near: Seg[] = [];
   const tips: {sx: number; sy: number; zr: number; trunk: boolean}[] = [];
 
-  // 流动脉冲：生长完后沿线流向汇点的亮脉冲（窄峰，低速）
+  // Flow pulse: bright pulses streaming along lines toward merge point post-growth (narrow peak, low speed)
   const flowIn = (end: number) => ramp(frame, end, 24, EASE.smooth);
   const pulseFn = (end: number, n: number, speed: number, seed: number) => {
     const on = flowIn(end);
@@ -249,7 +249,7 @@ export const DatavizLandscapeOpen: React.FC = () => {
   if (tTip) tips.push({...tTip, trunk: true});
   const trunkSegs = sharp.filter((s) => s.c === L.accent);
 
-  // 地面点阵：与世界锁定的网格，前飞时从远处涌来
+  // Ground dot grid: world-locked grid streaming in from distance during fly-forward
   const dots: {x: number; y: number; r: number; o: number}[] = [];
   const STEP = 420;
   const zStart = Math.ceil((cam.z + 300) / STEP) * STEP;
@@ -272,16 +272,16 @@ export const DatavizLandscapeOpen: React.FC = () => {
     <AbsoluteFill style={{background: L.bg[2], overflow: 'hidden'}}>
       <AbsoluteFill style={{opacity: 0.35 + 0.65 * fadeUp}}>
         <Stage look={L} keyLight={{x: VPX / 1920, y: HY / 1080}} fill={{x: 0.12, y: 0.95}} horizon={HY / 1080} intensity={0.55} grain={0.1} vignette={0.6}>
-          {/* 天空里的极淡浮尘 */}
+          {/* Subtle ambient dust in sky */}
           <div style={{position: 'absolute', left: 0, right: 0, top: 0, height: HY, overflow: 'hidden'}}>
             <Dust look={L} count={26} seed={7} drift={0.12} opacity={0.35} color={L.ink2} />
           </div>
-          {/* 地面：地平线以下略亮一档的冷灰绿，向近处压暗 */}
+          {/* Ground: cool gray-green slightly lifted below horizon, darkening toward foreground */}
           <div style={{
             position: 'absolute', left: 0, right: 0, top: HY, bottom: 0,
             background: `linear-gradient(180deg, ${alpha('#2a3122', 0.55)} 0%, ${alpha('#141811', 0.3)} 30%, ${alpha('#050604', 0)} 100%)`,
           }} />
-          {/* 地平线发丝线 */}
+          {/* Horizon hairline */}
           <div style={{
             position: 'absolute', left: 0, right: 0, top: HY - 0.5, height: 1,
             background: `linear-gradient(90deg, ${alpha(L.ink, 0)} 0%, ${alpha(L.ink, 0.16)} 40%, ${alpha(L.accent, 0.35)} 66%, ${alpha(L.ink, 0.12)} 85%, ${alpha(L.ink, 0)} 100%)`,
@@ -299,7 +299,7 @@ export const DatavizLandscapeOpen: React.FC = () => {
             </radialGradient>
           </defs>
           {dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r={d.r} fill={L.ink2} fillOpacity={d.o} />)}
-          {/* 主干泛光（只给主角） */}
+          {/* Trunk bloom (hero accent only) */}
           <g filter="url(#dv-glow)" opacity={0.75}>
             {trunkSegs.map((s, i) => <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={L.accent} strokeWidth={s.w * 3} strokeOpacity={s.o * 0.45} strokeLinecap="butt" />)}
           </g>
@@ -315,7 +315,7 @@ export const DatavizLandscapeOpen: React.FC = () => {
           })}
         </svg>
 
-        {/* 汇点交棒亮部：消失点一团黄绿光，收尾升亮 */}
+        {/* Merge handoff highlight: yellow-green bloom at vanishing point, lifting at close */}
         <div style={{
           position: 'absolute', left: VPX - 520, top: HY - 260, width: 1040, height: 520, pointerEvents: 'none',
           background: `radial-gradient(50% 50% at 50% 50%, ${alpha('#f4ffd6', 0.55)} 0%, ${alpha(L.accent, 0.22)} 22%, ${alpha(L.accent, 0)} 70%)`,
@@ -326,20 +326,20 @@ export const DatavizLandscapeOpen: React.FC = () => {
           boxShadow: `0 0 18px 6px ${alpha(L.accent, 0.6)}`, opacity: 0.4 + 0.6 * handoff,
         }} />
 
-        {/* 远的先画、近的后画：近处胶囊正确遮住远处图钉 */}
+        {/* Far to near paint order: near capsules correctly occlude distant pins */}
         {LABELS.map((l, i) => ({l, p: LABEL_PTS[i].p}))
           .sort((a, b) => b.p.z - a.p.z)
           .map(({l, p}) => (frame >= l.appear ? <Label key={l.id} spec={l} at={p} frame={frame} cam={cam} /> : null))}
 
-        {/* 近景大虚焦层（在标签之上：前景掠过） */}
+        {/* Foreground defocus layer (above labels: skimming foreground) */}
         <svg width={1920} height={1080} style={{position: 'absolute', inset: 0}}>
           <g filter="url(#dv-near)">{near.map(lineRender)}</g>
         </svg>
       </AbsoluteFill>
 
-      {/* 标题：天空左上，收尾落字 */}
+      {/* Title: upper-left sky, settling at outro */}
       <div style={{position: 'absolute', left: 120, top: 128}}>
-        {/* 眉题：品牌名按字标规范全小写（不走大写科技字标） */}
+        {/* Eyebrow: brand name in all-lowercase per logotype spec */}
         <div style={{
           fontFamily: FONT.mono, fontSize: 28, fontWeight: 600, color: L.accent, letterSpacing: '0.12em',
           opacity: ramp(frame, 104, 14, EASE.out), transform: `translateY(${(1 - ramp(frame, 104, 18, EASE.snappy)) * 12}px)`,

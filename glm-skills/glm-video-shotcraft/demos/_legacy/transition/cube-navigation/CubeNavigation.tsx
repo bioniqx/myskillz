@@ -1,16 +1,16 @@
-// cube-navigation — Cube Navigation 立方体逐面导航（motion-lab 定稿转原生 Remotion）
-// 内容贴在 3D 立方体六面，相机逐面浏览：正面特写 → 拉远到等轴视角看清棱角 →
-// 转到下一面推近，面间穿插斜角过渡；每面按法线朝向实时算明暗。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// cube-navigation — Cube Navigation face-by-face browsing (ported from motion-lab final to native Remotion)
+// Content mapped across 6 faces of a 3D cube; camera browses face by face: front close-up -> pull back to isometric angle showing edges ->
+// rotate and push in to the next face, interspersing oblique transitions; lighting calculated in real time per face normal.
+// Design coordinates 480×270 (DesignStage scales proportionally); parameter table values calibrated to this system.
 import React from 'react';
 import { DesignStage, E, rand, seg, useT } from '../../_fixtures/Motion';
 
 export const CUBE_NAVIGATION_DURATION = 180; // 6000ms @30fps
 
-const S = 190; // 立方体边长
+const S = 190; // Cube side length
 const H = S / 2;
 
-// 六面：贴面变换 / 法线 / 色相 / 角标字形
+// Six faces: face transform / normal / hue / corner glyph
 const FACES = [
   { n: 'OVERVIEW', tr: `translateZ(${H}px)`, nm: [0, 0, 1], hue: 224, glyph: '◧' },
   { n: 'METRICS', tr: `rotateY(90deg) translateZ(${H}px)`, nm: [1, 0, 0], hue: 268, glyph: '◆' },
@@ -20,7 +20,7 @@ const FACES = [
   { n: 'EXPORT', tr: `rotateX(-90deg) translateZ(${H}px)`, nm: [0, 1, 0], hue: 34, glyph: '↥' },
 ];
 
-// 相机关键姿态：正面 → 等轴 → 右面 → 等轴 → 背面 → 等轴收尾
+// Camera keyframe poses: front -> isometric -> right -> isometric -> back -> isometric ending
 const CAM = [
   { rx: 0, ry: 0, d: 235 },
   { rx: -22, ry: -38, d: -130 },
@@ -29,13 +29,13 @@ const CAM = [
   { rx: 0, ry: -180, d: 235 },
   { rx: -24, ry: -226, d: -95 },
 ];
-// 每段关键帧的时间窗（t 域），窗间即 hold
+// Time window for each keyframe segment (t domain); gaps between windows hold
 const WIN: [number, number][] = [[0.10, 0.24], [0.30, 0.44], [0.50, 0.62], [0.66, 0.78], [0.84, 0.97]];
 
 type Cam = { rx: number; ry: number; d: number };
 const CAM_KEYS = ['rx', 'ry', 'd'] as const;
 
-// 累加式关键帧插值：各段进度独立过 ease 后按差值叠加，天然支持窗间 hold
+// Cumulative keyframe interpolation: segment progresses eased independently and accumulated by deltas, naturally supporting holds between windows
 const acc = (t: number, base: Cam, kfs: { at: [number, number]; to: Cam }[], ease: (x: number) => number): Cam => {
   const out: Cam = { ...base };
   let prev = base;
@@ -49,9 +49,9 @@ const acc = (t: number, base: Cam, kfs: { at: [number, number]; to: Cam }[], eas
 
 const RAD = Math.PI / 180;
 
-// x264 暗部量化校准：原样片淡入头几帧 R 通道被编码器压得比 G/B 更暗
-// （按对照帧实测等效增益：f1≈×0.77、f2≈×0.88、f3-f5≈×0.97、f6 起回到 1），
-// 用 rgb(0,255,255) multiply 叠加层按帧号复现该 R 通道压暗，o = 1 - 增益。
+// x264 shadow quantization calibration: encoder crushed R channel darker than G/B during initial fade-in frames of the sample
+// (measured equivalent gains: f1≈×0.77, f2≈×0.88, f3-f5≈×0.97, f6+ returns to 1);
+// reproduces this R crush per frame number via rgb(0,255,255) multiply overlay, o = 1 - gain.
 const R_CRUSH: [number, number][] = [
   [1, 0.23],
   [2, 0.12],
@@ -72,11 +72,11 @@ const rCrushAt = (f: number) => {
 
 export const CubeNavigation: React.FC = () => {
   const t = useT();
-  // 当前帧号（useT 定义保证 t*(总帧-1) 恰为整数帧）
+  // Current frame number (useT definition guarantees t*(totalFrames-1) is exactly integer frame)
   const rCrush = rCrushAt(t * (CUBE_NAVIGATION_DURATION - 1));
-  // 相机姿态：五段窗口依次插值
+  // Camera pose: sequentially interpolate 5 window segments
   const v = acc(t, CAM[0], WIN.map((w, i) => ({ at: w, to: CAM[i + 1] })), E.inOutCubic);
-  // 法线明暗：Rx(rx)·Ry(ry)·n 的 z 分量
+  // Normal lighting: z-component of Rx(rx)·Ry(ry)·n
   const cy = Math.cos(v.ry * RAD), sy = Math.sin(v.ry * RAD);
   const cx = Math.cos(v.rx * RAD), sx = Math.sin(v.rx * RAD);
   return (
@@ -88,8 +88,8 @@ export const CubeNavigation: React.FC = () => {
           background: 'radial-gradient(110% 100% at 50% 10%,#171b2a,#07080e 72%)',
           perspective: 760,
           overflow: 'hidden',
-          // 开场整体淡入。按对照帧实测校准：原样片采集起点晚约 0.1 帧 +
-          // x264 暗部量化把淡入首帧压得更暗，整个 ramp 后移 0.1/179 对齐
+          // Intro overall fade-in. Calibrated against reference frame: reference capture started ~0.1f late +
+          // x264 shadow quantization crushed first frame darker; shift entire ramp by 0.1/179 to align
           opacity: seg(t - 0.1 / 179, 0, 0.08, E.outCubic),
         }}
       >
@@ -127,7 +127,7 @@ export const CubeNavigation: React.FC = () => {
                   filter: `brightness(${(0.5 + lit * 0.62).toFixed(3)}) saturate(${(0.8 + lit * 0.4).toFixed(2)})`,
                 }}
               >
-                {/* 面标题 */}
+                {/* Face title */}
                 <div
                   style={{
                     position: 'absolute',
@@ -140,7 +140,7 @@ export const CubeNavigation: React.FC = () => {
                 >
                   {f.n}
                 </div>
-                {/* 四条占位信息条，宽度按 rand(i*9+k) 定 */}
+                {/* 4 placeholder info bars with width determined by rand(i*9+k) */}
                 {Array.from({ length: 4 }, (_, k) => (
                   <div
                     key={k}
@@ -155,7 +155,7 @@ export const CubeNavigation: React.FC = () => {
                     }}
                   />
                 ))}
-                {/* 右下角标字形 */}
+                {/* Bottom-right corner glyph */}
                 <div
                   style={{
                     position: 'absolute',
@@ -172,7 +172,7 @@ export const CubeNavigation: React.FC = () => {
             );
           })}
         </div>
-        {/* R 通道压暗层：multiply 白青色 → 只把 R 乘以 (1-rCrush)，G/B 不动 */}
+        {/* R channel crush overlay: multiply white-cyan -> multiplies only R by (1-rCrush), leaves G/B untouched */}
         {rCrush > 0 && (
           <div
             style={{

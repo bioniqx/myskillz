@@ -1,25 +1,25 @@
-// voice-waveform-live —— 录音胶囊实时声纹（第二轮重设计：video-shotcraft 语音口述分镜 · 午后暖光）
+// voice-waveform-live — live voice waveform capsule (redesign: video-shotcraft voice dictation storyboard - afternoon warm light)
 //
-// 设计决定：
-// - look = sand（米色 · 赤陶）：与原版 raycast 暗场玻璃完全拉开——白天、生活方式、暖阳。
-//   主体两层：上方 92px 粗体实时转写（"你说的话"），下方 1240px 暖白胶囊里的实时声纹（"它在听"）。
-//   转写逐词跟着包络出现：每个词在它那一拍的音节起点由虚到实升起，刚说出的词是赤陶色、3–8f 后沉成墨色；
-//   停顿段转写尾巴挂一枚闪烁光标——观众同时从"字在等"和"波形塌成点线"两处读出"停"。
-// - 声纹机制保持原卡定稿：64 条、1.6 帧/采样点从右往左滚动、梯形说停包络 × 音节值噪声 × 中部 sin^0.8 权重
-//   × 逐条 jitter，静默钳到 6px 点线。条色 = 赤陶纵向渐变，越旧越淡；麦克风钮赤陶底 + 随包络外扩的呼吸环；
-//   胶囊下方地面暖光随音量亮灭。
-// - 提交：按钮压缩回弹、波形 12f ease-in 塌缩，转写整体上移缩小并收进一枚赤陶色消息气泡（墨字 → 白字），
-//   气泡下出 "Sent to Shotcraft · 0:03"；胶囊退回待机（麦克风变灰、点线）。结尾帧 = 一张完整的对话海报。
+// Design decisions:
+// - look = sand (beige, terracotta): distinct from dark glass — daytime, lifestyle, warm sunlight.
+//   Subject in two tiers: top 92px bold live transcription ("what you say"), bottom 1240px warm white capsule with live waveform ("it listens").
+//   Transcription reveals word-by-word following audio envelope: words rise from blur at syllable onset; fresh words in terracotta, settling to ink after 3-8f;
+//   trailing blinking cursor during pauses — communicates "pause" via both waiting cursor and collapsed flatline.
+// - Waveform mechanics: 64 bars, 1.6 frames/sample scrolling right to left, trapezoid speech envelope x value noise x center sin^0.8 weighting
+//   x per-bar jitter, silence clamped to 6px dots. Bar color = vertical terracotta gradient fading with age; mic button with expanding breathing ring;
+//   warm ambient floor light beneath capsule reacts to live volume.
+// - Submit: button compress and rebound, waveform 12f ease-in collapse, transcription shifts up and scales into terracotta message bubble (ink -> white),
+//   "Sent to Shotcraft - 0:03" subtitle emerges; capsule returns to standby (gray mic, dot line). Final frame = complete chat poster.
 //
-// 时间表（30fps，共 172f）：
-//   0–14    入场：胶囊 1.04→1 收焦淡入，标签 "Shotcraft is listening" 跟进（6f 后），提示语 Describe your next shot… 浮现、15f 首词前淡出
-//   15–57   说：Make a launch film for Friday,（逐词 17/22/25/32/40/45）
-//   57–80   停：波形塌成点线、转写尾光标闪烁（停顿必须真的"停"）
-//   80–124  说：open with a crash zoom.（82/88/92/102/112）
-//   126     提交：按钮 1→0.82→1，波形 12f 塌缩到 0.06，箭头上飞、对勾落入
-//   128–150 转写上移 + 缩到 0.72 收进气泡（22f，EASE.swift），气泡底色 / 白字 140 前到位
-//   140–152 "Sent" 行升起；胶囊下沉 24px 退回待机
-//   152–172 hold：对话海报定格，暖光极缓呼吸
+// Timeline (30fps, total 172f):
+//   0-14    Entrance: capsule 1.04->1 focus fade-in, "Shotcraft is listening" tag follows (6f later), placeholder appears and fades before 15f
+//   15-57   Speech: Make a launch film for Friday, (staggered 17/22/25/32/40/45)
+//   57-80   Pause: waveform collapses to dots, trailing cursor blinks
+//   80-124  Speech: open with a crash zoom. (82/88/92/102/112)
+//   126     Submit: button 1->0.82->1, waveform collapses to 0.06 over 12f, arrow launches up, checkmark enters
+//   128-150 Transcription moves up + scales to 0.72 into bubble (22f, EASE.swift), bubble bg / white text settle before 140
+//   140-152 "Sent" line rises; capsule drops 24px returning to standby
+//   152-172 Hold: chat poster frozen, subtle warm light breathing
 import React from 'react';
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -37,7 +37,7 @@ const mulberry32 = (a: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-// 值噪声：整数采样点取种子随机值，采样点之间平滑插值
+// Value noise: seed random values at integer points with smooth interpolation
 const noiseAt = (x: number) => {
   const i = Math.floor(x);
   const fr = x - i;
@@ -47,7 +47,7 @@ const noiseAt = (x: number) => {
   return a + (b - a) * s;
 };
 
-// 说话包络（按"声音发生时刻"计）：说→停→说
+// Speech envelope (by sound emission time): talk -> pause -> talk
 const envelope = (t: number) => {
   const seg = (a: number, b: number, rise = 5, fall = 7) =>
     interpolate(t, [a, a + rise, b - fall, b], [0, 1, 1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
@@ -57,11 +57,11 @@ const envelope = (t: number) => {
 };
 
 const N_BARS = 64;
-const SCROLL = 1.6; // 帧/采样点：滚动速度
+const SCROLL = 1.6; // Frames/sample: scroll speed
 const MAX_H = 150;
 const SUBMIT = 126;
 
-// 逐词转写：词在它那一拍的音节起点出现
+// Word-by-word transcription: word appears at syllable onset
 const LINES: { w: string; at: number }[][] = [
   [{ w: 'Make', at: 17 }, { w: 'a', at: 22 }, { w: 'launch', at: 25 }, { w: 'film', at: 32 }, { w: 'for', at: 40 }, { w: 'Friday,', at: 45 }],
   [{ w: 'open', at: 82 }, { w: 'with', at: 88 }, { w: 'a', at: 92 }, { w: 'crash', at: 102 }, { w: 'zoom.', at: 112 }],
@@ -73,11 +73,11 @@ const TEXT_CY = 372;
 export const VoiceWaveformLive: React.FC = () => {
   const f = useCurrentFrame();
 
-  // ── 入场 ──
+  // --- Entrance ---
   const inT = ramp(f, 0, 14, EASE.snappy);
   const labelT = ramp(f, 6, 12, EASE.out);
 
-  // ── 提交 ──
+  // --- Submit ---
   const submitted = f >= SUBMIT;
   const btnPress = interpolate(f, [SUBMIT, SUBMIT + 3, SUBMIT + 9], [1, 0.82, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const collapse = mix(1, 0.06, ramp(f, SUBMIT, 12, EASE.exit));
@@ -86,11 +86,11 @@ export const VoiceWaveformLive: React.FC = () => {
   const toBubble = ramp(f, SUBMIT + 2, 22, EASE.swift);
   const bubbleFill = ramp(f, SUBMIT + 6, 10, EASE.out);
   const sentT = ramp(f, SUBMIT + 14, 12, EASE.out);
-  const idle = ramp(f, SUBMIT + 14, 14, EASE.swift); // 胶囊退回待机
+  const idle = ramp(f, SUBMIT + 14, 14, EASE.swift); // Capsule returns to standby
 
-  // ── 声纹 ──
+  // --- Waveform ---
   const bars = Array.from({ length: N_BARS }, (_, i) => {
-    const sampleT = f - (N_BARS - 1 - i) * SCROLL; // 最右条是"现在"，越靠左越旧
+    const sampleT = f - (N_BARS - 1 - i) * SCROLL; // Rightmost bar is "now", leftwards is older
     const env = sampleT < 0 ? 0 : envelope(sampleT);
     const center = Math.pow(Math.sin((i / (N_BARS - 1)) * Math.PI), 0.8);
     const jitter = 0.35 + 0.65 * noiseAt(sampleT * 1.7 + i * 0.13);
@@ -99,24 +99,24 @@ export const VoiceWaveformLive: React.FC = () => {
   const nowEnv = submitted ? 0 : envelope(f);
   const level = (bars.slice(-12).reduce((a, b) => a + b, 0) / 12 / MAX_H) * collapse;
 
-  // 计时（说话时长，提交后停住）
+  // Timer (speech duration, freezes on submit)
   const secs = Math.min(f, SUBMIT) / 30;
   const timer = `0:${String(Math.floor(Math.max(0, secs - 0.4))).padStart(2, '0')}`;
 
-  // 转写尾光标：说话中常亮、停顿闪烁、提交后消失
+  // Trailing cursor: solid during speech, blinks during pause, disappears on submit
   const lastAt = LINES.flat().filter((w) => f >= w.at).pop()?.at ?? -99;
   const talking = nowEnv > 0.05;
   const caretOn = !submitted && f > 14 && (talking || Math.floor((f - lastAt) / 8) % 2 === 0);
 
-  // 转写 → 气泡：上移 + 缩到 0.72
+  // Transcription -> bubble: move up + scale to 0.72
   const textScale = mix(1, 0.72, toBubble);
   const textY = mix(TEXT_CY, 330, toBubble);
-  const hintO = ramp(f, 4, 10, EASE.out) * (1 - ramp(f, 15, 4, EASE.linear)); // 开口前的提示语
+  const hintO = ramp(f, 4, 10, EASE.out) * (1 - ramp(f, 15, 4, EASE.linear)); // Placeholder hint before speaking
   const inkToWhite = bubbleFill;
 
   const word = (w: { w: string; at: number }, k: number) => {
     const p = ramp(f, w.at, 8, EASE.snappy);
-    const fresh = 1 - ramp(f, w.at + 3, 6, EASE.linear); // 刚说出 → 赤陶，之后沉成墨
+    const fresh = 1 - ramp(f, w.at + 3, 6, EASE.linear); // Freshly spoken -> terracotta, then settles to ink
     const c = inkToWhite > 0 ? mixColor(L.ink, '#fff8f0', inkToWhite) : mixColor(L.ink, L.accent, fresh);
     return (
       <span key={k} style={{
@@ -125,7 +125,7 @@ export const VoiceWaveformLive: React.FC = () => {
         transform: `translateY(${((1 - p) * 0.22).toFixed(3)}em)`,
       }}>
         {w.w}
-        {/* 尾光标挂在最后一个已出现的词后面 */}
+        {/* Trailing cursor placed behind last revealed word */}
         {caretOn && w.at === lastAt && (
           <span style={{ display: 'inline-block', width: 6, height: '0.8em', verticalAlign: '-0.08em', marginLeft: '0.06em', marginRight: '-0.12em', borderRadius: 3, background: L.accent }} />
         )}
@@ -136,7 +136,7 @@ export const VoiceWaveformLive: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden', fontFamily: FONT.sans }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.0 }} fill={{ x: 0.78, y: 0.9 }} breathe={0.4}>
-        {/* 胶囊下的地面暖光：随"现在"的音量亮灭 */}
+        {/* Ambient ground warm light beneath capsule: reacts to current volume */}
         <div style={{
           position: 'absolute', left: 960 - 820, top: CAP.cy - 40, width: 1640, height: 420,
           background: `radial-gradient(ellipse 50% 46% at 50% 40%, ${alpha('#e2885a', 0.08 + 0.22 * level)} 0%, ${alpha('#e2885a', 0)} 70%)`,
@@ -144,12 +144,12 @@ export const VoiceWaveformLive: React.FC = () => {
         }} />
       </Stage>
 
-      {/* ── 实时转写 / 消息气泡 ── */}
+      {/* --- Live transcription / message bubble --- */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: textY, height: 0, display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
       }}>
         <div style={{ position: 'relative', transform: `translateY(-50%) scale(${textScale.toFixed(4)})`, transformOrigin: '50% 50%' }}>
-          {/* 气泡底 */}
+          {/* Message bubble background */}
           <div style={{
             position: 'absolute', left: -64, right: -64 + 0, top: -44, bottom: -44, borderRadius: 64,
             background: L.accent, opacity: bubbleFill,
@@ -166,14 +166,14 @@ export const VoiceWaveformLive: React.FC = () => {
         </div>
       </div>
 
-      {/* 开口前的提示语：首词落下前淡出（开场上半屏不空） */}
+      {/* Placeholder hint before speech: fades before first word */}
       {hintO > 0.01 && (
         <div style={{ position: 'absolute', left: 0, right: 0, top: TEXT_CY - 52, textAlign: 'center', fontSize: 92, fontWeight: 760, letterSpacing: '-0.035em', color: alpha(L.ink3, 0.55), opacity: hintO, filter: `blur(${((1 - hintO) * 6).toFixed(2)}px)` }}>
           Describe your next shot…
         </div>
       )}
 
-      {/* Sent 行 */}
+      {/* Sent line */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: 492, textAlign: 'center', fontSize: 32, fontWeight: 550, color: L.ink2,
         opacity: sentT, transform: `translateY(${((1 - sentT) * 16).toFixed(2)}px)`,
@@ -181,7 +181,7 @@ export const VoiceWaveformLive: React.FC = () => {
         <span style={{ color: L.accent }}>✓</span>&nbsp; Sent to {BRAND.short} · {timer}
       </div>
 
-      {/* 标签：Shotcraft is listening */}
+      {/* Tag: Shotcraft is listening */}
       <div style={{
         position: 'absolute', left: 960 - CAP.w / 2 + 24, top: CAP.cy - CAP.h / 2 - 62, display: 'flex', alignItems: 'center', gap: 14,
         fontSize: 32, fontWeight: 600, color: L.ink2, letterSpacing: '-0.01em',
@@ -191,7 +191,7 @@ export const VoiceWaveformLive: React.FC = () => {
         {BRAND.short} is listening
       </div>
 
-      {/* ── 胶囊 ── */}
+      {/* --- Capsule --- */}
       <div style={{
         position: 'absolute', left: 960 - CAP.w / 2, top: CAP.cy - CAP.h / 2 + 24 * idle, width: CAP.w, height: CAP.h, borderRadius: CAP.h / 2,
         opacity: inT, transform: `scale(${(mix(1.04, 1, inT) * mix(1, 0.94, idle)).toFixed(4)})`,
@@ -200,7 +200,7 @@ export const VoiceWaveformLive: React.FC = () => {
         boxShadow: `inset 0 1.5px 0 #ffffff, inset 0 0 0 1px rgba(70,45,20,0.07), 0 2px 4px rgba(58,36,16,0.08), 0 40px 80px -30px ${alpha(L.shadow, 0.45)}, 0 14px 30px -12px ${alpha(L.shadow, 0.22)}`,
         display: 'flex', alignItems: 'center', padding: '0 38px', gap: 30, boxSizing: 'border-box',
       }}>
-        {/* 麦克风钮：赤陶底，说话时外扩呼吸环 */}
+        {/* Mic button: terracotta base with expanding breathing rings during speech */}
         <div style={{ position: 'relative', width: 120, height: 120, flex: 'none' }}>
           {[0, 1].map((k) => (
             <div key={k} style={{
@@ -222,7 +222,7 @@ export const VoiceWaveformLive: React.FC = () => {
           </div>
         </div>
 
-        {/* 声纹 */}
+        {/* Waveform */} 
         <div style={{
           flex: 1, height: 160, display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden',
           WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, #000 14%, #000 100%)',
@@ -230,7 +230,7 @@ export const VoiceWaveformLive: React.FC = () => {
         }}>
           {bars.map((h, i) => {
             const k = Math.min(1, h / MAX_H);
-            const age = i / (N_BARS - 1); // 0 = 最旧
+            const age = i / (N_BARS - 1); // 0 = oldest
             const quiet = h <= 7 || collapse < 0.25;
             return (
               <div key={i} style={{
@@ -244,10 +244,10 @@ export const VoiceWaveformLive: React.FC = () => {
           })}
         </div>
 
-        {/* 计时 */}
+        {/* Timer */}
         <div style={{ fontSize: 32, fontWeight: 600, color: L.ink2, fontVariantNumeric: 'tabular-nums', width: 70, textAlign: 'right', flex: 'none' }}>{timer}</div>
 
-        {/* 提交钮：墨色圆 + 上箭头；提交时箭头上飞、对勾落入 */}
+        {/* Submit button: ink circle + up arrow; on submit arrow launches up, checkmark drops in */}
         <div style={{
           position: 'relative', width: 120, height: 120, borderRadius: 60, flex: 'none', overflow: 'hidden',
           background: 'linear-gradient(180deg, #2c241b, #191410)', transform: `scale(${btnPress.toFixed(4)})`,
@@ -268,7 +268,7 @@ export const VoiceWaveformLive: React.FC = () => {
   );
 };
 
-// 两个 hex 颜色按 t 混合 → rgb()
+// Mix two hex colors by t -> rgb()
 function mixColor(a: string, b: string, t: number) {
   const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const A = p(a);

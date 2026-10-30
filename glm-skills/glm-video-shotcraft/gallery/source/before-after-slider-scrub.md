@@ -1,48 +1,41 @@
 ---
 name: before-after-slider-scrub
-一句话: 前后对比拉杆——"处理前/后"两版叠放，分割杆先猛甩后慢扫，杆过处新版"显影"揭出
-适用: AI 增强/优化/重构类功能的效果对比段落（"用前 vs 用后"一镜讲清）
-时长: 4–5s
-能量: 中（快甩是打击点，慢扫是阅读期）
-标签: interaction
+summary: Before and after views share one frame while a fast-then-slow slider reveals the processed result.
+use: Feature comparison segments for AI enhancement, optimization, or refactoring ("before vs after" explained in a single shot)
+duration: 4–5s
+energy: Medium (fast scrub is the impact beat, slow sweep is the reading window)
+tags: interaction
 ---
 
-## 意图
-AI 图像产品发布片的标准对比语法：同一画面"处理前"（低对比灰蒙）
-与"处理后"（清晰版）叠放，带圆手柄的竖分割杆先从左端猛甩到 70%
-（overshoot 回弹）、停一拍，再以约 1/5 的速度慢扫回来让观众看清
-差异——**快甩慢扫的速度对比就是节奏**：快甩宣告"变了"，
-慢扫证明"变在哪"。
+## Intention
+The standard comparison syntax for AI visual product promo videos: the "before" view (low contrast, hazy) and "after" view (crisp, processed) share one frame; a vertical divider bar with a circular handle first whips rapidly from the left edge to 70% (with overshoot rebound), pauses for a beat, then slowly sweeps back at roughly 1/5 speed to let the audience inspect the differences—**the speed contrast between fast whip and slow sweep creates the rhythm**: the fast whip announces "it changed," and the slow sweep proves "how it changed."
 
-## 动作阶段
-| 阶段 | 帧段参考 | 内容 |
-|------|------|------|
-| 1 静置 | f0–14 | 杆停 8%，画面几乎全是"处理前"；f10–14 先向左预备回拉到 6.5% |
-| 2 快甩 | 12f | 8%→76%（out cubic）过冲 |
-| 3 回弹 | 12f | 76%→70% |
-| 4 停顿 | ~18f | 让观众看清 after |
-| 5 慢扫 | ~48f | 70%→40% 二次展示差异 |
-| 6 定格 | 末 ≥40f | 真静止 |
+## Motion Stages
+| Stage | Frame Reference | Content |
+|---|---|---|
+| 1 Rest | f0–14 | Bar holds at 8%, showing almost entirely "before"; f10–14 anticipates leftward recoil to 6.5% |
+| 2 Fast whip | 12f | 8% -> 76% (out cubic) overshoot |
+| 3 Rebound | 12f | 76% -> 70% |
+| 4 Pause | ~18f | Lets viewers clearly inspect the "after" state |
+| 5 Slow sweep | ~48f | 70% -> 40% secondary difference showcase |
+| 6 Freeze | Final >=40f | Pure static hold |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 速度比 | 快甩 12f vs 慢扫 48f，约 5:1 | 比例 <3:1 节奏对比不可感 |
-| 揭示 | after 层 clip-path inset 右边界跟随杆 x | 杆和揭示边界错位即穿帮 |
-| 手柄 | 圆形手柄 + 速度差分驱动 scaleX 微拉伸（峰值 1.18），静止自动归 1 | 拉伸给手柄"被甩"的重量感 |
-| before 处理 | 低对比灰蒙版 | before 太难看是自黑，"差"要可信（真实旧版/未优化态） |
-| 角标 | BEFORE/AFTER 角标放内容区 | demo 判例：初版压住侧栏/头像穿帮 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Speed ratio | Fast whip 12f vs slow sweep 48f, ~5:1 | Ratios <3:1 lack perceptible rhythmic contrast |
+| Reveal | After layer clip-path inset right boundary tracks bar x | Misalignment between bar and reveal edge breaks realism |
+| Handle | Circular handle + speed-differential driven scaleX micro-stretch (peak 1.18), returning to 1 at rest | Stretch gives the handle physical weight as it is whipped |
+| Before styling | Low-contrast hazy grade | Making "before" unrealistically ugly feels contrived; the deficiency must remain credible (real legacy version or unoptimized state) |
+| Badges | Position BEFORE/AFTER badges inside content area | Demo review precedent: early version clipped into sidebar/avatar, creating visual overlap bugs |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 两版必须同布局同机位——布局不同读作两个页面，对比失效
-  （theme-switch-moves 同款约束）
-- 实战 before/after 都用真实截图（Q1）：before 是注入旧数据/关闭
-  功能的真实态，不手搓"故意丑"的假 before
-- 慢扫终点停 40% 而非 0%——留一段 after 在画面上定格（结论可见）
-- 声音：快甩一声 whoosh + 回弹轻 tick，慢扫无声或极轻摩擦音（S4）
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Both versions must share identical layout and camera angle—differing layouts read as two separate pages, breaking the comparison (same constraint as theme-switch-moves).
+- Use authentic screenshots for both before and after in production (Q1): before is a genuine state with legacy data or disabled features, not a contrived artificial downgrade.
+- End the slow sweep at 40% rather than 0%—leave an "after" segment visible in the final freeze (keeping the conclusion on screen).
+- Audio: fast whip whoosh + subtle tick on rebound; slow sweep is silent or has a very light friction texture (S4).
 
-## 参考实现
+## Reference Implementation
 demos/data/before-after-slider-scrub/
-（BeforeAfterSliderScrub.tsx）
+(BeforeAfterSliderScrub.tsx)

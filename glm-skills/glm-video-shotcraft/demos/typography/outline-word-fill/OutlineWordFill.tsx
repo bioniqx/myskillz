@@ -1,27 +1,27 @@
-// outline-word-fill — Outline→Solid Fill 空心字瞬时点亮
-// 空心词从约 3.2 倍急缓收缩落位居中；背后虚线大圆从画外持续收缩到字周围并缓慢自转，两侧水平虚线从画框
-// 边缘向内伸向圆（"瞄准"）；描边先预热增亮，随即实心字一帧内硬切点亮（无慢扫），一闪辉光后定格。
+// outline-word-fill — Outline to Solid Fill instantaneous illumination
+// Outlined word rapidly scales down ~3.2x into center; dashed circle continuously contracts from off-screen rotating slowly;
+// horizontal dashed crosshair lines extend inward; outline preheats then hard cuts to solid fill in 1 frame with a single flash.
 //
-// 第二轮重设计（制图 HUD · 白热点亮）：
-// - look = ember（暖黑 · 橙）。原生 1920 坐标重写（不再走 480×270 DesignStage）：220px / 500 的 Helvetica Neue
-//   空心字（2px 暖灰描边），r=410 虚线圆 + 内圈 72 格刻度环（每 30° 一根长刻度，反向慢转）+ 四个套准刻度，两侧水平虚线带 mono 读数
-//   「BEFORE 1 week」/「AFTER 4 hrs」——把"更快"讲成一组前后对比数据（手 K 一周 vs video-shotcraft 一下午出片），瞄准的过程就有了内容。
-// - 点亮：第 54 帧硬切成白热实心字（#fff5ee），同帧圆与水平线"锁定"成橙色、右侧读数 4 hrs 变橙；
-//   辉光（白 + 橙两层）8f 衰完；一道冲击环从圆边外扩 14f 消散（只此一次）；舞台主光同步脉冲一下再回落。
-// - 主圈自转在点亮那一刻刹停（"锁定"），内圈刻度环继续反向慢转。
-// - 曲线：字急缩 11f（EASE.snappy，按 scale 速度给瞬时失焦）、圆慢收 44f（EASE.out，全片最慢的呼吸），
-//   快慢对比是这张卡的节奏；水平线 18f ease-out 内伸，停在圆边外 28px。
-// - 空心字必须用静态字体（Helvetica Neue）：SF 可变字体字形内部有重叠轮廓，text-stroke 会描出 a/e 内部交叠线。
+// Redesign (technical drafting HUD: white-hot illumination):
+// - look = ember (warm dark base, amber-orange). Native 1920 layout: 220px Helvetica Neue
+//   outlined text (2px warm gray stroke), r=410 dashed circle + inner 72-tick reticle ring (counter-rotating) + register marks, mono readouts
+//   "BEFORE 1 week" / "AFTER 4 hrs" — communicating speedup via before/after comparison data.
+// - Illumination: frame 54 cuts directly to white-hot solid fill (#fff5ee); circle and crosshairs lock to orange, "4 hrs" turns orange;
+//   dual-layer bloom decays over 8f; shockwave ring expands from circle edge over 14f; key light pulses once.
+// - Outer circle rotation brakes to a stop on illumination (locked), while inner reticle continues counter-rotation.
+// - Curves: snappy 11f text scale contraction (with velocity defocus), slow 44f circle contraction,
+//   contrasting tempos; crosshairs extend over 18f, stopping 28px outside circle.
+// - Static font used (Helvetica Neue) to avoid variable font internal stroke intersection artifacts.
 //
-// 时间表（30fps，共 90f）：
-//   0–2    舞台光与浮尘已在（第 1 帧不空）
-//   2–13   空心字 3.2→1 急缩（2–8 淡入）
-//   8–52   虚线圆 2.8→1 慢收 + 自转（8–18 淡入）
-//   28–46  两侧水平虚线内伸、读数淡入
-//   44–53  描边预热：暖灰 → 亮橙白
-//   54     硬切点亮 + 锁定（主圈刹停）；54–62 辉光衰减；54–68 冲击环
-//   56–70  眉题 / 副行在圆内升起
-//   70–90  hold 20f（极缓推进 1.5%）
+// Timeline (30fps, total 90f):
+//   0-2    Stage lighting and dust established on frame 0
+//   2-13   Outlined text scales 3.2->1 (fades in 2-8)
+//   8-52   Dashed circle contracts 2.8->1 with rotation (fades in 8-18)
+//   28-46  Crosshairs extend, readouts fade in
+//   44-53  Stroke preheat: warm gray -> glowing amber-white
+//   54     Direct cut illumination + lock (rotation brakes); 54-62 bloom decay; 54-68 shockwave
+//   56-70  Kicker / subtitle rise inside circle
+//   70-90  Hold 20f (slow 1.5% push)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, mix, ramp } from '../../_fixtures/Polish';
@@ -33,16 +33,16 @@ export const OUTLINE_WORD_FILL_DURATION = 90; // 3.0s @30fps
 const L = LOOKS.ember;
 const CX = 960;
 const CY = 540;
-const R = 410; // 虚线圆半径
+const R = 410; // Dashed circle radius
 const WORD = 'Faster';
 const SIZE = 220;
-const POP = 54; // 硬切点亮帧
+const POP = 54; // Illumination cut frame
 const STATIC_SANS = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 
 const lerpColor = (a: [number, number, number], b: [number, number, number], t: number) =>
   `rgb(${Math.round(mix(a[0], b[0], t))},${Math.round(mix(a[1], b[1], t))},${Math.round(mix(a[2], b[2], t))})`;
-const GREY: [number, number, number] = [138, 118, 104]; // 暖灰描边 / 制图线
-const HOT: [number, number, number] = [255, 196, 150]; // 预热后的亮橙白
+const GREY: [number, number, number] = [138, 118, 104]; // Warm gray stroke / drafting lines
+const HOT: [number, number, number] = [255, 196, 150]; // Preheated amber-white
 const ORANGE: [number, number, number] = [255, 107, 44];
 
 const wordScaleAt = (f: number) => mix(3.2, 1, ramp(f, 2, 11, EASE.snappy));
@@ -57,11 +57,11 @@ export const OutlineWordFill: React.FC = () => {
   const shrink = ramp(frame, 8, 44, EASE.out);
   const ext = ramp(frame, 28, 18, EASE.out);
   const warm = ramp(frame, 44, 9, EASE.swift);
-  const lit = frame >= POP ? 1 : 0; // 硬切：不存在中间态
+  const lit = frame >= POP ? 1 : 0; // Direct cut: discrete binary state
   const flash = lit * (1 - ramp(frame, POP, 8, EASE.out));
-  const lock = lit * (0.55 + 0.45 * flash); // 锁定后保持一半橙色
+  const lock = lit * (0.55 + 0.45 * flash); // Retains amber tone after lock
   const shock = ramp(frame, POP, 14, EASE.out);
-  // 主圈自转到点亮那一刻"锁死"（再滑 6° 刹停）；内圈刻度环继续反向慢转，hold 段画面仍在呼吸
+  // Outer circle brakes to stop on lock; inner reticle continues counter-rotation during hold
   const rot = 0.22 * Math.min(frame, POP) + (frame > POP ? 6 * ramp(frame, POP, 14, EASE.out) : 0);
   const rotIn = -0.14 * frame;
   const sub = (d: number) => ramp(frame, 56 + d, 14, EASE.snappy);
@@ -69,7 +69,7 @@ export const OutlineWordFill: React.FC = () => {
 
   const strokeC = lerpColor(GREY, HOT, warm);
   const lineC = lit ? lerpColor([150, 120, 100], ORANGE, lock) : lerpColor(GREY, [150, 120, 100], warm);
-  const lineEnd = CX - R - 28; // 水平线停在圆边外 28px
+  const lineEnd = CX - R - 28; // Crosshairs terminate 28px outside circle
 
   return (
     <AbsoluteFill style={{ background: L.bg[1] }}>
@@ -79,19 +79,19 @@ export const OutlineWordFill: React.FC = () => {
 
       <AbsoluteFill style={{ transform: `scale(${push.toFixed(5)})` }}>
         <svg width={1920} height={1080} viewBox="0 0 1920 1080" style={{ position: 'absolute', inset: 0 }}>
-          {/* 冲击环：点亮那一下从圆边外扩消散（只此一次） */}
+          {/* Shockwave ring: expands outward from circle on cut */}
           {lit > 0 && shock < 1 && (
             <circle cx={CX} cy={CY} r={R + shock * 160} fill="none" stroke={alpha('#ff8a4c', 0.55 * (1 - shock))} strokeWidth={2 + 10 * (1 - shock)} />
           )}
           <g transform={`translate(${CX} ${CY}) scale(${mix(2.8, 1, shrink).toFixed(5)})`} opacity={cin}>
-            {/* 主虚线圆（自转） */}
+            {/* Main dashed circle (rotating) */}
             <g transform={`rotate(${rot.toFixed(3)})`}>
               <circle r={R} fill="none" stroke={lineC} strokeWidth={2} strokeDasharray="22 18" />
               {[0, 90, 180, 270].map((a) => (
                 <line key={a} x1={0} y1={-R - 22} x2={0} y2={-R + 10} stroke={lineC} strokeWidth={2.5} strokeLinecap="round" transform={`rotate(${a})`} />
               ))}
             </g>
-            {/* 内圈刻度环（反向慢转，降亮：纹理层） */}
+            {/* Inner reticle ring (counter-rotating, dimmed texture layer) */}
             <g transform={`rotate(${rotIn.toFixed(3)})`}>
               <circle r={R - 34} fill="none" stroke={lineC} strokeWidth={1} opacity={0.35} />
               {Array.from({ length: 72 }, (_, i) => {
@@ -103,15 +103,15 @@ export const OutlineWordFill: React.FC = () => {
               })}
             </g>
           </g>
-          {/* 两侧水平虚线：从画框边缘内伸到圆边外 */}
+          {/* Horizontal dashed crosshairs extending inward */}
           <line x1={0} y1={CY} x2={lineEnd * ext} y2={CY} stroke={lineC} strokeWidth={2} strokeDasharray="14 12" opacity={ext} />
           <line x1={1920} y1={CY} x2={1920 - lineEnd * ext} y2={CY} stroke={lineC} strokeWidth={2} strokeDasharray="14 12" opacity={ext} />
-          {/* 线端准星点 */}
+          {/* Crosshair target dots */}
           <circle cx={lineEnd * ext} cy={CY} r={5} fill={lineC} opacity={ext} />
           <circle cx={1920 - lineEnd * ext} cy={CY} r={5} fill={lineC} opacity={ext} />
         </svg>
 
-        {/* 读数：水平线上方，左 = 旧值（弱），右 = 新值（点亮时变橙） */}
+        {/* Readouts: left = before, right = after (turns orange on lock) */}
         <div style={{ position: 'absolute', left: 120, top: CY - 74, opacity: ext, transform: `translateX(${((1 - ext) * -30).toFixed(2)}px)`, ...type(30, 500, { mono: true }), letterSpacing: '0.12em', color: L.ink3 }}>
           BEFORE <span style={{ color: L.ink2 }}>1 week</span>
         </div>
@@ -119,8 +119,8 @@ export const OutlineWordFill: React.FC = () => {
           AFTER <span style={{ color: lit ? L.accent : L.ink2, textShadow: lit && flash > 0.02 ? `0 0 ${(18 * flash).toFixed(1)}px ${alpha(L.accent, 0.8)}` : undefined }}>4 hrs</span>
         </div>
 
-        {/* 眉题 / 副行：圆内、字上下 */}
-        {/* 眉题 = 品牌落款：小号反白标志 + 全小写 video-shotcraft（字标规范：不做全大写） */}
+        {/* Kicker / subtitle within circle boundaries */}
+        {/* Kicker = brand mark + lowercase wordmark */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: CY - 200, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, opacity: sub(0), transform: `translateY(${((1 - sub(0)) * 16).toFixed(2)}px)`, ...type(28, 600, { mono: true }), letterSpacing: '0.16em', color: L.ink2 }}>
           <ShotcraftMark size={40} tone="dark" />
           <span>{BRAND.name}</span>
@@ -129,7 +129,7 @@ export const OutlineWordFill: React.FC = () => {
           One prompt to a finished promo.
         </div>
 
-        {/* 双层字：底层空心描边、顶层白热实心（硬切） */}
+        {/* Dual-layer typography: bottom outline stroke, top solid white-hot fill (cut) */}
         <div style={{
           position: 'absolute', left: CX, top: CY, fontFamily: STATIC_SANS, fontSize: SIZE, fontWeight: 500, letterSpacing: '0.005em', lineHeight: 1,
           opacity: born, transform: `translate(-50%, -54%) scale(${ws.toFixed(5)})`, whiteSpace: 'nowrap',

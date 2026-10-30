@@ -1,9 +1,9 @@
-// avatar-grid-radial-build-colorize — Avatar Grid 分环生长随机染色（motion-lab 定稿转原生 Remotion）
-// 8×7 小卡片网格由中心向四周分环生长（每 4 帧扩一环，1.2s 铺满），卡片内容混合三种占位：
-// 首字母 / 图标符 / 色块缩略图，只做 opacity + scale 0.8→1 不位移；铺满后约 15% 的卡片
-// 在 1s 内随机时刻把底色染成浅红、状态点转红，形成"异常项逐渐浮现"的呼吸感。
-// 中央 3×6 区域 visibility:hidden 占位留给标题与图例，标题层始终 100% 不透明。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// avatar-grid-radial-build-colorize — Avatar Grid radial build with random colorization (ported from motion-lab final to native Remotion)
+// 8×7 small card grid expands radially outward ring by ring from center (expands 1 ring every 4 frames, filling canvas in 1.2s); card contents mix three placeholders:
+// initials / icon glyph / color swatch thumbnail, animating opacity + scale 0.8 -> 1 without displacement; once populated, ~15% of cards
+// tint their background pale red and status dot red at random moments within 1s, creating a breathing sensation of "anomalies gradually surfacing".
+// Center 3×6 area reserved with visibility:hidden for title and legend; title layer remains 100% opaque throughout.
+// Design canvas 480×270 (DesignStage proportional scale); parameter values calibrated in this coordinate space.
 import React from 'react';
 import { DesignStage, E, lerp, rand, seg, useT } from '../../_fixtures/Motion';
 
@@ -15,7 +15,7 @@ const MID = '#8A8A8F';
 const CARD_WHITE = '#ffffff';
 const FLAG_BG = '#FDECEC';
 
-// 颜色插值（effect.js 的 mix；hex2rgb 原来自 lab 页面全局，这里内联实现）
+// Color interpolation (mix from effect.js; hex2rgb originally from lab page global, inlined here)
 const hex2rgb = (hex: string): [number, number, number] => [
   parseInt(hex.slice(1, 3), 16),
   parseInt(hex.slice(3, 5), 16),
@@ -31,32 +31,32 @@ const mix = (a: string, b: string, t: number) => {
 
 const COLS = 8;
 const ROWS = 7;
-const TOTAL = 5.6 * 30; // 总帧数（delay 换算用）
+const TOTAL = 5.6 * 30; // Total frames (used for delay conversion)
 
-// 网格几何：等价 effect.js 的 inset:16px + gap:10px CSS grid，但改为绝对定位手排。
-// CSS grid 在 480×270 设计坐标下会把轨道取整到整像素（放大 4 倍后节距 140/144 交替），
-// 与原片的全分辨率均匀分布不符；小数设计坐标 + 绝对定位可保住亚像素节距。
+// Grid geometry: equivalent to effect.js inset:16px + gap:10px CSS grid, but manually placed via absolute positioning.
+// CSS grid under 480×270 design coordinates rounds tracks to whole pixels (alternating 140/144 pitch when scaled 4x),
+// departing from reference uniform distribution at full resolution; fractional design coords + absolute positioning preserve subpixel pitch.
 const GAP = 10;
 const CELL_W = (480 - 32 - (COLS - 1) * GAP) / COLS; // 47.25
 const CELL_H = (270 - 32 - (ROWS - 1) * GAP) / ROWS; // ≈25.43
 
-// 卡片内容三种占位：首字母(logo 位) / 图标符 / 色块缩略图(图片位)，实际使用换项目素材
+// Three placeholder types for card content: initials (logo slot) / icon glyph / color swatch thumbnail (image slot), replaceable with project assets
 const INI = ['VS', 'KJ', 'EM', 'AL', 'TR', 'MN', 'BQ', 'DW', 'RC', 'SF', 'PL', 'GH'];
 const ICONS = ['◆', '▲', '●', '■', '✦', '◐', '❖', '▣'];
 
-// 每格的静态参数（种子与 effect.js 逐一对应，跨帧确定）
+// Static parameters per cell (seeds correspond 1:1 with effect.js, deterministic across frames)
 const CELLS = Array.from({ length: ROWS * COLS }, (_, i) => {
   const r = Math.floor(i / COLS);
   const c = i % COLS;
-  const hidden = r >= 2 && r <= 4 && c >= 1 && c <= 6; // 中央留空给标题 + 图例（占位不破坏网格）
-  const kind = Math.floor(rand(i * 9.1) * 3); // 0=首字母 1=图标 2=图片缩略
+  const hidden = r >= 2 && r <= 4 && c >= 1 && c <= 6; // Center void reserved for title + legend (placeholder preserves grid)
+  const kind = Math.floor(rand(i * 9.1) * 3); // 0=initials 1=icon 2=image thumbnail
   const ini = INI[Math.floor(rand(i * 3.7) * INI.length)];
   const icon = ICONS[Math.floor(rand(i * 5.3) * ICONS.length)];
-  const h = Math.floor(rand(i * 7.7) * 360); // 缩略图渐变色相
-  const ring = Math.round(Math.hypot((c - 3.5) / 1.0, (r - 3) / 0.85)); // 到中心的"环号"
-  const delay = (ring * 4 + rand(i + 40) * 3) / TOTAL; // 每 4 帧扩一环 + 帧级抖动
-  const flagged = rand(i + 900) < 0.15; // ~15% 异常卡
-  const at = 0.3 + rand(i + 1600) * 0.3; // 染色随机时刻
+  const h = Math.floor(rand(i * 7.7) * 360); // Thumbnail gradient hue
+  const ring = Math.round(Math.hypot((c - 3.5) / 1.0, (r - 3) / 0.85)); // "Ring index" from center
+  const delay = (ring * 4 + rand(i + 40) * 3) / TOTAL; // Expands 1 ring every 4 frames + frame jitter
+  const flagged = rand(i + 900) < 0.15; // ~15% anomalous cards
+  const at = 0.3 + rand(i + 1600) * 0.3; // Random moment for color tint
   return { hidden, kind, ini, icon, h, delay, flagged, at };
 });
 
@@ -68,7 +68,7 @@ const LEGEND: Array<[string, string]> = [
 
 export const AvatarGridRadialBuildColorize: React.FC = () => {
   const t = useT();
-  // 标题淡入 + 轻微 scale；图例随后浮现
+  // Title fades in + subtle scale; legend emerges thereafter
   const tIn = seg(t, 0.02, 0.1, E.outQuad);
   const legendIn = seg(t, 0.26, 0.36, E.outQuad);
   return (
@@ -88,7 +88,7 @@ export const AvatarGridRadialBuildColorize: React.FC = () => {
             const f = 0.09 + cl.delay;
             const o = seg(t, f, f + 0.018, E.linear);
             const sc = seg(t, f, f + 0.03, E.outQuad);
-            // 异常卡：底色染浅红、边框染粉、状态点转红
+            // Anomalous card: background tinted pale red, border tinted pink, status dot turns red
             const cT = cl.flagged ? seg(t, cl.at, cl.at + 0.036, E.outQuad) : 0;
             return (
               <div
@@ -99,7 +99,7 @@ export const AvatarGridRadialBuildColorize: React.FC = () => {
                   top: r * (CELL_H + GAP),
                   width: CELL_W,
                   height: CELL_H,
-                  boxSizing: 'border-box', // 等价 grid stretch：边框计入轨道尺寸
+                  boxSizing: 'border-box', // Equivalent to grid stretch: border included in track size
                   borderRadius: 8,
                   background: cl.flagged ? mix(CARD_WHITE, FLAG_BG, cT) : CARD_WHITE,
                   border: `1px solid ${cl.flagged ? mix('#E7E7E4', '#F6CFCF', cT) : '#E7E7E4'}`,
@@ -110,7 +110,7 @@ export const AvatarGridRadialBuildColorize: React.FC = () => {
                   fontWeight: 700,
                   fontSize: cl.kind === 1 ? 13 : 11,
                   lineHeight: 1,
-                  fontFamily: '-apple-system,Helvetica,sans-serif', // Remotion 无头浏览器缺 -apple-system，补 Helvetica 对齐原片 SF 字形
+                  fontFamily: '-apple-system,Helvetica,sans-serif', // Remotion headless browser lacks -apple-system; fallback Helvetica aligns with reference SF glyphs
                   color: cl.kind === 1 ? '#6a6f7c' : '#3A3A3E',
                   opacity: o,
                   boxShadow: '0 1px 2px rgba(0,0,0,.04)',
@@ -191,7 +191,7 @@ export const AvatarGridRadialBuildColorize: React.FC = () => {
                 fontWeight: 600,
                 fontSize: 11,
                 lineHeight: 1,
-                fontFamily: '-apple-system,Helvetica,sans-serif', // Remotion 无头浏览器缺 -apple-system，补 Helvetica 对齐原片 SF 字形
+                fontFamily: '-apple-system,Helvetica,sans-serif', // Remotion headless browser lacks -apple-system; fallback Helvetica aligns with reference SF glyphs
                 color: MID,
               }}
             >

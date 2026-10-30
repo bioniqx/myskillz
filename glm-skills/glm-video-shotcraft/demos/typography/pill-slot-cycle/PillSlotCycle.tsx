@@ -1,14 +1,14 @@
-// pill-slot-cycle —— 句中词槽轮换：固定句干 + 句尾 pill 老虎机式滚一格
-// 源：notion-ai 4.5–8.5s。旧 pill 上飞淡出、新 pill 从下带运动模糊滑入，
-// 连换 6 次后 pill 消失、句子落成 "One skill to do it all." 收束（video-shotcraft 一条龙的六步）。
+// pill-slot-cycle — In-sentence slot cycling: fixed stem + slot-machine rolling pill at end
+// Source: notion-ai 4.5–8.5s. Old pill flies up and fades out; new pill slides in from below with motion blur.
+// After 6 cycles, the pill disappears and the sentence resolves into "One skill to do it all." (the six steps of video-shotcraft).
 //
-// 质感升级：
-// - pill 绕"滚筒"翻入翻出：入场 rotateX -38°→0 + 0.94→1，出场 0→34° + 1→0.94（perspective 1400），
-//   竖向运动模糊按真实速度计算（SVG 只在 y 轴模糊），静止为 0。
-// - pill 材质：白面 + 发丝线 + 顶部内高光 + 随"离槽高度"变化的两层软阴影；图标换同一套线性 SVG，
-//   落在强调色浅底小方块里（替代 Unicode 字符 ▲ ☰ 等字体回退字形）。
-// - 系统字体栈 + 负字距；柔光 Backdrop 替代 #ececea 平铺。
-// - 收束：结论句落位后，整行用 smooth 缓缓居中（句干在列举期间仍纹丝不动），再 hold ≥45f。
+// Polish upgrades:
+// - Pill flips in/out around a cylinder: enter rotateX -38°→0 + scale 0.94→1, exit 0→34° + 1→0.94 (perspective 1400),
+//   vertical motion blur calculated from instantaneous velocity (SVG blur on y-axis only), 0 when static.
+// - Pill material: white face + hairline border + top inner highlight + two-tier soft shadow varying with lift height;
+//   linear SVG icons on a light accent rounded badge (replacing fallback Unicode glyphs like ▲ ☰).
+// - System font stack + negative tracking; soft-lit Backdrop replacing flat #ececea.
+// - Finale: after final sentence lands, the full line smoothly centers (stem stays stationary during cycling), then holds ≥45f.
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -16,7 +16,7 @@ import { Backdrop, EASE, FONT as PFONT, mix, ramp, softShadow, innerHighlight } 
 
 const FONT = PFONT.sans;
 
-// 槽内六个动词短语 = video-shotcraft 一条龙的六步（分镜 → 实拍页面 → 运镜 → 踩点 → 音效 → 渲染）
+// Six verb phrases in the slot = six steps of video-shotcraft (storyboard -> capture -> camera -> beat -> sound -> render)
 type IconKey = 'board' | 'capture' | 'camera' | 'beat' | 'sound' | 'render';
 const PILLS: { label: string; icon: IconKey }[] = [
   { label: 'Storyboard it', icon: 'board' },
@@ -26,22 +26,22 @@ const PILLS: { label: string; icon: IconKey }[] = [
   { label: 'Design the sound', icon: 'sound' },
   { label: 'Render the film', icon: 'render' },
 ];
-const STEM = 'One skill to'; // 句干（结论句 = STEM + "do it all."）
+const STEM = 'One skill to'; // Sentence stem (conclusion = STEM + "do it all.")
 
 const BEAT = 21; // ~0.7s @30fps
-const INTRO = 12; // 句干入场
+const INTRO = 12; // Stem intro
 const CYCLES = PILLS.length;
-const SWAP = 8; // 每拍前 8f 完成换位
-const FIN = 14; // 收束句落位
-const CENTER = 26; // 落位后整行缓缓居中
-// 12f 入场 + 6×21f 列举 + 14f 收束 + 48f 完整句 hold
+const SWAP = 8; // Swap completes in first 8f of each beat
+const FIN = 14; // Finale landing duration
+const CENTER = 26; // Smooth centering after landing
+// 12f intro + 6×21f cycles + 14f finale + 48f hold
 export const PILL_SLOT_CYCLE_DURATION = INTRO + CYCLES * BEAT + FIN + 48; // 200f ≈ 6.7s
 
-const STEM_LEFT = 300; // 句干左端锚点（列举期间纹丝不动）
+const STEM_LEFT = 300; // Stem left anchor (remains static during cycling)
 const STEM_GAP = 36;
-const WORD_GAP = 18; // 结论句里 "to" 与 "do" 之间是普通词距，不是槽位间距
+const WORD_GAP = 18; // Standard word spacing between "to" and "do" in finale, not slot gap
 
-// 线性图标（24 视框，stroke 继承 currentColor）
+// Linear icons (24px viewBox, stroke inherits currentColor)
 const Icon: React.FC<{ k: IconKey }> = ({ k }) => {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
@@ -81,7 +81,7 @@ const Icon: React.FC<{ k: IconKey }> = ({ k }) => {
   );
 };
 
-// pill 本体；lift = 离槽高度（0 落槽 → 1 飞行中），驱动阴影大小与虚实
+// Pill component; lift = height off slot (0 in slot -> 1 in flight), driving shadow size and softness
 const Pill: React.FC<{ label: string; icon: IconKey; lift?: number; style?: React.CSSProperties }> = ({
   label,
   icon,
@@ -127,7 +127,7 @@ const Pill: React.FC<{ label: string; icon: IconKey; lift?: number; style?: Reac
   </div>
 );
 
-// 竖向运动模糊滤镜（只在 y 轴模糊；std<0.3 时不挂滤镜）
+// Vertical motion blur filter (y-axis only; omitted when std < 0.3)
 const VBlur: React.FC<{ id: string; std: number }> = ({ id, std }) => (
   <svg width={0} height={0} style={{ position: 'absolute' }} aria-hidden>
     <filter id={id} x="-10%" y="-60%" width="120%" height="220%">
@@ -136,40 +136,40 @@ const VBlur: React.FC<{ id: string; std: number }> = ({ id, std }) => (
   </svg>
 );
 
-// 入场位移曲线（像素）：从下 +120 强 ease-out 落槽
+// Enter displacement curve (px): ease-out into slot from +120 below
 const inYAt = (bf: number) => mix(120, 0, ramp(bf, 0, SWAP, EASE.snappy));
-// 出场位移曲线：向上 -130 ease-in 加速飞出
+// Exit displacement curve: accelerating ease-in upward to -130
 const outYAt = (bf: number) => mix(0, -130, ramp(bf, 0, SWAP - 1, EASE.exit));
 
 export const PillSlotCycle: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 量最终句宽（STEM + gap + "do it all."），用于收束后居中
+  // Measure full sentence width (STEM + gap + "do it all.") for finale centering
   const finalRef = useRef<HTMLDivElement>(null);
   const [finalW, setFinalW] = useState(1240);
   useLayoutEffect(() => {
     if (finalRef.current) setFinalW(finalRef.current.offsetWidth || 1240);
   }, []);
 
-  // 句干入场：ease-out 上浮淡入 + 轻虚化收拢
+  // Stem intro: ease-out float up, fade in + subtle deblur
   const stemT = ramp(frame, 0, INTRO, EASE.out);
 
   const cycleStart = INTRO;
   const cycleEnd = cycleStart + CYCLES * BEAT;
 
-  // 当前处于第几个 pill 拍
+  // Current pill cycle index
   const rel = frame - cycleStart;
   const idx = Math.max(0, Math.min(Math.floor(rel / BEAT), CYCLES - 1));
   const beatFrame = rel - idx * BEAT;
 
-  // 收束段：pill 上飞消失，"do it all." 从下滑入落位（全片唯一一次过冲）
+  // Finale: pill flies out upward, "do it all." slides in from below (sole overshoot in sequence)
   const isFinale = frame >= cycleEnd;
   const finT = interpolate(frame, [cycleEnd, cycleEnd + FIN], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.out(Easing.back(1.4)),
   });
-  // 落位后整行缓缓居中
+  // Smoothly center the entire line after landing
   const centerT = ramp(frame, cycleEnd + FIN - 2, CENTER, EASE.smooth);
   const shiftX = centerT * ((1920 - finalW) / 2 - STEM_LEFT);
 
@@ -182,19 +182,19 @@ export const PillSlotCycle: React.FC = () => {
     whiteSpace: 'nowrap',
   };
 
-  // 槽内容渲染
+  // Slot content rendering
   let slot: React.ReactNode = null;
   if (!isFinale && rel >= 0) {
     const incoming = PILLS[idx];
     const outgoing = idx > 0 ? PILLS[idx - 1] : null;
 
-    // 新 pill：从下 +120px 绕滚筒翻入，blur 按速度
+    // Incoming pill: flips in around cylinder from +120px below, blur proportional to velocity
     const inT = ramp(beatFrame, 0, SWAP, EASE.snappy);
     const inY = inYAt(beatFrame);
     const inV = Math.abs(inYAt(beatFrame + 0.5) - inYAt(beatFrame - 0.5));
     const inBlur = Math.min(14, inV * 0.55);
 
-    // 旧 pill：向上 -130px 加速翻出淡掉
+    // Outgoing pill: accelerates upward to -130px and fades out
     const outT = ramp(beatFrame, 0, SWAP - 1, EASE.exit);
     const outY = outYAt(beatFrame);
     const outV = Math.abs(outYAt(beatFrame + 0.5) - outYAt(beatFrame - 0.5));
@@ -204,7 +204,7 @@ export const PillSlotCycle: React.FC = () => {
       <div style={{ position: 'relative', display: 'inline-block', perspective: 1400 }}>
         <VBlur id="psc-in" std={inBlur} />
         <VBlur id="psc-out" std={outBlur} />
-        {/* 撑起槽宽度的隐形占位（当前 pill） */}
+        {/* Invisible spacer matching current pill width */}
         <Pill label={incoming.label} icon={incoming.icon} style={{ visibility: 'hidden' }} />
         {outgoing && outT < 1 && (
           <div
@@ -237,7 +237,7 @@ export const PillSlotCycle: React.FC = () => {
       </div>
     );
   } else if (isFinale) {
-    // 最后一个 pill 上飞离场（前 7f），然后 "do it all." 落位
+    // Final pill flies out upward (first 7f), then "do it all." lands
     const lastOutT = ramp(frame, cycleEnd, 7, EASE.exit);
     const fv = Math.abs(
       interpolate(frame + 0.5, [cycleEnd, cycleEnd + FIN], [90, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.back(1.4)) }) -
@@ -282,12 +282,12 @@ export const PillSlotCycle: React.FC = () => {
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <Backdrop tone="light" light={{ x: 0.4, y: 0.3 }} accent="#5b63d3" grain={0.045} vignette={0.14} />
-      {/* 隐藏量宽：完整结论句 */}
+      {/* Hidden width measurement: complete finale sentence */}
       <div ref={finalRef} style={{ position: 'absolute', visibility: 'hidden', display: 'flex', gap: WORD_GAP }}>
         <span style={stemStyle}>{STEM}</span>
         <span style={stemStyle}>do it all.</span>
       </div>
-      {/* 句干固定不动：整行左端锚死，不随 pill 宽度居中重排（收束落位后才整体居中） */}
+      {/* Stem remains fixed: line is anchored to the left, unaffected by pill width changes (centers only after finale lands) */}
       <div
         style={{
           position: 'absolute',

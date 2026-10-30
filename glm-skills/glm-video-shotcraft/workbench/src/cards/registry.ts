@@ -10,13 +10,13 @@ import { PROJECT_CARDS } from "./projectCards";
 import { LEGACY_CARDS } from "./legacyCards";
 import { buildCardRegistry } from "./buildRegistry";
 
-/** 注册表（同 id 先到先得）：
- *  - 工作台原生卡：通用文字 / Ink Press 字卡 / 解说条 / 闪白转场（全部 schema 参数化）
- *  - 媒体卡：音频 / 视频 / 图片（成片工程 public/ 与仓库音效库都走它们）
- *  - 背景卡
- *  - 成片单元卡：已链接成片工程 workbench.ts 清单里的镜头 / 转场 / 字幕 / 叠加层
- *  - 动效库：demos/ 150 个 demo 组件（gen-index 静态索引）
- *  - 旧工程兼容卡：只进入 CARDS，不进入素材库 / Studio 使用的 CARD_LIST */
+/** Card registry (first-come first-served by id):
+ *  - Native cards: basic text / Ink Press title / caption / flash cut;
+ *  - Media cards: audio / video / image;
+ *  - Background cards;
+ *  - Film unit cards from linked project manifest;
+ *  - Motion library: demo components from demos/;
+ *  - Legacy compatibility cards. */
 const ALL: CardDef[] = [
   textBasicCard,
   titleCardCard,

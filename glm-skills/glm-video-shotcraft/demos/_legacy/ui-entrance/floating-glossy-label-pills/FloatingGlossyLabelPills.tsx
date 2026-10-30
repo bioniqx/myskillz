@@ -1,36 +1,38 @@
-// floating-glossy-label-pills — Glossy Pills Carousel 高光胶囊横滑走廊（motion-lab 定稿转原生 Remotion）
-// 白底四角强调色雾霭，四块浅灰 dashboard 占位 mockup（三栏卡片 / 折线图仪表盘 /
-// 列表表格 / 表单+开关列表）横向排队，各顶一枚高光强调色胶囊标签（Feature A–D）；
-// 轨道环形循环，任一拍居中面板左右都露出相邻面板边缘。开场有上一拍收尾余量
-// （偏左 11px 缓归位），随后轨道三拍向右换位（t≈0.20/0.483/0.688，inOutCubic，
-// 第一拍带长尾）——居中者放大清晰，两侧缩至 0.62、下沉变淡微模糊；t≈0.717 黑色
-// 描白边光标右上硬现，减速斜滑向左下，t≈0.90 停在末位胶囊右端。
-// 整卡唯一色相来源是 ACCENT 及其深浅档，按项目品牌色替换即换肤。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// floating-glossy-label-pills — Glossy Pills Carousel (ported from motion-lab final to native Remotion)
+// White background with accent-colored haze at four corners; four light-gray dashboard placeholder mockups
+// (three-column cards / line-chart dashboard / list table / form + toggle list) queued horizontally,
+// each topped with a glossy accent pill label (Feature A–D);
+// Circular loop track, ensuring adjacent panel edges peek out on left and right at any beat. Starts with residual motion
+// from the previous beat (drifting 11px left, gently settling), followed by a 3-beat track shift to the right
+// (t≈0.20/0.483/0.688, inOutCubic, beat 1 with a long tail) — centered panel scales up sharp, flanking panels scale down to 0.62,
+// sink, dim, and slightly blur; at t≈0.717 a black cursor with white outline hard-cuts in top-right, decelerates diagonally
+// toward bottom-left, settling at t≈0.90 at the right end of the last pill.
+// ACCENT and its shades are the sole hue source across the card; reskin by swapping with project brand colors.
+// Design coordinates 480×270 (DesignStage scales proportionally); parameter table values calibrated to this system.
 import React from 'react';
 import { DesignStage, E, lerp, rand, seg, useT } from '../../_fixtures/Motion';
 
 export const FLOATING_GLOSSY_LABEL_PILLS_DURATION = 120; // 4000ms @30fps
 
-// ── 模板强调色：实际使用时按项目品牌色替换这一组变量 ──
-const ACCENT = '#7a8699'; // 中性蓝灰做默认演示色
+// ── Template accent colors: replace this group with project brand colors for production use ──
+const ACCENT = '#7a8699'; // Neutral blue-gray as default demo color
 const ACCENT_LIGHT = '#a8b2c0', ACCENT_DEEP = '#4c5666';
 const A_RGB = '122,134,153', AL_RGB = '168,178,192', AD_RGB = '76,86,102';
 const F = '-apple-system,BlinkMacSystemFont,sans-serif';
 
-// 逐帧实测（480×270 裁切系）：
-//   居中面板 x 105-357（W≈252）、top=75，下缘正好压住画面底 → 真高 H≈195
-//   邻位（静止）面板 x -70..86（缩到 0.62）、top=126 → 缩放 + 下沉 51px
-//   相邻两块中心距 SP≈232
-// 内部 UI 按 330×255 的内容坐标书写，再整体等比 scale 到 252×195
+// Frame-by-frame measurements (480×270 crop system):
+//   Center panel x 105–357 (W≈252), top=75, bottom edge precisely flush with frame bottom -> true height H≈195
+//   Neighboring (resting) panel x -70..86 (scaled to 0.62), top=126 -> scaled + sunk by 51px
+//   Center-to-center distance between adjacent panels SP≈232
+// Internal UI authored in 330×255 content coordinates, then scaled proportionally to 252×195
 const CW = 330, CH = 255, CS = 252 / CW;
 const W = Math.round(CW * CS), H = Math.round(CH * CS), SP = 232;
 const PANEL_TOP = 75;
 
-// ── 通用占位（wireframe / skeleton）零件：全部只用灰条 + 色块，不写具体文案 ──
+// ── Generic placeholder (wireframe / skeleton) parts: purely gray bars + color blocks, no specific copy ──
 const TITLE = '#a8adb5', TEXT = '#d4d7dd', FAINT = '#e3e5ea', LINE = '#eceef1';
 
-// 骨架条：默认圆角 min(h/2, 3)
+// Skeleton bar: default border-radius min(h/2, 3)
 const Skel: React.FC<{ x: number; y: number; w: number; h: number; col: string; r?: number }> = ({ x, y, w, h, col, r }) => (
   <div
     style={{
@@ -45,7 +47,7 @@ const Skel: React.FC<{ x: number; y: number; w: number; h: number; col: string; 
   />
 );
 
-// 窗口顶栏：强调色方块 + 字标灰条 + 右侧两枚圆点（各页面通用 chrome）
+// Window title bar: accent square + logotype gray bar + two dots on right (shared chrome across pages)
 const Topbar: React.FC = () => (
   <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: 16, background: '#fff', borderBottom: '1px solid #eceef1', zIndex: 1 }}>
     <Skel x={8} y={4} w={8} h={8} col={ACCENT} r={2} />
@@ -55,7 +57,7 @@ const Topbar: React.FC = () => (
   </div>
 );
 
-// 左侧导航：一条高亮项 + 若干灰条
+// Left sidebar: one active item + several gray bars
 const Sidebar: React.FC = () => (
   <div style={{ position: 'absolute', left: 0, top: 16, width: 70, height: 'calc(100% - 16px)', background: '#f7f8f9', borderRight: '1px solid #eceef1' }}>
     <Skel x={8} y={8} w={36} h={8} col={ACCENT} />
@@ -65,7 +67,7 @@ const Sidebar: React.FC = () => (
   </div>
 );
 
-// 1) 三栏卡片占位（居中标题 + 三张卡：标题条/大字块/文本骨架/按钮块）
+// 1) Three-column cards placeholder (centered header + 3 cards: header bar / large metric block / text skeleton / button block)
 const BCards: React.FC = () => (
   <>
     <Topbar />
@@ -84,7 +86,7 @@ const BCards: React.FC = () => (
   </>
 );
 
-// 2) 仪表盘占位（四枚数值卡 + 折线图占位）
+// 2) Dashboard placeholder (four metric cards + line chart placeholder)
 const BDash: React.FC = () => (
   <>
     <Topbar />
@@ -109,7 +111,7 @@ const BDash: React.FC = () => (
   </>
 );
 
-// 3) 列表 / 表格占位（小统计条 + 多行骨架 + 状态色块）
+// 3) List / table placeholder (compact stat bar + multiline skeleton + status color blocks)
 const BTable: React.FC = () => (
   <>
     <Topbar />
@@ -123,7 +125,7 @@ const BTable: React.FC = () => (
     {Array.from({ length: 7 }, (_, i) => (
       <div key={i} style={{ position: 'absolute', left: 84, top: 78 + i * 22, width: 232, height: 18, borderBottom: '1px solid #f0f1f4' }}>
         <Skel x={0} y={6} w={70 + rand(i + 21) * 60} h={5} col={TEXT} />
-        {/* 状态色块保留功能色（异常淡红 / 正常淡绿） */}
+        {/* Status blocks preserve functional colors (error light red / normal light green) */}
         <Skel x={172} y={4} w={26} h={9} col={i % 2 ? '#f2d6d6' : '#cdeccf'} r={4} />
         <div style={{ position: 'absolute', left: 226, top: 6, width: 6, height: 6, borderRadius: '50%', background: '#28c06a' }} />
       </div>
@@ -131,7 +133,7 @@ const BTable: React.FC = () => (
   </>
 );
 
-// 4) 表单 + 开关列表占位（左侧字段框，右侧头像色块行 + 开关）
+// 4) Form + switch list placeholder (input fields on left, avatar color blocks + toggles on right)
 const BForm: React.FC = () => (
   <>
     <Topbar />
@@ -156,7 +158,7 @@ const BForm: React.FC = () => (
         <div style={{ position: 'absolute', left: 0, top: 3, width: 13, height: 13, borderRadius: '50%', background: `hsl(${212 + i * 4},14%,${56 + i * 5}%)` }} />
         <Skel x={19} y={3} w={48} h={4} col="#c2c6cc" />
         <Skel x={19} y={11} w={32} h={4} col={FAINT} />
-        {/* 开关保留功能色（开=蓝 / 关=灰） */}
+        {/* Switches preserve functional colors (active=blue / inactive=gray) */}
         <div style={{ position: 'absolute', right: 0, top: 4, width: 18, height: 10, borderRadius: 6, background: i % 2 ? '#d6d9de' : '#2f7de1' }}>
           <div style={{ position: 'absolute', top: 1.5, ...(i % 2 ? { left: 1.5 } : { right: 1.5 }), width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />
         </div>
@@ -165,7 +167,7 @@ const BForm: React.FC = () => (
   </>
 );
 
-// 四组：胶囊 + 占位 mockup 横向排队（i 越大越靠左，滑入中央越晚），轨道循环
+// 4 sets: pill + placeholder mockup queued horizontally (higher i is further left, enters center later), looping track
 const GROUPS: { txt: string; Body: React.FC }[] = [
   { txt: 'Feature A', Body: BCards },
   { txt: 'Feature B', Body: BDash },
@@ -173,24 +175,24 @@ const GROUPS: { txt: string; Body: React.FC }[] = [
   { txt: 'Feature D', Body: BForm },
 ];
 
-// 雾块静态参数（位置 / 颜色）
+// Mist patch static parameters (position / color)
 const FOGS = [
   { left: '68%', top: '8%', rgb: AD_RGB },
   { left: '4%', top: '60%', rgb: A_RGB },
   { left: '40%', top: '82%', rgb: AL_RGB },
 ];
 
-// 轨道三拍：起点 t≈0.20 / 0.483 / 0.688，inOutCubic 缓起→中段冲→缓收；
-// 第一拍明显更慢且带长尾（到 t≈0.48 才完全收住），后两拍干脆些。
+// Track 3 beats: start t≈0.20 / 0.483 / 0.688, inOutCubic ease-in -> mid-surge -> ease-out;
+// Beat 1 is noticeably slower with a long tail (settles fully at t≈0.48), beats 2 & 3 are snappier.
 const BEATS = [
-  { b: 0.200, d: 0.185, tail: 0.28 }, // 第 1 位 → 第 2 位
-  { b: 0.483, d: 0.150, tail: 0 },    // 第 2 位 → 第 3 位
-  { b: 0.688, d: 0.150, tail: 0 },    // 第 3 位 → 第 4 位
+  { b: 0.200, d: 0.185, tail: 0.28 }, // Slot 1 -> Slot 2
+  { b: 0.483, d: 0.150, tail: 0 },    // Slot 2 -> Slot 3
+  { b: 0.688, d: 0.150, tail: 0 },    // Slot 3 -> Slot 4
 ];
 
 export const FloatingGlossyLabelPills: React.FC = () => {
   const t = useT();
-  // 开场有上一拍的收尾余量：t=0 时轨道偏左 11px，t≈0.19 归位
+  // Residual tail from previous beat at intro: at t=0 track offset 11px left, settles at t≈0.19
   let trackX = -11 * (1 - seg(t, 0, 0.19, E.outQuart));
   for (const B of BEATS) {
     const p = B.tail
@@ -199,8 +201,8 @@ export const FloatingGlossyLabelPills: React.FC = () => {
     trackX += p * SP;
   }
   const N = GROUPS.length, RING = N * SP;
-  // 光标：t≈0.717 于右上（x≈403,y≈36）一帧硬现，减速斜滑向左下，
-  // t≈0.90 抵达末位胶囊右端附近（x≈281,y≈56）后几乎静止
+  // Cursor: hard-cuts in at t≈0.717 top-right (x≈403, y≈36), decelerates diagonally down-left,
+  // arriving near the right end of the last pill (x≈281, y≈56) by t≈0.90 and holding near-static
   const cp = seg(t, 0.717, 0.90, E.outQuart);
   return (
     <DesignStage bg="#fbfbfc">
@@ -215,7 +217,7 @@ export const FloatingGlossyLabelPills: React.FC = () => {
       #fbfbfc`,
         }}
       >
-        {/* 漂移雾块 */}
+        {/* Drifting mist patches */}
         {FOGS.map(({ left, top, rgb }, i) => (
           <div
             key={i}
@@ -234,12 +236,12 @@ export const FloatingGlossyLabelPills: React.FC = () => {
         ))}
 
         {GROUPS.map(({ txt, Body }, i) => {
-          // 环形轨道：面板绕 4 位循环，保证任一拍都有左右邻居各露一截在画面边缘
+          // Circular track: panels loop around 4 positions, ensuring adjacent panels peek out on both edges at any beat
           let wx = trackX - i * SP;
           wx = ((wx % RING) + RING * 1.5) % RING - RING / 2;
-          const d = Math.min(1, Math.abs(wx) / SP); // 0=正居中，1=已到邻位
+          const d = Math.min(1, Math.abs(wx) / SP); // 0=dead center, 1=at neighbor position
           const close = 1 - d;
-          const sc = lerp(close, 0.62, 1);          // 邻位实测缩到 0.62
+          const sc = lerp(close, 0.62, 1);          // Measured neighbor scale down to 0.62
           return (
             <div
               key={i}
@@ -251,13 +253,13 @@ export const FloatingGlossyLabelPills: React.FC = () => {
                 height: 270,
                 marginLeft: -W / 2,
                 transform: `translateX(${wx}px)`,
-                // 邻位（d=1）必须仍清楚可见 —— 原片左右两侧始终露出相邻面板边缘
+                // Neighboring position (d=1) must stay clearly visible — reference film keeps adjacent panel edges exposed
                 opacity: lerp(Math.min(1, close * 2.4), 0.78, 1),
                 filter: `blur(${d * 1.3}px)`,
                 zIndex: close > 0.5 ? 2 : 1,
               }}
             >
-              {/* 面板：等比缩小 + 顶边随 d 线性下沉（斜率 ≈80px） */}
+              {/* Panel: proportional downscale + top edge sinking linearly with d (slope ≈80px) */}
               <div
                 style={{
                   position: 'absolute',
@@ -289,8 +291,8 @@ export const FloatingGlossyLabelPills: React.FC = () => {
                   <Body />
                 </div>
               </div>
-              {/* 胶囊：实测中心 y 从 45（居中）沉到 102（邻位），比面板沉得更多，
-                  离心时贴近面板顶边 —— 单独一条更陡的下沉曲线 */}
+              {/* Pill: center y sinks from 45 (center) to 102 (neighbor), sinking more than panel,
+                  hugging panel top edge when off-center — separate steeper sink curve */}
               <div
                 style={{
                   position: 'absolute',
@@ -300,7 +302,7 @@ export const FloatingGlossyLabelPills: React.FC = () => {
                   padding: '4px 13px',
                   borderRadius: 999,
                   whiteSpace: 'nowrap',
-                  // 原 cssText 中 font 简写在 line-height:1 之后，实际生效行高为 normal
+                  // Original cssText had font shorthand after line-height:1, effectively yielding line-height: normal
                   font: `700 14px ${F}`,
                   color: '#fff',
                   background: `linear-gradient(180deg,${ACCENT_LIGHT} 0%,${ACCENT} 45%,${ACCENT_DEEP} 100%)`,
@@ -327,7 +329,7 @@ export const FloatingGlossyLabelPills: React.FC = () => {
           );
         })}
 
-        {/* 黑色描白边光标（结尾划向末位胶囊，macOS 指针样式） */}
+        {/* Black cursor with white outline (swipes toward last pill near end, macOS pointer style) */}
         <div
           style={{
             position: 'absolute',

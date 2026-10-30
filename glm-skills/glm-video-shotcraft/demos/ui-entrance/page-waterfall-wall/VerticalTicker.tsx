@@ -1,6 +1,6 @@
 // origin: vibe-motion/skills remotion-3d-ticker assets/VerticalTicker.tsx
-//         (2026-07-13 扫描，2026-07-15 吸收；改动：items 泛化为 ReactNode、
-//          遮罩高度/透视角/scale/列宽/间距提为 props)
+//         (Scanned 2026-07-13, adopted 2026-07-15; changes: generalized items to ReactNode,
+//          promoted mask height, perspective angle, scale, column width, and gap to props)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 
@@ -32,12 +32,12 @@ export interface VerticalTickerProps {
 }
 
 /**
- * 3D 透视多列无限纵向滚动墙。每列 [...items, ...items] 翻倍 +
- * progress 取模 translateY 0→-50%：前半段恰好滚出视口时归零，
- * 后半段与前半段像素级一致，循环点不可见。
- * 接缝无痕的前提：-50% 必须恰等于单副本周期（内容高 + n 个 gap）。
- * 源实现用 flex gap（翻倍后只有 2n-1 个 gap）会差 gap/2 px 跳一下，
- * 这里改为每项 marginBottom = gap，容器高恰为周期两倍。
+ * 3D perspective multi-column infinite vertical scrolling wall. Each column duplicates [...items, ...items] +
+ * modulo progress translateY 0→-50%: resets to zero right when the first copy scrolls out of the viewport,
+ * seamlessly identical to the second copy pixel-by-pixel, making the loop seam invisible.
+ * Prerequisite for seamless looping: -50% must exactly equal one copy's cycle (content height + n gaps).
+ * The original implementation used flex gap (which has only 2n-1 gaps after doubling), causing a gap/2 px jump;
+ * this version sets marginBottom = gap on each item so the container height is exactly twice the cycle length.
  */
 export const VerticalTicker: React.FC<VerticalTickerProps> = ({
   columns,
@@ -105,7 +105,7 @@ const Column: React.FC<TickerColumn & { width: number; gap: number }> = ({
 
   const loopFrames = durationInSeconds * fps;
   const progress = (frame % loopFrames) / loopFrames;
-  // up: 0 → -50%; down: -50% → 0（起点即偏移半程，首帧无空白）
+  // up: 0 → -50%; down: -50% → 0 (starts offset by half cycle to prevent blank space on first frame)
   const translateY = direction === -1 ? progress * -50 : -50 + progress * 50;
 
   return (

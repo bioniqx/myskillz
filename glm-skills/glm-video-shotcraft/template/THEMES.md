@@ -1,11 +1,11 @@
 # Visual themes and palette editing
 
-Open the **主题 (Themes)** tab in the existing left sidebar. Its upper section selects a preset; its lower section edits background, card surface, text, secondary text, accent, subtle fill, and border colors using a color picker or a six-digit HEX value. Press Enter or leave the HEX field to apply it. Invalid input is discarded.
+Open the **Themes** tab in the existing left sidebar. Its upper section selects a preset; its lower section edits background, card surface, text, secondary text, accent, subtle fill, and border colors using a color picker or a six-digit HEX value. Press Enter or leave the HEX field to apply it. Invalid input is discarded.
 
 Presets: Ink Press, Modern Light, Midnight, Sage, Coral, Iris, Deep Ocean, Obsidian Violet, and Vintage Kraft. Sage, Coral, and Iris replace the earlier bright experiments with pale surfaces and restrained accents. Their existing IDs (`solar-pop`, `coral-burst`, `color-play`) remain compatible with saved projects. Coral's neutral surface / dark violet text / coral accent direction draws on [Happy Hues](https://www.happyhues.co/); values are adapted for this fixture, not an exact copy of a complete site.
 
 - `themeId` and optional `themeColors` are stored in project JSON and browser saves. Changes support undo/redo. A continuous color-picker gesture creates one undo step and keeps the current clip selected.
-- Selecting another preset clears palette overrides; **恢复预设** clears them for the current preset. Explicit per-clip edits remain intact and take precedence.
+- Selecting another preset clears palette overrides; **Reset preset** clears them for the current preset. Explicit per-clip edits remain intact and take precedence.
 - Ink Press preserves its original raster screenshots and has no palette editor. Select another preset to recolor both the film and its demo UI assets.
 - Editable presets preserve the weekly heading in the report-header band and use compact 36px captions near the bottom. Explicit per-clip text, size, and position edits still take precedence.
 - Themes apply to the adapted template scenes. Ordinary Gallery cards and the editor's own chrome are not globally recolored.
@@ -39,6 +39,6 @@ The fixture describes a fictional research workspace, not a connected service or
 
 ## Save, import and export palettes
 
-Name a palette and click **保存配色** to add it to **我的主题**. These entries live in this browser's local storage, scoped to the current manifest name (up to 50 entries); they are separate from the project timeline. Click an entry to apply it, or its × button to remove it. Export a JSON file to back it up or move it to another browser.
+Name a palette and click **Save Palette** to add it to **My Themes**. These entries live in this browser's local storage, scoped to the current manifest name (up to 50 entries); they are separate from the project timeline. Click an entry to apply it, or its × button to remove it. Export a JSON file to back it up or move it to another browser.
 
-**导入配色** accepts version-1 `shotcraft-palette` JSON exported by this panel, validates the compatible base theme and complete HEX fields, and applies it without changing timeline edits. Click Save afterward to add the imported palette to My Themes. Arbitrary color-site JSON schemas are not yet supported. **导出配色** downloads the current palette, name and base theme ID. Vintage Kraft (`vintage-kraft`) preserves its procedural paper texture when its palette is saved or imported.
+**Import Palette** accepts version-1 `shotcraft-palette` JSON exported by this panel, validates the compatible base theme and complete HEX fields, and applies it without changing timeline edits. Click Save afterward to add the imported palette to My Themes. Arbitrary color-site JSON schemas are not yet supported. **Export Palette** downloads the current palette, name and base theme ID. Vintage Kraft (`vintage-kraft`) preserves its procedural paper texture when its palette is saved or imported.

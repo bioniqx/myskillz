@@ -1,15 +1,18 @@
-// lead-word-zoom-assemble — 首词推近落位组句
-// 首词以 2.3 倍字号占据画面中央，hold 期间继续向观众推近 6%，随后一条曲线同时
-// 完成「缩回终字号」与「整行左滑到最终排布」，后续词从右侧各自槽位外 0.5em 推入；
-// 整行上移的同一时窗里副行浮出，停一拍后整幕 crash-zoom 推近失焦交棒下一镜。
+// lead-word-zoom-assemble - Lead word zooms in and locks into place to assemble the sentence
+// The lead word occupies screen center at 2.3x font size, continuing to push in 6% during hold.
+// A single curve then simultaneously handles shrinking to final size and sliding the full line
+// left into its final layout, while subsequent words push in from 0.5em right of their slots;
+// in the same window as the line lifts, the subline emerges, pauses for a beat, and the entire scene
+// crash-zooms into blur before handing off to the next shot.
 //
-// 手感命门是支点：transform-origin 横向钉在**首词中心**、纵向钉在**基线**——
-// 这两点是全程唯一不该移动的锚，挂载时实测一次（基线用零尺寸 inline-block 的
-// offsetTop 读出），否则缩放过程中字会逐帧抖基线。
-// 参数以 1920×1080 标定。
-// 质感层（改版）：四色 mesh 收成"靛蓝主光 + 一抹暖色余光"的低对比底 + 颗粒 + 暗角；
-// 首词入场带 8px→0 失焦（与淡入同 6f）；缩回段按 scale 速度给瞬时失焦（≤3.5px，停稳归零），
-// 大幅缩放不再"硬缩"；整行上移提前到 f32–46，品牌行静止 26f 再 crash；强调色统一为批次靛蓝。
+// Critical pivot: transform-origin is anchored horizontally at the **center of the lead word**
+// and vertically at the **baseline** - these are the only two anchors that must never move,
+// measured once on mount (baseline read via offsetTop of a zero-size inline-block),
+// otherwise font scaling causes frame-by-frame baseline jitter.
+// Calibrated for 1920x1080.
+// Polish layer (revision): 4-color mesh refined into low-contrast "indigo key light + touch of warm ambient" + grain + vignette;
+// Lead word enters with 8px -> 0 blur (synced with 6f fade-in); recede segment adds dynamic blur based on scale velocity (<= 3.5px, returning to 0 at rest),
+// avoiding harsh snaps on large zooms; line lift moved up to f32-46, brand line holds steady for 26f before crash; accent color unified to batch indigo.
 import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { Grain, Vignette } from '../../_fixtures/Polish';
 import {
@@ -25,35 +28,35 @@ import {
 
 export const LEAD_WORD_ZOOM_ASSEMBLE_DURATION = 84; // 2.8s @30fps
 
-// ---- 编舞常量 ----
+// ---- Choreography constants ----
 const TEXT = 'Introducing video-shotcraft';
-const HIGHLIGHT_WORD = 'video-shotcraft'; // 精确匹配的词换强调色：品牌词落位那一下自带高亮
+const HIGHLIGHT_WORD = 'video-shotcraft'; // Exact matching word switches to accent color: brand word highlights upon settling
 const FONT_SIZE = 96;
-const INITIAL_SCALE = 2.3; // 首词起手放大倍数
-const INTRO_DURATION = 6; // f：首词淡入
-const HOLD_DURATION = 12; // f：首词在峰值停留（推近发生在这一段）
-const PUSH_SCALE = 1.06; // hold 期间继续推近的倍数
-const RECEDE_DURATION = 12; // f：缩回终字号
-const ASSEMBLE_DURATION = 24; // f：整行左滑到位
-const WORD_DELAY = 6; // f：缩回起点后第二个词开始推入
-const WORD_STAGGER = 4; // f：后续词之间的错峰
-const WORD_DURATION = 12; // f：单词推入行程
-const WORD_PUSH = 0.5; // em：后续词起始位置在自己槽位右侧多远
-const WORD_FADE = 2; // f：后续词淡入（刻意极短——是被推进来的，不是淡进来的）
+const INITIAL_SCALE = 2.3; // Initial scale factor for lead word
+const INTRO_DURATION = 6; // frames: lead word fade-in
+const HOLD_DURATION = 12; // frames: lead word peak hold (push-in happens here)
+const PUSH_SCALE = 1.06; // Additional push-in scale multiplier during hold
+const RECEDE_DURATION = 12; // frames: recede to final font size
+const ASSEMBLE_DURATION = 24; // frames: full line slides left into place
+const WORD_DELAY = 6; // frames: delay after recede begins before second word starts pushing in
+const WORD_STAGGER = 4; // frames: stagger between subsequent words
+const WORD_DURATION = 12; // frames: push-in travel duration per word
+const WORD_PUSH = 0.5; // em: initial offset distance to the right of each slot
+const WORD_FADE = 2; // frames: fade-in for subsequent words (intentionally brief - pushed in, not faded in)
 const LETTER_SPACING = '-0.03em';
 
-// ---- 场景层 ----
-const LIFT: [number, number] = [32, 46]; // f：整行上移 + 副行同帧出现（与左滑尾巴重叠 4f，读作一口气）
+// ---- Scene layer ----
+const LIFT: [number, number] = [32, 46]; // frames: line lifts + subline appears (overlaps last 4f of left-slide as a continuous gesture)
 const LIFT_DISTANCE = -56; // px
 const SUBLINE = 'One shot card, one motion recipe — copy, paste, render.';
-const CRASH_FRAMES = 12; // f：段尾 crash-zoom 占用的收尾帧数
+const CRASH_FRAMES = 12; // frames: crash-zoom duration at scene end
 const CRASH_SCALE = 0.2;
 const CRASH_BLUR = 9;
 
 const INK = '#1d1d1f';
 const INK_DIM = '#6e6f76';
 const ACCENT = '#5b63d3';
-// 系统 Display 字栈在前（-apple-system 在无头 Chrome 里常解析不到，会落到 PingFang），中文回退 PingFang
+// System Display font stack first (-apple-system may not resolve in headless Chrome, falling back to PingFang)
 const SANS = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "PingFang SC", Inter, Arial, sans-serif';
 const MESH_BG =
   'radial-gradient(56% 50% at 26% 24%, rgba(91,99,211,0.16) 0%, rgba(91,99,211,0) 72%),' +
@@ -61,14 +64,14 @@ const MESH_BG =
   'radial-gradient(70% 60% at 50% 46%, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 70%),' +
   'linear-gradient(180deg, #f6f6f8 0%, #efeff2 100%)';
 
-/** 首词向观众漂移：先快后停，峰值处挂住 */
+/** Lead word drifts toward viewer: fast start, soft stop, hangs at peak */
 const PUSH_EASE = Easing.bezier(0.25, 1, 0.5, 1);
-/** 缩回与左滑共用同一条曲线——两个动作必须读作一次运动，不能各走各的 */
+/** Recede and left slide share the same curve - both actions must read as a single motion */
 const ZOOM_EASE = Easing.bezier(0.5, 0, 0.05, 1);
-/** 后续词推入槽位：起步快，落地长而软 */
+/** Subsequent words push into slots: snappy start, long soft landing */
 const WORD_EASE = Easing.bezier(0.22, 0.8, 0.36, 1);
 
-// 整行 scale：hold 推近 + 缩回两段相加（两段之间没有速度断点）
+// Full line scale: hold push-in + recede combined smoothly without velocity discontinuities
 const lineScale = (f: number) =>
   interpolate(f, [0, HOLD_DURATION], [INITIAL_SCALE, INITIAL_SCALE * PUSH_SCALE], {
     extrapolateLeft: 'clamp',
@@ -85,7 +88,7 @@ const TextReveal: React.FC = () => {
   const frame = useCurrentFrame();
   const { width } = useVideoConfig();
 
-  // 整行宽度、首词中心占比、基线位置：只在挂载时量一次，量到之前挂起渲染
+  // Full line width, lead word center ratio, baseline position: measured once on mount; delays render until ready
   const lineRef = useRef<HTMLSpanElement>(null);
   const leadRef = useRef<HTMLSpanElement>(null);
   const baselineRef = useRef<HTMLSpanElement>(null);
@@ -121,9 +124,9 @@ const TextReveal: React.FC = () => {
   const baseline = metrics?.baseline ?? FONT_SIZE * 0.88;
 
   const zoomStart = HOLD_DURATION;
-  // 首词从"画面正中"走到"行内自己的位置"，位移就是这段偏心距
+  // Lead word translates from screen center to in-line slot position by offset distance
   const slideDistance = lineWidth * (0.5 - leadRatio);
-  // 首词入场失焦：与 6f 淡入同步 8px→0（scale 前单位，随 2.3× 放大）
+  // Lead word entrance blur: syncs with 6f fade-in 8px->0 (pre-scale units, magnified by 2.3x)
   const introBlur = interpolate(frame, [0, INTRO_DURATION], [8 / INITIAL_SCALE, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -146,7 +149,7 @@ const TextReveal: React.FC = () => {
           fontFamily: SANS,
           transformOrigin: `${leadRatio * 100}% ${baseline}px`,
           scale: lineScale(frame),
-          // 缩回段的瞬时失焦：按 scale 速度给（峰值约 0.3/帧 → ≈3px），停稳为 0
+          // Instantaneous defocus during scale recovery: proportional to scale velocity (peak ~0.3/f -> ~3px), 0 at rest
           filter: (() => {
             const v = Math.abs(lineScale(frame + 0.5) - lineScale(frame - 0.5));
             const b = Math.min(3.5, v * 10) + introBlur;
@@ -195,12 +198,12 @@ const TextReveal: React.FC = () => {
               >
                 {word}
               </span>
-              {/* 词间空格必须放在 inline-block 之外——跟在词里会被行盒裁掉，词会黏在一起 */}
+              {/* Inter-word spaces placed outside inline-block to prevent line-box clipping */}
               {i < words.length - 1 ? ' ' : null}
             </Fragment>
           );
         })}
-        {/* 基线尺：零尺寸 inline-block，它的 offsetTop 就是基线 */}
+        {/* Baseline ruler: zero-size inline-block whose offsetTop marks baseline */}
         <span ref={baselineRef} style={{ display: 'inline-block', width: 0, height: 0 }} />
       </span>
     </AbsoluteFill>

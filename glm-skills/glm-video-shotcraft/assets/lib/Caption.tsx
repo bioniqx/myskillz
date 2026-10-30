@@ -1,4 +1,4 @@
-// origin: template/src/aifl/Caption.tsx（模板片同源组件）
+// origin: template/src/aifl/Caption.tsx (shared template component)
 import { interpolate, useCurrentFrame } from 'remotion';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -8,9 +8,8 @@ const AMBER = 'oklch(52% 0.115 65)';
  * frame, led by a small amber square. Fades/rises in over 8 frames and fades
  * out over the last 8 of its window.
  *
- * 注意：22px 属"信息条"风格（大字距全大写作补偿），低于审美准则 Q11 的
- * 字幕线（≥56px）。作为叙事主字幕使用时应提到 56–60px 档或改用大字幕组件；
- * 沿用 22px 信息条风格属于 Q11 允许的有意识违反，需在项目说明中注明。 */
+ * Note: 22px is informational sub-strip style. For main narrative captions,
+ * scale to 56–60px or use dedicated large caption components per aesthetic guidelines Q11. */
 export const Caption: React.FC<{ text: string; duration: number; bottom?: number }> = ({
   text,
   duration,

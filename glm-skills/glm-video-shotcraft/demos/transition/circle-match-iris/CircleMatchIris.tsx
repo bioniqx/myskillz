@@ -1,26 +1,25 @@
-// circle-match-iris — 圆心匹配光圈切（match-cut × iris）：光圈从前景一个真圆的圆心炸开，
-// 圈内新景的圆环图表接在同一个圆上——"这个人的头像"变成"这个人的数据"。
+// circle-match-iris — Concentric match-cut iris: the iris opens from the center of a true foreground circle,
+// and the new scene's ring chart expands along the exact same circle — transforming "this person's avatar" into "this person's stats".
 //
-// 第二轮重设计（创作者周榜 · 荧光柠檬）：
-// - look = lime（石墨底 + 荧光黄绿）。景 A 是 video-shotcraft 工作室的本周出片榜：五行大字号排行，
-//   第 3 行是「你」——荧光绿实心头像圆（72px）是全片唯一的强调色块，也是匹配剪辑的锚点。
-// - 定睛：其他行降到 32% 亮度、「你」这行抬亮，头像两次脉冲 + 两道荧光涟漪；相机以锚点为原点缓推 3%
-//   （锚点在屏幕上纹丝不动）。
-// - 接圆（命门）：头像实心圆本身"镂空"成圆环——描边宽度从 = 直径（实心盘）收到 44px、半径 36→300，
-//   光圈半径 = 圆环外沿 + 一段 ease-in 加速的外扩，所以是"圆环把光圈撑开"，接圆发生在光圈吃满屏之前。
-//   旧页同时以锚点为心被推远（放大 + 压暗），新景"压"在旧页之上。
-// - 景 B：同心的计时刻度盘 + 圆环 sweep 到 87%（本周出片目标），中央 200px 数字与 sweep 同步计数；右侧大标题逐词升起、
-//   三枚数据错峰落位。
+// Design Decisions (Creator Weekly Leaderboard · Lime):
+// - look = lime (graphite darkfield + fluorescent yellow-green). Scene A is the video-shotcraft studio weekly output board: 5 large rows,
+//   row 3 is "You" — the 72px solid lime avatar circle is the sole accent color block and the match-cut anchor.
+// - Focus: other rows dim to 32% brightness while "You" highlights; avatar pulses twice with two lime ripples; camera pushes in 3% centered on anchor (anchor stays motionless on screen).
+// - Circle match (core mechanism): solid avatar disc hollowing into a ring — stroke width collapses from diameter (solid disc) to 44px, radius expands 36 -> 300;
+//   iris radius = ring outer edge + ease-in acceleration, so the "ring pushes the iris open", matching circles before the iris fills the screen.
+//   Scene A recedes outward from anchor (scaled up + dimmed), with Scene B layering over Scene A.
+// - Scene B: concentric dial ticks + ring sweep to 87% (weekly production goal), central 200px number counts synchronously; right-hand headline rises word by word,
+//   three metrics drop into place in staggered timing.
 //
-// 时间表（30fps，共 165f）：
-//   0–18    预备：舞台光、五行榜单逐行从下浮现（第 0 帧已有第一行的起始态）
-//   14–40   定睛：其余行压暗；18f / 30f 两次头像脉冲 + 涟漪；相机以锚点缓推 1→1.03
-//   40–47   蓄力：头像收到 0.9（预备）
-//   47–75   主动作：实心头像镂空成圆环，r 36→300（spring 式 expo-out，28f），光圈被圆环撑开，
-//           54–84 光圈 ease-in 加速外扩吃满屏；旧页放大 1.03→1.22 并压暗
-//   60–118  跟随：sweep 0→87%（慢起长尾 58f），数字同步计数；76–104 右侧标题逐词升起、数据错峰；
-//           108f 排名胶囊回扣景 A
-//   118–165 hold：刻度盘极缓旋转 + 圆环光呼吸，最后是一张完整的海报
+// Timeline (30fps, 165f):
+//   0–18    Intro: stage light, 5 rows emerge from below in sequence (frame 0 shows initial state of row 1)
+//   14–40   Focus: remaining rows dim; 18f / 30f dual avatar pulses + ripples; camera slowly pushes in 1 -> 1.03 on anchor
+//   40–47   Anticipation: avatar shrinks to 0.9 (prep)
+//   47–75   Main action: solid avatar hollows into ring, r 36 -> 300 (spring-like expo-out, 28f), iris pushed open by ring,
+//           54–84 iris ease-in accelerates to fill screen; old scene scales 1.03 -> 1.22 and dims
+//   60–118  Follow-through: sweep 0 -> 87% (slow start, long tail 58f), numbers count synchronously; 76–104 right headline rises word-by-word, metrics stagger;
+//           108f rank pill callbacks Scene A
+//   118–165 Hold: dial rotates slowly + ring breathes, resolving into a complete poster
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -31,18 +30,18 @@ export const CIRCLE_MATCH_IRIS_DURATION = 165;
 
 const L = LOOKS.lime;
 
-// ── 锚点：两景共用的唯一圆心（所有圆——头像、涟漪、光圈、圆环、刻度盘——都引用这一组常量）──
-const CX = 540; // = ROW_X + 行左内边距 36 + 名次列 84 + 头像半径
+// ── Anchor: shared circle center for both scenes (all circles: avatar, ripple, iris, ring, dial reference this) ──
+const CX = 540; // = ROW_X + row padding-left 36 + rank column 84 + avatar radius
 const CY = 540;
-const AV_R = 36; // 头像半径
-const RING_R = 300; // 新景圆环半径
-const RING_W = 44; // 圆环描边宽
+const AV_R = 36; // Avatar radius
+const RING_R = 300; // Scene B ring radius
+const RING_W = 44; // Ring stroke width
 const GOAL = 0.87;
 
-// 榜单几何：五行，行距 124，第 3 行（index 2）中心落在 CY
+// Leaderboard geometry: 5 rows, 124px pitch, row 3 (index 2) centered at CY
 const ROW_H = 108;
 const ROW_PITCH = 124;
-const ROW_X = 384; // 行左缘
+const ROW_X = 384; // Row left edge
 const ROW_W = 1152;
 const rowTop = (i: number) => CY - ROW_H / 2 + (i - 2) * ROW_PITCH;
 const ME = 2;
@@ -61,17 +60,17 @@ const STATS = [
   { v: '4:52', u: 'min', k: 'Avg render' },
 ];
 
-// 光圈外扩：前段很慢（让圆环先把它撑开）、后段加速吃满
+// Iris expansion: slow at start (letting ring push it open), accelerates to fill screen
 const IRIS_EASE = bezier(0.62, 0, 0.32, 1);
-// sweep：起笔稍慢（接住圆环生长的尾速）、长尾落定，读数在最后 1/3 慢慢爬到 87
+// sweep: gentle start matching ring expansion tail speed, long settle, readouts crawl to 87 in final third
 const SWEEP_EASE = bezier(0.4, 0, 0.12, 1);
 
 export const CircleMatchIris: React.FC = () => {
   const f = useCurrentFrame();
 
-  // ── 景 A ──
+  // ── Scene A ──
   const rowIn = (i: number) => ramp(f, -6 + stagger(i, 5, 14, EASE.out), 16, EASE.snappy);
-  const focus = ramp(f, 14, 18, EASE.out); // 其余行压暗
+  const focus = ramp(f, 14, 18, EASE.out); // Dim other rows
   const pulse = (s: number) => ramp(f, s, 5, EASE.snappy) - ramp(f, s + 5, 11, EASE.out);
   const anticip = ramp(f, 40, 7, EASE.swift);
   const avScale = 1 + 0.16 * (pulse(18) + pulse(30)) - 0.1 * anticip;
@@ -79,19 +78,19 @@ export const CircleMatchIris: React.FC = () => {
     const p = ramp(f, s, 22, EASE.out);
     return { r: AV_R + 10 + p * 64, o: f >= s && f < s + 22 ? 0.85 * (1 - p) : 0, w: mix(4, 1, p) };
   });
-  // 相机：以锚点为原点缓推，开圈时旧页被推远（放大 + 压暗）
+  // Camera: slow push centered on anchor; when iris opens, old page recedes (scales up + dims)
   const push = ramp(f, 4, 40, EASE.smooth);
   const away = ramp(f, 47, 34, EASE.exit);
   const aScale = 1 + 0.03 * push + 0.19 * away;
   const aDim = 1 - 0.55 * away;
 
-  // ── 接圆：实心头像 → 圆环 ──
+  // ── Match cut: solid avatar -> ring ──
   const grow = ramp(f, 47, 28, EASE.snappy);
   const ringR = mix(AV_R * 0.9, RING_R, grow);
-  const ringW = mix(AV_R * 0.9 * 2, RING_W, ramp(f, 47, 22, EASE.snappy)); // 描边 = 直径时就是实心盘
+  const ringW = mix(AV_R * 0.9 * 2, RING_W, ramp(f, 47, 22, EASE.snappy)); // Stroke = diameter yields solid disc
   const opened = f >= 47;
   const irisR = ringR + ringW / 2 + 10 + 2400 * ramp(f, 54, 30, IRIS_EASE);
-  const discToTrack = ramp(f, 50, 14, EASE.out); // 实心荧光 → 暗轨
+  const discToTrack = ramp(f, 50, 14, EASE.out); // Solid lime -> dark track
   const sweep = GOAL * ramp(f, 60, 58, SWEEP_EASE);
   const circ = 2 * Math.PI * ringR;
   const headA = -Math.PI / 2 + sweep * 2 * Math.PI;
@@ -105,13 +104,13 @@ export const CircleMatchIris: React.FC = () => {
 
   return (
     <div style={{ width: 1920, height: 1080, position: 'relative', overflow: 'hidden', background: L.bg[2] }}>
-      {/* ===== 景 A：video-shotcraft 出片周榜（共享舞台只有这一层 Stage；景 B 在光圈里自带暗底） ===== */}
+      {/* ===== Scene A: video-shotcraft weekly leaderboard (shared stage has this single Stage layer; Scene B has dark backdrop inside iris) ===== */}
       <div style={{ position: 'absolute', inset: 0, transformOrigin: `${CX}px ${CY}px`, transform: `scale(${aScale.toFixed(4)})`, filter: away > 0 ? `brightness(${aDim.toFixed(3)})` : undefined }}>
         <Stage look={L} keyLight={{ x: 0.5, y: -0.06 }} fill={{ x: 0.92, y: 0.98 }} intensity={0.7} grain={0} breathe={0.4} />
-        {/* 页眉 */}
+        {/* Header */}
         <div style={{ position: 'absolute', left: ROW_X, top: 76, width: ROW_W, display: 'flex', alignItems: 'flex-end', opacity: ramp(f, 0, 14, EASE.out) }}>
           <div>
-            {/* 品牌眉题：标志 + 小写字标（字标不做全大写）+ caps 小标签 */}
+            {/* Brand eyebrow: mark + lowercase wordmark (not all caps) + caps small badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <ShotcraftMark size={34} tone="dark" />
               <span style={{ ...type(TYPE.label + 4, 700), fontFamily: BRAND.font, letterSpacing: '0.03em', color: L.ink }}>{BRAND.name}</span>
@@ -138,7 +137,7 @@ export const CircleMatchIris: React.FC = () => {
                 : `inset 0 0 0 1px ${L.line}, inset 0 1px 0 ${alpha('#ffffff', 0.04)}`,
             }}>
               <div style={{ ...type(TYPE.small, 600, { mono: true }), width: 84, color: me ? L.accent : L.ink3 }}>{r.rank}</div>
-              {/* 头像槽：「你」的头像单独画在外层（脉冲 / 接圆要精确对心） */}
+              {/* Avatar slot: "You" avatar rendered in outer layer for precise concentric pulsing/matching */}
               <div style={{
                 width: AV_R * 2, height: AV_R * 2, borderRadius: '50%', flex: 'none',
                 background: me ? 'transparent' : `linear-gradient(150deg, #3a3f33, #22261e)`,
@@ -159,7 +158,7 @@ export const CircleMatchIris: React.FC = () => {
         })}
       </div>
 
-      {/* 「你」的头像（锚点真圆）+ 涟漪 —— 开圈后由圆环接管 */}
+      {/* "You" avatar (anchor circle) + ripples — handed off to ring chart after iris opens */}
       {!opened && (
         <>
           <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
@@ -177,16 +176,16 @@ export const CircleMatchIris: React.FC = () => {
         </>
       )}
 
-      {/* ===== 景 B：本周目标圆环，从同一圆心被圆环撑开 ===== */}
+      {/* ===== Scene B: weekly target ring, pushed open by ring from same circle center ===== */}
       {opened && (
         <>
-          {/* 圈外落影：新景压在旧页上 */}
+          {/* Drop shadow outside iris: new scene overlays old page */}
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
             background: `radial-gradient(circle at ${CX}px ${CY}px, rgba(0,0,0,0) ${irisR.toFixed(1)}px, rgba(0,0,0,0.45) ${(irisR + 1).toFixed(1)}px, rgba(0,0,0,0) ${(irisR + 90).toFixed(1)}px)`,
           }} />
           <div style={{ position: 'absolute', inset: 0, clipPath: `circle(${irisR.toFixed(1)}px at ${CX}px ${CY}px)` }}>
-            {/* B 底：更深的橄榄黑 + 以圆心为光源的荧光余光 + 右上冷白主光 */}
+            {/* Scene B backdrop: deeper olive black + lime radial glow from center + top-right cool white key light */}
             <div style={{
               position: 'absolute', inset: 0,
               background:
@@ -207,7 +206,7 @@ export const CircleMatchIris: React.FC = () => {
                   <stop offset="100%" stopColor={L.accent} stopOpacity={0} />
                 </radialGradient>
               </defs>
-              {/* 同心计时刻度盘（120 格，每 10 格长刻度），极缓旋转 */}
+              {/* Concentric dial ticks (120 ticks, major tick every 10), slow rotation */}
               <g opacity={dialIn} transform={`rotate(${dialRot.toFixed(3)} ${CX} ${CY})`}>
                 {Array.from({ length: 120 }, (_, i) => {
                   const a = (i / 120) * Math.PI * 2;
@@ -220,10 +219,10 @@ export const CircleMatchIris: React.FC = () => {
                 })}
               </g>
               <circle cx={CX} cy={CY} r={RING_R - RING_W / 2 - 22} fill="none" stroke={alpha(L.ink, 0.06 * dialIn)} strokeWidth={1.5} />
-              {/* 暗轨：开圈瞬间还是实心荧光头像，再退成暗轨 */}
+              {/* Dark track: solid lime avatar at moment of opening, then fades into dark track */}
               <circle cx={CX} cy={CY} r={ringR} fill="none" strokeWidth={ringW}
                 stroke={discToTrack < 1 ? `rgba(${mix(198, 40, discToTrack).toFixed(0)},${mix(244, 48, discToTrack).toFixed(0)},${mix(50, 28, discToTrack).toFixed(0)},1)` : '#283018'} />
-              {/* sweep 弧：从 12 点起笔 */}
+              {/* sweep arc: starts at 12 o'clock */}
               {sweep > 0.002 && (
                 <circle cx={CX} cy={CY} r={ringR} fill="none" stroke="url(#cmi-arc)" strokeWidth={ringW} strokeLinecap="round"
                   strokeDasharray={`${(sweep * circ).toFixed(2)} ${circ.toFixed(2)}`} transform={`rotate(-90 ${CX} ${CY})`}
@@ -231,7 +230,7 @@ export const CircleMatchIris: React.FC = () => {
               )}
               {sweep > 0.01 && <circle cx={hx} cy={hy} r={RING_W * 1.25} fill="url(#cmi-head)" />}
             </svg>
-            {/* 中央数字：随 sweep 计数 */}
+            {/* Central number: counts synchronously with sweep */}
             <div style={{
               position: 'absolute', left: CX - 240, top: CY - 130, width: 480, height: 260, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', opacity: numIn, transform: `scale(${mix(0.86, 1, ramp(f, 58, 22, EASE.snappy)).toFixed(4)})`,
@@ -242,7 +241,7 @@ export const CircleMatchIris: React.FC = () => {
               </div>
               <div style={{ ...type(TYPE.small, 500), color: L.ink2, marginTop: 8 }}>of 54-shot goal</div>
             </div>
-            {/* 右侧：标题 + 数据 */}
+            {/* Right side: headline + metrics */}
             <div style={{ position: 'absolute', left: 1010, top: 262, width: 820 }}>
               <div style={{ ...type(TYPE.label, 700, { caps: true }), letterSpacing: '0.22em', color: L.accent, opacity: ramp(f, 72, 14, EASE.out) }}>
                 Your week · Mara K.
@@ -268,7 +267,7 @@ export const CircleMatchIris: React.FC = () => {
                   );
                 })}
               </div>
-              {/* 叙事收口：回扣景 A 的排名 */}
+              {/* Narrative payoff: callbacks Scene A ranking */}
               <div style={{
                 marginTop: 56, display: 'inline-flex', alignItems: 'center', gap: 16, padding: '16px 26px', borderRadius: 999,
                 background: alpha(L.accent, 0.1), boxShadow: `inset 0 0 0 1px ${alpha(L.accent, 0.28)}`,
@@ -279,7 +278,7 @@ export const CircleMatchIris: React.FC = () => {
               </div>
             </div>
           </div>
-          {/* 光圈边缘受光环（只在开圈初段） */}
+          {/* Highlight ring on iris edge (early opening phase only) */}
           {rimO > 0.01 && (
             <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
               <circle cx={CX} cy={CY} r={irisR} fill="none" stroke={L.accent} strokeWidth={2} opacity={0.7 * rimO}

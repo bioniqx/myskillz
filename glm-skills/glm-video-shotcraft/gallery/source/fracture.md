@@ -1,40 +1,40 @@
 ---
 name: fracture
-一句话: 5×5 瓦片从 3D 碎片态按中心波纹逐圈聚合成整面海报，停一拍亮字，随后全部碎片背离中心加速旋转飞出画面
-适用: 开场第一镜"从混沌到成形"的品牌/海报揭示；倒放或只取后半可作硬转场
-时长: 约 5.2s（156f@30fps；聚合 0–2.6s · hold 1s · 飞散 1.5s）
-能量: 高（两头高能、中段静止，适合压 BGM 重音起收）
+summary: Twenty-five 3D tiles fly in from scattered space and lock into a poster in a center-out ripple, hold for a beat, then accelerate outward off-screen in all directions.
+use: Opening establishing shot for brand/poster reveals "from chaos to formation"; reversing or isolating the second half functions as a hard transition
+duration: ~5.2s (156f@30fps; assembly 0–2.6s · hold 1s · dispersion 1.5s)
+energy: High (high energy at both ends, calm in the middle; ideal for locking to BGM accent beats)
 ---
 
-## 意图
-把"产品成形"拍成物理事件：碎片从三维空间各自带着旋转飞回原位，观众看着一面完整画面从无序中长出来；hold 读字后再整体炸出画面，把注意力干净地交给下一镜。进出对称，一支素材可正反两用。
+## Intention
+Framing "product formation" as a physical event: fragments carry individual rotations out of 3D space and fly into position, letting viewers watch a coherent visual emerge from disorder; after holding to read copy, the entire assembly detonates off-screen, cleanly handing attention to the next shot. Symmetrical entry and exit allows the asset to run forward or reversed.
 
-## 动效核心
-- 25 块瓦片各自持有确定性伪随机的初始姿态：位移 ±450/±300/±490px（x/y/z）+ 三轴 ±180° 旋转，由 `rand(seed)` 生成，渲染可复现
-- 入场按曼哈顿距离波纹 stagger：`delay = (|r-2|+|c-2|) * 0.045`，中心先就位、四角最后，每块 0.34 时长走 `bezier(0.42,0,0.3,1)`（落位前长减速）；落位后 ~10f 一次 ≤2.5° 的 rotateX 阻尼小摆 = 入槽"咔哒"
-- 25 块切的是**同一张海报**（每块按格位偏移取自己那一格），拼齐才看见完整画面；瓦片按朝向做明暗（越侧对镜头越暗）
-- opacity 以 `tin * 2.5` 快速升到 1——碎片远处即近乎实体，避免"淡入感"稀释物理感
-- 海报上印眉题 INTRODUCING + video-shotcraft 字标（标志 + 小写字标），随瓦片切片，t=0.42–0.52 亮起占住 hold 段视线；退场不单独淡出，字和标志跟着碎片一起被撕走；hold 段整面极缓推近 3%
-- 退场不淡出：每块沿背离画面中心的方向（`atan2` 计算 + ±0.8 抖动）飞出 620–880px 并加旋 ±150°，`inCubic` 加速，实体出画
+## Motion Core
+- 25 tiles each hold deterministic pseudorandom initial poses: displacement +-450/+-300/+-490px (x/y/z) + three-axis +-180 deg rotation, generated via `rand(seed)` for reproducible rendering.
+- Entrance staggered via Manhattan distance ripple: `delay = (|r-2|+|c-2|) * 0.045`, center settling first and corners last, each tile traveling over 0.34 duration along `bezier(0.42,0,0.3,1)` (extended deceleration before landing); landing followed by ~10f damped rotateX oscillation <=2.5 deg = tactile "click" into place.
+- 25 tiles slice from **the exact same poster** (each tile offsets according to its grid slot), revealing complete artwork only upon alignment; tiles shaded by orientation (darker when angled away from lens).
+- Opacity rises rapidly to 1 via `tin * 2.5`—tiles appear solid even from afar, avoiding fade-in softness that dilutes physical weight.
+- Poster carries eyebrow INTRODUCING + video-shotcraft wordmark (logo + lowercase wordmark) sliced with tiles, lighting up across t=0.42–0.52 to command focus during hold; exit does not fade text independently; typography and logo tear away with fragments; whole poster slowly pushes in 3% during hold.
+- Exit avoids fading: each tile accelerates along vector away from screen center (`atan2` calculation + +-0.8 jitter), flying 620–880px off-screen with additional +-150 deg rotation via `inCubic` acceleration as solid physical entities.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 网格 | 5×5，380×230px，perspective 900px | 瓦片更多波纹更细腻但单块存在感下降；persp <700 透视夸张易穿帮 |
-| 初始散布 | dx±450 / dy±300 / dz −210~+490 | 放大散布开场更混沌，但聚合路径变长需同步加 delay 窗口 |
-| 波纹间隔 | 0.045/环（曼哈顿距离） | >0.07 波纹感变"逐圈点名"；<0.03 全体近同时到位失去波纹 |
-| 入场时长 | 每块 0.34（inOutCubic） | 缩短更"啪"地成形；配合波纹间隔保证末块 ≤0.6 就位 |
-| 退场窗口 | 0.70 + delay×0.5 起飞，0.18 时长（inCubic） | **窗口必须收在 t≈0.97 前**：曾因 0.72+delay×0.7/0.26 导致角瓦片出画不完、卡在画框边一秒（判例 2026-08-05） |
-| 退场距离 | 620–880px（背离中心 + 随机抖动） | 距离不足会残留在画框边；中心瓦片方向随机（无"背离"可言） |
-| 海报配色 | `ACCENT_HUE=218` 派生整张海报（冷色深场 + 左上柔光 + 底部发光地平线弧） | 改一个色相常量整面换色；拼缝 0.5 设计 px，再宽会把字切缺笔 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Grid | 5x5, 380x230px, perspective 900px | Denser tiles yield smoother ripples but diminish individual tile presence; persp <700 distorts perspective excessively |
+| Initial scatter | dx+-450 / dy+-300 / dz -210~+490 | Wider scatter heightens initial chaos, but longer assembly paths require wider delay windows |
+| Ripple interval | 0.045/ring (Manhattan distance) | >0.07 turns ripple into sequential roll call; <0.03 arrives nearly simultaneously, losing ripple effect |
+| Entrance duration | 0.34 per tile (inOutCubic) | Shorter snaps into place faster; pair with ripple interval to ensure final tile lands by <=0.6 |
+| Exit window | Departs at 0.70 + delay*0.5, duration 0.18 (inCubic) | **Window must complete before t~0.97**: previously 0.72+delay*0.7/0.26 caused corner tiles to linger on frame boundary for a full second |
+| Exit distance | 620–880px (away from center + random jitter) | Insufficient distance leaves fragments stuck at frame edge; center tile direction is random (lacks "away from center" vector) |
+| Poster palette | `ACCENT_HUE=218` derives entire poster (cool deep stage + top-left soft light + bottom glowing horizon arc) | Change a single hue constant to recolor entire poster; tile gap 0.5 design px—wider cuts missing strokes in text |
 
-## 已知坑
-- 退场用位移出画而非 opacity 淡出——淡出会读作"消失"而非"飞走"，物理感尽失；改参数时保持 `opacity = min(1, tin*2.5)` 不挂退场项
-- 所有随机量必须走确定性 `rand(seed)`（等价 Remotion `random()`），真随机会渲染间抖动
-- hold 段（t≈0.6–0.7）是唯一读字窗口，加长文案要同步拉开 label 淡出与首块起飞的间隔，否则字还没读完瓦片已散
-- 标志别跨拼缝：拼缝会把标志切出一条细缝/残边，读作坏图。demo 把字标中心对准第 3 行瓦片中心、字号定 22 让标志整个落在第 2 列瓦片里，碎片飞散时标志随一块瓦片完整飞走；换标志尺寸或网格时同步重算
-- 用作转场时建议只取 t=0.7–1 的飞散段倒放/正放各半，两侧素材分别贴在瓦片面上需另做纹理映射
+## Known Pitfalls
+- Exit must clear screen via translation rather than opacity fading—fading reads as "disappearing" rather than "flying away," ruining physical realism; preserve `opacity = min(1, tin*2.5)` without exit modifier when adjusting parameters.
+- All random values must use deterministic `rand(seed)` (equivalent to Remotion `random()`); true randomness causes frame-to-frame render jitter.
+- Hold segment (t~0.6–0.7) is the sole reading window; extending copy requires expanding the gap between label fade-out and initial tile departure, otherwise tiles scatter before text is read.
+- Do not let logos straddle tile seams: seams cut thin gaps or residual edges into logos, appearing broken. The demo centers the wordmark on row 3 center and sets font size to 22 so it sits entirely within column 2; recalculate when modifying logo dimensions or grid layout.
+- When used as a transition, isolate t=0.7–1 dispersion segment running half reversed and half forward; mapping incoming and outgoing assets to tile faces requires custom texture mapping.
 
-## 参考实现
+## Reference Implementation
 demos/opening/fracture/
-（Fracture.tsx）
+(Fracture.tsx)

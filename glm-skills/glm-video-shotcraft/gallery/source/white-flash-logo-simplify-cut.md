@@ -1,41 +1,44 @@
 ---
 name: white-flash-logo-simplify-cut
-一句话: 液态金属质感的彩色词标静置流光，蓄力后从字心炸出一记白闪过曝，曝光回落时同一位置已是扁平版字标——一次闪白完成质感降维
-适用: 品牌段落收束（华丽演绎→干净定妆）；情绪从炫技切换到正式宣告的转场拍
-时长: 约 4s（120f@30fps；演出 0–34f · 蓄力 34–46f · 冲白 44–54f · 曝光回落 54–76f · 锁定 72–96f · hold 至 120f）
-能量: 中高（一次脉冲式重音，前后都是静场）
+summary: A liquid six-color gradient wordmark shimmers in place, the frame flash-burns to white with a blur-and-brightness pulse, and a flat gradient wordmark fades in and settles on the white.
+use: Brand sequence resolution (flamboyant demonstration → pristine lockup); transition beat shifting emotion from technical virtuosity to authoritative declaration.
+duration: Approx. 4s (120f@30fps; showcase 0–34f · anticipation 34–46f · whiteout surge 44–54f · exposure recovery 54–76f · lockup 72–96f · hold through 120f).
+energy: Medium-high (a single pulsed accent, flanked by serene static stages).
 ---
 
-## 意图
-先给足华丽（虹彩液态金属在字面上流动、一次斜向高光扫过），再用一次白闪把它"净化"成扁平单色字标——观众读到的是"演出结束，这就是它的正式形象"。降维是修辞：从感性质感切到理性识别。两版同字号同位置，读作"同一个字标被净化了"，不是换了张图。
+## Intention
+First deliver unabashed luxury (an iridescent liquid-metal wash rippling across the letterforms, swept by an angled specular glint), then deploy a white flash to "purify" the mark into a flat, monochromatic logo—communicating to the audience that "the spectacle has concluded; this is its true, authoritative identity." Dimensional reduction serves as visual rhetoric: shifting from emotional texture to rational brand recognition. Both versions share identical font size and layout coordinates, registering as "the same wordmark being purified," rather than an arbitrary image swap.
 
-## 动效核心
-- 液态层（demo 词标是 video-shotcraft 字标「video-shotcraft」，字标字体 190px 700 字重、全小写，中心 y=500）：一个 span 叠四层背景并全部 `background-clip:text`——
-  ①虹彩底色 `background-size:300%` 每帧 1.1% 缓流 ②纵向体积（顶亮底暗）③字腰镀铬反光带 ④斜向高光
-  6–34f 扫过一次（Q4：只给主角一次、裁进字形）；字下同色 bloom（blur 38px）+ 地面翻转倒影（0.22、渐隐 mask）；整幅 0–44f 缓推 1→1.035
-- 蓄力 34–46f（EASE.exit 越来越快）：字标 brightness 1→1.7、bloom 加强；一条横向变形眩光从字心拉开（宽软光晕 + 4px 细亮核，核两端渐隐）
-- 冲白 44–50f：径向白团从字心撑满全屏（半径 80→1580px，二次 ease-in，后 3 帧肉眼可见地吞掉字标）；50–54f 纯白 hold（呼吸位），并在 50f 全白时换场
-- 曝光回落 54–76f：白层 1→0（quint-out，先快后慢，像眼睛适应强光）——底下扁平字标早已在位，只做 1.03→1 对焦收束
-- 锁定：琥珀 96px 短线 72–86f 从中间画出、字标上方镜刻标志 74–96f 描出（取景框先揭开、琥珀斜切后划入）、品牌短句「Frame motion. Craft the shot.」逐词升起（78f 起）；96–120f 极缓前推 1→1.01
+## Motion Core
+- **Liquid Layer** (demo wordmark is "video-shotcraft", 190px font size, 700 weight, all lowercase, center y=500): A single span stacks four background layers, all clipped via `background-clip: text`—
+  1. Iridescent base `background-size: 300%` flowing gently at 1.1% per frame;
+  2. Vertical dimensional shading (bright top, deep bottom);
+  3. Mid-body chrome specular band;
+  4. Angled glint sweeping across once during 6–34f (Q4: granted strictly once to the hero element, clipped precisely within letter contours);
+  Matching-color bloom beneath letterforms (blur 38px) + floor specular reflection (0.22 opacity, linear gradient mask); entire frame applies a gentle push-in from 1 → 1.035 across 0–44f.
+- **Anticipation (34–46f, `EASE.exit` accelerating)**: Wordmark brightness climbs from 1 → 1.7, bloom intensifies; a horizontal anamorphic lens flare stretches outward from the letter core (wide soft halo + 4px sharp bright core with feathered ends).
+- **Whiteout Surge (44–50f)**: A radial white sphere expands outward from the letter core to engulf the entire screen (radius 80 → 1580px, quadratic ease-in, visibly swallowing the wordmark over the final 3 frames); 50–54f holds pure white (breathing room), executing the scene cut on the 50f full-white frame.
+- **Exposure Recovery (54–76f)**: White overlay clears from 1 → 0 (quint-out, fast then slow, mimicking the eye adjusting to intense glare)—the underlying flat wordmark is already in position, performing only a subtle 1.03 → 1 focus contraction.
+- **Lockup**: Amber 96px accent bar draws outward from center across 72–86f; engraved lens emblem above the wordmark sketches in across 74–96f (viewfinder opens first, amber diagonal stroke cuts in after); brand tagline "Frame motion. Craft the shot." rises word by word (starting at 78f); ultra-slow camera creep from 1 → 1.01 across 96–120f.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 冲白窗口 | 44–50f 径向撑满（t² ease-in）+ 50–54f 纯白 | 冲白必须"快进"；整屏均匀淡入读作剪辑软切，从字心炸出才读作"字在发光过曝" |
-| 蓄力 | 34–46f，brightness ×1.7 + 横向眩光 | 砍掉蓄力则白闪没有预兆、像丢帧；眩光核加 box-shadow 会带一圈暗边（实测） |
-| 曝光回落 | 54–76f，白层 quint-out 退去 | 用扁平字标淡入代替回落，会出现"白底上浮出一个字"的二次动作；回落让字标"一直在那儿" |
-| 扁平入场 | 1.03→1（snappy，52–78f） | >1.06 读作字标弹出；同时做淡入就和回落叠成两次揭示 |
-| 字标尺寸 | 液态 / 扁平同为 190px、同中心（15 字符字标按画宽压的字号；4 字母短词可放到 300px） | 两版位置或字号不同，读作换皮不换人 |
-| 品牌常量 | `PAPER` / `FLAT_INK` / `FLAT_ACCENT`（块顶定义；demo 已收编为 video-shotcraft 的剪辑纸 / 片场墨 / 镜琥珀） | 换成项目品牌色即完成收编；液态层虹彩一般保留（它是"演出"不是品牌）；标志只在扁平段出现、不上液态质感（品牌规范禁渐变/发光） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Whiteout surge window | 44–50f radial expansion (t² ease-in) + 50–54f pure white | Whiteout must enter rapidly; a uniform screen fade reads like a soft cross-dissolve, whereas detonating from the letter core conveys "the letter itself is overexposing" |
+| Anticipation | 34–46f, brightness ×1.7 + anamorphic flare | Cutting anticipation makes the flash feel unprompted, like a dropped frame; adding box-shadow to the flare core produces a dark border artifact (verified in testing) |
+| Exposure recovery | 54–76f, white layer fades via quint-out | Substituting a flat wordmark fade-in for recovery introduces a secondary "text emerging from white" action; recovery ensures the wordmark feels like it was "there all along" |
+| Flat logo entrance | 1.03 → 1 (snappy, 52–78f) | >1.06 reads as the mark popping forward; simultaneously fading opacity stacks two competing reveal mechanics |
+| Wordmark dimensions | Liquid / flat identical at 190px, sharing center anchor (15-character wordmark sized to fit screen width; short 4-letter words can scale up to 300px) | Mismatched positions or sizes make it look like a generic asset swap rather than an organic metamorphosis |
+| Brand constants | `PAPER` / `FLAT_INK` / `FLAT_ACCENT` (defined at file header; demo standardized to video-shotcraft's editorial paper / studio ink / lens amber) | Swapping in project palette completes integration; the iridescent liquid layer is usually preserved (it represents "the spectacle," not the brand); the emblem appears only in the flat stage without liquid texturing (brand guidelines forbid gradients/glows on official marks) |
 
-## 已知坑
-- 换场发生在 50f 全白帧（暗场与纸面二选一渲染），白层不能在 50f 前退——否则两场同时可见
-- `WORD` = `BRAND.name`（15 字符），换词需同步调字号 `FS`；液态层 / bloom / 倒影 / 扁平层四处共用 `wordStyle` 与 `wordText`
-- 字标带 +0.03em 字距时「ft」两道横笔恰好相接，大字号下接缝露出一条抗锯齿亮线——demo 让 f 后字距归零、两笔重叠
-- 冲白配 SFX 是必选项（impact/whoosh-bright 类），无声的白闪读作素材丢帧
-- 高光必须裁进字形（background-clip:text）——做成盖在字上的径向光斑会溢出字形、在黑底上糊成白雾（Q4 光溢出）
-- 后半场底色是亮纸面——若下一镜是暗场需另接转场，或复用本卡结尾直切
+## Known Pitfalls
+- The scene cut occurs precisely on the 50f full-white frame (rendering dark stage vs. paper base conditionally); the white layer must not recede before 50f, otherwise both scenes will be visible simultaneously.
+- `WORD = BRAND.name` (15 characters); changing words requires recalibrating font size `FS`; liquid layer / bloom / floor reflection / flat layer share unified wordStyle and wordText.
+- When the wordmark uses +0.03em tracking, the crossbars of "f" and "t" kiss, revealing an anti-aliasing seam artifact at large sizes—the demo resets tracking after "f" to zero to overlap the strokes.
+- Pairing the whiteout with an SFX hit is mandatory (impact / bright whoosh); a silent whiteout reads like dropped frames.
+- Specular glints must be strictly clipped within the letterform (`background-clip: text`)—overlaying a loose radial light blob spills outside the glyphs, hazing the black background with an unappealing white fog (Q4 light leak violation).
+- The second half transitions to a bright paper background—if the subsequent shot is a dark stage, chain an appropriate transition or cut directly from this card's outro hold.
 
-## 参考实现
+## Reference Implementation
 demos/transition/white-flash-logo-simplify-cut/
-（WhiteFlashLogoSimplifyCut.tsx）
+(WhiteFlashLogoSimplifyCut.tsx)

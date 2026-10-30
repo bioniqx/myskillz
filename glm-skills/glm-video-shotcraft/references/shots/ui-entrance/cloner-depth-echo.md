@@ -1,40 +1,31 @@
 ---
 name: cloner-depth-echo
-一句话: 克隆纵队——主卡瞬间"复印"出 7 个半透明分身沿斜向纵深排开成队，停一拍后全体加速吸回本体合一+弹跳
-适用: "多副本/多租户/规模感/批量处理"卖点；一镜讲完"一个=很多"
-时长: 138f（约 4.6s）
-能量: 中（陈列-收束型）
+summary: A card duplicates into a diagonal depth trail, holds briefly, then accelerates back into one springy original.
+use: Value props of "multiple replicas / multi-tenancy / scale / batch processing"; one-shot demonstration of "one = many."
+duration: 138f (~4.6s)
+energy: Medium (Display-and-collapse cadence)
 ---
 
-## 意图
-Spline/C4D Cloner 语汇的 UI 翻译：一张主卡"啪"地复印出 7 个克隆体
-沿 Z 轴向后等距排开（间隔 250px、透明度 100%→28% 递减、越远越只剩轮廓），
-错峰弹出成纵队；停 ~32f 让观众数得清"有很多个"；然后全体 ease-in 加速吸回
-本体合一，合体瞬间本体弹 1.06x 收束。demo 把"一个=很多"落到具体卖点：
-一张 video-shotcraft 渲染卡（launch-film）×8 个镜头，合体时卡底 8 个镜头位同时点亮，标题落「One prompt. / Eight shots.」。与 depth-layer-moves 视差
-（不同内容分层）分工：这是**同一内容**的等距重影阵列，语义是规模
-不是空间。
+## Intention
+A UI translation of the Spline/C4D Cloner vocabulary: a hero card instantly duplicates 7 translucent clones stepping backward along the Z axis (250px spacing, opacity decaying from 100% to 28%, distant clones reducing to wire outlines), popping out in a staggered column; holds for ~32f allowing viewers to register "there are many"; then all clones ease-in rapidly back into the hero card, collapsing into one with a 1.06x impact bounce. The demo ties "one = many" to a concrete feature: 1 video-shotcraft render card (launch-film) × 8 shot variations; upon collapse, 8 shot indicator dots at card base illuminate simultaneously as headline lands: "One prompt. / Eight shots." Distinct from parallax in depth-layer-moves (which layers different content): this is an equidistant echo array of the **exact same content**, conveying scale rather than spatial navigation.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 纵深排布 | 真 3D 透视 perspective 1500，消失点放在左上（360,120）；克隆体 translateZ = −250·idx，再叠 dx=−58·idx / dy=−6·idx | **命门**：纯 translateZ 且消失点在正中时克隆体全被本体挡住（不可感）；把消失点挪到画面一角，后退本身就把纵队排向那一角 |
-| 克隆数/间隔 | 7 个 / 250px | 少于 5 读不出"队"，多于 9 尾部糊成一团 |
-| 衰减 | 透明度 100%→28% 线性；填充褪掉只留强调色描边；越远附加 0→1.6px 景深虚化 | 越远越淡、越"只剩轮廓"=纵深证据；克隆体只留顶栏 + 折线 + 镜头号，别重复大读数（叠成一团乱码） |
-| 排开/吸回 | spring 错峰 2.2f/个（damping 15，一次轻过冲）；吸回强 ease-in 10f 全体同步，按纵深速度加拖影模糊 | 排开要错峰（复印感），吸回要同步（收束感）——节奏不对称是设计 |
-| 停留 | 32f，期间相机极缓推近 2% + 纵队轻微视差漂移 | 停太短数不清"有很多个"，完全静止又是死帧 |
-| 合体 | 主卡 sin 单脉冲 1.06x + 一次强调色描边光（14f 衰减）；同帧镜头位全亮、计数器回弹 | 吸回无弹跳读作淡出；弹跳=质量证据 |
-| 计数 | 左下 260px「×N」，每弹出一个克隆滚一格（5f，出场格上移淡出 + 速度竖向虚化） | 计数让"规模"从画面变成数字；滚动格不要 overflow 裁切，会把泛光裁出方框 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Depth layout | True 3D perspective 1500, vanishing point placed top-left (360, 120); clone translateZ = −250·idx, layered with dx=−58·idx / dy=−6·idx | **Critical**: pure translateZ with vanishing point centered hides all clones directly behind hero; offsetting vanishing point to a screen corner lets depth travel naturally fan out toward that corner |
+| Clone count / spacing | 7 clones / 250px | Fewer than 5 fails to read as a "formation", more than 9 turns tail into a muddy blob |
+| Decay | Opacity 100%→28% linear; fill fades leaving accent border; distant clones add 0→1.6px depth of field blur | Fainter and more wireframe at distance provides evidence of depth; clones keep only top bar + line chart + shot number, omitting giant metric readouts to prevent overlapping visual clutter |
+| Fan-out / Snap-back | Spring stagger 2.2f/card (damping 15, slight single overshoot); snap-back strong ease-in 10f synchronized across all clones, with velocity motion blur | Fan-out must be staggered (printing feel), snap-back must be synchronized (cohesive snap)—asymmetric rhythm is intentional |
+| Hold | 32f, camera drifts in 2% with subtle parallax drift across column | Too short prevents viewers from counting "many", completely frozen becomes a dead frame |
+| Collapse impact | Hero card single sine pulse 1.06x + accent border sheen (14f decay); shot slots ignite simultaneously on landing frame with counter bounce | Snap-back without bounce reads as a fade; bounce provides physical proof of mass |
+| Counter | Bottom-left 260px "×N", rolls one notch per clone popped (5f, outgoing digit slides up and fades with vertical motion blur) | Counter translates "visual scale" into hard numbers; avoid overflow hidden clipping that crops glow effects into rectangles |
 
-## 已知坑
-- demo 用手搓的 video-shotcraft 渲染卡（lime 暗场）调校——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 克隆体必须从后往前渲染保证遮挡正确；透明度 ≤0.005 条件卸载
-- 同批 3D 渠道另两条（厚板转台淘汰、走廊改改再看）——纯陈列型
-  3D 运镜相性存疑，本卡过墙靠的是"排开-吸回"的叙事动作，
-  实战别退化成静态纵队陈列
-- 声音：排开一串细"啪"错峰，吸回一声上扬 whoosh，合体一声实"咚"
+## Known Pitfalls
+- Demo calibrated using mock video-shotcraft render card (lime dark palette)—parameters serve as calibration baseline, not final production specs; verify against real assets in production.
+- Clones must render back-to-front to ensure correct z-sorting; conditionally unmount when opacity ≤ 0.005.
+- Among three 3D channel explorations (thick turntable dropped, corridor kept for refinement)—pure showcase 3D camera moves face readability challenges; this card succeeds through the narrative motion of "fan-out and snap-back", avoid regressing into a static 3D array showcase.
+- Audio: rapid string of subtle pops on fan-out, rising whoosh on snap-back, solid thud on collapse.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/cloner-depth-echo/
-（ClonerDepthEcho.tsx）
+(ClonerDepthEcho.tsx)

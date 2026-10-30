@@ -1,13 +1,13 @@
-// 批量渲染 demos/ 全部镜头卡（工作台 Root 里 id 为 demo-<Stem> 的合成）为 mp4。
-// 一次打包、逐个渲染，适合做改版前后对照或批量刷样片。
+// Batch render all shot cards in demos/ (compositions in workbench Root with id demo-<Stem>) to mp4.
+// Bundles once and renders sequentially, ideal for before/after comparison or batch generating samples.
 //
-//   node scripts/render-demos.mjs --out <目录> [--only A,B] [--scale 0.6667] [--concurrency 4]
-//                                 [--force] [--bundle <已有打包目录>] [--save-bundle <目录>]
-//                                 [--durations <json：{ Stem: 帧数 }>]
+//   node scripts/render-demos.mjs --out <dir> [--only A,B] [--scale 0.6667] [--concurrency 4]
+//                                 [--force] [--bundle <existing bundle dir>] [--save-bundle <dir>]
+//                                 [--durations <json: { Stem: frames }>]
 //
-// - 已存在的 <Stem>.mp4 默认跳过（--force 重渲）；结果写 <out>/render-log.json
-// - --save-bundle：打包产物拷到指定目录，之后 --bundle 复用（源码再改也不影响这份快照）
-// - --durations：按表覆盖合成时长（改版补了正确时长后，用旧快照按新时长重渲对照）
+// - Existing <Stem>.mp4 skipped by default (--force to re-render); results written to <out>/render-log.json
+// - --save-bundle: copies bundle output to specified dir for subsequent --bundle reuse (source changes won't affect snapshot)
+// - --durations: override composition duration from table (after adjusting durations, re-render old snapshot with new duration for comparison)
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

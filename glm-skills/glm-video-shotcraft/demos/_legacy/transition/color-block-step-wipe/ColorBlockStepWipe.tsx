@@ -1,6 +1,6 @@
-// color-block-step-wipe —— 纯色矩形按 steps() 离散阶跃吞屏转场
-// 源：notion-ai 1.5–3.5s（蓝块中央阶跃生长）+ 26–27s（红块右下角斜向吃屏，携带页面卡）
-// 核心语法：无缓动、逐帧硬跳的块状生长，像素游戏手感。
+// color-block-step-wipe — solid color rectangle discrete step-wipe transition
+// Source: stepped growth from center + diagonal wipe carrying card
+// Core grammar: stepped block expansion without easing, pixel-game tactile feel.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { G, Card } from '../../_fixtures/Fixtures';
@@ -8,7 +8,7 @@ import { G, Card } from '../../_fixtures/Fixtures';
 const BLUE = '#2383e2';
 const RED = '#e8503a';
 
-// 离散阶跃：frame 越过阈值瞬间跳到新值，无插值
+// Discrete steps: frame jumps to new values across thresholds without interpolation
 const stepVal = (frame: number, steps: Array<[number, number]>): number => {
   let v = steps[0][1];
   for (const [f, val] of steps) {
@@ -17,7 +17,7 @@ const stepVal = (frame: number, steps: Array<[number, number]>): number => {
   return v;
 };
 
-// 蓝底上的圆形 AI 表情徽章
+// Circular AI badge on blue ground
 const AiBadge: React.FC<{ scale: number; opacity: number }> = ({ scale, opacity }) => (
   <div
     style={{
@@ -43,7 +43,7 @@ const AiBadge: React.FC<{ scale: number; opacity: number }> = ({ scale, opacity 
   </div>
 );
 
-// 变体 B 背景：极简灰阶页面（不动 Fixtures，只组合）
+// Variant B background: minimal grayscale page
 const GrayPage: React.FC = () => (
   <AbsoluteFill style={{ background: G.panel, padding: '90px 160px', boxSizing: 'border-box' }}>
     <div style={{ height: 40, width: 560, background: G.bar, borderRadius: 12, marginBottom: 40 }} />
@@ -60,9 +60,9 @@ const GrayPage: React.FC = () => (
 export const ColorBlockStepWipe: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ---------- 场景 A（0–77f）：蓝块中央阶跃生长 ----------
+  // ---------- Scene A (0–77f): center stepped block growth ----------
   if (frame < 78) {
-    // [宽, 高] 逐级硬跳：小条 → 长条 → 半屏色带 → 全屏
+    // [width, height] stepped jumps: bar -> strip -> half-screen -> full
     const w = stepVal(frame, [
       [0, 0],
       [8, 280],
@@ -79,7 +79,7 @@ export const ColorBlockStepWipe: React.FC = () => {
       [32, 580],
       [44, 1080],
     ]);
-    // 徽章：全屏接管后阶跃弹出（同样离散，两跳到位）
+    // Badge: pops in discrete steps after full screen coverage
     const badgeScale = stepVal(frame, [
       [0, 0],
       [52, 0.55],
@@ -107,15 +107,15 @@ export const ColorBlockStepWipe: React.FC = () => {
     );
   }
 
-  // ---------- 场景 B（78–149f）：红块从右下角斜向阶跃吃屏，携带灰阶页面卡 ----------
-  // p 控制对角线推进量：p=0 无，p=200 全覆盖
+  // ---------- Scene B (78–149f): diagonal stepped wipe carrying grayscale card ----------
+  // p controls diagonal progress: p=0 none, p=200 full coverage
   const p = stepVal(frame, [
     [78, 0],
     [84, 42],
     [96, 106],
     [108, 200],
   ]);
-  // 卡片随色块逐跳前进（同样离散跳位）
+  // Card steps forward along block
   const cardPos = stepVal(frame, [
     [78, 0],
     [84, 1],
@@ -123,7 +123,7 @@ export const ColorBlockStepWipe: React.FC = () => {
     [108, 3],
   ]);
   const cardXY: Array<[number, number]> = [
-    [2100, 1180], // 画外
+    [2100, 1180], // Off-screen
     [1480, 800],
     [980, 560],
     [560, 350],

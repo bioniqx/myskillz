@@ -1,55 +1,44 @@
 ---
 name: brace-expand
-一句话: 一对紧贴的小花括号先在正中出现，随即带一次过冲向左右弹开并放大到标题级，文字 clip 宽度严格绑括号内缘、像被拉开幕布般从中间揭示，落定后字距再细微松弛
-适用: 开发者/技术产品的标题字卡；章节开场；需要"一个符号完成揭示"的极简一拍
-时长: 约 4s（120f@30fps：光标 0–6f → 6f 小括号硬切 → 14f 弹开 → 40–64f 字距松弛 → 副标 → hold）
-能量: 中（单次过冲是唯一峰值，其余静止）
+summary: A tight pair of braces appears at center, then springs apart and scales up to title size, revealing the text through a clip width bound strictly to the brace gap.
+use: Title cards for developer/technical products; chapter openers; minimalist single beats where "a single symbol completes the reveal"
+duration: ~4s (120f@30fps: cursor 0–6f → 6f small braces hard-cut → 14f spring open → 40–64f kerning relaxation → subtitle → hold)
+energy: Medium (single overshoot is the only peak, remaining stationary)
 ---
 
-## 意图
-标题揭示的手法里，本卡最省：不做遮罩条、不做逐字、不做位移——只让
-一对括号往两边走，文字被"括出来"。它天生带代码语感（`{}` 是花括号），
-所以在技术产品语境里读作"这就是内容本体"。命门是 clip 宽度**必须严格
-绑括号位置**：一旦文字自己淡入或自己擦入，括号就退化成装饰，幕布感全失。
+## Intention
+Among all title reveal techniques, this card is the most economical: no mask bars, no character-by-character reveals, no displacement — just a pair of braces expanding sideways while the text is "bracketed out." It naturally carries the semantics of code (`{}` are curly braces), so in the context of technical products it reads as "this is the content itself." The critical point is that clip width **must be strictly bound to brace positions**: once text fades in or wipes in on its own, the braces degrade into mere decoration, completely destroying the curtain effect.
 
-## 动效核心
-- 开场第 0 帧中心是一个闪烁的输入光标（编辑器语感，不是空帧）；6f 被一对 0.4 倍、内缘相贴的 "{}" **硬切替换**
-  （不淡入），静置 8f——先建立"这是一对括号"
-- 弹开 `ex = springAt(f, 14, { damping: 14, stiffness: 130 })`：起跳后 ~8f 到位、~11f 过冲峰 ≈9%、~24f 收敛，一次可见回弹
-- 同步放大 `sc = mix(0.4, 1, ex)`；幕布半宽 `x = (HALF − INNER)·ex·sc`、括号中心 `±(x + INNER·sc)`
-  （HALF=676、INNER=64）——**位移与缩放乘在一起**，放大本身也在推开括号；ex=0 时两只括号内缘正好相贴
-- 文字揭示宽度 `clip.width = 2x`（严格绑括号内缘），两侧 14px 羽化（clip 窄时羽化跟着收）
-- 文字同步 `scale(sc)`，与括号共用同一个 sc；落定后字距 −0.05em → −0.03em 松弛（40–64f smooth）——"呼一口气"
-- 质感（midnight）：等宽 300px 电光蓝括号 + 泛光（泛光峰值跟着过冲走、34–64f 回落），弹开快速段按水平速度加方向性
-  运动模糊（amount 0.22、封顶 16，落定为 0）；标题（demo 为品牌名 video-shotcraft，全小写）164px 800 字重白→冷蓝渐变；背景编辑器点阵（32px，径向渐隐）+
-  顶光 + 地平线光带，括号下方一道随弹开展宽的冷光反射
-- 余波：眉题 `// shot recipes for your agent`（等宽 32px 青色）44f 起字距收拢入场，副标（品牌短句 Frame motion. Craft the shot.）54f 起逐词虚化浮现；70–120f 整幅 1→1.012 缓推
-- 定位全部绝对定位（括号 / clip 框 / 文字都以 960 为中线算 left），**不用 flex**：宽度全程在变，flex 会重排
+## Motion Core
+- Frame 0 opens with a blinking input cursor at center (editor semantics, not an empty frame); at 6f it is **hard-cut replaced** (no fade) by a pair of 0.4x braces with inner edges touching "{}" and held stationary for 8f — establishing "this is a pair of braces" first.
+- Spring expansion `ex = springAt(f, 14, { damping: 14, stiffness: 130 })`: settles in ~8f after launch, reaches ~9% overshoot peak at ~11f, converges at ~24f, providing a single visible rebound.
+- Synchronized scale-up `sc = mix(0.4, 1, ex)`; curtain half-width `x = (HALF - INNER)·ex·sc`, brace centers `±(x + INNER·sc)`
+  (HALF=676, INNER=64) — **displacement and scale multiply together**, where scaling up itself also pushes the braces apart; when ex=0, the inner edges of both braces touch exactly.
+- Text reveal width `clip.width = 2x` (strictly bound to the inner edges of the braces), with 14px feathering on both sides (feathering scales down when the clip is narrow).
+- Text scales synchronously via `scale(sc)`, sharing the exact same sc with the braces; after settling, letter-spacing relaxes from -0.05em to -0.03em (40–64f smooth) — "taking a breath."
+- Texture (midnight): monospace 300px electric blue braces + glow (glow peak follows the overshoot, receding across 34–64f), with directional motion blur applied along horizontal velocity during the rapid expansion phase (amount 0.22, capped at 16, 0 when settled); title (in demo: brand name video-shotcraft, all lowercase) 164px 800 weight white-to-cool-blue gradient; background editor dot grid (32px, radial fade) + top light + horizon light band, with a cool-light reflection beneath the braces expanding with the spring.
+- Aftermath: eyebrow `// shot recipes for your agent` (monospace 32px cyan) enters with kerning contracting from 44f; subtitle (brand tagline "Frame motion. Craft the shot.") emerges from defocus starting at 54f; full frame undergoes slow push-in 1→1.012 across 70–120f.
+- Layout uses strict absolute positioning (braces / clip box / text all compute left from midline 960), **no flex**: width changes continuously throughout, and flex will trigger reflow.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 括号出现 | 6f 硬切替换光标 | 硬切是对的（符号"啪"地在那儿）；改淡入就少了"先看清括号"的那几帧，弹开显得突然 |
-| 弹开 | 14f 起弹簧 damping 14 / stiffness 130（≈9% 过冲） | 过冲是全片唯一峰值；damping ≥18 读作滑开，没有"撑"的力道；<12 回弹两次读作果冻 |
-| 半距 | HALF = 676px（括号中心）、INNER = 64px（括号中心到内缘） | 决定标题可容纳的宽度：内腔 = 2·(HALF−INNER) = 1224px |
-| 缩放 | `mix(0.4, 1, ex)`，括号 300px / 字 164px | 0.4 起点是"小字号"的量；起点 >0.8 看不出放大，<0.3 括号一开始小得像标点 |
-| 文案宽度 | 「video-shotcraft」164px 落定实测 ≈1130px（内腔 1224px 减两侧羽化） | 字比内腔窄太多，括号还没到位字就露全了，幕布感变弱；比内腔宽则两头被裁 |
-| 字距松弛 | −0.05 → −0.03em，40–64f smooth | 这一下是"落定后的呼吸"；松弛后字会变宽，要留在内腔内 |
-| 运动模糊 | SpeedBlur amount 0.22 / max 16 | amount 0.35 时峰值帧括号糊成三道横线，认不出是括号 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Brace appearance | 6f hard-cut replacing cursor | A hard cut is correct (the symbol snaps into existence); changing to a fade loses the frames needed to register the braces, making expansion feel abrupt |
+| Expansion | Spring from 14f damping 14 / stiffness 130 (≈9% overshoot) | Overshoot is the sole peak in the entire shot; damping ≥18 reads like a generic slide lacking outward force; <12 rebounds twice, reading like jelly |
+| Half-distance | HALF = 676px (brace center), INNER = 64px (center to inner edge) | Determines accommodated title width: inner cavity = 2·(HALF-INNER) = 1224px |
+| Scaling | `mix(0.4, 1, ex)`, braces 300px / text 164px | 0.4 start represents a small font scale; starting >0.8 makes scale-up imperceptible; <0.3 starts braces looking like tiny punctuation |
+| Copy width | "video-shotcraft" 164px measures ≈1130px settled (inner cavity 1224px minus edge feathering) | If text is much narrower than cavity, words fully reveal before braces settle, weakening curtain effect; if wider, ends get clipped |
+| Kerning relaxation | -0.05 → -0.03em, 40–64f smooth | Represents "breathing after settling"; relaxing widens text, which must remain within inner cavity |
+| Motion blur | SpeedBlur amount 0.22 / max 16 | At amount 0.35, peak frame blurs braces into three horizontal streaks, unidentifiable as braces |
 
-## 已知坑
-- **文案长度必须与 HALF 匹配**：clip 只做裁切不做缩放——换成长标题时字会被括号裁掉两头，
-  必须同步加大 HALF（或减小字号）；中文标题字宽约为英文两倍，6 个汉字就接近上限
-- clip 宽度是从 0 长起来的，所以文字**总是从中间往两边露**：文案的
-  视觉重心要在中央（居中单行短句最佳），左右不对称的长短句会露得别扭
-- 括号与文字必须共用同一个 `sc`：分别写两条缩放曲线（哪怕数值相同）
-  会在过冲那几帧出现括号已经到位、字还在长的错位
-- 过冲只此一次：全片其他运动都无过冲，这是把注意力压在"撑开"这一
-  动作上；再叠别的 back / 弹簧过冲就贬值了
-- clip 框高度写死 220px（标题 164px 留上下余量），字号大改时要同步——不然上下被切
-- 声音：弹开那一下值得一记短促的机械/木质开合音，落定后无声；
-  配法纪律见 sound-design.md
+## Known Pitfalls
+- **Copy length must match HALF**: the clip only crops without scaling — longer titles get both ends clipped by braces, requiring a corresponding increase in HALF (or smaller font size); Chinese text is roughly twice as wide as English per character, reaching limits at ~6 characters.
+- Clip width expands from 0, so text **always reveals from the center outwards**: the visual center of gravity must be centered (centered single-line short phrases work best); asymmetrical long/short phrases reveal awkwardly.
+- Braces and text must share the exact same `sc`: writing separate scale curves (even with matching values) causes desynchronization during overshoot frames where braces arrive while text continues growing.
+- Only one overshoot is permitted: all other motions in the shot have zero overshoot, keeping focus strictly on the "expansion" action; stacking additional back/spring overshoots dilutes impact.
+- Clip box height is hardcoded at 220px (leaving top/bottom margins for 164px title); adjust when significantly altering font size to prevent vertical clipping.
+- Audio: The expansion beat deserves a crisp, short mechanical/wooden snap-open sound, remaining silent after settling; see sound-design.md for audio guidelines.
 
-## 参考实现
+## Reference Implementation
 demos/typography/brace-expand/
-（BraceExpand.tsx）
+(BraceExpand.tsx)

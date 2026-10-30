@@ -1,6 +1,6 @@
-// Motion 动效公共件 —— 源自 motion-lab 孵化轮沉淀的 48 张卡共用：
-// 缓动表 E / 分段进度 seg / 插值 lerp / 确定性伪随机 rand + DesignStage 设计坐标容器。
-// 全部是纯函数，由 useCurrentFrame 驱动，满足 Remotion 确定性渲染要求。
+// Motion utilities shared across motion-lab cards:
+// Easing table E / segmented progress seg / lerp / deterministic rand + DesignStage container.
+// Pure functions driven by useCurrentFrame for deterministic rendering in Remotion.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 
@@ -29,28 +29,28 @@ export const E = {
 
 export const lerp = (t: number, a: number, b: number) => a + (b - a) * t;
 
-// 分段进度：t 在 [t0,t1] 内归一化后过 ease，越界钳位——所有动效的时间轴原语
+// Segmented progress: normalized t over [t0, t1] clamped through easing — core timeline primitive
 export const seg = (t: number, t0: number, t1: number, ease: (x: number) => number = E.linear) =>
   ease(Math.min(1, Math.max(0, (t - t0) / (t1 - t0))));
 
-// 确定性伪随机（等价 Remotion random(seed)，同种子跨帧/跨渲染可复现）
+// Deterministic pseudo-random (reproducible across frames and renders)
 export const rand = (seed: number) => {
   const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
 
-// 全片归一化进度 t∈[0,1]：末帧恰为 1（与样片渲染的 t 映射逐帧一致）
+// Normalized composition progress t in [0, 1]: final frame is exactly 1
 export const useT = () => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   return Math.min(1, frame / Math.max(1, durationInFrames - 1));
 };
 
-// 设计坐标容器：内容按 w×h（默认 480×270）作画，等比放大铺满合成分辨率。
-// motion-lab 系动效的参数表数值都在此坐标系下标定，换算比例时数值不动。
-// raster='zoom'：用 CSS zoom 放大（布局期放大，字形按目标尺寸光栅化，等效原采集
-// 的 DPR=4 截图管线）。默认 transform scale（合成期放大）。文字密集的小字号场景
-// 两种管线字形形状有可感差异，对齐原片样片时选 zoom。
+// Design coordinate container: rendered at wxh (default 480x270), scaled to composition resolution.
+// Parameter values calibrated in this coordinate system.
+// raster="zoom": uses CSS zoom (layout-phase scaling, crisp glyph rasterization);
+// default transform scale (composition-phase scaling).
+// Select zoom when matching pixel-perfect typography.
 export const DesignStage: React.FC<{
   w?: number;
   h?: number;

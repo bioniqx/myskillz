@@ -1,50 +1,42 @@
 ---
 name: promo-energy-arc
-一句话: 全片能量骨架——低开品牌 → 单主角立传 → 字卡呼吸间隔的功能爬升段 → 发布会峰值收场
-适用: 30–60s 多功能 web 产品宣传片的默认全片结构（分镜阶段先填骨架再挑卡）
-段数: 4 段位 + 2–4 张呼吸字卡
+summary: Full-video energy arc — low-key brand open → single-hero establishment → feature-climbing sequence with breathing title cards → keynote peak outro
+use: Default full-video structure for 30–60s multi-feature web product promo videos (fill the skeletal arc during storyboarding before picking shot cards)
+segments: 4 segments + 2–4 breathing title cards
 ---
 
-## 意图
+## Intention
 
-把散落在 R1–R3/Q5/Q8/P4 的节奏规则合成一条可直接填空的全片曲线。
-模板片成片（1085f）与两次独立复现（各 900f）三次成表均收敛到同一
-骨架——它是默认项，不是令：逐项目可有意识偏离，偏离写进项目 spec。
+Synthesizes the rhythm rules scattered across R1–R3, Q5, Q8, and P4 into a single, directly applicable full-video curve template.
+The reference template video (1085f) and two independent reproductions (900f each) all converged into this exact same structure. It is a solid default, not an absolute mandate: projects may intentionally deviate, but any deviation must be explicitly justified in the project spec.
 
-## 段位表
+## Segment Table
 
-| 段位 | 时长占比 | 能量 | 职责 | 候选配方卡 |
-|------|----------|------|------|------------|
-| ① 品牌开场 | 8–12%（30s 片）；开场+立传合计可达 20%（模板片） | 低 | 字标压印 + hold ≥1s（R1），交棒产品页面 | brand-ink-open |
-| ② 单主角立传 | 12–15% | 中（质感最高、节奏最慢） | 一个主角、一条完整动作弧 ≥3s（Q5/R3），立出产品原子单位 | spotlight-hero-card（+aesthetic-rules.md Q2 高清 rasterize 技法） |
-| ③ 功能爬升段 | 55–65% | 中高⇄低交替 | 每镜绑一个独特功能、一种手法只当一次主角（P4）；镜与镜之间按需插呼吸字卡 | deck-deal-flyin / type-and-filter / list-stack-press / row-embed / document-typewriter-reveal |
-| ④ 发布会收场 | 13–16% | 峰值（全片最高） | 已展示功能各出代表元素合影围住字标（Q8），sign-off hold ≥1s（R1） | outro-group-photo-launch |
+| Segment | Duration % | Energy | Responsibility | Candidate Recipe Cards |
+|---|---|---|---|---|
+| ① Brand Opening | 8–12% (30s video); Opening + Establishment combined up to 20% (template video) | Low | Wordmark imprint + hold ≥1s (R1), handing off cleanly to the product page | brand-ink-open |
+| ② Single-Hero Establishment | 12–15% | Medium (highest textural polish, slowest deliberate pacing) | Single hero, one complete movement arc ≥3s (Q5/R3), firmly grounding the product's atomic unit | spotlight-hero-card (+ aesthetic-rules.md Q2 high-DPI rasterization technique) |
+| ③ Feature Climbing Sequence | 55–65% | Alternating Mid-High ⇄ Low | Each shot binds a unique feature, and each technique stars only once (P4); breathing title cards inserted between shots as needed | deck-deal-flyin / type-and-filter / list-stack-press / row-embed / document-typewriter-reveal |
+| ④ Keynote Peak Outro | 13–16% | Peak (highest across entire video) | Representative elements of all showcased features assemble to surround the wordmark (Q8), sign-off hold ≥1s (R1) | outro-group-photo-launch |
 
-呼吸字卡（paper-title-card）规则：每 1–2 个功能镜头后插一张，单张
-50–55f（≈1.8s），全片 2–4 张；重要功能出场前用作引导字卡（C2）。
-模板片 10 镜里字卡占 4 席，两次复现各 2 席——密度按功能镜头数取。
+Breathing title card (`paper-title-card`) rules: Insert one card after every 1–2 feature shots; 50–55f (~1.8s) per card; 2–4 cards across the entire video. Use as an introductory title card before major feature reveals (C2).
+In the template video, title cards account for 4 out of 10 shots, and 2 cards each in the two reproductions — adjust density based on the number of feature shots.
 
-## 填空流程（替代 ad-hoc 推导）
+## Workflow (Replacing Ad-Hoc Deduction)
 
-1. 列产品功能清单（P4），数出功能镜头数 N。
-2. 按段位表分配总帧数：先扣 ①②④ 与字卡的预算，剩余给 ③ 均分。
-   每镜预算内**先划走 hold/rest 帧**（R1 落定 ≥30f、批量收尾 15f，R3）
-   再排动效——不是排完动效再找空隙。
-3. ③ 段能量交替：高能量镜（发牌/堆叠）与稳节奏镜（交互/读字段）
-   间隔排列，信息密度最高的镜头（文档/报告类）放在峰值收场之前——
-   模板片与两次复现均把文档/报告类镜头排在倒数第 2–3 位。
-4. 逐槽位扫 shots/ frontmatter 挑卡，选中的卡读全文。
-5. 镜头排定后逐接缝选转场式（shot-transitions 技法卡三式选型），
-   写进分镜表"关键动效"列——转场帧从相邻镜头预算划走。
+1. List product features (P4) and count the number of feature shots N.
+2. Allocate total frames using the segment table: first deduct budgets for ①, ②, ④, and title cards; split remaining frames across ③.
+   Within each shot's budget, **allocate hold/rest frames first** (R1 landing hold ≥30f, batch ending rest 15f, R3) before choreographing motion — do not design motion first and look for gaps later.
+3. Alternate energy in segment ③: interleave high-energy shots (deal/stack) with steady-pace shots (interaction/field reading). Place the highest information-density shot (documents/reports) right before the peak outro — the template video and both reproductions placed document/report shots in the 2nd or 3rd to last position.
+4. Scan `shots/` frontmatter to pick cards for each slot; read the full card for chosen shots.
+5. After arranging shots, select transitions for each boundary (`shot-transitions` technique card patterns), and write them into the storyboard's "Key Motion" column — transition frames are budgeted from adjacent shots.
 
-## 已知坑
+## Known Pitfalls
 
-- 骨架当风格令全局硬套：段位占比是模板片单例实证（标注：单例判例），
-  15s 短片或单功能产品应大胆合并段位，但 ①hold/④峰值两端不可省。
-- ③ 段只堆高能量镜：连续高能量读作嘈杂，交替与字卡就是节奏本身。
-- 呼吸字卡写成第二遍 tagline：字卡与 outro 文案重复即删（P4 判例：
-  outro tagline 去重）。
+- Blindly applying the skeleton as a rigid rule: Segment percentages are empirical observations from the reference template video. Short 15s videos or single-feature products should boldly merge segments, but the ① hold and ④ peak outro ends must never be skipped.
+- Stacking only high-energy shots in segment ③: Continuous high energy reads as noisy chaos; alternating intensity and inserting title cards is rhythm itself.
+- Writing breathing title cards as duplicate taglines: If a title card duplicates the outro tagline, remove it (P4 rule: outro tagline deduplication).
 
-## 参考实现
+## Reference Implementation
 
-template/src/aifl/Main.tsx AIFL_SHOTS 段位表（sum=1085f）。
+`template/src/aifl/Main.tsx` `AIFL_SHOTS` segment table (total = 1085f).

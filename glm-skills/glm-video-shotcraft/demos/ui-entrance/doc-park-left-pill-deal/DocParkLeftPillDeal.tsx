@@ -1,13 +1,14 @@
-// doc-park-left-pill-deal — Doc Park 文档靠左 + 结论慢发牌（motion-lab 定稿转原生 Remotion）
-// 扫描结束文档不淡出，而是向左滑出只露约 35% 宽并微缩到 0.92；右侧按旁白节奏
-// 慢速发牌三张白底描边药丸（outBack 弹入），每张落定后其下方走逐词加深字幕、
-// 下一张到来前整句淡出；左侧文档全程做极缓慢自动滚动保持"正在被读"。
-// 设计坐标 480×270（DesignStage 等比放大），440×240 定尺画布居中排版。
-// 质感层（改版）：文档从骨架条换成出版级 video-shotcraft「宣传片简报」正文（标题 / 元信息 / 分节正文），
-// 右侧三张药丸是 agent 据此推荐的三张镜头配方卡（Crash Zoom / Deck Deal / Logo Sting）；
-// 自动滚动改为连续匀速（原取模写法每 1/3 片长整页回跳 40px）；每张药丸落定时，文档里对应的
-// 依据句被荧光笔划出，并有一条强调色细线从该句连到药丸（"结论从文档里长出来"），随字幕退场；
-// 药丸换成受光白面 + 发丝线 + 两层软阴影 + 强调色图标底；柔光浅底 + 颗粒。
+// doc-park-left-pill-deal — Doc Park document parked left + slow conclusion pill deal (motion-lab finalized design ported to native Remotion)
+// Document does not fade out when scanning finishes; instead, it slides left showing ~35% width and scales down slightly to 0.92;
+// on the right, three white bordered pills deal out slowly paced to voiceover rhythm (springing in with outBack);
+// after each settles, word-by-word deepening captions play below it, fading out before the next arrives;
+// left document scrolls very slowly throughout to feel actively read.
+// Design coordinates: 480×270 (proportionally scaled by DesignStage), centered layout on 440×240 fixed canvas.
+// Aesthetic revisions: Document upgraded from skeleton bars to editorial video-shotcraft "Promo Brief" body text (title / metadata / sectioned copy);
+// the three pills on the right represent shot recipe cards recommended by the agent (Crash Zoom / Deck Deal / Logo Sting);
+// auto-scroll made continuous and uniform (replacing previous modulo jump of 40px every 1/3 duration);
+// as each pill lands, its source sentence in the document is highlighted in highlighter pen, with an accent connecting line linking the sentence to the pill ("conclusion emerging from document"), exiting with caption;
+// pills feature illuminated white faces + hairline stroke + 2-layer soft shadow + accent icon badge; soft light backdrop + grain.
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
 import { DesignStage, E, lerp, seg, useT } from '../../_fixtures/Motion';
@@ -15,25 +16,25 @@ import { Backdrop, EASE, FONT, softShadow } from '../../_fixtures/Polish';
 
 export const DOC_PARK_LEFT_PILL_DEAL_DURATION = 174; // 5800ms @30fps
 
-// ---- 本卡共享量（浅灰瑞士极简系配色，与 Phase 0 fixture 令牌协调） ----
+// ---- Shared constants (light-gray Swiss minimalist palette, coordinated with Phase 0 fixture tokens) ----
 const SANS = FONT.sans;
-const TXT = '#17181c'; // 正文近黑（带冷调）
-const DIM = '#c4c6cc'; // 浅灰占位字
+const TXT = '#17181c'; // Body near-black (cool-toned)
+const DIM = '#c4c6cc'; // Light gray placeholder text
 const INK2 = '#5d5f66';
 const INK3 = '#9b9da3';
-const LINE = 'rgba(20,22,28,0.09)'; // 发丝描边
+const LINE = 'rgba(20,22,28,0.09)'; // Hairline border
 const ACCENT = '#5b63d3';
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const h2r = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-// 颜色插值：mix(p,'#C9C9CE','#111')
+// Color interpolation: mix(p,'#C9C9CE','#111')
 const mix = (p: number, a: string, b: string) => {
   const A = h2r(a), B = h2r(b), q = clamp01(p);
   return `rgb(${Math.round(A[0] + (B[0] - A[0]) * q)},${Math.round(A[1] + (B[1] - A[1]) * q)},${Math.round(A[2] + (B[2] - A[2]) * q)})`;
 };
 
-// 简易线性占位图标（纯 SVG，零依赖），强调色描边
-// zoom = 推镜取景角标、deck = 一摞卡、sting = 星芒（片尾 logo 一击）
+// Simple linear placeholder icons (pure SVG, zero dependencies) with accent stroke
+// zoom = push-in viewfinder crop marks, deck = card stack, sting = starburst (outro logo hit)
 const Icon: React.FC<{ k: 'zoom' | 'deck' | 'sting'; size: number }> = ({ k, size }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={ACCENT} strokeWidth={1.35} strokeLinecap="round" strokeLinejoin="round">
     {k === 'zoom' && (
@@ -56,8 +57,8 @@ const Icon: React.FC<{ k: 'zoom' | 'deck' | 'sting'; size: number }> = ({ k, siz
   </svg>
 );
 
-// 逐词加深字幕（本系列统一语法）：浅灰占位 → 逐词加深到黑 → 逐词淡回浅灰 → 整行归零
-// innP: 入场加深进度；outP: 出场进度（>0 时覆盖颜色与整行透明）；showV: 行基础透明
+// Word-by-word deepening captions (series-wide unified syntax): light gray placeholder → words darken to black → words fade back to light gray → whole line resets to zero
+// innP: entrance deepening progress; outP: exit progress (overrides color and row opacity when >0); showV: row baseline opacity
 const Caption: React.FC<{
   text: string;
   left: number;
@@ -69,8 +70,8 @@ const Caption: React.FC<{
 }> = ({ text, left, top, size, showV, innP, outP }) => {
   const words = text.split(' ');
   const n = words.length;
-  const st = 0.78 / n, win = st * 1.5; // 入场逐词交错
-  const stw = 0.55 / n;                // 出场逐词交错
+  const st = 0.78 / n, win = st * 1.5; // Inbound word-by-word stagger
+  const stw = 0.55 / n;                // Outbound word-by-word stagger
   const rowOpacity = outP > 0 ? clamp01(1 - (outP - 0.7) / 0.3) : showV;
   return (
     <div
@@ -109,7 +110,7 @@ const Caption: React.FC<{
   );
 };
 
-// ---- 文档：出版级客户档案（内容坐标，宽 DW；只露右侧约 35%，行尾要铺满） ----
+// ---- Document: Editorial client brief (content coordinates, width DW; right ~35% exposed, line ends filled) ----
 const DW = 250, DH = 190;
 type Line = { y: number; kind: 'title' | 'meta' | 'h' | 'p'; text: string; mark?: number };
 const DOC: Line[] = [
@@ -140,9 +141,9 @@ const DOC: Line[] = [
   { y: 293, kind: 'p', text: 'Open the workbench to tune timing and swap shots beat by beat.' },
   { y: 303, kind: 'p', text: 'Export a JianYing draft for the final pass with the team.' },
 ];
-// 自动滚动总行程（设计 px）：等于原 3 周期 × 40 的速度（≈0.7px/f），改为连续匀速、不回跳
+// Total auto-scroll travel (design px): equals previous 3 cycles × 40 speed (≈0.7px/f), continuous and uniform without rewind
 const SCROLL = 120;
-// 文档内容坐标 → 画布坐标（与文档窗格 transform 同一套：left 34 / top 25 / origin 左缘中点）
+// Document content coordinates → canvas coordinates (matches document pane transform: left 34 / top 25 / origin left-edge center)
 const DOC_LEFT = 34, DOC_TOP = (240 - DH) / 2;
 
 const ITEMS: { n: string; ic: 'zoom' | 'deck' | 'sting'; cap: string }[] = [
@@ -151,15 +152,15 @@ const ITEMS: { n: string; ic: 'zoom' | 'deck' | 'sting'; cap: string }[] = [
   { n: 'Logo Sting', ic: 'sting', cap: 'Sting ends on the brand mark' },
 ];
 const PX = 214, PY = 54, PH = 34, PG = 14;
-const T0 = [0.26, 0.48, 0.70]; // 三张药丸的发牌起点
+const T0 = [0.26, 0.48, 0.70]; // Deal start times for the three pills
 
 export const DocParkLeftPillDeal: React.FC = () => {
   const t = useT();
-  // 文档靠左驻留：滑出只露约 35% 宽 + 微缩 0.92
+  // Document parked left: slides out showing ~35% width + scales down to 0.92
   const park = seg(t, 0.06, 0.24, E.inOutCubic);
   const tx = lerp(park, 0, -0.55 * DW);
   const sc = lerp(park, 1, 0.92);
-  // 极缓慢自动滚动：连续匀速（不取模，避免整页回跳）
+  // Very slow auto-scroll: continuous and uniform (no modulo to prevent page jump)
   const scrollY = -t * SCROLL;
   const toCanvas = (xd: number, yd: number) => ({
     x: DOC_LEFT + tx + sc * xd,
@@ -170,7 +171,7 @@ export const DocParkLeftPillDeal: React.FC = () => {
     <AbsoluteFill>
       <Backdrop tone="light" light={{ x: 0.6, y: 0.24 }} accent={ACCENT} grain={0.05} vignette={0.12} />
       <DesignStage bg="transparent">
-        {/* 页面 + 440×240 定尺画布（居中） */}
+        {/* Page + 440×240 fixed canvas (centered) */}
         <div
           style={{
             position: 'absolute',
@@ -181,7 +182,7 @@ export const DocParkLeftPillDeal: React.FC = () => {
           }}
         >
           <div style={{ position: 'absolute', left: '50%', top: '50%', width: 440, height: 240, margin: '-120px 0 0 -220px' }}>
-            {/* 左侧文档窗格：靠左驻留 + 微缩，origin 钉在左缘中点 */}
+            {/* Left document pane: parked left + scaled down, origin pinned to left-center edge */}
             <div
               style={{
                 position: 'absolute',
@@ -193,7 +194,7 @@ export const DocParkLeftPillDeal: React.FC = () => {
                 transform: `translateX(${tx.toFixed(2)}px) scale(${sc.toFixed(4)})`,
               }}
             >
-              {/* 文档卡：白面 + 发丝线 + 内高光 + 两层软阴影 */}
+              {/* Document card: white face + hairline border + inner highlight + 2-layer soft shadow */}
               <div
                 style={{
                   position: 'absolute',
@@ -219,7 +220,7 @@ export const DocParkLeftPillDeal: React.FC = () => {
                           : l.kind === 'h'
                             ? { fontSize: 5, fontWeight: 650, color: INK3, letterSpacing: '0.1em' }
                             : { fontSize: 6.3, fontWeight: 450, color: INK2, letterSpacing: '0' };
-                    // 依据句荧光笔：对应药丸落定后自左向右划出
+                    // Source sentence highlighter: sweeps left-to-right after corresponding pill settles
                     const mk = l.mark !== undefined ? seg(t, T0[l.mark] + 0.06, T0[l.mark] + 0.13, EASE.out) : 0;
                     return (
                       <div key={i} style={{ position: 'absolute', left: 14, width: DW - 28, top: l.y - 5, height: 10, lineHeight: '10px', whiteSpace: 'nowrap', ...st }}>
@@ -244,7 +245,7 @@ export const DocParkLeftPillDeal: React.FC = () => {
               </div>
             </div>
 
-            {/* 依据连线：文档依据句右端 → 药丸左缘，药丸落定后 draw-on，随字幕退场淡出 */}
+            {/* Reference connecting line: doc source sentence right edge → pill left edge; draws on after pill lands, fades with caption exit */}
             <svg width={440} height={240} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}>
               {ITEMS.map((_, k) => {
                 const f = T0[k];
@@ -274,17 +275,17 @@ export const DocParkLeftPillDeal: React.FC = () => {
               })}
             </svg>
 
-            {/* 右侧三张药丸 + 逐词字幕，按 T0 节奏慢发牌 */}
+            {/* Right-side three pills + word-by-word captions, dealt out at T0 tempo */}
             {ITEMS.map((it, k) => {
               const f = T0[k];
               const o = seg(t, f, f + 0.035, E.outQuad);
               const b = seg(t, f, f + 0.062, E.outBack);
-              // 字幕：落定 +3 帧起加深，下一张入场前淡出
+              // Caption: darkens from landing +3 frames, fades out before next entrance
               const cs = f + 0.05, ce = k < 2 ? T0[k + 1] - 0.03 : 0.98;
               const showV = seg(t, cs, cs + 0.02);
               const innP = seg(t, cs, cs + (ce - cs) * 0.7);
               const outP = seg(t, ce - 0.05, ce, E.outQuad);
-              // 落定前阴影更高更虚（飞入感），落定后收成静置阴影
+              // Pre-landing shadow is elevated and softer (fly-in feel), settles into resting shadow after landing
               const lift = lerp(clamp01(b), 14, 4);
               return (
                 <React.Fragment key={k}>

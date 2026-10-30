@@ -1,27 +1,27 @@
-// word-relay-geometry — 三个利益词接力，每个词各带一套只属于它的几何：
-//   Faster   —— 虚线大圆 + 刻度环减速自转，一道彗星弧沿环飞跑（"在转"＝快）
-//   Tighter  —— 三实线圆依次 trim 生长（相位差 6f），长满后向中心收拢 40px 互相咬紧（"咬合"＝紧）
-//   Stronger —— 无几何；金属 sheen 从左扫到右，一拍后收成纯白 + 泛光（"材质硬"＝强，结论词的升格待遇）
-// 旧词缩到 0.86 并退焦淡出，新词从 1.06 去虚推近、描边先到位、填充柔边擦入。
+// word-relay-geometry — 3-word relay with unique dedicated geometry per word:
+//   Faster   — dashed circle + decelerating reticle ring, comet arc racing along ring (rotation = speed)
+//   Tighter  — three solid circles trim-grow sequentially (phase 6f), contracting 40px to interlock (interlocking = tightness)
+//   Stronger — no geometry; chrome sheen sweeps left to right, resolving to solid white + bloom (material hardness = strength)
+// Prior word scales to 0.86 and fades out defocused; new word unblurs from 1.06, stroke settles first, soft-edge fill wipes in.
 //
-// 第二轮重设计（石墨 · 电影字卡）：
-// - look = graphite（近单色暗场，白为强调、香槟金只做 sheen 高光一丝暖色）。几何全是白色发丝线 + 柔光，
-//   不加色——"一词一世界"靠形状说话，不靠颜色。
-// - 版式：词 230px / 800 静态字库（Helvetica Neue，描边不露可变字体内部交叠线），画面正中；
-//   几何放大到画幅级（虚线环 r=400、三圆 r=230），字压在几何上；词下一行 40px 副句给出产品证据；
-//   左上 mono 计数「01 / 03」、右上镜刻标志 + video-shotcraft 小写字标、底部三段进度条（label 级纹理字，不当内容读）。
-// - 节奏：三拍等长推进但每拍内部「快入—稳—决绝出」：入场 14f snappy、出场 10f exit；
-//   交接重叠 6f；第三拍收白后 hold 26f，镜头整体 1→1.025 极缓推进（不抖）。
+// Redesign (graphite: cinematic title card):
+// - look = graphite (near monochrome dark field, white as accent, champagne gold highlight). Geometry uses white hairlines + soft glow,
+//   uncolored — shapes articulate distinct thematic worlds.
+// - Typography: 230px / 800 static font (Helvetica Neue), centered in frame;
+//   canvas-scale geometry (dashed ring r=400, triplet rings r=230); 40px subtitle below providing supporting product proof;
+//   top-left mono counter "01 / 03", top-right ShotcraftMark + wordmark, bottom 3-segment progress indicator.
+// - Rhythm: 3 equal-length beats with "snappy in - hold - decisive exit": 14f entrance, 10f exit;
+//   6f handoff overlap; beat 3 resolves to white then holds 26f; slow camera push 1->1.025.
 //
-// 时间表（30fps，共 180f）：
-//   0–2     舞台光 + 虚线环起始态（0.4 倍、半透明）已在画面
-//   副句：Faster / Stronger 在词下 210px，Tighter 让出三圆下沿压到 246px
-//   0–22    Faster：环 0.4→1 snappy 生长、减速自转；2–16 描边入；12–30 填充擦入；18 起副句
-//   52–62   Faster 出（0.86 + 退焦）
-//   56–70   Tighter 入；58/64/70 三圆 trim 生长（22f）；66–84 填充；92–106 三圆收拢咬紧（swift）
-//   112–122 Tighter 出
-//   116–128 Stronger 入（描边）；124–148 金属 sheen 扫过；146–158 收纯白 + 泛光一次
-//   158–180 hold 落定（相机极缓推进）
+// Timeline (30fps, total 180f):
+//   0-2     Stage light + initial dashed ring state present on frame 0
+//   Subtitle: Faster/Stronger at y=210px below word, Tighter yields to rings at 246px
+//   0-22    Faster: ring grows 0.4->1, decelerating rotation; 2-16 stroke in; 12-30 fill wipe; 18+ subtitle
+//   52-62   Faster exit (scale 0.86 + defocus)
+//   56-70   Tighter entrance; 58/64/70 three rings trim-grow (22f); 66-84 fill; 92-106 rings contract and interlock (swift)
+//   112-122 Tighter exit
+//   116-128 Stronger entrance (stroke); 124-148 metal sheen sweep; 146-158 resolves to solid white + bloom
+//   158-180 Hold settle (slow continuous camera push)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -34,10 +34,10 @@ const L = LOOKS.graphite;
 const W = 1920;
 const H = 1080;
 const CX = W / 2;
-const CY = 500; // 视觉中心略高于几何中心，给副句留位
+const CY = 500; // Visual center elevated slightly to reserve room for subtitle
 const WORD_SIZE = 230;
 const STATIC_FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-const GEO = 'rgba(236,238,244,0.42)'; // 几何线：比字暗一档，层级在字之下
+const GEO = 'rgba(236,238,244,0.42)'; // Geometry line color
 const GOLD = L.accent2;
 
 type Slot = { word: string; sub: string; in0: number; out0: number | null };
@@ -49,23 +49,23 @@ const SLOTS: Slot[] = [
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-// 一个词的进出场包络：入 14f（snappy，1.06→1 去虚）、出 10f（exit，1→0.86 退焦）
+// Word entrance/exit envelope: in 14f (snappy, 1.06->1 unblur), out 10f (exit, 1->0.86 defocus)
 const envelope = (f: number, s: Slot) => {
   const tin = ramp(f, s.in0, 14, EASE.snappy);
   const tout = s.out0 === null ? 0 : ramp(f, s.out0, 10, EASE.exit);
   return { tin, tout, alive: f >= s.in0 - 1 && tout < 1 };
 };
 
-// ───────────── Faster：虚线环 + 刻度环 + 彗星弧 ─────────────
+// ------------- Faster: Dashed Ring + Reticle + Comet Arc -------------
 const FasterGeo: React.FC<{ f: number; fade: number }> = ({ f, fade }) => {
   const grow = ramp(f, 0, 22, EASE.snappy);
   const s = mix(0.4, 1, grow);
-  // 自转：入场时多转 160° 并减速（像飞轮刹住），之后匀速慢转永不停
+  // Rotation: decelerates from initial 160 deg burst, then continuous steady rotation
   const spin = -90 - 160 * (1 - grow) + f * 0.9;
-  const spinTicks = 40 * (1 - grow) - f * 0.35; // 刻度环反向慢转，两层相对运动读出"转速"
+  const spinTicks = 40 * (1 - grow) - f * 0.35; // Reticle counter-rotates for relative motion speed
   const R = 400;
   const RT = 452;
-  // 彗星：沿 r=400 飞跑的亮弧（头亮尾淡），角速度比环快得多
+  // Comet: bright arc racing along r=400 with higher angular velocity
   const head = -90 + f * 7.5 - 220 * (1 - grow);
   const comet = Array.from({ length: 16 }, (_, k) => {
     const a0 = ((head - k * 4) * Math.PI) / 180;
@@ -96,12 +96,12 @@ const FasterGeo: React.FC<{ f: number; fade: number }> = ({ f, fade }) => {
   );
 };
 
-// ───────────── Tighter：三圆 trim 生长 → 收拢咬紧 ─────────────
+// ------------- Tighter: 3-Ring Trim-Grow -> Contract and Interlock -------------
 const TighterGeo: React.FC<{ f: number; fade: number; outF: number | null }> = ({ f, fade, outF }) => {
   const R = 218;
-  const tight = ramp(f, 92, 14, EASE.swift); // 长满后向中心收拢
+  const tight = ramp(f, 92, 14, EASE.swift); // Contracts toward center after full trim
   const gap = mix(340, 300, tight);
-  // 收拢落定时圆线一次提亮（咬合的"咔"）
+  // Line brightness pulse on interlock landing snap
   const click = Math.sin(clamp01((f - 100) / 12) * Math.PI);
   return (
     <g opacity={fade} transform={`translate(${CX} ${CY})`}>
@@ -123,7 +123,7 @@ const TighterGeo: React.FC<{ f: number; fade: number; outF: number | null }> = (
           </g>
         );
       })}
-      {/* 相邻两圆的交点：收拢落定时亮起四枚铆钉光点，证明"咬住了" */}
+      {/* Intersection rivet lights igniting on interlock landing */} 
       {[-1, 1].flatMap((k) => [-1, 1].map((sy) => {
         const h = Math.sqrt(Math.max(0, R * R - (gap / 2) ** 2));
         const on = ramp(f, 100 + (k + 1) * 1.5 + (sy + 1), 10, EASE.overshoot);
@@ -137,7 +137,7 @@ const TighterGeo: React.FC<{ f: number; fade: number; outF: number | null }> = (
   );
 };
 
-// ───────────── 词组（描边 / 填充 / sheen 三层） ─────────────
+// ------------- Word Layers (Stroke / Fill / Sheen) -------------
 const Word: React.FC<{ f: number; slot: Slot; idx: number }> = ({ f, slot, idx }) => {
   const { tin, tout } = envelope(f, slot);
   const last = idx === SLOTS.length - 1;
@@ -145,11 +145,11 @@ const Word: React.FC<{ f: number; slot: Slot; idx: number }> = ({ f, slot, idx }
   const defocus = (1 - tin) * 10 + tout * 12;
   const fillStart = slot.in0 + 10;
   const fillp = ramp(f, fillStart, 18, EASE.swift);
-  // 柔边擦入：前沿 ±7%
+  // Soft-edge wipe: leading edge +/-7%
   const FE = 7;
   const edge = fillp * (100 + FE * 2) - FE;
   const mask = `linear-gradient(90deg, #000 ${(edge - FE).toFixed(2)}%, transparent ${(edge + FE).toFixed(2)}%)`;
-  // Stronger：sheen 出现 → 扫光 → 收白
+  // Stronger: sheen appears -> sweep -> resolve to white
   const sh = ramp(f, 120, 10, EASE.out);
   const sweep = ramp(f, 124, 24, EASE.smooth);
   const white = ramp(f, 146, 12, EASE.out);
@@ -157,7 +157,7 @@ const Word: React.FC<{ f: number; slot: Slot; idx: number }> = ({ f, slot, idx }
 
   const base: React.CSSProperties = {
     fontFamily: STATIC_FONT, fontSize: WORD_SIZE, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, whiteSpace: 'nowrap',
-    // 三层共用留白：mask / background-clip 只画在盒内，不留白会把 g 的下伸部和末字右沿裁掉、露出描边层
+    // Shared padding preventing descender and edge clipping in background-clip
     padding: '0.08em 0.1em 0.28em',
   };
   return (
@@ -171,13 +171,13 @@ const Word: React.FC<{ f: number; slot: Slot; idx: number }> = ({ f, slot, idx }
         </div>
         {last ? (
           <>
-            {/* 金属底：竖向镀铬分层（亮顶—暗腰—亮底），读出"材质硬" */}
+            {/* Metallic chrome gradient base */} 
             <div style={{
               ...base, position: 'absolute', inset: 0, color: 'transparent',
               backgroundImage: 'linear-gradient(180deg, #f2f3f6 8%, #b9bdc6 40%, #4a4e57 52%, #8b909a 62%, #e1e3e8 88%)',
               WebkitBackgroundClip: 'text', backgroundClip: 'text', opacity: sh * (1 - white),
             }}>{slot.word}</div>
-            {/* 扫光：一道带香槟暖色的窄白带从左扫到右（只给结论词一次，Q4） */}
+            {/* Sheen sweep: warm champagne highlight traversing left to right */} 
             <div style={{
               ...base, position: 'absolute', inset: 0, color: 'transparent',
               backgroundImage: `linear-gradient(100deg, transparent 38%, ${alpha(GOLD, 0.7)} 45%, #ffffff 50%, ${alpha(GOLD, 0.7)} 55%, transparent 62%)`,
@@ -201,11 +201,11 @@ const Word: React.FC<{ f: number; slot: Slot; idx: number }> = ({ f, slot, idx }
 
 export const WordRelayGeometry: React.FC = () => {
   const f = useCurrentFrame();
-  // 相机：全程极缓推进 1→1.025（smooth，起止无速度突变），给 hold 段一点呼吸
+  // Camera: slow push 1->1.025 throughout, providing hold breath
   const cam = mix(1, 1.025, ramp(f, 0, 180, EASE.smooth));
   const e = SLOTS.map((s) => envelope(f, s));
   const active = f < 56 ? 0 : f < 116 ? 1 : 2;
-  // Stronger 收白时主光一次提亮
+  // Key light brightness pulse on Stronger resolve
   const flare = Math.sin(clamp01((f - 146) / 26) * Math.PI);
 
   return (
@@ -224,7 +224,7 @@ export const WordRelayGeometry: React.FC = () => {
           )}
         </svg>
 
-        {/* Stronger 落定的地平线光带：结论词脚下一道横向冷白光，只出现一次 */}
+        {/* Horizon light bar at base of final word */} 
         <div style={{
           position: 'absolute', left: CX - 700, width: 1400, top: CY + 158, height: 2,
           background: `linear-gradient(90deg, transparent, ${alpha('#ffffff', 0.7)} 50%, transparent)`,
@@ -234,7 +234,7 @@ export const WordRelayGeometry: React.FC = () => {
 
         {SLOTS.map((s, i) => (e[i].alive ? <Word key={s.word} f={f} slot={s} idx={i} /> : null))}
 
-        {/* 副句：40px，词落定后从线下升起，随词一起退场 */}
+        {/* Subtitle: 40px, rises after word settles, exits with word */} 
         {SLOTS.map((s, i) =>
           e[i].alive ? (
             <div key={`sub${i}`} style={{
@@ -248,11 +248,11 @@ export const WordRelayGeometry: React.FC = () => {
         )}
       </AbsoluteFill>
 
-      {/* 画框装饰（不随相机）：左上计数、底部三段进度——label 级纹理字 */}
+      {/* Frame ornamentation: top-left counter, bottom 3-segment progress */} 
       <div style={{ position: 'absolute', left: 120, top: 96, fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.18em', color: L.ink3, opacity: ramp(f, 0, 14, EASE.out) }}>
         <span style={{ color: L.ink }}>{`0${active + 1}`}</span> / 03
       </div>
-      {/* 右上品牌签：镜刻标志 + 小写字标（label 级，不抢词） */}
+      {/* Top-right brand signature: ShotcraftMark + wordmark */} 
       <div style={{ position: 'absolute', right: 120, top: 90, display: 'flex', alignItems: 'center', gap: 12, fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.1em', color: L.ink3, opacity: ramp(f, 4, 14, EASE.out) }}>
         <ShotcraftMark size={34} tone="dark" />
         {BRAND.name}

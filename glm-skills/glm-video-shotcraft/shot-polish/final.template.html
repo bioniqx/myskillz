@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>video-shotcraft · 终版确认</title>
+<title>video-shotcraft · Final Review</title>
 <style>
   :root {
     --bg: #0f0f0d; --panel: #171714; --panel2: #201f1b; --line: rgba(245,243,238,0.08);
@@ -81,7 +81,7 @@
   .savest { font-size: 12px; color: var(--dim); }
   .savest.ok { color: var(--ok); } .savest.warn { color: var(--fix); }
   .empty { color: var(--dim); text-align: center; padding: 80px 0; }
-  /* 去掉的镜头：小格子，进入视野才加载 */
+  /* Dropped shots: small grid items, loaded when scrolled into view */
   .dropgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
   .dcell { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .dcell .vbox { border-radius: 0; cursor: default; }
@@ -101,7 +101,7 @@
       <div class="spacer"></div>
       <div class="seg" id="mode"><button data-v="side" class="on" data-i18n="side"></button><button data-v="solo" data-i18n="solo"></button></div>
       <div class="seg" id="speed"><button data-v="0.25">0.25×</button><button data-v="0.5">0.5×</button><button data-v="1" class="on">1×</button></div>
-      <div class="seg" id="lang"><button data-v="zh" class="on">中文</button><button data-v="en">EN</button></div>
+      <div class="seg" id="lang"><button data-v="en" class="on">EN</button><button data-v="zh">ZH</button></div>
     </div>
     <div class="bar2">
       <div id="cats" style="display:flex; gap:8px; flex-wrap:wrap"></div>
@@ -126,15 +126,17 @@ const DATA = /*__DATA__*/null;
 const FPS = 30;
 const VER_COLOR = { before: '#8b93a1', v1: '#60a5fa', after: '#4ade80' };
 const T = {
-  zh: { subtitle: '终版确认', side: '改前 / 终版', solo: '只看终版', vAll: '全部版本', cAll: '全部', changed: '换了品牌', same: '未改动',
-        rAll: '全部', rNone: '未确认', ok: '通过', fix: '要改', export: '导出确认 JSON', autoplay: '进入视野自动播放', search: '搜索卡名 / 组件名…',
-        all: '全部', before: '原版', v1: '第一版', after: '第二版', prevTag: '选定版本 · 改品牌前', finalTag: '终版', brand: '品牌 / 文案改动',
-        nonotes: '（暂无说明）', notyet: '尚未渲染', play: '播放', pause: '暂停', shots: '个镜头', confirm: '确认', notePh: '要改的地方（可选）',
-        savedFile: '已保存到 shot-polish/final-review.json', savedLocal: '仅保存在浏览器（用 serve.py 启动可写入文件）', empty: '没有匹配的镜头',
-        droppedTitle: '已去掉的镜头', cardGone: '整张卡已删除', styleGone: '只删这一式', reviewed: '已确认',
-        intro: (k, d, c) => `按你的决策落版后保留 <b>${k}</b> 个镜头，画面里的 logo / 品牌名已换成 video-shotcraft，合适的文案换成了宣传语。每张卡左边是你选定的版本（改品牌前），右边是终版。逐个点「通过」或「要改」并写备注，会自动保存。页面底部是去掉的 <b>${d}</b> 个镜头，其中 <b>${c}</b> 张卡整卡删除。`,
-        cats: { opening: '开场', camera: '运镜与空间', transition: '转场', typography: '文字排版', 'ui-entrance': 'UI 入场',
-                interaction: '交互演示', data: '数据', effects: '特效', rhythm: '节奏', outro: '收尾' } },
+  zh: { subtitle: 'final review', side: 'Before brand / Final', solo: 'Final only', vAll: 'All versions', cAll: 'All', changed: 'Rebranded', same: 'Unchanged',
+        rAll: 'All', rNone: 'Unreviewed', ok: 'Approve', fix: 'Needs fix', export: 'Export review JSON', autoplay: 'Autoplay in view', search: 'Search card / component…',
+        all: 'All', before: 'Original', v1: 'V1', after: 'V2', prevTag: 'Chosen version · before rebrand', finalTag: 'Final', brand: 'Brand / copy changes',
+        nonotes: '(no notes yet)', notyet: 'not rendered yet', play: 'Play', pause: 'Pause', shots: 'shots', confirm: 'Review', notePh: 'What to fix (optional)',
+        savedFile: 'Saved to shot-polish/final-review.json', savedLocal: 'Saved in browser only (start with serve.py to write the file)', empty: 'No matching shots',
+        droppedTitle: 'Dropped shots', cardGone: 'whole card removed', styleGone: 'style removed', reviewed: 'reviewed',
+        intro: (k, d, c) => `<b>${k}</b> shots kept per your decisions; logos and brand names now read video-shotcraft, with promo copy where it fits. Left: the version you picked (before rebrand); right: final. Approve or flag each one — it saves automatically. The <b>${d}</b> dropped shots are listed at the bottom (<b>${c}</b> whole cards removed).`,
+        cats: Object.fromEntries(DATA.cats.map(c => [c.key, c.en])) },
+};
+const state = { lang: localStorage.getItem('fr-lang') || 'zh', cat: 'all', q: '', mode: 'side', speed: 1, autoplay: true, vfilter: 'all', cfilter: 'all', rfilter: 'all' };
+// Review results: { [stem]: { verdict: 'ok'|'fix', note } },
   en: { subtitle: 'final review', side: 'Before brand / Final', solo: 'Final only', vAll: 'All versions', cAll: 'All', changed: 'Rebranded', same: 'Unchanged',
         rAll: 'All', rNone: 'Unreviewed', ok: 'Approve', fix: 'Needs fix', export: 'Export review JSON', autoplay: 'Autoplay in view', search: 'Search card / component…',
         all: 'All', before: 'Original', v1: 'V1', after: 'V2', prevTag: 'Chosen version · before rebrand', finalTag: 'Final', brand: 'Brand / copy changes',
@@ -145,7 +147,7 @@ const T = {
         cats: Object.fromEntries(DATA.cats.map(c => [c.key, c.en])) },
 };
 const state = { lang: localStorage.getItem('fr-lang') || 'zh', cat: 'all', q: '', mode: 'side', speed: 1, autoplay: true, vfilter: 'all', cfilter: 'all', rfilter: 'all' };
-// 确认结果：{ [stem]: { verdict: 'ok'|'fix', note } }。serve.py 启动时读写 shot-polish/final-review.json，否则落 localStorage
+// Review results: { [stem]: { verdict: 'ok'|'fix', note } }. Read/written from shot-polish/final-review.json when running serve.py, otherwise localStorage.
 let reviews = JSON.parse(localStorage.getItem('fr-reviews') || '{}');
 let serverOK = false;
 const t = k => T[state.lang][k];
@@ -225,7 +227,7 @@ function renderList() {
   root.querySelectorAll('.card').forEach(c => io.observe(c));
 }
 
-// 终版为主时钟；帧数相同的改前版本逐帧跟随，不同的各自循环、进度条按比例定位
+// Final is primary clock; same-length previous versions follow frame-by-frame, others loop independently
 function setupCard(card) {
   const vids = [...card.querySelectorAll('video.vid')];
   const master = card.querySelector('.v-final') || vids[0];

@@ -1,7 +1,8 @@
-// radial-wave — Grid Radial Wave 点阵涟漪（motion-lab 定稿转原生 Remotion）
-// 17×9 圆点阵列，波从中心向外按欧氏距离 stagger 扩散：每点 scale 0→1.5→1 +
-// 亮度脉冲，波前过后留下常亮点阵；第二道波反向收拢。offset = k·dist(cell, origin)。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// radial-wave — Grid Radial Wave (motion-lab finalized design ported to native Remotion)
+// 17×9 dot matrix where waves propagate outward from center staggered by Euclidean distance:
+// each dot scales 0→1.5→1 with a brightness pulse, leaving a steadily lit matrix in the wake;
+// a second wave converges in reverse. offset = k · dist(cell, origin).
+// Design coordinates: 480×270 (proportionally scaled by DesignStage); parameters calibrated to this system.
 import React from 'react';
 import { DesignStage, E, seg, useT } from '../../_fixtures/Motion';
 
@@ -28,7 +29,7 @@ export const RadialWave: React.FC = () => {
   return (
     <DesignStage bg="#0a0b10">
       {DOTS.map(({ left, top, dist }, i) => {
-        // 第一道波：扩散点亮；第二道波：反向脉冲
+        // First wave: outward lighting; Second wave: reverse pulse
         const w1 = seg(t, dist * 0.35, dist * 0.35 + 0.18, E.outCubic);
         const w2 = seg(t, 0.62 + (1 - dist) * 0.25, 0.62 + (1 - dist) * 0.25 + 0.15);
         const pulse2 = Math.sin(w2 * Math.PI);

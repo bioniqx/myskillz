@@ -5,9 +5,8 @@ import { CARDS } from "../cards/registry";
 import { MANIFEST } from '../cards/projectCards';
 import { themedProps, themedBackground } from '../theme';
 
-/** 时间重映射：clip 本地帧 → 卡片源帧（inOffset + f × speed）。
- *  卡片全部是 frame 的纯函数（tween 均 clamp），因此变速/裁入/超时长定格都安全。
- *  不变速且不裁入时直通不包 Freeze——含 Audio/Video 的卡需要原生播放（Freeze 会掐掉声音）。 */
+/** Time remapping: clip local frame -> card source frame (inOffset + f * speed).
+ *  Cards are pure functions of frame; pass through without Freeze when unshifted. */
 const TimeRemap: React.FC<{
   inOffset: number;
   speed: number;
@@ -19,7 +18,7 @@ const TimeRemap: React.FC<{
 };
 
 export const MainComposition: React.FC<{ project: ProjectData }> = ({ project }) => {
-  // UI 中 tracks[0] 是最上层轨 → 最后渲染（覆盖在上）
+  // tracks[0] in UI is topmost track -> rendered last (overlays on top)
   const ordered = [...project.tracks].reverse();
   return (
     <AbsoluteFill style={{ background: themedBackground(project, MANIFEST) ?? "#0e0e10" }}>
@@ -32,11 +31,11 @@ export const MainComposition: React.FC<{ project: ProjectData }> = ({ project })
             const Comp = card.component;
             const duration = Math.max(1, Math.round(clip.duration));
             const props: Record<string, unknown> = themedProps(MANIFEST, card, project.themeId, clip.props, project.themeColors);
-            // 成片组件按 `duration`/`dur` 算出场淡出：注入 clip 的源时长，拉长/裁短后淡出跟着挪
+      // Film component calculates fade-out from duration/dur: inject source duration
             if (card.durationProp)
               props[card.durationProp] = Math.max(1, Math.round(clip.inOffset + duration * clip.speed));
-            // 音频卡：裁入/变速交给卡内 <Audio trimBefore playbackRate>，
-            // 不能包 Freeze（会掐死原生播放），也无需图层包裹
+      // Audio card: trim/speed handled by internal <Audio trimBefore playbackRate>;
+      // do not wrap in Freeze to allow native playback
             if (card.kind === "audio") {
               return (
                 <Sequence key={clip.id} from={clip.start} durationInFrames={duration}>
@@ -53,7 +52,7 @@ export const MainComposition: React.FC<{ project: ProjectData }> = ({ project })
                   }}
                 >
                   {card.kind === "video" ? (
-                    // 视频卡：同音频卡走原生播放通道，保留图层包裹
+                    // Video cards: native playback channel with layer wrapping
                     <Comp {...props} inOffset={clip.inOffset} speed={clip.speed} />
                   ) : (
                     <TimeRemap inOffset={clip.inOffset} speed={clip.speed}>

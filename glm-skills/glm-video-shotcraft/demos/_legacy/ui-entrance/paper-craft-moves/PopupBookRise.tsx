@@ -1,22 +1,22 @@
-// popup-book-rise —— 立体书立起
-// FakeDashboard(A) 打平躺下（场景 rotateX 75° 透视俯视），6 张卡片是贴在页上的
-// 纸片，沿各自底边从平躺错峰立起（rotateX 90°→-5° 过冲→0° 回弹，即立到 95° 再回 90°），
-// 根部投影随立起角度收窄变淡。全部立起后整个场景轻微回正（75°→68°）收尾。
-// 卡片用独立网格复刻 dashboard A 区布局（Fixtures 内嵌卡无法单独驱动）。
-// 收尾 f108 后真静止 ≥52f。帧确定性：全由 frame 派生。
+// popup-book-rise — Pop-up book card rise
+// FakeDashboard(A) laid flat (scene rotateX 75° overhead perspective); 6 cards are paper cutouts
+// attached to page, rising sequentially along bottom edges (rotateX 90° -> -5° overshoot -> 0° rebound, i.e. rising to 95° then back to 90°),
+// base drop shadow narrows and fades as angle rises. After all cards stand, scene levels slightly (75° -> 68°) to settle.
+// Cards use independent grid replicating dashboard A layout (embedded cards in Fixtures cannot be individually animated).
+// True static hold >= 52f after f108. Frame deterministic: all derived from frame.
 import React from 'react';
 import { useCurrentFrame, interpolate, spring, Easing } from 'remotion';
 import { G, Card } from '../../_fixtures/Fixtures';
 
 const FPS = 30;
-const HOLD = 14; // 开头静置
+const HOLD = 14; // Initial static hold
 const STAGGER = 7;
-const RISE_DUR = 34; // spring 视觉收敛帧数
+const RISE_DUR = 34; // Spring visual convergence frames
 const LAST_START = HOLD + 5 * STAGGER; // 49
-const SETTLE = LAST_START + RISE_DUR; // 83：全部立起
-const REST = SETTLE + 25; // 108：场景回正完成
+const SETTLE = LAST_START + RISE_DUR; // 83: all cards standing
+const REST = SETTLE + 25; // 108: scene re-leveling complete
 
-// dashboard A 区几何（照抄 FakeDashboard：侧栏 220 + 顶栏 72 + padding 36 + gap 28）
+// Dashboard A-area geometry (matching FakeDashboard: sidebar 220 + topbar 72 + padding 36 + gap 28)
 const AREA_X = 220 + 36;
 const AREA_Y = 72 + 36;
 const AREA_W = 1920 - 220 - 72;
@@ -28,7 +28,7 @@ const CELL_H = (AREA_H - GAP) / 2;
 const PageCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const col = i % 3;
   const row = Math.floor(i / 3);
-  // 远排（row 0）先立，近排后立；同排从左到右
+  // Back row (row 0) rises first, then front row; left to right within each row
   const order = row === 0 ? col : 3 + col;
   const start = HOLD + order * STAGGER;
 
@@ -39,12 +39,12 @@ const PageCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
     durationInFrames: RISE_DUR,
     durationRestThreshold: 0.0001,
   });
-  // 平躺（贴页面 = local 0°）→ 立起（垂直页面 = local -90°，顶边朝观众翻起），
-  // spring 过冲自然冲过 -90° 到约 -95°（纸的韧性）再回弹。
+  // Flat (on page = local 0°) -> upright (perpendicular to page = local -90°, top edge flips toward viewer),
+  // spring naturally overshoots -90° to ~-95° (paper flex) before rebounding.
   const rx = interpolate(s, [0, 1], [0, -90]);
 
-  // 根部投影：躺平时长影（卡片盖在页面上），立起后收成窄条
-  const lie = 1 - Math.min(Math.abs(rx) / 90, 1); // 1 = 躺平, 0 = 立直
+  // Base shadow: elongated while flat (card resting on page), collapses to narrow strip once upright
+  const lie = 1 - Math.min(Math.abs(rx) / 90, 1); // 1 = flat, 0 = upright
   const shH = 14 + 90 * Math.max(lie, 0);
   const shAlpha = 0.1 + 0.16 * Math.max(lie, 0);
 
@@ -59,7 +59,7 @@ const PageCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
         transformStyle: 'preserve-3d',
       }}
     >
-      {/* 根部投影贴在页面上，不随卡片立起 */}
+      {/* Base shadow rests on page surface, does not tilt with card */}
       <div
         style={{
           position: 'absolute',
@@ -90,7 +90,7 @@ const PageCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
 export const PopupBookRise: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 场景（书页）俯视角：全程 75°，全部立起后轻微回正到 68°
+  // Scene (book page) pitch angle: 75° throughout, levels slightly to 68° after cards settle
   const sceneRx = interpolate(frame, [SETTLE, REST], [75, 68], {
     easing: Easing.inOut(Easing.cubic),
     extrapolateLeft: 'clamp',
@@ -109,7 +109,7 @@ export const PopupBookRise: React.FC = () => {
             transformStyle: 'preserve-3d',
           }}
         >
-          {/* 书页底板：dashboard 的壳（侧栏+顶栏+空白页面） */}
+          {/* Book page baseplate: dashboard shell (sidebar + topbar + blank canvas) */}
           <div style={{ position: 'absolute', inset: 0, background: G.bg, boxShadow: '0 40px 80px rgba(0,0,0,0.25)' }}>
             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 220, background: G.side, padding: '28px 22px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: '#777775' }} />
@@ -123,7 +123,7 @@ export const PopupBookRise: React.FC = () => {
               <div style={{ width: 36, height: 36, borderRadius: 18, background: G.mid }} />
             </div>
           </div>
-          {/* 6 张纸片卡沿底边立起 */}
+          {/* 6 paper cards rising along bottom edges */}
           {Array.from({ length: 6 }).map((_, i) => (
             <PageCard key={i} i={i} frame={frame} />
           ))}

@@ -13,12 +13,12 @@ import { buildProjectFromManifest } from "../projectImport";
 type MainProps = { project: ProjectData; renderExact?: boolean };
 const Main = MainComposition as React.ComponentType<MainProps>;
 
-/** Remotion Studio / CLI 入口：
- *  - Main：整条时间轴合成（吃工作台导出的工程 JSON——右侧 Props 面板可直接贴 JSON）
- *  - ProjImported：已链接成片按清单刚导入、未做任何改动的工程（= Main + 导入结果）
- *  - ProjOriginal：成片工程自己的原合成（清单 `original`）
- *    两者逐帧应一致，scripts/parity.mjs 用它们做对照
- *  - 每张卡各注册一个合成，Zod schema 由工作台 schema 自动转换，Studio Inspector 自动生成调参表单 */
+/** Remotion Studio / CLI entrypoint:
+ *  - Main: full timeline composition
+ *  - ProjImported: linked film project imported from manifest
+ *  - ProjOriginal: film project original composition (parity comparison)
+ *    both should match frame-by-frame; scripts/parity.mjs uses them for verification
+ *  - Each card is registered as a composition with Zod schema */
 export const RemotionRoot: React.FC = () => {
   const demo = demoProject();
   return (
@@ -32,7 +32,7 @@ export const RemotionRoot: React.FC = () => {
         height={demo.height}
         defaultProps={{ project: demo, renderExact: false }}
         calculateMetadata={({ props }) => ({
-          // 导出成片（renderExact）用内容精确时长；Studio 预览留 1s 余量
+          // Export (renderExact) uses exact content duration; Studio preview includes 1s padding
           durationInFrames: props.renderExact
             ? Math.max(2, projectEndFrame(props.project))
             : projectDuration(props.project),
@@ -43,7 +43,7 @@ export const RemotionRoot: React.FC = () => {
       />
       {MANIFEST && (
         <Composition
-          id="ProjImported"
+ *  - ProjImported: linked film project imported from manifest
           component={Main}
           durationInFrames={Math.max(2, MANIFEST.total)}
           fps={MANIFEST.fps}
@@ -54,7 +54,7 @@ export const RemotionRoot: React.FC = () => {
       )}
       {MANIFEST && ORIGINAL && (
         <Composition
-          id="ProjOriginal"
+ *  - ProjOriginal: film project original composition (parity comparison)
           component={ORIGINAL}
           durationInFrames={Math.max(2, MANIFEST.total)}
           fps={MANIFEST.fps}
@@ -68,7 +68,7 @@ export const RemotionRoot: React.FC = () => {
           <Composition
             key={card.id}
             id={card.id.replace(/[^a-zA-Z0-9-]/g, "-")}
-            // 动态注册：schema/defaultProps 无法静态对齐类型，交给运行时（zod 会校验）
+            // Dynamic registration: runtime schema validation with Zod
             component={card.component as React.ComponentType<Record<string, unknown>>}
             durationInFrames={Math.max(2, card.durationInFrames)}
             fps={cardFps(card)}

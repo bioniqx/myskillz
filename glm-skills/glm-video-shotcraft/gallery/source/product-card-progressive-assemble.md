@@ -1,56 +1,47 @@
 ---
 name: product-card-progressive-assemble
-一句话: 详情卡像被逐字段抓取般自建——一枚"填充光标"领先跳格，图→标题→分类 pill 依次 pop→原价出现后被划线降级、强调色新价 spring 跳出→正文逐行揭示且高亮块由左向右刷过→色卡点亮→按钮填满，整卡全程极慢 scale 前推
-适用: 商品/条目详情页的能力展示；"结构化抽取""自动填充""数据自己长出来"类叙事的主镜头
-时长: 约 5.7s（172f@30fps）
-能量: 中（连续小事件密集排布，无单点爆发；靠前推保持推进感）
+summary: A product card builds itself field by field as image, title and pills pop in, the old price gets struck through while an accent new price springs out, and highlighter blocks sweep across the copy.
+use: Capability showcases on product/item detail views; primary shot for narratives around "structured extraction," "autofill," and "data assembling itself."
+duration: ~5.7s (172f @ 30fps)
+energy: Medium (Dense sequence of micro-events without a single explosion; maintains forward momentum via continuous slow camera push)
 ---
 
-## 意图
-一张详情卡直接淡入，观众只看到"有一张卡"。逐字段落位则把卡变成一份**正在被填写的
-表单**：每个字段各自到位，观众的注意力被牵着走一遍卡的信息结构——图在哪、标题在哪、
-价格在哪、正文重点在哪。价格划线降级是全片唯一的语义事件（不是"出现"而是"改变"），
-所以它被安排在中段最显眼的位置。
+## Intention
+Fading in a detail card directly merely tells viewers "here is a card." Assembling it field by field transforms the card into a **form actively being filled in real time**: as each field snaps into position, the viewer's attention is guided step by step through the card's information architecture—where the image lives, where the title is, where the price sits, and where body highlights lie. Price strikethrough downgrade is the sole semantic event in the entire sequence (representing a transformation rather than a mere appearance), which is why it is staged at the most prominent position mid-sequence.
 
-## 动效核心
-（demo：瓷白 look，原生 1920 坐标；1520×840 详情卡占画宽 79%，商品是 video-shotcraft 自己：棚拍图里放标志，标题 Shotcraft、卖点与色卡都是它的）
-- 字段时间表直接用 30fps 帧号：光标到达 图 8 / 标题 20 / pill 30 / 价格 42 / 正文 76 / 色卡 96 / 按钮 114，
-  字段在光标到达后 2f 开始落位；同组内部间隔 3f（pill、正文行、色卡），跨组间隔 10–20f——间隔的疏密就是信息分组
-- 填充光标：钴蓝 2.5px 描边框 + 外圈 6px 淡光 + AUTOFILL 小签，在相邻两个字段框之间用不对称 in-out
-  （`cubic-bezier(.4,0,.2,1)`，6f）同时插值位置与宽高；最后收进按钮（ease-in 8f 淡出）。这是全片唯一的光效
-- 骨架槽位：字段落位前槽位里是浅灰骨架条，落位时骨架随进度淡出——"表单正在被填"不是"元素在出现"
-- 两种落位：`rise`（上移 10–26px + 6px→0 失焦淡入，expo-out 14f）给图/标题/价格/正文；`pop`
-  （物理弹簧 damping 13，scale 0.4→1 一次可见过冲）给 pill 与色卡；小件 pop、大件 rise
-- 价格降级 f62（$449 完整落位后 hold 18f）：6f 内同窗"scale 1→0.46 + 变灰 + 9px 删除线从左划过"，
-  f63 起钴蓝新价 Free（Apache-2.0 开源）弹簧（damping 14）从 1.18 收到 1，OPEN SOURCE chip f69 滑入
-- 马克笔高亮：钴蓝 16% 底块 `scaleX 0→1`（origin 左），f86 / f90 起各 6f——比字段落位还快，读作"笔一划过去"
-- 按钮：墨黑底色 f116 起 12f 由左向右填满，文案 f122 淡入
-- 整卡呼吸：`scale 1→1.035`（不对称 in-out）摊在 0–132f；入场 0–14f scale .96→1 + 上移 30px；末段 40f 静止定格
+## Motion Core
+(Demo: porcelain aesthetic, native 1920 coordinates; 1520×840 detail card spans 79% screen width; featured product is video-shotcraft itself: studio photo with emblem, title Shotcraft, value props and palette swatches)
+- Field schedule uses absolute 30fps frame numbers: cursor arrives at image 8 / title 20 / pills 30 / price 42 / body 76 / color swatches 96 / button 114; fields start settling 2f after cursor arrival; intra-group intervals are 3f (pills, body lines, swatches), while inter-group gaps span 10–20f—timing cadence visually organizes information hierarchy.
+- Autofill cursor: cobalt 2.5px outline box + 6px ambient glow + AUTOFILL badge, interpolating position and size between adjacent field bounding boxes via asymmetric in-out (`cubic-bezier(.4,0,.2,1)`, 6f); finally docks into button (ease-in 8f fade-out). This is the only lighting effect in the shot.
+- Skeleton slots: light gray skeleton placeholders fill slots prior to arrival, fading out in sync as content lands—reinforcing "a form being populated" rather than "elements popping in."
+- Dual arrival styles: `rise` (upward travel 10–26px + 6px→0 de-focus fade-in, expo-out 14f) for image/title/price/body; `pop` (spring damping 13, scale 0.4→1 with distinct overshoot) for pills and swatches; smaller elements pop, larger blocks rise.
+- Price downgrade at f62 ($449 holds 18f after settling): over 6f, simultaneous "scale 1→0.46 + gray out + 9px strikethrough line drawing from left"; from f63 cobalt new price "Free" (Apache-2.0 open source) springs in (damping 14) from 1.18 down to 1, followed by OPEN SOURCE chip sliding in at f69.
+- Highlighter sweep: cobalt 16% background block `scaleX 0→1` (left origin), starting at f86 / f90 for 6f each—faster than field arrivals, reading as a pen stroke sweeping across text.
+- Action button: ink-black fill expands left-to-right over 12f starting at f116, with label fading in at f122.
+- Full card breathing: `scale 1→1.035` (asymmetric in-out) across 0–132f; entrance 0–14f scale 0.96→1 + upward 30px; tail holds static for 40f.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 字段时间表 | 光标 8/20/30/42/76/96/114，落位 +2f | 同类字段间隔 3 帧、跨类间隔 10–20 帧；全部改成等间隔会读作机械点名 |
-| 光标跳格 | 6f，swift in-out，框形同步变形 | <4f 读作闪现；>10f 光标拖在字段后面，"领先抓取"变成"事后框选" |
-| 单字段行程 | 14f expo-out | 行程远大于组内间隔 → 同组几个字段同时在动，画面是"涌"而非"点" |
-| rise 位移 | 10–26px（按字号） | 大标题位移大、小字位移小；>40px 会与整卡前推的方向感打架 |
-| pop | 弹簧 damping 13，0.4→1 | pill 与色卡尺寸小，过冲不会撞到邻居，大件用 pop 就会显得廉价 |
-| 价格降级点 | f62（价格落位后 hold 18f） | 必须留出"先看清原价"的时间，紧贴落位会读作从来就是打折价 |
-| 新价 spring | damping 14，1.18→1 | 全片唯一的放大回弹事件；阻尼调小会抖两下，与旁边的划线动作抢注意力 |
-| 高亮刷过 | 6f，`scaleX` 从左 | 5–6f 是马克笔速度；>12f 读作背景色渐变而不是划线 |
-| 整卡前推 | `scale 1→1.035`，0–132f | 摊在 4.4s 上是纯呼吸；>8% 卡会撞到画框 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Field timeline | Cursor 8/20/30/42/76/96/114, arrival +2f | Homogeneous fields stagger by 3f, distinct categories gap by 10–20f; uniform intervals feel like a robotic roll call |
+| Cursor jump | 6f, swift in-out, synchronized box morphing | <4f reads as a telemetric flash; >10f cursor lags behind fields, turning "anticipatory extraction" into "post-hoc selection" |
+| Field arrival travel | 14f expo-out | Duration exceeds group interval → multiple fields in a category move concurrently, feeling like a fluid wave |
+| rise displacement | 10–26px (scaled to font size) | Large headlines move more, captions move less; >40px fights against forward camera push |
+| pop | Spring damping 13, 0.4→1 | Pills and swatches are compact so overshoots do not collide with neighbors; using pop for large blocks looks unpolished |
+| Price downgrade timing | f62 (18f hold after price lands) | Must leave ample time to register original price; rushing reads as if the product was always on sale |
+| New price spring | Damping 14, 1.18→1 | Sole zoom-rebound event in shot; lower damping wobbles twice, competing with adjacent strikethrough |
+| Highlighter sweep | 6f, `scaleX` from left | 5–6f captures hand marker speed; >12f reads as a background gradient fade |
+| Card slow push | `scale 1→1.035`, 0–132f | Spread over 4.4s acts as pure breathing; >8% pushes card into frame edge |
 
-## 已知坑
-- 字段框（光标落点）是写死的绝对坐标：改字号或文案后要同步改 `F` 表里的 box，否则光标框不住字段
-- 最后一个字段在 ~f128 落定，之后 ~1.3s 只有极缓前推——给观众通读整卡的时间，别当成 bug 砍掉
-- 三行正文 `white-space: nowrap` 写死不换行（34px，行宽 ≤ 700px）。换更长文案或中文时会溢出卡边，
-  落地必须重新配字号与行长
-- 新价与折扣 chip 是绝对定位（按 112px 粗体数字宽度估的 x），换价格位数要重排，否则 chip 压字
-- 内容是 video-shotcraft 的示例填法（$449 划掉→Free、卖点文案、品牌四色色卡；$449 只是示意原价），字段结构本身才是可复用的部分。
-  换成真实商品数据后字段数量往往变化，时间表要按新的字段分组重排间隔
-- 高亮的起点（f86/90）晚于所在行开始落位（f78/81）8–9f；改行落位时间必须同步改高亮，否则出现"高亮先到、文字后来"
-- `BLUE`（钴蓝）是全卡唯一色相来源（光标 + 新价 + chip + 高亮），换品牌色改 look 的 accent 即可；其余全是中性色
+## Known Pitfalls
+- Field bounding boxes (cursor targets) are hardcoded absolute coordinates: modifying font size or copy requires updating box definitions in table `F`, otherwise cursor misaligns with text.
+- Final field settles at ~f128, leaving ~1.3s with subtle push—this is reading time for viewers to take in the assembled card, not dead space to cut.
+- Three body lines enforce `white-space: nowrap` (34px, width ≤ 700px). Applying longer text or other languages risks overflowing card margins; recalibrate font size and line lengths accordingly.
+- New price and discount chips use absolute positioning (x estimated for 112px bold digits); changing price digit counts requires layout adjustment to prevent chip clipping digits.
+- Content represents video-shotcraft demo copy ($449 strikethrough to Free, feature copy, brand color swatches; $449 is illustrative); the structural field assembly itself is the reusable asset. Real product data alters field counts, requiring timeline reorganization.
+- Highlighter start cues (f86/90) lag row arrivals (f78/81) by 8–9f; adjusting row timings requires synchronizing highlighters to prevent highlighting before text arrives.
+- Cobalt BLUE is the sole accent color (cursor + new price + chip + highlighter); swap accent tokens for client branding while keeping remainder neutral.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/product-card-progressive-assemble/
-（ProductCardProgressiveAssemble.tsx）
+(ProductCardProgressiveAssemble.tsx)

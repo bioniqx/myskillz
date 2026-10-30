@@ -1,24 +1,27 @@
-// 功能卡 3D 翻面揭示（card-flip-reveal）——Apple bento 翻转段。
-// 手法不变：一排功能卡逐张错峰沿 Y 轴翻 180°（perspective + 双面 backface hidden），正面是功能界面，
-// 背面是它带来的大号结论数字（语义成对）；翻转末端过冲再回落，侧棱最薄处有一道随角度走的受光。
+// Feature card 3D flip reveal (card-flip-reveal) - Apple bento flip sequence.
+// Mechanics unchanged: a row of feature cards flip 180° along Y axis staggered (perspective + double-sided backface hidden).
+// Front side shows the feature UI; back side shows the key outcome metric (semantically paired).
+// Overshoots at the end of flip before settling back; a dynamic light glint travels along the edge at its thinnest angle.
 //
-// 第二轮重设计（设计决定）
-// - look = graphite（近单色暗场，白为强调、香槟金点缀）。正面是暗色功能卡，背面是亮瓷白结论卡：
-//   翻面 = 从暗到亮的反相，"所以呢？"的答案被打亮，三张翻完画面从一排暗卡变成一排白色数字海报。
-// - 内容：video-shotcraft 的三项能力——Prompt（一句话写片）/ Recipes（镜头配方）/ Library（配方库搜索），
-//   正面画成为镜头设计的大字 UI（≥ 28px），背面 158px 数字 3.2× / −41% / 0.2s + 34px 结论，上方一组「之前 / 用上之后」对照条在落定后收短。
-// - 卡片竖版 480×620（bento 比例），三卡 1536px 宽占画宽 80%；左上 84px 标题 + 金色眉题；
-//   卡片立在一面暗色镜面地板上——每张卡在地板里有一份同步翻转的倒影（遮罩渐隐），空间一下就成立了。
-// - 翻转动作：4f 预备（反向后仰 −10°）→ 16f 加速翻到 194°（bezier 0.55,0,0.3,1）→ 物理弹簧落回 180°；
-//   翻转中卡片离地抬起（scale +6%）、面随偏离主光的角度变暗（|cos θ| 着色），侧棱 60–120° 有一道
-//   随角度从左扫到右的窄受光（物理光照，不是额外的扫光特效）。背面数字在落定时由 1.08 收到 1，标签晚 4f。
+// Round 2 Redesign (Design decisions)
+// - look = graphite (near-monochrome dark stage, white emphasis, champagne gold accents). Front is dark feature card, back is bright porcelain white outcome card:
+//   flip = dark-to-light inversion, illuminating the "so what?" answer. After all three flip, screen transforms from dark cards into white metric posters.
+// - Content: three video-shotcraft capabilities: Prompt (one-line generation) / Recipes (camera moves) / Library (recipe search).
+//   Front features large-type UI designed for camera framing (>= 28px); back features 158px metric 3.2x / -41% / 0.2s + 34px takeaway,
+//   with "Before / With Shotcraft" comparison bars shrinking after settling.
+// - Card vertical 480x620 (bento ratio); three cards total 1536px width, occupying 80% screen width; top-left 84px title + gold kicker;
+//   Cards stand on a dark mirror floor - each card has a synchronously flipping reflection (masked fade), establishing 3D space.
+// - Flip animation: 4f prep (reverse tilt -10°) -> 16f accelerated flip to 194° (bezier 0.55,0,0.3,1) -> physical spring settles back to 180°;
+//   Card lifts off ground during flip (scale +6%), surfaces darken based on angle deviation from main light (|cos theta| shading);
+//   A narrow light band sweeps left-to-right between 60–120° along the edge (physical lighting, not an artificial sweep effect).
+//   Back metric shrinks from 1.08 to 1 on settle, label lags by 4f.
 //
-// 时间表（30fps，150f）
-//   0–16    暗卡一排已在画面，眉题 + 标题逐行升起，相机全程 1 → 1.03 极缓推近
-//   22–48   卡 0：22 预备 → 26–42 翻转 → 42–52 弹簧落定，数字收拢、标签升起
-//   34–60   卡 1（错峰 12f）
-//   46–72   卡 2
-//   72–150  全部落定后 hold ~78f（R1），尾帧是三张白色结论卡的海报
+// Timeline (30fps, 150f)
+//   0–16    Row of dark cards already on screen, kicker + title rise line-by-line, camera slowly pushes 1 -> 1.03 throughout
+//   22–48   Card 0: 22 prep -> 26–42 flip -> 42–52 spring settle, metric contracts, label rises
+//   34–60   Card 1 (staggered by 12f)
+//   46–72   Card 2
+//   72–150  All settled, hold ~78f (R1); final frame is poster of three white outcome cards
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -36,13 +39,13 @@ const X0 = (1920 - (CW * 3 + GAP * 2)) / 2; // 192
 const Y = 330;
 const FLIP0 = 22;
 const STAGGER = 12;
-const PRE = 4; // 预备帧
-const FLIP = 16; // 翻转帧
+const PRE = 4; // Preparation frames
+const FLIP = 16; // Flip frames
 const PEAK_DEG = 194;
 
 const flipEase = bezier(0.55, 0, 0.3, 1);
 
-// 卡 i 在帧 f 的翻转角：0 → −10（预备）→ 194（加速翻转）→ 180（弹簧落定）
+// Flip angle for card i at frame f: 0 -> -10 (prep) -> 194 (accelerated flip) -> 180 (spring settle)
 const angleAt = (f: number, i: number) => {
   const s = FLIP0 + i * STAGGER;
   if (f < s + PRE) return -10 * ramp(f, s, PRE, EASE.out);
@@ -56,7 +59,7 @@ const FEATURES = [
   { name: 'Library', desc: 'Every shot, one search away.', value: '0.2s', label: 'to find the right move', bars: [1, 0.06], unit: ['3.4 s', '0.2 s'] },
 ];
 
-// ───────────── 正面 UI（暗色、大字） ─────────────
+// ───────────── Front UI (dark theme, large type) ─────────────
 const FrontUI: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const ink = L.ink, ink2 = L.ink2, ink3 = L.ink3;
   if (i === 0) {
@@ -111,7 +114,7 @@ const FrontUI: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   );
 };
 
-// 受光着色：面偏离正面越多越暗；60–120° 区间一道随角度从左扫到右的窄受光（只在侧棱最薄附近）
+// Surface shading: darkens as surface angles away from camera; narrow light band sweeps left-to-right between 60–120° (near thinnest edge angle)
 const FaceLight: React.FC<{ angle: number; dark: boolean }> = ({ angle, dark }) => {
   const c = Math.abs(Math.cos((angle * Math.PI) / 180));
   const shade = (1 - c) * (dark ? 0.55 : 0.4);
@@ -144,7 +147,7 @@ const FlipCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
         position: 'absolute', inset: 0, transformStyle: 'preserve-3d',
         transform: `translateZ(${(lift * 60).toFixed(2)}px) rotateY(${angle.toFixed(3)}deg)`,
       }}>
-        {/* 正面：暗色功能卡 */}
+        {/* Front: dark feature card */}
         <div style={{
           position: 'absolute', inset: 0, backfaceVisibility: 'hidden', borderRadius: 34, overflow: 'hidden',
           background: `linear-gradient(180deg, #1d1e22 0%, ${L.surface} 48%, #111214 100%)`,
@@ -164,7 +167,7 @@ const FlipCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
           </div>
           <FaceLight angle={angle} dark />
         </div>
-        {/* 背面：瓷白结论卡 */}
+        {/* Back: porcelain white outcome card */}
         <div style={{
           position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: 34, overflow: 'hidden',
           background: 'linear-gradient(180deg, #fbfaf7 0%, #f1f0ec 100%)',
@@ -175,7 +178,7 @@ const FlipCard: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
             <div style={{ width: 12, height: 12, borderRadius: 6, background: '#b8925a' }} />
             <div style={{ ...type(22, 700, { caps: true }), color: '#6b6a66', letterSpacing: '0.16em' }}>{f.name}</div>
           </div>
-          {/* 对照条：之前 / 用上之后（落定后才长出来） */}
+          {/* Comparison bars: Before / With Shotcraft (grows after settling) */}
           <div style={{ position: 'absolute', left: 40, right: 40, top: 112 }}>
             {(['Before', `With ${BRAND.short}`] as const).map((t, k) => {
               const g = k === 0 ? 1 : ramp(frame, land + 4, 18, EASE.snappy);
@@ -216,7 +219,7 @@ export const CardFlipReveal: React.FC = () => {
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.5, y: -0.05 }} fill={{ x: 0.5, y: 1.1 }} horizon={0.88} intensity={0.9}>
-        {/* 镜面地板：地平线以下略亮的反射面 */}
+        {/* Mirror floor: subtly bright reflective surface below horizon */}
         <div style={{
           position: 'absolute', left: 0, right: 0, top: Y + CH, bottom: 0,
           background: `linear-gradient(180deg, ${alpha('#ffffff', 0.035)} 0%, ${alpha('#ffffff', 0)} 60%)`,
@@ -224,7 +227,7 @@ export const CardFlipReveal: React.FC = () => {
         }} />
       </Stage>
       <AbsoluteFill style={{ transform: `scale(${push.toFixed(4)})`, transformOrigin: '50% 60%' }}>
-        {/* 标题 */}
+        {/* Title */}
         <div style={{ position: 'absolute', left: X0, top: 118, fontFamily: FONT.sans }}>
           <div style={{ ...type(26, 700, { caps: true }), color: GOLD, letterSpacing: '0.18em' }}>
             <TextReveal text={`${BRAND.name} · Launch results`} by="word" variant="blur" start={0} each={14} gap={2} />
@@ -235,7 +238,7 @@ export const CardFlipReveal: React.FC = () => {
         </div>
         {[0, 1, 2].map((i) => (
           <React.Fragment key={i}>
-            {/* 倒影：同一张卡竖直镜像，遮罩渐隐 */}
+            {/* Reflection: vertically mirrored clone of card with gradient mask */}
             <div style={{
               position: 'absolute', left: X0 + i * (CW + GAP), top: Y + CH + 6, width: CW, height: CH,
               transform: 'scaleY(-1)', transformOrigin: 'center', opacity: 0.22,
@@ -244,7 +247,7 @@ export const CardFlipReveal: React.FC = () => {
             }}>
               <FlipCard i={i} frame={frame} />
             </div>
-            {/* 接地影 */}
+            {/* Contact shadow */}
             <div style={{
               position: 'absolute', left: X0 + i * (CW + GAP) + 30, width: CW - 60, top: Y + CH - 18, height: 36, borderRadius: '50%',
               background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0,0,0,0.7), rgba(0,0,0,0) 70%)',

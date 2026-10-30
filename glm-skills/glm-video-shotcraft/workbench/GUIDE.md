@@ -1,129 +1,128 @@
-# 动效工作台 · 图文指南
+# Motion Workbench · User Guide
 
-成片交付后，在浏览器里继续改：镜头挪位、变速、换字、调色、加动效、加音效，改完一键导出。
-本页按界面区域介绍每个功能。接入契约与制作规范见 [references/workbench.md](../references/workbench.md)，
-技术说明见 [workbench/README.md](README.md)。
+Fine-tune delivered videos in your browser: reposition shots, adjust playback speeds, edit copy, recolor scenes, insert new motion cards, add sound effects, and export the finished MP4 with a single click.
+This guide walks through each interface area. For developer contracts and specs, refer to [references/workbench.md](../references/workbench.md); for technical architecture, see [workbench/README.md](README.md).
 
-## 怎么打开
+## How to Launch
 
-skill 在交付收尾时会自动执行下面这条命令并打开浏览器；也可以随时手动运行：
+The skill automatically runs this command upon delivery and opens your browser; you can also launch it manually anytime:
 
 ```bash
-node workbench/scripts/open.mjs <成片工程目录>     # 首次运行会自动安装依赖
+node workbench/scripts/open.mjs <project_dir>     # Automatically installs dependencies on first run
 ```
 
-- 地址固定为 `http://localhost:5198/`，带 `?import=project` 打开时会按成片清单把片子拆成多轨。
-- 同一版成片再次打开时保留你上次的改动；成片代码变了（清单内容哈希不同）才重新导入，旧改动压进撤销栈，⌘Z 可找回。
-- 所有改动自动保存在浏览器本地（localStorage），关页不丢。停止服务：`kill $(cat workbench/.dev.pid)`。
+- Accessible at `http://localhost:5198/`; opening with `?import=project` automatically splits the video into multi-track clips per project manifest.
+- Reopening the same project preserves previous modifications; the workbench re-imports only if code changes (manifest hash mismatch), pushing previous states to the undo stack (accessible via Cmd+Z).
+- All changes save automatically to local browser storage (`localStorage`). To stop the server: `kill $(cat workbench/.dev.pid)`.
 
-## 界面总览
+## Interface Overview
 
-![工作台总览](docs/overview.png)
+![Workbench Overview](docs/overview.png)
 
-五个区域，从左到右、从上到下：
+Five core panels from left to right, top to bottom:
 
-| 区域 | 位置 | 干什么 |
+| Panel | Position | Purpose |
 |---|---|---|
-| 顶栏 | 顶部 | 工程名、撤销 / 重做、导出成片、导出 / 导入 JSON、重置示例 |
-| 素材库 | 左栏 | 成片单元、工程素材、150 张 demo 动效、音效与 BGM；点击预览、拖拽上轨 |
-| 预览 | 中央 | Remotion Player 实时预览 + 走带控制 |
-| 属性面板 | 右栏 | 选中片段的文案 / 字号 / 颜色、时间与变速、图层 |
-| 时间轨 | 底部 | 多轨编辑：挪动、裁边、分割、复制、变速、层序 |
+| Top Bar | Top | Project title, Undo / Redo, Export MP4, Export / Import JSON, Reset Demo |
+| Library | Left | Project clips, assets, 150 motion demo cards, SFX and BGM; click to preview, drag to timeline |
+| Preview | Center | Remotion Player live composition with playback controls |
+| Inspector | Right | Selected clip's copy, typography, color palettes, timing, speed, and transform properties |
+| Timeline | Bottom | Multi-track timeline: arrange, trim, split, duplicate, retime, and layer clips |
 
-三条分隔线都可拖动，调整左右栏宽度和时间轨高度，尺寸会记住。
+All three divider handles can be dragged to resize panels; dimensions are persisted.
 
-## 顶栏
+## Top Bar
 
-![顶栏](docs/topbar.png)
+![Top Bar](docs/topbar.png)
 
-- **工程名**：直接点击编辑，导出的 MP4 / JSON 文件名用它。
-- **撤销 / 重做**（⌘Z / ⇧⌘Z）：每次编辑手势一步；同一控件 0.8 秒内的连续输入合并为一步。
-- **导出成片**：把当前工程交给 dev server 用 Remotion 渲染，按钮上显示进度百分比；完成后变成「✓ 已导出 · 显示文件」，点它在 Finder 里定位 MP4（输出在 `workbench/exports/`）。导出时长精确到最后一个片段结束。
-- **导出 JSON / 导入**：工程是一份 JSON，可以存档、发给别人、或贴进 Remotion Studio 的 Props 面板。
-- **重置示例**：换回内置演示工程（可撤销）。
+- **Project Title**: Click directly to edit; sets exported MP4 and JSON filenames.
+- **Undo / Redo** (Cmd+Z / Shift+Cmd+Z): One step per edit gesture; rapid inputs on the same control within 0.8s merge into a single step.
+- **Export Video**: Dispatches the project to the dev server to render via Remotion, displaying export progress percentage on the button. Upon completion, click "✓ Exported · Show file" to locate the MP4 in Finder (`workbench/exports/`). Export duration matches the end of the latest clip.
+- **Export / Import JSON**: Project state is portable JSON — save backups, share with team members, or paste into Remotion Studio's Props panel.
+- **Reset Demo**: Reverts to the built-in demo project (undoable).
 
-## 素材库
+## Asset Library
 
-三个 tab，所有条目都是**点击 = 在中央预览，拖到时间轨 = 添加片段**。
+Three tabs where **Click = Preview in Center, Drag to Timeline = Add Clip**.
 
-### 素材
+### Project Assets
 
-![素材 tab](docs/library-media.png)
+![Project Assets Tab](docs/library-media.png)
 
-- **导入成片**：按成片工程的 `src/workbench.ts` 清单重新拆解导入（一步撤销）。
-- **成片单元（可再加一份）**：片子里的每种镜头、字卡、字幕条、转场各是一张卡，标着时长与「可调参」。想在别处再来一段同款字卡，拖一份上轨即可。
-- **素材文件（工程 public/）**：成片工程自带的图片、视频，按目录折叠分组。
+- **Import Project**: Re-parses and decomposes project from `src/workbench.ts` manifest (undoable).
+- **Project Units**: Every scene, title card, subtitle strip, and transition exists as an editable card labeled with duration and parameter status. Drag duplicates onto tracks as needed.
+- **Media Files**: Images and videos from project `public/`, grouped by folder.
 
-### 动效库
+### Motion Cards
 
-![动效库 tab](docs/library-cards.png)
+![Motion Cards Tab](docs/library-cards.png)
 
-- 「工作台」组是 4 张原生参数化卡：通用文字、Ink Press 字卡、解说字幕条、暖白闪转场，文案颜色字号全部可调。
-- 下面按画廊分类列出全部 **150 张 demo 动效**（开场与品牌、文字排版、数据图表……）。缩略图是定妆帧，**鼠标悬停才循环播放**，不会满屏乱闪。
-- 标签写着卡片时长；标「可调参」的卡在属性面板里有内容与样式栏。demo 卡上轨后可裁剪、变速、定格、做图层变换。
+- Built-in "Workbench" group features 4 native parameterized cards: Generic Text, Ink Press Title Card, Subtitle Strip, and Warm White Flash Transition.
+- 150 categorized demo cards (Opening & Brand, Typography, Data & Metrics, etc.). Thumbnails are frozen keyframes; **hover over a card to loop preview**.
+- Badges show card duration; parameterized cards expose content and style controls in the inspector. All cards support trimming, speed retiming, freezing, and layer transforms once placed on tracks.
 
-### 音效
+### Audio
 
-![音效 tab](docs/library-sfx.png)
+![Audio Tab](docs/library-sfx.png)
 
-- **本片音频**：成片工程 `public/` 里的音效，右侧「片中 ×N」是原片里的使用次数。
-- **BGM 备选**与**音效库**（149 条，按 camera / counter / crowd… 分类折叠）来自仓库 `assets/audio/`。
-- 音频片段上轨后可裁入、变速（playbackRate）、调音量，不会哑音。
+- **Project Audio**: Sound effects from project `public/`; right badge indicates usage count in original render.
+- **BGM Candidates & SFX Library**: 149 audio assets categorized from repository `assets/audio/`.
+- Audio clips on tracks support in-point trimming, playbackRate adjustment, and volume control without muting.
 
-## 预览与走带
+## Preview & Transport Controls
 
-![预览区](docs/preview.png)
+![Preview Area](docs/preview.png)
 
-- 中央是 Remotion Player，画面与最终渲染逐帧一致（像素级校验过）；改属性面板或拖动片段，预览即时跟随。
-- 走带条：⏮ 回到开头、▶ / ⏸ 播放（空格）、时间码（秒.帧 / 总长）、循环开关、画幅与帧率。
-- 点击画面本身也能播放 / 暂停；← / → 逐帧步进，按住 Shift 一次 10 帧。
-- 点素材库任意条目会切到**素材预览**模式，单独循环播放这张卡；点「返回工程」回到时间轴预览：
+- Center Remotion Player matches final render frame-for-frame; editing inspector values or moving clips updates preview instantly.
+- Transport Bar: Jump to start, Play / Pause (Space), Timecode (seconds.frames / total), Loop toggle, resolution and frame rate.
+- Click the video directly to Play / Pause; Left / Right arrows step frame-by-frame (hold Shift for 10-frame jumps).
+- Clicking any item in the library enters **Card Preview** mode, looping that card in isolation; click "Back to Project" to return to timeline preview:
 
-![素材预览](docs/card-preview.png)
+![Card Preview](docs/card-preview.png)
 
-## 属性面板
+## Inspector Panel
 
-![属性面板](docs/inspector.png)
+![Inspector Panel](docs/inspector.png)
 
-选中时间轨上的片段后，右栏分三节：
+Selecting a clip on the timeline populates the right panel across three sections:
 
-- **内容与样式**：由卡片声明的 schema 自动生成——文本、多行文本、滑杆、颜色、下拉、开关。成片里的镜头把语境级参数（字标、眉题、批注、字号、墨色、琥珀强调色、纸底……）都暴露在这里；动效节奏（弹入时长、缓动、相机路径）故意不暴露，避免调坏品相。
-- **时间与变速**：起点、时长（秒）、变速滑杆与 0.5× / 1× / 1.5× / 2× 快捷键、裁入点、「↺ 恢复原始时长」。卡片帧率与工程帧率不一致时这里会有一行提示。
-- **图层**：不透明度、缩放、位移 X / Y。
+- **Content & Style**: Auto-generated from component schemas — text, textareas, sliders, color pickers, dropdowns, toggles. Exposes contextual parameters (wordmarks, headlines, notes, colors, materials) while locking motion invariants (durations, easing curves, camera moves) to prevent degradation.
+- **Timing & Speed**: Start frame, duration (seconds), speed slider with 0.5× / 1× / 1.5× / 2× presets, in-point trimming, and "↺ Restore Original Duration". Displays a warning notice if card FPS diverges from project FPS.
+- **Layer**: Opacity, scale, translation X / Y.
 
-底部「删除片段」等价于 Delete 键。
+Bottom "Delete Clip" button mirrors the Delete key.
 
-## 时间轨
+## Timeline
 
-![时间轨](docs/timeline.png)
+![Timeline](docs/timeline.png)
 
-- **工具条**：✂ 分割（S，在播放头处切开选中片段）、复制（⌘D，接在原片段之后）、删除（Delete）、+ 轨道（加在最上层）、适配（缩放到刚好看全）、缩放滑杆。
-- **轨道头**：拖动左侧把手上下调整层序（上层盖住下层）；👁 隐藏 / 显示整轨；× 删除轨道。导入成片时轨序与原片 z 序一致：转场 > 字幕 > 叠加层 > 镜头 > 音乐 > 音效。
-- **片段**：拖动本体挪位置（自动吸附到其他片段的起止点）、上下拖到别的轨、拖两侧把手裁边（左边裁入、右边裁出）；片段上的徽标显示时长、变速倍率、裁入秒数、不透明度。
-- **标尺**：点击或拖动标尺跳转播放头；红线是当前播放头。
-- 同轨允许片段重叠（层级用多轨表达）。
+- **Toolbar**: Split (S, cuts selected clip at playhead), Duplicate (Cmd+D), Delete, + Track (adds layer to top), Fit to view, Zoom slider.
+- **Track Headers**: Drag handle to reorder layer hierarchy (upper tracks overlay lower tracks); Eye toggle hides / reveals track; × deletes track. Imported tracks mirror original composition z-order: Transitions > Subtitles > Overlays > Scenes > BGM > SFX.
+- **Clips**: Drag clip body to reposition (snapping to adjacent clip edges); drag between tracks; drag edge handles to trim in/out points. Badges indicate duration, speed factor, in-point offset, and opacity.
+- **Ruler**: Click or scrub ruler to jump playhead; red line denotes current playhead.
+- Clips may overlap on the same track (represented across multi-track hierarchy).
 
-## 快捷键
+## Keyboard Shortcuts
 
-| 键 | 作用 |
+| Shortcut | Action |
 |---|---|
-| 空格 | 播放 / 暂停 |
-| ← / → | 逐帧步进；按住 Shift 一次 10 帧 |
-| S | 在播放头处分割选中片段 |
-| ⌘D | 复制选中片段 |
-| Delete / Backspace | 删除选中片段 |
-| ⌘Z / ⇧⌘Z | 撤销 / 重做 |
+| Space | Play / Pause |
+| Left / Right Arrow | Step frame-by-frame (hold Shift for 10 frames) |
+| S | Split selected clip at playhead |
+| Cmd+D | Duplicate selected clip |
+| Delete / Backspace | Delete selected clip |
+| Cmd+Z / Shift+Cmd+Z | Undo / Redo |
 
-## 一次典型的修改
+## Example Editing Workflow
 
-1. 交付后工作台自动打开，片子已拆好在时间轨上。
-2. 点时间轨上的「S1 墨线开场」，右栏把「字标」改成新品牌名、拖大「字标字号」，预览立刻更新。
-3. 觉得某段字幕太早，直接拖字幕片段挪后一点；想让镜头慢一点，变速滑到 0.8×。
-4. 从「动效库」拖一张「数据晨光开场」到最上层轨道当片头，从「音效」拖一条 whoosh 对齐它的起点。
-5. 点「导出成片」，等进度走完，「显示文件」拿到 MP4。
+1. Workbench launches automatically after delivery, with the project decomposed across tracks.
+2. Click "S1 Ink Line Open" on the timeline; in the right inspector, update "Wordmark" to your new brand name and enlarge "Wordmark Size" — preview updates immediately.
+3. Subtitle appearing too early? Drag the caption clip to shift it right; want a shot to linger longer? Adjust speed slider to 0.8×.
+4. Drag "Dataviz Landscape Open" from Motion Cards to the top track as an intro, then drag a whoosh sound effect to align with its start.
+5. Click "Export Video", wait for render completion, then click "Show File" to grab your MP4.
 
-## 进阶
+## Advanced Usage
 
-- 让自己的成片能被逐属性编辑：镜头组件把语境参数做成 props + schema、写一份 `src/workbench.ts` 清单，见 [references/workbench.md](../references/workbench.md) §2–§3。
-- 验证拆解无损：`cd workbench && npm run parity`，逐帧比对导入结果与原片。
-- Remotion Studio 视角：`cd workbench && npm run studio`，每张卡都是一个合成，Props 面板与工作台 schema 同源。
+- Make custom project scenes editable: expose contextual parameters as defaulted props + schema in `src/workbench.ts` ([references/workbench.md](../references/workbench.md) §2–§3).
+- Parity verification: `cd workbench && npm run parity` diffs imported playback against the original render frame-by-frame.
+- Remotion Studio view: `cd workbench && npm run studio` mounts dedicated compositions per card with official Inspector integration.

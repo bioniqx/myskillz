@@ -22,11 +22,10 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-/** 不进动效库的分类：成片单元只在素材 tab；媒体走素材 / 音效 tab；预设幕底卡不进素材库
- *  （已有工程里的幕底 clip 仍由注册表渲染） */
-const NON_MOTION_CATS = new Set(["成片单元", "音频", "素材", "背景"]);
+/** Categories excluded from motion library */
+const NON_MOTION_CATS = new Set(["Film Units", "Audio", "Media", "Background"]);
 
-/** 进入视口才挂载重内容（预览视频 / 实时 Player） */
+/** Mount heavy contents (video preview / live Player) only when entering viewport */
 const useVisible = () => {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -42,7 +41,7 @@ const useVisible = () => {
   return { ref, visible };
 };
 
-/** 进入视口才加载并循环播放的预览视频 */
+/** Looping preview video loaded only when visible in viewport */
 const LazyLoopVideo: React.FC<{ src: string }> = ({ src }) => {
   const ref = useRef<HTMLVideoElement>(null);
   const [visible, setVisible] = useState(false);
@@ -79,9 +78,7 @@ const LazyLoopVideo: React.FC<{ src: string }> = ({ src }) => {
   );
 };
 
-/** 没有预渲染视频的卡：可见时用实时 Player 当缩略图——**静止在 45% 处的定妆帧**，鼠标悬停才循环播放。
- *  曾经默认自动循环：十几个 1080p 场景同时跑、闪白转场卡每 0.3s 白一次、字卡每 1.8s 淡出重来，
- *  首屏像在闪光灯下；大图反复解码还刷出一串 EncodingError。 */
+/** Cards without pre-rendered video: thumbnail paused at 45% hero frame, loops on hover. */
 const LazyCardLoop: React.FC<{ card: CardDef }> = ({ card }) => {
   const themeId = useStore(s => s.project.themeId);
   const themeColors = useStore(s => s.project.themeColors);
@@ -91,7 +88,7 @@ const LazyCardLoop: React.FC<{ card: CardDef }> = ({ card }) => {
   const [hover, setHover] = useState(false);
   const total = Math.max(2, card.durationInFrames);
   const poster = Math.min(total - 1, Math.round(total * 0.45));
-  // .lib-thumb 本身 pointer-events:none（让拖拽落到 .lib-cell 上），悬停监听挂到所属 cell
+  // .lib-thumb has pointer-events:none; hover listeners attach to parent cell
   useEffect(() => {
     const cell = ref.current?.closest(".lib-cell");
     if (!cell) return;
@@ -155,7 +152,7 @@ export const LibraryPanel: React.FC = () => {
   const tx = useTx();
   const setPreview = useStore((s) => s.setPreview);
   const [tab, setTab] = useState<TabId>(PROJ_LINKED ? "media" : "cards");
-  // 折叠分组默认收起，点击标题展开
+  // Collapsible groups collapsed by default, click header to expand
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
   const toggleCat = (cat: string) =>
     setOpenCats((prev) => {
@@ -165,7 +162,7 @@ export const LibraryPanel: React.FC = () => {
       return next;
     });
 
-  /** 网格单元通用外壳：点击=中屏预览，拖拽=上轨 */
+  /** Grid cell shell: click to preview, drag to timeline */
   const Cell: React.FC<{
     name: string;
     meta?: string;
@@ -187,7 +184,7 @@ export const LibraryPanel: React.FC = () => {
     </div>
   );
 
-  /** 动效卡网格单元 */
+  /** Motion card grid cell */
   const CardCell: React.FC<{ card: CardDef }> = ({ card }) => (
     <Cell
       name={cardName(card)}
@@ -200,7 +197,7 @@ export const LibraryPanel: React.FC = () => {
     </Cell>
   );
 
-  /** 音效等无画面素材的列表行 */
+  /** Non-visual audio list row */
   const Row: React.FC<{
     dot: string;
     name: string;
@@ -221,7 +218,7 @@ export const LibraryPanel: React.FC = () => {
     </div>
   );
 
-  /** 可折叠分组标题 */
+  /** Collapsible group header */
   const Group: React.FC<{ id: string; label: string; count: number; children: React.ReactNode; defaultOpen?: boolean }> =
     ({ id, label, count, children, defaultOpen }) => {
       const open = defaultOpen ? !openCats.has(id) : openCats.has(id);
@@ -238,13 +235,13 @@ export const LibraryPanel: React.FC = () => {
     };
 
   const motionCards = CARD_LIST.filter((c) => !NON_MOTION_CATS.has(c.category));
-  const projectCards = CARD_LIST.filter((c) => c.category === "成片单元");
+  const projectCards = CARD_LIST.filter((c) => c.category === "Film Units");
   const usage = sfxUsage(MANIFEST);
   const projectAudio = MEDIA_ITEMS.filter((m) => m.kind === "audio");
   const projectVisual = MEDIA_ITEMS.filter((m) => m.kind !== "audio");
 
-  // 动效库：工作台原生卡靳前，然后按画廊分类
-  const motionGroups = ["工作台", ...DEMO_CATEGORIES]
+  // Motion library: native workbench cards first, then gallery categories
+  const motionGroups = ["Workbench", ...DEMO_CATEGORIES]
     .map((cat) => ({ cat, cards: motionCards.filter((c) => c.category === cat) }))
     .filter((g) => g.cards.length > 0);
 
@@ -337,7 +334,7 @@ export const LibraryPanel: React.FC = () => {
 
         {tab === "cards" &&
           motionGroups.map((g) => (
-            <Group key={g.cat} id={`cat:${g.cat}`} label={tx(g.cat)} count={g.cards.length} defaultOpen={g.cat === "工作台"}>
+            <Group key={g.cat} id={`cat:${g.cat}`} label={tx(g.cat)} count={g.cards.length} defaultOpen={g.cat === "Workbench"}>
               <div className="lib-grid">
                 {g.cards.map((card) => (
                   <CardCell key={card.id} card={card} />

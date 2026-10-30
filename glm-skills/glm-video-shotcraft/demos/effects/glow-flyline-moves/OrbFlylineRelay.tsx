@@ -1,35 +1,35 @@
-// orb-flyline-relay｜光斑飞线接力——氛围层（光斑）与事件层（飞线）同帧共振：飞线落点那一帧，
-// 节点背后的光斑一起涨亮一拍，背景给前景"搭腔"。
+// orb-flyline-relay: ambient orb and event flyline resonance: on the exact frame the flyline lands,
+// the background orb behind the node flares in synchrony, background responding to foreground event.
 //
-// 第二轮重设计（午夜接力 · 三颗玻璃节点）：
-// - look = midnight（深蓝夜 · 电光蓝 · 青）。三张灰卡换成 video-shotcraft 出片流程的三颗 240px 玻璃节点
-//   「Brief → Storyboard → Ship」（品牌轮由语音 AI「Tessel」的 Listen → Understand → Act 换来），横向起伏排布（中间高、两边低），飞线是节点之间的
-//   一跳一跳的弧——读作"接力"而不是连线图。每颗节点背后各有一团 720–820px 的光斑（电光蓝 / 青 / 堇蓝），
-//   连同节点一起轻微漂移。
-// - 共振（组合命门）：飞线落点帧 = 节点点亮帧 = 背后光斑 surge 起点帧（同一个常量），光斑 5f 涨到
-//   1+1.6 倍亮度并放大 12%、15f 消散；节点同帧描边脉冲 + 一圈冲击环。错开 ≥2f 就读不出"搭腔"。
-// - 飞线：白芯 + 青蓝两层辉光，亮头领跑带彗尾，生长曲线起步蓄力、进站减速；到站 4f 后整条线 14f 消散
-//   成一串细点虚线（能量已经交出去，只留下路径），与 flyline-arc 的"常驻线"区分。
-// - 收束：C 点亮后 72px 标题「Say it once. video-shotcraft does the rest.」逐词升起（品牌名用青色），
-//   光斑 110–140f out-sine 收敛冻结，末 25f 真静止。
-// - 镜头：全程 1→1.04 极缓推进，焦点随接力从 A 漂到 C（起止无速度突变）。
+// Redesign (midnight relay: three glass nodes):
+// - look = midnight (deep blue night, electric blue, cyan). Three 240px glass nodes represent workflow milestones:
+//   "Brief -> Storyboard -> Ship", arranged in an undulating arc; flylines leap between nodes as sequential hops.
+//   Each node sits in front of a 720-820px ambient glow orb (electric blue / cyan / violet),
+//   drifting gently with perspective parallax.
+// - Resonance: flyline arrival frame = node ignite frame = orb surge start frame (shared constant); orb flares to
+//   2.6x brightness and expands 12% over 5f, decaying over 15f; node pulses stroke and emits shockwave ring.
+// - Flyline: white core + cyan/blue dual glow, leading beacon with comet tail, ease-in acceleration with deceleration on arrival;
+//   dissolves into subtle dotted path after 4f, contrasting with persistent lines in flyline-arc.
+// - Closing: after Node C ignites, 72px headline "Say it once. video-shotcraft does the rest." rises word-by-word,
+//   orbs converge and freeze 110-140f (out-sine), followed by a 25f complete static hold.
+// - Camera: continuous slow push 1->1.04 throughout, tracking relay from A to C with smooth motion.
 //
-// 时间表（30fps，共 165f）：
-//   0–20     光斑亮起，三颗节点错峰升起（0 / 4 / 8f）；A 10f 点亮（自带光斑）
-//   22–48    线 1 A→B（26f）
-//   48       B 点亮 = B 光斑 surge（同帧）
-//   58–82    线 2 B→C（24f）
-//   82       C 点亮 = C 光斑 surge（同帧）
-//   92–122   标题逐词升起；两条线已消散为细点虚线
-//   110–140  光斑漂移 out-sine 收敛冻结
-//   140–165  真静止 hold
+// Timeline (30fps, total 165f):
+//   0-20     Orbs illuminate, 3 nodes rise staggered (0/4/8f); Node A ignites at 10f
+//   22-48    Line 1: A -> B (26f)
+//   48       Node B ignites = Orb B surge (synchronous)
+//   58-82    Line 2: B -> C (24f)
+//   82       Node C ignites = Orb C surge (synchronous)
+//   92-122   Headline rises word-by-word; lines dissolve into dotted paths
+//   110–140  Orb drift converges and freezes (out-sine)
+//   140-165  Static hold
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, bezier, mix, ramp } from '../../_fixtures/Polish';
 import { LOOKS, Stage, TextReveal, alpha, type } from '../../_fixtures/Look';
 import { BRAND } from '../../_fixtures/Brand';
 
-export const ORB_FLYLINE_RELAY_DURATION = 165; // 5.5s：动作 f98 前结束、光斑 f140 冻结、末 25f 真静止
+export const ORB_FLYLINE_RELAY_DURATION = 165; // 5.5s: action ends by f98, orbs freeze f140, last 25f static hold
 
 const L = LOOKS.midnight;
 const TAU = Math.PI * 2;
@@ -48,14 +48,14 @@ const h = (n: number) => {
 };
 const grow = bezier(0.45, 0, 0.2, 1);
 
-// 漂移时间：0–110 同速，110–140 out-sine 收敛（起始斜率 = 1），之后冻结
+// Drift time: 0-110 steady, 110-140 out-sine convergence, frozen thereafter
 const T0 = 110, TS = 30;
 const drift = (f: number) => (f <= T0 ? f : T0 + (2 * TS / Math.PI) * Math.sin((Math.PI / 2) * Math.min(1, (f - T0) / TS)));
 
-// ───────────── 节点 ─────────────
+// ------------- Nodes -------------
 const R = 120;
-const LIT_B = 48; // 线 1 落点 = B 点亮 = B 光斑 surge
-const LIT_C = 82; // 线 2 落点 = C 点亮 = C 光斑 surge
+const LIT_B = 48; // Line 1 arrival = Node B ignite = Orb B surge
+const LIT_C = 82; // Line 2 arrival = Node C ignite = Orb C surge
 
 type NodeDef = { x: number; y: number; label: string; sub: string; litAt: number; inAt: number; orb: string; orbSize: number; seed: number; icon: React.ReactNode };
 const ICON_STROKE = { fill: 'none', strokeWidth: 7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -74,7 +74,7 @@ const NODES: NodeDef[] = [
   },
 ];
 
-// 涨亮一拍：5f out 起升，15f 消散
+// Surge pulse: 5f rise, 15f decay
 const surge = (f: number, at: number) => (f < at ? 0 : f <= at + 5 ? ramp(f, at, 5, EASE.out) : 1 - ramp(f, at + 5, 15, EASE.swift));
 
 const edge = (n: NodeDef, deg: number): Pt => ({ x: n.x + R * Math.cos((deg * Math.PI) / 180), y: n.y + R * Math.sin((deg * Math.PI) / 180) });
@@ -94,8 +94,8 @@ const Flyline: React.FC<{ f: number; ln: typeof LINES[number] }> = ({ f, ln }) =
   if (f < start) return null;
   const e = grow(Math.min(1, (f - start) / dur));
   const growing = f < start + dur;
-  const fade = 1 - ramp(f, start + dur + 4, 14, EASE.swift); // 到站 4f 后整条消散
-  const dots = ramp(f, start + dur + 6, 14, EASE.out); // 留下细点虚线路径
+  const fade = 1 - ramp(f, start + dur + 4, 14, EASE.swift); // Dissolves 4f post arrival
+  const dots = ramp(f, start + dur + 6, 14, EASE.out); // Reveals dotted path
   const pts: Pt[] = [];
   const n = Math.max(2, Math.ceil(e * N) + 1);
   for (let i = 0; i < n; i++) pts.push(bez(p0, p1, p2, p3, Math.min(i / N, e)));
@@ -141,7 +141,7 @@ const Node: React.FC<{ f: number; n: NodeDef; ox: number; oy: number }> = ({ f, 
   const c = n.orb;
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, opacity: enter }}>
-      {/* 冲击环 */}
+      {/* Shockwave ring */} 
       {ring > 0 && ring < 1 && (
         <div style={{
           position: 'absolute', left: x, top: y, width: 0, height: 0,
@@ -153,7 +153,7 @@ const Node: React.FC<{ f: number; n: NodeDef; ox: number; oy: number }> = ({ f, 
           }} />
         </div>
       )}
-      {/* 玻璃节点 */}
+      {/* Glass node */} 
       <div style={{
         position: 'absolute', left: x - R, top: y - R, width: 2 * R, height: 2 * R, borderRadius: '50%',
         background: `radial-gradient(circle at 50% 28%, ${alpha('#2a3a66', 0.92)} 0%, ${alpha('#121a30', 0.94)} 62%, ${alpha('#0b1122', 0.96)} 100%)`,
@@ -164,7 +164,7 @@ const Node: React.FC<{ f: number; n: NodeDef; ox: number; oy: number }> = ({ f, 
           <g stroke={lit > 0.5 ? '#ffffff' : L.ink3} style={{ filter: lit > 0.5 ? `drop-shadow(0 0 10px ${alpha(c, 0.8)})` : undefined }}>{n.icon}</g>
         </svg>
       </div>
-      {/* 标签 */}
+      {/* Node label */} 
       <div style={{ position: 'absolute', left: x - 260, width: 520, top: y + R + 34, textAlign: 'center' }}>
         <div style={{ ...type(52, 650), color: lit > 0.5 ? L.ink : L.ink3 }}>{n.label}</div>
         <div style={{ ...type(32, 450), color: lit > 0.5 ? L.ink2 : alpha(L.ink3, 0.7), marginTop: 10, ...(n.label === 'Ship' ? { fontFamily: FONT.mono, letterSpacing: '0em' } : null) }}>{n.sub}</div>
@@ -180,7 +180,7 @@ export const OrbFlylineRelay: React.FC = () => {
   const fx = mix(700, 1200, ramp(f, 10, 100, EASE.smooth));
   const orbIn = 0.3 + 0.7 * ramp(f, 0, 20, EASE.out);
 
-  // 节点与光斑一起轻漂（节点漂得少 = 视差：光斑在后）
+  // Nodes drift with orbs (less node drift creates spatial parallax: orbs behind)
   const offs = NODES.map((n) => {
     const a = h(n.seed * 7 + 1) * TAU, b = h(n.seed * 7 + 2) * TAU;
     return {
@@ -188,14 +188,14 @@ export const OrbFlylineRelay: React.FC = () => {
     };
   });
 
-  const nodeOffs = offs.map((o) => ({ ox: o.ox * 0.22, oy: o.oy * 0.22 })); // 节点只漂 22%：光斑在后、节点在前的视差
+  const nodeOffs = offs.map((o) => ({ ox: o.ox * 0.22, oy: o.oy * 0.22 })); // Node drifts 22% of orb for depth parallax
 
   return (
     <AbsoluteFill style={{ background: L.bg[2] }}>
       <Stage look={L} keyLight={{ x: 0.5, y: -0.05 }} fill={null} intensity={0.8} />
 
       <AbsoluteFill style={{ transform: `scale(${cam})`, transformOrigin: `${fx}px 470px` }}>
-        {/* 光斑：每颗节点背后一团；点亮后常亮，落点帧同帧 surge */}
+        {/* Ambient orbs: one behind each node; surges on arrival frame */} 
         {NODES.map((n, i) => {
           const s = surge(f, n.litAt);
           const base = n.litAt <= 10 ? 0.4 + 0.6 * ramp(f, n.litAt, 10, EASE.out) : 0.35 + 0.65 * ramp(f, n.litAt, 8, EASE.out);
@@ -218,7 +218,7 @@ export const OrbFlylineRelay: React.FC = () => {
               <stop offset="100%" stopColor={alpha(L.accent, 0)} />
             </radialGradient>
           </defs>
-          {/* 飞线坐标跟随节点漂移：端点按节点偏移整体平移 */}
+          {/* Flyline coordinates track node drift offset */} 
           {LINES.map((ln, i) => {
             const a = nodeOffs[i], b = nodeOffs[i + 1];
             const shift = (p: Pt, w: number) => ({ x: p.x + mix(a.ox, b.ox, w), y: p.y + mix(a.oy, b.oy, w) });
@@ -230,7 +230,7 @@ export const OrbFlylineRelay: React.FC = () => {
         {NODES.map((n, i) => <Node key={i} f={f} n={n} ox={nodeOffs[i].ox} oy={nodeOffs[i].oy} />)}
       </AbsoluteFill>
 
-      {/* 收束标题（不随镜头推进，稳在画面下缘） */}
+      {/* Closing headline anchored at bottom margin */} 
       <div style={{ position: 'absolute', left: 0, right: 0, top: 862, textAlign: 'center' }}>
         <TextReveal text={`Say it once. ${BRAND.name} does the rest.`} by="word" variant="rise" start={92} each={18} gap={3.5}
           style={{ ...type(72, 700), color: L.ink }}

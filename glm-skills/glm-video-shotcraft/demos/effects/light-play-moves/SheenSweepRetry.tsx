@@ -1,23 +1,23 @@
-// sheen-sweep-retry —— 单点扫光（高标准重试）：深墨主角卡上一道斜向高光带缓扫一次，被圆角裁住，无声的加冕。
+// sheen-sweep-retry — Single-point sheen sweep (high-standard retry): A diagonal specular band slowly sweeps across a dark hero card once, clipped by rounded corners, a silent coronation.
 //
-// 第二轮重设计（暖沙展台 · 钛黑会员卡发布）：
-// - look = sand（米色 · 赤陶）。主角从"灰底上的 PRO 小卡"换成一张 900×567 的钛黑金属卡（video-shotcraft 导演卡），
-//   卡面是拉丝钛（横向发丝纹）+ 激光蚀刻的单色「镜刻」标志与 video-shotcraft 字标 / 持卡人 / 非接图标 + 香槟金芯片，
-//   带 8 层叠出的金属厚边。卡在右侧 3D 斜放（rotateY 朝向左侧文字栏、rotateX 微仰），左栏是编辑式标题
-//   「Cinematic, / by default.」。
-// - 扫光有物理动机：卡缓缓"转向光源"（rotateY 21°→14°）的同一时段，高光带掠过卡面——不是贴上去的特效，
-//   而是转角带来的反射。四约束照旧：单点（只扫主角卡）、圆角裁剪、只扫一次、扫前扫后无光效层。
-// - 光带三层：宽柔光（0.14）+ 窄亮芯（0.5）screen 叠在钛黑上；光带经过处，拉丝纹与蚀刻字被"照出来"
-//   （固定在卡面上的亮版副本，用随光带移动的同一条 115° 遮罩揭开），卡的上沿发丝线同步亮一下。
-// - 空间：Stage 左上主光 + 沙色地面；卡下两层软投影（接触影 + 远影）随入场高度收紧，不在 3D 层里。
+// Second-round redesign (Warm sand plinth · Titanium black membership card release):
+// - look = sand (beige · terracotta). Hero shifts from a "PRO card on grey backdrop" to a 900×567 titanium black metallic card (video-shotcraft Director Card),
+//   featuring brushed titanium texture (horizontal hairline grain) + laser-etched monochrome "Mirror Cut" emblem, video-shotcraft wordmark / cardholder / contactless icon + champagne gold chip,
+//   layered with 8 stacked slices for metallic rim thickness. Positioned 3D-angled on the right (rotateY facing left text column, rotateX tilted slightly back), left column houses editorial headline
+//   "Cinematic, / by default.".
+// - Sheen sweep has physical motivation: As card slowly rotates toward light source (rotateY 21°->14°), the specular band sweeps across the surface — not a pasted-on overlay effect,
+//   but a reflection driven by angular transition. Four strict constraints preserved: single target (only sweeps hero card), rounded corner clipping, sweeps exactly once, zero residual glow layers before/after.
+// - Three-layer light band: Wide soft glow (0.14) + narrow specular core (0.5) screen-blended onto titanium black; where light passes, brushed hairline and etched typography are revealed
+//   (bright duplicate pinned to card surface, unveiled by matching 115° moving mask), card's top edge hairline specular catches light simultaneously.
+// - Spatial layout: Stage top-left key light + sand ground plinth; two soft drop shadows beneath card (contact shadow + ambient distance shadow) tighten with entrance elevation, outside 3D layer.
 //
-// 时间表（30fps，共 150f）：
-//   0–36    卡入场：从下方 120px 处升起 + 转到 21°（弹簧 damping 24，慢、重、无回弹的奢侈感）；投影晚 4f 收紧
-//   6–44    左栏：眉题字距收拢 → 标题两行从线下升起（间隔 7f）→ 正文淡入上浮
-//   44–58   hold：卡静置，观众先看清卡面
-//   58–90   主动作：卡转向光源（smooth in-out，到 96f）+ 高光带扫过一次（32f，swift）
-//   92–108  余波：CTA 胶囊升起
-//   108–150 hold：卡极缓漂移（rotateY 再转 1°，ease-out 收住），尾段干净海报
+// Timeline (30fps, total 150f):
+//   0–36    Card entrance: Rises from 120px below + settles at 21° (spring damping 24, slow, heavy, zero bounce luxury feel); shadows tighten 4f delayed
+//   6–44    Left column: Overline tracking tightens -> Two headline lines emerge from baseline rule (7f stagger) -> Body text fades in and floats up
+//   44–58   Hold: Card pauses motionless, allowing viewer to read card details first
+//   58–90   Main action: Card turns toward light source (smooth in-out, to 96f) + specular band sweeps once (32f, swift)
+//   92–108  Aftermath: CTA pill button rises
+//   108–150 Hold: Card drifts imperceptibly (rotateY turns additional 1°, ease-out settle), clean poster composition at outro
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -29,24 +29,24 @@ export const SHEEN_SWEEP_RETRY_DURATION = 150;
 const L = LOOKS.sand;
 
 const W = 900;
-const H = 567; // ISO 卡比例 1.586
+const H = 567; // ISO card ratio 1.586
 const R = 38;
-const CX = 1262; // 卡心
+const CX = 1262; // Card center x
 const CY = 520;
 
 const SWEEP_START = 58;
 const SWEEP_END = 90;
 const TURN_END = 96;
 
-const ENGRAVE = '#57534d'; // 蚀刻：比钛黑底亮两档的暖灰（静置时也读得出字标）
-const LIT = '#efe6d8'; // 光带下的蚀刻反光：暖白
+const ENGRAVE = '#57534d'; // Etched tone: Warm grey two steps brighter than titanium black base (readable even at rest)
+const LIT = '#efe6d8'; // Specular reflection on etching under light band: Warm white
 
-// 拉丝钛：横向发丝纹（两组不同周期叠出不规则感）
+// Brushed titanium: Horizontal hairline grain (two staggered periodic layers for organic irregularity)
 const BRUSH =
   'repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 3px),' +
   'repeating-linear-gradient(180deg, rgba(0,0,0,0.25) 0px, rgba(0,0,0,0.25) 1px, transparent 1px, transparent 7px)';
 
-// 蚀刻标志：激光雕刻按规范用单色版（取景框与斜切同色），标志本身不加发光 / 投影
+// Etched emblem: Laser engraving uses monochromatic spec (viewfinder frame and diagonal cut share tone), emblem itself has zero glow / drop shadow
 const Mark: React.FC<{ color: string; size?: number }> = ({ color, size = 66 }) => (
   <ShotcraftMark size={size} frameColor={color} cutColor={color} />
 );
@@ -59,9 +59,9 @@ const Contactless: React.FC<{ color: string }> = ({ color }) => (
   </svg>
 );
 
-// 卡面内容（蚀刻层）：tone = 字色；lit = 光带下的亮版（只换颜色与阴影）
+// Card surface content (etched layer): tone = font color; lit = illuminated state under sheen sweep (color and shadow swap only)
 const Face: React.FC<{ tone: string; lit?: boolean }> = ({ tone, lit }) => {
-  // 蚀刻感：下沿 1px 亮、上沿 1px 暗（刻进去的槽）；亮版换成发光
+  // Etched relief: 1px bright bottom edge, 1px dark top edge (recessed groove); lit state switches to glow highlight
   const etch = lit ? `0 0 14px ${alpha(LIT, 0.5)}` : '0 1px 0 rgba(255,255,255,0.10), 0 -1px 0 rgba(0,0,0,0.6)';
   return (
     <div style={{ position: 'absolute', inset: 0, padding: '52px 60px 50px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', color: tone }}>
@@ -84,7 +84,7 @@ const Face: React.FC<{ tone: string; lit?: boolean }> = ({ tone, lit }) => {
   );
 };
 
-// 香槟金芯片：拉丝金属 + 触点分割线
+// Champagne gold chip: Brushed metal texture + contact pad segment dividers
 const Chip: React.FC = () => (
   <div
     style={{
@@ -105,10 +105,10 @@ const Chip: React.FC = () => (
 export const SheenSweepRetry: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // —— 卡入场：慢弹簧，无回弹 ——
+  // —— Card entrance: Slow spring, zero bounce ——
   const enter = springAt(frame, 0, { damping: 24, stiffness: 70, mass: 1.1 });
-  const shadowIn = springAt(frame, 4, { damping: 24, stiffness: 70, mass: 1.1 }); // 投影晚 4f
-  // —— 转向光源：与扫光同段 ——
+  const shadowIn = springAt(frame, 4, { damping: 24, stiffness: 70, mass: 1.1 }); // Shadow delayed by 4f
+  // —— Turn toward light source: Synchronized with sheen sweep ——
   const turn = ramp(frame, SWEEP_START - 4, TURN_END - SWEEP_START + 4, EASE.smooth);
   const drift = ramp(frame, TURN_END, 150 - TURN_END, EASE.out);
   const rotY = mix(36, 21, enter) - 7 * turn - 1.5 * drift;
@@ -117,10 +117,10 @@ export const SheenSweepRetry: React.FC = () => {
   const scale = mix(0.94, 1, enter);
   const appear = ramp(frame, 0, 8, EASE.out);
 
-  // —— 扫光：只一次，条件挂载 ——
+  // —— Sheen sweep: Single pass, conditionally mounted ——
   const sweepOn = frame >= SWEEP_START && frame <= SWEEP_END;
   const p = ramp(frame, SWEEP_START, SWEEP_END - SWEEP_START, EASE.swift);
-  // 光带中心从卡左外 0.45W 走到卡右外 0.45W；遮罩/光带宽 2W，中心在其 50% 处
+  // Light band center traverses from 0.45W left of card to 0.45W right of card; mask / light band width is 2W, centered at 50%
   const bandC = mix(-0.45 * W, 1.45 * W, p);
   const bandX = bandC - W;
   const bandMask = `linear-gradient(115deg, transparent 38%, #000 50%, transparent 62%)`;
@@ -131,11 +131,11 @@ export const SheenSweepRetry: React.FC = () => {
   return (
     <AbsoluteFill style={{ overflow: 'hidden', fontFamily: FONT.sans }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.08 }} fill={{ x: 0.9, y: 0.95 }} horizon={0.86} intensity={1}>
-        {/* 展台地面：下 1/4 微微压暗的桌面 + 远处一条柔和的桌沿 */}
+        {/* Plinth ground: Lower 1/4 subtle desktop vignetting + distant soft plinth rim */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 820, bottom: 0, background: `linear-gradient(180deg, ${alpha(L.shadow, 0)} 0%, ${alpha(L.shadow, 0.08)} 100%)` }} />
       </Stage>
 
-      {/* 卡下投影：接触影（小而实）+ 远影（大而虚），随入场高度收紧 */}
+      {/* Under-card drop shadows: Contact shadow (crisp & compact) + ambient distance shadow (diffuse & wide), tightening with entrance altitude */}
       <div
         style={{
           position: 'absolute', left: CX - W * 0.42 + 40, top: CY + H * 0.44 + mix(60, 0, shadowIn), width: W * 0.84, height: 70,
@@ -149,7 +149,7 @@ export const SheenSweepRetry: React.FC = () => {
         }}
       />
 
-      {/* 主角卡：3D 斜放 */}
+      {/* Hero card: 3D angled plinth view */}
       <div style={{ position: 'absolute', inset: 0, perspective: 2400, perspectiveOrigin: `${CX}px ${CY - 120}px` }}>
         <div
           style={{
@@ -158,7 +158,7 @@ export const SheenSweepRetry: React.FC = () => {
             transform: `translateY(${lift.toFixed(2)}px) rotateX(${rotX.toFixed(3)}deg) rotateY(${rotY.toFixed(3)}deg) scale(${scale.toFixed(4)})`,
           }}
         >
-          {/* 金属厚边：8 层叠出约 6px 厚度，越往后越暗 */}
+          {/* Metallic rim thickness: 8 stacked layers forming ~6px depth, darker toward back */}
           {Array.from({ length: 8 }, (_, i) => (
             <div
               key={i}
@@ -169,23 +169,23 @@ export const SheenSweepRetry: React.FC = () => {
               }}
             />
           ))}
-          {/* 正面 */}
+          {/* Front face */}
           <div
             style={{
-              position: 'absolute', inset: 0, borderRadius: R, overflow: 'hidden', // 圆角裁剪：一切光都被卡边裁住
+              position: 'absolute', inset: 0, borderRadius: R, overflow: 'hidden', // Rounded corner clip: all illumination clipped by card edge
               background: 'linear-gradient(140deg, #2d2b29 0%, #1b1a19 42%, #121110 72%, #1d1c1a 100%)',
               boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08), inset 0 1.5px 0 rgba(255,255,255,0.16)',
             }}
           >
             <div style={{ position: 'absolute', inset: 0, backgroundImage: BRUSH, opacity: 0.6 }} />
-            {/* 静态受光：左上主光方向 */}
+            {/* Static ambient light: Top-left key light direction */}
             <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 70% 90% at 12% 0%, rgba(255,240,220,0.09) 0%, rgba(255,240,220,0) 62%)' }} />
             <Chip />
             <Face tone={ENGRAVE} />
 
             {sweepOn && (
               <>
-                {/* 光带下：拉丝纹被照亮（固定在卡面，遮罩随光带走） */}
+                {/* Under light band: Brushed grain catches specular reflection (fixed to card face, mask moves with light band) */}
                 <div
                   style={{
                     position: 'absolute', inset: 0, backgroundImage: BRUSH.replace(/0\.05\)/g, '0.22)'), mixBlendMode: 'screen',
@@ -194,7 +194,7 @@ export const SheenSweepRetry: React.FC = () => {
                     WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
                   }}
                 />
-                {/* 光带下：蚀刻字反光 */}
+                {/* Under light band: Etched typography highlights */}
                 <div
                   style={{
                     position: 'absolute', inset: 0,
@@ -205,7 +205,7 @@ export const SheenSweepRetry: React.FC = () => {
                 >
                   <Face tone={LIT} lit />
                 </div>
-                {/* 宽柔光 + 窄亮芯：screen 叠在钛黑上 */}
+                {/* Broad soft wash + narrow hot core: Screen blended over titanium black */}
                 <div
                   style={{
                     position: 'absolute', top: 0, left: bandX, width: 2 * W, height: H, mixBlendMode: 'screen', pointerEvents: 'none',
@@ -213,7 +213,7 @@ export const SheenSweepRetry: React.FC = () => {
                       'linear-gradient(115deg, transparent 36%, rgba(255,244,228,0.06) 43%, rgba(255,244,228,0.14) 47.5%, rgba(255,248,238,0.5) 50%, rgba(255,244,228,0.14) 52.5%, rgba(255,244,228,0.06) 57%, transparent 64%)',
                   }}
                 />
-                {/* 上沿发丝线受光 */}
+                {/* Top edge hairline catches specular glint */}
                 <div
                   style={{
                     position: 'absolute', left: 0, top: 0, right: 0, height: 2,
@@ -226,7 +226,7 @@ export const SheenSweepRetry: React.FC = () => {
         </div>
       </div>
 
-      {/* 左栏：编辑式标题 */}
+      {/* Left column: Editorial headline block */}
       <div style={{ position: 'absolute', left: 150, top: 256, width: 640 }}>
         <div
           style={{

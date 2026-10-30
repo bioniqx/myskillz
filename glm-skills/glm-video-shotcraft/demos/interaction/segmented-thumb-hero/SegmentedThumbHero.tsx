@@ -1,24 +1,24 @@
-// segmented-thumb-hero —— 分段控件 thumb 位移当叙事主角拍特写
-// 源：perplexity-promo 2.3–5s。胶囊分段控件（Ask/Computer）带阴影浮入，
-// 超大描边箭头光标从画外滑入点击，白 thumb 左→右 ~8f ease-out 滑动，
-// 到位瞬间新选项前弹出小图标、旧图标收起。
-// 质感升级：柔光纸面底 + 暗角颗粒；轨道做成下凹槽（内阴影 + 发丝线），thumb 是受光的凸起件
-// （顶沿高光 + 近实远虚两层影）；thumb 8f 内前缘先走、后缘跟随的橡皮筋拉伸 + 速度拖影，
-// 到位后 1.5% 过冲回弹；段标签颜色随 thumb 位置连续过渡；新图标带强调色笑脸；
-// 光标起点挪到真正画外，两层投影；涟漪换强调色细环。时间轴不变。
-// 品牌轮：两段从 Perplexity 的 Ask / Computer 换成 video-shotcraft 的 Prompt → Film
-// （"一句话出一支片"），图标换成对话气泡 / 带笑脸的场记板，几何与时间轴不动。
+// segmented-thumb-hero — segmented control thumb slide close-up narrative
+// Reference: perplexity-promo 2.3-5s. Pill segmented control (Ask/Computer) floats in with drop shadow,
+// oversized stroked cursor slides in from off-screen to click, white thumb slides left->right over ~8f ease-out,
+// new option icon pops out on landing as old icon retracts.
+// Polish pass: soft paper base + vignette grain; track styled as recessed groove (inner shadow + hairline), thumb is raised tactile element
+// (top highlight + dual contact and diffuse shadows); elastic stretch with leading edge ahead of trailing edge + motion blur over 8f,
+// 1.5% overshoot rebound on landing; label color interpolates continuously with thumb pos; new icon features accent smile;
+// cursor enters from off-screen with dual shadows; accent ring ripple. Timing preserved.
+// Brand adaptation: options updated to video-shotcraft Prompt -> Film
+// ("prompt to film"), icons: dialogue bubble / smiling clapperboard. Geometry and timeline preserved.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing, spring, useVideoConfig } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
 import { Backdrop, FONT, SpeedBlur, mix, velocity } from '../../_fixtures/Polish';
 
-export const SEGMENTED_THUMB_HERO_DURATION = 110; // 浮入 18f + 光标 24f + 点击 + 滑动 8f + 弹出 + hold 50f
+export const SEGMENTED_THUMB_HERO_DURATION = 110; // Float in 18f + cursor 24f + click + slide 8f + pop + hold 50f
 
 const INK = G.ink1;
 const DIM = '#8e9097';
 
-// 超大描边箭头光标（白芯墨描边，两层投影：近地实、远地虚）
+// Oversized stroked cursor (white core with dark stroke, dual contact and diffuse shadows)
 const ArrowCursor: React.FC<{ x: number; y: number; press: number }> = ({ x, y, press }) => (
   <svg
     width={130}
@@ -43,7 +43,7 @@ const ArrowCursor: React.FC<{ x: number; y: number; press: number }> = ({ x, y, 
   </svg>
 );
 
-// 新身份图标：带表情的场记板（表情用唯一强调色，是"奖励感"的一半）
+// New option icon: clapperboard with smile (accent color)
 const SmileClapper: React.FC<{ size: number }> = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 40 40">
     <rect x={6} y={15.5} width={28} height={19} rx={3.5} fill="none" stroke={INK} strokeWidth={2.8} />
@@ -57,7 +57,7 @@ const SmileClapper: React.FC<{ size: number }> = ({ size }) => (
   </svg>
 );
 
-// 旧身份图标：对话气泡（一句 prompt），里面两行"字"
+// Prior option icon: chat bubble (prompt text lines)
 const PromptIcon: React.FC<{ size: number }> = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 40 40">
     <path d="M9 8.5 H31 a3.5 3.5 0 0 1 3.5 3.5 V24 a3.5 3.5 0 0 1 -3.5 3.5 H19 L12 33 V27.5 H9 a3.5 3.5 0 0 1 -3.5 -3.5 V12 a3.5 3.5 0 0 1 3.5 -3.5 Z"
@@ -66,7 +66,7 @@ const PromptIcon: React.FC<{ size: number }> = ({ size }) => (
   </svg>
 );
 
-// 颜色插值（#rrggbb）
+// Color interpolation (#rrggbb)
 const lerpHex = (a: string, b: string, t: number) => {
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
   const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
@@ -77,25 +77,25 @@ export const SegmentedThumbHero: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // ---- 时间轴 ----
-  const FLOAT_IN = 0; // 控件浮入 0–18
-  const CURSOR_IN = 20; // 光标滑入 20–44
-  const CLICK = 48; // 按下
-  const SLIDE = 52; // thumb 开始滑 52–60 (~8f)
+  // ---- Timeline ----
+  const FLOAT_IN = 0; // Control float in 0-18
+  const CURSOR_IN = 20; // Cursor slides in 20-44
+  const CLICK = 48; // Click press
+  const SLIDE = 52; // Thumb slides 52-60 (~8f)
   const SLIDE_END = 60;
 
-  // 控件浮入：从下 200px 带阴影弹簧浮入
+  // Control float in: rises 200px from below with spring physics and shadow
   const floatT = spring({ frame: frame - FLOAT_IN, fps, config: { damping: 14, stiffness: 120, mass: 0.9 } });
   const ctrlY = interpolate(floatT, [0, 1], [200, 0]);
 
-  // 控件几何（特写尺寸）
-  const CW = 1080; // 控件宽
+  // Control geometry (close-up scale)
+  const CW = 1080; // Control width
   const CH = 220;
   const PAD = 16;
   const SEGW = (CW - PAD * 2) / 2;
-  const TH = CH - PAD * 2; // thumb 高
+  const TH = CH - PAD * 2; // Thumb height
 
-  // 光标滑入：ease-out 从右下画外（整只光标在画框外）飘到 Film 段上
+  // Cursor slides in: ease-out from off-screen bottom-right onto Film segment
   const curT = interpolate(frame, [CURSOR_IN, CURSOR_IN + 24], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -103,16 +103,16 @@ export const SegmentedThumbHero: React.FC = () => {
   });
   const curX = interpolate(curT, [0, 1], [2020, 1210]);
   const curY = interpolate(curT, [0, 1], [1200, 590]);
-  // 点击点 = 光标尖端（svg 内 (4,2)×5 → +20,+10），换算到控件 padding 盒坐标（控件左上 (420,430)，1px 边）
+  // Click point = cursor tip ((4,2)*5 -> +20,+10 in SVG), converted to control padding box coordinates
   const TIP = { x: 1210 + 20 - 420 - 1, y: 590 + 10 - 430 - 1 };
-  // 按下动作
+  // Click press action
   const press = interpolate(frame, [CLICK, CLICK + 3, CLICK + 7], [0, 1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
 
-  // thumb 位移：~8f ease-out（主曲线），前缘略快、后缘略慢 → 滑动中被拉长 ~10%，到位收回；
-  // 到位后 1.5% 过冲回弹（6f 内收敛），给"落定"一个物理感
+  // Thumb translation: ~8f ease-out, leading edge leads and trailing follows -> elongates ~10% during slide, settles on landing;
+  // 1.5% overshoot rebound on landing (settles within 6f) providing tactile feel
   const slide = (f: number, ease: (x: number) => number) =>
     interpolate(f, [SLIDE, SLIDE_END], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: ease });
   const thumbT = slide(frame, Easing.out(Easing.cubic));
@@ -120,11 +120,11 @@ export const SegmentedThumbHero: React.FC = () => {
     f < SLIDE_END ? 0 : 0.015 * Math.sin(Math.min(1, (f - SLIDE_END) / 6) * Math.PI) * (1 - Math.min(1, (f - SLIDE_END) / 6));
   const leadAt = (f: number) => slide(f, Easing.out(Easing.poly(4))) + settle(f);
   const trailAt = (f: number) => slide(f, Easing.out(Easing.quad)) + settle(f);
-  const thumbL = PAD + trailAt(frame) * SEGW; // 后缘（左）
-  const thumbR = PAD + SEGW + leadAt(frame) * SEGW; // 前缘（右）
+  const thumbL = PAD + trailAt(frame) * SEGW; // Trailing edge (left)
+  const thumbR = PAD + SEGW + leadAt(frame) * SEGW; // Leading edge (right)
   const thumbV = velocity((f) => PAD + slide(f, Easing.out(Easing.cubic)) * SEGW, frame);
 
-  // 到位瞬间：Film 图标弹出（过冲），Prompt 图标收起
+  // On landing: Film icon pops out (overshoot), Prompt icon retracts
   const iconIn = spring({ frame: frame - SLIDE_END, fps, config: { damping: 10, stiffness: 220, mass: 0.6 } });
   const filmScale = frame >= SLIDE_END ? iconIn : 0;
   const askScale = interpolate(frame, [SLIDE, SLIDE + 6], [1, 0], {
@@ -133,7 +133,7 @@ export const SegmentedThumbHero: React.FC = () => {
     easing: Easing.in(Easing.cubic),
   });
 
-  // 点击涟漪
+  // Click ripple
   const rippleT = interpolate(frame, [CLICK, CLICK + 12], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -156,13 +156,13 @@ export const SegmentedThumbHero: React.FC = () => {
     zIndex: 2,
   });
 
-  // 标签激活度跟着 thumb 位置连续变（不再在 0.5 处硬跳色）
+  // Label activation tracks continuous thumb position without abrupt color switch
   const compAmt = Math.min(1, Math.max(0, (thumbT - 0.2) / 0.6));
 
   return (
     <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
       <Backdrop tone="light" light={{ x: 0.5, y: 0.3 }} accent={G.accent} />
-      {/* 控件身下的接触光池：浮入落定后把控件"放"在台面上 */}
+      {/* Contact light pool grounding control on surface after float in */}
       <div
         style={{
           position: 'absolute',
@@ -174,7 +174,7 @@ export const SegmentedThumbHero: React.FC = () => {
           opacity: floatT,
         }}
       />
-      {/* 分段控件：下凹轨道 */}
+      {/* Segmented control: recessed track */}
       <div
         style={{
           width: CW,
@@ -197,7 +197,7 @@ export const SegmentedThumbHero: React.FC = () => {
           boxSizing: 'border-box',
         }}
       >
-        {/* 白色 thumb：受光凸起件，滑动中前后缘错开形成拉伸 + 速度拖影 */}
+        {/* White thumb: raised element with elastic stretch and motion blur during slide */}
         <SpeedBlur vx={thumbV} amount={0.06} max={6} style={{ zIndex: 1 }}>
           <div
             style={{
@@ -212,7 +212,7 @@ export const SegmentedThumbHero: React.FC = () => {
             }}
           />
         </SpeedBlur>
-        {/* 点击涟漪（圆心锁点击点，压在 thumb 之上） */}
+        {/* Click ripple (centered at click point, layered above thumb) */}
         {rippleT > 0 && rippleT < 1 && (
           <div
             style={{
@@ -230,7 +230,7 @@ export const SegmentedThumbHero: React.FC = () => {
             }}
           />
         )}
-        {/* Prompt 段 */}
+        {/* Prompt segment */}
         <div style={labelStyle(1 - compAmt)}>
           <span
             style={{
@@ -244,7 +244,7 @@ export const SegmentedThumbHero: React.FC = () => {
           </span>
           Prompt
         </div>
-        {/* Film 段 */}
+        {/* Film segment */}
         <div style={labelStyle(compAmt)}>
           <span
             style={{

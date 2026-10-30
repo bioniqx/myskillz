@@ -1,64 +1,42 @@
 ---
 name: glitch-cycle
-一句话: 同一行等宽槽位循环轮播 4 条状态短语，每条头尾按概率关键帧 [1,0,0,0.1,0,0,1] 全乱码、中段偶发单字抖动，切换瞬间叠 RGB 分离与整行位移；末条概率收 0 保证收尾干净
-适用: 加载/构建/部署过程的状态播报；技术型片头的"系统自述"；需要机器口吻推进时间的一段垫底
-时长: 约 5.6s（168f@30fps；demo 每条短语 38f，末条延续到片尾作收尾 hold）
-能量: 中高（持续的高频噪声脉冲，切换点是峰值）
+summary: Status phrases cycle through one monospace slot, each dissolving into noise at both ends with RGB split and jitter, while a progress bar tracks the whole run.
+use: Status reporting during load/build/deploy processes; technical intro "system self-diagnostics"; rhythmic background beds pushing time forward with a machine tone
+duration: ~5.6s (168f@30fps; 38f per phrase in demo, with final phrase extending to shot end as hold)
+energy: Medium-high (continuous high-frequency noise pulses, peaking at transitions)
 ---
 
-## 意图
-状态播报最笨的做法是四行字逐条淡入。轮播把它们压进**一个槽位**：
-短语头尾用乱码"熔断"再"凝固"，中段几乎干净只偶尔抽一下——观众读到的
-是"系统在一步步推进"，而不是四条独立文案。乱码浓度是这卡的语法：
-浓 = 正在切换，淡 = 正在这一状态里。底部进度条把四拍串成一条时间线，
-最后一条把概率收到 0，落定即结束。
+## Intention
+The clumsiest approach to status logs is fading in four lines of text one by one. Cycling compresses them into **a single slot**: phrases fuse into glitch at both ends and solidify in between, remaining pristine with only occasional single-character twitches in the middle — the audience reads "the system is advancing step-by-step," rather than four disconnected lines of copy. Glitch intensity is this card's grammar: dense = switching states, faint = dwelling in the current state. A bottom progress bar stitches the four beats into a cohesive timeline, while the final phrase settles probability to zero, concluding upon rest.
 
-## 动效核心
-- 槽位按最长短语预建 `MAXCH` 个 span（`min-width:0.66em` 固定槽宽），
-  短短语左右对称填空格（行居中）——**字符不增删，只换内容**，整行永不重排
-- 时段等分：`slot = floor(frame / SLOT)`，短语内进度 `p = (frame - slot·SLOT)/SLOT`（demo SLOT=38f；
-  末条按同一 38f 走 `KF_LAST` 后保持干净直到片尾，留出 ~28f 收尾）
-- glitch 概率关键帧 `KF=[1,0,0,0.1,0,0,1]` 按 p 线性插值：**开头 1.0 全乱、
-  中段 0、约 p=0.5 处回弹到 0.1（偶发抽字）、结尾又回 1.0 熔进下一条**
-- 末条专用 `KF_LAST=[1,0,0,0.1,0,0,0]`，结尾概率归零 → t=1 画面干净
-- 逐字符判定：`rand(i·31 + bucket·17 + slot·97) < g` 才替换成字池字符，
-  命中字随机上强调点缀色或暗色（demo aurora：粉 / 暗紫）；`bucket = floor(frame/2)`，
-  即每 2 帧重掷一次
-- 整行抖动与 RGB 分离强度全部乘 g（480 设计坐标值；demo 原生 1920、短语 104px）：`jx = ±g·10`px
-  （demo ±g·36）、`jy = ±g·4`px（demo ±g·10），`text-shadow` 左右各偏 `g·3`px（demo 粉 / 冰蓝各 g·10，
-  g>0.04 才开）——**噪声浓度一个变量同时驱动换字、位移、色散**，所以三者永不打架；g>0.25 时同一个 g
-  再驱动一条水平撕裂带（行切三段、中段横移，带高每 2 帧重掷），g>0.45 时再叠 3 块像素块残影
-- demo 版式：上方状态行（脉冲点 + RENDERING · 工程名 · 渲染号）、槽位四角细括号、下方 1100px 进度轨
-  线性走满（与四拍无关地铺底，三根四拍刻度 + 发光头）+ `STEP n/4` / 百分比（tabular-nums）；
-  末条收干净时给一次柔和泛光（只给主角一次），进度满后状态转 RENDERED、点转实心，再升起一行强调色署名（video-shotcraft 标志 + 品牌名）
+## Motion Core
+- The slot pre-builds `MAXCH` spans sized for the longest phrase (`min-width:0.66em` fixed slot width), with shorter phrases symmetrically padded with spaces (centered row) — **characters are never added or removed, only content is swapped**, so the row never reflows.
+- Time divided into equal slots: `slot = floor(frame / SLOT)`, intra-phrase progress `p = (frame - slot·SLOT)/SLOT` (demo SLOT=38f;
+  the final phrase follows `KF_LAST` across the same 38f, remaining clean until shot end to leave ~28f for resolution).
+- Glitch probability keyframes `KF=[1,0,0,0.1,0,0,1]` interpolated linearly against p: **1.0 full scrambled noise at start, 0 in the middle, rebounding to 0.1 around p=0.5 (occasional jitter), and returning to 1.0 at the end to fuse into the next phrase**.
+- Final phrase uses `KF_LAST=[1,0,0,0.1,0,0,0]`, zeroing out probability at the end → clean frame at t=1.
+- Character-level evaluation: `rand(i·31 + bucket·17 + slot·97) < g` triggers replacement with glyph-pool characters; hit characters randomly take accent highlight or dark tone (demo aurora: pink / dark purple); `bucket = floor(frame/2)`, rerolling every 2 frames.
+- Row jitter and RGB split intensity both multiply by g (values in 480 design space; native 1920 in demo with 104px phrase): `jx = ±g·10`px (demo ±g·36), `jy = ±g·4`px (demo ±g·10), `text-shadow` offsets `g·3`px left/right (demo pink / ice blue each g·10, enabled only when g>0.04) — **a single noise intensity variable simultaneously drives glyph replacement, displacement, and chromatic aberration**, ensuring they never clash. When g>0.25, the same g drives a horizontal tear band (splitting line into three slices with middle slice shifted horizontally, band height rerolled every 2 frames); when g>0.45, 3 pixel block ghosts are layered.
+- Demo layout: top status line (pulsing dot + RENDERING · project name · render number), thin corner brackets around slot, 1100px progress track below advancing linearly (underlying the four beats with three tick marks + glowing head) + `STEP n/4` / percentage (tabular-nums); when the final phrase settles cleanly, a soft bloom pulse triggers (awarded to the hero once), and after the progress bar fills, status switches to RENDERED, the dot turns solid, and an accent signature line rises (video-shotcraft logo + wordmark).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 短语表 | 4 条，最长 17 字符（demo `LOCKING BEAT GRID`） | 每条 42f 是"读得完一个状态"的下限；5 条以上单条不足 34f 观众只看到闪 |
-| 概率关键帧 | `[1,0,0,0.1,0,0,1]`（6 段） | 中间那个 0.1 是"活着"的证据，删了短语中段死板；把 0 段调到 0.3+ 全片糊成故障 |
-| 重掷频率 | 每 2 帧（`floor(frame/2)`） | 1 帧一换糊成灰带；4 帧以上乱码看得清是"另一个词"，不像噪声 |
-| 抖动幅度 | `x ±g·10` / `y ±g·4`px（480 坐标；1920 原生约 ×3.6） | x 大于 y 是横向撕裂的关键（等比抖动读作地震）；超过 ~2 个字宽整行跳出槽位 |
-| RGB 分离 | 左红右青各 `g·3`px，阈值 g>0.04 | 这是"电子故障"的身份证；无阈值时中段那 0.1 的概率会让字常年带毛边 |
-| 槽宽字体 | SF Mono 26px（480 坐标；demo 原生 104px）、槽 `0.64–0.66em` | 等宽 + 固定槽宽是刚需；字距 3px 让乱码之间有呼吸，挤在一起读作乱码块 |
-| 进度条 | 150×2px（demo 原生 1100×4px），强调色渐变填充，线性 + 四拍刻度 | 唯一的线性元素，给四拍噪声一个稳定参照；删了轮播读不出"在推进" |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Phrase list | 4 phrases, longest 17 chars (demo `LOCKING BEAT GRID`) | 42f per phrase is the lower limit for readable status; with >5 phrases, sub-34f slots reduce phrases to meaningless flashes |
+| Probability keyframes | `[1,0,0,0.1,0,0,1]` (6 segments) | The 0.1 middle value proves the system is "alive"; removing it makes phrases feel static; raising 0-segments to 0.3+ turns the entire shot into chaotic malfunction |
+| Reroll frequency | Every 2 frames (`floor(frame/2)`) | 1-frame changes turn into a grey blur; >4 frames make scrambled characters legible as "another word" rather than noise |
+| Jitter amplitude | `x ±g·10` / `y ±g·4`px (480 space; native 1920 ~3.6x) | x larger than y is crucial for horizontal tearing (equal jitter reads like an earthquake); exceeding ~2 character widths causes row to escape slot |
+| RGB split | Left red / right cyan each `g·3`px, threshold g>0.04 | The hallmark of electronic glitches; without a threshold, the 0.1 mid-segment keeps text permanently frayed |
+| Monospace slot | SF Mono 26px (480 space; native 1920 at 104px), slot `0.64–0.66em` | Monospace + fixed slot width are mandatory; 3px letter-spacing gives scrambled characters room to breathe, preventing clumped blocks |
+| Progress bar | 150×2px (demo native 1100×4px), accent gradient fill, linear + 4-beat ticks | The sole linear element, providing a steady reference frame for the 4 noise beats; removing it obscures progression |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **换项目文案时四条短语字符数要接近（demo 12–17 字符）**：槽位数按最长
-  短语一次建好，短短语靠右填空格——如果一条只有 4 字符、另一条 30 字符，
-  短的那条在 30 格里孤零零居左，行宽全程被最长条撑着，节奏读作漂移
-- 概率关键帧是 6 段等分映射到短语内进度：短语条数变了单条时长跟着变，
-  但关键帧形状不变——所以条数越多，"全乱码"那两段的绝对时长越短，
-  切换感越弱，超过 5 条就该把首尾的 1.0 段拉宽
-- 末条必须用 `KF_LAST`（结尾收 0）：用普通 KF 会让 t=1 停在满乱码上，
-  接下一镜时读作没渲染完
-- 深底专用：深色底 + 冷/艳色噪声是整套配色的地基（demo 用 aurora 深紫黑 + 粉 / 冰蓝分离），浅底上 RGB 分离
-  几乎不可见；声音也强依赖——四个切换点天然是四个节奏点，实战必须配
-  电子故障/开关音；
-  配法纪律见 sound-design.md（同类元素同音，连发交替双样本防机枪感）
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **Keep character counts close across phrases when replacing copy (demo uses 12–17 characters)**: Slot count is initialized for the longest phrase, with shorter phrases padded with spaces on the right — if one phrase has 4 characters and another 30, the short phrase sits isolated on the left while line width is held wide, reading as awkward drift.
+- Probability keyframes map across 6 equal segments within each phrase: changing phrase count alters phrase duration, but keyframe shapes remain constant — so more phrases compress the absolute duration of the 1.0 glitch phases, weakening transitions; if exceeding 5 phrases, widen the 1.0 segments at both ends.
+- The final phrase must use `KF_LAST` (ending at 0): using standard KF leaves t=1 frozen on scrambled noise, making the next cut feel like an unfinished render.
+- Dark backgrounds only: dark backdrop + cool/vibrant noise form the foundation (demo uses aurora deep purple-black + pink/ice blue split); RGB split is virtually invisible on light backgrounds. Sound is also critical — the four transition points are natural rhythm points that require electronic glitch/switch SFX; see sound-design.md (use identical SFX for matching elements, alternating two samples to avoid machine-gun repetition).
 
-## 参考实现
+## Reference Implementation
 demos/typography/glitch-cycle/
-（GlitchCycle.tsx）
+(GlitchCycle.tsx)

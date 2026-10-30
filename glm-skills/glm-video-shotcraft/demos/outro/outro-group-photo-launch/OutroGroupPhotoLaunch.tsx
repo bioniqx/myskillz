@@ -1,14 +1,14 @@
-// outro-group-photo-launch —— 全片元素四方飞来围住字标合影，crane 落机位 + 舞台光 +
-// 金尘做成发布会收场。outro/品牌收尾，多功能产品"全家福"式终镜，能量推到全片最高。
-// 参考实现从 template SceneOutroLive 剥离（self-contained）：
-// 9 个页面元素从四方带旋转飞入（cue 4 起每 3f 一个，飞 12f，bezier y1>1 真过冲，
-// 渲染顺序=cue 顺序后到者叠上），落地强调色 glow（0.35→0）；字标 letterpress 逐字
-// 登场（delay=42+i·1.8）全员退后排（opacity −12% / saturate −8%）；rule 长出 +
-// 190px 延长线射出；crane 运镜 perspective rotateX(4°→0) + scale 落下后缓推；
-// 发布会三件套：开场光带扫过、字标背后舞台光、20 颗确定性金尘上飘；背景页 blur 化
-// 景深；落定后 sign-off hold 30f。outro 不加解说 caption 保持干净。
-// 品牌轮：字标 = video-shotcraft「镜刻」标志 + 全小写字标（品牌字体），标志与字母同一套 letterpress
-// 入场（标志先压 4f）；下方眉题换成品牌短句。背景页 / 合影元素是真实截图纹理，里面的字保留。
+// outro-group-photo-launch — All UI elements fly in from all directions to surround the wordmark in a group photo;
+// crane drop + stage lighting + gold dust create a keynote finale. Outro/brand sign-off, a "family portrait" closing shot pushing energy to the peak.
+// Self-contained reference implementation extracted from template SceneOutroLive:
+// 9 page elements fly in with rotation from four directions (staggered every 3f from cue 4, 12f duration, bezier y1>1 true overshoot,
+// render order = cue order so later arrivals stack on top), landing with an accent glow (0.35 -> 0); wordmark letters enter via letterpress
+// (delay = 42 + i * 1.8), pushing elements into the background (opacity -12% / saturate -8%); dividing rule extends with 190px projection lines;
+// crane camera motion perspective rotateX(4° -> 0) + scale drop followed by slow push-in;
+// Keynote trio: opening light sweep, stage lighting behind wordmark, 20 deterministic rising gold dust motes; blurred background page
+// for depth of field; sign-off holds 30f after settling. Outro omits narrative captions to remain clean.
+// Brand cycle: wordmark = video-shotcraft mark + all-lowercase wordmark (brand font), sharing the letterpress entry
+// (mark stamps 4f early); subhead replaced with brand motto. Background / group elements use real screenshot textures with original text preserved.
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import { PageCam2D } from '../../_fixtures/PageCam2D';
 import { EASE, Grain, SpeedBlur, ramp, velocity } from '../../_fixtures/Polish';
@@ -55,7 +55,7 @@ const ELS: FlyEl[] = [
 ];
 
 // 20 gold dust motes, all parameters index-derived (deterministic)
-// 质感：每颗带一圈暖光晕（亮场上才看得见"金"），另加 6 颗前景失焦大光斑（bokeh）做景深层
+// Polish: each mote has a warm halo (revealing "gold" on bright field); plus 6 foreground defocused bokeh spots for depth layer
 const DUST = Array.from({ length: 20 }, (_, i) => ({
   x: (i * 439 + 137) % 1920,
   y0: (i * 613 + 271) % 1080,
@@ -85,8 +85,8 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.3, 0, 0.2, 1),
   });
   const tag = ramp(frame, 68, 12, EASE.out);
-  // 收尾淡到暖墨色（显式底色，不淡到透明），ease-in：先慢后快地"熄灯"
-  const fadeOut = 1 - ramp(frame, duration - 12, 11, EASE.exit); // 末帧恰好全暗，定格尾帧干净
+  // Fade out to warm ink (explicit background, avoiding fade to transparent), ease-in lights-out transition
+  const fadeOut = 1 - ramp(frame, duration - 12, 11, EASE.exit); // Final frame fully dark for a clean hold
   const recede = interpolate(frame, [42, 50], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
@@ -95,7 +95,7 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
   const craneT = interpolate(frame, [0, 40], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: CRANE_EASE,
   });
-  // 缓推从零速起步（与 crane 的减速收尾衔接，避免 f40 处速度突变）
+  // Slow push starts from zero velocity (blends into crane deceleration to avoid abrupt velocity jump at f40)
   const pushT = ramp(frame, 36, duration - 36, EASE.smooth);
   const camScale = 1.06 - 0.06 * craneT + 0.035 * pushT;
   const camTilt = 4 * (1 - craneT);
@@ -139,9 +139,9 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
           transformOrigin: '50% 45%',
         }}
       >
-        {/* blur 只作用背景页：PageCam2D 自闭合，飞入元素放在未过滤的兄弟层
-            （屏幕空间坐标，与 template SceneOutroLive 同构）——放进 children
-            会连"合影元素"一起糊掉，只剩字标清晰 */}
+        {/* Blur applies only to background page: PageCam2D is self-closing; flying elements sit in an unfiltered sibling layer
+            (screen space coordinates, isomorphic with template SceneOutroLive) — placing them in children
+            would blur group elements together, leaving only the wordmark sharp */}
         <PageCam2D src="textures/live/projects-full.png" pageH={PAGE_H} keys={[{ frame: 0, cx: 960, cy: 700, zoom: 0.75 }]} blur={blur} />
         {/* warm scrim under the flying elements */}
         <AbsoluteFill style={{ background: 'radial-gradient(1200px 800px at 50% 48%, rgba(250,247,242,0.82), rgba(250,247,242,0.55) 60%, rgba(250,247,242,0.35))', pointerEvents: 'none' }} />
@@ -173,7 +173,7 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
                   border: '1px solid oklch(90% .008 82)',
                 }
               : null;
-            // 方向性运动模糊：按屏幕速度（px/帧）沿飞行方向拖影，落地后为 0（替代滞后 ghost 残影）
+            // Directional motion blur: trails along flight path based on screen velocity (px/frame), 0 upon landing (replaces lagging ghost frames)
             const posAt = (fr: number) => {
               const tt = interpolate(fr, [el.cue, el.cue + 12], [0, 1], {
                 extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: FLY_EASE,
@@ -182,7 +182,7 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
             };
             const vx = velocity((fr) => posAt(fr)[0], frame);
             const vy = velocity((fr) => posAt(fr)[1], frame);
-            // 落地压实：过冲回落的那 4f 里接触影收紧、元素 1.5% 轻压
+            // Landing compression: contact shadow tightens and element compresses by 1.5% during 4f overshoot rebound
             const land = interpolate(frame, [el.cue + 9, el.cue + 12, el.cue + 16], [0, 1, 0], {
               extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
             });
@@ -226,7 +226,7 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
             />
           );
         })}
-        {/* 前景失焦光斑：大而虚、上飘更快，压在合影最前面做景深 */}
+        {/* Foreground bokeh: large and soft, drifting faster, layered in front of group photo for depth of field */}
         {BOKEH.map((b, i) => {
           const y = (((b.y0 - frame * b.rise) % 1180) + 1180) % 1180 - 50;
           return (
@@ -283,11 +283,11 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
           <div style={{
             fontFamily: BRAND.font, fontSize: 118, fontWeight: 700, lineHeight: 1.18, color: BRAND.ink, letterSpacing: `${0.03 + wordSpacing}em`, display: 'flex',
             alignItems: 'center', justifyContent: 'center',
-            // letterpress：下沿 1px 纸面高光 + 一层极软的环境影，让字标"压"在合影之上而不是浮在纸上
+            // Letterpress: bottom 1px paper highlight + soft ambient shadow, anchoring the wordmark onto the photo rather than floating
             textShadow: '0 1px 0 rgba(255,253,248,0.75), 0 14px 36px rgba(60,44,24,0.14)',
           }}>
             {(() => {
-              // 标志先压：比首字母早 4f，同一套 letterpress（上抬 + 放大 + 虚焦 → 落定）
+              // Mark stamps first: 4f earlier than first letter, using identical letterpress (lift + enlarge + blur -> settle)
               const t = interpolate(frame, [38, 46], [0, 1], {
                 extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.2, 0.75, 0.3, 1),
               });
@@ -335,7 +335,7 @@ export const OutroGroupPhotoLaunch: React.FC = () => {
           </div>
         </div>
       </AbsoluteFill>
-      {/* 极弱胶片颗粒：大面积奶白纸面防色带 */}
+      {/* Subtle film grain: prevents banding across large cream-white paper surfaces */}
       <Grain opacity={0.045} />
     </AbsoluteFill>
     </AbsoluteFill>

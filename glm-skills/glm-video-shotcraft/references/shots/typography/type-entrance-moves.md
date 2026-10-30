@@ -1,41 +1,34 @@
 ---
 name: type-entrance-moves
-一句话: 标题文字入场一式——letter-drop-physics 字符坠落（重力砸落、弹跳、歪斜站定，最后一拍集体立正归位）
-适用: 大标题/章节字卡的入场；与 type-assembly-moves（集结系）、document-typewriter-reveal（打字机）同品类互斥选用
-时长: 单式 5s（含 hold 与静止收尾；动作段 ~116f，demo 150f）
-能量: 中高（物理趣味）
+summary: Letters falling under gravity and bouncing into alignment as a title entrance.
+use: Entrances for large titles / chapter title cards; mutually exclusive with type-assembly-moves (assembly style) and document-typewriter-reveal (typewriter style) within the same category
+duration: 5s per variant (including hold and static rest; motion segment ~116f, demo 150f)
+energy: Medium-high (physical playfulness)
 ---
 
-## 意图
-标题入场库内已有打字机（沉稳文档感）和集结系（字从别处汇聚），本卡补
-物理喜剧感——字符从天而降、砸地弹跳、歪歪扭扭站定，最后一拍
-集体立正归位，适合轻松调性的开场破冰（demo 让品牌名「Shotcraft」砸落站定，
-副标题「Every shot lands on the beat.」随归位一拍浮出）。标题入场同片 ≤2 种（P4）。
+## Intention
+The title entrance library already includes typewriter style (sober, document feel) and assembly style (words converging from elsewhere); this card introduces physical comedy — characters plummeting from the sky, bouncing off the floor, settling at precarious angles, and snapping into perfect alignment on the final beat, ideal for lighthearted openers (demo drops the brand name "Shotcraft", with subtitle "Every shot lands on the beat." emerging on the snap beat). Title entrances across the same film must be ≤2 types (P4).
 
-## 做法
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A letter-drop-physics 字符坠落 | 字符错峰从顶砸落，重力加速+两次衰减弹跳+落地歪斜站定，最后一拍全体齐整回正 | 轻松调性开场；"活物感"的标题破冰 |
+## Variant Selection
+| Variant | Technique | Use Case |
+|---|---|---|
+| A letter-drop-physics character drop | Characters stagger from top, accelerating with gravity + dual decaying bounces + landing at skewed tilts, snapping upright in unison on final beat | Lighthearted openers; energetic character-driven title icebreakers |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 坠落 | 第 i 字符帧 4+36·(1−(1−i/(n−1))^1.5) 起跳（首末字固定在 4f / 40f，间隔越来越密；demo 9 字符 6.5→1.6f）；y = −DROP + DROP·(t/24)²（重力）→ 4u(1−u) 抛物线弹跳 30% → 二跳 9% | 弹跳衰减比 30%/9% 是"有弹性但不闹"的甜点；三跳以上读作果冻 |
-| 歪斜 | 落地瞬间 rotate 到 seed hash ±6° 并保持 | 歪角是"物理感"的一半；全体笔直落地读作普通位移入场 |
-| 归位一拍 | 全员落定后（如帧 110）6f ease-out 集体 rotate→0 + scale 1.06→1 | 集体归位是句号——错峰归位会把"立正"的仪式感拆散 |
-| 收尾 | 动作完毕真静止 ≥20f | R1：静止期所有属性锁死（含歪角归零后） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Drop trajectory | Character i launches at frame 4 + 36·(1 - (1 - i/(n-1))^1.5) (first/last characters fixed at 4f / 40f, intervals progressively compress; demo 9 characters 6.5→1.6f); y = -DROP + DROP·(t/24)^2 (gravity) → 4u(1-u) parabolic bounce 30% → second bounce 9% | Bounce decay ratio 30%/9% is the sweet spot of "springy without chaotic noise"; 3+ bounces reads like rubber jelly |
+| Skewed landing | Rotates to seeded hash ±6° upon impact and holds | Tilt angle provides half the physical character; perfectly upright landings read as generic displacement reveals |
+| Snap beat | After all letters settle (e.g., frame 110), 6f ease-out collective rotate→0 + scale 1.06→1 | Collective snap is the exclamation mark — staggering the snap destroys the military precision of "standing at attention" |
+| Resolution | True static rest ≥20f after motion completes | Rule R1: All properties locked dead during rest phase (including zeroed tilt angles) |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 落地砸声是声音强依赖候选位（sound-design §4.5）：逐字钉帧会让重量感翻倍，
-  无声版也成立但少一半劲
-- 字符间不做真实碰撞（demo 为各字符独立轨迹）——字距排开即可；
-  想要"互相撞歪"需预烘焙轨迹，成本高收益薄
-- 选词避开带下行笔画的字母（g/j/p/q/y）或按字形单独校地面——demo 按基线贴地，
-  下行笔画会"插进"地面
-- 标题入场自带高注意力——别和其他高能量入场同帧抢戏
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Impact sound is a strong audio dependency candidate (sound-design §4.5): character-by-character frame-accurate Foley doubles perceived physical weight; silent playback works but loses half its punch.
+- No real physics collision between glyphs (demo uses independent trajectories per character) — spacing characters apart in layout is sufficient; simulating mutual collision requires prebaked physics simulations with high cost and negligible return.
+- Avoid words with descenders (g/j/p/q/y) or adjust individual ground baselines — demo aligns baselines to floor; descenders will pierce through the ground plane.
+- Title entrances command high viewer attention — avoid running other high-energy animations simultaneously in the same frame.
 
-## 参考实现
+## Reference Implementation
 demos/typography/type-entrance-moves/
-（LetterDropPhysics.tsx）
+(LetterDropPhysics.tsx)

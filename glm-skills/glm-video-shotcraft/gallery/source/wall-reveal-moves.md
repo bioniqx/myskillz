@@ -1,47 +1,39 @@
 ---
 name: wall-reveal-moves
-一句话: 整墙批量入场两式——bento 逐格点亮、蓝图描线成形，全部原位显形不位移，与 deck-deal-flyin 的飞入位移型互补成品类矩阵
-适用: 功能墙/卡片墙/整页界面的整体亮相；内容已在原位、要"显形"而非"涌入"的段落
-时长: 单式约 5s（A 150f / B 150f @30fps，含建立 hold 与静止收尾）
-能量: 中
+summary: Two in-place wall reveals: sequential bento lights and a wireframe drawing itself into a finished interface.
+use: Monolithic reveals of feature walls, card grids, and full-page dashboards; sections where content is already in place and should "materialize" rather than "fly in."
+duration: ~5s per variant (A 150f / B 150f @ 30fps, including establishing hold and static finish)
+energy: Medium
 ---
 
-## 意图
-"一墙内容怎么出场"库内此前只有 deck-deal-flyin 一个答案——高能量、位移型、
-"东西涌进来"。但不是每面墙都该涌：品牌段要庄重、
-"从设计到实物"要讲工序。这两式共同点是**非位移批量入场**——元素原地显形，
-版式从第一帧就成立，观众看的是"状态变化的波前扫过一面墙"而不是"物体飞行"。
-选型先问一句：这面墙该"涌进来"还是"亮起来"？前者去 deck-deal-flyin，后者进本卡。
+## Intention
+When asking "how does a wall of content enter," the library previously had only one answer: deck-deal-flyin—high energy, displacement-driven, "items streaming in." But not every wall should stream in: brand segments require dignity, and "from concept to production" requires process. The shared principle of these two variants is **non-displacement batch entrance**—elements materialize in place, layout holds true from frame one, and viewers observe a wavefront of state change sweeping across a wall rather than flying objects.
+When selecting, ask: should this wall "flood in" or "illuminate in place"? The former points to deck-deal-flyin; the latter belongs here.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A bento-light-up 逐格点亮 | 暗场 3×2 bento 墙（两行宽窄互补 600/420/420 ↔ 420/420/600，暗色卡面）压暗待命，强调色彗星流光逐格描边一圈、内容随即提亮上浮，全亮后镜头缓推收住；墙上方眉标是 video-shotcraft 标志 + 字标，主标题「Every shot, tuned in one place.」 | 内容庄重/暗场品牌段；节奏沉稳的功能总览 |
-| B wireframe-draw-on 蓝图描线成形 | 界面先以 SVG 细线蓝图分组描画，再一条强调色发光竖线左→右扫过，扫过处线框实体化成真实界面（demo 里是 video-shotcraft 工作台，侧栏 logo 方块内描出镜刻标志） | "从设计到实物/从想法到产品"叙事；产品首次整体亮相 |
+## Variant Selection
+| Variant | Method | Application |
+|---------|--------|-------------|
+| A bento-light-up | Dark 3×2 bento wall (two rows with alternating widths 600/420/420 ↔ 420/420/600, dark card surfaces) sits dimmed on standby; an accent-colored comet trail traces each border, followed by content brightening and rising; after all cells ignite, camera pulls in gently to finish; wall header features video-shotcraft emblem + wordmark with headline "Every shot, tuned in one place." | Dignified content / dark brand sections; steady feature overviews |
+| B wireframe-draw-on | Interface sketches first as fine SVG blueprint lines in groups, then an accent glowing vertical line sweeps left-to-right, materializing wireframes into finished software where it passes (demo features video-shotcraft workbench, sidebar logo block sketching viewfinder emblem) | "From design to artifact / from idea to product" narratives; product debut reveals |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 节拍 | hold 20f → 每格间隔 12f 依次激活（六格 ~96f 全亮）→ scale 1→1.04 缓推 25f（bezier 0.33,0,0.2,1）→ 静止收尾 | 12f 级联是"逐格可辨"与"整墙拖沓"的平衡点；格数增多可压到 8–10f，但间隔均匀本身就是这一式的庄重感来源，别学发牌加速 |
-| A 单格 | 暗态 opacity 0.18 + translateY 20px；SVG rect pathLength=100 描边 8f：22% 周长的彗星段（#e8b45e 6px 高斯辉光 + #ffe3ae 2.5px 亮芯）领跑，身后留 1.5px 细边；描边过半（+6f）内容 back-out(0.3,1.4,0.5,1) 弹出 8f 提亮归位；描完 +12f 流光退火到 0.4 常亮细边 | 描边与内容弹出要**接力不同步**——同帧起读作整格闪现；点亮中段辉光脉冲用 lit·(1−lit)·4 抛物线，峰值幅度按格 seed 微差（正弦哈希，禁真随机） |
-| B 描线 | hold 20f → 分组错峰各 30f 描完：侧栏 20f 起/顶栏 30f 起/6 卡 40+i*3f 起/折线图 52f 起；SVG pathLength=1 + dashoffset 1→0，蓝图冷灰蓝 #6c7894（外框 1.6px / 内件 1.25px）round，淡蓝 24px 点阵底 + 卡角裁切标记 | 分组错峰是"手在画"的感觉来源，全部同帧起笔读作打印机；卡内占位线再按 +3f 细错峰，长短用 seed 哈希微差 |
-| B 实体化 | 88–118f 实体层 clip-path inset(0 right% 0 0) 从左向右展开 30f，bezier(0.55,0,0.25,1)；前沿跟 4px 强调色竖线（#ffc46b + 双层辉光 boxShadow），86–92f 淡入、112–120f 淡出；竖线身后 260px 一段渐隐暖光（刚显影的余温） | 竖线位置与 clip 前沿必须同一个 scan 值驱动，异步读作穿帮；描线段与扫描段之间留 ~6f 喘息（82→88f），线框画完立刻扫读作赶工 |
-| 静止收尾 | 两式动作全部落定后真静止 ≥15f（A 在缓推结束后、B 在扫描线淡出后起算） | R1 呼吸判例：静止期一切属性锁死，包括辉光/阴影/高光残留 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Variant A cadence | Hold 20f → cells activate sequentially at 12f intervals (all 6 cells lit by ~96f) → scale 1→1.04 slow push 25f (bezier 0.33,0,0.2,1) → static rest finish | 12f cascade balances per-cell readability against overall momentum; more cells can compress to 8–10f, but uniform spacing provides dignified cadence—avoid card-deal acceleration |
+| Variant A single cell | Dim state opacity 0.18 + translateY 20px; SVG rect pathLength=100 traces over 8f: 22% perimeter comet lead (#e8b45e 6px Gaussian glow + #ffe3ae 2.5px bright core) leaving 1.5px fine hairline trail; halfway through trace (+6f), content back-out(0.3,1.4,0.5,1) pops up over 8f to brighten into place; +12f post-trace comet anneals to 0.4 steady fine hairline | Stroke and content pop must **relay rather than synchronize**—starting on same frame reads as cell flickering; mid-trace glow pulse uses `lit·(1−lit)·4` parabola with seed-based subtle peak differences (sine hash, no Math.random) |
+| Variant B wireframe trace | Hold 20f → groups complete traces over 30f staggered: sidebar from 20f / header from 30f / 6 cards from 40+i*3f / line chart from 52f; SVG pathLength=1 + dashoffset 1→0, cool gray-blue blueprint #6c7894 (outer frame 1.6px / inner details 1.25px) round, light blue 24px dot grid base + corner crop marks | Group staggering creates hand-drawn feel, simultaneous tracing reads as a printer; card placeholder lines stagger by +3f with length seeds |
+| Variant B materialization | 88–118f solid layer clip-path inset(0 right% 0 0) reveals left-to-right over 30f, bezier(0.55,0,0.25,1); leading edge tracks 4px accent vertical line (#ffc46b + dual-layer boxShadow glow), fading in 86–92f, fading out 112–120f; trailing 260px warm gradient glow behind line (residual warmth of freshly developed film) | Vertical line position and clip edge must share single scan driver, desync reads as a rendering glitch; leave ~6f breath between tracing and scanning (82→88f), scanning immediately looks rushed |
+| Static hold finish | Pure stillness ≥15f after all movement completes (measured after slow push in A, after scan line fades in B) | Breathing ruling: freeze all properties completely, including glow, shadow, and specular highlights |
 
-## 已知坑
-- **demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验**
-- A/B 的强调色描边/扫描线属"单点高质量光效"范畴（Q4 三约束内合规），但一支片
-  整墙点亮 ≤1 次（P4 手法去重）——A 和 B 同片共用即算两次整墙光效，选一
-- B 式线框几何必须与实体层布局逐像素对位（demo 里按 FakeDashboard A 手排），
-  换素材要重排线框——对不齐则扫描线扫过瞬间元素跳位，一眼穿帮；改了品牌名 / logo
-  也算换素材（字宽变了，面包屑后面的元素会整组右移），线长要按实体层实测字宽重对
-- 两式都是"原位显形"，别混入位移入场（如逐格点亮时再加 translateX 飞入）——
-  位移需求去 deck-deal-flyin，杂交会两头不像
-- A 式暗态 opacity 0.18 依赖暗底（#2a2a28）成立，亮底下压暗读作褪色故障
+## Known Pitfalls
+- **Demo calibrated on grayscale placeholder assets—parameters serve as calibration baseline, not final production specs; verify against real assets in production.**
+- Accent borders and scan lines in A/B qualify as single-point high-quality lighting effects (compliant with Q4 constraints), but full-wall lighting should occur ≤1 time per video (P4 de-duplication)—using A and B in the same film counts as two full-wall effects; choose one.
+- Variant B wireframe geometry must align pixel-for-pixel with solid layer layout (demo hand-aligned to FakeDashboard A); changing assets requires realigning wireframes—misalignment causes elements to jump as scan line sweeps, immediately breaking immersion; modifying brand names or logos also shifts breadcrumbs and elements, requiring wireframe length realignment.
+- Both variants represent "materializing in place"; do not mix in displacement fly-ins (e.g. adding translateX fly-ins during cell lighting)—displacement needs belong in deck-deal-flyin; hybridization compromises both styles.
+- Variant A dim state opacity 0.18 relies on dark background (#2a2a28); against light backgrounds dimming reads as a washed-out glitch.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/wall-reveal-moves/
-（BentoLightUp.tsx / WireframeDrawOn.tsx）
+(BentoLightUp.tsx / WireframeDrawOn.tsx)
 
-实现状态：两式均有参考实现与 Gallery 动态样片。
+Implementation Status: Both variants possess reference implementations and live Gallery motion samples.

@@ -1,26 +1,26 @@
-// title-demote-to-label —— 大标题降格为节标签（两式串播）
-// 源：perplexity-promo 16–18.5s；B 式变体源自 framer text-selection-title。
+// title-demote-to-label — Hero title demotes to section label (two-part sequence)
+// Source: perplexity-promo 16–18.5s; Variant B derived from framer text-selection-title.
 //
-// 第二轮重设计（paper · 瑞士网格编辑版式 · 产品 = video-shotcraft 的分镜工作台）：
-// - look = paper（暖白纸 · 墨 · 朱红）。主角是 220px / 850 字重的单词海报标题「Frame.」「Craft.」（品牌短句 Frame motion. Craft the shot.），
-//   句点是朱红——降格后它就是栏目标签的识别点。12 栏网格的左边距 120、发丝线、mono 眉题撑起编辑版式。
-// - 降格：一次连续补间（26f，不对称 in-out：起步果断、落点很软）scale 1→0.22、中心→左上标签槽，
-//   transform-origin 左中、居中修正 translate(-50%) 随补间归零；飞行按速度加方向性运动模糊。
-//   眉题「CHAPTER 01」随起飞 6f 淡出，落位时标签前的「01 /」从左擦入接班。
-// - 内容在降格进行到 12f 时开始错峰生长（裁切揭开 + 上移 + 淡入，先密后疏），交接零空档：
-//   A = 导语 + 三张卡（镜头配方卡 / 用户评价 / 卡点节拍）；B = 一段分镜脚本，其中一句带朱红选区 → 连线 → 匹配镜头卡。
-// - 两式之间不再白闪：A 内容 ease-in 上移退场，A 标签上移一行、变灰缩小成"上一节"（多节连用不叠放），
-//   B 大标题在同一个舞台上显影——共享一个 Stage，没有接缝。
-// - B 式：朱红选区扫入（右缘跟着 3px 插入光标）→ 站 10f → 左缘撤走 → 再降格。
+// Redesign round 2 (paper · Swiss grid editorial layout · product = video-shotcraft storyboard workbench):
+// - look = paper (warm white paper · ink · vermilion). Hero is 220px / 850-weight poster titles "Frame." and "Craft." (from brand tagline "Frame motion. Craft the shot."),
+//   with vermilion period — serving as the visual anchor when demoted to section label. 12-column grid with 120 margin, hairline rules, and mono eyebrow create editorial structure.
+// - Demotion: single continuous tween (26f, asymmetric in-out: decisive start, soft landing) scale 1→0.22, center→top-left label slot,
+//   transform-origin left-center, center correction translate(-50%) zeros out over tween; directional motion blur scaled to velocity during flight.
+//   Eyebrow "CHAPTER 01" fades out in 6f at takeoff, replaced by "01 /" wiping in from left as label lands.
+// - Content stagger-reveals 12f into demotion (clip-reveal + shift-up + fade-in, front-loaded stagger), zero gap at handoff:
+//   A = lead-in + 3 cards (recipe card / testimonial / beat grid); B = storyboard script with vermilion text selection -> connecting line -> matched shot card.
+// - No white flash between variations: A content exits ease-in upward, A label shifts up one row, grays out and shrinks into "previous section" (no stacking across sections),
+//   B hero title emerges on the same stage — seamless single Stage continuity.
+// - Variant B: vermilion selection sweeps in (3px caret at right edge) -> holds 10f -> left edge clears -> demotes.
 //
-// 时间表（30fps，共 246f）：
-//   A  0–16    眉题字距收拢 + 标题逐字从线下升起（rise，先到先稳）
-//      16–36   站稳 20f（极缓 1.5% 推近，画面不死）
-//      36–62   降格 26f；48 起内容生长（~44f 长完）
-//      92–112  hold
-//   转 112–124 A 内容退场（exit 12f）；A 标签 124–140 上移成"上一节"
-//   B  118–134 B 标题显影；136–146 选区扫入；146–156 站；156–164 撤；166–192 降格；178 起内容生长
-//      226–246 hold 落定（尾帧 = 完整编辑页海报）
+// Timeline (30fps, 246f total):
+//   A  0–16    Eyebrow tracking tightens + title rises char-by-char from below baseline (rise, settles progressively)
+//      16–36   Hold 20f (subtle 1.5% push-in to keep frame dynamic)
+//      36–62   Demote 26f; content grows starting frame 48 (~44f total growth)
+//      92–112  Hold
+//   Tr 112–124 A content exits (exit 12f); A label 124–140 moves up into "previous section"
+//   B  118–134 B title reveals; 136–146 selection sweeps in; 146–156 hold; 156–164 clear; 166–192 demote; 178 content grows
+//      226–246 Hold and settle (tail frame = complete editorial poster)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, SpeedBlur, bezier, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -30,15 +30,15 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 const L = LOOKS.paper;
 export const TITLE_DEMOTE_TO_LABEL_DURATION = 246;
 
-const B0 = 112; // B 式（转场）起点
-const MARGIN = 120; // 网格左边距
-const HERO = 220; // 标题字号
-const LABEL_SCALE = 0.22; // 降格终点缩放（≈48px）
-const SLOT = { x: MARGIN + 96, y: 196 }; // 标签槽（左中锚点）；前面留给「01 /」
-const DEMOTE_EASE = bezier(0.6, 0, 0.18, 1); // 起步果断、落点很软的不对称 in-out
+const B0 = 112; // Variant B (transition) start
+const MARGIN = 120; // Grid left margin
+const HERO = 220; // Hero font size
+const LABEL_SCALE = 0.22; // Demoted scale target (≈48px)
+const SLOT = { x: MARGIN + 96, y: 196 }; // Label slot (left-center anchor); prefix reserved for "01 /"
+const DEMOTE_EASE = bezier(0.6, 0, 0.18, 1); // Asymmetric in-out: decisive start, soft landing
 const SEL = alpha(L.accent, 0.2);
 
-// ───────────── 生长块：裁切从左揭开 + 上移 + 淡入（内容不变形） ─────────────
+// ───────────── Grow block: left-to-right clip reveal + shift up + fade in (no content distortion) ─────────────
 const Grow: React.FC<{ frame: number; at: number; dur?: number; children: React.ReactNode; style?: React.CSSProperties }> = ({
   frame, at, dur = 20, children, style,
 }) => {
@@ -68,9 +68,9 @@ const card: React.CSSProperties = {
   padding: '34px 36px', boxSizing: 'border-box', overflow: 'hidden',
 };
 
-// ───────────── A：取景（导语 + 配方卡 / 评价 / 节拍三张卡） ─────────────
+// ───────────── A: Framing (lead-in + 3 cards: recipe / testimonial / beat grid) ─────────────
 const ContentA: React.FC<{ frame: number; at: number }> = ({ frame, at }) => {
-  const t = (k: number) => at + k; // 先密后疏的错峰
+  const t = (k: number) => at + k; // Front-loaded stagger
   return (
     <div style={{ position: 'absolute', left: MARGIN, top: 262, width: 1680 }}>
       <Grow frame={frame} at={t(8)} dur={18}>
@@ -123,10 +123,10 @@ const ContentA: React.FC<{ frame: number; at: number }> = ({ frame, at }) => {
   );
 };
 
-// ───────────── B：分镜脚本 + 句内选区 → 连线 → 匹配镜头卡 ─────────────
+// ───────────── B: Storyboard script + in-sentence selection -> connector -> matched shot card ─────────────
 const ContentB: React.FC<{ frame: number; at: number }> = ({ frame, at }) => {
-  const sel = ramp(frame, at + 20, 12, EASE.swift); // 文中那句的选区扫入
-  const wire = ramp(frame, at + 30, 12, EASE.swift); // 选区 → 答案卡的连线
+  const sel = ramp(frame, at + 20, 12, EASE.swift); // Sweep in selection on sentence
+  const wire = ramp(frame, at + 30, 12, EASE.swift); // Connector line from selection to card
   const body: React.CSSProperties = { ...type(58, 450), lineHeight: 1.5, color: L.ink2, whiteSpace: 'nowrap' };
   return (
     <div style={{ position: 'absolute', left: MARGIN, top: 262, width: 1680 }}>
@@ -150,12 +150,12 @@ const ContentB: React.FC<{ frame: number; at: number }> = ({ frame, at }) => {
           </div>
         </Grow>
         <Grow frame={frame} at={at + 16}><div style={{ ...body, color: L.ink3 }}>Sound design and the logo sting come last.</div></Grow>
-        {/* 连线：从选区右缘拐到旁注卡 */}
+        {/* Connector: from right edge of selection to side card */}
         <svg width={1680} height={400} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', pointerEvents: 'none' }}>
           <path d="M 800 217 L 1112 217" stroke={L.accent} strokeWidth={2.5} fill="none" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - wire} />
           {wire > 0.02 && <circle cx={800} cy={217} r={6} fill={L.accent} />}
         </svg>
-        {/* 旁注：匹配到的镜头配方卡 */}
+        {/* Marginalia: matched shot recipe card */}
         <div style={{ position: 'absolute', left: 1120, top: -40, width: 560 }}>
           <Grow frame={frame} at={at + 38} dur={22}>
             <div style={{ ...card, width: 560, height: 'auto', padding: '32px 36px 30px' }}>
@@ -178,7 +178,7 @@ const ContentB: React.FC<{ frame: number; at: number }> = ({ frame, at }) => {
   );
 };
 
-// 页脚：发丝线 + 纹理级 mono 小字（两节共用，给海报一个底边）
+// Footer: hairline rule + mono fine-print (shared across sections, anchors bottom edge of poster)
 const Footer: React.FC<{ frame: number }> = ({ frame }) => {
   const p = ramp(frame, 54, 26, EASE.out);
   return (
@@ -191,10 +191,10 @@ const Footer: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// ───────────── 标题：显影 → (选区) → 降格 ─────────────
+// ───────────── Title: Reveal -> (Selection) -> Demote ─────────────
 const Title: React.FC<{
   frame: number; word: string; num: string; reveal: number; demote: number; select?: { on: number; off: number };
-  retire?: number; // 被下一节顶上去的时刻（变"上一节"）
+  retire?: number; // Frame when bumped upward by next section (becomes "previous section")
 }> = ({ frame, word, num, reveal, demote, select, retire }) => {
   const demAt = (f: number) => ramp(f, demote, 26, DEMOTE_EASE);
   const dem = demAt(frame);
@@ -203,16 +203,16 @@ const Title: React.FC<{
   const scale = mix(1 + 0.015 * hold, LABEL_SCALE, dem);
   const x = mix(960, SLOT.x, dem);
   const y = mix(540, SLOT.y, dem);
-  // 退位：上移一行、变小、变灰
+  // Retire: shift up one row, shrink, and fade to secondary gray
   const ret = retire !== undefined ? ramp(frame, retire, 16, EASE.swift) : 0;
   const ry = -68 * ret;
   const rs = 1 - 0.3 * ret;
   if (frame < reveal) return null;
 
-  // 眉题：字距由宽收紧（显影），起飞后 6f 淡出
+  // Eyebrow: tracking tightens from wide (reveal), fades out in 6f at takeoff
   const eyebrowIn = ramp(frame, reveal, 16, EASE.out);
   const eyebrowOut = ramp(frame, demote, 6, EASE.exit);
-  // 选区（B 式）
+  // Selection (Variant B)
   let selL = 0, selW = 0, caret = 0;
   if (select) {
     const on = ramp(frame, select.on, 10, EASE.swift);
@@ -221,13 +221,13 @@ const Title: React.FC<{
     selW = Math.max(0, on * 100 - selL);
     caret = frame >= select.on && frame < select.off + 6 ? 1 - off : 0;
   }
-  // 「01 /」在落位前 4f 从左擦入
+  // "01 /" wipes in from left 4f before landing
   const numIn = ramp(frame, demote + 20, 12, EASE.out);
   const ink = ret > 0 ? `rgb(${[23, 19, 15].map((c, k) => Math.round(mix(c, [155, 145, 132][k], ret))).join(',')})` : L.ink;
 
   return (
     <>
-      {/* 落位后的「01 /」 */}
+      {/* Settled "01 /" */}
       <div style={{
         position: 'absolute', left: MARGIN, top: SLOT.y + ry, transform: `translateY(-50%) scale(${rs})`, transformOrigin: 'left center',
         ...type(30, 700, { mono: true }), color: ret > 0.5 ? L.ink3 : L.accent, whiteSpace: 'nowrap',
@@ -241,7 +241,7 @@ const Title: React.FC<{
           transform: `translate(${(-(1 - dem) * 50).toFixed(3)}%, -50%) scale(${(scale * rs).toFixed(4)})`,
           transformOrigin: 'left center', whiteSpace: 'nowrap',
         }}>
-          {/* 眉题 */}
+          {/* Eyebrow */}
           <div style={{
             position: 'absolute', left: 14, top: -46, ...type(30, 700, { caps: true, mono: true }),
             letterSpacing: `${(0.3 - 0.12 * eyebrowIn).toFixed(3)}em`, color: L.accent,
@@ -269,12 +269,12 @@ const Title: React.FC<{
 
 export const TitleDemoteToLabel: React.FC = () => {
   const frame = useCurrentFrame();
-  // A 内容退场
+  // Content A exit
   const outA = ramp(frame, B0, 12, EASE.exit);
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.05 }} fill={{ x: 0.9, y: 0.95 }} />
-      {/* 网格页眉：右上角品牌（镜刻标志 + 全小写字标）/ 页码（纹理级小字） */}
+      {/* Grid header: top-right brand (mark + lowercase wordmark) / page number (mono fine-print) */}
       <div style={{ position: 'absolute', right: MARGIN, top: 182, display: 'flex', alignItems: 'center', gap: 40, ...type(22, 600, { caps: true, mono: true }), letterSpacing: '0.16em', color: L.ink3, opacity: ramp(frame, 40, 20, EASE.out) }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, textTransform: 'none', letterSpacing: '0.04em' }}><ShotcraftMark size={28} tone="light" />{BRAND.name}</span><span style={{ color: L.ink }}>{frame < 190 ? '01' : '02'} / 04</span>
       </div>

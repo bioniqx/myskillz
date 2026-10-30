@@ -1,50 +1,42 @@
 ---
 name: list-reveal
-一句话: 垂直菜单 6 项按 10f 的间隔依次 scale 找位、软 back 轻微过冲落定，同时整个列表容器全程匀速上移——逐项入场与整体漂移是两层不相干的运动
-适用: 导航/侧边栏/设置面板的入场；任何"界面自己长出来"的 UI 段落，也适合做旁白铺垫时的低能量底
-时长: 约 4s（120f@30fps）
-能量: 低（稳定节拍，无峰值；靠漂移维持画面不死）
+summary: Menu rows scale into place one after another with a faint overshoot while the whole list drifts slowly upward, keeping the per-item entrance and the group motion on two independent layers.
+use: Navigation, sidebar, and settings panel entrances; UI sections where "interfaces self-assemble"; also serves as low-energy background during voiceover setup.
+duration: ~4s (120f @ 30fps)
+energy: Low (Steady cadence without peaks; maintains visual vitality via upward drift)
 ---
 
-## 意图
-列表逐项淡入是最容易做得死板的一类动效：每项动完就停，画面在两项之间是完全静止的。
-这张卡的解法是给容器加一层与逐项入场无关的慢速漂移——局部在"找位"，整体在"呼吸"。
-观众读得清每一项，同时画面从头到尾没有一帧是钉死的。
+## Intention
+Staggered list item fade-ins are easily prone to feeling stiff: each item freezes once it finishes moving, leaving the screen completely dead between arrivals. This card's solution adds a slow drift to the container that is completely independent of the per-item entrances—individual rows "find their slots" while the whole list "breathes." Viewers clearly read each item while no single frame across the entire shot is frozen solid.
 
-## 动效核心
-- 两层运动完全解耦：容器 `translateY(DRIFT/2 − DRIFT·f/(N−1))` 只吃全局帧，是贯穿全片的匀速漂移
-  （demo：1920 坐标下总 96px，+48 → −48，≈0.8px/f）；每项只吃自己的局部窗口，互不参与对方的计算
-- 逐项入场：起点 `2 + i·10f`、窗口 24f，stagger 10f 比常规 UI stagger 慢一档——这是"读得完"的间隔，
-  不是"快速铺开"的间隔；窗口是 stagger 的 2.4 倍 → 相邻 2–3 项同时在动，队列连绵
-- 找位动作是 scale 主导：`scale(0.82 → 1)` 配 `translateY(44 → 0)` + 对焦模糊 8px → 0，
-  观众感知到的是"从虚到实、从小长到位"，而不是"从下面飞上来"
-- 软过冲 `bezier(0.3, 1.18, 0.5, 1)`（~1.5%）——量很小，作用是把落位那一帧从"停"变成"扣住"
-- 跟随：图标晚 2f、右侧快捷键 / 徽章晚 4f 落定；透明度 `min(1, lin·2.2)`，行程 45% 就已全实
-- 当前项（Home）是全片唯一的高亮：瓷白实心条 + 落位后一次扫光（Q4）；其余项为深石墨面 + 发丝线
+## Motion Core
+- Two completely decoupled motion layers: container `translateY(DRIFT/2 − DRIFT·f/(N−1))` consumes only global frame count, maintaining uniform upward drift throughout the sequence (demo: 96px total under 1920 coordinates, +48 → −48, ≈0.8px/f); individual items consume only their local timing windows without cross-calculating.
+- Staggered entrances: start cue `2 + i·10f`, window 24f; 10f stagger is one step slower than conventional UI staggers—providing an interval suited for reading rather than rapid cascading; window is 2.4x the stagger → 2–3 adjacent items move concurrently, forming an unbroken wave.
+- Placement motion is scale-driven: `scale(0.82 → 1)` paired with `translateY(44 → 0)` + focus blur 8px → 0; viewers perceive items growing into position from blurred states rather than flying up from below.
+- Soft overshoot `bezier(0.3, 1.18, 0.5, 1)` (~1.5%)—subtle enough to turn landing from a mechanical halt into a soft latch.
+- Secondary elements: icons lag by 2f, right-hand shortcuts/badges lag by 4f; opacity `min(1, lin·2.2)` reaches full solid state at 45% travel.
+- Active item (Home) acts as the sole visual highlight: solid porcelain bar + single sheen sweep upon settling (Q4); remaining items use deep graphite fills with hairline strokes.
 
-## 参数表（demo 为 1920×1080 原生坐标）
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 项数 | 6（Home…Sign out） | 末项 52f 起、76f 落定，尾部留 ~44f 给观众收尾；>8 项必须压 stagger，否则末项吃到收尾 |
-| stagger | 10f/项 | 10f 是"逐项读得完"；压到 4f 变成一次铺开（另一种手法），拉到 16f 以上节拍会散 |
-| 单项窗口 | 24f | 窗口比 stagger 长 2.4 倍 → 相邻项重叠；两者相等会变成一项一项硬接 |
-| 起始 scale | 0.82 | "已经能认出是个条目"的尺度；<0.5 读作从零弹出，和 pop 类手法混淆 |
-| 起始位移 / 模糊 | 44px / 8px | 位移必须小于行距（92px 行高 + 14px 间距），否则项与项之间穿插 |
-| 过冲 | 软 back ~1.5% | 要小到几乎读不出来；换 spring 或加大过冲，6 项连续抖会显得廉价 |
-| 容器漂移 | 全程匀速 96px（≈0.8px/f） | 总量是单项位移的 2 倍、速度慢一个数量级——读作"画面在呼吸"；速度接近单项入场速度时两层运动混为一件事 |
-| 透明度斜率 | `min(1, lin·2.2)` | 降到 1 会看到半透明项叠在背景上，暗场下尤其脏 |
+## Parameter Table (demo in 1920×1080 native coordinates)
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Item count | 6 (Home…Sign out) | Final item starts at 52f, settles at 76f, leaving ~44f for viewers to conclude; >8 items requires compressing stagger to avoid eating into outro |
+| Stagger | 10f / item | 10f allows reading each row; compressing to 4f turns into a rapid cascade (different style), extending beyond 16f scatters cadence |
+| Item window | 24f | Window is 2.4x stagger → creates overlapping flow; matching window to stagger creates rigid sequential handoffs |
+| Initial scale | 0.82 | Scale where "an item is already recognizable"; <0.5 reads as popping from zero, conflating with pop styles |
+| Initial displacement / Blur | 44px / 8px | Displacement must remain below row spacing (92px row height + 14px gap) to prevent rows intersecting |
+| Overshoot | Soft back ~1.5% | Must be subtle enough to barely register; spring or larger overshoots across 6 rows look cheap |
+| Container drift | Uniform 96px throughout (≈0.8px/f) | Total travel is 2x item displacement, but an order of magnitude slower—reads as "breathing"; matching item speed blurs the two layers together |
+| Opacity slope | `min(1, lin·2.2)` | Lowering to 1 reveals translucent rows over background, looking muddy on dark palettes |
 
-## 已知坑
-- 容器漂移是匀速且贯穿全程，末帧停在 −48px 而不是 0——这个动效**末帧不回位**。
-  要循环播放或与后一镜对齐位置，得把漂移换成收束曲线，或在末段补一个反向缓收
-- 项数变化必须重算 stagger：末项起点 `2 + (n−1)·10f`，再加 24f 窗口，要给收尾留 ≥30f
-- 行宽 700px、标签 `nowrap`——中文或更长的英文标签会顶到右侧快捷键，换文案要同步加宽；
-  列表总高 ~644px，加项前先算漂移后首末项是否仍在安全区内（demo 漂移范围 y 188–928）
-- 漂移方向（向上）与逐项位移方向（44px→0，也是向上）同向。这是有意的（同向叠加更顺），
-  但两者速度量级必须保持一个数量级差距，否则读作"一起往上飘"而非两层
-- 右侧标题要等列表铺到一半（46f）才进：开场只给列表一个主角（Q5），不然观众在两处之间来回找
-- 图标是单色线性图标，只有当前项用实心高亮、未读徽章用点缀色；浅色界面下描边和阴影都要重调
+## Known Pitfalls
+- Container drift is uniform throughout, ending at −48px on the final frame rather than 0—this animation **does not return to origin on the final frame**. To loop or match positions with subsequent shots, replace drift with a settle curve or add a counter-deceleration tail.
+- Altering item counts requires recalculating stagger: final item starts at `2 + (n−1)·10f` plus 24f window, reserving ≥30f for conclusion.
+- Row width 700px with label `nowrap`—longer labels can collide with right-hand shortcuts; expanding copy requires widening rows. Total list height ~644px; verify top and bottom rows stay inside safety margins after drift (demo drift range y 188–928).
+- Drift direction (upward) shares direction with item displacement (44px→0, also upward). This alignment is intentional (reinforcing smooth motion), but velocities must maintain an order of magnitude difference, otherwise the shot reads as "everything floating upward together."
+- Right-hand headline waits until list reaches halfway (46f) before entering: opening grants sole focus to the list (Q5), preventing viewers from scanning between two targets.
+- Icons use monochrome line art; only active item takes solid highlight, with unread badge taking accent color; recalibrate strokes and shadows on light palettes.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/list-reveal/
-（ListReveal.tsx：graphite 暗场，左列表 + 右侧 120px 标题的侧边栏海报）
+(ListReveal.tsx: graphite dark palette, sidebar poster with left list + 120px right headline)

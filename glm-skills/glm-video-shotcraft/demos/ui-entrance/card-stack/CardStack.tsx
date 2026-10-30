@@ -1,24 +1,26 @@
-// card-stack — 一组卡从屏幕下方逐张 spring 弹入叠成一摞，全员落位后整摞一次性展成扇面——
-// 每张按序号偏转 6.5°、横移 138px、向后退一层 z；扇柄在卡片下缘之外（transform-origin 50% 130%）。
+// card-stack — A deck of cards springs in sequentially from the bottom of the screen into a single stack;
+// once all cards settle, the stack fans out in a single motion:
+// each card rotates 6.5° per index, shifts horizontally 138px, and steps back one z-layer;
+// the fan pivot is below the bottom edge of the cards (transform-origin 50% 130%).
 //
-// 第二轮重设计（瓷白 · 模板库发布；品牌轮：video-shotcraft 镜头配方库）：
-// - look = porcelain（冷白 + 墨 + 钴蓝，青绿只做点缀）。卡片放大到 320×440 原生像素（不再走 480×270 设计坐标），
-//   每张是一张为镜头设计的"模板封面"：上 58% 生成式封面图（甘特 / 柱图 / 折线 / 圆环 / 表格 / 日历 / 看板 / 大数字），
-//   下部 30px 标题 + mono 元信息（每张是一种镜头 / 模板）；只有中心那张「Launch film」用钴蓝实色封面——它是结尾被抽出来的主角。
-// - 卡数 9（奇数）：中心卡独占中位，扇面左右对称；叠压次序 = 序号（像手里摊开的一手牌，左压右），
-//   全程不换 zIndex，避免从"一摞"到"扇面"时顶牌跳变。
-// - 重量感：入场按"越来越快"分布（EASE.exit 错峰，砰——砰—砰-砰砰），每张落座时整摞被压低 5px 再回弹；
-//   展开前 6f 预备（整摞收紧 2%），展开用低阻尼弹簧（damping 20）带一点惯性落定；相机同段拉远到 0.88。
-// - 结尾：中心卡沿自身轴抽出 72px + 钴蓝描边 + 一次扫光（Q4），标题与副句升起，形成发布会海报。
+// Round 2 redesign (porcelain · template library launch; branding: video-shotcraft shot recipe library):
+// - look = porcelain (cool white + ink + cobalt blue, teal accents only). Cards scaled up to native 320×440 px (no longer using 480×270 design coordinates);
+//   each represents a designed "template cover" for shots: top 58% generative cover art (gantt / bars / line / rings / table / calendar / kanban / metric),
+//   bottom 30px title + mono metadata (each is a shot/template type); only the center "Launch film" card uses a solid cobalt blue cover—it is the featured card pulled out at the end.
+// - Card count 9 (odd): center card takes the middle slot, fan is symmetrically balanced; stack order = index (like a fanned hand of cards, left over right),
+//   zIndex remains constant throughout to prevent top-card pop when transitioning from stack to fan.
+// - Sense of weight: entrance distributes in an "accelerating" rhythm (EASE.out stagger, thud——thud—thud-thud-thud); each landing card compresses the stack downward 5px before rebounding;
+//   6f anticipation before fanning (stack tightens 2%); fan deployment uses a low-damping spring (damping 20) settling with subtle inertia; camera zooms out to 0.88 in the same segment.
+// - Outro: center card slides out 72px along its own axis + cobalt blue outline + sheen sweep (Q4); headline and subtitle rise into place, forming a launch poster.
 //
-// 时间表（30fps，共 150f）：
-//   0–3     瓷白舞台 + 地面接触影 + 左上眉题已在
-//   2–42    9 张卡依次起跳（错峰 40f，越来越快），各自 spring（damping 13）≈20f 落座，落座时整摞下压 5px
-//   62–72   预备：整摞收紧 2%
-//   0–64    相机极缓推近 1→1.06
-//   68–100  扇形展开（弹簧 damping 20，轻微过冲一次），相机 1.06→0.88 拉远（smooth 64–106）
-//   102–122 中心卡抽出 72px（overshoot）+ 钴蓝描边 + 扫光；标题逐词升起（106–）、副句（116–）
-//   122–150 hold（相机极缓推进 ×1.017）
+// Timeline (30fps, 150f total):
+//   0–3     Porcelain stage + floor contact shadow + top-left eyebrow already present
+//   2–42    9 cards launch sequentially (staggered over 40f, accelerating), each springs in (damping 13) ≈20f to settle, compressing stack 5px on touchdown
+//   62–72   Anticipation: stack tightens 2%
+//   0–64    Camera very slow zoom-in 1→1.06
+//   68–100  Fan unfold (spring damping 20, single gentle overshoot), camera zooms out 1.06→0.88 (smooth 64–106)
+//   102–122 Center card pulled out 72px (overshoot) + cobalt outline + sheen; title rises word-by-word (106–), subtitle (116–)
+//   122–150 Hold (camera continues very slow creep ×1.017)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -32,9 +34,9 @@ const N = 9;
 const CW = 320;
 const CH = 440;
 const CX = 960;
-const CY = 610; // 卡片中心
-const ROT = 6.5; // 扇面每张偏转（°）
-const TX = 138; // 扇面每张横移（px）
+const CY = 610; // Card center
+const ROT = 6.5; // Fan rotation per card (deg)
+const TX = 138; // Fan horizontal shift per card (px)
 const FEATURED = 4;
 
 type Kind = 'gantt' | 'bars' | 'line' | 'rings' | 'hero' | 'table' | 'calendar' | 'kanban' | 'metric';
@@ -56,18 +58,18 @@ const rand = (n: number) => {
 };
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-// 入场：起跳帧按"越来越快"分布（EASE.out 映射 = 前面间隔大、后面间隔小）；spring 0→1（damping 13 = 一次可见回弹）
+// Entrance: launch frames distribute in an "accelerating" cadence (EASE.out mapping: larger initial gaps, tightening toward end); spring 0→1 (damping 13 = one visible bounce)
 const START = Array.from({ length: N }, (_, i) => 2 + stagger(i, N, 40, EASE.out));
 const inAt = (f: number, i: number) => (f < START[i] ? 0 : springAt(f, START[i], { damping: 13, stiffness: 150 }));
-const DROP = 820; // 起点在画框下方
+const DROP = 820; // Starting point below viewport
 
 export const CardStack: React.FC = () => {
   const f = useCurrentFrame();
-  // 落座下压：每张卡落座（≈起跳后 7f 越过终点）时整摞被压低 5px，sin 包络 9f
+  // Landing compression: as each card settles (≈7f after launch crossing baseline), stack depresses 5px with a 9f sine envelope
   const dip = START.reduce((d, s) => d + Math.sin(clamp01((f - s - 6) / 9) * Math.PI) * 5, 0);
   const squeeze = 1 - 0.02 * Math.sin(clamp01((f - 62) / 10) * Math.PI);
   const fan = f < 68 ? 0 : springAt(f, 68, { damping: 20, stiffness: 95 });
-  // 相机：成摞段极缓推近 1→1.06（给"一摞"分量），展开同段拉远到 0.88，hold 段再极缓推进
+  // Camera: very slow creep forward 1→1.06 during stacked phase (weighting the stack), pulls back to 0.88 during fan-out, creeps slightly during hold
   const camPush = mix(1, 1.06, ramp(f, 0, 64, EASE.smooth));
   const cam = mix(camPush, 0.88, ramp(f, 64, 42, EASE.smooth)) * mix(1, 1.017, ramp(f, 122, 28, EASE.smooth));
   const lift = ramp(f, 102, 18, EASE.overshoot);
@@ -77,11 +79,11 @@ export const CardStack: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1] }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.12 }} fill={null}>
-        {/* 地面：一道极淡的桌面反光带 */}
+        {/* Floor: subtle tabletop reflection strip */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 860, height: 220, background: `linear-gradient(180deg, ${alpha('#ffffff', 0)} 0%, ${alpha('#ffffff', 0.5)} 40%, ${alpha('#ffffff', 0)} 100%)` }} />
       </Stage>
 
-      {/* 眉题（画框装饰，不随相机） */}
+      {/* Eyebrow header (frame embellishment, fixed to camera) */}
       <div style={{ position: 'absolute', left: 120, top: 96, display: 'flex', alignItems: 'center', gap: 14, opacity: ramp(f, 0, 12, EASE.out) }}>
         <ShotcraftMark size={30} tone="light" />
         <div style={{ fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.1em', color: L.ink2 }}>{`${BRAND.name} · shot recipes`}</div>
@@ -90,7 +92,7 @@ export const CardStack: React.FC = () => {
         {`${String(START.filter((s) => f >= s + 6).length).padStart(2, '0')} / ${String(N).padStart(2, '0')}`}
       </div>
 
-      {/* 标题：中心卡抽出时升起 */}
+      {/* Headline: rises when center card pulls out */}
       <div style={{ position: 'absolute', left: 0, right: 0, top: 150, textAlign: 'center' }}>
         <div style={{ ...type(88, 700), color: L.ink }}>
           <TextReveal text="Start from a shot recipe." by="word" variant="rise" start={106} each={18} gap={3} />
@@ -98,7 +100,7 @@ export const CardStack: React.FC = () => {
       </div>
 
       <AbsoluteFill style={{ transform: `scale(${cam.toFixed(4)})`, transformOrigin: `${CX}px ${CY + 120}px` }}>
-        {/* 地面接触影：成摞时集中、展开后随扇面变宽 */}
+        {/* Floor contact shadow: concentrated when stacked, widens with fan expansion */}
         <div style={{
           position: 'absolute', left: CX - mix(220, 760, fan) / 2, top: CY + CH / 2 - 30 + dip, width: mix(220, 760, fan), height: 70,
           borderRadius: '50%', background: `radial-gradient(ellipse at center, ${alpha(L.shadow, 0.28)} 0%, ${alpha(L.shadow, 0)} 70%)`,
@@ -111,10 +113,10 @@ export const CardStack: React.FC = () => {
             const vy = ((1 - inAt(f + 0.5, i)) - (1 - inAt(f - 0.5, i))) * DROP;
             const blurY = Math.min(10, Math.abs(vy) * 0.18);
             const k = i - (N - 1) / 2;
-            // 成摞错位：确定性 ±3.2° / ±11px，像随手码齐的一摞；展开时理顺
+            // Stack irregularity: deterministic ±3.2° / ±11px mimicking a hand-stacked deck; aligns cleanly on unfold
             const jitR = (rand(i * 3 + 1) - 0.5) * 6.4;
             const jitX = (rand(i * 5 + 2) - 0.5) * 22;
-            const tilt = (i % 2 ? 1 : -1) * 9 * (y / DROP); // 飞行中带交替倾角，随落座收敛
+            const tilt = (i % 2 ? 1 : -1) * 9 * (y / DROP); // Alternating tilt angle in mid-flight, converging upon landing
             const rot = mix(jitR + tilt, k * ROT, fan);
             const tx = mix(jitX, k * TX, fan);
             const tz = i * 2;
@@ -163,7 +165,7 @@ export const CardStack: React.FC = () => {
   );
 };
 
-// ───────────── 卡面：封面图 + 标题 + 元信息 ─────────────
+// ───────────── Card Face: Cover image + Title + Metadata ─────────────
 const COVER_H = 256;
 const CardFace: React.FC<{ c: (typeof CARDS)[number]; i: number }> = ({ c, i }) => {
   const hero = c.kind === 'hero';
@@ -252,7 +254,7 @@ const Cover: React.FC<{ kind: Kind; seed: number }> = ({ kind, seed }) => {
           {[0, 1, 2, 3, 4].map((k) => (
             <circle key={k} cx={250} cy={40} r={60 + k * 44} fill="none" stroke="#ffffff" strokeOpacity={0.22 - k * 0.035} strokeWidth={2} />
           ))}
-          {/* 主角模板的封面主字换成镜刻标志反白版（取景框剪辑纸色 + 琥珀斜切），128 视框缩到 64px，占原「Q4」大字的位置 */}
+          {/* Hero template cover insignia replaced with inverted mark (viewfinder paper tone + amber slice), scaled from 128 viewport to 64px, occupying the former "Q4" display position */}
           <g transform="translate(14 140) scale(0.5)">
             <path d={MARK_PATHS.frame} fill={BRAND.paper} />
             <path d={MARK_PATHS.cut} fill={BRAND.amber} />

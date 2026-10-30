@@ -1,46 +1,38 @@
 ---
 name: space-camera-moves
-一句话: 3D 空间化运镜两式——exploded-view 爆炸分解（构件沿 Z 炸开再合体）、drone-dive-landing 无人机俯冲降落
-适用: 把平面页面当 3D 实体拍的高光段落；两式都是"大动作"，一支片合计 ≤2 次
-时长: A 170f（5.7s，炸开-悬停-合体-收尾标题全程）；C 105f（3.5s，俯冲 69f + 落定 hold 36f）单向俯冲
-能量: 高
+summary: Three spatial camera moves: exploded assembly, subject-locked rotation, and a drone-like dive to the landing point.
+use: Hero sequences treating a 2D page as a physical 3D object; both variants are "major maneuvers," use <=2 times total per video
+duration: A 170f (5.7s, full sequence of explode-hover-recombine-ending title); C 105f (3.5s, dive 69f + settled hold 36f) one-way dive
+energy: High
 ---
 
-## 意图
-depth-layer 卡是给平移加纵深——层在动、页面还是页面。这两式更进一步：
-整页被当成一个 3D 实体，相机（或世界）绕着它做实拍级机动。两式叙事
-语义各占一格：A 说"看看它由什么组成"（拆解展示，Apple 发布片语言）；
-C 说"从全局俯瞰砸到主角"（上帝视角一头扎进 hero 特写，全景→焦点）。
+## Intention
+The depth-layer card adds depth to panning—layers move, but the page remains a page. These two recipes go further: the entire page is treated as a 3D physical object, with the camera (or world) executing live-action-grade maneuvers around it. The two variants serve distinct narrative roles: Variant A says "look at what it is made of" (deconstructed exhibition, Apple keynote visual language); Variant C says "slam from global overhead straight into the hero" (god's-eye perspective plunging into a hero close-up, wide -> focal point).
 
-## 两式选型
+## Variant Selection
+| Variant | Approach | Use Case |
+|---|---|---|
+| A exploded-view | Full page rests flat in 3/4 axonometric perspective, components explode staggered along page normal and hover (with numbered callouts), then recombine in reverse order with a solid drop-hammer lock | Architecture / composition display: "what is inside this product"; module overview section |
+| C drone-dive-landing | Near-vertical overhead hover -> steep plunge dive -> air-cushion deceleration settling into hero card close-up | Opening establishing shot -> entering topic; chapter kickoff diving from macro map into a single point |
 
-| 式 | 做法 | 适用段落 |
-|----|------|----------|
-| A exploded-view | 整页 3/4 轴测平躺，构件沿页面法线错峰炸开悬停（配编号标注），一拍后逆序合体落锤收口 | 架构/组成展示："这个产品里有什么"；模块总览段 |
-| C drone-dive-landing | 近垂直俯角悬停 → 猛扎俯冲 → 气垫减速停在 hero 卡特写 | 开场定场→入题；全局地图砸进单点的章节启动 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Spatial base | perspective 2400 + `translate * scale * rotateX(54 deg) * rotateZ(-34 deg)` axonometric + preserve-3d; camera pulls back 0.56 -> 0.47 and shifts down during explosion to frame layer stack; rotateZ +10 deg orbit and pitch tightens 4 deg during hover | Slight front tilt (18 deg / -12 deg) merely reads as "lifting"; flat axonometric is needed for an exploded diagram feel; hover orbit reveals inter-layer depth via parallax |
+| A Explosion | 5 layers translateZ 150/270/400/520/640, spring (damping 15, stiffness 120) staggered by 5f | Layers further toward the back/top must rise higher, otherwise lower layers occlude upper ones; uniform depth reads as entire page floating |
+| A Recombination | Callouts withdraw first (ease-in 8f), layers reverse ease-in over 14f staggered by 3f; on landing frame, whole assembly drops 8px with damped rebound + base contact shadow snaps tight, followed by a light sheen sweeping the page | The drop-hammer beat is mandatory—without it, recombination feels like a mushy fade-in; no screen shake needed (Q3), drop rebound + tightening shadow provide the crisp snap |
+| A Depth anchors | Drop shadow on base plate shifts down, softens, and fades with height + thickness edge on back of each layer + dashed component slot outlines on base plate | Omitting any of these three cues blurs inter-layer spatial relationships |
+| A Callouts | Anchor = 3D projection of outer edge midpoint (calculated manually with same matrix as CSS), left/right rails, horizontal leader lines dog-legging to rails; 44px title + 30px description, line draw 8f + rise 12f, staggered 6f | Leader lines drawn from layer center will intersect other layers; callout text <32px is unreadable |
+| C Flight path | Single progress p drives rotateX 72 deg -> 0 + scale 0.42 -> 1.35 + translation convergence; origin pinned to hero card center (e.g. 518, 335); page laid out at end scale 1.35 + CSS zoom rasterization before scaling down, keeping close-up text crisp | Single p = one camera, one maneuver; separate drivers fight like three conflicting animations |
+| C Velocity curve | 0–24f god's-eye establish + upward anticipation (recoil 2.5% of path) -> main dive 25f Easing.in(cubic) covering 82% of distance -> air cushion 20f Easing.out(poly(5)) covering remaining 18% -> settled hold 36f | Sudden velocity drop at handoff frame creates the physical air cushion feel; 82/18 distance ratio matters more than frame counts |
+| C Atmosphere | Scene wrapped in CameraMotionBlur (shutterAngle 220, samples 12), with background and grain kept outside blur; page hovers above dot-matrix ground in the same 3D world (initial lift 150), dot matrix rushes toward camera during dive; ground contact shadow tightens and sharpens during descent, fading to 0 right before touchdown; subtle vignette darkens around hero after landing to focus gaze | Soft shadow sells altitude; blur sells speed; missing either dimension breaks realism; multi-sampling large gradients causes color banding, so keep backgrounds outside blur wrapper |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 空间基座 | perspective 2400 + `translate·scale·rotateX(54°)·rotateZ(−34°)` 轴测 + preserve-3d；炸开时机位拉远 0.56→0.47 并下移给层堆留画面；悬停期环绕 rotateZ +10°、俯角收 4° | 正面微倾（18°/−12°）只读作"浮起"，轴测平躺才像爆炸图；悬停环绕让层间视差读出深度 |
-| A 炸开 | 5 层 translateZ 150/270/400/520/640，弹簧（damping 15、stiffness 120）错峰 5f | 页面上越靠远端（顶部）的层要越高，否则低处的层升起后挡住上方层；深度全同读作整页浮起 |
-| A 合体 | 标注先撤（ease-in 8f），层逆序 ease-in 14f、错峰 3f；落座帧整组下沉 8px 阻尼回弹 + 台面接触影一紧，随后一道扫光掠过整页 | 落锤必须有——没有它合体读作软趴趴的淡入；但不用抖屏（Q3），下沉回弹 + 影子收紧同样有"咔" |
-| A 深度锚 | 各层投到底板的影随高度下移变虚变淡 + 每层背后一片厚度边 + 底板露出构件虚线插槽 | 三个线索缺一层间关系就糊 |
-| A 标注 | 锚点 = 层外缘中点的 3D 投影（与 CSS 同一套矩阵手算），左右两栏、水平引线到栏前一折；标题 44px + 说明 30px，描线 8f + 升起 12f，错峰 6f | 引线从层中间拉出会穿过别的层；标注字 <32px 读不清 |
-| C 行程 | 同一条 p 驱动 rotateX 72°→0 + scale 0.42→1.35 + translate 收拢；origin 钉死 hero 卡中心（如 518,335）；页面按终点倍率 1.35 布局 + CSS zoom 栅格化再缩回，特写文字不糊 | 一条 p = 一台相机一次机动；分开驱动读作三个动画打架 |
-| C 速度曲线 | 0–24f 上帝视角建立 + 上提预备（行程倒退 2.5%）→ 主俯冲 25f Easing.in(cubic) 吃 82% 行程 → 气垫 20f Easing.out(poly(5)) 走 18% → 落定 hold 36f | 切换帧速度骤降 = 气垫顶住的体感；82/18 比例比帧数更关键 |
-| C 氛围 | 场景包 CameraMotionBlur(shutterAngle 220, samples 12)，背景与颗粒放在模糊之外；页面悬停在同一 3D 世界的点阵地面上方（起始 lift 150），俯冲时点阵向镜头涌来；地面同形接触影随降落收紧变实、触地前淡到 0；落定后 hero 外一圈轻压暗收焦 | 软影卖"悬空高度"；blur 卖速度，缺一维就假；大面积渐变放进多重采样会量化出色环，背景留在模糊外 |
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Both variants require real screenshot slicing / high-resolution textures: Variant A requires the page sliced into independent component assets (top bar, sidebar, cards each rendered separately; a single full-page image cannot explode); Variant C ends in a tight close-up, requiring preparation with Q2 high-resolution rasterization first.
+- Variant C common bug: Remotion has no `Easing.quint`; write `Easing.poly(5)` instead (encountered during this production run).
+- Variant A component layout must use absolute positioning replicating the original page grid (the demo has 5 layers: sidebar, chart, assistant, metric, command bar); flex/flow layout cannot support per-component translateZ.
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 两式都吃真实截图分层/高清纹理：A 需页面按构件切块截图（顶栏/侧栏/
-  卡各自独立成图，整页一张图炸不开）；C 终点是特写，素材先按
-  审美准则 Q2 的高分辨率栅格化技法处理
-- C 式易错：Remotion 无 Easing.quint，写 Easing.poly(5)（本批实渲踩坑）
-- A 式构件布局要绝对定位复刻原页面网格（demo 里 5 层：侧栏/图表/助手/指标/命令栏），
-  流式布局做不了 per-构件 translateZ
-
-## 参考实现
+## Reference Implementation
 demos/camera/space-camera-moves/
-（DroneDiveLanding.tsx / ExplodedView.tsx）
+(DroneDiveLanding.tsx / ExplodedView.tsx)

@@ -1,13 +1,13 @@
-// mask-wipe 元素遮罩擦除（轮 D）——真实项目卡（card4-hires）放大成
-// 全屏窗口，projects 全景从窗内长出接管："点开一张卡进入它的世界"。
-// 节拍：0–40 全景 hold → 40–85 卡放大成窗（窗内新景反向补偿）→ 85–120 hold。
+// mask-wipe element mask wipe: project card (card4-hires) zooms into
+// full-screen window, revealing deep detail view: "click card to enter its world".
+// Beats: 0-40 overview hold -> 40-85 card zooms to window -> 85-120 hold.
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import layout from '../../_textures/live-layout.json';
 
 export const MASKWIPE_DUR = 120;
 
-const C4 = layout.projects.cards[3]; // 页面空间 x=781,y=616,w=357,h=312
-const VIEW_Y = 180; // 全景观察窗：页面 y=180 起
+const C4 = layout.projects.cards[3]; // Page coordinates x=781, y=616, w=357, h=312
+const VIEW_Y = 180; // Overview viewport: starts at y=180
 
 export const MaskWipeReal: React.FC = () => {
   const frame = useCurrentFrame();
@@ -15,23 +15,23 @@ export const MaskWipeReal: React.FC = () => {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.bezier(0.5, 0, 0.2, 1),
   });
-  // 卡在屏幕空间的初始 geometry（全景视口下）
+  // Initial card geometry in screen space
   const g0 = { x: C4.x, y: C4.y - VIEW_Y, w: C4.w, h: C4.h, r: 12 };
   const x = interpolate(t, [0, 1], [g0.x, 0]);
   const y = interpolate(t, [0, 1], [g0.y, 0]);
   const w = interpolate(t, [0, 1], [g0.w, 1920]);
   const h = interpolate(t, [0, 1], [g0.h, 1080]);
   const r = interpolate(t, [0, 1], [g0.r, 0]);
-  // 窗内新景（detail 视角用 papers 页顶部模拟）：从 0.42 缩放反向长到 1
+  // In-window scene: grows inversely from 0.42 to 1
   const innerScale = interpolate(t, [0, 1], [0.42, 1]);
   return (
     <AbsoluteFill style={{ backgroundColor: '#f9f6f1', overflow: 'hidden' }}>
-      {/* 背景：projects 全景 */}
+      {/* Background: projects overview */}
       <Img
         src={staticFile('legacy-textures/projects-full.png')}
         style={{ position: 'absolute', left: 0, top: -VIEW_Y, width: 1920 }}
       />
-      {/* 卡片即窗口 */}
+      {/* Card as window */}
       <div
         style={{
           position: 'absolute', left: x, top: y, width: w, height: h,
@@ -39,7 +39,7 @@ export const MaskWipeReal: React.FC = () => {
           boxShadow: t > 0 && t < 1 ? '0 16px 56px rgba(31,28,23,0.25)' : 'none',
         }}
       >
-        {/* 窗内新景：projects 页深部（detail 语义），反向补偿铺满 */}
+        {/* In-window incoming scene: detail view inverse compensated */}
         <div
           style={{
             position: 'absolute', width: 1920, height: 1080,
@@ -53,7 +53,7 @@ export const MaskWipeReal: React.FC = () => {
             style={{ position: 'absolute', left: 0, top: -846, width: 1920 }}
           />
         </div>
-        {/* 卡片脸：随放大渐隐露出窗内景 */}
+        {/* Card face: fades out to reveal in-window scene */}
         <Img
           src={staticFile('legacy-textures/card4-hires.png')}
           style={{

@@ -20,7 +20,7 @@ const savedTheme = (() => {
 const initialCategory = (() => {
   try {
     const cat = new URLSearchParams(window.location.search).get('cat');
-    // 只认侧栏里真实存在的筛选键；旧链接（如已删除的 ?cat=missing）回退 all
+    // Only accept filter keys genuinely present in sidebar; legacy URLs (e.g. deleted ?cat=missing) fallback to all
     return cat && document.querySelector(`#filters [data-filter="${CSS.escape(cat)}"]`)
       ? cat : 'all';
   } catch {
@@ -72,24 +72,17 @@ const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character)
 }[character]));
 
 const text = (key) => translations.ui[state.language][key] || key;
-// 入库 14 天内的卡在卡片和分类导航上挂 NEW 徽标（过期自动消失，无需维护）；
-// addedAt 由 sync 脚本在卡首次进 library.json 时写死，之后编辑只动 updatedAt
+// Cards added within 14 days display a NEW badge in cards and category navigation (expires automatically without maintenance);
+// addedAt is frozen by sync script upon card first entry into library.json, subsequent edits only modify updatedAt
 const NEW_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const isNewCard = (card) =>
   Boolean(card.addedAt) && Date.now() - Date.parse(card.addedAt) < NEW_WINDOW_MS;
-const cardName = (card) => state.language === 'zh'
-  ? translations.cardsZh[card.name] || card.name
-  : card.name;
-const styleName = (style) => state.language === 'zh'
-  ? translations.stylesZh[style.key] || style.label
-  : style.key;
-// 多式卡的描述跟随当前所选式（zh 用 library.json 的 style.description，
-// en 用 translations.stylesEn）；单式卡沿用整卡描述
+const cardName = (card) => card.name;
+const styleName = (style) => style.key;
+// Descriptions for multi-style cards track currently selected style (uses translations.stylesEn);
+// single-style cards inherit card-level description
 const cardDescription = (card, style) => {
   const multi = card.styles.length > 1;
-  if (state.language === 'zh') {
-    return (multi && style?.description) || card.summary || card.intention;
-  }
   return (multi && translations.stylesEn[style?.key])
     || translations.cardsEn[card.name] || card.name.split('-').join(' ');
 };
@@ -106,8 +99,8 @@ function resolveTheme(choice = state.theme) {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-// 单键切换：标签/图标写的是"点了会变成什么"。state.theme 初值 system，
-// 首次点击才落到显式 light/dark，所以没点过的用户仍跟随系统。
+// Single-button toggle: label/icon indicates state upon click. state.theme defaults to system,
+// explicit light/dark set only on first click so untoggled users follow system.
 function applyTheme() {
   const resolved = resolveTheme();
   document.documentElement.dataset.theme = resolved;
@@ -120,7 +113,7 @@ function applyTheme() {
 }
 
 function applyLanguage() {
-  document.documentElement.lang = state.language === 'zh' ? 'zh-CN' : 'en';
+  document.documentElement.lang = 'en';
   document.title = text('documentTitle');
   elements.pageTitle.textContent = text('title');
   document.querySelectorAll('[data-i18n]').forEach((node) => {
@@ -130,7 +123,7 @@ function applyLanguage() {
     node.setAttribute('aria-label', text(node.dataset.i18nAriaLabel));
   });
   elements.searchInput.placeholder = text('searchPlaceholder');
-  elements.languageToggleLabel.textContent = state.language === 'zh' ? 'EN' : '中文';
+  elements.languageToggleLabel.textContent = 'EN';
   elements.languageToggle.setAttribute('aria-label', text('languageToggle'));
   applyTheme();
   updateSelectionBar();
@@ -204,12 +197,12 @@ function cardMarkup(card, cardIndex) {
   const sourceUrl = card.sourceUrl || `/source/${encodedSource}`;
   const status = implementationStatusLabel(style);
   const title = cardName(card);
-  const subtitle = state.language === 'zh' ? card.name : '';
+  const subtitle = '';
 
   const isSelected = state.selectedCards.has(card.name);
 
-  // 单式卡的 style 名等于卡名，重复第三遍没有信息量；多式卡才需要
-  // "STYLE 0n + 名称" 这一行来说明当前看的是哪一式
+  // Single-style cards have style name equal to card name, redundant to repeat; multi-style cards need
+  // "STYLE 0n + Name" to specify the active variant
   const multiStyle = card.styles.length > 1;
 
   return `
@@ -262,14 +255,14 @@ function cardMatches(card) {
   ].join(' ').toLowerCase();
 
   if (state.query && !searchable.includes(state.query.toLowerCase())) return false;
-  // tags = 主类别（目录）+ frontmatter 标签，一张卡可命中多个筛选类
+  // tags = primary category (directory) + frontmatter tags, allowing a card to match multiple filters
   if (state.filter !== 'all' && !(card.tags || [card.category]).includes(state.filter)) return false;
   return true;
 }
 
-// 整个网格是 innerHTML 重建的，重建后 activeElement 会掉回 body。
-// 记下焦点元素的"身份"（卡名 + 角色），重建后按同一身份找回来，
-// 否则键盘用户每点一次就被扔回文档顶部。
+// Entire grid is rebuilt via innerHTML, resetting activeElement to body.
+// Record focus identity (card name + role) to restore after rebuild,
+// avoiding resetting keyboard users to document top.
 function captureFocus() {
   const el = document.activeElement;
   if (!el || !elements.library.contains(el)) return null;
@@ -298,7 +291,7 @@ function render() {
   if (!state.library) return;
   const focusMark = captureFocus();
   const cards = state.library.cards.filter(cardMatches);
-  // 跨类标签之后按主类别分组名不副实：All 视图就是一整片按字母序的平铺
+  // All view is a flat alphabetical layout across categories
   elements.library.innerHTML = cards.map((card, index) => cardMarkup(card, index)).join('');
   elements.library.setAttribute('aria-busy', 'false');
   elements.emptyState.hidden = cards.length > 0;
@@ -330,7 +323,7 @@ function observeMedia() {
 let toastTimer;
 function showToast(message) {
   elements.toast.textContent = message;
-  // 选择条占着底部中央；有它在场时 toast 上移，别盖住刚点的按钮
+  // Selection bar occupies bottom-center; move toast upward when visible to avoid obscuring clicked button
   elements.toast.classList.toggle('has-selection-bar', !elements.selectionBar.hidden);
   elements.toast.classList.add('is-visible');
   clearTimeout(toastTimer);
@@ -389,7 +382,7 @@ function renderCategoryCounts() {
       button.append(badge);
     }
     badge.textContent = counts[key] ?? 0;
-    // NEW 徽标插在文字与计数之间（“all” 恒有新卡时也提示，与卡片徽标同窗口）
+    // NEW badge inserted between text and count (shows on 'all' when new cards exist, sharing card badge window)
     let newBadge = button.querySelector('.new-badge');
     if (hasNew[key] && !newBadge) {
       newBadge = document.createElement('span');
@@ -402,7 +395,7 @@ function renderCategoryCounts() {
   });
 }
 
-// 104 张卡全量重建，每个按键都重排一次太贵；120ms 防抖
+// Full rebuild on every keystroke is costly; 120ms debounce
 let searchTimer;
 elements.searchInput.addEventListener('input', (event) => {
   const value = event.target.value.trim();
@@ -496,16 +489,16 @@ function toggleCardSelection(cardName) {
 
 function copySelectedCards() {
   if (!state.selectedCards.size) return;
-  // 按当前库顺序输出，保持稳定；含多式卡的当前所选式
+  // Output in current library order to preserve stability; includes currently selected variant for multi-style cards
   const ordered = (state.library?.cards || [])
     .filter((card) => state.selectedCards.has(card.name))
     .map((card) => cardCopyValue(card.name));
-  const value = ordered.join('，');
+  const value = ordered.join(', ');
   copyText(value, text('selectedCount').replace('{n}', ordered.length));
 }
 
-// 全屏放大单支样片。优先原生 Fullscreen API（能真全屏、Esc 原生退出）；
-// iOS Safari 不支持元素全屏，退化成 webkitEnterFullscreen（视频原生播放器）。
+// Fullscreen zoom for individual sample video. Native Fullscreen API preferred (true fullscreen, native Esc exit);
+// iOS Safari lacks element fullscreen, falls back to webkitEnterFullscreen (native video player).
 function openFullscreen(key) {
   const video = document.querySelector(`video[data-key="${key}"]`);
   if (!video) return;
@@ -522,17 +515,17 @@ function openFullscreen(key) {
     return;
   }
   if (video.webkitEnterFullscreen) {
-    // iOS: 原生播放器需要非 muted 之外的手势上下文，直接进即可
+    // iOS: Native player requires unmuted gesture context, enter directly
     video.play().catch(() => {});
     video.webkitEnterFullscreen();
     return;
   }
-  // 兜底：没有任何全屏能力时，至少把这支放到视口中央播放
+  // Fallback: If no fullscreen capability exists, center and play in viewport
   stage?.scrollIntoView({block: 'center'});
   video.play().catch(() => {});
 }
 
-// 全屏态下 object-fit: cover 会裁掉画面；标记出来让 CSS 改成 contain
+// object-fit: cover crops video in fullscreen; flag to allow CSS switch to contain
 document.addEventListener('fullscreenchange', () => {
   document.querySelectorAll('.preview.is-fullscreen').forEach((el) => {
     el.classList.remove('is-fullscreen');

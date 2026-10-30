@@ -1,14 +1,16 @@
-// 墨渗揭示（ink-bleed-reveal）——水墨转场（轨道遮罩法）。
-// 旧景：暖白纸面上的章节扉页（等宽小字章号 + 衬线大标题 + 细线 + 副题），纸纹静态颗粒；
-// 新景 FakeDashboard(A) 放进 SVG <foreignObject>，套 <mask>：落墨点 (800,420) 的白圆当轨道遮罩。
-// 墨的三层（自外向内）：①湿晕——纸被水洇湿的一圈极淡暗环（大半径、重羽化）；
-// ②墨边——深靛墨色的须状渗边，半径领先新景 20–42px：外沿半透明重羽化、内芯浓，读作"湿墨"；
-// ③新景——在墨边后面"显影"出来，内容始终清晰，scale 1.035→1 轻收（显影感）。
-// 三层遮罩圆共用 feTurbulence(baseFrequency 0.02, octaves 3, seed 7 固定) + feDisplacementMap
-// （scale 60→160 随帧涨）造须状渗边——filter 只揉遮罩形状，不揉画面。
-// 节拍：0–14 hold 旧景 → 14–22 墨滴落点（小墨点过冲落下）→ 20–98 半径 0→1450
-// （Easing.out(quad)）叠 ±8% 低频正弦扰动（帧 78–98 衰减到 0，洇满全屏）→
-// 100–130 摘掉 mask 直接铺新景，真静止 30f。
+// Ink bleed reveal: Ink wash transition using track mattes.
+// Outgoing scene: Chapter half-title page on warm white paper (monospace chapter number + serif title + hairline rule + subhead) with static paper grain.
+// Incoming scene FakeDashboard(A) inside SVG <foreignObject> with <mask>: a white circle at ink drop origin (800, 420) acts as track matte.
+// Three ink layers (outer to inner):
+// 1. Wet halo: A faint dark ring where water soaks paper (large radius, heavy feathering);
+// 2. Ink fringe: Deep indigo fibrous bleeding edge, radius leading incoming scene by 20–42px:
+//    outer edge translucent with heavy feathering, inner core dense, reading as "wet ink";
+// 3. Incoming scene: "Develops" behind ink edge, content always sharp, subtle scale-in 1.035 -> 1 (developing photo feel).
+// All 3 mask circles share feTurbulence (baseFrequency 0.02, octaves 3, fixed seed 7) + feDisplacementMap
+// (scale 60 -> 160 ramping with frame) for fibrous bleeding edges—the filter displaces mask geometry only, never scene pixels.
+// Pacing: 0–14 hold outgoing scene -> 14–22 ink drop impact (small dot overshoots downward) -> 20–98 radius 0 -> 1450
+// (Easing.out(quad)) with ±8% low-frequency sine wobble (fading to 0 at frames 78–98, soaking full frame) ->
+// 100–130 mask removed to render incoming scene directly, true static hold for 30f.
 import React, { useId } from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard } from '../../_fixtures/Fixtures';
@@ -17,11 +19,11 @@ import { EASE, FONT, ramp, mix, Grain } from '../../_fixtures/Polish';
 export const INK_BLEED_REVEAL_DURATION = 130;
 
 const SERIF = 'ui-serif, "New York", "Iowan Old Style", Georgia, "Times New Roman", serif';
-const PAPER = '#f3efe6'; // 暖白纸
-const INK = '#1a1c29'; // 带一点靛的墨色（不用纯黑）
-const PAPER_INK = '#2a2620'; // 印在纸上的字色
+const PAPER = '#f3efe6'; // Warm white paper
+const INK = '#1a1c29'; // Ink tone with slight indigo tint (avoids pure black)
+const PAPER_INK = '#2a2620'; // Printed typography ink color
 
-// 旧景：章节扉页（纸 + 印刷字）——标题是 video-shotcraft 品牌短句，副题是宣传语
+// Outgoing scene: Chapter title page (paper + print typography)—title is video-shotcraft brand slogan, subhead is promo tagline
 const PaperPage: React.FC = () => (
   <div style={{
     position: 'absolute', inset: 0, background: `radial-gradient(ellipse 80% 70% at 42% 38%, #f8f5ee 0%, ${PAPER} 55%, #e9e4d8 100%)`,
@@ -41,14 +43,14 @@ const PaperPage: React.FC = () => (
         Every shot, tuned in one place.
       </div>
     </div>
-    {/* 纸纹：静态颗粒（step 极大 = 不换帧，静止段像素恒定） */}
+    {/* Paper texture: static grain (huge step = no frame swapping, constant pixels during hold) */}
     <Grain opacity={0.07} step={100000} freq={0.9} blend="multiply" />
   </div>
 );
 
 export const InkBleedReveal: React.FC = () => {
   const frame = useCurrentFrame();
-  // 滤镜/mask ID 按实例生成，多实例同场不串引（useId 的 «:» 在 url() 里非法，需清洗）
+  // Filter/mask IDs generated per instance to avoid clashes (clean colons from useId which are invalid in url())
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const bleedId = `inkBleed-${uid}`;
   const featherId = `inkFeather-${uid}`;
@@ -57,37 +59,37 @@ export const InkBleedReveal: React.FC = () => {
   const maskInk = `inkMaskInk-${uid}`;
   const maskHalo = `inkMaskHalo-${uid}`;
 
-  // 墨滴落点：画面中心偏左上
+  // Ink drop origin: upper-left off-center
   const cx = 800;
   const cy = 420;
 
-  // 基础半径：帧 20–98，0 → 1450px（最远角 ~1300px + 渗边位移余量 150px）
+  // Base radius: frames 20–98, 0 -> 1450px (furthest corner ~1300px + 150px bleed displacement margin)
   const baseR = interpolate(frame, [20, 98], [0, 1450], {
     easing: Easing.out(Easing.quad),
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  // ±8% 低频正弦扰动 = 快慢不匀的洇开；帧 78–98 幅度衰减到 0，保证吃满后能真静止
+  // ±8% low-frequency sine wobble = organic non-uniform spreading; amplitude decays to 0 across frames 78–98 for clean freeze
   const wobbleEnv = interpolate(frame, [78, 98], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const r = Math.max(0, baseR * (1 + 0.08 * Math.sin(frame * 0.32) * wobbleEnv));
-  // 墨边领先量：起笔时窄（20px）、洇开中段最宽（~42px）——墨在纸上先跑、画面后显
+  // Ink fringe lead distance: narrow at start (20px), widest mid-bleed (~42px)—ink runs ahead on paper, scene follows
   const lead = 20 + 22 * Math.sin(Math.PI * ramp(frame, 20, 78, EASE.linear));
-  const rInk = r > 0.5 ? r + lead : 0; // 墨边外沿（半透明、羽化重）
-  const rCore = r > 0.5 ? r + lead * 0.45 : 0; // 墨芯（浓、羽化轻）
-  // 湿晕：比墨边再外扩 ~110px，极淡
+  const rInk = r > 0.5 ? r + lead : 0; // Ink fringe outer edge (translucent, heavily feathered)
+  const rCore = r > 0.5 ? r + lead * 0.45 : 0; // Ink core (dense, lightly feathered)
+  // Wet halo: expands ~110px beyond ink fringe, very faint
   const rHalo = r > 0.5 ? r + lead + 110 : 0;
 
-  // 渗边发散度：displacement scale 60 → 160（边缘越洇越散、指尖分叉越长）
+  // Bleed divergence: displacement scale 60 -> 160 (edges spread more raggedly with longer fibrous tendrils)
   const dispScale = interpolate(frame, [20, 98], [60, 160], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
-  // 墨滴：14–22f 一个小墨点过冲落下，随后被洇开的墨边吞没
+  // Ink drop: small droplet falls with overshoot across 14–22f, then absorbed into spreading ink edge
   const drop = ramp(frame, 14, 8, EASE.overshoot);
   const dropR = 16 * drop;
 
-  // 新景显影：scale 1.035 → 1（20–100f，ease-out），摘罩前必须精确回到 1
+  // Incoming scene reveal: scale 1.035 -> 1 (20–100f, ease-out), must return precisely to 1 before unmasking
   const develop = mix(1.035, 1, ramp(frame, 20, 80, EASE.out));
 
-  // 帧 100 起 mask 已全白：摘掉 SVG 直接铺新景，确保结尾像素级真静止
+  // At frame 100+ mask is fully white: remove SVG to render scene directly, guaranteeing pixel-perfect freeze
   const settled = frame >= 100;
 
   return (
@@ -101,12 +103,12 @@ export const InkBleedReveal: React.FC = () => {
       ) : (
         <svg width={1920} height={1080} viewBox="0 0 1920 1080" style={{ position: 'absolute', inset: 0, display: 'block' }}>
           <defs>
-            {/* filter 只挂在 mask 的圆上——揉的是遮罩边，不是画面内容 */}
+            {/* Filter applies only to mask circle—distorting mask edge, not scene content */}
             <filter id={bleedId} x="-40%" y="-40%" width="180%" height="180%">
               <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="7" result="noise" />
               <feDisplacementMap in="SourceGraphic" in2="noise" scale={dispScale} xChannelSelector="R" yChannelSelector="G" />
             </filter>
-            {/* 墨边：同一套须状位移 + 1.6px 羽化 = 湿墨的软边 */}
+            {/* Ink fringe: same fibrous displacement + 1.6px feathering = soft wet-ink edge */}
             <filter id={featherId} x="-40%" y="-40%" width="180%" height="180%">
               <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="7" result="noise" />
               <feDisplacementMap in="SourceGraphic" in2="noise" scale={dispScale * 1.08} xChannelSelector="R" yChannelSelector="G" result="d" />
@@ -117,7 +119,7 @@ export const InkBleedReveal: React.FC = () => {
               <feDisplacementMap in="SourceGraphic" in2="noise" scale={dispScale * 1.03} xChannelSelector="R" yChannelSelector="G" result="d" />
               <feGaussianBlur in="d" stdDeviation="1" />
             </filter>
-            {/* 湿晕：重羽化，只留一圈若有若无的暗 */}
+            {/* Wet halo: heavily feathered, leaving subtle ambient darkening */}
             <filter id={haloId} x="-40%" y="-40%" width="180%" height="180%">
               <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7" result="noise" />
               <feDisplacementMap in="SourceGraphic" in2="noise" scale={dispScale * 1.3} xChannelSelector="R" yChannelSelector="G" result="d" />
@@ -142,12 +144,12 @@ export const InkBleedReveal: React.FC = () => {
               {r > 0.5 && <circle cx={cx} cy={cy} r={r} fill="white" filter={`url(#${bleedId})`} />}
             </mask>
           </defs>
-          {/* ① 湿晕 */}
+          {/* 1. Wet halo */}
           <rect x="0" y="0" width="1920" height="1080" fill="#5a4e3a" opacity={0.12} mask={`url(#${maskHalo})`} />
-          {/* ② 墨边（含落点墨滴） */}
+          {/* 2. Ink fringe (includes impact droplet) */}
           <rect x="0" y="0" width="1920" height="1080" fill={INK} opacity={0.42} mask={`url(#${maskInk})`} />
           <rect x="0" y="0" width="1920" height="1080" fill={INK} opacity={0.86} mask={`url(#${maskInk}c)`} />
-          {/* ③ 新景显影 */}
+          {/* 3. Incoming scene reveal */}
           <g mask={`url(#${maskNew})`}>
             <foreignObject x="0" y="0" width="1920" height="1080">
               <div style={{ width: 1920, height: 1080, transform: `scale(${develop})`, transformOrigin: `${cx}px ${cy}px` }}>

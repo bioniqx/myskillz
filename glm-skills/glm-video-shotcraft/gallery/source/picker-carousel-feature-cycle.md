@@ -1,55 +1,42 @@
 ---
 name: picker-carousel-feature-cycle
-一句话: 移动端风竖向选择器——焦点药丸不动、内容穿过它，每项带明显 outQuint 减速吸附后完全静止，按到中心距离分层控制透明度/字号/灰度，落定时药丸做 scaleY 极轻呼吸
-适用: 逐个念出功能名/场景名的列表镜头；"选一个"的交互演示；移动端产品的 picker 类控件展示
-时长: 约3.6s（108f@30fps）
-能量: 中（每一次吸附都是一个节拍点，5 拍匀速推进）
+summary: A vertical mobile-style picker holds its focus pill still while the list passes through it, each item decelerating hard into place and resting for several frames before the next.
+use: List shots reading out feature names or use cases sequentially; interactive demonstrations of "picking one option"; showcasing picker-style controls in mobile products
+duration: ~3.6s (108f@30fps)
+energy: Medium (every snap serves as a beat marker, advancing at a steady 5-beat pace)
 ---
 
-## 意图
-把"选择"这件事的物理感做出来：焦点框是固定的，是内容在滚动并被吸住。
-每项停下后必须**真的静止几帧**——连续滚动读作 loading 动画，停顿才读作
-"这一项被选中了"。距离衰减（透明度 + 字号 + 灰度三通道同时衰减）是让
-观众视线始终锁在中间那一行的唯一手段。
+## Intention
+Crafting the physical sensation of "selection": the focus frame remains stationary while content rolls through and snaps into place. Each item must **truly pause for several frames** upon stopping—continuous scrolling reads like a loading animation, while pauses convey "this item is selected." Distance attenuation (simultaneous decay across opacity, font size, and grayscale) is the sole method to keep viewer gaze locked onto the center row.
 
-## 动效核心
-- 视口 300×170px（5 行 × rowH 34），焦点药丸固定在第 3 行位置
-  （`top: rowH*2`），白底 + 1px `#E3E3E6` 描边 + `0 2px 8px rgba(0,0,0,.06)`
-- 全程 `t 0.05→0.95` 匀速切成 STEPS=5 步；步内位移
-  `outQuint(min(1, local/(1−HOLD)))`，HOLD=5/14 的尾段完全不动
-  （每步≈0.65s = 走位≈0.42s + 静止≈0.23s）
-- 列表整体 `translateY(rowH*2 − pos*rowH)`——移动的是内容，药丸零位移
-- 距离衰减（`d = |i − pos|`）分三段：opacity `d≤1` 时 1→0.55、
-  `1<d≤2` 时 0.55→0.18；fontSize 17→14px（按 `d/2`）；
-  color `d<0.5` 用 INK、`d<1.5` 用 MID、更远用 `#B9B9BE`
-- 行内图标 opacity `max(0, 1 − d*1.6)`——只有焦点行看得见图标
-- 落定后药丸 `scaleY 1 + sin(min(1, land/0.6)·π)*0.06` 呼吸一下
-  （`land` 只在 HOLD 段内 >0，即吸附完成才呼吸）
-- 视口上下各 26% 的 alpha 渐隐遮罩（`mask-image` 透明→不透明），让进出项自然消隐
+## Motion Core
+- Viewport 300x170px (5 rows x rowH 34), focus pill fixed at row 3 position (`top: rowH*2`), white background + 1px `#E3E3E6` border + `0 2px 8px rgba(0,0,0,.06)`.
+- Total progress `t 0.05->0.95` partitioned evenly into STEPS=5 steps; step displacement `outQuint(min(1, local/(1-HOLD)))`, with HOLD=5/14 tail segment completely motionless (each step ~0.65s = travel ~0.42s + pause ~0.23s).
+- List translated as a whole `translateY(rowH*2 - pos*rowH)`—content moves while pill has zero displacement.
+- Distance attenuation (`d = |i - pos|`) split into three bands: opacity 1->0.55 when `d<=1`, 0.55->0.18 when `1<d<=2`; fontSize 17->14px (based on `d/2`); color uses INK when `d<0.5`, MID when `d<1.5`, and `#B9B9BE` further out.
+- Inline icon opacity `max(0, 1 - d*1.6)`—only the focused row displays an icon.
+- Settle breath on pill: `scaleY 1 + sin(min(1, land/0.6)*pi)*0.06` (where `land` >0 only within HOLD segment, breathing strictly after snap completes).
+- Viewport top and bottom feature 26% alpha fade masks (`mask-image` transparent->opaque) for natural item entry and exit fading.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 行高/可见行数 | rowH 34px × 5 行，焦点在第 3 行 | 可见行数必须是奇数，否则焦点行不在视觉正中 |
-| 步数 | STEPS=5，窗口 t 0.05→0.95 匀速 | 5 拍是 3.6s 的舒适上限；7 拍每拍就压到 0.46s 读不清 |
-| HOLD | 5/14 ≈ 0.357（每步尾段静止≈0.23s） | **命门**：HOLD 归零就变成匀速滚动，完全丢掉"吸附"语义 |
-| 吸附缓动 | outQuint（作用在 local/(1−HOLD) 上） | outQuint 的急减速就是"被磁铁吸住"的手感，outCubic 太软 |
-| opacity 衰减 | 1 → 0.55（d≤1）→ 0.18（d≤2） | 相邻行留 0.55 是让观众感知"上下还有内容"；降到 0.3 就孤立了 |
-| fontSize 衰减 | 17→14px，按 min(1, d/2) | 字号差是第二重景深；只做透明度会显得扁 |
-| 图标可见性 | max(0, 1 − d·1.6) | 只有焦点行带图标，是"当前项"的额外标记 |
-| 药丸呼吸 | scaleY 1→1.06→1，落定后 0.6·HOLD 内走完 | 0.06 已到上限；再大就读作药丸自己在动，抢了内容的戏 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Row height / visible rows | rowH 34px x 5 rows, focus on row 3 | Visible row count must be odd, otherwise focus row is not visually centered |
+| Steps | STEPS=5, uniform across window t 0.05->0.95 | 5 beats is comfortable upper bound for 3.6s; 7 beats compresses each to 0.46s, making it illegible |
+| HOLD | 5/14 ~ 0.357 (tail pause ~0.23s per step) | **Critical linchpin**: zeroing HOLD turns motion into uniform scrolling, losing "snap" semantics |
+| Snap easing | outQuint (applied to local/(1-HOLD)) | Rapid deceleration of outQuint provides "magnetic snap" feel; outCubic feels too soft |
+| Opacity attenuation | 1 -> 0.55 (d<=1) -> 0.18 (d<=2) | Retaining 0.55 on adjacent rows lets viewers sense adjacent content; dropping to 0.3 feels isolated |
+| FontSize attenuation | 17->14px, based on min(1, d/2) | Font size delta provides secondary depth; opacity alone feels flat |
+| Icon visibility | max(0, 1 - d*1.6) | Only the focused row shows an icon, providing secondary marker for active item |
+| Pill breath | scaleY 1->1.06->1, resolves within 0.6*HOLD post-settle | 0.06 is the upper ceiling; any larger reads as pill moving on its own, overshadowing content |
 
-## 已知坑
-- 药丸必须是 **`translateY` 零位移的固定层**，`scaleY` 呼吸也不能带
-  位移，否则焦点框漂移，"内容穿过焦点"的语义立刻失效
-- 距离衰减写在 `fontSize` 上会触发逐帧重排（行高固定所以布局不跳），
-  行高若改成 auto 就会抖；rowH 必须写死
-- 渐隐用 `mask-image` 做 alpha 遮罩，不要叠纸色色块：底色一旦是渐变/有光斑，色块遮罩就会露出矩形边界带
-- 左外侧 24×24 的方形 app 图标（深底 + video-shotcraft 标志反白版）用
-  `margin:-12px 0 0 -186px` 相对画面中心定位；改视口宽度必须同改 186px
-- ITEMS 是 video-shotcraft 的 7 条功能名（"Shot recipe cards" 等），换成别的功能名时
-  字长变化会影响居中观感——单行超过 300px 就要缩字号而不是换行
+## Known Pitfalls
+- Pill must be a **fixed layer with zero `translateY` displacement**; `scaleY` breath must not include displacement either, otherwise focus frame drifts and "content traversing focus" collapses.
+- Driving distance attenuation via `fontSize` triggers per-frame reflow (row height is fixed so layout does not jump); if row height is set to auto it will jitter; rowH must be hardcoded.
+- Use `mask-image` for alpha fading rather than overlaying solid background patches: if background has gradients or flares, patch masks reveal rectangular seam boundaries.
+- Outer left 24x24 square app icon (dark base + inverted video-shotcraft logo) positioned relative to screen center via `margin:-12px 0 0 -186px`; modifying viewport width requires updating 186px offset.
+- ITEMS consists of 7 video-shotcraft feature names ("Shot recipe cards", etc.); swapping for other feature names impacts centering—if a single line exceeds 300px, reduce font size rather than wrapping lines.
 
-## 参考实现
+## Reference Implementation
 demos/interaction/picker-carousel-feature-cycle/
-（PickerCarouselFeatureCycle.tsx）
+(PickerCarouselFeatureCycle.tsx)

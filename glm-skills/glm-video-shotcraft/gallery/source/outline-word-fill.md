@@ -1,66 +1,46 @@
 ---
 name: outline-word-fill
-一句话: 空心词（细暖灰描边、500 字重）从 3.2 倍急缓收缩落位，虚线大圆随后从 2.8 倍收到字周围并缓慢自转，左右水平虚线从画框边缘内伸；描边先微微增亮，实心白热字在一帧内硬切点亮，一闪辉光即定格
-适用: 单词式利益点/口号的重锤一拍；节奏卡点上的"钉子"镜；深底品牌片的强调帧
-时长: 约 3.0s（90f@30fps，短促单拍 + 36f 落定）
-能量: 高（3.2 倍收缩 + 瞬时点亮，短时高冲击）
+summary: An outlined word snaps down from triple size while a dashed circle and horizontal guides close in, then the stroke flips to solid white in a single frame with one brief glow.
+use: Heavyweight hammer beats for single-word value propositions / slogans; anchor shots aligned with rhythm drops; emphasis frames in dark-field brand videos
+duration: ~3.0s (90f@30fps, snappy single-beat + 36f landing hold)
+energy: High (3.2x contraction + instantaneous ignition, brief high impact)
 ---
 
-## 意图
-一个词要打成钉子，靠的不是慢慢淡入而是**两次落定**：先是巨大空心字
-急速收缩到位（这是尺寸的落定），再是描边在一帧内变实心白（这是质感的
-落定）。中间那 1.5s 的虚线圆收缩与水平虚线内伸是"瞄准"过程——技术
-制图语汇，让点亮那一下读作"确认"。填充**必须是瞬时**的：慢扫填充会把
-钉子变成缓慢的美化动画。
+## Intention
+Driving a word home like a hammered nail does not rely on a slow fade-in, but on **two successive landings**: first, an enormous hollow outlined word rapidly contracts into place (the landing of size); second, the thin stroke snaps into solid white within a single frame (the landing of texture). The intervening 1.5s of contracting dashed circles and extending horizontal guides represents an "aiming" sequence — technical drafting vocabulary that frames the ignition beat as a decisive "confirmation." Fill **must be instantaneous**: a slow wipe fill degrades an impactful hammer blow into a leisurely cosmetic animation.
 
-## 动效核心
-（demo 以 1920×1080 原生坐标、帧号标定；look = ember 暖黑 · 橙）
-- 空心字急缓收缩：`scale = mix(3.2, 1, ramp(f, 2, 11, EASE.snappy))`，2–8f 淡入——
-  **收缩窗只 11f**，快到几乎是一次冲击；按 scale 速度给瞬时失焦（停稳归零）
-- 双层字：`outline`（`color:transparent` + `-webkit-text-stroke:2px` 暖灰）与 `solid`
-  （白热 #fff5ee，初始 opacity 0）叠放，220px / **500 字重** Helvetica Neue
-  （中等字重，不是标题的 800——空心字太粗会糊成块）
-- 虚线大圆（r=410、`dasharray 22 18`）+ 内圈 72 格刻度环（每 30° 一根长刻度，反向慢转）+ 四个套准刻度：
-  8–18f 淡入，`scale 2.8 → 1` 在 8–52f 慢收（EASE.out，**44f，全片最慢的一条曲线**）；主圈 0.22°/f 自转，
-  点亮那一刻刹停（"锁定"），内圈继续慢转让 hold 段画面仍在呼吸
-- 左右水平虚线（`dasharray 14 12`）：28–46f 从画框边缘内伸到圆边外 28px，线端带准星点；
-  线上方 mono 读数「BEFORE 1 week」/「AFTER 4 hrs」——把"更快"讲成一组前后对比数据（手 K 一周 vs video-shotcraft 一下午出片）
-- 描边预热：44–53f 暖灰 → 亮橙白并带一点外发光，给硬切一个"充能"前奏
-- **瞬时填充**：第 54 帧 `lit = frame >= 54 ? 1 : 0`，solid 与 outline 透明度硬切，不存在中间态；
-  同帧圆 / 水平线锁定成橙色、右侧读数变橙
-- 一闪即逝的辉光：`flash = lit · (1 − ramp(f, 54, 8))`，白 14px + 橙 60px 两层 text-shadow，8f 衰完后
-  只留极弱橙晕；一道冲击环从圆边外扩 160px、14f 消散（只此一次）；舞台主光同步脉冲一下
-- 落定：56–70f 圆内眉题（小号 video-shotcraft 标志 + 全小写 mono 字标）/ 副行（40px，"One prompt to a finished promo."）升起，70–90f hold，全程极缓推进 1→1.015
+## Motion Core
+(Demo calibrated at native 1920×1080 coordinates and frame indices; look = ember warm black / orange)
+- Rapid outline contraction: `scale = mix(3.2, 1, ramp(f, 2, 11, EASE.snappy))`, fading in across 2–8f —
+  **contraction window lasts only 11f**, moving fast enough to read as an impact shock; instantaneous defocus proportional to scale velocity is applied (zero when settled).
+- Dual-layer text: `outline` (`color:transparent` + `-webkit-text-stroke:2px` warm grey) layered with `solid` (white-hot `#fff5ee`, initial opacity 0), 220px / **500 weight** Helvetica Neue (medium weight, not 800 display bold — overly thick outlines blob together).
+- Dashed outer circle (r=410, `dasharray 22 18`) + inner 72-division scale ring (long tick every 30°, slowly rotating in reverse) + four registration reticles: fades in at 8–18f, `scale 2.8 → 1` contracting slowly across 8–52f (EASE.out, **44f, the slowest curve in the entire shot**); main circle rotates at 0.22°/f, braking to an abrupt stop the instant fill ignites ("locked"), while inner ring continues rotating slowly so the hold section continues to breathe.
+- Left and right horizontal dashed lines (`dasharray 14 12`): extend inward from screen edges to 28px outside the circle edge across 28–46f, with reticle dots at tips; monospace telemetry above lines reads "BEFORE 1 week" / "AFTER 4 hrs" — translating "faster" into concrete before/after metrics (hand-crafting a week vs. video-shotcraft delivering in an afternoon).
+- Stroke preheating: warm grey warms to bright orange-white with subtle outer glow across 44–53f, providing an energy-charging prelude before the hard cut.
+- **Instantaneous fill**: At frame 54, `lit = frame >= 54 ? 1 : 0`, hard-switching solid and outline opacities with zero intermediate states; in the same frame, circle and horizontal lines lock into solid orange, and right telemetry turns orange.
+- Fleeting flash: `flash = lit · (1 - ramp(f, 54, 8))`, with white 14px + orange 60px dual-layer text-shadow decaying over 8f, leaving only a faint orange halo; an impact shockwave expands 160px past the circle border, dissipating over 14f (firing only once); stage key light pulses synchronously.
+- Landing: Eyebrow inside circle (small video-shotcraft logo + lowercase monospace wordmark) / subtitle (40px, "One prompt to a finished promo.") rises across 56–70f, holding static from 70 to 90f, with full scene executing an ultra-slow push-in 1→1.015.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 收缩 | `scale 3.2 → 1`，窗 11f，snappy | 3.2 倍是"从脸前退开"的量；<2 倍读作普通缩放；窗 >20f 就成了缓慢 zoom，冲击全失 |
-| 字重字号 | 220px / **500**，占画宽约三分之一 | 空心字上 700+ 会让细描边包住一大块空白，读作气球字；500 是空心字的甜点 |
-| 描边 | 2px 暖灰（138,118,104），点亮前预热到亮橙白 | 细描边是"制图"语汇；>4px 变涂鸦；预热那一档删了硬切显得没由来 |
-| 虚线圆 | r=410、`dash 22 18`、scale 2.8→1（44f）、0.22°/f 自转，点亮时刹停 | 44f 慢收缩是全片的"呼吸"，与 11f 的字收缩形成快慢对比；窗压到 20f 两者撞在一起 |
-| 水平虚线 | `dash 14 12`，28–46f 内伸到圆边外 28px | 内伸终点要停在圆边外（不进圆内）；伸满全宽读作十字准星，过头了 |
-| 瞬时填充 | 第 54 帧硬切（按帧判断，不用归一化时间窗） | **这一下是全卡的目的**：任何形式的慢扫（>3f）都会把钉子降级成美化动画 |
-| 辉光 | 白 14px + 橙 60px，8f 衰完；冲击环 14f | 一闪即逝才像"点亮"；持续辉光读作发光字体，质感立刻廉价 |
-| 时长 | 90f（3.0s）：点亮后 hold 36f | 点亮后 <20f 观众来不及读副行与读数 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Contraction | `scale 3.2 → 1`, 11f window, snappy | 3.2x represents "backing away from your face"; <2x reads as standard scaling; window >20f becomes a slow zoom, losing impact |
+| Font size & weight | 220px / **500 weight**, spanning ~1/3 screen width | 700+ weight causes thin strokes to enclose huge blank cavities, looking like balloon fonts; 500 is the sweet spot for outlined type |
+| Stroke | 2px warm grey (138,118,104), preheated to bright orange-white before fill | Fine stroke embodies drafting vocabulary; >4px turns into graffiti; removing preheating makes the snap cut feel unmotivated |
+| Dashed circle | r=410, `dash 22 18`, scale 2.8→1 (44f), 0.22°/f rotation, brakes upon fill | 44f slow contraction provides the scene's "breathing," contrasting against the 11f text contraction; compressing window to 20f collides them |
+| Horizontal dashed lines | `dash 14 12`, 28–46f extending to 28px outside circle | Inward travel must terminate outside circle border (not entering it); spanning full width creates a sniper crosshair, which is excessive |
+| Instantaneous fill | Frame 54 hard cut (frame-exact conditional, no normalized time windows) | **This moment is the sole purpose of the card**: any gradual wipe (>3f) downgrades the hammer blow into a cosmetic decoration |
+| Bloom glow | White 14px + orange 60px, decaying over 8f; shock ring 14f | Must vanish quickly to read as a flash; sustained glow looks like cheap neon text |
+| Duration | 90f (3.0s): 36f hold after fill | Hold <20f after fill cuts away before viewers can read the subtitle and telemetry |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **只适合单个短词（demo `Faster`，6 字母）**：字号 220 与虚线圆 r=410 是写死的
-  一组坐标，字一长就顶穿圆、水平虚线内伸终点也会压到字上——换成
-  两个词或中文四字须同步调 `SIZE` / `R` / 内伸终点三处
-- `-webkit-text-stroke` 是前缀属性，Chromium/WebKit 才生效；Firefox 下
-  outline 层是全透明（词直到点亮帧才突然出现）。Remotion 走 Chromium 无碍
-- 瞬时填充必须按**帧**硬切（demo `frame >= POP`）。早期版本用归一化时间窗 `seg(0.742, 0.762)`，
-  片长一拉长这个窗就会变成几帧的可见渐变——改时长时只挪 `POP` 帧号
-- 深底专用：暖黑底 + 细描边 + 辉光是效果的全部；浅底上空心字
-  几乎不可见，需整套重配
-- 声音强依赖：点亮那一帧必须有一记短促重音（金属/开关/低频撞击），
-  这是本卡"钉子"感的一半，配法纪律见 sound-design.md；与
-  word-relay-geometry 分工：那卡是三词接力（本卡是它第一段的独立化 +
-  升级版），同片二者不并置
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **Suitable strictly for a single short word (demo uses `Faster`, 6 letters)**: Font size 220 and circle radius r=410 form fixed coordinates; longer words punch through the circle and collide with horizontal lines — changing to two words or longer phrases requires synchronously updating `SIZE`, `R`, and line terminal points.
+- `-webkit-text-stroke` is a vendor-prefixed property supported in Chromium/WebKit; in Firefox, the outline layer renders fully transparent (text pops in only at ignition). Remotion renders via Chromium with zero issues.
+- Instantaneous fill must be a frame-exact hard cut (demo: `frame >= POP`). Earlier versions using normalized windows like `seg(0.742, 0.762)` turned into multi-frame visible gradients when stretching duration — adjust duration solely by shifting the `POP` frame index.
+- Dark backgrounds only: warm black backdrop + fine strokes + bloom constitute the entire aesthetic; outlined type is virtually invisible on white backdrops, requiring full restyling.
+- Audio dependency: The ignition frame requires a crisp, heavy impact sound (metal / switch / low-end transient), providing half the card's tactile weight (see sound-design.md). Division of labor with word-relay-geometry: that card handles three-word relays (this card is an independent, upgraded realization of its first segment); do not juxtapose both in the same video.
 
-## 参考实现
+## Reference Implementation
 demos/typography/outline-word-fill/
-（OutlineWordFill.tsx）
+(OutlineWordFill.tsx)

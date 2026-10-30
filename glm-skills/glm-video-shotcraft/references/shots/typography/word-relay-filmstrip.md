@@ -1,57 +1,42 @@
 ---
 name: word-relay-filmstrip
-一句话: 左列黑白相间等高页面卡步进滚动（焦点卡全亮、邻卡离焦压暗）、右侧衬线大词原位接力（名词恒定+动词轮换）——切词瞬间才滚动一格，词块垂直中心与当前页面卡中点精确对齐
-适用: "一个主体 × 多种能力"的枚举段（Shotcraft frames/builds/ships…）；作品集/案例流展示；产品多场景巡礼
-时长: 每词期 ~1.5–2s × 3–4 词；demo 180f（6s）
-能量: 中低（编辑部气质，节奏靠切词的"咔哒"感）
-标签: ui-entrance
+summary: A filmstrip of page cards steps vertically while a serif word relay swaps only its verb, each swap aligned to the center of the current card.
+use: "Single subject × multiple capabilities" enumeration sections (Shotcraft frames / builds / ships…); portfolio / case-study flows; multi-scenario product walkthroughs
+duration: ~1.5–2s per word period × 3–4 words; demo 180f (6s)
+energy: Medium-low (editorial temperament, rhythm driven by tactile "click" of word swaps)
+tags: ui-entrance
 ---
 
-## 意图
-左边是证据（页面截图胶片），右边是论点（大词）：动词换一次，
-胶片就步进一格给出新证据——文字与画面互为注脚。命门是**步进制**：
-左列平时完全静止，只在切词瞬间滚动一格（滚动=换证据的机械动作），
-持续滚动会让左列沦为背景装饰、切词失去"咔哒"感。第二命门是
-**对齐**：大词块垂直中心必须与当前页面卡中点精确对齐（像素级），
-歪了整个版式的"编辑部严谨感"就塌了。
+## Intention
+On the left sits the evidence (page screenshot filmstrip), on the right sits the thesis (large display typography): each time the verb swaps, the filmstrip steps down by one frame to present fresh evidence — copy and visuals annotate each other. The core requirement is **stepped motion**: the left column remains completely static normally, advancing exactly one card height solely at the instant of a word swap (stepping = the physical action of changing evidence); continuous scrolling degrades the left column into decorative background noise, robbing word swaps of their tactile "click." The second requirement is **alignment**: the vertical midpoint of the large text block must align with pixel-level precision to the midpoint of the active page card; any vertical deviation collapses the disciplined elegance of the editorial layout.
 
-## 动效核心
-- 舞台：graphite 近单色暗场 + 金色点缀；左列：等高页面卡（940×530，间距 105）纵向排列，
-  黑白（深浅）强制相间以显滚动步进；切词窗口内 18f 不对称 in-out（EASE.swift）滚动恰好一卡高，
-  其余时间零位移，快段叠纵向运动模糊
-- 景深：按离焦点距离 `dist = |卡顶 - 275| / 635`，邻卡压暗 `0.68·dist`、缩到 0.94、虚化 ≤3px——
-  步进时新证据"对焦"进来
-- 右侧：衬线体（Didot 类，140px）两行——主体名词「Shotcraft」正体次级墨恒定，动词斜体白字原位接力：
-  旧词 10f 灰化 → 切点起 8f ease-in 从遮罩上沿升出（先出），新词切点 +7f 起逐字母从遮罩下沿升起
-  （1.2f 错峰，金色句点最后到，后进），先出后进不许叠影（判例：v2 叠影"resebuilds"被抓）
-- 金色引线：从焦点卡右缘指向词块中线 y=540，切词起 6f 收回、切点 +10f 后 16f 重画；
-  词块上方 mono 序号 01/03、下方 32px 证据注脚随动词同步接力
-- 对齐：词块两行各一个 154px 行盒，`top = 540 - 154`，总高中心 = 当前卡顶 + 卡高/2 = y540@1080p
-  （精确到个位像素）
-- 滚动与切词同步：滚动起点=旧词开始灰化，滚动终点=新词落稳
+## Motion Core
+- Stage: graphite near-monochrome dark field with warm champagne gold accents; left column: equal-height page cards (940×530, spacing 105) arranged vertically, strictly alternating black and white (dark and light) cards to emphasize stepping motion; within the swap window, cards advance exactly one card height over 18f asymmetric in-out (EASE.swift), with zero displacement during all other frames and vertical motion blur applied during the rapid transit phase.
+- Depth of field: Based on distance from focal point `dist = |cardTop - 275| / 635`, adjacent cards dim by `0.68·dist`, scale to 0.94, and blur ≤3px — bringing new evidence into sharp focus as it steps into view.
+- Right side: Serif typography (Didot style, 140px) across two lines — the primary subject noun "Shotcraft" remains roman and secondary ink throughout, while italic white verbs execute in-place relays:
+  old verb grays out over 10f → lifts out from top mask edge across 8f ease-in starting at swap point (exit first); new verb rises letter-by-letter from bottom mask edge starting at swap point +7f (1.2f stagger, gold period arrives last; enter second); exit precedes entry with zero overlapping ghost frames (precedent: v2 ghosting "resebuilds" was caught and corrected).
+- Gold leader line: Points from right edge of active card to text midline y=540, retracting across 6f at swap start and redrawing over 16f at swap point +10f; monospace index "01 / 03" above text block and 32px evidence footnote below swap synchronously with the verb.
+- Alignment: Two line boxes of 154px each, `top = 540 - 154`, centering the combined height at active card top + card height/2 = y540 @1080p (calibrated to the exact pixel).
+- Scroll-swap synchronization: Scroll start = old verb begins graying out; scroll finish = new verb settles into place.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 页面卡 | 等高（530px@1080p）、黑白相间、约半屏宽 | 不等高/同色系读不出步进；卡太窄失去"证据"分量 |
-| 词期 | ~45–60f/词 | <40f 读不完词+胶片看不清；词期不必均匀 |
-| 滚动窗口 | ~16–18f 不对称 in-out，恰一卡高 | 持续滚动=命门违例；滚过头/不足读作机械故障 |
-| 词接力 | 旧词灰化后 8f 升出 → 切点 +7f 新词逐字母升起（16f/字母，1.2f 错峰） | 同帧交叉必叠影；间隙 >10f 读作断片 |
-| 垂直对齐 | 词块中心=当前卡中点（像素级） | 用户单点意见"文字高度和中间的页面中点要对齐"；差 >8px 可感 |
-| 字体 | 衬线 Didot 类、动词斜体白字 / 名词正体次级墨 | 无衬线会丢"编辑部"气质；动词要比名词亮，它才是换的那一个 |
-| 邻卡离焦 | 压暗 0.68·dist、缩 6%、虚化 ≤3px | 不压暗则邻卡和焦点卡抢戏；虚化 >5px 读不出是页面 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Page cards | Equal height (530px @1080p), alternating dark/light, ~half-screen width | Unequal heights or matching palettes obscure stepping; cards too narrow lose evidence weight |
+| Word period | ~45–60f per word | <40f cuts off reading and blurs filmstrip; periods need not be strictly identical |
+| Scroll window | ~16–18f asymmetric in-out, exactly one card height | Continuous scrolling violates the core requirement; over/undershooting reads as mechanical failure |
+| Word relay | Old verb lifts out 8f after graying → swap point +7f new verb rises letter-by-letter (16f/letter, 1.2f stagger) | Same-frame crossfade produces ugly ghosting; gap >10f feels like dropped frames |
+| Vertical alignment | Text block center = active card midpoint (pixel-exact) | Review precedent: "text height and center of middle page must align"; delta >8px is visibly jarring |
+| Typography | Serif Didot style; verbs italic white, noun roman secondary ink | Sans-serif loses editorial refinement; verb must be brighter than noun as it is the changing element |
+| Neighbor defocus | Dims 0.68·dist, scales down 6%, blurs ≤3px | Failing to dim allows neighbor cards to fight active card; blur >5px renders cards unrecognizable |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 text-column-converge 分工：那张是左右对峙合拢的揭晓戏；
-  本卡是纵向证据流+原位接力，无合拢无揭晓
-- 与 pill-slot-cycle 分工：那张是胶囊槽位轮换 UI 元素；
-  本卡是版式级的图文对位系统
-- 实战素材：页面卡应使用真实截图（demo 为手搓假页面——分镜脚本 / 渲染流水线 / 成片 PR 评审，每个动词停在
-  与之对应的证据卡上，残余差距已知）；截图亮度要人工分档保证相间可读
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Division of labor with text-column-converge: that card handles left/right confrontation and concluding convergence; this card handles vertical evidence flows + in-place relays, with zero convergence or final reveal.
+- Division of labor with pill-slot-cycle: that card handles cycling UI pill badges; this card represents an editorial-grade typographic and visual alignment layout system.
+- Production assets: Page cards should feature authentic product screenshots (demo uses crafted mock layouts — storyboard script / render pipeline / final PR review, each verb resting on its corresponding evidence card; residual gap acknowledged); screenshot brightness must be manually categorized to ensure legible alternation.
 
-## 参考实现
+## Reference Implementation
 demos/typography/word-relay-filmstrip/
-（WordRelayFilmstrip.tsx）
-原片出处：perplexity-promo.mp4 ≈76–90s
+(WordRelayFilmstrip.tsx)
+Original source: perplexity-promo.mp4 ≈76–90s

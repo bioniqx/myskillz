@@ -1,25 +1,25 @@
-// theme-sweep-toggle —— 深浅模式扫场（第二轮重设计：video-shotcraft 发布周排期 · 昼 → 夜）
+// theme-sweep-toggle — light-dark theme sweep toggle (redesign: video-shotcraft launch schedule week - Day -> Night)
 //
-// 设计决定：
-// - 主体：video-shotcraft 的周视图制作排期（品牌轮由虚构日历 Solstice 换来，版式逐像素不变）——1680×912 浮窗，
-//   大字层级：64px 周标题、40px 日期数字、28px 事件标题；5 列 13 个制作日程（分镜 → 实拍 → 踩点 → 音效 → 渲染）、
-//   4 种日历色、一条"此刻"红线。顶栏标志 = 「镜刻」ShotcraftMark（昼夜各用亮 / 反白版）。
-// - look = custom（sand 的昼面 + 自定的夜面）：昼 = 暖象牙舞台 + 左上斜射的阳光窗格光；
-//   夜 = 墨蓝舞台 + 右上月光 + 星点。主题切换不只换 UI 皮，连舞台的"时辰"一起换——
-//   但两版布局逐像素一致（同一个 <World> 组件、只换色板），读作"同一个 UI 就地换肤"。
-// - 因果：开场镜头贴近顶栏的大号日夜开关（zoom 2.0），指针按下 → 旋钮弹到右侧、太阳收光芒
-//   长出月牙 → 夜色边界紧接着**从开关那一侧**（右→左）15° 斜扫过全画面，同时相机拉开到全景，
-//   观众从"按了哪里"一路看到"整个世界入夜"。
-// - 边界 = 晨昏线：2px 白热核心线 + 亮侧一条随速度变宽的落日橙暮光带 + 夜侧冷蓝辉 + 亮侧柔影。
-// - 余波「灯亮了」：扫完后今天的日期胶囊、此刻线与窗口冷色轮廓光依次点亮（夜里才有的光）。
+// Design decisions:
+// - Subject: video-shotcraft weekly production schedule (1680x912 floating window),
+//   typography hierarchy: 64px week title, 40px date numbers, 28px event titles; 5 columns with 13 production milestones,
+//   4 calendar colors, one "now" indicator line. Header logo = ShotcraftMark (bright/inverted versions for day/night).
+// - look = custom (daytime ivory sand + deep nighttime blue): day = warm ivory stage + sunlight window beam from top-left;
+//   night = midnight blue stage + top-right moonlight + stars. Switch transforms both UI theme and environmental time of day —
+//   while keeping identical pixel-perfect layout across both states.
+// - Causality: starts close on header day/night toggle (zoom 2.0), pointer clicks -> knob springs to right, sun rays retract
+//   yielding crescent moon -> terminator line sweeps diagonally 15 deg across screen from switch side (right -> left), camera pulls back to full view,
+//   connecting the interaction to the global environment transition.
+// - Sweep line = terminator: 2px white-hot core line + velocity-proportional sunset orange band on light side + cool blue glow on dark side + soft shadow.
+// - Aftermath illumination: after sweep, today capsule, now line, and window cool rim lights ignite sequentially.
 //
-// 时间表（30fps，共 140f）：
-//   0–8     预备：特写开关（zoom 2.0，极缓推 2.0→2.04），指针滑入开关
-//   8–18    按下：指针压 0.86、旋钮弹簧滑到右侧（damping 16，一次过冲），太阳 → 月牙；指针随后让开
-//   14–78   主动作：夜色斜边从右往左扫（64f，bezier(.3,0,.35,1)），~24f 扫过开关；
-//           10–40 相机拉开到全景（EASE.smooth），~40–50f 晨昏线过画面中线 = 昼夜同屏海报帧
-//   76–96   余波：开灯——今日胶囊 / 此刻线 / 窗口冷色轮廓光错峰亮起（EASE.out）
-//   96–140  hold：夜景定格，相机 1.0→1.02 极缓推、星点微闪
+// Timeline (30fps, total 140f):
+//   0-8     Lead-in: close-up on switch (zoom 2.0 -> 2.04), pointer enters switch
+//   8-18    Click: pointer compresses to 0.86, knob spring slides right (damping 16, single overshoot), sun -> moon; pointer moves away
+//   14-78   Main action: diagonal night boundary sweeps right to left (64f, bezier(.3,0,.35,1)), sweeps past switch at ~24f;
+//           10-40 camera pulls back to full view (EASE.smooth), ~40-50f terminator crosses screen midline (split-screen day/night poster frame)
+//   76-96   Aftermath: lights turn on — today capsule / now line / window rim light ignite staggered (EASE.out)
+//   96-140  Hold: night view settles, camera slow drift 1.0 -> 1.02, stars twinkle
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, bezier, mix, ramp, velocity } from '../../_fixtures/Polish';
@@ -28,33 +28,33 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
 export const THEME_SWEEP_TOGGLE_DURATION = 140;
 
-// ───────────── 时间轴 ─────────────
+// ------------- Timeline -------------
 const PTR_IN = 0;
-const CLICK = 8; // 指针按下 = 旋钮起跳
-const SWEEP0 = 14; // 夜色边界起扫（旋钮还在过冲回落，动作重叠）
+const CLICK = 8; // Pointer press = knob starts
+const SWEEP0 = 14; // Night sweep begins (overlapping with knob settle)
 const SWEEP1 = 78;
-const CAM0 = 10; // 相机开始拉开
-const CAM1 = 40; // 全景先到位，晨昏线 ~44–50f 才过画面中线（昼夜同屏的海报帧）
-const LIGHTS = 76; // 开灯余波起点
+const CAM0 = 10; // Camera begins pulling back
+const CAM1 = 40; // Full overview settles first; terminator crosses centerline at ~44-50f
+const LIGHTS = 76; // Night lights ignition start
 
-// ───────────── 世界几何（1920×1080 世界坐标，相机在其上推拉）─────────────
+// ------------- World Geometry (1920x1080 world coordinates) -------------
 const WIN = { x: 120, y: 84, w: 1680, h: 912, r: 28 };
 const TOP_H = 92;
 const HEAD_H = 112;
 const DAYS_H = 80;
-const GUT = 104; // 时间刻度列
+const GUT = 104; // Time gutter width
 const COL_W = (WIN.w - GUT - 36) / 5;
-const H0 = 9; // 9:00 起
-const H1 = 16; // 16:00 止
+const H0 = 9; // 9:00 start
+const H1 = 16; // 16:00 end
 const HOUR = (WIN.h - TOP_H - HEAD_H - DAYS_H - 24) / (H1 - H0);
-const GRID_Y = TOP_H + HEAD_H + DAYS_H; // 窗口内坐标
-const TOG = { w: 132, h: 66 }; // 开关
-const TOG_X = WIN.w - 40 - TOG.w; // 窗口内
+const GRID_Y = TOP_H + HEAD_H + DAYS_H; // In-window coordinates
+const TOG = { w: 132, h: 66 }; // Switch dimensions
+const TOG_X = WIN.w - 40 - TOG.w; // In-window X
 const TOG_Y = (TOP_H - TOG.h) / 2;
-const TOG_C = { x: WIN.x + TOG_X + TOG.w / 2, y: WIN.y + TOG_Y + TOG.h / 2 }; // 世界坐标
+const TOG_C = { x: WIN.x + TOG_X + TOG.w / 2, y: WIN.y + TOG_Y + TOG.h / 2 }; // World coordinates
 const T15 = Math.tan((15 * Math.PI) / 180);
 
-// ───────────── 两套主题（同布局，逐键手工映射色板，不做滤镜反相）─────────────
+// ------------- Dual Theme Palettes (identical layout, mapped tokens, no filter inversion) -------------
 type Hue = 'blue' | 'green' | 'amber' | 'rose';
 type Theme = {
   night: boolean;
@@ -129,13 +129,13 @@ const fmt = (h: number) => {
   return `${h12}:${String(mm).padStart(2, '0')}`;
 };
 
-// 确定性哈希（星点）
+// Deterministic hash (star generation)
 const hash = (n: number) => {
   const x = Math.sin(n * 91.345 + 47.853) * 43758.5453;
   return x - Math.floor(x);
 };
 
-// ───────────── 日 → 月 图标（太阳收光芒、遮罩圆滑入长出月牙）─────────────
+// ------------- Sun -> Moon Icon (rays retract, circle mask reveals crescent) -------------
 const SunMoon: React.FC<{ p: number; color: string; size: number }> = ({ p, color, size }) => {
   const id = React.useId().replace(/[^a-zA-Z0-9]/g, '');
   const rays = 1 - EASE.out(Math.min(1, p * 1.6));
@@ -159,7 +159,7 @@ const SunMoon: React.FC<{ p: number; color: string; size: number }> = ({ p, colo
   );
 };
 
-// ───────────── 整个世界（舞台 + 窗口），两版主题共用这一份布局 ─────────────
+// ------------- World Scene (stage + window, shared layout across themes) -------------
 const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; frame: number }> = ({ th, knob, icon, lights, frame }) => {
   const n = th.night;
   const [t, m, b] = th.bg;
@@ -168,7 +168,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
   const rimLit = n ? EASE.out(Math.min(1, Math.max(0, lights * 2.2 - 1))) : 0;
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
-      {/* 舞台：外扩 260px，相机特写时右上角也有底 */}
+      {/* Stage: 260px margin ensuring coverage during close-up camera angles */}
       <div style={{ position: 'absolute', left: -260, top: -260, right: -260, bottom: -260, background: `linear-gradient(180deg, ${t} 0%, ${m} 55%, ${b} 100%)` }} />
       <div style={{
         position: 'absolute', left: -260, top: -260, right: -260, bottom: -260,
@@ -176,7 +176,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
         mixBlendMode: n ? 'screen' : 'normal',
       }} />
       {!n && (
-        // 昼：左上斜射进来的窗格光（三道暖白光柱，极淡）
+        // Day: angled window sunlight beams from top-left (three warm white shafts)
         <div style={{ position: 'absolute', inset: -260, overflow: 'hidden' }}>
           {[0, 1, 2].map((i) => (
             <div key={i} style={{
@@ -189,7 +189,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
         </div>
       )}
       {n && (
-        // 夜：星点（窗口外的天空），确定性微闪
+        // Night: starry sky outside window with deterministic twinkling
         <div style={{ position: 'absolute', inset: -260 }}>
           {Array.from({ length: 70 }, (_, i) => {
             const x = hash(i * 3.1) * 2440;
@@ -201,7 +201,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
           })}
         </div>
       )}
-      {/* 窗口落在"桌面"上的地面光 / 影 */}
+      {/* Window desk reflection and drop shadow */}
       <div style={{
         position: 'absolute', left: WIN.x + 80, top: WIN.y + WIN.h - 40, width: WIN.w - 160, height: 140,
         background: n
@@ -210,7 +210,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
         filter: 'blur(14px)',
       }} />
 
-      {/* 窗口 */}
+      {/* Window frame */}
       <div style={{
         position: 'absolute', left: WIN.x, top: WIN.y, width: WIN.w, height: WIN.h, borderRadius: WIN.r, overflow: 'hidden',
         background: th.win, fontFamily: FONT.sans, color: th.ink,
@@ -218,10 +218,10 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
           ? `inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(150,175,255,${(0.1 + 0.18 * rimLit).toFixed(3)}), 0 0 ${(60 * rimLit).toFixed(1)}px rgba(90,125,255,${(0.22 * rimLit).toFixed(3)}), 0 40px 90px -20px rgba(0,2,7,0.9), 0 12px 30px rgba(0,2,7,0.6)`
           : `inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 1px rgba(70,48,24,0.08), 0 40px 90px -24px rgba(74,47,18,0.32), 0 10px 26px -6px rgba(74,47,18,0.16)`,
       }}>
-        {/* 顶栏 */}
+        {/* Top header bar */}
         <div style={{ position: 'absolute', left: 0, top: 0, width: WIN.w, height: TOP_H, borderBottom: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', padding: '0 40px', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* 「镜刻」标志：昼用墨框、夜用反白框，琥珀斜切不变（标志本身不加底块 / 发光） */}
+            {/* Brand mark: dark stroke for day, inverted white for night, amber notch unchanged */}
             <ShotcraftMark size={44} tone={n ? 'dark' : 'light'} />
             <span style={{ fontFamily: BRAND.font, fontSize: 32, fontWeight: 700, letterSpacing: '0.03em' }}>{BRAND.name}</span>
           </div>
@@ -237,14 +237,14 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
           </div>
           <div style={{ marginLeft: 'auto', marginRight: TOG.w + 28, fontSize: 24, color: th.ink2, fontWeight: 500 }}>Today</div>
         </div>
-        {/* 日夜开关 */}
+        {/* Day/night toggle switch */}
         <div style={{
           position: 'absolute', left: TOG_X, top: TOG_Y, width: TOG.w, height: TOG.h, borderRadius: TOG.h / 2,
           background: n ? th.track : `linear-gradient(90deg, ${th.trackOn} 0%, ${th.trackOn} ${(knob * 100).toFixed(1)}%, ${th.track} ${(knob * 100).toFixed(1)}%)`,
           boxShadow: n ? 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.06)' : 'inset 0 2px 4px rgba(74,47,18,0.16), inset 0 0 0 1px rgba(74,47,18,0.06)',
           overflow: 'hidden',
         }}>
-          {/* 轨道里的小星（拨到夜时显出） */}
+          {/* Mini star in switch track (revealed in night mode) */}
           {[0, 1, 2].map((i) => (
             <div key={i} style={{ position: 'absolute', left: 18 + i * 13, top: 18 + (i % 2) * 18, width: 4, height: 4, borderRadius: 2, background: '#e8edff', opacity: Math.min(1, Math.max(0, knob * 1.4 - 0.3)) * (0.5 + 0.2 * i) }} />
           ))}
@@ -258,14 +258,14 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
           </div>
         </div>
 
-        {/* 周标题 */}
+        {/* Week title */}
         <div style={{ position: 'absolute', left: 40, top: TOP_H, height: HEAD_H, display: 'flex', alignItems: 'center', width: WIN.w - 80 }}>
           <span style={{ fontSize: 64, fontWeight: 760, letterSpacing: '-0.035em' }}>September 14 – 18</span>
           <span style={{ marginLeft: 26, fontSize: 26, fontWeight: 600, letterSpacing: '0.08em', color: th.ink3, transform: 'translateY(8px)' }}>WEEK 38</span>
           <span style={{ marginLeft: 'auto', fontSize: 26, color: th.ink2, fontWeight: 500 }}>Launch film · ships Friday</span>
         </div>
 
-        {/* 星期 / 日期 */}
+        {/* Day of week / date */}
         {DAYS.map((d, i) => {
           const today = i === TODAY;
           return (
@@ -283,7 +283,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
           );
         })}
 
-        {/* 时间网格 */}
+        {/* Time grid */}
         <div style={{ position: 'absolute', left: 0, top: GRID_Y, width: WIN.w, height: WIN.h - GRID_Y, borderTop: `1px solid ${th.line}` }}>
           {Array.from({ length: H1 - H0 + 1 }, (_, k) => (
             <React.Fragment key={k}>
@@ -296,9 +296,9 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
           {DAYS.map((_, i) => (
             <div key={i} style={{ position: 'absolute', left: GUT + i * COL_W, top: 0, bottom: 0, width: 1, background: th.line }} />
           ))}
-          {/* 今天整列的极淡底色 */}
+          {/* Subtle background tint for active today column */}
           <div style={{ position: 'absolute', left: GUT + TODAY * COL_W, top: 0, bottom: 0, width: COL_W, background: alpha(th.accent, n ? 0.04 : 0.035) }} />
-          {/* 事件 */}
+          {/* Schedule events */}
           {EVENTS.map((ev, i) => {
             const c = th.ev[ev.hue];
             const top = (ev.s - H0) * HOUR + 4;
@@ -315,7 +315,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
               </div>
             );
           })}
-          {/* 此刻线 */}
+          {/* Current time indicator line */}
           <div style={{ position: 'absolute', left: GUT, right: 36, top: (NOW - H0) * HOUR, height: 0 }}>
             <div style={{ position: 'absolute', left: 0, right: 0, top: -1, height: 2, background: alpha(th.accent, 0.35) }} />
             <div style={{
@@ -333,7 +333,7 @@ const World: React.FC<{ th: Theme; knob: number; icon: number; lights: number; f
   );
 };
 
-// macOS 指针
+// macOS pointer cursor
 const Pointer: React.FC<{ x: number; y: number; s: number; o: number }> = ({ x, y, s, o }) => (
   <svg width={30} height={30} viewBox="0 0 28 28" style={{
     position: 'absolute', left: x - 2, top: y - 1, opacity: o, overflow: 'visible',
@@ -344,12 +344,12 @@ const Pointer: React.FC<{ x: number; y: number; s: number; o: number }> = ({ x, 
   </svg>
 );
 
-const SWEEP_EASE = bezier(0.3, 0, 0.35, 1); // 不对称 in-out：特写里起步（屏幕上已被 2× 放大显得很快），全景里匀称穿过、扫到左端软落
+const SWEEP_EASE = bezier(0.3, 0, 0.35, 1); // Asymmetric in-out: starts in close-up, traverses full overview smoothly, eases to soft landing
 
 export const ThemeSweepToggle: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ── 相机：特写开关 → 拉开全景 → 极缓推 ──
+  // --- Camera: close-up on switch -> pull back to overview -> slow drift ---
   const camT = ramp(frame, CAM0, CAM1 - CAM0, EASE.smooth);
   const pre = ramp(frame, 0, CAM0, EASE.linear);
   const hold = ramp(frame, CAM1, THEME_SWEEP_TOGGLE_DURATION - CAM1, EASE.swift);
@@ -362,22 +362,22 @@ export const ThemeSweepToggle: React.FC = () => {
   };
   const toScreen = (wx: number, wy: number) => ({ x: (wx - cx) * z + 960, y: (wy - cy) * z + 540 });
 
-  // ── 开关：弹簧滑到右侧（一次过冲），图标 日→月 ──
+  // --- Switch: spring slides right (single overshoot), icon Sun -> Moon ---
   const knob = frame < CLICK ? 0 : springAt(frame, CLICK, { damping: 16, stiffness: 210 });
   const icon = ramp(frame, CLICK + 1, 12, EASE.out);
 
-  // ── 指针：滑入开关 → 按下 → 拉开时淡出 ──
+  // --- Pointer: enters switch -> clicks -> fades out during pull back ---
   const ptrT = ramp(frame, PTR_IN, CLICK - PTR_IN, EASE.out);
-  const away = ramp(frame, CLICK + 6, 16, EASE.swift); // 点完让开，别挡住月亮
+  const away = ramp(frame, CLICK + 6, 16, EASE.swift); // Clears away after clicking to reveal moon
   const ptrX = mix(TOG_C.x + 150, TOG_C.x + 20, ptrT) + 60 * away;
   const ptrY = mix(TOG_C.y + 120, TOG_C.y + 8, ptrT) + Math.sin(ptrT * Math.PI) * 10 + 70 * away;
   const press = frame < CLICK - 1 ? 1 : mix(0.86, 1, ramp(frame, CLICK + 1, 6, EASE.out));
   const ptrO = 1 - ramp(frame, 22, 10, EASE.exit);
 
-  // ── 扫场边界：世界坐标里的 15° 斜线 x(y) = p + y·tan15（顶端领先），夜在线的右侧 ──
+  // --- Sweep line: 15 deg diagonal x(y) = p + y*tan15 in world coordinates, night is on right ---
   const pAt = (f: number) => mix(1960, -480, ramp(f, SWEEP0, SWEEP1 - SWEEP0, SWEEP_EASE));
   const p = pAt(frame);
-  const v = Math.abs(velocity(pAt, frame)); // px/帧（世界）
+  const v = Math.abs(velocity(pAt, frame)); // px/frame (world)
   const streak = Math.min(1, v / 110);
   const sweeping = frame >= SWEEP0 && frame < SWEEP1;
   const night = frame >= SWEEP0;
@@ -385,7 +385,7 @@ export const ThemeSweepToggle: React.FC = () => {
   const nightClip = dayGone ? 'none' : `polygon(${p - 400 * T15}px -400px, 2400px -400px, 2400px 1500px, ${p + 1500 * T15}px 1500px)`;
   const edgeO = ramp(frame, SWEEP0, 3, EASE.linear) * (1 - ramp(frame, SWEEP1 - 8, 8, EASE.linear));
 
-  // 屏幕空间的晨昏多边形（给屏幕空间暗角分昼夜两层用）
+  // Screen-space terminator polygon for day/night vignette layering
   const a = toScreen(p - 400 * T15, -400);
   const b = toScreen(p + 1500 * T15, 1500);
   const screenNightClip = `polygon(${a.x}px ${a.y}px, 4000px ${a.y}px, 4000px ${b.y}px, ${b.x}px ${b.y}px)`;
@@ -393,7 +393,7 @@ export const ThemeSweepToggle: React.FC = () => {
 
   const lights = ramp(frame, LIGHTS, 20, EASE.linear);
 
-  // 边界几何（世界坐标）：中心点 (xc, 540)，竖直条绕中心逆时针转 15°
+  // Sweep geometry: center point (xc, 540), rotated 15 deg counter-clockwise
   const xc = p + 540 * T15;
   const duskW = 70 + 170 * streak;
   const coolW = 60 + 140 * streak;
@@ -409,19 +409,19 @@ export const ThemeSweepToggle: React.FC = () => {
         )}
         {sweeping && (
           <div style={{ position: 'absolute', left: 0, top: 0, width: 1920, height: 1080, pointerEvents: 'none', opacity: edgeO }}>
-            {/* 亮侧：幕布压过来的柔影 + 落日橙暮光带（随速度变宽） */}
+            {/* Light side: soft edge shadow + sunset orange twilight band (widens with velocity) */}
             <div style={{
               position: 'absolute', left: xc - duskW, top: 540 - 1100, width: duskW, height: 2200,
               transformOrigin: '100% 50%', transform: 'rotate(-15deg)',
               background: `linear-gradient(90deg, rgba(255,150,70,0) 0%, rgba(255,150,70,${(0.06 + 0.08 * streak).toFixed(3)}) 60%, rgba(255,128,56,${(0.22 + 0.12 * streak).toFixed(3)}) 94%, rgba(60,30,30,0.22) 100%)`,
             }} />
-            {/* 夜侧：冷蓝辉 */}
+            {/* Night side: cool blue glow */}
             <div style={{
               position: 'absolute', left: xc, top: 540 - 1100, width: coolW, height: 2200,
               transformOrigin: '0% 50%', transform: 'rotate(-15deg)',
               background: `linear-gradient(90deg, rgba(150,180,255,${(0.26 + 0.1 * streak).toFixed(3)}) 0%, rgba(90,120,255,0.1) 30%, rgba(90,120,255,0) 100%)`,
             }} />
-            {/* 白热核心线 */}
+            {/* White-hot core line */}
             <div style={{
               position: 'absolute', left: xc - 1.5, top: 540 - 1100, width: 3, height: 2200,
               transformOrigin: '50% 50%', transform: 'rotate(-15deg)', background: '#fffaf0',
@@ -429,11 +429,11 @@ export const ThemeSweepToggle: React.FC = () => {
             }} />
           </div>
         )}
-        {/* 指针（世界坐标，随相机缩放） */}
+        {/* Pointer (world coordinates, scales with camera) */}
         {ptrO > 0.01 && <Pointer x={ptrX} y={ptrY} s={1.15 * press} o={ptrO} />}
       </div>
 
-      {/* 屏幕空间暗角（昼夜两层，按晨昏线分区），颗粒一层 */}
+      {/* Screen-space vignette (dual day/night layers partitioned by terminator) + grain layer */}
       {!dayGone && (
         <div style={{ position: 'absolute', inset: 0, clipPath: night ? screenDayClip : undefined, background: 'radial-gradient(ellipse 75% 75% at 50% 46%, rgba(74,47,18,0) 55%, rgba(74,47,18,0.16) 100%)' }} />
       )}

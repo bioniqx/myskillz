@@ -1,53 +1,42 @@
 ---
 name: scanline-assemble-flyin
-一句话: 页面开场是一张只有网格与虚线槽位的蓝图画板，一条亮扫描线自上而下掠过；扫到每个槽位，该处组件就从画外飞入过冲贴合，带方向性残影模糊与落位咬合角标——扫完整页恰好装配完成
-适用: "页面自己生成"的开场；AI 建站/自动排版类产品的核心演示；从空白到成品的能力叙事
-时长: 约5.2s（156f@30fps）
-能量: 中高（扫描线是稳的，但每次组件飞入都是一个爆点，密度递进）
+summary: The page starts as an empty dark grid; a scanline descends and each component flies in from off-screen to snap into place behind it, with motion blur and a bright edge flash on landing.
+use: Openings where a "page generates itself"; core capability demos for AI website builders and automated layout tools; capability narratives from blank canvas to finished product
+duration: ~5.2s (156f @ 30fps)
+energy: Medium-high (scanline remains steady, but each incoming component delivers an impact beat with rising density)
 ---
 
-## 意图
-让"页面被生成"这件事有一个可信的施工顺序：扫描线是施工进度条，
-组件从画外飞进来贴合是施工动作。关键是**扫完那一刻恰好装完最后一块**
-——扫描线提前收工或组件拖尾都会让"扫描驱动装配"的因果关系散掉。
+## Intention
+Provide a credible construction sequence for "generating a page": the scanline acts as a construction progress bar, and components flying in from off-screen serve as construction actions. The golden rule is that **the scanline completes its pass on the exact frame the final component snaps into place**—finishing the scanline early or letting component arrivals drag out destroys the causal link of "scanning drives assembly."
 
-## 动效核心
-- 第 1 帧就是完整的"施工图"：全屏蓝图网格（24px 细线 α.045 + 120px 主线 α.085）、1640×860 画板虚线外框
-  与宽度标注、每个组件的虚线槽位（带 `H1 820×250` 类小标）——观众先看到"要装什么、装在哪"
-- 扫描线 8→92f **严格匀速**走画板 y −20→880：白芯 + 电光蓝三层辉光，两端各出画板 60px 渐隐；
-  线身后 180px 网格被照亮，且**页面底色被"刷"出来**（画板表面 mask 跟着扫描线下移）
-- 落位帧由槽位下缘反算：`land = frameAtY(y + h)`，按下缘排序钳制最小间隔 4f；飞行 14f **提前起飞**，
-  组件与扫描线同时到位。demo 实测 NAV 19f · BADGE 29f · H1 55f · BODY 66f · MEDIA 75f · CTA 79f · STATS 88f
-- 7 个组件各有画外起点：导航自上（0,−260），徽章 / H1 / 正文自左（−620…−980），媒体卡自右（+900,+80, 6°），
-  CTA / 数据行自下（+420…+460）；`EASE.overshoot` 过冲 ~8% 贴合，旋转 ±2–7° 同步归零
-- 运动中按位姿中心差分求速度，`SpeedBlur` 沿飞行方向拖影（0.32×速度、≤18px），落位 4f 后清零
-- 落位：槽位虚线 4f 内消失；四角电光蓝 L 角（臂长 22px）从外扩 20px 咬进到 10px，`land+1→+4` 亮、`+5→+14` 收；
-  满宽导航不加
-- 状态行 `BLOCKS 0n / 07` + 秒表实时走；最后一块落位后切 `✓ BUILT`、秒表定格，蓝图网格退到 30%、
-  媒体卡（银河样片镜头）亮起一档，之后 ~50f hold
+## Motion Core
+- Frame 1 presents the full "blueprint": full-screen blueprint grid (24px fine lines alpha 0.045 + 120px major lines alpha 0.085), 1640x860 artboard dashed border with dimension annotations, and dashed slot placeholders for each component (labeled with micro-text like `H1 820x250`)—viewers see "what is being built and where" upfront.
+- Scanline sweeps artboard y: −20->880 across 8->92f at **strictly constant velocity**: white core + electric blue 3-tier glow, fading out 60px past artboard edges; 180px grid trailing behind the line illuminates, and **the page background is "painted" on** (artboard surface mask descends following the scanline).
+- Landing frames derived from slot bottom edges: `land = frameAtY(y + h)`, sorted by bottom edge with minimum 4f spacing; 14f flight duration **launches in advance** so components and scanline arrive at the slot simultaneously. Measured demo values: NAV 19f, BADGE 29f, H1 55f, BODY 66f, MEDIA 75f, CTA 79f, STATS 88f.
+- 7 components originate from dedicated off-screen positions: navigation from top (0, −260), badge / H1 / body from left (−620…−980), media card from right (+900, +80, 6 deg), CTA / stats row from bottom (+420…+460); snapping into place via `EASE.overshoot` with ~8% overshoot, rotations of ±2–7 deg zeroing out concurrently.
+- Flight applies directional motion blur via `SpeedBlur` (0.32x velocity, capped at 18px) based on centroid displacement, zeroing out 4f after landing.
+- Landing: slot dashed lines vanish within 4f; four-corner electric blue L-brackets (arm length 22px) snap inward from 20px offset to 10px, flashing bright across `land+1->+4` and collapsing across `+5->+14`; omitted on full-width navigation.
+- Status line tallies `BLOCKS 0n / 07` with live stopwatch; after final block lands, switches to `✓ BUILT`, stopwatch freezes, blueprint grid fades to 30%, media card (galaxy reel footage) steps up in brightness, followed by ~50f hold.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 扫描线 | 84f 匀速，画板 y −20→880 | 收工时刻要略晚于最后一块落位，才读作"扫完即装完" |
-| 触发换算 | land = SCAN0 + (y+h−Y0)/(Y1−Y0)·(SCAN1−SCAN0) | 改扫描窗口只改四个常量；飞行时长 FLIGHT 是提前起飞量，去掉就变成"扫过之后才动" |
-| 最小间隔 | prev + 4f | 下缘接近的 MEDIA / CTA 会同时落；钳制后才有"一块一块"的密度 |
-| 飞入位移 | 画外 260–980px，按组件所在方位定 | 位移小于 200px 读作"抖一下就位"，不是从画外来 |
-| 飞入旋转 | ±2–7° | 超过 12° 就读作"翻滚"，贴合时不服帖 |
-| 飞入缓动 | EASE.overshoot，14f | 过冲是"吸附贴合"的手感；纯 ease-out 就成了滑入 |
-| 残影模糊 | 方向性 SpeedBlur 0.32×速度、≤18px，落定清零 | 各向同性 blur 读作失焦而不是速度；不清零会留一层永久糊 |
-| 落位角标 | 外扩 20→10px、臂长 22px，3f 亮 / 9f 落 | 角标是"咬合"的听觉替代品；整圈描边闪框读作调试框、且 7 次群发违反 Q4 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Scanline | 84f constant velocity, artboard y −20->880 | Scanline finish must slightly trail final component landing to convey "scanned means finished" |
+| Trigger conversion | land = SCAN0 + (y + h − Y0) / (Y1 − Y0) * (SCAN1 − SCAN0) | Changing scan window requires editing only four constants; flight duration FLIGHT represents advance launch; omitting it produces "moving only after scanline has passed" |
+| Minimum spacing | prev + 4f | Items with adjacent bottom edges like MEDIA / CTA land concurrently without clamping; clamping restores "item by item" rhythmic cadence |
+| Fly-in travel | Off-screen 260–980px, matched to component entry direction | Travel <200px reads like "nudging into place" rather than arriving from off-screen |
+| Fly-in rotation | ±2–7 deg | Exceeding 12 deg feels like "tumbling," failing to snap neatly into slots |
+| Fly-in easing | EASE.overshoot, 14f | Overshoot provides the tactile sensation of "magnetic snapping"; pure ease-out feels like sliding |
+| Motion blur | Directional SpeedBlur 0.32x velocity, <=18px, clearing upon settling | Isotropic blur reads as out-of-focus rather than speed; omitting reset leaves permanent blur layers |
+| Landing brackets | Outer offset 20->10px, arm length 22px, 3f bright / 9f decay | Brackets serve as visual proxies for audio clicks; full-frame stroke flashes look like debug boxes and firing 7 times violates Q4 |
 
-## 已知坑
-- **触发时刻与 PLAN 里的槽位 box 绑定**：换页面模板后每个组件的 box 要重测，否则组件在扫描线到达前就飞入
-- 组件在 `Fly` 里以槽位为原点绝对定位；角标层是组件内部的 SVG（overflow:visible），
-  组件自身若 `overflow:hidden` 会把外扩角标裁掉——媒体卡的裁切放在内层
-- 页面底色"刷出"用的是画板表面的 linear-gradient mask（跟扫描线 y），蓝图网格是另一层；
-  两层都随扫描线走，别把网格也 mask 掉，否则扫描线下方会变成死黑
-- 与 `scanline-annotate-focus` 共用"扫描线即因果"的逻辑；两张卡可以串联（先装配、后分析），
-  但扫描线要换向或留空档，否则读作重复
-- 页面内容为 video-shotcraft 的落地页（镜刻标志 + 字标导航、「Shoot the / launch film.」H1、样片镜头卡），强调色（电光蓝 / 青）取自 LOOKS.midnight，换肤改 L 即可
+## Known Pitfalls
+- **Trigger timing is locked to slot boxes in PLAN**: re-measure component boxes when changing page templates, otherwise components fly in before the scanline arrives.
+- Components use slot origins for absolute positioning in `Fly`; bracket layers are SVGs inside components (`overflow: visible`); if components declare `overflow: hidden`, outer brackets get clipped—place media card clipping on an inner container instead.
+- Painting the page background uses a linear-gradient mask on the artboard surface (tracking scanline y); the blueprint grid is a separate layer; both follow the scanline, so do not mask the grid or the area below the line becomes dead black.
+- Shares the "scanline as causal driver" concept with `scanline-annotate-focus`; the two cards can daisy-chain (assemble first, annotate second), but reverse scanline direction or leave a distinct pause between them to avoid repetition.
+- Page content uses video-shotcraft's landing page (engraved mark + wordmark nav, "Shoot the / launch film." H1, sample reel card); accent colors (electric blue / cyan) derive from LOOKS.midnight, updated via variable L.
 
-## 参考实现
+## Reference Implementation
 demos/effects/scanline-assemble-flyin/
-（ScanlineAssembleFlyin.tsx）
+(ScanlineAssembleFlyin.tsx)

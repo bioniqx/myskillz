@@ -1,73 +1,49 @@
 ---
 name: magician-card-flourish
-一句话: 午夜蓝暗场上蓝色星芒闪现 0.3s（X 形针状光束旋转 90°+中心辉光放射小光芒），卡片从闪光点弹射而出——极速自旋弧线飞向镜头、自旋随靠近衰减、瞬间硬定格（卡高 86% 画高）、光脉冲 + sheen 扫光，右侧文案随后逐行揭示
-适用: 单张卡片/海报/封面的魔术性登场（片头主视觉、产品卡揭晓）；纯黑暗场；需要"变出来"仪式感的爆点
-时长: 156f（闪光 0.3s + 飞行 1.6s + 定格/扫光/文案揭示 + hold 3.3s；全段 5.2s）
-能量: 高（一次性爆点，定格后即静）
-标签: ui-entrance、effects
+summary: A blue starburst flashes on black for a third of a second, then a card shoots out of the flash, spinning along an arc toward camera before freezing near full frame.
+use: Magical entrance for single cards, posters, or covers (opening key visual, hero product card reveal); pure dark stage; visual burst requiring "summoned from thin air" theatricality
+duration: 156f (starburst 0.3s + flight 1.6s + freeze/sheen/copy reveal + hold 3.3s; total 5.2s)
+energy: High (singular burst beat; completely still after freeze)
+tags: ui-entrance, effects
 ---
 
-## 意图
-魔术师甩牌：一道蓝色星芒闪过，卡片仿佛从光里被变出来——从画面
-中心极远处（视觉上一个小点）弹射而出，沿弧线极速自旋飞向镜头，
-到达中心瞬间硬定格成近满幅展示。三个魔术感命门：**闪光先行**
-（光是"变"的仪式，0.3s 短促干脆）、**弹射节奏**（起飞慢速蓄力→
-急加速踢出→弧线段减速抵达，slow-in→burst→decelerating arc）、
-**定格即静**（无减速尾巴无回弹，13 整圈自旋保证定格恰为正面）。
+## Intention
+A magician flourishing a card: a blue starburst flashes, and a card appears summoned from the light—catapulting from infinite distance at frame center (visually a pinpoint), spinning rapidly along an arc toward the camera, and hard-freezing the instant it reaches center into a near full-frame showcase. Three critical magical pillars: **flash leads** (light is the summoning ritual, lasting a crisp 0.3s), **catapult rhythm** (slow-in anticipation -> burst acceleration -> decelerating arc), and **freeze to stillness** (zero deceleration tail, zero rebound; 13 exact rotations guarantee facing camera upon freeze).
 
-## 动效核心
-- 开场星芒（用户参考图 IMG_2505 逐轮收敛的最终形态）：
-  - X 形**对角**针状光束（-38°/52° 起始），闪光期间整体**动态旋转
-    90°**（easeInOut）；长轴 840/短轴 420（比例 2:1）
-  - 光束纯饱和蓝（#3f9bff→#2277f2 贯穿全长，白段只留根部 5%），
-    每轴三层：宽糊辉光包层 + 明亮主束 + 过曝细芯
-  - 中心**不是白球**：极小亮点（26px）+ 蓝辉光晕（140px）+ 一圈
-    10 根长短相间放射短刺（随星芒反向缓转）
-  - 节奏：渐亮 2.5f → 微闪 → 坍缩，9f（0.3s）完
-- 弹射飞行：闪光点 = 落点（画面左 1/3，cx=700）极远（scale≈0.11）出发，
-  真透视 scale=F/(F+z)（z 14000→0）；行程曲线 slow-in（前 14% 时间走 6%）
-  →斜率跳变弹射→easeOut(cubic) 减速；正弦单拱弧线向右上荡出（经过日后
-  文案的位置）再收回落点；飞行中卡带一圈蓝色辉光，被运动模糊拖成光尾
-- 自旋：沿卡片对角线轴 13 整圈；前 40% 行程近匀速极快，后 60%
-  角速度 2.4 次幂衰减（越近镜头转越慢），整圈数保证定格正面
-- 定格：f=57（TAKEOFF+48）全量冻结，卡高 ≈86% 画面高；落定瞬间一圈与卡同形的
-  蓝色光脉冲从卡边外扩淡出（22f），卡后背光与舞台主光同时亮起（闪光期舞台压暗，
-  让星芒是唯一光源）
-- 扫光：定格稳 8f 后 sheen 斜带左→右一次扫过（screen 叠加，裁进圆角）
-- 卡面：深海军蓝 video-shotcraft「Launch Film」首映票——品牌行（标志 + 小写字标）、中心
-  video-shotcraft 标志托在同心细环 + 交叉针线上（开场星芒"留在卡上"；环与针线从标志外缘
-  起，不从取景框开口里穿过）、58px 大字标题（定格后 ≈100px）、mono 票根行；徽记区一层
-  全息箔垫在标志下面，色相随自旋角滚动（飞行中流光、定格即冻结）；卡背中心也是标志
-- 右侧文案（定格后）：眉题 NOW SHOWING 字距收拢 63f → 132px 标题「Craft / the shot.」两行升起 67/74f →
-  36px 副文「Cinematic product videos, crafted by your agent.」逐词 86f
-- 卡片按定格尺寸（×1.72）布局、CSS zoom 栅格化，飞行只做缩小——定格帧文字锐利（Q2）
+## Motion Core
+- Opening starburst (refined across iterative user references):
+  - X-shaped **diagonal** needle beams (-38 deg / 52 deg start), **dynamically rotating 90 deg** during flash (easeInOut); major axis 840 / minor axis 420 (2:1 ratio).
+  - Pure saturated blue beams (#3f9bff->#2277f2 throughout, white reserved for root 5%), each axis comprising three tiers: wide blurred glow envelope + bright main beam + overexposed hairline core.
+  - Center is **not a white sphere**: micro pinpoint (26px) + blue halo (140px) + ring of 10 alternating radial spikes (counter-rotating slowly with starburst).
+  - Rhythm: brightens 2.5f -> shimmer -> collapse, resolving in 9f (0.3s).
+- Catapult flight: Flash origin = landing target (screen left 1/3, cx=700) launching from deep perspective (scale~0.11), true perspective scale=F/(F+z) (z 14000->0); trajectory curve slow-in (first 14% time covers 6%) -> slope-jump burst -> easeOut(cubic) deceleration; single-arch sine arc sweeps top-right (passing future copy position) before returning to target; card carries blue glow in flight, trailing light streaks via motion blur.
+- Spin: 13 full rotations along card diagonal axis; first 40% near-uniform rapid spin, trailing 60% angular velocity decays with 2.4 power (spinning slower near camera); integer rotations guarantee front-facing landing.
+- Freeze: Full freeze at f=57 (TAKEOFF+48), card height ~86% frame height; instant blue pulse expanding and fading from card perimeter (22f), backlight and main stage lighting snapping on simultaneously (stage dimmed during flash to isolate starburst).
+- Sheen sweep: Diagonal sheen sweeps left-to-right once after 8f of solid freeze (screen blend, clipped to rounded corners).
+- Card face: Deep navy video-shotcraft "Launch Film" premiere ticket—brand header (logo + lowercase wordmark), centered video-shotcraft logo resting on concentric rings + crosshairs (starburst "imprinted onto card"; rings and crosshairs extend outward from logo perimeter), 58px headline (~100px post-freeze), monospace ticket stub row; holographic foil underneath logo shifts hue with spin angle (shimmering in flight, frozen on landing); card back also features centered logo.
+- Right-side copy (post-freeze): Eyebrow NOW SHOWING letterspacing contracts at 63f -> 132px headline "Craft / the shot." rises across 67/74f -> 36px subtitle "Cinematic product videos, crafted by your agent." types word-by-word at 86f.
+- Card laid out at freeze dimensions (x1.72) and rasterized via CSS zoom, scaling down for flight—ensuring razor-sharp typography on freeze frame.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 闪光时长 | 9f（0.3s，用户精确定值；曾 1.5s→0.8s→0.5s 逐轮压短） | 光是仪式不是主角；>15f 抢卡片的戏 |
-| 星芒旋转 | 闪光期间动态转 90°（判例：静态摆角被裁"没看到旋转"） | 旋转要逐帧可见；>120° 读作螺旋桨 |
-| 光束颜色 | 纯饱和蓝贯穿全长 | 白段过长/衰减过快被裁"不够还原"；青蓝偏灰被裁"要蓝色的" |
-| 中心 | 小亮点+辉光+放射短刺 | **白色圆球被裁**——中心是光学辉光不是实体球 |
-| 弹射曲线 | slow-in 14%→burst→减速弧线 | 直接匀速/纯 easeOut 没有"弹射"的蓄力感 |
-| 自旋衰减 | 后 60% 行程 2.4 次幂减速 | 匀速到底被裁"靠近镜头时应随距离衰减"；整圈数=定格正面的保证 |
-| 定格尺寸 | 卡高 86% 画面高（右侧留给文案） | 初版 1.0x 被裁"更近更大基本靠近上下界"；单卡居中无文案时可回到 94% |
-| 硬定格 | 全量冻结零回弹 | 魔术感=瞬间静止；回弹读作物理玩具 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Flash duration | 9f (0.3s, precisely tuned; compressed from 1.5s->0.8s->0.5s) | Light is ritual, not hero; >15f steals focus from card |
+| Starburst rotation | Dynamically rotates 90 deg during flash (static angle previously rejected for missing rotation) | Rotation must be visible frame-by-frame; >120 deg reads like an airplane propeller |
+| Beam color | Pure saturated blue throughout length | Long white segments or fast decay rejected as inaccurate; cyan-blue rejected for lacking deep blue saturation |
+| Center core | Pinpoint + glow + radial spikes | **White solid sphere rejected**—center is an optical glow, not a physical ball |
+| Trajectory curve | slow-in 14% -> burst -> decelerating arc | Constant speed or plain easeOut lacks physical catapult tension |
+| Spin decay | Trailing 60% decelerates with 2.4 power | Uniform spin rejected: "should decay with distance near camera"; integer rotations guarantee front-facing landing |
+| Freeze size | Card height 86% frame height (leaving right side for copy) | Initial 1.0x rejected as too small; centered card without copy can expand to 94% |
+| Hard freeze | Total freeze with zero rebound | Magic sensation = instant stillness; rebound reads like a toy |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **光效质感判例链**（本卡贡献的全局方法论）：几何色块被裁"5毛
-  特效"→光学实感重做→游戏感+真实→用户给参考图一轮收敛。
-  质感类意见文字损耗大，**主动请用户丢参考图**
-- 工程坑：细针光束**不能放进 CameraMotionBlur**——旋转被模糊采样
-  拆成条纹分身（"廉价感"的隐性来源）；闪光层独立于运动模糊渲染
-- 工程坑：星芒 SVG viewBox 要 ≥ 光束长+旋转扫掠半径，否则端点
-  被裁出直边
-- 与 card-flip-reveal/deck-deal-flyin 分工：那两张是翻牌/发牌的
-  多卡节奏戏；本卡是单卡"变出来"的魔术仪式，一次只变一张
+## Known Pitfalls
+- Demo calibrated on grayscale/placeholder assets—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- **Lighting aesthetic precedent**: geometric blocks rejected as cheap effects -> optical realism rebuild -> gaming realism -> user reference image convergence; request visual references early when tuning subtle lighting qualities.
+- Engineering gotcha: fine needle beams **must not be placed inside CameraMotionBlur**—rotation motion blur samples create striped ghost artifacts; render flash layer independently of motion blur.
+- Engineering gotcha: starburst SVG viewBox must be >= beam length + rotation sweep radius, otherwise tips clip into flat edges.
+- Division of labor with card-flip-reveal / deck-deal-flyin: those cards handle multi-card rhythmic card play; this card is a solo summoning ritual, revealing one card at a time.
 
-## 参考实现
+## Reference Implementation
 demos/opening/magician-card-flourish/
-（MagicianCardFlourish.tsx）
-原片出处：无（用户口述定制，多轮迭代收敛）
+(MagicianCardFlourish.tsx)
+Source: Custom user specification, converged across multiple iterations

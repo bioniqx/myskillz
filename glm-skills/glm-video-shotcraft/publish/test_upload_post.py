@@ -1,4 +1,4 @@
-"""upload_post.py 离线单测（不联网，不需要 key）。
+"""upload_post.py offline unit tests (no network, no key required).
 
     python3 -m unittest publish/test_upload_post.py -v
 """
@@ -18,10 +18,10 @@ import upload_post as up  # noqa: E402
 
 
 def run_cli(argv, *, post=None, gets=()):
-    """跑一次 main()，返回 (退出码, JSON 输出, post mock, get mock)。"""
+    """Run main(), returns (exit_code, json_out, post_mock, get_mock)."""
     out = io.StringIO()
     err = io.StringIO()
-    # gets: 依次返回的 GET 响应列表；最后一个会一直重复（模拟持续同一状态）
+    # gets: sequence of mock GET responses
     gets = list(gets)
 
     def fake_request(method, path, api_key, **kw):
@@ -32,7 +32,7 @@ def run_cli(argv, *, post=None, gets=()):
         resp = gets.pop(0) if len(gets) > 1 else gets[0]
         if isinstance(resp, Exception):
             raise resp
-        return copy.deepcopy(resp)  # main() 会改返回的 dict，不能污染共享样例
+        return copy.deepcopy(resp)  # Prevent mutating shared mock data
 
     with mock.patch.object(sys, "argv", ["upload_post.py", *argv]), \
          mock.patch.dict("os.environ", {"UPLOAD_POST_API_KEY": "k"}), \
@@ -43,7 +43,7 @@ def run_cli(argv, *, post=None, gets=()):
             up.main()
         except SystemExit as e:
             code = e.code
-        except BaseException:  # 模拟进程中途死掉：保留 stderr 供断言
+        except BaseException:  # Simulate process interruption; preserve stderr
             run_cli.last_stderr = err.getvalue()
             raise
     run_cli.last_stderr = err.getvalue()
@@ -144,11 +144,11 @@ class UploadPostTest(unittest.TestCase):
             self.assertIn(kv, form)
 
     def test_multipart_encoding(self):
-        body, ctype = up.encode_multipart([("platform[]", "x"), ("title", "标题")],
+        body, ctype = up.encode_multipart([("platform[]", "x"), ("title", "Test Title")],
                                           [("video", "a.mp4", b"DATA", "video/mp4")])
         boundary = ctype.split("boundary=")[1]
         self.assertTrue(body.endswith(f"--{boundary}--\r\n".encode()))
-        self.assertIn('name="title"\r\n\r\n标题'.encode(), body)
+        self.assertIn('name="title"\r\n\r\nTest Title'.encode(), body)
         self.assertIn(b'filename="a.mp4"\r\nContent-Type: video/mp4\r\n\r\nDATA', body)
 
 
@@ -157,7 +157,7 @@ COMPLETED = (200, {"status": "completed", "results": [
 
 
 class AmbiguousSubmitTest(unittest.TestCase):
-    """提交结果不确定时绝不重发，只按同一 request_id 查询。"""
+    """Never re-upload on ambiguous status; query by request_id."""
 
     setUp = UploadPostTest.setUp
     tearDown = UploadPostTest.tearDown
@@ -256,7 +256,7 @@ class ReviewRegressionTest(unittest.TestCase):
             self._sent_id(req)
 
     def test_request_id_is_logged_before_sending(self):
-        # 进程在发送途中死掉：stderr 里必须已经有可用的恢复命令
+        # Process aborted mid-flight: stderr must include recovery command
         with self.assertRaises(KeyboardInterrupt):
             run_cli(self.base + ["--platforms", "tiktok"], post=KeyboardInterrupt())
         logged = run_cli.last_stderr
@@ -271,7 +271,7 @@ class ReviewRegressionTest(unittest.TestCase):
             post=(202, {"success": True, "job_id": job_id, "request_id": "r"}))
         self.assertEqual((code, js["status"], js["jobId"]), (0, "scheduled", job_id))
         self.assertTrue(js["statusCommand"].endswith(f"--status {job_id}"))
-        # 按输出的命令查询：第一次请求必须是 job_id
+        # Status command query: first request must probe job_id
         status_args = js["statusCommand"].split("upload_post.py ", 1)[1].split()
         code, js2, req = run_cli(status_args + ["--json-out"],
                                  gets=[(200, {"status": "pending", "job_id": job_id, "results": []})])

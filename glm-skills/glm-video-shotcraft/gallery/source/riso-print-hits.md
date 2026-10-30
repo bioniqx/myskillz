@@ -1,49 +1,37 @@
 ---
 name: riso-print-hits
-一句话: 套印错位冲击帧——riso-misregistration-hit 单发：标题撞停瞬间裂成双色 riso 印版，抖两下"啪"地套准
-适用: 标题/卡片的命中强调，纸墨审美版的"故障闪"；全片 1–2 次的单发高潮
-时长: 4s（120f，单发）
-能量: 高
-标签: typography
+summary: A risograph impact: a single misregistered colour split that snaps into alignment.
+use: Emphasis hit for titles and cards, serving as an ink-and-paper analog to digital glitch flashes; 1–2 standalone climax hits per video
+duration: 4s (120f, single hit)
+energy: High
+tags: typography
 ---
 
-## 意图
-RGB 色散故障闪（impact-feedback C 式的一部分）是荧光屏语言，与纸墨
-调性相克。这张卡给出印刷版平替：元素裂成两份单色 riso 印版（demo：荧光粉 × 蓝；
-multiply 油墨感而非 screen 荧光感，两版套准时叠成深色墨），
-像 risograph 没对准版，抖几下
-"啪"地套准——同样的冲击力，介质想象完全换成纸上油墨。单发：
-撞停瞬间裂版、震荡衰减、硬切套准，给一次命中盖章。demo 是一张 video-shotcraft 的
-双色 riso 宣传海报（「CRAFT IT / LOUD.」+ 三栏卖点，圆章中心是单色版镜刻标志）。
+## Intention
+RGB chromatic aberration glitch flashes (part of impact-feedback Variant C) belong to the language of phosphor screens, conflicting with paper-and-ink aesthetics. This card provides a printmaking equivalent: the element splits into two monochrome risograph printing plates (demo: fluorescent pink x blue; using `multiply` for physical ink depth rather than `screen` fluorescence, blending into dark ink when aligned), mimicking an off-register risograph that shakes before snapping sharply into perfect registration—delivering identical impact while grounding physical imagination in ink on paper. Single hit: splitting on crash stop, damped oscillation, hard cut into alignment, stamping authority onto a key landing. Demo features a two-color riso promotional poster for video-shotcraft ("CRAFT IT / LOUD." + 3-column feature highlights, with monochrome engraved mark at stamp center).
 
-## 做法
-| 式 | 做法 | 适用 |
-|----|------|------|
-| misregistration-hit 单发 | 标题 8f 撞入撞停，裂两版反向错 ~40px，44f 衰减震荡后硬切套准 + scale 脉冲 + 「ON REGISTER」圆章盖下 | 全片 1–2 次的命中盖章；标题/大字的到位一瞬 |
+## Method
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| misregistration-hit single | Title crashes in over 8f, splits into two plates offset ~40px in opposite directions, shakes with 44f damped oscillation before hard cutting into alignment + scale pulse + "ON REGISTER" circular stamp drops | 1–2 signature hit stamps per video; headline / hero text arrival moment |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 双版 | 两色 riso 油墨：荧光粉 #ff4fa3 + 蓝 #1f5fc4（套准叠成深紫）。`mix-blend-mode: multiply` 叠在再生纸（#f3eee2 + 静态纸纤维/油墨颗粒）上，位移反向；套准即两版归零重合 | multiply 叠出的重影就是"油墨没对准"；screen 叠加立刻变荧光故障；两版选互补色相、套准后叠成近黑最好，别用纯灰（读作阴影） |
-| 错位包络 | `offset = A·cos(2πt/18)·exp(-t/60)`，A=(20,8)px 两版反向（300px 标题）；帧 72 硬切归零 | 命门：套准是**硬切跳变**不是渐收——衰减到 ~11px 残余时啪地归零才有"啪"；纯渐收读不出套准一拍 |
-| 撞入 | 8f Easing.in(cubic) 从画外撞停，命中帧即裂版 | 裂版必须与撞停同帧——晚 2f 就读作两件事 |
-| 套准脉冲 | 归零帧 4f scale 1.03→1；同帧圆章 scale 1.5→1 盖下；命中帧整页 1.2% 顿挫 10f 回落 | 盖章的一拍；省略则套准无重量 |
-| 作用域 | 错版只作用标题，背景（太阳 / 版记 / 信息栏）保持套准 | 整画面全裂读作故障而非印刷 |
-| 收尾 | 套准后 ≥40f 真静止 | R1 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Dual plates | Two riso inks: fluorescent pink #ff4fa3 + blue #1f5fc4 (multiplying into deep violet). `mix-blend-mode: multiply` on recycled paper (#f3eee2 + static paper fibers/ink grain) with opposite offsets; registration zeroes both offsets into alignment | Multiply blending creates the tactile impression of "misaligned ink layers"; screen blending immediately turns into electronic glitches; choose complementary hues that multiply into near-black, avoiding plain grays (which read as drop shadows) |
+| Misregistration envelope | `offset = A*cos(2*pi*t/18)*exp(-t/60)`, A=(20,8)px opposing on both plates (300px title); hard cut to zero at frame 72 | Critical core: alignment is a **hard cut snap**, not a smooth fade—snapping to zero at ~11px residual offset creates the physical snap; smooth fades lose the register hit |
+| Crash-in | 8f Easing.in(cubic) crashing in from off-screen, splitting on the exact impact frame | Splitting must lock to the crash-stop frame—delaying by even 2f reads as two disconnected events |
+| Register pulse | Frame 72 hard-snap scale 1.03->1 over 4f; circular stamp drops scale 1.5->1 on same frame; page hit creates 1.2% hitch recovering over 10f | The stamping beat; omitting it deprives alignment of physical weight |
+| Scope | Misregistration applies only to the title; background elements (sun, colophon, metadata) remain registered | Splitting the entire screen reads as a system glitch rather than printmaking |
+| Finale | Truly static for >=40f after alignment | R1 |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **错位幅度可感性判例（本批实渲）**：词汇表原案 ±5px 在 1920 宽画面
-  正常速度下肉眼几乎不可见——单版 16px/总分离 32px 起步才可感（200–300px 大标题按 20px/40px）；
-  幅度存疑时做极端版给用户看（可感性优先）
-- 本卡与 impact-feedback C（负片冲击帧）语义重叠——纸墨调性片子用本卡、
-  游戏/动漫调性用 C 式，同片不并用（P4）
-- 错位方向一横一纵混合（x 为主 y 少量）更像没对准版；纯横向读作
-  左右晃动
-- 300px 大字配 −0.045em 负字距时，相邻字形的横笔可能恰好相接（如 CRAFT 的 F→T 顶横），
-  两边抗锯齿叠出一条发丝亮缝——给前一个字单独再收 ~0.01em 让两笔重叠即可
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- **Misregistration amplitude perceptibility precedent (verified in render)**: the original vocabulary draft of ±5px is virtually invisible to the naked eye at normal playback on 1920-wide canvases—start at >=16px per plate (32px total separation) for perceptible separation (20px/40px for 200–300px headlines); when in doubt, render extreme versions for review (perceptibility priority).
+- Semantic overlap with impact-feedback Variant C (negative impact frame)—use this card for paper-and-ink aesthetics, and Variant C for gaming/anime aesthetics; never combine both in the same video (P4).
+- Mixing horizontal and vertical offsets (primarily X with slight Y) feels more authentic to printing registration errors; purely horizontal offset reads like horizontal vibration.
+- When 300px headline text uses negative tracking (−0.045em), horizontal strokes of adjacent glyphs may touch (e.g., F->T top bar in CRAFT), creating a hairline antialiasing seam—nudge tracking on the preceding character by an extra ~0.01em so strokes overlap cleanly.
 
-## 参考实现
+## Reference Implementation
 demos/effects/riso-print-hits/
-（RisoMisregistrationHit.tsx）
+(RisoMisregistrationHit.tsx)

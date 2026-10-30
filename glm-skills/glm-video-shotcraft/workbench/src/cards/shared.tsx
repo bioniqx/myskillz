@@ -1,6 +1,6 @@
 import React from "react";
 
-/** 与 template/cards 同款的缓动 / tween helper（对照 GSAP 名字） */
+/** Easing / tween helpers matching template/cards (aligned with GSAP naming) */
 export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 export const tw = (t: number, t0: number, d: number, ease: (x: number) => number) =>
   ease(clamp01((t - t0) / Math.max(1e-6, d)));
@@ -16,7 +16,7 @@ export const power2InOut = (x: number) =>
 export const power4InOut = (x: number) =>
   x < 0.5 ? 16 * Math.pow(x, 5) : 1 - Math.pow(-2 * x + 2, 5) / 2;
 
-/** GSAP 色彩插值：RGB 逐通道线性；输入 #rrggbb */
+/** GSAP color interpolation: per-channel RGB linear; input #rrggbb */
 export const hexToRgb = (hex: string): [number, number, number] => {
   const h = hex.replace("#", "");
   const v =
@@ -36,7 +36,7 @@ export const mixHex = (a: string, b: string, p: number) => {
 export const FONT_STACK =
   '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
 
-/** 主持人占位剪影（演示语境素材，不属于动效本体） */
+/** Presenter placeholder silhouette (demo asset, not part of core motion) */
 export const HostSilhouette: React.FC = () => (
   <div
     style={{

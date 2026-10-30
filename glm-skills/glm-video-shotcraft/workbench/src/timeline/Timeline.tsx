@@ -7,7 +7,7 @@ import { useT, useTx } from "../i18n";
 
 const HEADER_W = 140;
 
-/** 播放头竖线：唯一订阅 playhead 的时间轨组件——播放中每帧只动它 */
+/** Playhead line: sole timeline component subscribed to playhead */
 const PlayheadLine: React.FC = () => {
   const playhead = useStore((s) => s.playhead);
   const ppf = useStore((s) => s.pxPerFrame);
@@ -53,14 +53,14 @@ export const Timeline: React.FC = () => {
     if (w) setZoom((w - HEADER_W - 80) / duration);
   };
 
-  // —— 轨道拖拽排序：按住轨道头上下拖，蓝线标出插入位，松手落位（一步撤销）——
+  // —— Track drag reorder: drag track header vertically to reposition ——
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
-  /** 拖动中：被拖轨道 id + 目标插入位（原数组下标，0..tracks.length） */
+  /** Drag state: dragging track id + target index (0..tracks.length) */
   const [trackDrag, setTrackDrag] = useState<{ id: string; to: number } | null>(null);
 
   const onTrackHeadDown = (trackId: string) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest("button")) return; // 👁 / ✕ 照常点击
+    if ((e.target as HTMLElement).closest("button")) return; // Allow normal clicks on button icons
     e.preventDefault();
     const startY = e.clientY;
     const from = useStore.getState().project.tracks.findIndex((t) => t.id === trackId);
@@ -69,11 +69,11 @@ export const Timeline: React.FC = () => {
     let dragging = false;
     const onMove = (ev: PointerEvent) => {
       if (!dragging) {
-        if (Math.abs(ev.clientY - startY) < 4) return; // 抖动阈值：点一下不算拖
+        if (Math.abs(ev.clientY - startY) < 4) return; // Jitter threshold: simple click is not a drag
         dragging = true;
         setTrackDrag({ id: trackId, to });
       }
-      // 插入位 = 中线在指针上方的轨道数
+      // Insertion slot = number of tracks whose centerline is above pointer
       let idx = 0;
       for (const t of useStore.getState().project.tracks) {
         const el = rowRefs.current.get(t.id);
@@ -81,7 +81,7 @@ export const Timeline: React.FC = () => {
         const r = el.getBoundingClientRect();
         if (ev.clientY > r.top + r.height / 2) idx++;
       }
-      // 指针贴近时间轨上下边时自动滚动，轨道多时能拖到看不见的位置
+      // Auto-scroll when pointer reaches edge of timeline
       const sc = scrollerRef.current;
       if (sc) {
         const r = sc.getBoundingClientRect();
@@ -96,13 +96,13 @@ export const Timeline: React.FC = () => {
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       setTrackDrag(null);
-      if (dragging) moveTrack(trackId, to); // 原位落下时 store 内部忽略
+      if (dragging) moveTrack(trackId, to); // In-place drop ignored internally by store
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
   };
 
-  /** 插入线在 tl-content 内的 top；落回原位时不画 */
+  /** Drop indicator line position; omitted when dropping in place */
   const dropLineTop = (): number | null => {
     if (!trackDrag) return null;
     const tracks = project.tracks;

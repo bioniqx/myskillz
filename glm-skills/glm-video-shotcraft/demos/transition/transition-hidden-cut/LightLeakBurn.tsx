@@ -1,25 +1,25 @@
-// light-leak-burn〔转场〕：一团暖色胶片漏光从右上角斜扫入画，亮度顶峰时吞掉旧画面七成以上（高光溢出、
-// 对比度被冲淡），光峰帧硬切新画面，光沿对角线退散时新画面已在光下就位——比白闪柔、有方向、有温度。
+// light-leak-burn [transition]: A warm film light leak sweeps diagonally in from the top-right corner. At peak brightness, it engulfs over 70% of the outgoing frame (highlight spill,
+// washed-out contrast); at the peak frame, it hard-cuts to the new scene. As the light retreats along the diagonal, the new scene is already in place under the illumination — softer than a white flash, directional, and warm.
 //
-// 第二轮重设计（暖黑电影感 · video-shotcraft 取景器的模式切换："从夜到黄昏"）：
-// - look = ember（暖黑 · 余烬橙 · 琥珀金）。A / B 是同一个取景器里的两张全出血"照片"——同一道山脊剪影：
-//   A 夜景（冷蓝黑天、星点、新月、山间一盏暖窗灯）配品牌短句上半「Frame motion.」；
-//   B 黄昏（赤橙天空、半落的太阳、暖色雾带）配下半「Craft the shot.」。漏光本身就是"天亮了"——光效即语义，
-//   一句 motto 被光峰切成两半。
-// - 取景器 UI 让它是产品而不是壁纸：四角取景框、顶部镜刻标志 + 字标与等宽曝光参数、底部模式拨轮（NIGHT / GOLDEN HOUR / PORTRAIT），
-//   光峰后高亮滑块从 NIGHT 滑到 GOLDEN HOUR（swift 曲线 14f）。
-// - 漏光三段色温：白热核 #fff3dc → 琥珀 #ffb347 → 余烬橙 #ff5a1f → 外缘赭红；全部是沿扫掠对角线拉长、转 −34° 的
-//   径向渐变椭圆（screen 叠加，不用 blur 滤镜——渐变本身就软，且便宜）；右缘另有一道"片门溢光"线性光带
-//   随光强长出（真漏光是从画框边缘漏进来的）。峰值时页面 brightness ↑ / contrast ↓ / saturate ↓ = 被烧穿。
-// - 光强包络：爬升 ease-in 27f（蓄力）→ 52f 峰值藏切 → ease-out 43f 收敛（余温）；热核 = intensity³，只在峰值附近烧起来。
+// Round 2 redesign (Warm dark cinematic · video-shotcraft viewfinder mode switch: "From Night to Golden Hour"):
+// - look = ember (warm dark · ember orange · amber gold). A / B are two full-bleed "photographs" in the same viewfinder — sharing the same mountain ridge silhouette:
+//   A Night (cool blue-black sky, stars, crescent moon, a single warm window light on the mountain) paired with the first half of the brand motto "Frame motion.";
+//   B Golden hour (terracotta sky, setting sun, warm mist band) paired with the second half "Craft the shot.". The light leak itself represents "dawn breaking" — the lighting effect is semantic,
+//   a single motto split in two by the light peak.
+// - Viewfinder UI establishes it as a product rather than wallpaper: four corner brackets, top shotcraft mark + wordmark with monospace exposure readouts, bottom mode dial (NIGHT / GOLDEN HOUR / PORTRAIT);
+//   after the light peak, the highlight indicator slides from NIGHT to GOLDEN HOUR (swift curve 14f).
+// - Three-stage light leak color temperature: incandescent core #fff3dc -> amber #ffb347 -> ember orange #ff5a1f -> outer rim ochre; all rendered as radial gradient ellipses
+//   elongated along the sweep diagonal and rotated -34° (screen blend, no blur filters — the gradient itself is soft and lightweight); an additional "gate spill" linear band on the right edge
+//   grows with light intensity (authentic light leaks bleed from film frame edges). At peak, page brightness ↑ / contrast ↓ / saturate ↓ = burned through.
+// - Intensity envelope: ease-in climb 27f (anticipation) -> 52f peak hidden cut -> ease-out 43f decay (warm afterglow); thermal core = intensity³, igniting only near the peak.
 //
-// 时间表（30fps，共 130f）：
-//   0–24    A 夜景：标题逐词从线下升起（4–24），星点闪烁，镜头极缓推进 1 → 1.02
-//   24–52   漏光从右上角爬入，强度 ease-in 爬升，夜景被逐渐冲淡
-//   52      光峰帧：画面七成以上烧白，硬切 A → B
-//   52–95   光沿对角线退向左下并衰减；B 镜头 1.04 → 1 落定（out）；54–68 模式滑块滑到 GOLDEN HOUR；
-//           62–86 B 标题逐词升起（在余温里）
-//   95–130  hold 35f：太阳泛光极缓呼吸、取景器曝光数字静止
+// Timeline (30fps, 130f total):
+//   0–24    A Night: headline rises word-by-word from under the line (4–24), stars twinkle, slow camera push 1 -> 1.02
+//   24–52   Light leak creeps in from top-right, intensity builds ease-in, night scene progressively washes out
+//   52      Light peak frame: over 70% of frame burns white, hard cut A -> B
+//   52–95   Light retreats toward bottom-left along diagonal while decaying; Scene B camera settles 1.04 -> 1 (out); 54–68 mode slider slides to GOLDEN HOUR;
+//           62–86 Scene B headline rises word-by-word (amidst the afterglow)
+//   95–130  Hold 35f: sun bloom gently breathes, viewfinder exposure readouts hold steady
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, Vignette, mix, ramp } from '../../_fixtures/Polish';
@@ -33,7 +33,7 @@ const W = 1920;
 const H = 1080;
 const PAD = 120;
 const LEAK_IN = 24;
-const PEAK = 52; // 光峰帧 = 藏切点
+const PEAK = 52; // Light peak frame = hidden cut point
 const LEAK_OUT = 95;
 
 const h = (n: number) => {
@@ -41,7 +41,7 @@ const h = (n: number) => {
   return s - Math.floor(s);
 };
 
-// 同一道山脊（两张照片共用，换景时构图不跳）
+// Shared mountain ridge (used by both photos so composition doesn't jump on cut)
 const RIDGE_FAR = 'M0 640 C 180 600 300 560 420 580 C 560 604 640 520 780 500 C 900 484 1000 560 1120 570 C 1260 582 1380 500 1520 490 C 1680 480 1800 560 1920 548 L1920 1080 L0 1080 Z';
 const RIDGE_MID = 'M0 760 C 160 700 300 690 440 720 C 600 756 720 650 880 640 C 1040 630 1140 720 1300 730 C 1460 740 1600 660 1760 670 C 1840 676 1890 700 1920 706 L1920 1080 L0 1080 Z';
 const RIDGE_NEAR = 'M0 880 C 220 820 420 830 600 860 C 800 892 980 800 1180 812 C 1380 824 1560 900 1760 880 C 1840 872 1890 864 1920 862 L1920 1080 L0 1080 Z';
@@ -77,7 +77,7 @@ const Night: React.FC<{ f: number }> = ({ f }) => (
     <path d={RIDGE_FAR} fill="#1a1c28" />
     <path d={RIDGE_MID} fill="#11121b" />
     <path d={RIDGE_NEAR} fill="#07070b" />
-    {/* 山间一盏暖窗灯：夜景里唯一的暖色，预告漏光 */}
+    {/* A single warm window light on the mountain: only warm tone in the night scene, previewing the light leak */}
     <circle cx={1606} cy={898} r={28} fill={alpha(L.accent2, 0.2)} />
     <rect x={1600} y={890} width={12} height={10} rx={2} fill={L.accent2} />
   </svg>
@@ -116,15 +116,15 @@ const Golden: React.FC<{ f: number }> = ({ f }) => {
   );
 };
 
-// 品牌短句（PITCH.en.motto）被光峰切成两半：A 夜景 / B 黄昏
+// Brand motto (PITCH.en.motto) split in two by light peak: A Night / B Golden hour
 const MOTTO_A = 'Frame motion.';
 const MOTTO_B = 'Craft the shot.';
 
 const MODES = ['NIGHT', 'GOLDEN HOUR', 'PORTRAIT'];
-const MODE_X = [0, 220, 532]; // 每项左缘（相对拨轮）
+const MODE_X = [0, 220, 532]; // Left edge of each item (relative to dial)
 const MODE_W = [172, 272, 228];
 
-// 取景器 UI（两页共用，只有数值与模式不同）
+// Viewfinder UI (shared by both pages, only values and mode change)
 const Viewfinder: React.FC<{ golden: boolean; slide: number }> = ({ golden, slide }) => {
   const corner = (x: number, y: number, sx: number, sy: number) => (
     <div style={{
@@ -153,7 +153,7 @@ const Viewfinder: React.FC<{ golden: boolean; slide: number }> = ({ golden, slid
         <span>{golden ? 'ISO 100 · 1/500 · ƒ2.8' : 'ISO 3200 · 1/8 · ƒ1.6'}</span>
         <span>{golden ? '4K · 24' : 'RAW · 24'}</span>
       </div>
-      {/* 模式拨轮 */}
+      {/* Mode dial */}
       <div style={{ position: 'absolute', left: (W - 760) / 2, top: H - 156, width: 760, height: 64 }}>
         <div style={{
           position: 'absolute', left: hx, top: 0, width: hw, height: 64, borderRadius: 32,
@@ -179,23 +179,23 @@ export const LightLeakBurn: React.FC = () => {
   const frame = useCurrentFrame();
   const golden = frame > PEAK;
 
-  // 光强包络：ease-in 爬升 → 峰值 → ease-out 收敛
+  // Light intensity envelope: ease-in climb -> peak -> ease-out decay
   const intensity = frame <= PEAK
     ? ramp(frame, LEAK_IN, PEAK - LEAK_IN, (t) => t * t)
     : 1 - ramp(frame, PEAK, LEAK_OUT - PEAK, EASE.out);
-  // 光团沿对角线：右上外 → 左下外（全程 swift，峰值时在画面中上偏右）
+  // Light blob along diagonal: off-screen top-right -> off-screen bottom-left (swift throughout, at peak sits upper-center right)
   const sweep = ramp(frame, LEAK_IN, LEAK_OUT - LEAK_IN, (t) => 1 - Math.pow(1 - t, 1.2));
   const cx = mix(2250, -500, sweep);
   const cy = mix(-380, 1400, sweep);
 
-  // 镜头：A 极缓推进，B 从 1.04 落定
+  // Camera: A pushes in very slowly, B settles from 1.04
   const zoom = golden ? 1 + 0.04 * (1 - ramp(frame, PEAK, 44, EASE.out)) : 1 + 0.02 * ramp(frame, 0, PEAK, EASE.smooth);
   const burn = `brightness(${(1 + intensity * 0.85).toFixed(3)}) contrast(${(1 - intensity * 0.5).toFixed(3)}) saturate(${(1 - intensity * 0.25).toFixed(3)})`;
-  // 高光溢出把 A 的字也烧淡（峰值处只剩 ~25%），切点那一下不会看到标题突然换字
+  // Highlight spill washes out text in A (~25% remaining at peak), so the headline text swap isn't abrupt at the cut
   const aWash = golden ? 1 : 1 - 0.75 * Math.pow(intensity, 1.6);
   const slide = ramp(frame, PEAK + 2, 14, EASE.swift);
 
-  // 三段色温光团（长径 / 颜色 / 透明度 / 沿扫掠方向的偏移）
+  // Three-stage color temperature light blobs (major axis / color / opacity / offset along sweep direction)
   const blobs = [
     { d: 3000, c: '#c2311a', a: 0.6, o: 360 },
     { d: 2300, c: '#ff5a1f', a: 0.8, o: 160 },
@@ -206,14 +206,14 @@ export const LightLeakBurn: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: L.bg[2], overflow: 'hidden' }}>
-      {/* 画面层（受漏光烧穿） */}
+      {/* Scene layer (burned through by light leak) */}
       <div style={{ position: 'absolute', inset: 0, filter: intensity > 0.01 ? burn : undefined }}>
         <div style={{ position: 'absolute', inset: 0, transform: `scale(${zoom.toFixed(5)})` }}>
           {golden ? <Golden f={frame} /> : <Night f={frame} />}
         </div>
-        {/* 底部压暗，托住标题与拨轮 */}
+        {/* Bottom gradient to support headline and dial */}
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${alpha('#000000', 0.25)} 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 52%, ${alpha('#0a0402', 0.72)} 100%)` }} />
-        {/* 标题 */}
+        {/* Headline */}
         <div style={{ position: 'absolute', left: PAD + 36, top: 596, opacity: aWash }}>
           <div style={{ ...type(28, 700, { caps: true }), letterSpacing: '0.2em', color: golden ? L.accent2 : alpha(L.ink, 0.7), marginBottom: 22 }}>
             {golden ? '02 — Golden hour' : '01 — Night'}
@@ -229,10 +229,10 @@ export const LightLeakBurn: React.FC = () => {
         <Viewfinder golden={golden} slide={slide} />
       </div>
 
-      {/* 漏光层 */}
+      {/* Light leak layer */}
       {intensity > 0.003 && (
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          {/* 片门溢光：从右缘与上缘漏进来的线性光带 */}
+          {/* Gate spill: linear light band leaking from right and top edges */}
           <div style={{
             position: 'absolute', inset: 0, mixBlendMode: 'screen', opacity: intensity,
             background: `linear-gradient(250deg, ${alpha('#ffb347', 0.9)} 0%, ${alpha('#ff5a1f', 0.55)} 14%, ${alpha('#c2311a', 0.2)} 30%, rgba(0,0,0,0) 46%)`,
@@ -244,13 +244,13 @@ export const LightLeakBurn: React.FC = () => {
               background: `radial-gradient(closest-side, ${alpha(b.c, 1)} 0%, ${alpha(b.c, 0.65)} 35%, ${alpha(b.c, 0)} 100%)`,
             }} />
           ))}
-          {/* 白热核：只在峰值附近烧起来 */}
+          {/* White-hot thermal core: burns only near peak */}
           <div style={{
             position: 'absolute', left: cx - 1100, top: cy - 700, width: 2200, height: 1400, borderRadius: '50%', transform: 'rotate(-34deg)',
             mixBlendMode: 'screen', opacity: core,
             background: 'radial-gradient(closest-side, #fff6e6 0%, rgba(255,236,200,0.9) 40%, rgba(255,200,130,0) 100%)',
           }} />
-          {/* 全屏暖罩：高光溢出带温度 */}
+          {/* Full-screen warm wash: warm highlight spill */}
           <div style={{ position: 'absolute', inset: 0, background: '#ff9a4a', mixBlendMode: 'screen', opacity: 0.4 * intensity * intensity + cutFlash }} />
         </div>
       )}

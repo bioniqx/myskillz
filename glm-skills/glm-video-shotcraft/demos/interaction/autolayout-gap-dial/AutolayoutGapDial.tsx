@@ -1,24 +1,24 @@
 // autolayout-gap-dial —— framer-ai 4.5–5.5s
-// 间距拨盘驱动布局：一个 gap 数值同帧驱动整排导航块的位置、测量线、徽章与读数。
+// autolayout-gap-dial — Spacing dial driving autolayout: a single gap value synchronously drives nav block positions, measurement lines, badges, and readouts.
 //
-// 第二轮重设计（石墨暗场 · 设计工具检查器海报）：
-// - look = graphite（近单色暗场）。设计工具的"选择白 + 测量金"两色语义：框选描边/手柄用近白，
-//   间距测量线/徽章/拨盘指针用 accent2 香槟金——画面里只有"被拨动的那个数"是有颜色的。
-// - 主角是"数"：顶部 196px 超大 tabular 读数（GAP 眉题 + 数值 + px 单位），下面一把 760px 拨盘刻度尺，
-//   刻度随 gap 横向滚过中心金针；拨动时读数由白转金、松手后回白——数值就是缰绳。
-// - 布局主体：一排 120px 高的导航块（video-shotcraft 站点的顶部导航），占画宽 ~64–86%；激活项白底黑字，
-//   其余是带色相深灰面板 + 发丝线 + 顶部内高光；块按自身速度做横向运动模糊（外侧块位移最大，拖影最长）。
-// - 节奏「预备—拉开—屏息—回弹」：开场先把 gap 往里收一点（anticip 预备，12→6），再 swift 不对称曲线
-//   拉到 104；hold 一拍屏息；松手后欠阻尼弹簧过冲到比起点更紧再回稳（过冲段 ×0.45 压缩，gap 永不为负）。
+// Iteration 2 redesign (graphite dark field · design tool inspector poster):
+// - look = graphite (near-monochrome dark field). Two-color semantics of design tools ("selection white + measurement gold"): selection stroke/handles use near-white,
+//   measurement lines/badges/dial needle use champagne gold accent2 — only the manipulated value carries color.
+// - Hero is the number: massive 196px tabular readout up top (GAP eyebrow + value + px unit), accompanied by a 760px dial ruler beneath;
+//   ticks roll horizontally beneath the center gold needle; readout shifts white to gold during dial drag and returns to white upon release.
+// - Layout subject: row of 120px nav blocks (video-shotcraft top navigation), spanning ~64–86% frame width; active item in high contrast,
+//   others in tinted dark gray panels with hairline borders + top inner specular; blocks apply horizontal motion blur proportional to velocity.
+// - Cadence (anticipation -> expansion -> held breath -> snapback): initial anticipation compression (gap 12->6), then swift asymmetrical curve
+//   expanding to 104; hold pause; release triggers underdamped spring overshoot tighter than starting gap before settling (overshoot compressed x0.45 to guarantee non-negative gap).
 //
-// 时间表（30fps，共 150f）：
-//   0–20    入场：舞台光 + 点阵画布；导航块错峰上浮（父先到）、框选描边从外侧收拢、8 手柄 2f 错峰弹出
-//   6–22    读数入场：眉题字距收拢、数值从线下升起、刻度尺淡入
-//   22–32   预备：gap 12→6（anticip，观众先看到"往回收"再看到"冲出去"）
-//   32–66   主动作：gap 6→104（34f swift），读数逐 2 跳、转金；测量线与徽章实时拉长
-//   66–86   屏息 hold 20f：相机极缓推近（总 +2.5%），金色读数停在 104
-//   86–118  回弹：spring(damping 9, stiffness 80) 104→~7→12，~118f 落定，读数回白
-//   118–150 落定 hold：完整海报（读数 12 + 收紧的导航条），相机继续极缓推进
+// Timeline (30fps, 150f total):
+//   0–20    Entrance: stage light + dot canvas; nav blocks float up staggered, selection bounds collapse inward, 8 handles pop staggered 2f
+//   6–22    Readout entrance: eyebrow tracking collapse, value rises from baseline, ruler fades in
+//   22–32   Anticipation: gap 12->6 (anticipation compression before expansion)
+//   32–66   Main motion: gap 6->104 (34f swift), readout ticks in steps of 2, turns gold; measurement lines and badges extend in real time
+//   66–86   Held breath 20f: subtle camera push (+2.5%), gold readout rests at 104
+//   86–118  Snapback: spring(damping 9, stiffness 80) 104->~7->12, settling ~118f, readout returns to white
+//   118–150 Settled hold: complete poster (readout 12 + tightened nav bar), continuous gentle camera push
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, spring } from 'remotion';
 import { EASE, FONT, ramp, softShadow } from '../../_fixtures/Polish';
@@ -28,25 +28,25 @@ export const AUTOLAYOUT_GAP_DIAL_DURATION = 150;
 
 const L = LOOKS.graphite;
 const FPS = 30;
-const SEL = 'rgba(244,244,242,0.92)'; // 选择白：框选描边 / 手柄
-const GOLD = L.accent2; // 测量金：间距线 / 徽章 / 指针 / 拨动中的读数
+const SEL = 'rgba(244,244,242,0.92)'; // Selection white: bounding stroke / handles
+const GOLD = L.accent2; // Measurement gold: gap lines / badges / needle / active readout
 
-const LABELS = ['Recipes', 'Gallery', 'Workbench', 'Showcase', 'Install']; // video-shotcraft 站点导航
-const BLOCK_WIDTHS = [252, 206, 278, 268, 220]; // 不等宽才像真导航
+const LABELS = ['Recipes', 'Gallery', 'Workbench', 'Showcase', 'Install']; // video-shotcraft site navigation
+const BLOCK_WIDTHS = [252, 206, 278, 268, 220]; // Non-uniform widths for authentic UI feel
 const BLOCK_H = 120;
-const ROW_Y = 684; // 行中心
+const ROW_Y = 684; // Row center
 const G_REST = 12;
-const G_PRE = 6; // 预备回收值
+const G_PRE = 6; // Anticipation compression value
 const G_MAX = 104;
 
 const PRE_START = 22;
 const PRE_END = 32;
 const GROW_END = 66;
 const HOLD_END = 86;
-// damping 9 的原始过冲 ≈18%×106px 会把 gap 拉成负数；过冲段 ×0.45 → 最紧约 6px，仍"比起点更紧再回稳"
+// Damping 9 raw overshoot would pull gap negative; overshoot compressed x0.45 -> tightest ~6px before stabilizing
 const OVERSHOOT_K = 0.45;
 
-// 同一个 gap 参数派生全部几何（块位置、测量线、徽章、读数、刻度尺）
+// Unified gap parameter derives all geometry (block layout, measurement lines, badges, readout, ruler)
 const gapAt = (f: number) => {
   if (f < PRE_END) return G_REST + (G_PRE - G_REST) * ramp(f, PRE_START, PRE_END - PRE_START, EASE.swift);
   if (f < HOLD_END) return G_PRE + (G_MAX - G_PRE) * ramp(f, PRE_END, GROW_END - PRE_END, EASE.swift);
@@ -55,7 +55,7 @@ const gapAt = (f: number) => {
   return G_MAX + (G_REST - G_MAX) * s2;
 };
 
-// 两个 hex 颜色按 t 混合
+// Blend two hex colors by t
 const mixHex = (a: string, b: string, t: number) => {
   const pa = a.match(/[0-9a-f]{2}/gi)!.map((h) => parseInt(h, 16));
   const pb = b.match(/[0-9a-f]{2}/gi)!.map((h) => parseInt(h, 16));
@@ -83,7 +83,7 @@ const IconAutoLayout: React.FC<{ c: string; size?: number }> = ({ c, size = 22 }
   </svg>
 );
 
-// 拨盘刻度尺：每 1 单位 = UNIT px，中心金针读当前 gap
+// Dial ruler: 1 unit = UNIT px, center gold needle reads current gap
 const RULER_W = 760;
 const UNIT = 6.5;
 const Ruler: React.FC<{ gap: number; op: number; hot: number }> = ({ gap, op, hot }) => {
@@ -92,7 +92,7 @@ const Ruler: React.FC<{ gap: number; op: number; hot: number }> = ({ gap, op, ho
     const x = RULER_W / 2 + (u - gap) * UNIT;
     if (x < -10 || x > RULER_W + 10) continue;
     const major = u % 10 === 0;
-    const edge = Math.max(0, Math.min(1, Math.min(x, RULER_W - x) / 150)); // 两端淡出
+    const edge = Math.max(0, Math.min(1, Math.min(x, RULER_W - x) / 150)); // Falloff at endpoints
     const near = Math.abs(x - RULER_W / 2);
     ticks.push(
       <div key={u} style={{
@@ -105,7 +105,7 @@ const Ruler: React.FC<{ gap: number; op: number; hot: number }> = ({ gap, op, ho
         <div key={`l${u}`} style={{
           position: 'absolute', left: x, bottom: 40, transform: 'translateX(-50%)',
           ...type(22, 500, { mono: true }), color: L.ink3,
-          opacity: edge * Math.min(1, Math.max(0, (near - 18) / 22)), // 靠近指针的数字让位
+          opacity: edge * Math.min(1, Math.max(0, (near - 18) / 22)), // Digits yield near needle
         }}>{u}</div>,
       );
     }
@@ -113,9 +113,9 @@ const Ruler: React.FC<{ gap: number; op: number; hot: number }> = ({ gap, op, ho
   return (
     <div style={{ position: 'absolute', left: 960 - RULER_W / 2, top: 414, width: RULER_W, height: 76, opacity: op }}>
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>{ticks}</div>
-      {/* 基线 */}
+      {/* Baseline */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, background: `linear-gradient(90deg, transparent, ${alpha(L.ink, 0.18)} 20%, ${alpha(L.ink, 0.18)} 80%, transparent)` }} />
-      {/* 金针：拨动时泛光 */}
+      {/* Gold needle: glows during dial adjustment */}
       <div style={{
         position: 'absolute', left: RULER_W / 2 - 1.5, bottom: -6, width: 3, height: 50, borderRadius: 2, background: GOLD,
         boxShadow: `0 0 ${8 + hot * 14}px ${alpha(GOLD, 0.35 + hot * 0.4)}`,
@@ -132,21 +132,21 @@ export const AutolayoutGapDial: React.FC = () => {
   const frame = useCurrentFrame();
 
   const gap = gapAt(frame);
-  const gapShown = Math.max(0, Math.round(gap / 2) * 2); // 逐格跳数（步进 2 = 拨盘咔哒的颗粒）
-  const v = gapAt(frame + 0.5) - gapAt(frame - 0.5); // gap 速度（px/帧）
+  const gapShown = Math.max(0, Math.round(gap / 2) * 2); // Quantized readout steps (step 2 = tactile detent feel)
+  const v = gapAt(frame + 0.5) - gapAt(frame - 0.5); // Gap velocity (px/frame)
   const moving = Math.min(1, Math.abs(v) / 1.2);
-  // 拨动热度：读数白→金，带 ~6f 余温（松手回稳后慢慢褪回白）
+  // Dialing warmth: readout transitions white -> gold with ~6f afterglow before returning to white
   let hot = 0;
   for (let k = 0; k <= 6; k++) hot = Math.max(hot, Math.min(1, Math.abs(gapAt(frame - k + 0.5) - gapAt(frame - k - 0.5)) / 1.5) * (1 - k / 7));
-  // 跳数脉冲：相位由数值本身驱动（每跨一个步进格脉冲一次）× 速度门限
+  // Tick pulse: driven by value increments multiplied by velocity threshold
   const tickPulse = 1 + 0.06 * Math.abs(Math.sin((Math.PI * gap) / 2)) * moving;
 
   const { total, startX, xs } = rowLayout(gap);
 
-  // 相机：整段极缓推近（smooth，起止无速度突变）
+  // Camera: continuous gentle push throughout (smooth easing without abrupt velocity jumps)
   const cam = 1 + 0.025 * ramp(frame, 0, AUTOLAYOUT_GAP_DIAL_DURATION, EASE.smooth);
 
-  // 框选描边：spring 从外侧 26px 收拢
+  // Selection frame: spring retracts 26px inward from perimeter
   const selIn = springAt(frame, 4, { damping: 16, stiffness: 140 });
   const pad = 30;
   const grow = (1 - selIn) * 26;
@@ -160,20 +160,20 @@ export const AutolayoutGapDial: React.FC = () => {
   const numIn = ramp(frame, 8, 18, EASE.snappy);
   const rulerIn = ramp(frame, 12, 16, EASE.out);
 
-  // 读数颜色：白 ↔ 金
+  // Readout color: white <-> gold
   const numColor = mixHex(L.ink, GOLD, hot);
 
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden', fontFamily: FONT.sans }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.0 }} fill={{ x: 0.5, y: 1.05 }} horizon={0.62} breathe={0.4}>
-        {/* 画布点阵：围绕导航条清楚、四周隐去 */}
+        {/* Canvas dot grid: distinct around navigation bar, fading toward edges */}
         <AbsoluteFill style={{
           backgroundImage: `radial-gradient(${alpha(L.ink, 0.13)} 1.4px, transparent 1.7px)`,
           backgroundSize: '36px 36px', backgroundPosition: '6px 16px',
           WebkitMaskImage: 'radial-gradient(ellipse 52% 40% at 50% 62%, #000 20%, transparent 100%)',
           maskImage: 'radial-gradient(ellipse 52% 40% at 50% 62%, #000 20%, transparent 100%)',
         }} />
-        {/* 导航条落脚的光池：条子"站"在画布上 */}
+        {/* Light pool anchoring nav bar: gives physical grounding on canvas */}
         <div style={{
           position: 'absolute', left: 260, right: 260, top: ROW_Y + 40, height: 200,
           background: `radial-gradient(ellipse 50% 50% at 50% 30%, ${alpha(L.light, 0.1)} 0%, transparent 70%)`,
@@ -181,7 +181,7 @@ export const AutolayoutGapDial: React.FC = () => {
       </Stage>
 
       <AbsoluteFill style={{ transform: `scale(${cam})`, transformOrigin: '50% 52%' }}>
-        {/* ── 读数：眉题 + 超大数值 + 单位 ── */}
+        {/* ── Readout: eyebrow + oversized value + unit ── */}
         <div style={{
           position: 'absolute', left: 0, right: 0, top: 150, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16,
           opacity: eyebrow, letterSpacing: `${(0.28 + (1 - eyebrow) * 0.4).toFixed(3)}em`,
@@ -208,11 +208,11 @@ export const AutolayoutGapDial: React.FC = () => {
         </div>
         <Ruler gap={gap} op={rulerIn} hot={hot} />
 
-        {/* ── 导航块（video-shotcraft 站点顶部导航） ── */}
+        {/* ── Navigation blocks (video-shotcraft top nav) ── */}
         {BLOCK_WIDTHS.map((w, i) => {
           const inP = ramp(frame, 1 + i * 2, 16, EASE.snappy);
           const active = i === 0;
-          const vx = (i - 2) * v; // 块速度 = (i−2)·dgap/dt：外侧块位移最大
+          const vx = (i - 2) * v; // Block velocity = (i-2)*dgap/dt: outermost blocks travel furthest
           const blur = Math.min(9, Math.abs(vx) * 0.5);
           const fid = `nb${i}`;
           const dy = (1 - inP) * 34;
@@ -245,7 +245,7 @@ export const AutolayoutGapDial: React.FC = () => {
           );
         })}
 
-        {/* ── 框选描边 + 8 手柄 + 图层名 ── */}
+        {/* ── Selection stroke + 8 handles + layer label ── */}
         <div style={{
           position: 'absolute', left: selX, top: selY, width: selW, height: selH, boxSizing: 'border-box',
           border: `2px solid ${SEL}`, borderRadius: 6, opacity: Math.min(1, selIn * 1.4),
@@ -271,7 +271,7 @@ export const AutolayoutGapDial: React.FC = () => {
           })}
         </div>
 
-        {/* ── 间距标注：延长线 ×2 + 测量线 + 徽章（全部由 gap 实时重算） ── */}
+        {/* ── Gap dimensions: extension lines + measurement rules + badges (recomputed live from gap) ── */}
         {xs.slice(0, -1).map((x, i) => {
           const gx = x + BLOCK_WIDTHS[i];
           const cy = ROW_Y + BLOCK_H / 2 + 74;

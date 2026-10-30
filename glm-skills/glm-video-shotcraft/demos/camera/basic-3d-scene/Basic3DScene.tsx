@@ -1,28 +1,25 @@
-// basic-3d-scene — impress.js 式空间步进（第二轮重设计）
-// 手法不变：卡片散布在 3D 空间（各有 x·y·z + 旋转 + 缩放），相机取每站姿态之逆依次飞行对齐，
-// 末站拉远成 OVERVIEW 总览。核心配方 camera = stepTransform.inverse()。
+// basic-3d-scene — impress.js spatial steps (round 2 redesign)
+// Cards scattered in 3D space (x, y, z, rotation, scale); camera flies sequentially inverting poses,
+// pulling back to OVERVIEW at the end. Core formula: camera = stepTransform.inverse().
 //
-// 设计决定
-// - look：graphite（近单色暗场，白为强调、香槟金只做点缀）——像发布会上"三章节"的空间叙事。
-//   产品是 video-shotcraft，三站 = 品牌短句拆成的三个章节：Frame / Craft / Ship，
-//   总览站是品牌落版「Craft the shot.」（标志 + 字标做眉题）。
-// - 卡片是为镜头设计的海报而不是小 UI：1240×700 原生 1:1 排版（对位时屏幕上就是原生像素，
-//   不经 DesignStage 放大，字不糊），150px 标题 + 44px 说明 + 420px 细体大号章节数字（被卡边裁切的编辑感）。
-// - 空间感：世界里散布 70 颗真 3D 浮尘（各有 z，相机飞/转时有真实视差）；非当前卡按"站距"退焦变暗；
-//   飞行中段相机额外拉远 ~30%（hop）让观众看见"还有别的卡在空间里"，再推近落位。
-// - 每站停留时卡底一条金色进度线走满（像幻灯片计时），停留段不是死帧；落位前 8f 标题逐词从线下升起，
-//   每张卡只揭示一次，之后在总览里保持已读状态。
-// - 运动模糊：飞行段做时间采样（快门 0.5f，子帧 3–8 个按相机位移自适应），停留段零开销。
+// Design decisions
+// - look: graphite (monochrome dark ground with champagne gold accents) — spatial 3-chapter narrative.
+//   Three chapters: Frame / Craft / Ship, culminating in brand outro "Craft the shot."
+// - 1240x700 native 1:1 layout for sharp text without scaling blur; 150px title + 420px light chapter digits.
+// - Spatial depth: 70 3D dust motes fixed in world space providing true camera parallax;
+//   non-current cards defocus based on stop distance; 30% mid-flight pull-back hop.
+// - Gold progress bar advances during card holds; titles reveal word-by-word 8f before landing.
+// - Motion blur: shutter 0.5f time-sampled adaptive sub-frames during flight, zero overhead during holds.
 //
-// 时间表（30fps，225f = 7.5s）
-//   0–36    站 1 Capture：相机从 1.06 倍距离缓推到位（snappy 30f）；2f 起标题逐词升起；进度线走满
-//   36–64   飞行 1→2（28f）：右移 + 世界左转 38°，途中 hop 拉远 30%
-//   64–96   站 2 Connect 停留 32f
-//   96–128  飞行 2→3（32f）：画框侧躺 90° 被转正——最长的一段，观众要看懂"世界在转"
-//   128–158 站 3 Ship 停留 30f
-//   158–190 飞行 3→总览（32f）：相机 1/2.7 拉远，三卡与品牌落版同框
-//   184–212 落版：眉题字距收拢 → 「Craft the shot.」逐词升起 → 副句淡入
-//   206–224 hold：极缓推近 1.5%，尾帧是一张完整海报
+// Timeline (30fps, 225f = 7.5s)
+//   0-36    Stop 1 Capture: camera settles smoothly (30f); title rises at 2f; progress line fills
+//   36-64   Flight 1->2 (28f): slide right + rotate 38 deg, 30% hop
+//   64-96   Stop 2 Connect: 32f hold
+//   96-128  Flight 2->3 (32f): 90 deg tilt alignment
+//   128-158 Stop 3 Ship: 30f hold
+//   158-190 Flight 3->Overview (32f): 1/2.7 camera pull-back
+//   184-212 Outro: title reveal "Craft the shot."
+//   206-224 Hold: gentle 1.5% push-in to final poster
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -33,12 +30,12 @@ export const BASIC_3D_SCENE_DURATION = 225; // 7.5s @30fps
 
 const L = LOOKS.graphite;
 const GOLD = L.accent2;
-const CW = 1240; // 卡片原生尺寸（对位时屏幕 1:1）
+const CW = 1240; // Native card dimensions (1:1 on screen at alignment)
 const CH = 700;
 const PERSP = 2600;
 
 type Pose = { x: number; y: number; z: number; rx: number; ry: number; rz: number; s: number };
-// 每站：卡片自己的 pose（相机取其逆）。站 2 世界左转 38°、站 3 画框侧躺 90°、总览 s=2.7 拉远
+// Stop poses (camera inverts these): Stop 2 yaw -38 deg, Stop 3 roll 90 deg, Overview s=2.7
 const POSES: Pose[] = [
   { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, s: 1 },
   { x: 1690, y: -260, z: -650, rx: 0, ry: -38, rz: 0, s: 1 },
@@ -51,19 +48,19 @@ const CHAPTERS = [
   { no: '03', kicker: 'Ship', title: 'Ship.', body: 'One prompt to a finished promo.' },
 ];
 
-// 飞行时刻表（帧）：[起, 止]
+// Flight schedule (frames): [start, end]
 const FLIGHTS: [number, number][] = [[36, 64], [96, 128], [158, 190]];
-const ARRIVE = [0, 64, 128, 190]; // 每站落位帧（站 0 开场即在）
+const ARRIVE = [0, 64, 128, 190]; // Landing frames for each stop
 const HOLD_END = [36, 96, 158, 225];
-const FLY_EASE = bezier(0.62, 0, 0.16, 1); // 起步稳、落位很软的不对称 in-out
-const HOP = 0.3; // 站间飞行途中额外拉远比例
+const FLY_EASE = bezier(0.62, 0, 0.16, 1); // Asymmetric in-out easing
+const HOP = 0.3; // Mid-flight hop zoom ratio
 
-// 相机姿态（帧的纯函数，可取小数帧：运动模糊子帧采样用）
+// Camera pose as pure function of frame (supports fractional frames for blur sampling)
 const camAt = (f: number) => {
   const cam: Pose = { ...POSES[0] };
-  // 开场：从 1.06 倍距离缓推到位（不是死帧起手）
+  // Intro: gentle push-in from 1.06x distance
   cam.s = mix(1.06, 1, ramp(f, 0, 30, EASE.snappy));
-  let af = 0; // 累计飞行进度（0..3，小数 = 途中）
+  let af = 0; // Cumulative flight progress (0..3)
   let hop = 0;
   FLIGHTS.forEach(([a, b], i) => {
     const u = ramp(f, a, b - a, FLY_EASE);
@@ -75,13 +72,13 @@ const camAt = (f: number) => {
     if (i < 2 && u > 0 && u < 1) hop = HOP * Math.sin(Math.PI * u);
   });
   cam.s *= 1 + hop;
-  // 停留段极缓推近 1.5%：落位后慢慢吃进去，下一段飞行起步时同曲线还原（画面活着但不晃）
+  // Gentle 1.5% push-in during holds
   let creep = 0;
   for (let i = 0; i < 3; i++) {
     creep += ramp(f, ARRIVE[i] + 4, HOLD_END[i] - ARRIVE[i], EASE.smooth) * (1 - ramp(f, FLIGHTS[i][0], 14, EASE.smooth));
   }
   cam.s *= 1 - 0.015 * creep;
-  // 总览落定后极缓推近 1.5%（hold 段活着，不晃）
+  // Gentle 1.5% push-in after overview settles
   cam.s *= 1 - 0.015 * ramp(f, 196, 29, EASE.smooth);
   return { cam, af };
 };
@@ -95,7 +92,7 @@ const hash = (n: number) => {
   const x = Math.sin(n * 91.345 + 47.853) * 43758.5453;
   return x - Math.floor(x);
 };
-// 世界里的真 3D 浮尘：位置固定在世界坐标，视差全部来自相机
+// 3D dust particles fixed in world space; parallax driven by camera motion
 const MOTES = Array.from({ length: 70 }, (_, i) => ({
   x: -2600 + hash(i * 3.1) * 6800,
   y: -2000 + hash(i * 5.7 + 1) * 4800,
@@ -104,24 +101,24 @@ const MOTES = Array.from({ length: 70 }, (_, i) => ({
   a: 0.25 + hash(i * 13.1 + 4) * 0.55,
 }));
 
-// ───────── 章节卡 ─────────
+// ───────── Chapter Cards ─────────
 const ChapterCard: React.FC<{ i: number; frame: number; focus: number }> = ({ i, frame, focus }) => {
   const c = CHAPTERS[i];
   const arrive = ARRIVE[i];
-  const reveal = arrive - (i === 0 ? -2 : 8); // 标题在落位前一拍开始升起
-  const hold = ramp(frame, arrive, HOLD_END[i] - arrive, EASE.smooth); // 进度线
+  const reveal = arrive - (i === 0 ? -2 : 8); // Title begins rising before arrival
+  const hold = ramp(frame, arrive, HOLD_END[i] - arrive, EASE.smooth); // Progress line
   const numIn = ramp(frame, reveal - 4, 26, EASE.out);
   const bodyIn = ramp(frame, reveal + 8, 18, EASE.out);
   return (
     <div style={{ position: 'absolute', inset: 0, padding: '74px 84px', boxSizing: 'border-box', fontFamily: FONT.sans }}>
-      {/* 细体大号章节数字：被卡右缘裁掉一截（编辑感），只做纹理层 */}
+      {/* Large light chapter digits: cropped by card edge as typographic texture */}
       <div style={{
         position: 'absolute', right: -36, bottom: -118, ...type(560, 200), letterSpacing: '-0.06em',
         color: 'transparent', backgroundImage: `linear-gradient(170deg, ${alpha('#ffffff', 0.16)} 10%, ${alpha('#ffffff', 0.02)} 70%)`,
         WebkitBackgroundClip: 'text', backgroundClip: 'text',
         transform: `translateY(${((1 - numIn) * 60).toFixed(1)}px)`, opacity: numIn,
       }}>{c.no}</div>
-      {/* 眉题 */}
+      {/* Eyebrow */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, ...type(26, 600, { mono: true }), letterSpacing: '0.14em', color: L.ink3, textTransform: 'uppercase' }}>
         <span style={{ color: GOLD }}>{c.no}</span>
         <span style={{ width: 44, height: 1, background: alpha(GOLD, 0.6) }} />
@@ -130,7 +127,7 @@ const ChapterCard: React.FC<{ i: number; frame: number; focus: number }> = ({ i,
           <ShotcraftMark size={32} tone="dark" />{BRAND.name}
         </span>
       </div>
-      {/* 标题：逐词从线下升起 */}
+      {/* Title: rises word by word */}
       <div style={{ marginTop: 150, ...type(156, 760), color: L.ink }}>
         <TextReveal text={c.title} by="char" variant="rise" start={reveal} each={20} gap={1.8} />
       </div>
@@ -138,7 +135,7 @@ const ChapterCard: React.FC<{ i: number; frame: number; focus: number }> = ({ i,
         marginTop: 34, maxWidth: 820, ...type(44, 420), lineHeight: 1.3, color: L.ink2, textWrap: 'balance',
         opacity: bodyIn, transform: `translateY(${((1 - bodyIn) * 18).toFixed(1)}px)`,
       }}>{c.body}</div>
-      {/* 底部：三段章节进度，当前段金色走满 */}
+      {/* Bottom: 3-stage progress with gold current stage fill */}
       <div style={{ position: 'absolute', left: 84, right: 84, bottom: 70, display: 'flex', gap: 14 }}>
         {[0, 1, 2].map((k) => (
           <div key={k} style={{ flex: 1, height: 3, borderRadius: 2, background: alpha('#ffffff', 0.1), overflow: 'hidden' }}>
@@ -154,7 +151,7 @@ const ChapterCard: React.FC<{ i: number; frame: number; focus: number }> = ({ i,
   );
 };
 
-// ───────── 总览落版（世界里挂在总览站：放大 s 倍排版，相机 1/s 看回来 = 屏幕 1:1） ─────────
+// ───────── Overview Outro (scaled 2.7x in world space, viewed at 1/2.7 = 1:1) ─────────
 const OverviewPlate: React.FC<{ frame: number }> = ({ frame }) => {
   const st = 184;
   const kick = ramp(frame, st, 22, EASE.snappy);
@@ -178,7 +175,7 @@ const OverviewPlate: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// 一个完整的世界（给定帧，可为小数帧）
+// Complete world (at given frame)
 const World: React.FC<{ f: number; frame: number }> = ({ f, frame }) => {
   const { cam, af } = camAt(f);
   const over = ramp(f, FLIGHTS[2][0], FLIGHTS[2][1] - FLIGHTS[2][0], EASE.smooth);
@@ -194,7 +191,7 @@ const World: React.FC<{ f: number; frame: number }> = ({ f, frame }) => {
       ))}
       {CHAPTERS.map((_, i) => {
         const p = POSES[i];
-        // enter/exit：按"站距"退焦变暗；总览时全部回到可读（但略压暗，给落版让主次）
+        // enter/exit: defocus based on distance from current stop
         const d = Math.min(1, Math.abs(af - i));
         const focus = Math.max(1 - d, over * 0.85);
         const lift = (1 - d) * 18;
@@ -208,13 +205,13 @@ const World: React.FC<{ f: number; frame: number }> = ({ f, frame }) => {
             opacity: 0.22 + 0.78 * focus,
             filter: focus < 0.985 ? `blur(${((1 - focus) * 7).toFixed(2)}px)` : undefined,
           }}>
-            {/* 顶沿受光线：中间亮两端隐 */}
+            {/* Top illuminated edge */}
             <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 2, background: `linear-gradient(90deg, transparent, ${alpha('#ffffff', 0.35 * (0.4 + 0.6 * focus))}, transparent)` }} />
             <ChapterCard i={i} frame={frame} focus={focus} />
           </div>
         );
       })}
-      {/* 总览落版：在总览站姿态上（放大 2.7 倍排版），只在最后一段飞行开始显影 */}
+      {/* Overview outro: reveals during final flight */}
       <div style={{ position: 'absolute', left: 0, top: 0, transform: poseTransform(POSES[3]), opacity: plateOn }}>
         <OverviewPlate frame={frame} />
       </div>
@@ -222,7 +219,7 @@ const World: React.FC<{ f: number; frame: number }> = ({ f, frame }) => {
   );
 };
 
-// 飞行段时间采样：快门 0.5 帧内 N 个子帧逐层 opacity 1/(i+1) 叠加 = 等权平均；N 按相机位移自适应
+// Time-sampled motion blur: shutter 0.5f adaptive sub-frame accumulation
 const SHUTTER = 0.5;
 const samplesAt = (f: number) => {
   const a = camAt(f).cam, b = camAt(f - SHUTTER).cam;

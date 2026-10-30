@@ -1,19 +1,19 @@
-// quad-split-parallel-scenes — Quad Split 四宫并行蒙太奇
-// 手法卡：画面硬切 2×2 四宫格，四个象限并行跑各自独立的微场景，关键节拍互相错开 3–6 帧、全程无转场，
-// 靠并行密度制造信息轰炸（格内内容可整体替换，错拍表才是配方）。
+// quad-split-parallel-scenes — Quad Split parallel montage
+// Technique: Hard cut to 2x2 quad split; four quadrants run independent micro-scenes in parallel,
+// with key beats staggered by 3–6 frames and zero transitions throughout, leveraging parallel density for information impact (inner content can be swapped; stagger schedule is the formula).
 //
-// 第二轮重设计（余烬 · 发布日的四个现场）：
-// - look = ember（暖黑 · 橙 · 琥珀点缀）。四格是 video-shotcraft 出一支宣传片时同时发生的四件事，按明度做棋盘交错：
-//   TL 奶油色 · 浏览器打开本地预览页（Launch film.）｜ TR 暖黑 · 终端 npx remotion render + 急推到「promo.mp4 ready」
-//   BL 橙色实底 · 「Prompt. Render. Ship.」三个巨大的词逐个砸下（瑞士海报）｜ BR 拿铁色 · 光标点 Approve → Publish → 上线通知弹出
-//   四格之间 8px 暖黑缝 + 20px 圆角，像一块 bento 发布板；格内字全部按 1080p 可读字号重排（≥32px，主词 132px）。
-// - 错拍表（帧，30fps）——任意相邻重事件间隔 ≥3f，从不齐动：
-//     TL  tab 6 / 11 / 16 / 21 弹入 · 0–40 地址栏打字 · 44 页面载入（大标题滑入）· 全程 inQuad 慢推 1→1.1
-//     TR  0–24 命令打字 · 27 / 33 两行输出 · 37 末行出现 + 37–47 whip 急推 1→1.85（sin 包络模糊）
-//     BL  14「Write.」· 30「Ship.」· 49「Repeat.」（overshoot 下落）
-//     BR  4–14 卡片滑入 · 14–25 光标飞向 Approve · 25 点击 · 27–33 按钮变 Approved · 38–50 飞向 Publish · 52 点击 · 56 通知弹出
-//   两处打字光标闪烁周期错开（16f vs 14f + 5 相位）。
-// - 原版 2.1s 无收尾，这一轮加到 90f：0–62 并行轰炸，62–90 四格都落在终态海报上 hold（只剩光标闪烁与慢推）。
+// Redesign (Ember — four live launch day scenes):
+// - look = ember (warm black, orange, amber accents). Four quadrants show four events happening simultaneously during a video-shotcraft promo release, arranged in checkerboard brightness:
+//   TL Cream: browser opens local preview (Launch film.) | TR Warm black: terminal running npx remotion render + whip-zoom to "promo.mp4 ready"
+//   BL Solid orange: "Prompt. Render. Ship." three massive words slamming down (Swiss poster) | BR Latte: cursor clicks Approve -> Publish -> live notification pops up
+//   8px warm black gap + 20px corner radius between panels like a bento launch board; typography resized for 1080p legibility (>=32px, main word 132px).
+// - Stagger schedule (frames at 30fps) — any adjacent major events separated by >=3f, never simultaneous:
+//     TL  tabs pop in at 6 / 11 / 16 / 21; 0–40 address bar typing; 44 page load (headline slides in); continuous inQuad slow push 1->1.1
+//     TR  0–24 command typing; 27 / 33 two output lines; 37 final line appears + 37–47 whip zoom 1->1.85 (sin envelope blur)
+//     BL  14 "Write."; 30 "Ship."; 49 "Repeat." (overshoot drop)
+//     BR  4–14 card slides in; 14–25 cursor moves to Approve; 25 click; 27–33 button becomes Approved; 38–50 moves to Publish; 52 click; 56 toast pops up
+//   Cursor blink periods are desynchronized (16f vs 14f + 5 phase).
+// - Extended to 90f: 0–62 parallel bombardment, 62–90 all four panels settle on final poster hold (cursor blink and slow push only).
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, mix, ramp } from '../../_fixtures/Polish';
@@ -28,7 +28,7 @@ const LATTE = '#e9d7c4';
 const ORANGE = L.accent;
 const DARK = '#160d09';
 
-// 四格几何：外边距 = 缝宽 8px
+// Quad geometry: outer margin = gap width 8px
 const G = 8;
 const QW = (1920 - 3 * G) / 2; // 948
 const QH = (1080 - 3 * G) / 2; // 528
@@ -42,18 +42,18 @@ const QUADS = [
 const blink = (f: number, period: number, phase = 0) => (Math.floor((f + phase) / (period / 2)) % 2 === 0 ? 1 : 0);
 const typed = (s: string, f: number, a: number, b: number) => s.slice(0, Math.floor(ramp(f, a, b - a, EASE.linear) * s.length));
 
-// 四格通用：角标（纹理级小字，不必读）
+// Quad common: corner label (texture-level micro text)
 const Corner: React.FC<{ n: string; label: string; color: string }> = ({ n, label, color }) => (
   <div style={{ position: 'absolute', left: 34, top: 28, ...type(20, 700, { caps: true }), letterSpacing: '0.2em', color, opacity: 0.7 }}>
     {n} — {label}
   </div>
 );
 
-// ───────────── TL：浏览器打开本地预览页（不编域名：localhost 预览）─────────────
+// ───────────── TL: Browser opening local preview (localhost preview) ─────────────
 const URL = 'localhost:3000/promo';
 const TABS = ['Recipes', 'Gallery', 'Docs', 'Promo'];
 const QuadTL: React.FC<{ f: number }> = ({ f }) => {
-  const push = mix(1, 1.1, Math.pow(Math.min(1, f / 90), 2)); // inQuad 慢推：底噪运动
+  const push = mix(1, 1.1, Math.pow(Math.min(1, f / 90), 2)); // inQuad slow push: ambient motion
   const load = ramp(f, 44, 14, EASE.snappy);
   return (
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 90% 90% at 30% 20%, #fffaf3 0%, ${CREAM} 55%, #efe2d3 100%)` }}>
@@ -62,7 +62,7 @@ const QuadTL: React.FC<{ f: number }> = ({ f }) => {
         border: '1px solid rgba(60,30,10,0.10)', boxShadow: `inset 0 1px 0 #fff, 0 2px 4px rgba(60,30,10,0.08), 0 30px 60px -24px rgba(60,30,10,0.35)`,
         transform: `scale(${push})`, transformOrigin: '50% 90%',
       }}>
-        {/* 标签栏 */}
+        {/* Tab bar */}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 58, padding: '0 18px', background: '#f3e9de' }}>
           <div style={{ display: 'flex', gap: 8, alignSelf: 'center', marginRight: 10 }}>
             {['#ff6a52', '#ffbd3d', '#5fcf6a'].map((c) => <i key={c} style={{ width: 13, height: 13, borderRadius: 7, background: c }} />)}
@@ -80,13 +80,13 @@ const QuadTL: React.FC<{ f: number }> = ({ f }) => {
             );
           })}
         </div>
-        {/* 地址栏 */}
+        {/* Address bar */}
         <div style={{ margin: '16px 22px', height: 62, borderRadius: 31, background: '#f6eee5', display: 'flex', alignItems: 'center', padding: '0 24px', gap: 14 }}>
           <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#a08c7a" strokeWidth={2.2}><rect x={5} y={10} width={14} height={10} rx={2} /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
           <span style={{ ...type(34, 550), color: DARK }}>{typed(URL, f, 0, 40)}</span>
           <span style={{ width: 3, height: 36, background: ORANGE, opacity: f < 44 ? blink(f, 16) : 0, marginLeft: -10 }} />
         </div>
-        {/* 页面：44f 载入，大标题从下滑入 */}
+        {/* Page: loads at 44f, headline slides in from below */}
         <div style={{ position: 'absolute', left: 44, top: 168, right: 44 }}>
           <div style={{ height: 6, borderRadius: 3, background: ORANGE, width: `${load * 100}%`, opacity: 1 - ramp(f, 56, 6, EASE.linear), marginBottom: 20 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: load }}>
@@ -104,13 +104,13 @@ const QuadTL: React.FC<{ f: number }> = ({ f }) => {
   );
 };
 
-// ───────────── TR：终端渲染 + whip 急推 ─────────────
+// ───────────── TR: Terminal render + whip zoom ─────────────
 const CMD = 'npx remotion render';
 const QuadTR: React.FC<{ f: number }> = ({ f }) => {
   const zip = ramp(f, 37, 10, EASE.smooth);
   const zoom = mix(1, 1.85, zip);
   const blur = 5 * Math.sin(Math.PI * zip);
-  const old = 1 - 0.92 * zip; // 急推时前几行退成背景
+  const old = 1 - 0.92 * zip; // Early lines fade to background during whip zoom
   const line = (at: number) => ramp(f, at, 5, EASE.out);
   const mono = (s: number, w = 500): React.CSSProperties => ({ ...type(s, w, { mono: true }), whiteSpace: 'pre' });
   return (
@@ -138,7 +138,7 @@ const QuadTR: React.FC<{ f: number }> = ({ f }) => {
   );
 };
 
-// ───────────── BL：三词砸下 ─────────────
+// ───────────── BL: Three words slamming down ─────────────
 const WORDS: Array<[string, number]> = [['Prompt.', 14], ['Render.', 30], ['Ship.', 49]];
 const QuadBL: React.FC<{ f: number }> = ({ f }) => (
   <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(150deg, #ff8340 0%, ${ORANGE} 45%, #e8541c 100%)` }}>
@@ -160,8 +160,8 @@ const QuadBL: React.FC<{ f: number }> = ({ f }) => (
   </div>
 );
 
-// ───────────── BR：审批 → 发布 → 上线通知 ─────────────
-// 光标锚点（格内坐标，tip）
+// ───────────── BR: Approval -> Publish -> Live notification ─────────────
+// Cursor anchors (quad coordinates, tip)
 const P_START: [number, number] = [860, 470];
 const P_APPROVE: [number, number] = [270, 318];
 const P_PUBLISH: [number, number] = [560, 318];
@@ -180,7 +180,7 @@ const QuadBR: React.FC<{ f: number }> = ({ f }) => {
   const toast = ramp(f, 56, 10, EASE.overshoot);
   return (
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 90% 90% at 70% 20%, #f4e6d6 0%, ${LATTE} 60%, #dcc5ae 100%)` }}>
-      {/* 发布审批卡 */}
+      {/* Release approval card */}
       <div style={{
         position: 'absolute', left: 120, top: 120, width: 620, padding: '30px 34px', borderRadius: 22, background: '#fffaf4',
         border: '1px solid rgba(60,30,10,0.10)', boxShadow: '0 2px 4px rgba(60,30,10,0.08), 0 26px 50px -22px rgba(60,30,10,0.4)',
@@ -208,7 +208,7 @@ const QuadBR: React.FC<{ f: number }> = ({ f }) => {
           }}>{published ? 'Published' : 'Publish'}</div>
         </div>
       </div>
-      {/* 上线通知：链尾重音 */}
+      {/* Live notification: closing accent */}
       {toast > 0 && (
         <div style={{
           position: 'absolute', right: 56, bottom: 44, padding: '20px 26px', borderRadius: 18, background: DARK, display: 'flex', alignItems: 'center', gap: 16,
@@ -218,7 +218,7 @@ const QuadBR: React.FC<{ f: number }> = ({ f }) => {
           <span style={{ ...type(32, 650), color: CREAM }}>Live · <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Math.round(3214 * ramp(f, 56, 30, EASE.snappy)).toLocaleString('en-US')}</span> views</span>
         </div>
       )}
-      {/* 光标 */}
+      {/* Cursor */}
       {f >= 10 && f < 76 && (
         <svg width={34} height={46} viewBox="-1 -1 18 26" style={{
           position: 'absolute', left: p[0], top: p[1], overflow: 'visible', opacity: ramp(f, 10, 4, EASE.out) * (1 - ramp(f, 68, 8, EASE.exit)),

@@ -1,19 +1,19 @@
-// logo-sting-button —— 收尾按钮镜头（button ending）
-// 上一镜收黑 → 黑场 → LOGO 入场定住（观众以为结束）→ 12f UI 特写彩蛋硬切 →
-// 硬切回黑底 LOGO 定格。节奏是全部：彩蛋段短促像眨眼。收尾真静止 ≥40f。
+// logo-sting-button — Button ending outro sequence
+// Previous shot fades to black -> black hold -> LOGO enters and holds (viewer assumes end) -> 12f UI closeup easter egg jump cut ->
+// jump cuts back to black LOGO lockup freeze. Rhythm is everything: easter egg beat is blink-and-you-miss-it. True static hold >= 40f.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard } from '../../_fixtures/Fixtures';
 
-// 时间轴（30fps，共 142f）
+// Timeline (30fps, 142f total)
 const T = {
-  shotAEnd: 24,     // 0–24f 上一镜（B），f14–24 压暗到纯黑
+  shotAEnd: 24,     // 0–24f Previous shot (B), f14–24 darkens to black
   darkenStart: 14,
-  blackEnd: 30,     // 24–30f 黑场 6f
-  logoInEnd: 40,    // 30–40f LOGO 入场 10f
-  holdEnd: 70,      // 40–70f 定住 30f（观众以为结束）
-  eggEnd: 82,       // 70–82f 彩蛋硬切 12f
-  total: 142,       // 82–142f 黑底 LOGO 真静止 60f
+  blackEnd: 30,     // 24–30f Black hold 6f
+  logoInEnd: 40,    // 30–40f LOGO entrance 10f
+  holdEnd: 70,      // 40–70f Hold 30f (viewer assumes end)
+  eggEnd: 82,       // 70–82f Easter egg jump cut 12f
+  total: 142,       // 82–142f Black LOGO true static hold 60f
 };
 
 const LogoLockup: React.FC<{ opacity: number; scale: number }> = ({ opacity, scale }) => (
@@ -29,7 +29,7 @@ const LogoLockup: React.FC<{ opacity: number; scale: number }> = ({ opacity, sca
         width: 120, height: 120, borderRadius: 28, background: '#fff',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {/* 方块内一个黑色小标记，避免纯白块太空 */}
+        {/* Small black mark inside square to avoid empty white box */}
         <div style={{ width: 44, height: 44, borderRadius: 12, background: '#000' }} />
       </div>
       <div style={{
@@ -45,7 +45,7 @@ const LogoLockup: React.FC<{ opacity: number; scale: number }> = ({ opacity, sca
 export const LogoStingButton: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // —— 段 1：上一镜（FakeDashboard B）压暗收黑 ——
+  // —— Phase 1: Previous shot (FakeDashboard B) darkens to black ——
   if (frame < T.shotAEnd) {
     const dark = interpolate(frame, [T.darkenStart, T.shotAEnd - 1], [0, 1], {
       extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
@@ -59,23 +59,23 @@ export const LogoStingButton: React.FC = () => {
     );
   }
 
-  // —— 段 2：黑场 6f ——
+  // —— Phase 2: Black hold 6f ——
   if (frame < T.blackEnd) {
     return <div style={{ width: 1920, height: 1080, background: '#000' }} />;
   }
 
-  // —— 段 4：彩蛋硬切 12f（variant A 按钮区 2.4x 裁切 + 角落小圆点 tick 闪 2f）——
+  // —— Phase 4: Easter egg jump cut 12f (variant A button region 2.4x crop + corner tick dot flashes 2f) ——
   if (frame >= T.holdEnd && frame < T.eggEnd) {
     const egg = frame - T.holdEnd; // 0..11
-    // tick 圆点：第 4–5f 亮 2f，像眨眼
+    // Tick dot: lights for 2f at frame 4–5, like a blink
     const tickOn = egg >= 4 && egg < 6;
     return (
       <div style={{ width: 1920, height: 1080, background: '#ececea', position: 'relative', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', inset: 0,
-          // 2.4x 放大：把第 1 张卡片底部"按钮行"（头像圆+文字条）平移到画面中心
-          // 原坐标 (839, 531)（第 2 列卡片底部头像圆+文字条）→ 屏幕中心 (960, 540)
-          // 选中列卡片可把左侧深色 sidebar 完全推出画面，特写更纯粹
+          // 2.4x zoom: translate first card bottom "button row" (avatar circle + text bar) to screen center
+          // Original coords (839, 531) (col 2 card bottom avatar + text) -> screen center (960, 540)
+          // Cropping col 2 card pushes dark sidebar completely off-screen for a cleaner closeup
           transform: 'translate(-1054px, -734px) scale(2.4)', transformOrigin: '0 0',
         }}>
           <FakeDashboard variant="A" />
@@ -93,7 +93,7 @@ export const LogoStingButton: React.FC = () => {
     );
   }
 
-  // —— 段 3 + 段 5：黑底 LOGO（入场 → 定住 → 彩蛋后定格收尾，真静止）——
+  // —— Phase 3 + Phase 5: Black LOGO (entrance -> hold -> post-egg freeze ending, true static hold) ——
   const opacity = interpolate(frame, [T.blackEnd, T.logoInEnd], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.out(Easing.cubic),

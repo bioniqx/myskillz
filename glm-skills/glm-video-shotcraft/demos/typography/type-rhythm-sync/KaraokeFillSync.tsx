@@ -1,13 +1,13 @@
-// 卡拉OK填色随读（karaoke-fill-sync）——旁白读到哪个词，哪个词就从左到右被填亮。
-// 两行居中标语 "FRAME MOTION / CRAFT SHOTS"（video-shotcraft 短句 Frame motion. Craft the shot. 的四词版），
-// 每个词双层同文本叠放：底层低透明墨色未读字，
-// 上层用 mask 按词内进度线性揭开（逐词独立叠层，揭开百分比即词内进度，无需量测词宽；
-// 揭开前沿是 ±4% 的柔边而不是硬切口）。正在读的词填强调色，读完 10f 内退成主墨色——
-// 强调色只属于"此刻"。词级时间表模拟语速：FRAME 20–38、MOTION 42–75（长词慢读）、
-// CRAFT 85–103、SHOTS 107–130，词间停顿（换气）。
-// 读指：正在填的词底下 8px 强调色圆角下划线，右缘跟随填充前沿；读完从左往右收掉（6f），不留线。
-// 底部一条旁白波形作静音预览的参照：词内起伏、换气处回落，已播部分着色。
-// 0–19f hold；130–149f 真静止（最后的退色 / 收线在 f140 前完成）。
+// Karaoke fill sync (karaoke-fill-sync) — as voiceover reads each word, it fills from left to right with highlight color.
+// Two centered tagline lines "FRAME MOTION / CRAFT SHOTS" (four-word version of the video-shotcraft phrase "Frame motion. Craft the shot."),
+// each word stacked with dual identical text layers: bottom layer is low-opacity ink for unread text,
+// top layer is revealed linearly via mask based on word progress (per-word independent stacking; reveal percentage equals word progress without measuring text width;
+// reveal leading edge is a +/-4% soft feather rather than a hard cut). Currently spoken word fills with accent color, fading to primary ink within 10f once read —
+// accent color strictly belongs to "the present moment". Word-level schedule mimics speech pacing: FRAME 20-38, MOTION 42-75 (longer word read slower),
+// CRAFT 85-103, SHOTS 107-130, with breath pauses between words.
+// Reading indicator: 8px rounded accent underline beneath current word, right edge tracking fill progress; retracts left-to-right (6f) once read, leaving no line behind.
+// Bottom voiceover waveform acts as a silent reference: rises during speech, drops on breath pauses, colored for played portion.
+// 0-19f hold; 130-149f true freeze (final color fade / line retraction finishes before f140).
 import React from 'react';
 import { useCurrentFrame, interpolate } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -29,7 +29,7 @@ const LINES: Word[][] = [
 ];
 const ALL = LINES.flat();
 const SIZE = 150;
-const FEATHER = 4; // 揭开前沿柔边（%）
+const FEATHER = 4; // Reveal leading edge feather (%)
 const ACC = [91, 99, 211]; // G.accent
 const INK = [23, 24, 28]; // G.ink1
 
@@ -37,23 +37,23 @@ const rgbMix = (a: number[], b: number[], k: number) =>
   `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',')})`;
 
 const KaraokeWord: React.FC<{ word: Word; frame: number }> = ({ word, frame }) => {
-  // 词内 linear 填充进度，clamp 保证读完保持（跟语速，不加缓动）
+  // Linear fill progress within word; clamp maintains state after completion (follows speech rate without easing)
   const p = interpolate(frame, [word.start, word.end], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  const edge = p * (100 + FEATHER * 2) - FEATHER; // 柔边中心（%），p=0/1 时完全藏 / 完全露
+  const edge = p * (100 + FEATHER * 2) - FEATHER; // Feather center (%), fully hidden at p=0 and fully revealed at p=1
   const mask = `linear-gradient(90deg, #000 ${(edge - FEATHER).toFixed(2)}%, transparent ${(edge + FEATHER).toFixed(2)}%)`;
-  const settle = ramp(frame, word.end, 10, EASE.out); // 读完退成主墨色
+  const settle = ramp(frame, word.end, 10, EASE.out); // Settles to primary ink color after reading
   const fillColor = rgbMix(ACC, INK, settle);
-  // 读指：读中跟随前沿，读完 6f 从左往右收掉
+  // Reading indicator: tracks leading edge while reading, retracts left-to-right over 6f when done
   const retract = ramp(frame, word.end, 6, EASE.swift);
   const showLine = frame >= word.start && retract < 1;
   return (
     <span style={{ position: 'relative', display: 'inline-block' }}>
-      {/* 底层：低透明墨色未读字 */}
+      {/* Bottom layer: low-opacity ink for unread text */}
       <span style={{ color: 'rgba(23,24,28,0.13)' }}>{word.text}</span>
-      {/* 上层：按进度从左到右柔边揭开 */}
+      {/* Top layer: soft-feather reveal from left to right tracking progress */}
       {p > 0 && (
         <span style={{
           position: 'absolute', inset: 0, color: fillColor,
@@ -62,7 +62,7 @@ const KaraokeWord: React.FC<{ word: Word; frame: number }> = ({ word, frame }) =
           {word.text}
         </span>
       )}
-      {/* 读指下划线：右缘跟随填充前沿，读完从左收 */}
+      {/* Reading indicator underline: right edge follows fill progress, retracts from left when finished */}
       {showLine && (
         <span style={{
           position: 'absolute', bottom: -6, height: 8, borderRadius: 4,
@@ -75,7 +75,7 @@ const KaraokeWord: React.FC<{ word: Word; frame: number }> = ({ word, frame }) =
   );
 };
 
-// 旁白波形：48 根竖条，按"此刻是否在读词"给包络，确定性哈希给起伏
+// Voiceover waveform: 48 vertical bars, enveloped by whether a word is currently being spoken, undulating via deterministic hash
 const BARS = 48;
 const WAVE_W = 560;
 const WAVE_T0 = 14;
@@ -101,7 +101,7 @@ export const KaraokeFillSync: React.FC = () => {
     <div style={{ width: 1920, height: 1080, position: 'relative', overflow: 'hidden', fontFamily: FONT.sans }}>
       <Backdrop tone="light" light={{ x: 0.5, y: 0.22 }} accent="#5b63d3" />
 
-      {/* 标语：两行居中 */}
+      {/* Tagline: two lines centered */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: 0, bottom: 60,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -116,14 +116,14 @@ export const KaraokeFillSync: React.FC = () => {
         ))}
       </div>
 
-      {/* 旁白波形：已播部分强调色，未播部分淡墨 */}
+      {/* Voiceover waveform: accent color for played portion, faint ink for unplayed portion */}
       <div style={{
         position: 'absolute', left: 960 - WAVE_W / 2, top: 860, width: WAVE_W, height: 56,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         {Array.from({ length: BARS }, (_, i) => {
           const u = i / (BARS - 1);
-          const at = WAVE_T0 + u * (WAVE_T1 - WAVE_T0); // 这根条对应的旁白时刻
+          const at = WAVE_T0 + u * (WAVE_T1 - WAVE_T0); // Timestamp corresponding to this bar
           const env = speechAt(at);
           const amp = 0.12 + env * (0.35 + 0.65 * h(i * 3 + 1));
           const played = u <= playhead;

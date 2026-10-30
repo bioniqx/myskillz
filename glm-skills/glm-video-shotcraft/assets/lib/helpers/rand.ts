@@ -1,4 +1,4 @@
-// origin: 模板片源仓库 helpers
+// origin: template source helpers
 /** Deterministic PRNG — same seed always yields the same sequence. */
 export const mulberry32 = (seed: number) => {
   let a = seed | 0;

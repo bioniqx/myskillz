@@ -1,24 +1,24 @@
-// 落点冲击套件（impact-burst-kit）——主卡从镜头前砸进页面里的空槽位，落点帧同帧起爆
-// 冲击环 + 碎屑迸发 + 震屏；冲击波前沿扫到左右邻卡的那一帧（按半径-距离反解 = 落点后 3f），
-// 早已驻场的邻卡被可见地向外推开、再阻尼弹回——"这一下震到了邻居"。
+// impact-burst-kit — hero card slams into empty slot from camera foreground; impact detonation on arrival frame:
+// shockwave ring + debris burst + screen shake; shockwave front reaches neighboring cards 3f post-impact,
+// visibly shoving neighboring cards outward before damped rebound — tactile physical impulse transmitted to neighbors.
 //
-// 第二轮重设计（瓷白规格页 · Launch film 砸入）：
-// - look = porcelain（冷白 · 钴蓝）。页面是 video-shotcraft 的成片规格区：眉题标志 + 标题「One prompt to a finished promo.」，
-//   三张 470×600 规格卡——Teaser / Walkthrough 两张白卡开场就在，中间是一个虚线空槽；主角 Launch film 卡是深墨蓝底
-//   （全片唯一的暗面 = 视觉重心），112px 时长、钴蓝 CTA，落定后头顶弹出「DIRECTOR'S CUT」签。
-// - 节奏「悬 — 砸 — 震 — 传 — 落」：0–16f 主卡悬在槽位上方的镜头前（scale 1.55→1.6、上提 20px、景深虚化，
-//   槽位里的接触影随高度变实）→ 16–22f 六帧 ease-in 加速砸落 → 22f 落点帧：卡片压扁 3f 再弹簧回正 +
-//   钴蓝冲击环（白色压力盘打底，扩散 out-cubic / 消散线性解耦）+ 18 片碎屑 + 8px 震屏 4f →
-//   25f 环前沿过邻卡中心：邻卡外推 34px + 旋转 ±3.5°，包络 cos(t/2)·e^(−t/8)，40f 硬钳 0，推开那一下给水平拖影。
-// - 落定后 28f「DIRECTOR'S CUT」签弹簧弹出，邻卡 ~65f 归位，此后整版真静止（只留极缓推镜）。
+// Redesign (porcelain specs page: Launch film slam):
+// - look = porcelain (cool white, cobalt blue). Page is video-shotcraft specs layout: kicker logo + headline "One prompt to a finished promo.",
+//   three 470x600 spec cards — Teaser / Walkthrough white cards present from start around dashed center slot; hero Launch film card is deep midnight blue
+//   (sole dark surface = visual anchor), 112px runtime, cobalt CTA; "DIRECTOR'S CUT" badge pops out on settle.
+// - Rhythm (anticipate -> slam -> shock -> transmit -> settle): 0-16f hero card hovers above slot (scale 1.55->1.6, +20px lift, blur,
+//   contact shadow hardens) -> 16-22f 6-frame ease-in slam -> 22f impact frame: card squashes for 3f then springs back +
+//   cobalt shockwave ring (white pressure disc base) + 18 debris particles + 8px screen shake for 4f ->
+//   25f wave front reaches neighbors: outward displacement 34px + rotation +/-3.5 deg, clamped at 40f with motion blur.
+// - Settle: 28f "DIRECTOR'S CUT" badge springs out, neighbors settle by ~65f, followed by complete static hold.
 //
-// 时间表（30fps，共 140f）：
-//   0–16    邻卡驻场 ≥15f；主卡悬停蓄力（上提 + 放大 + 虚化），空槽可见
-//   16–22   砸落（主动作 6f，ease-in）
-//   22–38   落点：压扁回弹、冲击环 16f、碎屑 22f、震屏 4f
-//   25–65   邻卡被波及：外推 → 阻尼弹回 → 硬钳归零
-//   28–40   DIRECTOR'S CUT 签弹出
-//   65–140  hold（75f）
+// Timeline (30fps, total 140f):
+//   0-16    Neighbors present; hero card hovers anticipating, slot visible
+//   16-22   Slam descent (6f ease-in)
+//   22-38   Impact: squash & rebound, 16f shockwave, 22f debris, 4f shake
+//   25-65   Neighbor card reaction: push outward -> damped rebound -> settle
+//   28-40   DIRECTOR'S CUT badge pops out
+//   65-140  Hold (75f)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, bezier, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -38,7 +38,7 @@ const CX = 960;
 const CY = Y + CH / 2; // 600
 const IMPACT = 22;
 const DROP0 = 16;
-// 冲击环半径 100→1100（16f out-cubic）。前沿到邻卡中心距 514px：(514−100)/1000=0.414 → p≈0.163 → 2.6f → 取 +3f
+// Shockwave radius 100->1100 (16f out-cubic). Wavefront reaches neighbor center (+3f post-impact)
 const HIT = IMPACT + 3;
 const EASE_IN_CUBIC = bezier(0.55, 0.055, 0.675, 0.19);
 
@@ -47,7 +47,7 @@ const rnd = (n: number) => {
   return x - Math.floor(x);
 };
 
-// 碎屑：钴蓝碎片 + 白纸屑，上半球为主
+// Debris: cobalt fragments + white paper motes
 const BITS = Array.from({ length: 18 }, (_, i) => ({
   ang: -Math.PI / 2 + (rnd(i + 1) - 0.5) * Math.PI * 1.75,
   dist: 260 + rnd(i + 40) * 300,
@@ -57,7 +57,7 @@ const BITS = Array.from({ length: 18 }, (_, i) => ({
   ratio: 0.35 + rnd(i + 9) * 0.5,
 }));
 
-// 邻卡被推开的阻尼包络：t=0 瞬时到 1，余弦衰减，40f 后钳 0 保证真静止
+// Damped impulse envelope on neighbors: clamped to 0 after 40f
 const pushEnv = (f: number) => {
   const t = f - HIT;
   if (t < 0 || t >= 40) return 0;
@@ -72,7 +72,7 @@ const Check: React.FC<{ c: string }> = ({ c }) => (
 );
 
 type Plan = { name: string; price: string; unit: string; blurb: string; feats: string[]; cta: string; hero?: boolean };
-// video-shotcraft 的三种成片规格：大数字是片长（演示值），主角是 Launch film
+// Three video formats: hero is Launch film
 const PLANS: Plan[] = [
   { name: 'Teaser', price: '15s', unit: '9:16 social', blurb: 'For a social drop.', feats: ['Crash-zoom open', 'Beat-synced cuts', 'Logo sting'], cta: 'Cut a teaser' },
   { name: 'Launch film', price: '60s', unit: '16:9 · 1080p', blurb: 'Your product, in motion.', feats: ['Real page captures', '2.5D camera moves', 'Film-grade SFX'], cta: 'Render launch film', hero: true },
@@ -116,7 +116,7 @@ const PlanCard: React.FC<{ p: Plan }> = ({ p }) => {
 export const ImpactBurstKit: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ── 主卡（Launch film）：0–16 悬停蓄力 → 16–22 加速砸落 → 22 起压扁回弹
+  // --- Hero card (Launch film): 0-16 hover -> 16-22 slam -> 22+ squash & rebound ---
   const wind = ramp(frame, 0, DROP0, EASE.smooth);
   const drop = ramp(frame, DROP0, IMPACT - DROP0, EASE_IN_CUBIC);
   const hoverScale = 1.55 + 0.05 * wind;
@@ -130,7 +130,7 @@ export const ImpactBurstKit: React.FC = () => {
   const sy = mScale * (1 - 0.085 * squash);
   const mOp = ramp(frame, 0, 5, EASE.out);
 
-  // ── 冲击环 + 压力盘
+  // --- Shockwave ring + pressure disc ---
   const ringP = ramp(frame, IMPACT, 16, EASE.snappy);
   const ringLin = ramp(frame, IMPACT, 16, EASE.linear);
   const ringOn = frame >= IMPACT && frame < IMPACT + 16;
@@ -138,18 +138,18 @@ export const ImpactBurstKit: React.FC = () => {
   const ringOp = mix(0.95, 0, ringLin);
   const ringW = mix(10, 1.5, ringP);
 
-  // ── 碎屑 22f
+  // --- Debris 22f ---
   const pT = ramp(frame, IMPACT, 22, EASE.out);
   const pLin = ramp(frame, IMPACT, 22, EASE.linear);
   const pOn = frame >= IMPACT && frame < IMPACT + 22;
 
-  // ── 邻卡波及
+  // --- Neighbor reaction ---
   const env = pushEnv(frame);
   const pushX = 34 * env;
   const pushRot = 3.5 * env;
   const pushV = 34 * (pushEnv(frame + 0.5) - pushEnv(frame - 0.5));
 
-  // ── 震屏 4f，8px 衰减
+  // --- Screen shake 4f, 8px decay ---
   let shakeX = 0;
   let shakeY = 0;
   if (frame >= IMPACT && frame < IMPACT + 4) {
@@ -166,7 +166,7 @@ export const ImpactBurstKit: React.FC = () => {
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.12 }} fill={{ x: 0.5, y: 1.0 }} />
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX.toFixed(2)}px, ${shakeY.toFixed(2)}px) scale(${push.toFixed(5)})` }}>
-        {/* 页面标题区：本来就在 */}
+        {/* Page title area: present from start */} 
         <div style={{ position: 'absolute', left: X0, top: 104, fontFamily: FONT.sans, color: L.ink }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, font: `700 24px ${FONT.mono}`, letterSpacing: '0.06em', color: L.accent }}>
             <ShotcraftMark size={34} tone="light" />
@@ -176,7 +176,7 @@ export const ImpactBurstKit: React.FC = () => {
           <div style={{ marginTop: 14, font: `780 76px ${FONT.sans}`, letterSpacing: '-0.045em', lineHeight: 1 }}>One prompt to a finished promo.</div>
         </div>
 
-        {/* 中间空槽：虚线槽位 + 随下落变实的接触影 */}
+        {/* Center empty slot: dashed border + contact shadow */} 
         <div style={{ position: 'absolute', left: X0 + CW + GAP, top: Y, width: CW, height: CH, borderRadius: 30, border: `2px dashed ${alpha(L.accent, 0.3)}`, background: alpha(L.accent, 0.035), opacity: 1 - ramp(frame, IMPACT, 3, EASE.out) }} />
         <div style={{
           position: 'absolute', left: X0 + CW + GAP - 30, top: Y + CH - 60, width: CW + 60, height: 120, borderRadius: '50%',
@@ -184,7 +184,7 @@ export const ImpactBurstKit: React.FC = () => {
           opacity: frame < IMPACT ? mix(0.25, 1, drop) : 1 - ramp(frame, IMPACT, 4, EASE.out), transform: `scale(${mix(1.5, 1, drop).toFixed(3)})`,
         }} />
 
-        {/* 左右邻卡：被冲击波推开再弹回 */}
+        {/* Left/right neighbors pushed outward by shockwave */} 
         {[0, 2].map((k) => {
           const dir = k === 0 ? -1 : 1;
           return (
@@ -199,7 +199,7 @@ export const ImpactBurstKit: React.FC = () => {
           );
         })}
 
-        {/* 压力盘：落点一瞬的白色气浪（打底，让钴蓝环在亮底上读得出来） */}
+        {/* Pressure disc: white shock puff grounding the cobalt ring */} 
         {ringOn && (
           <div style={{
             position: 'absolute', left: CX - ringR * 0.9, top: CY - ringR * 0.9, width: ringR * 1.8, height: ringR * 1.8, borderRadius: '50%',
@@ -207,7 +207,7 @@ export const ImpactBurstKit: React.FC = () => {
           }} />
         )}
 
-        {/* 主卡 Launch film */}
+        {/* Hero card Launch film */} 
         <div style={{
           position: 'absolute', left: X0 + CW + GAP, top: Y + mDy, width: CW, height: CH, borderRadius: 30, opacity: mOp,
           background: `linear-gradient(170deg, #1a2550 0%, ${NAVY} 55%, #0a1026 100%)`,
@@ -215,12 +215,12 @@ export const ImpactBurstKit: React.FC = () => {
           transform: `scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`, transformOrigin: '50% 100%',
           filter: dof > 0.4 ? `blur(${dof.toFixed(2)}px)` : undefined,
         }}>
-          {/* 顶部钴蓝辉光 */}
+          {/* Top cobalt glow */} 
           <div style={{ position: 'absolute', inset: 0, borderRadius: 30, overflow: 'hidden' }}>
             <div style={{ position: 'absolute', left: -80, right: -80, top: -260, height: 420, background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha(L.accent, 0.45)} 0%, ${alpha(L.accent, 0)} 70%)` }} />
           </div>
           <PlanCard p={PLANS[1]} />
-          {/* DIRECTOR'S CUT 签：落定后弹出，骑在卡顶缘 */}
+          {/* DIRECTOR'S CUT badge popping up on top edge */} 
           <div style={{ position: 'absolute', left: 0, right: 0, top: -24, display: 'flex', justifyContent: 'center' }}>
             <div style={{
               height: 48, padding: '0 22px', borderRadius: 24, background: L.accent, color: '#ffffff', display: 'flex', alignItems: 'center',
@@ -232,7 +232,7 @@ export const ImpactBurstKit: React.FC = () => {
           </div>
         </div>
 
-        {/* 碎屑（卡上方）：沿飞行方向按速度拉长 */}
+        {/* Debris: elongated along flight vector */} 
         {pOn && BITS.map((b, i) => {
           const sp = Math.pow(1 - pT, 2 / 3);
           const px = CX + Math.cos(b.ang) * (140 + b.dist * pT);
@@ -250,7 +250,7 @@ export const ImpactBurstKit: React.FC = () => {
           );
         })}
 
-        {/* 冲击环：钴蓝细环 + 柔辉，越扩越细 */}
+        {/* Shockwave: cobalt ring + soft glow */} 
         {ringOn && (
           <div style={{
             position: 'absolute', left: CX - ringR, top: CY - ringR, width: ringR * 2, height: ringR * 2, borderRadius: '50%', boxSizing: 'border-box', opacity: ringOp,

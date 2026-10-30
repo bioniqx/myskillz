@@ -1,22 +1,22 @@
-// command-palette-summon —— 命令面板降临
-// FakeDashboard 静置 → 整屏压暗+blur → ⌘K 面板从中心上方 20px 带 overshoot 弹落
-// → 5 条候选行错峰浮现 → 模拟输入 2 字母（灰块当字符）候选 5→3→2 收窄
-// → 高亮首条。f=110 后全静止（40f）。光标 f<104 闪烁、之后常亮。
+// command-palette-summon — Command palette descent
+// FakeDashboard rests → full screen dims + blurs → ⌘K palette drops from 20px above center with overshoot
+// → 5 candidate rows stagger in → simulated input of 2 letters (gray blocks as chars) narrows candidates 5→3→2
+// → highlights first item. Fully static after f=110 (40f). Cursor blinks when f<104, then stays solid.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, FakeDashboard } from '../../_fixtures/Fixtures';
 
 const CL = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 
-// 时间轴
-const DIM0 = 12; // 压暗开始（前 12f 初始静置）
+// Timeline
+const DIM0 = 12; // Dimming starts (first 12f initial rest)
 const DIM1 = 22;
-const PANEL_IN = 18; // 面板开始弹落
-const ROWS_START = 32; // 候选行开始错峰浮现
-const KEY1 = 62; // 第一个字母
-const KEY2 = 78; // 第二个字母
-const HL = 94; // 高亮首条
-const BLINK_END = 104; // 光标停止闪烁（常亮）
+const PANEL_IN = 18; // Palette begins drop
+const ROWS_START = 32; // Candidate rows begin staggered entrance
+const KEY1 = 62; // First letter
+const KEY2 = 78; // Second letter
+const HL = 94; // Highlight first item
+const BLINK_END = 104; // Cursor stops blinking (stays solid)
 
 const PANEL_W = 780;
 const PANEL_X = (1920 - PANEL_W) / 2;
@@ -25,7 +25,7 @@ const ROW_H = 72;
 const ROW_GAP = 8;
 const EXIT_DUR = 10;
 
-// exitAt: 0=留到最后，1=第一次按键后退出，2=第二次按键后退出
+// exitAt: 0=retained until end, 1=exits after first keystroke, 2=exits after second keystroke
 const ROWS = [
   { titleW: 52, exitAt: 0 },
   { titleW: 38, exitAt: 0 },
@@ -39,7 +39,7 @@ const PaletteRow: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const inStart = ROWS_START + i * 4;
   const exitStart = exitAt === 1 ? KEY1 + 3 : exitAt === 2 ? KEY2 + 3 : null;
 
-  if (exitStart !== null && frame >= exitStart + EXIT_DUR) return null; // 条件卸载，非 opacity 0
+  if (exitStart !== null && frame >= exitStart + EXIT_DUR) return null; // Conditional unmount, not opacity 0
 
   const inOp = interpolate(frame, [inStart, inStart + 8], [0, 1], CL);
   const inY = interpolate(frame, [inStart, inStart + 8], [12, 0], {
@@ -54,7 +54,7 @@ const PaletteRow: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
           ...CL,
         });
 
-  // 高亮首条
+  // Highlight first item
   const hl = i === 0 ? interpolate(frame, [HL, HL + 10], [0, 1], CL) : 0;
 
   return (
@@ -90,11 +90,11 @@ const PaletteRow: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
 export const CommandPaletteSummon: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 背景压暗 + blur
+  // Background dim + blur
   const dim = interpolate(frame, [DIM0, DIM1], [0, 0.45], CL);
   const blur = interpolate(frame, [DIM0, DIM1], [0, 10], CL);
 
-  // 面板弹落：上方 20px → 过冲 +8px → 落回 0
+  // Palette drop: 20px above → overshoot +8px → settle to 0
   const panelY =
     frame < PANEL_IN + 9
       ? interpolate(frame, [PANEL_IN, PANEL_IN + 9], [-20, 8], {
@@ -107,9 +107,9 @@ export const CommandPaletteSummon: React.FC = () => {
         });
   const panelOp = interpolate(frame, [PANEL_IN, PANEL_IN + 7], [0, 1], CL);
 
-  // 模拟输入：已敲字符数
+  // Simulated typing: typed character count
   const typed = (frame >= KEY1 ? 1 : 0) + (frame >= KEY2 ? 1 : 0);
-  // 光标闪烁（周期 16f），BLINK_END 后常亮保证收尾静止
+  // Cursor blink (16f period), stays solid after BLINK_END to guarantee final stillness
   const cursorOn = frame >= BLINK_END ? true : (frame - PANEL_IN) % 16 < 8;
 
   return (
@@ -136,7 +136,7 @@ export const CommandPaletteSummon: React.FC = () => {
             boxSizing: 'border-box',
           }}
         >
-          {/* 输入框 */}
+          {/* Input field */}
           <div
             style={{
               height: 76,
@@ -149,18 +149,18 @@ export const CommandPaletteSummon: React.FC = () => {
             }}
           >
             <div style={{ width: 32, height: 32, borderRadius: 8, background: G.bar }} />
-            {/* 已敲入的字符灰块 */}
+            {/* Typed character gray blocks */}
             {Array.from({ length: typed }).map((_, c) => (
               <div key={c} style={{ width: 28, height: 38, borderRadius: 6, background: '#4a4a48' }} />
             ))}
-            {/* 光标 */}
+            {/* Cursor */}
             {cursorOn && <div style={{ width: 4, height: 42, background: G.ink, borderRadius: 2 }} />}
-            {/* 占位提示条：敲第一个字母时卸载 */}
+            {/* Placeholder hint bar: unmounted on first letter typed */}
             {typed === 0 && (
               <div style={{ width: 260, height: 14, borderRadius: 7, background: G.line, opacity: 0.8 }} />
             )}
           </div>
-          {/* 候选行 */}
+          {/* Candidate rows */}
           <div style={{ paddingTop: 14 }}>
             {ROWS.map((_, i) => (
               <PaletteRow key={i} i={i} frame={frame} />

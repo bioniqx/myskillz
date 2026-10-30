@@ -1,64 +1,45 @@
 ---
 name: value-stagger-gradient
-一句话: 16 根柱入场时 delay 是时间错峰，同时高度/色相/位移/模糊四个属性各自铺成从首到末的数值梯度；第二拍把错峰原点换成中心，脉冲幅度以中心为最大重新铺开
-适用: 技法演示与参数化能力的展示镜头；也可直接当数据/频谱/均衡器类界面的入场
-时长: 约 5.0s（150f@30fps）
-能量: 中高（第一拍是连续铺开，第二拍中心脉冲是明确的一次峰值）
+summary: Sixteen bars rise in a staggered sweep where height, hue, travel distance and blur are each spread as a gradient across the row, then a second beat re-origins the stagger at the center so the pulse amplitude fans out symmetrically.
+use: Demonstrating craft and parametric motion capabilities; directly applicable as entrances for data grids, audio visualizers, or equalizer interfaces.
+duration: ~5.0s (150f @ 30fps)
+energy: Medium-High (Beat one is a continuous rollout; beat two's center pulse is an explicit sharp peak)
 ---
 
-## 意图
-stagger 通常只被用来错开时间。这张卡要说的是它还能错开**值**——同一个索引既决定
-"什么时候动"，也决定"动到多少"。两拍是一组对照实验：第一拍原点在首位（梯度从左到
-右单调铺开），第二拍原点换到中心（梯度以中轴对称铺开）。观众看到的不是两个动画，
-而是同一个配方换了一个参数。屏幕上的代码字幕同步换成对应的 stagger 调用，明说这件事。
+## Intention
+Stagger is typically used merely to offset time. This card demonstrates that stagger can also offset **values**—a single index dictates both "when it moves" and "how much it moves." The two beats form a controlled experiment: beat one originates at the first index (gradient unfolds monotonically left-to-right), while beat two relocates origin to the center (gradient unfolds symmetrically across the central axis). Viewers perceive not two disparate animations, but a single recipe with an adjusted parameter. Code captions on screen update synchronously to reflect the corresponding stagger invocation, rendering the concept explicit.
 
-## 动效核心
-- 核心工具是一个 8 行的 `staggerVal(i, n, a, b, ease)`：把索引归一化成 `k = i/(n-1)`
-  再 `lerp(k, a, b)`——等价 anime.js 的 `stagger([a, b])` 值模式，可选 ease 让梯度非线性
-- 静态梯度（写在 setup 里，一次算完）：色相 `staggerVal(i,N,200,320)`、
-  最大高度 `staggerVal(i,N,92,32)`——16 根柱天生是一道从蓝到紫、从高到矮的斜坡
-- 动态梯度（每帧用）：位移量 `staggerVal(i,N,46,14)`、模糊量 `staggerVal(i,N,8,2)`
-  ——首位柱要走 46px、糊 8px，末位只走 14px、糊 2px。**同一次入场里每根柱的行程都不同**
-- 第一拍时间错峰：`d = i*0.02`，`e = seg(t, 0.06+d, 0.28+d, E.outCubic)`——从首位起，
-  16 根摊在 0.3 的窗上；`opacity = e`、`filter = blur((1-e)*b0)`、
-  `translateY((1-e)*y0)` + 高度 `hMax*e`（底部锚定按 height 生长，圆角不被 scaleY 压扁），三者都被同一个 e 驱动
-- 第二拍换原点：`distC = |i - 7.5| / 7.5` 是到中心的归一化距离，
-  `w = seg(t, 0.56 + distC*0.13, +0.18)`——中心柱先动，波向两端扩，这就是 `from:'center'`
-- 第二拍的幅度也是梯度：`amp = lerp(1-distC, 0.06, 0.42)`，中心柱脉冲 42%、末端只有 6%；
-  `pulse = sin(w*π)` 是纯脉冲，同时叠进高度 `hMax*e*(1+pulse*amp)` 与
-  `brightness(1+pulse*0.55)`
-- 代码字幕是一条语法着色的代码条，在 t≈0.52 用约 5f 上下交叉换句（旧句上移淡出、新句自下替入），从 `scale: stagger([1, 0.35])  hue: stagger([200, 320])`
-  换成 `pulse: stagger([.06, .42], { from: 'center' })`——正好卡在两拍之间
+## Motion Core
+- Core helper is an 8-line `staggerVal(i, n, a, b, ease)`: normalizes index to `k = i/(n-1)` then executes `lerp(k, a, b)`—equivalent to anime.js `stagger([a, b])` value mode, with optional ease curves for non-linear gradients.
+- Static gradients (evaluated once in setup): hue `staggerVal(i,N,200,320)`, maximum height `staggerVal(i,N,92,32)`—16 bars naturally form an incline stepping from blue to purple and tall to short.
+- Dynamic gradients (evaluated per frame): displacement `staggerVal(i,N,46,14)`, blur `staggerVal(i,N,8,2)`—first bar travels 46px with 8px blur, while final bar travels only 14px with 2px blur. **Every bar has distinct travel within the same entrance.**
+- Beat one time stagger: `d = i*0.02`, `e = seg(t, 0.06+d, 0.28+d, E.outCubic)`—from index 0, 16 bars distribute across a 0.3 window; `opacity = e`, `filter = blur((1-e)*b0)`, `translateY((1-e)*y0)` + height `hMax*e` (bottom-anchored height growth prevents scaleY squashing rounded corners); all three driven by the same e.
+- Beat two origin shift: `distC = |i - 7.5| / 7.5` is normalized distance to center, `w = seg(t, 0.56 + distC*0.13, +0.18)`—center bar initiates first, wave propagates toward outer edges, representing `from:'center'`.
+- Beat two amplitude gradient: `amp = lerp(1-distC, 0.06, 0.42)`, center bar pulses 42% while edge bars pulse only 6%; `pulse = sin(w*π)` is a transient pulse, layering into height `hMax*e*(1+pulse*amp)` and `brightness(1+pulse*0.55)`.
+- Syntax-highlighted code snippet swaps phrases vertically across ~5f at t≈0.52 (old phrase drifts up and fades, new phrase ascends from below), switching from `scale: stagger([1, 0.35])  hue: stagger([200, 320])` to `pulse: stagger([.06, .42], { from: 'center' })`—landing precisely between the two beats.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 柱数 | N=16（`left: 8+i*5.4%`，宽 3.4%） | 16 根让梯度有足够分档；<8 根梯度读作"每根都不一样"而非一道斜坡，>24 根柱间距要重算 |
-| 时间错峰 | `d = i*0.02`（≈3f/根，总 0.3） | 3f 是连绵的铺开；>0.05 会变成逐根点名，梯度的"整体感"丢失 |
-| 单柱行程 | 窗 0.22（≈33f，outCubic） | 行程是总错峰的 0.73 倍 → 大部分时间十来根同时在动；行程 < 错峰总量时变成一根接一根 |
-| 高度梯度 | `stagger([92, 32])`px | 首末 2.9 倍差是明确斜坡；比值 <1.5 读不出梯度，>4 末端柱矮到看不见 |
-| 色相梯度 | `stagger([200, 320])` | 120° 跨度（蓝→紫）；跨度 <40° 时色相白给，>200° 会绕回红色让斜坡读作环形 |
-| 位移/模糊梯度 | `stagger([46,14])`px / `stagger([8,2])`px | 这两条是本卡的"值 stagger"主证据——把它们改成常量，动效立刻退化成普通的 stagger 入场 |
-| 第二拍原点 | `from:'center'`，`distC*0.13` | 0.13 是从中心到端点的传播延迟（≈4f）；归零则整排同时脉冲，`from` 参数就没有意义了 |
-| 脉冲幅度梯度 | `lerp(1-distC, 0.06, 0.42)` | 中心 42% / 端点 6% 是 7 倍差，波形明显；两端也给大幅度会读作整排一起鼓，中心原点看不出 |
-| 亮度脉冲 | `brightness(1 + pulse*0.55)` | 55% 提亮让脉冲在暗底上可读；这一项没做梯度（全柱同幅），是有意的——太多梯度叠一起观众读不清哪个是主角 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Bar count | N=16 (`left: 8+i*5.4%`, width 3.4%) | 16 bars provides sufficient gradient granularity; <8 bars feels like "different values" rather than a slope, >24 bars requires recalculating spacing |
+| Time stagger | `d = i*0.02` (≈3f / bar, 0.3 total) | 3f creates fluid cascade; >0.05 turns into sequential roll call, eroding cohesive gradient |
+| Single-bar travel | Window 0.22 (≈33f, outCubic) | Duration is 0.73x total stagger → ~10 bars moving concurrently for most of beat; duration < stagger total isolates individual bars |
+| Height gradient | `stagger([92, 32])`px | 2.9x difference between ends forms distinct slope; <1.5x loses gradient perception, >4x makes tail bars invisible |
+| Hue gradient | `stagger([200, 320])` | 120° span (blue→purple); <40° span lacks impact, >200° wraps around red, making slope feel circular |
+| Displacement / Blur gradient | `stagger([46,14])`px / `stagger([8,2])`px | Core evidence of "value stagger"—setting these to constants reduces motion to standard stagger entrance |
+| Beat two origin | `from:'center'`, `distC*0.13` | 0.13 is propagation delay from center to edges (≈4f); zero pulses all bars at once, rendering `from` parameter meaningless |
+| Pulse amplitude gradient | `lerp(1-distC, 0.06, 0.42)` | Center 42% / edges 6% is a 7x ratio, producing distinct wave shape; boosting edges makes whole row swell together, obscuring center origin |
+| Brightness pulse | `brightness(1 + pulse*0.55)` | 55% boost ensures readability on dark grounds; uniform across bars intentionally—stacking too many simultaneous gradients overwhelms focal clarity |
 
-## 已知坑
-- 第一拍与第二拍首尾相接：末柱入场结束于 `0.28+15*0.02 = 0.58`，而中心柱的脉冲在 0.56
-  就起。加柱数或加大时间错峰会让入场吃进脉冲段，两拍糊成一件事——加柱必须把 0.56 后推
-- 端点柱的第二拍窗口是 `0.69→0.87`，之后到 t=1 有约 0.13（20f）的完全静止。这是给
-  观众看清"终态梯度"的时间，不是空白
-- `distC` 的分母 `C=(N-1)/2` 在 N=1 时会除零；`staggerVal` 里已用 `n<=1 ? 0` 兜住，
-  但 `distC` 没有——柱数改成 1 会 NaN
-- 柱位 `left: 8+i*5.4%` 与宽 `3.4%` 是为 N=16 手配的（末柱右缘 8+15*5.4+3.4 = 92.4%）。
-  改柱数必须重算这两个百分比，否则柱会溢出或挤在左半边
-- 字幕是 anime.js 的 API 调用字符串，本质是**技法说明**而不是内容。用在真实成片里
-  要么换成有语义的标题，要么去掉——否则观众读到的是代码
-- 底部的 16 个小圆点（`bottom:17%`，opacity .35）是静态装饰，不参与任何动画；它们的
-  `left` 偏移 `+1.2%` 是与柱宽 3.4% 手对的居中量，改柱宽要一起改
-- 深底（`#0a0b10`）+ 高饱和柱（85%/66%）+ 12px 光晕是一套；浅色主题下光晕与
-  brightness 脉冲都失效，需要改用 saturate 或阴影表达脉冲
+## Known Pitfalls
+- Beat one and beat two meet end-to-end: last bar entrance ends at `0.28+15*0.02 = 0.58`, while center bar pulse begins at 0.56. Adding bars or increasing stagger encroaches into pulse phase, muddying the two beats—adding bars requires delaying 0.56.
+- Edge bars beat two window is `0.69→0.87`, leaving ~0.13 (20f) of complete stillness before t=1. This provides reading time for viewers to observe the final state gradient, not dead space.
+- Denominator `C=(N-1)/2` in `distC` divides by zero when N=1; `staggerVal` guards via `n<=1 ? 0`, but `distC` does not—setting N=1 yields NaN.
+- Bar layout `left: 8+i*5.4%` and width `3.4%` are tailored for N=16 (right edge of bar 16: 8+15*5.4+3.4 = 92.4%). Changing N requires recalculating percentages to prevent overflow or left clustering.
+- Subtitle is an anime.js API string, serving as **craft demonstration** rather than content. For production promos, replace with meaningful headlines or remove—otherwise audiences read raw code.
+- Bottom 16 indicator dots (`bottom:17%`, opacity 0.35) are static decorations and do not animate; `left` offset `+1.2%` centers with 3.4% bar width; modify alongside bar widths.
+- Dark backdrop (`#0a0b10`) + high-saturation bars (85%/66%) + 12px glow operate as a unified system; on light themes glow and brightness pulses vanish, requiring saturation or shadows instead.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/value-stagger-gradient/
-（ValueStaggerGradient.tsx）
+(ValueStaggerGradient.tsx)

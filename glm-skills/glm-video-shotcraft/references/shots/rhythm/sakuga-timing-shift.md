@@ -1,56 +1,40 @@
 ---
 name: sakuga-timing-shift
-一句话: 一拍三转一拍一——元素先以每 3 帧一步的手翻书顿挫移动，高潮瞬间切成逐帧丝滑冲刺，帧率量化的突变本身就是看点
-适用: 单元素的强调性位移（卡片入场、指标冲线）；需要"手工感→高潮爆发"反差的段落
-时长: 150f（5s）
-能量: 中高
-标签: ui-entrance
+summary: Movement begins in stepped, held drawings and suddenly switches to frame-by-frame acceleration at the climax.
+use: Emphatic displacement of single elements (card entries, metrics crossing finish lines); sequences requiring contrast between "handcrafted stutter" and "explosive climax"
+duration: 150f (5s)
+energy: Medium-high
+tags: ui-entrance
 ---
 
-## 意图
-库内时间轴操纵已有 speed-ramp-freeze 的定格解冻与 hit-counter 的局部顿帧。
-本卡是另一种——**改的不是速度是帧率本身**：
-顿挫段驱动帧 q=floor(f/3)*3，元素每 3 帧才动一步（10fps 手翻书），
-切换帧起改用原始 f 逐帧驱动，丝滑冲刺。一拍三的钝与一拍一的滑
-同屏对切，日式作画的拍数演出（shooting on 3s / on 1s）。顿挫段
-不是低级感是手工感，切换点即高潮标记。
+## Intention
+The library's timeline manipulation already includes speed-ramp-freeze's freeze-unfreeze and hit-counter's local hit-stops. This card represents a different axis—**altering frame rate rather than velocity**:
+The stuttered phase uses quantized driving frames `q = floor(f/3) * 3`, moving only once every 3 frames (10fps flipbook animation); at the transition frame, it switches instantly to raw frame `f` continuous motion for a silky sprint. The blunt cadence of shooting on 3s cuts against the fluidity of shooting on 1s on the same screen, channeling the timing direction of Japanese sakuga animation. The stuttered phase does not convey poor quality but handcrafted craft, and the switch point marks the climax.
 
-## 动效核心
-- 顿挫段：q = Math.floor(f/3)*3 当驱动帧，位置线性 X 140→1180，
-  16 张原画、每步 ≈69px；姿势随 q 冻结：sin(q) rotate ±5° + 挤压/拉伸交替
-  （0.97/1.035）+ 一高一低小跳（−18/−2px），一步一个样
-- f48 切换：两帧「冲击帧」（画面反相成墨底 + 以卡片为焦点的集中线）当高潮标记，
-  之后改原始 f 连续驱动，Easing.out(poly(4)) 高初速冲刺折返中央 + 过冲 40px
-  + 6f 回弹，落地 scaleX 0.92 / scaleY 1.07 挤压
-- 冲刺段运动拉伸由位置差分速度驱动（scaleX 峰值 ≈1.3 / scaleY 0.9），
-  身后 9 条横向锥形墨色速度线、长度 ∝ 速度，**条件挂载**——速度低即摘除
-- 换拍标注三处同步：角标 "ON 3s / 3コマ打ち"→"ON 1s / 1コマ打ち"（pop 1.25×，
-  手绘下划线每 4 帧重描一次沸腾、f=108 后冻结）；底部「摄影表」一拍三只在每 3 格写原画号、
-  中间格画竖线（= 沿用上一张），一拍一格格有号——观众直接看见每秒画几张
-- 画面：paper look 作画纸（定位孔、淡蓝铅笔安全框/十字），主体是 5px 墨线 + 硬边
-  赛璐珞投影的 video-shotcraft 产品卡（30fps · every frame, crafted）；f74 后 hold 段 2% 极缓推进
+## Motion Core
+- Stuttered phase: `q = Math.floor(f / 3) * 3` acts as driving frame, linearly translating X 140->1180 across 16 key poses, ≈69px per step; pose freezes with `q`: `sin(q)` rotation ±5 deg + alternating squash/stretch (0.97/1.035) + alternating high/low hops (−18/−2px), varying each step.
+- Frame 48 switch: two "impact frames" (screen inverted to dark ink + focus lines converging on the card) act as climax markers, switching immediately to continuous raw `f` driving with `Easing.out(poly(4))` high-initial-velocity sprint snapping to center + 40px overshoot + 6f rebound, landing with scaleX 0.92 / scaleY 1.07 compression.
+- Sprint motion stretch is driven by velocity differentials (peak scaleX ≈ 1.3 / scaleY 0.9), trailing 9 horizontal tapered ink speed lines whose lengths scale proportionally with velocity; **conditionally mounted**—unmounted as velocity drops.
+- Timing shift callouts sync across three points: corner badge toggles "ON 3s / shooting on 3s" -> "ON 1s / shooting on 1s" (pops 1.25x, hand-drawn boiling underline redraws every 4 frames, freezing at f=108); bottom dope sheet marks drawing numbers only every 3 cells during shooting on 3s with vertical continuation lines, while shooting on 1s numbers every single frame—making the frame rate visible to the audience.
+- Canvas: paper-look animation paper (peg holes, pale blue pencil safety frame and crosshairs), hero element is a video-shotcraft product card drawn with 5px ink lines + hard-edged cel shading ("30fps · every frame, crafted"); rests on 2% subtle push-in hold after f74.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 拍数 | 顿挫段 floor(f/3)（一拍三） | /2 顿感不足、/4 以上读作播放器卡死 |
-| 每步位移 | ≈69px（总程 1040 ÷ 15 步倒推） | <30px 读作卡顿掉帧不是顿挫——命门 |
-| 步间姿势 | sin(q) rotate ±5° + 挤压/拉伸交替 + 一高一低小跳 | 无姿势变化的纯位移顿挫像 bug 不像手翻书 |
-| 切换帧 | f48（顿挫:冲刺 ≈ 3:2） | 切换必须一帧完成，任何补间都毁掉"换拍"感 |
-| 冲刺缓动 | Easing.out(poly(4)) + 过冲 40px + 6f 回弹 | 初速要猛，与顿挫段拉满反差 |
-| 收尾 | 落位后 hold 70f（只留 2% 极缓推进），角标沸腾 f108 冻结 | 沸腾残留毁真静止（feTurbulence 摘罩判例同族） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Timing | Stuttered phase floor(f/3) (shooting on 3s) | /2 lacks stutter character; /4+ reads like video player stutter |
+| Step displacement | ≈69px (1040 total travel / 15 steps) | <30px reads as dropped frames rather than intentional stutter—critical core |
+| Inter-step pose | sin(q) rotate ±5 deg + squash/stretch + high/low hops | Pure displacement stutter without pose changes looks like a bug rather than a flipbook |
+| Switch frame | f48 (stutter:sprint ratio ≈ 3:2) | Switch must execute in a single frame; any tweening destroys the "timing shift" perception |
+| Sprint easing | Easing.out(poly(4)) + 40px overshoot + 6f rebound | Initial velocity must be fierce to maximize contrast with the stuttered phase |
+| Finale | 70f hold after settling (preserving 2% subtle push), badge boiling freezes at f108 | Lingering boil ruins true resting rest (akin to feTurbulence unmasking precedent) |
 
-## 已知坑
-- demo 用手搓作画纸 + 赛璐珞卡调校——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 冲击帧是全画面级冲击（R4 计数），一个镜头只给切换点这一次，且只给 2f
-- 同一镜头单一时间操纵者判例：与 speed-ramp-freeze / hit-counter 顿帧
-  互斥，一个镜头只能有一个人动时间轴
-- 顿挫段每步位移 ≥30px 才读得出"顿"——微步顿挫读作渲染掉帧，
-  这是本卡命门；步幅不够就缩短总时长换大步幅
-- 切换点必须有标注（角标 "ON 3s"→"ON 1s"、摄影表格子或一声打点，
-  sound-design §4.5）——无标注观众只觉得"变快了"，读不出"换拍"
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Impact frames represent full-canvas visual hits (R4 tally); allocate strictly once per shot at the transition point, capped at 2f.
+- Single timeline manipulator precedent: mutually exclusive with speed-ramp-freeze / hit-counter hit stops; only one manipulator may alter the timeline in a single shot.
+- Stuttered steps must displace >=30px per step to read as intentional—micro-stutters look like render drops; if travel distance is insufficient, shorten total duration to widen step displacements.
+- The shift point must feature annotations (badge "ON 3s" -> "ON 1s", dope sheet cells, or an audio hit per sound-design §4.5)—without cues, viewers merely feel it "got faster" rather than recognizing a shift in timing.
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/sakuga-timing-shift/
-（SakugaTimingShift.tsx）
+(SakugaTimingShift.tsx)

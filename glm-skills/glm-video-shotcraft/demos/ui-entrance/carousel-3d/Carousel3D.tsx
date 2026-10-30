@@ -1,18 +1,18 @@
-// carousel-3d — 8 张卡排成圆环整环自转一圈：每卡只绕 Y 公转、自身 billboard 朝外，正反两层同向贴图 +
-// backface-visibility:hidden 保证任何时刻都正立不倒置；相机全程钉在浅俯角，首尾帧无缝 loop。
+// carousel-3d — 8 cards arranged into a ring rotating one full revolution: each card revolves around Y, billboarded outward, front/back identical faces +
+// backface-visibility:hidden ensuring upright orientation at all times; camera pinned at a shallow down-angle, seamless loop from start to end frame.
 //
-// 第二轮重设计（酸柠 · 镜头配方画廊；品牌轮：原「训练计划」换成 video-shotcraft 的镜头配方卡）：
-// - look = lime（石墨暗场 + 荧光黄绿）。卡片放大到 340×460 原生像素、环半径 700px，整环占画宽约 70%；
-//   卡面是为镜头设计的"镜头配方卡"：mono 编号、生成式图形（剖面 / 闪切柱 / 声波 / 圆环…）、
-//   64px 大数字、30px 名称——转到正前方的那张被点亮（荧光描边 + 图形转荧光色 + 底光），其余保持石墨灰。
-// - 节奏：不再是死匀速。转角 = 50% 匀速底 + 50% 分步（每 21f 一步 = 8f 停靠 + 13f smooth 换位），
-//   整环永远在走（loop 稳态）但每 45° 有一次"推一把—停靠"的呼吸，正前方的卡在停靠时被读清；
-//   8 步 × 21f = 168f 正好一圈，首尾帧逐像素可接。
-// - 环下方大字幕随步进滚动换字（编号 + 72px 名称），相机固定不动（画廊而不是过山车）。
-// - 空气透视：按方位角给卡面叠深色（最后方 70%）+ 地面反光盘 + 渐隐倒影环，环真正"落地"。
+// Round 2 redesign (Lime · Shot Recipe Gallery; Brand pivot: previous "Training Plan" replaced with video-shotcraft shot recipe cards):
+// - look = lime (graphite dark stage + fluorescent yellow-green). Cards enlarged to 340x460 native pixels, ring radius 700px, ring spans ~70% frame width;
+//   Card face is a purpose-designed "shot recipe card": mono index, generative graphics (profile / strobe bars / sound wave / rings...),
+//   64px large numeral, 30px label — the card rotated to center-front is spotlighted (fluorescent stroke + graphics turn fluorescent + ground glow), others remain graphite gray.
+// - Rhythm: No longer static constant speed. Rotation angle = 50% constant baseline + 50% stepped (21f per step = 8f dwell + 13f smooth transition),
+//   ring continuously moves (steady loop) but with a "push-dwell" breathing cycle every 45°, letting center-front card be read during dwell;
+//   8 steps x 21f = 168f completes one revolution, pixel-perfect loop from last to first frame.
+// - Subtitles below ring scroll to change text with each step (index + 72px label), camera fixed (gallery rather than roller coaster).
+// - Aerial perspective: Dark overlay proportional to azimuth (backmost 70%) + floor reflection disc + fading reflection ring, grounding the carousel.
 //
-// 时间表（30fps，共 168f，可无缝循环）：
-//   每 21f 一拍：0–8 停靠（正前方卡点亮、字幕定格）→ 8–21 换位（smooth，字幕上滚换字）；共 8 拍 = 360°
+// Timeline (30fps, 168f total, seamlessly loopable):
+//   One beat per 21f: 0–8 dwell (front card spotlights, subtitle freezes) → 8–21 transition (smooth, subtitle rolls up); 8 beats total = 360°
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix } from '../../_fixtures/Polish';
@@ -26,9 +26,9 @@ const N = 8;
 const RADIUS = 700;
 const CW = 340;
 const CH = 460;
-const RING_Y = 470; // 环中心高度
-const FLOOR = CH / 2 + 10; // 卡脚下的地面（相对环中心）
-const BEAT = 21; // 每步帧数 = 停靠 + 换位
+const RING_Y = 470; // Ring center height
+const FLOOR = CH / 2 + 10; // Floor level below cards (relative to ring center)
+const BEAT = 21; // Frames per step = dwell + transition
 const DWELL = 8;
 
 type Kind = 'climb' | 'intervals' | 'pulse' | 'rings' | 'splits' | 'bars' | 'mobility' | 'race';
@@ -54,7 +54,7 @@ const mixHex = (a: string, b: string, t: number) => {
   return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * q)).join(',')})`;
 };
 
-// 转角（0→1 圈）：50% 匀速 + 50% 分步（停靠 DWELL 帧 + smooth 换位）；f=168 恰为 1 圈
+// Rotation angle (0→1 rev): 50% constant speed + 50% stepped (dwell DWELL frames + smooth transition); f=168 completes exactly 1 rev
 const stepPart = (f: number) => {
   const k = Math.floor(f / BEAT);
   const local = f - k * BEAT;
@@ -65,12 +65,12 @@ const turnAt = (f: number) => 0.5 * (f / (N * BEAT)) + 0.5 * stepPart(f);
 export const Carousel3D: React.FC = () => {
   const f = useCurrentFrame();
   const spin = turnAt(f) * 360;
-  // 每张卡的世界方位角（0 = 正前方）
+  // World azimuth of each card (0 = center front)
   const azimuth = (i: number) => ((((i * 360) / N - spin) % 360) + 540) % 360 - 180;
   const depthOf = (i: number) => (1 - Math.cos((azimuth(i) * Math.PI) / 180)) / 2;
   const hlOf = (i: number) => EASE.smooth(clamp01(1 - Math.abs(azimuth(i)) / 26));
 
-  // 字幕：停靠时定格当前卡，换位时上滚到下一张
+  // Subtitles: freezes current card during dwell, rolls up to next card during transition
   const k = Math.floor(f / BEAT);
   const roll = EASE.smooth(clamp01((f - k * BEAT - DWELL) / (BEAT - DWELL)));
 
@@ -85,7 +85,7 @@ export const Carousel3D: React.FC = () => {
       boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.1)}`,
       ...(reflect
         ? {
-            // 透明度只能挂在叶子层：挂在 preserve-3d 容器上会把整环拍平
+            // Opacity must attach to leaf layer: attaching to preserve-3d container flattens the ring
             opacity: 0.08,
             WebkitMaskImage: 'linear-gradient(180deg, rgba(0,0,0,0) 62%, rgba(0,0,0,0.85) 100%)',
             maskImage: 'linear-gradient(180deg, rgba(0,0,0,0) 62%, rgba(0,0,0,0.85) 100%)',
@@ -95,15 +95,15 @@ export const Carousel3D: React.FC = () => {
     const body = (
       <>
         <Face i={i} hl={hl} />
-        {/* 空气透视：越靠后越暗（只叠一层带色相的深色，不改几何） */}
+        {/* Aerial perspective: darker toward rear (tinted dark overlay, geometry unchanged) */}
         <div style={{ position: 'absolute', inset: 0, background: L.bg[2], opacity: (0.7 * d).toFixed(3) }} />
       </>
     );
     return (
       <div key={i} style={{
         position: 'absolute', left: -CW / 2, top: -CH / 2, width: CW, height: CH, transformStyle: 'preserve-3d',
-        // 卡只做环上定位（绕 Y 公转 + 沿法向推出半径），永不绕 X/Z——永远正立
-        // 转到正前方的卡沿法向多推出 44px（只平移不旋转），停靠时读作"被选中"
+        // Cards only positioned on ring (orbit around Y + push radius along normal), never rotate on X/Z — always upright
+        // Card reaching front pushes out 44px extra along normal (translation only), visually read as "selected" during dwell
         transform: `rotateY(${(i * 360) / N}deg) translateZ(${(RADIUS + 44 * hlOf(i)).toFixed(2)}px)`,
       }}>
         <div style={face}>{body}</div>
@@ -116,19 +116,19 @@ export const Carousel3D: React.FC = () => {
     <AbsoluteFill style={{ background: L.bg[2] }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.16 }} fill={{ x: 0.5, y: 1.0 }} intensity={0.5} />
 
-      {/* 正前方卡脚下的荧光底光（固定在画面上，不随环转） */}
+      {/* Fluorescent ground glow beneath center-front card (fixed to frame, does not rotate) */}
       <div style={{
         position: 'absolute', left: 960 - 520, top: RING_Y + 120, width: 1040, height: 420, borderRadius: '50%',
         background: `radial-gradient(ellipse at 50% 40%, ${alpha(L.accent, 0.16)} 0%, ${alpha(L.accent, 0)} 65%)`,
       }} />
 
-      {/* 3D 场景：perspective 2200px；相机固定浅俯角 */}
+      {/* 3D scene: perspective 2200px; camera fixed at shallow down-angle */}
       <div style={{ position: 'absolute', inset: 0, perspective: '2200px', perspectiveOrigin: `50% ${RING_Y - 60}px` }}>
         <div style={{
           position: 'absolute', left: 960, top: RING_Y, width: 0, height: 0, transformStyle: 'preserve-3d',
           transform: `translateZ(${-RADIUS}px) rotateX(-9deg)`,
         }}>
-          {/* 地面反光盘 + 刻度环 */}
+          {/* Floor reflection disc + radial tick ring */}
           <div style={{
             position: 'absolute', left: -RADIUS * 1.35, top: FLOOR - RADIUS * 1.35, width: RADIUS * 2.7, height: RADIUS * 2.7, borderRadius: '50%',
             transform: 'rotateX(90deg)',
@@ -144,18 +144,18 @@ export const Carousel3D: React.FC = () => {
                 stroke={t % 12 === 0 ? alpha(L.accent, 0.5) : alpha('#ffffff', 0.12)} strokeWidth={t % 12 === 0 ? 3 : 2} />;
             })}
           </svg>
-          {/* 倒影环：以地面为镜面翻转 */}
+          {/* Reflection ring: inverted mirroring ground plane */}
           <div style={{ position: 'absolute', transformStyle: 'preserve-3d', transform: `translateY(${FLOOR * 2}px) scaleY(-1) rotateY(${-spin}deg)` }}>
             {Array.from({ length: N }, (_, i) => renderCard(i, true))}
           </div>
-          {/* 圆环载体：唯一的逐帧变量 */}
+          {/* Ring carrier: sole per-frame variable */}
           <div style={{ position: 'absolute', transformStyle: 'preserve-3d', transform: `rotateY(${-spin}deg)` }}>
             {Array.from({ length: N }, (_, i) => renderCard(i, false))}
           </div>
         </div>
       </div>
 
-      {/* 字幕：编号 + 名称，随步进上滚换字（裁切窗） */}
+      {/* Subtitle: index + name, rolls up to switch text per step (clipped window) */}
       <div style={{ position: 'absolute', left: 0, right: 0, top: 862, height: 120, overflow: 'hidden' }}>
         {[0, 1].map((j) => {
           const c = (k + j) % N;
@@ -172,7 +172,7 @@ export const Carousel3D: React.FC = () => {
         })}
       </div>
 
-      {/* 画框装饰 */}
+      {/* Frame decorations */}
       <div style={{ position: 'absolute', left: 120, top: 96, display: 'flex', alignItems: 'center', gap: 14 }}>
         <ShotcraftMark size={30} tone="dark" />
         <div style={{ fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.1em', color: L.ink2 }}>{`${BRAND.name} · shot recipes`}</div>
@@ -184,13 +184,13 @@ export const Carousel3D: React.FC = () => {
   );
 };
 
-// ───────────── 卡面（340×460） ─────────────
+// ───────────── Card Face (340x460) ─────────────
 const Face: React.FC<{ i: number; hl: number }> = ({ i, hl }) => {
   const c = CARDS[i];
-  const g = mixHex('#6b7262', L.accent, hl); // 图形主色：石墨灰 → 荧光
+  const g = mixHex('#6b7262', L.accent, hl); // Graphic primary color: graphite gray → fluorescent
   return (
     <div style={{ position: 'absolute', inset: 0, padding: 30 }}>
-      {/* 卡顶受光 */}
+      {/* Top edge lighting */}
       <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 55% at 30% 0%, ${alpha('#ffffff', 0.07)} 0%, transparent 60%)` }} />
       <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', fontFamily: FONT.mono, fontSize: 17, letterSpacing: '0.14em', color: L.ink3 }}>
         <span>{`SHOT ${String(i + 1).padStart(2, '0')}`}</span>
@@ -235,7 +235,7 @@ const Graphic: React.FC<{ kind: Kind; color: string; seed: number }> = ({ kind, 
         </svg>
       );
     case 'pulse': {
-      // 音效卡：四记"打击 + 衰减"的声波（每 14 点一记，振幅指数衰减的正负交替折线）
+      // SFX card: 4 "hit + decay" sound waves (1 hit every 14 points, alternating polyline with exponentially decaying amplitude)
       const d = Array.from({ length: 57 }, (_, k) => {
         const x = k * 5;
         const beat = k % 14;

@@ -1,44 +1,32 @@
 ---
 name: speed-ramp-freeze
-一句话: 帧号非线性 remap 的节奏手法——定格标注（流动→定格圈注→解冻）
-适用: 卡片流/长横移中把一个重点"停下给人看"；教学解说、评审语境
-时长: 定格标注全程 158f（≈5.3s，定格段 67f ≥45f）
-能量: 中高（速度反差本身即energy beat）
+summary: A freeze used for on-screen annotation before motion resumes.
+use: Pausing to direct viewer attention to a key focal point during card streams or long lateral pans; tutorial explanations and evaluation contexts
+duration: Full freeze-annotate sequence 158f (≈5.3s, freeze phase 67f >= 45f)
+energy: Medium-high (velocity contrast itself delivers the energy beat)
 ---
 
-## 意图
-匀速流读作 PPT（R2），全程快流观众抓不住重点（R3）。定格标注在一条
-运动里干脆停下来——马克笔圈出重点再走。技术根是帧号 remap（斜率即速率），
-语义是"停课划重点"。
+## Intention
+Constant linear flow reads like a slide deck (R2); continuous fast motion prevents viewers from absorbing key points (R3). Freeze-annotate halts motion decisively mid-flight—circling the highlight with a marker before resuming. The technical root is frame remapping (slope equals velocity), while the semantic intent is "pausing the class to highlight the board."
 
-## 动效核心
-- 源动画匀速，输出帧对源帧做非线性 remap（斜率即速率）：流动段斜率 1（26px/源帧）→
-  定格段斜率 0 → 解冻段 smootherstep；**blur 联动速率**——按 remap 后的实际速度给方向性
-  模糊（Polish SpeedBlur，|v|<8px/f 不挂滤镜），定格段裸渲；CameraMotionBlur 多重采样会给
-  页面纹理染色，本卡不用
-- 定格段斜率 =0（瞬时切换，无缓入——定格要干脆）；定格那一帧给"按下暂停"的
-  信号：快门白闪 3f、整帧取景框四角弹入、时间码从 LIVE 走字切到 PAUSED 并停住；
-  强调色马克笔超椭圆一笔圈 10f 描边（stroke-dashoffset，1.08 圈、收笔不闭合）圈住目标 +
-  箭杆 6f + 箭头 3f 点题，feTurbulence（scale≈6）给手绘抖动，再接一行 68px 粗体批注 +
-  手绘下划线 + 署名；解冻段 smootherstep（ease-in 起步）22f 走完一张卡、
-  平均斜率 >1 补偿时长，墨迹 8f 淡出，但在目标卡角留一枚评论图钉随卡离场
-- 目标卡对位屏中并被"拾起"（抬高 + 放大 3–5% + 阴影加深），其余卡退暗 / 去饱和；
-  卡宽 600px 时 2x 卡片纹理是向下采样，任选一张都锐利（凝视/圈注对象必须锐利、居中）
+## Motion Core
+- Source animation runs at constant speed, while output frames apply non-linear remapping to source frames (slope = velocity): flow phase slope 1 (26px/source frame) -> freeze phase slope 0 -> unfreeze phase smootherstep; **blur dynamically links to velocity**—applying directional blur based on remapped real velocity (`SpeedBlur`, bypassed when |v| < 8px/f), with freeze phase rendering bare; CameraMotionBlur multisampling tints canvas textures and is avoided here.
+- Freeze phase slope = 0 (instantaneous transition with zero ease-in—freezing must be crisp); freeze frame issues "pause activated" signals: 3f white shutter flash, four-corner reticle snapping inward, timecode switching from LIVE to PAUSED and freezing; accent marker draws an unclosed super-ellipse outline over 10f (stroke-dashoffset, 1.08 loops) around the target + 6f arrow stem + 3f arrowhead pointing to focal point, with `feTurbulence` (scale ≈ 6) imparting hand-drawn jitter, followed by a 68px bold callout + hand-drawn underline + signature; unfreeze phase smootherstep (ease-in departure) traverses one card over 22f with average slope >1 compensating for lost time, ink fading out over 8f while leaving a comment pushpin pinned to the card corner as it exits.
+- Target card aligns to screen center and is "picked up" (lifted + scaled 3–5% + deepened shadow), while remaining cards dim and desaturate; with card width at 600px, 2x card textures are downsampled, keeping every card crisp (scrutiny/annotated subjects must remain razor-sharp and centered).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 定格时长 | ≥45f | 短了凝视不成立（R3 宁慢勿快） |
-| 解冻补偿 | smootherstep 22f 走完一张卡（平均斜率 >1） | 解冻太慢全片拖沓；不补偿则定格吃掉的时间读作冷场 |
-| 圈注描边 | 10f 划完 + 抖动 scale 6 | 太慢像加载动画；无抖动像机械标注 |
-| 暂停信号 | 快门白闪 3f + 取景框四角 + 时间码 PAUSED | 无信号时观众分不清"定格"和"卡顿" |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Freeze duration | >=45f | Shorter durations fail to establish scrutiny (R3 lean slower over faster) |
+| Unfreeze compensation | smootherstep 22f to traverse one card (average slope >1) | Sluggish unfreezing drags the entire film; without speed compensation, time consumed by the freeze reads as a dead stall |
+| Callout stroke | 10f draw + jitter scale 6 | Too slow feels like a loading animation; missing jitter feels like mechanical vector plotting |
+| Pause cues | Shutter white flash 3f + 4-corner reticle + PAUSED timecode | Without cues, viewers cannot distinguish an intentional freeze from a playback freeze |
 
-## 已知坑
-- SFX 钉帧跟**输出帧**不跟源帧（画面动作在输出时间轴上发生）；
-  拟音槽位：定格配马克笔沙沙声（S4），本卡转正时未配、实战补
-- 定格标注一支 30s 片 ≤2 次（克制原则）
-- 参数经占位素材调校转正，非实战定稿，首次实战后回验
+## Known Pitfalls
+- SFX cues lock to **output frames**, not source frames (visual events take place on the output timeline); foley slot: marker scratching audio during freeze (S4), left unassigned in baseline and supplied in production.
+- Freeze-annotate occurs <=2 times in a 30s video (restraint principle).
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/speed-ramp-freeze/
-（FreezeAnnotateReal.tsx）
+(FreezeAnnotateReal.tsx)

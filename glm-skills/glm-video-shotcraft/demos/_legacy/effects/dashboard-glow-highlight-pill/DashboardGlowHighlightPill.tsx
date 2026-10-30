@@ -1,17 +1,17 @@
-// dashboard-glow-highlight-pill — Glow Highlight Pill 金色胶囊指引（motion-lab 定稿转原生 Remotion）
-// 金字 "Ready." 悬于黑场，数据仪表盘（订单簿+K线+买卖面板，内容为占位数据）自底带透视升入后
-// 保持缓慢 rotateX/rotateY 3D 漂移；金色光斑从右侧面板巡游至底部中央拉成胶囊，背景虚化压暗
-// （仪表盘继续漂），辉光描边从底边逆时针描出 Focus Mode 弹窗轮廓，内容淡入后描边收敛为金色细框。
-// 设计坐标 480×270（DesignStage raster="zoom" 等比放大），参数表数值以此坐标系标定。
-// 验收：SSIM mean=0.9583/min=0.9510（BORDERLINE，对照条逐帧肉眼一致）。余差为近黑底
-// 的 x264 暗场量化：把首帧自渲 PNG 过同参数 x264 后与原样片比对得 0.9977——内容已
-// 像素级一致，直接比对的 -0.04 全部来自样片解码端的暗部压缩（2-30 电平带被压到 ~0.8x）。
+// dashboard-glow-highlight-pill — Glow Highlight Pill guidance (ported from motion-lab final to native Remotion)
+// Golden text "Ready." hangs on black field; data dashboard (order book + candlestick + trade panel with placeholder data) rises from bottom with perspective,
+// then maintains a slow rotateX/rotateY 3D drift; golden glow blob patrols from right panel to bottom center, stretching into a pill shape; background blurs and dims
+// (dashboard continues drifting); glow stroke traces Focus Mode popup outline counterclockwise from bottom edge; after content fades in, stroke settles into a thin gold frame.
+// Design canvas 480×270 (DesignStage raster="zoom" proportional scale); parameter values calibrated in this coordinate space.
+// Acceptance: SSIM mean=0.9583/min=0.9510 (BORDERLINE, frame-by-frame visual parity). Residual diff comes from near-black floor
+// x264 dark quantization: running self-rendered first frame PNG through x264 with identical parameters yields 0.9977 against reference — content is already
+// pixel-identical; the direct comparison -0.04 delta stems entirely from reference decoder dark compression (levels 2-30 compressed to ~0.8x).
 import React from 'react';
 import { DesignStage, E, lerp, rand, seg, useT } from '../../_fixtures/Motion';
 
 export const DASHBOARD_GLOW_HIGHLIGHT_PILL_DURATION = 60; // 2000ms @30fps
 
-// ---- 订单簿行（上红下绿，渐变量条；种子与 effect.js 逐一对应） ----
+// ---- Order book rows (red top, green bottom, gradient bars; seeds match effect.js 1:1) ----
 const OB_ROWS = Array.from({ length: 7 }, (_, i) => ({
   wRed: (30 + rand(i * 3 + 1) * 65).toFixed(0),
   wGreen: (30 + rand(i * 7 + 4) * 65).toFixed(0),
@@ -21,7 +21,7 @@ const OB_ROWS = Array.from({ length: 7 }, (_, i) => ({
   amtGreen: (rand(i * 13 + 6) * 9 + 0.4).toFixed(3),
 }));
 
-// ---- K 线（确定性随机游走，dv 负偏置 → 整体上行；SVG y 轴向下） ----
+// ---- Candlestick chart (deterministic random walk, dv negative bias -> overall upward trend; SVG y-axis points down) ----
 const CANDLES: Array<{ x: number; hi: string; lo: string; yTop: string; h: string; col: string; volY: string }> = (() => {
   const out = [];
   let px = 104;
@@ -46,15 +46,15 @@ const CANDLES: Array<{ x: number; hi: string; lo: string; yTop: string; h: strin
   return out;
 })();
 
-// ---- Focus Mode 弹窗几何（原片逐帧实测，注释见 effect.js） ----
+// ---- Focus Mode popup geometry (measured frame-by-frame from reference, see effect.js notes) ----
 const MW = 24.5, MH = 40, MCX = 48.4, MCY = 47; // % of root
-const MRAD = 5; // 弹窗圆角（px），描边共用
+const MRAD = 5; // Popup corner radius (px), shared with stroke
 const RW = 480, RH = 270;
-const BW = (RW * MW) / 100, BH = (RH * MH) / 100; // 弹窗盒子像素尺寸
-const BO = 0.5; // 描边压在 1px 边框中线上
-// 起笔点 = 胶囊停住的位置（BLOB 末帧 x 44.1%），换算成盒内坐标
+const BW = (RW * MW) / 100, BH = (RH * MH) / 100; // Popup box pixel dimensions
+const BO = 0.5; // Stroke centered on 1px border midline
+// Stroke start point = pill resting position (BLOB final frame x 44.1%), converted to box-local coordinates
 const SX = ((44.1 - (MCX - MW / 2)) / MW) * BW;
-// 描边路径：底边中点起、逆时针一整圈（与 effect.js 的 D 字符串逐字节一致）
+// Stroke path: starts at bottom edge center, loops counterclockwise full circle (byte-for-byte identical to effect.js D string)
 const TRACE_D =
   `M${SX.toFixed(1)} ${(BH - BO).toFixed(1)}` +
   ` L${(MRAD + BO).toFixed(1)} ${(BH - BO).toFixed(1)}` +
@@ -66,10 +66,10 @@ const TRACE_D =
   ` L${(BW - BO).toFixed(1)} ${(BH - MRAD - BO).toFixed(1)}` +
   ` A${MRAD} ${MRAD} 0 0 1 ${(BW - MRAD - BO).toFixed(1)} ${(BH - BO).toFixed(1)}` +
   ` L${SX.toFixed(1)} ${(BH - BO).toFixed(1)}`;
-// pathLength 归一化：dashoffset 直接按百分比走，免去 getTotalLength 运行时测量
+// pathLength normalized: dashoffset operates directly as percentage, avoiding runtime getTotalLength measurement
 const P_L = 100;
 
-// 关键帧插值（segments 间 inOutQuad；lerp 签名是 lerp(t, a, b)）
+// Keyframe interpolation (inOutQuad between segments; lerp signature is lerp(t, a, b))
 const KF = (rows: number[][], t: number): number[] => {
   if (t <= rows[0][0]) return rows[0].slice(1);
   for (let i = 1; i < rows.length; i++) {
@@ -82,9 +82,9 @@ const KF = (rows: number[][], t: number): number[] => {
   return rows[rows.length - 1].slice(1);
 };
 
-// ---- 逐帧校准的姿态关键帧：[t, rotateX, rotateY, translateX%, translateY%, scale]
-// 0.30 只有顶栏切片露在画面底部 → 0.365 基本满幅摆正 → 之后缓慢 3D 漂移；
-// 0.62-0.72 有一次明显镜头后拉（87% → 61.5% 宽），把画面让给弹窗。
+// ---- Frame-calibrated pose keyframes: [t, rotateX, rotateY, translateX%, translateY%, scale]
+// 0.30 only top bar slice shows at screen bottom -> 0.365 upright near full frame -> slow 3D drift thereafter;
+// 0.62-0.72 features a distinct camera pull-back (87% -> 61.5% width), yielding screen space to popup.
 const POSE = [
   [0.3, 34.0, -13.0, -7.0, 47.0, 1.62],
   [0.322, 24.0, -11.0, -5.5, 30.0, 1.44],
@@ -98,7 +98,7 @@ const POSE = [
   [1.0, 1.2, 2.6, -0.9, -1.3, 0.7],
 ];
 
-// 光斑巡游关键帧 [t, x%, y%, w, h]：右侧面板圆斑 → 左下移动拉长 → 停在弹窗底边偏左（=描边起笔点）
+// Glow patrol keyframes [t, x%, y%, w, h]: circular blob on right panel -> stretches moving lower-left -> rests at popup bottom-left edge (= stroke start point)
 const BLOB = [
   [0.4, 80.5, 42.0, 22, 22],
   [0.44, 79.7, 46.5, 27, 30],
@@ -111,7 +111,7 @@ const BLOB = [
 const FS = (n: number): React.CSSProperties => ({ fontSize: n });
 const rowBetween: React.CSSProperties = { display: 'flex', justifyContent: 'space-between' };
 
-// 订单簿一行（红/绿共用结构，量条右对齐渐变）
+// Order book row (shared structure for red/green, right-aligned gradient volume bar)
 const ObRow: React.FC<{ w: string; price: string; amt: string; red?: boolean }> = ({ w, price, amt, red }) => (
   <div style={{ position: 'relative', height: 8.5, margin: '1px 0' }}>
     <div
@@ -130,32 +130,32 @@ const ObRow: React.FC<{ w: string; price: string; amt: string; red?: boolean }> 
 export const DashboardGlowHighlightPill: React.FC = () => {
   const t = useT();
 
-  // 金字：满亮保持到 t≈0.30，0.30-0.355 淡出；辉光轻微呼吸
+  // Gold text: full brightness held until t≈0.30, fades out 0.30-0.355; glow breathes subtly
   const yOut = seg(t, 0.3, 0.355, E.inQuad);
   const br = 0.85 + 0.15 * Math.sin(t * Math.PI * 9);
 
-  // 仪表盘姿态（全部走 KF，不叠加二次 ease）
+  // Dashboard pose (all driven by KF, no secondary easing applied)
   const [prx, pry, ptx, pty, ps] = KF(POSE, t);
   const dashOp = t >= 0.298 ? seg(t, 0.298, 0.315) : 0;
 
-  // 背景虚化"先起后退"：0.58-0.66 起，0.80-0.93 退掉约一半（原片终帧清晰度仍低于满清晰）
+  // Background blur "rises then recedes": rises 0.58-0.66, recedes by ~half 0.80-0.93 (final frame in reference remains slightly below full sharpness)
   const blUp = seg(t, 0.58, 0.66, E.inOutQuad);
   const blDown = seg(t, 0.8, 0.93, E.inOutQuad);
   const bl = blUp * (1 - blDown * 0.52);
 
-  // 光斑 0.385-0.425 浮现 → 巡游拉长 → 0.655-0.678 交棒给描边
+  // Glow blob emerges 0.385-0.425 -> stretches while traveling -> hands over to stroke 0.655-0.678
   const gOn = seg(t, 0.385, 0.425, E.outCubic);
   const gOff = seg(t, 0.655, 0.678, E.inQuad);
   const [bx, by, bw, bh] = KF(BLOB, t);
 
-  // 描边 draw-on 0.655-0.775 走完一圈（outQuad 快起步），0.79-0.93 收敛成金色细框
+  // Stroke draw-on completes full loop 0.655-0.775 (outQuad fast start), settles into thin gold border 0.79-0.93
   const dr = seg(t, 0.655, 0.775, E.outQuad);
   const settle = seg(t, 0.79, 0.93, E.inOutQuad);
 
-  // 弹窗内容淡入：底板比文字早一点到位
+  // Popup content fade-in: background card arrives slightly before text
   const mBase = seg(t, 0.665, 0.75, E.outCubic);
   const mc = seg(t, 0.715, 0.84, E.outCubic);
-  // 弹窗/描边跟随半幅相机漂移，与背景仪表盘同向浮动
+  // Popup/stroke follows half-amplitude camera drift, floating in sync with background dashboard
   const mDrift =
     ` rotateX(${(prx * 0.45).toFixed(2)}deg) rotateY(${(pry * 0.45).toFixed(2)}deg)` +
     ` translate(${(ptx * 0.5).toFixed(2)}%,${(pty * 0.5).toFixed(2)}%)`;
@@ -169,14 +169,14 @@ export const DashboardGlowHighlightPill: React.FC = () => {
           perspective: 800, fontFamily: '-apple-system,system-ui,sans-serif',
         }}
       >
-        {/* 暖色底光（原片黑场并非纯黑，顶部偏暖褐） */}
+        {/* Warm base glow (warm brown top tint) */}
         <div
           style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'radial-gradient(130% 95% at 42% -8%,rgba(104,74,30,.32),rgba(44,32,14,.14) 42%,rgba(0,0,0,0) 74%)',
           }}
         />
-        {/* 开场发光金字（上端浅暖白、下端沉到金褐；background-clip:text 辉光只能走 filter） */}
+        {/* Opening glowing gold type (filter glow with gradient fill) */}
         <div
           style={{
             position: 'absolute', left: '50%', top: '49%', transform: 'translate(-50%,-50%)',
@@ -192,7 +192,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
           Ready.
         </div>
 
-        {/* 交易所仪表盘（自底带透视升入；基准尺寸=落位后满幅，靠 scale 推拉） */}
+        {/* Exchange dashboard: rises from bottom with perspective */}
         <div
           style={{
             position: 'absolute', left: '50%', top: '50%', width: '87%', height: '91%',
@@ -209,7 +209,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
               filter: `blur(${(bl * 4.5).toFixed(2)}px) brightness(${(1.5 + bl * 0.05).toFixed(3)}) saturate(1.06)`,
             }}
           >
-            {/* 顶栏 */}
+            {/* Topbar */}
             <div style={{ height: '9%', borderBottom: '1px solid #1a1c20', display: 'flex', alignItems: 'center', padding: '0 8px', gap: 10 }}>
               <span style={{ fontSize: 8, fontWeight: 800, color: '#e8e6df', letterSpacing: 1 }}>◆ ACME</span>
               <span style={{ ...FS(6), color: '#9aa0aa' }}>Trade</span>
@@ -218,7 +218,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
               <span style={{ marginLeft: 'auto', ...FS(6), color: '#565c66' }}>Support {' '} 0x8f...c2 {' '}</span>
               <span style={{ ...FS(6), color: '#0b0c0e', background: '#e6c476', borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>Connect</span>
             </div>
-            {/* 左：订单簿 */}
+            {/* Left: Order book */}
             <div style={{ position: 'absolute', left: 0, top: '9%', bottom: '16%', width: '24%', borderRight: '1px solid #1a1c20', padding: '4px 5px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
                 <span style={{ ...FS(6), color: '#d8dbe0', borderBottom: '1px solid #e6c476', paddingBottom: 1 }}>Orderbook</span>
@@ -232,7 +232,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
                 <ObRow key={`g${i}`} w={r.wGreen} price={r.priceGreen} amt={r.amtGreen} />
               ))}
             </div>
-            {/* 中：K 线 */}
+            {/* Center: Candlestick chart */}
             <div style={{ position: 'absolute', left: '24%', top: '9%', bottom: '16%', right: '22%', padding: '4px 6px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <span style={{ fontSize: 7, fontWeight: 700, color: '#e8e6df' }}>
@@ -251,7 +251,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
                 ))}
               </svg>
             </div>
-            {/* 右：买卖面板 */}
+            {/* Right: Trade panel */}
             <div style={{ position: 'absolute', right: 0, top: '9%', bottom: '16%', width: '22%', borderLeft: '1px solid #1a1c20', padding: '4px 6px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
                 <span style={{ flex: 1, textAlign: 'center', fontSize: 5.5, color: '#d8dbe0', background: '#1d2026', borderRadius: 3, padding: '2px 0' }}>Cross</span>
@@ -285,7 +285,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
                 );
               })}
             </div>
-            {/* 底：持仓表 */}
+            {/* Bottom: Position table */}
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '16%', borderTop: '1px solid #1a1c20', padding: '3px 8px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', gap: 9, marginBottom: 3 }}>
                 {['Positions (2)', 'Open Orders (0)', 'Balances', 'Order History', 'Trade History', 'Funding History', 'Position History'].map((s, i) => (
@@ -305,10 +305,10 @@ export const DashboardGlowHighlightPill: React.FC = () => {
           </div>
         </div>
 
-        {/* 虚化压暗层 */}
+        {/* Blur and darken overlay */}
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(6,5,4,.4)', opacity: blUp * 0.22, pointerEvents: 'none' }} />
 
-        {/* 金色巡游光斑：实心亮核 + box-shadow 外扩辉光（root 有 perspective，screen 混合会被隔离，见 effect.js） */}
+        {/* Gold cruising light orb: bright core + box-shadow glow */}
         <div
           style={{
             position: 'absolute',
@@ -324,7 +324,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
           }}
         />
 
-        {/* Focus Mode 弹窗（描边与它共用同一个盒子与 transform 链，全程贴合轮廓） */}
+        {/* Focus Mode dialog: shares box and transform chain with stroke */}
         <div
           style={{
             position: 'absolute', left: `${MCX}%`, top: `${MCY}%`, width: `${MW}%`, height: `${MH}%`,
@@ -367,7 +367,7 @@ export const DashboardGlowHighlightPill: React.FC = () => {
           </div>
         </div>
 
-        {/* 辉光描边（viewBox 1 unit = 1 CSS px；pathLength 归一化免运行时 getTotalLength） */}
+        {/* Glowing contour stroke (viewBox 1 unit = 1 CSS px) */}
         <div
           style={{
             position: 'absolute', left: `${MCX}%`, top: `${MCY}%`, width: `${MW}%`, height: `${MH}%`,

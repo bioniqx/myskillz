@@ -1,16 +1,16 @@
-// 组合：长卷急刹 × 准星咬合（brake-reticle-lock）
-// changelog 长列表从下往上高速掠过（加速冲刺→9f 猛减速带 30px 超调回弹），
-// 急刹帧（BRAKE=59）同帧四个 L 形角标从画外四个方向飞入，back-out 超调咬合
-// 锁定停点条目四角；条目同步高亮 + 右侧弹出小标签。
-// 组合命门：角标咬合帧与列表急刹帧必须同帧共振（都在 f=59 起跳），错开即退化。
-// 关键帧：0–12 初始静置 → 12–50 加速冲刺（速度段 blur）→ 50–59 猛减速超调 →
-// 59 急刹+角标飞入 → 59–72 咬合回弹/高亮/标签 → 75–150 真静止 75f。
-// 帧确定，无随机源。
+// Combo: scroll brake x reticle lock (brake-reticle-lock)
+// Changelog list rushes upward at high speed (accelerating sprint -> 9f sharp deceleration with 30px overshoot rebound).
+// On the hard brake frame (BRAKE=59), four L-shaped corner brackets fly in from off-screen in four directions, locking onto
+// the four corners of the target row with back-out overshoot; target row simultaneously highlights + side badge pops out on the right.
+// Critical sync: reticle lock frame and list hard brake frame must resonate on the exact same frame (both trigger at f=59); any offset breaks the punch.
+// Keyframes: 0–12 initial rest -> 12–50 accelerating sprint (speed-dependent blur) -> 50–59 sharp deceleration overshoot ->
+// 59 hard brake + corner brackets fly in -> 59–72 lock rebound / highlight / tag -> 75–150 true freeze for 75f.
+// Deterministic across frames, no randomness.
 //
-// 质感升级：灰骨架行换成真实感 changelog（类型图标 / 标题 / 说明 / 版本 / 日期，时间自上而下递增），
-// 停点 v2.41 出版级内容；顶栏骨架换成真实应用顶栏；各向同性 blur 换成沿滚动方向的纵向 SpeedBlur；
-// 角标从 8px 墨色粗角换成 6px 强调色圆头 L 角，飞入段按自身速度给方向性运动模糊；停点行加强调色描边 +
-// 抬升阴影，其余行退暗 0.38；标签 0.6→1 弹出并带脉冲点；柔光亮场 + 上下渐隐 + 颗粒。
+// Polish upgrade: gray skeleton rows replaced with realistic changelog (type icon / title / description / version / date, chronological top-down),
+// target row v2.41 publication-grade content; top bar wireframe replaced with realistic app header; isotropic blur replaced with vertical SpeedBlur along scroll direction;
+// corner reticles updated from 8px black thick brackets to 6px rounded accent L-brackets, with directional motion blur proportional to flight speed; target row gains accent border +
+// elevated shadow, while remaining rows dim to 0.38; badge pops out from 0.6->1 with pulsing dot; soft light background + top/bottom fade mask + grain.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -22,15 +22,15 @@ const BRAKE = 59;
 const DUR = 150;
 export const BRAKE_RETICLE_LOCK_DURATION = DUR;
 
-const PITCH = 156; // 行高 120 + 间距 36
+const PITCH = 156; // Row height 120 + gap 36
 const ROW_H = 120;
 const TARGET_ROW = 30;
-const FINAL_SCROLL = TARGET_ROW * PITCH - 480; // 停点条目 top 落在屏幕 y=480
+const FINAL_SCROLL = TARGET_ROW * PITCH - 480; // Target item top rests at screen y=480
 const LIST_X = 360;
 const LIST_W = 1200;
 
-// 滚动位置：12–50 加速冲刺（sin-in，越滚越快）→ 50–59 猛减速冲过头 30px →
-// 59–63 回弹落定。59 帧为急刹帧（首次停住/反向）。
+// Scroll position: 12–50 accelerating sprint (sin-in, rolling faster) -> 50–59 sharp deceleration overshooting 30px ->
+// 59–63 rebound settle. Frame 59 is the hard brake frame (first stop/reversal).
 const scrollAt = (f: number): number => {
   if (f <= SCROLL_START) return 0;
   if (f <= 50) {
@@ -49,7 +49,7 @@ const scrollAt = (f: number): number => {
   });
 };
 
-// ── 假内容：video-shotcraft 时间自上而下递增的发布记录，第 30 行 = v2.41 Motion workbench ──
+// Mock content: video-shotcraft chronological release history, row 30 = v2.41 Motion workbench
 const TITLES = [
   'Crash zoom shot card', 'Faster Remotion renders', 'Audio drift on long renders', 'Beat grid from any BGM',
   'Dolly zoom shot card', 'Real page captures', 'Caption timing at 60 fps', 'Gallery style filters', 'Whip pans',
@@ -63,7 +63,7 @@ const TITLES = [
 const DESCS = [
   'Rolled out to every project.', 'Now 3× faster on long films.', 'Fixed for macOS and Linux.', 'Ships with the skill today.',
 ];
-// 类型：图标色 + 字形
+// Types: icon color + glyph
 const KIND = [
   { name: 'Feature', tint: 'rgba(91,99,211,0.12)', ink: '#4a51b8', glyph: '✦' },
   { name: 'Improved', tint: 'rgba(22,150,110,0.12)', ink: '#137a5a', glyph: '↗' },
@@ -133,7 +133,7 @@ const Row: React.FC<{ i: number; highlight: number; dim: number }> = ({ i, highl
   );
 };
 
-// L 形角标：两条圆头强调色边组成的直角
+// L-corner bracket: right angle formed by two rounded accent lines
 const Corner: React.FC<{ flip: [number, number]; style: React.CSSProperties }> = ({ flip, style }) => (
   <div style={{ position: 'absolute', width: 46, height: 46, transform: `scale(${flip[0]}, ${flip[1]})`, ...style }}>
     <div style={{ position: 'absolute', left: 0, top: 0, width: 46, height: 6, background: G.accent, borderRadius: 3 }} />
@@ -141,7 +141,7 @@ const Corner: React.FC<{ flip: [number, number]; style: React.CSSProperties }> =
   </div>
 );
 
-// 角标咬合进度（back-out 超调）
+// Reticle lock progress (back-out overshoot)
 const lockAt = (f: number) =>
   interpolate(f, [BRAKE, BRAKE + 9], [0, 1], {
     extrapolateLeft: 'clamp',
@@ -149,17 +149,17 @@ const lockAt = (f: number) =>
     easing: Easing.out(Easing.back(2.4)),
   });
 
-// 列表上下渐隐（顶栏下方 / 画面底部）
+// List top/bottom gradient fade (below top bar / screen bottom)
 const LIST_MASK = 'linear-gradient(180deg, transparent 72px, #000 170px, #000 960px, transparent 1080px)';
 
 export const BrakeReticleLock: React.FC = () => {
   const f = useCurrentFrame();
   const scroll = scrollAt(f);
 
-  // 速度段纵向模糊：由相邻帧位移决定（px/f），冲刺段拉成色带，刹停即清晰
+  // Speed-dependent vertical blur: driven by adjacent-frame delta (px/f), streaked during sprint, crisp when braked
   const v = scroll - scrollAt(Math.max(0, f - 1));
 
-  // 急刹帧起：高亮 0→1（6f），其余行退暗（12f）
+  // From hard brake frame: highlight 0->1 (6f), remaining rows dim (12f)
   const highlight = interpolate(f, [BRAKE, BRAKE + 6], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const dim = interpolate(f, [BRAKE + 2, BRAKE + 14], [0, 1], {
     extrapolateLeft: 'clamp',
@@ -167,9 +167,9 @@ export const BrakeReticleLock: React.FC = () => {
     easing: Easing.out(Easing.cubic),
   });
 
-  // 停点条目屏幕坐标（落定后 top=480）
+  // Target item screen coordinates (settles at top=480)
   const rowTopAt = (fr: number) => TARGET_ROW * PITCH - scrollAt(fr);
-  const GAP = 10; // 咬合位：角外扩 10px
+  const GAP = 10; // Lock position: corners offset outward by 10px
   const rect = (fr: number) => ({ x: LIST_X - GAP, y: rowTopAt(fr) - GAP, w: LIST_W + GAP * 2, h: ROW_H + GAP * 2 });
 
   const corners: Array<{ ax: 0 | 1; ay: 0 | 1; fromX: number; fromY: number; flip: [number, number] }> = [
@@ -180,11 +180,11 @@ export const BrakeReticleLock: React.FC = () => {
   ];
   const cornerPos = (c: (typeof corners)[number], fr: number) => {
     const r = rect(fr);
-    const fly = 1 - lockAt(fr); // 1=画外 0=咬合到位
+    const fly = 1 - lockAt(fr); // 1 = off-screen, 0 = locked in place
     return { x: r.x + c.ax * r.w - 23 + c.fromX * fly, y: r.y + c.ay * r.h - 23 + c.fromY * fly };
   };
 
-  // 小标签：63f 从条目右侧弹出（超调）
+  // Side badge: pops out from right of row at 63f (with overshoot)
   const tagT = interpolate(f, [BRAKE + 4, BRAKE + 12], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -197,7 +197,7 @@ export const BrakeReticleLock: React.FC = () => {
     <div style={{ width: 1920, height: 1080, position: 'relative', overflow: 'hidden', fontFamily: FONT.sans }}>
       <Backdrop tone="light" light={{ x: 0.5, y: 0.25 }} vignette={0.16} grain={0} />
 
-      {/* changelog 长列表：整体上掠，速度段纵向模糊 */}
+      {/* Changelog long list: rushes upward as a whole, vertically blurred during speed phase */}
       <div style={{ position: 'absolute', inset: 0, WebkitMaskImage: LIST_MASK, maskImage: LIST_MASK }}>
         <SpeedBlur vx={0} vy={v} amount={0.15} max={32}>
           <div style={{ position: 'absolute', left: LIST_X, top: 0, width: LIST_W, height: 1080 }}>
@@ -210,7 +210,7 @@ export const BrakeReticleLock: React.FC = () => {
         </SpeedBlur>
       </div>
 
-      {/* 顶栏（不随滚动） */}
+      {/* Top bar (fixed, does not scroll) */}
       <div
         style={{
           position: 'absolute',
@@ -250,7 +250,7 @@ export const BrakeReticleLock: React.FC = () => {
         </div>
       </div>
 
-      {/* 准星角标：急刹帧同帧挂载（组合命门：与刹停同帧共振）；飞入段方向性运动模糊 */}
+      {/* Reticle corner brackets: mount on the exact hard brake frame (critical: resonates with brake); directional motion blur during fly-in */}
       {f >= BRAKE &&
         corners.map((c, i) => {
           const p = cornerPos(c, f);
@@ -265,7 +265,38 @@ export const BrakeReticleLock: React.FC = () => {
           );
         })}
 
-      {/* 旁弹小标签 */}
+      {/* Side popup badge */}
+      {f >= BRAKE + 4 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: r.x + r.w + 28,
+            top: r.y + r.h / 2 - 28,
+            height: 56,
+            transform: `scale(${(0.6 + 0.4 * tagT).toFixed(4)})`,
+            transformOrigin: 'left center',
+            opacity: tagOp,
+            padding: '0 24px 0 22px',
+            borderRadius: 28,
+            background: G.ink1,
+            boxShadow: softShadow(12, { strength: 1.4 }),
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontWeight: 650,
+            fontSize: 26,
+            letterSpacing: tracking(26),
+          }}
+        >
+          <div style={{ width: 10, height: 10, borderRadius: 5, background: '#67d17c', boxShadow: '0 0 0 4px rgba(103,209,124,0.22)' }} />
+          Just shipped
+        </div>
+      )}
+      <Grain opacity={0.05} />
+    </div>
+  );
+};
       {f >= BRAKE + 4 && (
         <div
           style={{

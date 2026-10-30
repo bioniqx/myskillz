@@ -1,62 +1,43 @@
 ---
 name: doc-park-left-pill-deal
-一句话: 文档不淡出而是向左滑出只露约 35% 宽并微缩到 0.92，右侧按旁白节奏慢速发牌三张白底描边药丸（outBack 弹入），每张落定后其下方字幕逐词加深、下一张到来前整句淡出，左侧文档全程极缓慢自动滚动保持"正在被读"
-适用: 旁白驱动的"分析结论逐条给出"段落；文档理解、推荐理由、审阅意见类产品的核心说明镜头
-时长: 约 5.8s（174f@30fps）
-能量: 低（慢发牌节奏，全片无峰值；靠自动滚动维持活性）
+summary: The source document slides left until only a sliver remains and keeps scrolling slowly, while three outlined pills are dealt one at a time, each followed by a caption that darkens word by word.
+use: Voiceover-driven sections presenting analytical conclusions one by one; core explanatory shot for document understanding, recommendation reasoning, or review critique products.
+duration: ~5.8s (174f @ 30fps)
+energy: Low (Deliberate dealing cadence without peaks; maintains visual vitality via continuous background auto-scroll)
 ---
 
-## 意图
-结论要一条一条给，观众才记得住。但如果把来源文档淡出，结论就变成了空中楼阁——观众
-不知道这些话从哪来。这张卡的解法是**让来源留在画面里**：文档靠左驻留只露一截，还在
-缓慢滚动（说明它正在被读），右侧的每条结论都是从这份文档里长出来的。发牌节奏刻意慢，
-是为了给旁白留出说完一句的时间。
+## Intention
+Conclusions must be delivered one by one for audiences to absorb them. But fading out the source document leaves conclusions floating in a vacuum—viewers lose track of where the findings originate. This card's solution is **keeping the source document in frame**: it parks against the left edge with only a sliver exposed, scrolling slowly (signaling it is actively being parsed), while each conclusion pill on the right branches directly from this source. The dealing cadence is deliberately measured to provide ample time for the voiceover to complete each sentence.
 
-## 动效核心
-- 驻留（park）不是淡出：`seg(t, 0.06, 0.24, E.inOutCubic)` 驱动
-  `translateX(0→-55%) scale(1→0.92)`，`transform-origin: 0% 50%` 让缩放以左边缘为锚，
-  文档缩小时不会离开画框左侧——最终只露约 35% 宽
-- 常驻自动滚动：`translateY(-t * 120)` 连续匀速（≈0.7px/f），内容比容器长 140px 以上。
-  旧写法 `-(t*3 % 1) * 40` 取模，非周期内容每 1/3 片长整页回跳 40px，肉眼可见，已弃用
-- 慢发牌：三张药丸起点写死在 `T0 = [0.26, 0.48, 0.70]`——间隔 0.22（约 38f / 1.27s），
-  这是一句短旁白的长度，不是 UI 常规的 stagger
-- 每张药丸两条曲线并行：`o = seg(t, f, f+0.035, E.outQuad)` 管透明度（快，约 6f），
-  `b = seg(t, f, f+0.062, E.outBack)` 管 `translateY(14→0) scale(0.94→1)`（慢，约 11f
-  且带过冲）——先看见、再落定，比单曲线更有"接住"的手感
-- 字幕四段编排：起点 `cs = f+0.05`（药丸落定后约 3 帧），`show` 用 0.02 的窗快速出现，
-  `inn` 逐词加深摊在 `(ce-cs)*0.7` 上，`ce` 是下一张的起点减 0.03（末张 ce=0.98），
-  `out` 在 `ce-0.05→ce` 淡出——每句字幕在下一张药丸入场前就已清场，画面永远只有一句
-- 药丸终态是静态列表（`top = 54 + k*48`），三张全部落位后一直留在画面上，读作
-  "结论清单已成形"
-- 依据联动：每张药丸落定后，文档里对应的依据句被荧光笔自左向右划出（f+0.06→0.13），
-  一条强调色细线从该句行尾连到药丸左缘（f+0.04→0.11 draw-on），随该句字幕退场淡出
+## Motion Core
+- Parking (not fading): `seg(t, 0.06, 0.24, E.inOutCubic)` drives `translateX(0→-55%) scale(1→0.92)`, with `transform-origin: 0% 50%` anchoring scale to the left edge so document shrinking never leaves the left screen margin—ultimately exposing ~35% width.
+- Continuous auto-scroll: `translateY(-t * 120)` runs at constant velocity (≈0.7px/f), with content extending >140px beyond container. Legacy modulo approach `-(t*3 % 1) * 40` caused noticeable 40px snap-backs every 1/3 of shot duration on non-periodic content, and is deprecated.
+- Slow dealing: three pill cards anchor launch cues hardcoded at `T0 = [0.26, 0.48, 0.70]`—spacing 0.22 (≈38f / 1.27s), matching the spoken length of a short voiceover sentence rather than a rapid UI stagger.
+- Dual parallel curves per pill: `o = seg(t, f, f+0.035, E.outQuad)` controls opacity (snappy, ~6f), `b = seg(t, f, f+0.062, E.outBack)` governs `translateY(14→0) scale(0.94→1)` (deliberate, ~11f with overshoot)—seeing the element first before it settles delivers a tangible "caught and placed" feel compared to single-curve fades.
+- Four-phase caption choreography: start `cs = f+0.05` (~3 frames after pill settles), `show` rapidly reveals over a 0.02 window, `inn` darkens word by word across `(ce-cs)*0.7`, `ce` marks next pill start minus 0.03 (final pill ce=0.98), `out` fades over `ce-0.05→ce`—each caption clears before the next pill arrives, keeping exactly one active sentence on screen.
+- Pills finalize into a static vertical list (`top = 54 + k*48`), remaining permanently in view once settled to establish the completed list of conclusions.
+- Source linkage: once each pill settles, corresponding source text in the document highlights left-to-right (f+0.06→0.13), with an accent connector line drawing from line end to pill left edge (f+0.04→0.11 draw-on), fading out as caption exits.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 发牌起点 | `T0 = [0.26, 0.48, 0.70]`，间隔 0.22（≈38f） | 间隔就是旁白句长；压到 0.12 以下字幕的"逐词加深"来不及走完，读作字幕闪一下就没了 |
-| 驻留窗 | 0.06→0.24（inOutCubic） | 必须在首张药丸（0.26）之前收住；重叠会出现"文档还在滑、药丸已在发"的浑浊 |
-| 驻留幅度 | `translateX -55%` + `scale 0.92`，露约 35% | 露太少（<25%）文档变成装饰失去"来源"语义；露太多右侧放不下 172px 宽的药丸 |
-| 药丸透明度窗 | 0.035（≈6f，outQuad） | 比位移窗短是有意的——先实后稳；两窗等长会读作普通淡入 |
-| 药丸位移窗 | 0.062（≈11f，outBack），y 14→0、scale 0.94→1 | outBack 的过冲是"发牌落桌"的手感；换 outCubic 会变成平淡的浮上来 |
-| 字幕延迟 | `cs = f + 0.05`（≈9f） | 药丸落定（0.062）之后才起字幕；提前会出现字幕先于结论出现 |
-| 字幕加深行程 | `(ce-cs)*0.7` | 占该句可见时长的 70%，末 30% 是全实态的静置阅读时间；调到 1.0 则字幕刚读完就被淡出 |
-| 自动滚动 | `-t × 120px` 连续匀速 | 5.8s 上约 0.7px/f，是"正在读"的暗示级速度；>3px/f 会抢注意力变成滚动展示 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Deal cue points | `T0 = [0.26, 0.48, 0.70]`, interval 0.22 (≈38f) | Interval matches voiceover phrase length; below 0.12 word-by-word darkening cannot finish, reading as a flash before disappearing |
+| Parking window | 0.06→0.24 (inOutCubic) | Must settle before first pill (0.26); overlap creates visual confusion of document sliding while pills are already dealing |
+| Parking extent | `translateX -55%` + `scale 0.92`, exposing ~35% | Exposing too little (<25%) reduces document to decoration, losing source semantics; exposing too much crowds out 172px wide pills |
+| Pill opacity window | 0.035 (≈6f, outQuad) | Intentionally shorter than position window—solidifies before settling; equal durations read as generic fade-ins |
+| Pill position window | 0.062 (≈11f, outBack), y 14→0, scale 0.94→1 | outBack overshoot provides physical landing bounce; switching to outCubic feels floaty |
+| Caption delay | `cs = f + 0.05` (≈9f) | Caption starts only after pill settles (0.062); starting early causes text to precede conclusion |
+| Caption darkening span | `(ce-cs)*0.7` | Accounts for 70% of phrase visibility, leaving remaining 30% for static reading; 1.0 fades caption immediately upon finish |
+| Auto-scroll | `-t × 120px` continuous constant | Over 5.8s ≈ 0.7px/f, subtly signaling active reading; >3px/f steals focus as a content tour |
 
-## 已知坑
-- 自动滚动是连续位移而非取模循环（取模只有在内容本身严格周期时才不回跳）；改时长或
-  行程时要保证文档内容比容器长出至少整段行程，否则末段会滚出空白
-- 末张字幕的 `ce = 0.98` 意味着它在 0.93→0.98 淡出，末帧只剩三张药丸没有字幕。若要
-  末句留到底，把末张的 `ce` 改成 >1 并去掉 out
-- 药丸位置写死为 `left:214px, top:54+k*48`、宽 172px，是 480 宽画布下与驻留后文档
-  （露出约 87px）配套的一组数字。改文档驻留幅度必须同步改 PX，否则两者重叠
-- 三条药丸文案（demo 里是 video-shotcraft 宣传片简报推荐的三张镜头卡 Crash Zoom / Deck Deal / Logo Sting）与三句字幕都是示意，且字幕
-  长度直接影响"逐词加深"读起来快慢——换真实文案后要按新句长重调 `inn` 行程
-- 药丸数写死为 3（`T0` 的长度）。加到 4 条时间就不够：末张起点会超过 0.9，字幕根本
-  走不完；4 条以上应考虑缩短单句而不是硬塞
-- 字幕的 `ce` 依赖 `T0[k+1]`，改任一张的起点都会连带改变前一张字幕的可见时长——这
-  是有意的联动（字幕永远填满到下一张之前），但调参时要意识到不是独立参数
+## Known Pitfalls
+- Auto-scroll uses continuous displacement rather than modulo looping (modulo only works without jumps on strictly periodic content); when adjusting duration or distance, ensure document length exceeds container by full travel distance to avoid empty space.
+- Final caption `ce = 0.98` fades over 0.93→0.98, leaving three pills without captions on the final frame. To hold final caption until end, set `ce` > 1 and remove `out`.
+- Pill layout is hardcoded to `left:214px, top:54+k*48` at 172px width, matched with ~87px exposed parked document on a 480px canvas. Tweaking parking displacement requires recalculating PX positions to prevent overlap.
+- Pill copy (demo references video-shotcraft promo recommendations: Crash Zoom / Deck Deal / Logo Sting) and captions are schematic; text length directly influences reading speed of word darkening—recalibrate `inn` span when applying production copy.
+- Pill count is fixed at 3 (length of `T0`). Expanding to 4 exceeds timing budget: final pill start exceeds 0.9, leaving insufficient time for caption; for >3 items, shorten phrases rather than cramming cards.
+- Caption `ce` depends on `T0[k+1]`; shifting any card's cue alters preceding caption display duration—this tight coupling is intentional (captions fill up to next card), but must be considered during tuning.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/doc-park-left-pill-deal/
-（DocParkLeftPillDeal.tsx）
+(DocParkLeftPillDeal.tsx)

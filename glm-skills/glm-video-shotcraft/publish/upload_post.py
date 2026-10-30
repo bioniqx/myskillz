@@ -1,40 +1,39 @@
 #!/usr/bin/env python3
-"""成片一键发布到社交平台（Upload-Post API）。
+"""One-click video publishing to social platforms (Upload-Post API).
 
-把交付的 MP4 一次发到 TikTok、Instagram（Reels/Stories）、YouTube、LinkedIn、
-Facebook、X、Threads、Pinterest、Bluesky。只在用户明确要求发布、并确认过文案与
-平台后执行，流程见 references/publish-upload-post.md。
+Publish finished MP4 to TikTok, Instagram (Reels/Stories), YouTube, LinkedIn,
+Facebook, X, Threads, Pinterest, and Bluesky via Upload-Post API.
+Execute only when explicitly requested by user with confirmed copy and platforms;
+see references/publish-upload-post.md.
 
-仅用 Python 标准库，无需 venv / pip。需要两个环境变量：
-  UPLOAD_POST_API_KEY   Upload-Post 后台创建的 API key
-  UPLOAD_POST_USER      连接了社交账号的 profile 名（也可用 --user）
+Standard library only, no venv/pip required. Requires two environment variables:
+  UPLOAD_POST_API_KEY   API key created in Upload-Post dashboard
+  UPLOAD_POST_USER      Profile name connected to social accounts (or via --user)
 
-用法：
-  # 只校验，不发布（同时检查 key、profile、哪些平台未连接）
-  python3 publish/upload_post.py --video out/promo.mp4 --title "..." \\
-      --platforms tiktok,instagram,youtube --dry-run
+Usage:
+  # Dry-run validation only (checks key, profile, unconnected platforms)
+  python3 publish/upload_post.py --dry-run \
+      --file out/promo.mp4 --title "My Product" --platforms tiktok,instagram,youtube
 
-  # 发布并等待每个平台的结果
-  python3 publish/upload_post.py --video out/promo.mp4 --title "..." \\
-      --platforms tiktok,instagram,youtube
+  # Publish and wait for results per platform
+  python3 publish/upload_post.py \
+      --file out/promo.mp4 --title "My Product" --platforms tiktok,instagram,youtube
 
-  # 定时发布（按指定时区）
-  python3 publish/upload_post.py --video out/promo.mp4 --title "..." \\
-      --platforms linkedin,x --schedule 2026-10-01T09:00:00 --timezone Asia/Shanghai
+  # Scheduled publishing
+  python3 publish/upload_post.py \
+      --file out/promo.mp4 --title "My Product" --platforms tiktok,instagram,youtube \
+      --schedule "2026-08-15 10:00:00" --timezone "America/Los_Angeles"
 
-  # 查询之前的发布
-  python3 publish/upload_post.py --status <request_id 或 job_id>
+  # Check previous publish status
+  python3 publish/upload_post.py --status <request_id or job_id>
 
-行为要点：
-  * 视频只上传一次，Upload-Post 分发到各平台，按平台返回链接或错误。
-  * 异步上传：API 收到文件即返回 request_id，脚本轮询状态直到全部平台结束
-    （或 --wait-timeout 超时；超时不取消，稍后用 --status 查）。
-  * 防重复发布：request_id 由脚本生成并作为 Idempotency-Key 发送。只有
-    400/401/403/422 算明确拒绝；5xx、超时、断网、2xx 却无有效 JSON 都算"不确定"，
-    不重发文件，改用同一个 id 查询；仍无法确认时输出 status=unknown（退出码 2）、
-    request_id 和 --status 命令。unknown 之后绝不能重跑发布命令，只能 --status。
-  * profile 未连接的平台返回 skipped，不影响其他平台。
-  * YouTube 默认 private；TikTok 默认沿用账号自身隐私设置。
+Key behaviors:
+* Video uploaded once, Upload-Post distributes to designated platforms.
+* Asynchronous upload: API returns request_id upon receipt; script polls status.
+* Idempotency protection: request_id sent as Idempotency-Key; non-deterministic
+  errors do not resend file, but query status under same ID.
+* Unconnected platforms on profile return skipped without blocking others.
+* YouTube defaults to private; TikTok defaults to account privacy settings.
 """
 from __future__ import annotations
 
@@ -72,21 +71,21 @@ UPLOAD_TIMEOUT = 900
 API_TIMEOUT = 60
 TITLE_MAX = {"youtube": 100, "tiktok": 2200}
 
-# 网络层错误：上传可能已送达，也可能没有，不重发，改查同一 request_id
-# http.client.HTTPException 覆盖读响应体时的截断（IncompleteRead）、对端断开
-# （RemoteDisconnected）等；ConnectionError 覆盖 ConnectionResetError。
+# Network layer errors: upload may or may not have arrived; probe under same request_id
+# http.client.HTTPException covers IncompleteRead, RemoteDisconnected, etc.
+# ConnectionError covers ConnectionResetError.
 NETWORK_ERRORS = (urllib.error.URLError, socket.timeout, ConnectionError, TimeoutError,
                   http.client.HTTPException)
-# 只有这些是"服务端受理前明确拒绝"：可以直接判失败。其余（5xx、网关错误、
-# 超时、2xx 却无有效 JSON）都算"不确定"，文件可能已被受理，绝不能重发。
+# Explicit pre-acceptance rejection: can fail immediately. Others (5xx, gateway error,
+# timeout, 2xx without valid JSON) are ambiguous; never resend.
 DEFINITIVE_REJECTIONS = {400, 401, 403, 422}
-PROBE_ATTEMPTS = 6          # 不确定时按同一 request_id 探查的次数（×POLL_INTERVAL_SECS）
-NOT_FOUND_GRACE_POLLS = 6   # 已受理后 status 仍 not_found 的容忍次数（记录可能稍晚写入）
-MAX_POLL_ERRORS = 6         # 轮询期间连续出错的容忍次数
+PROBE_ATTEMPTS = 6          # Probe attempts on ambiguous response (*POLL_INTERVAL_SECS)
+NOT_FOUND_GRACE_POLLS = 6   # Tolerance polls for not_found after acceptance
+MAX_POLL_ERRORS = 6         # Consecutive error tolerance during polling
 
 
 class AmbiguousSubmit(Exception):
-    """提交结果不确定：服务端可能已受理。只能按同一 request_id 查询，不能重发。"""
+    """Submission status ambiguous: server may have accepted. Probe using request_id."""
 
 
 class ApiError(Exception):
@@ -97,7 +96,7 @@ class ApiError(Exception):
 
 
 def log(msg: str) -> None:
-    """日志走 stderr；stdout 只留给 --json-out。"""
+    """Logs go to stderr; stdout reserved for --json-out."""
     print(msg, file=sys.stderr)
 
 
@@ -120,7 +119,7 @@ def _request(method: str, path: str, api_key: str, *, params: dict | None = None
     url = f"{API_BASE}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    # Upload-Post 的 API key 用 "Apikey" 方案，不是 "Bearer"
+    # Upload-Post API key uses "Apikey" scheme, not "Bearer"
     hdrs = {"Authorization": f"Apikey {api_key}", **(headers or {})}
     req = urllib.request.Request(url, data=body, headers=hdrs, method=method)
     try:
@@ -130,7 +129,7 @@ def _request(method: str, path: str, api_key: str, *, params: dict | None = None
         status, raw = e.code, e.read()
     try:
         data = json.loads(raw)
-    except ValueError:  # 空响应或非 JSON
+    except ValueError:  # Empty response or non-JSON
         return status, {"_invalid": True, "message": raw[:300].decode("utf-8", "replace")}
     return status, data if isinstance(data, dict) else {"data": data}
 
@@ -150,7 +149,7 @@ def api_get(api_key: str, path: str, params: dict | None = None) -> dict:
 
 
 def check_account(api_key: str, user: str) -> dict:
-    """校验 key 并列出 profile 已连接的平台。"""
+    """Validate key and list profile connected platforms."""
     me = api_get(api_key, "/api/uploadposts/me")
     profile = api_get(api_key, f"/api/uploadposts/users/{urllib.parse.quote(user)}")
     accounts = (profile.get("profile") or profile).get("social_accounts") or {}
@@ -172,7 +171,7 @@ def get_status(api_key: str, *, request_id: str | None = None, job_id: str | Non
 
 
 def encode_multipart(fields: list[tuple[str, str]], files: list[tuple[str, str, bytes, str]]):
-    """标准库版 multipart/form-data。files: (字段名, 文件名, 内容, MIME)。"""
+    """Standard library multipart/form-data. files: (field, filename, content, mime)."""
     boundary = f"----shotcraft{uuid.uuid4().hex}"
     out = bytearray()
     for name, value in fields:
@@ -186,7 +185,7 @@ def encode_multipart(fields: list[tuple[str, str]], files: list[tuple[str, str, 
     return bytes(out), f"multipart/form-data; boundary={boundary}"
 
 
-# ---------------------------------------------------------------- 请求构造
+# ---------------------------------------------------------------- Request construction
 def parse_platforms(raw: str | None) -> list[str]:
     platforms: list[str] = []
     for p in (raw or "").split(","):
@@ -197,7 +196,7 @@ def parse_platforms(raw: str | None) -> list[str]:
 
 
 def build_form(args, description: str, request_id: str) -> list[tuple[str, str]]:
-    """表单字段（视频文件除外）。platform[] / tags[] 可重复，所以用列表。"""
+    """Form fields (excluding video file)."""
     form = [("user", args.user), ("title", args.title),
             ("request_id", request_id), ("async_upload", "true")]
     form += [("platform[]", p) for p in args.platforms]
@@ -210,7 +209,7 @@ def build_form(args, description: str, request_id: str) -> list[tuple[str, str]]
     if args.first_comment:
         form.append(("first_comment", args.first_comment))
     if args.ai_generated:
-        # 跨平台别名：TikTok AIGC 标签、Instagram "AI info"、YouTube 合成内容声明、X made_with_ai
+        # Cross-platform AI declaration flags
         form.append(("is_ai_generated", "true"))
     if "youtube" in args.platforms:
         form.append(("privacyStatus", args.youtube_privacy))
@@ -245,7 +244,7 @@ def submit_upload(api_key: str, video: str, form: list, thumbnail: str | None, r
     except NETWORK_ERRORS as e:
         raise AmbiguousSubmit(f"network error: {e}")
     if status in DEFINITIVE_REJECTIONS:
-        _check(status, data)  # 抛出 ApiError：受理前明确拒绝，可放心判失败
+        _check(status, data)  # Raises ApiError on explicit rejection
     if status >= 400:
         raise AmbiguousSubmit(f"HTTP {status}: {data.get('message') or data.get('error') or ''}".strip())
     if data.get("_invalid"):
@@ -254,7 +253,7 @@ def submit_upload(api_key: str, video: str, form: list, thumbnail: str | None, r
 
 
 def probe_submission(api_key: str, request_id: str) -> dict | None:
-    """不确定提交后按同一 request_id 查询：服务端有记录就返回状态，否则 None。"""
+    """Query request_id status after ambiguous submission."""
     for attempt in range(PROBE_ATTEMPTS):
         try:
             status = get_status(api_key, request_id=request_id)
@@ -276,7 +275,7 @@ def wait_for_result(api_key: str, request_id: str, wait_secs: int) -> dict:
             status = get_status(api_key, request_id=request_id)
             errors = 0
         except ApiError as e:
-            # 已提交后查询出错：不能判失败（上传可能正在进行）
+            # Query error after submission: cannot fail (upload may be in progress)
             errors += 1
             if errors >= MAX_POLL_ERRORS or time.monotonic() >= deadline:
                 return {"status": "unknown", "request_id": request_id, "reason": str(e)}
@@ -284,7 +283,7 @@ def wait_for_result(api_key: str, request_id: str, wait_secs: int) -> dict:
             continue
         state = status.get("status")
         if state == "not_found":
-            # 我们确实发出了上传：not_found 只说明记录还没写入或无法确认，不是失败
+            # Upload was sent: not_found indicates record pending, not failure
             not_found += 1
             if not_found >= NOT_FOUND_GRACE_POLLS or time.monotonic() >= deadline:
                 return {"status": "unknown", "request_id": request_id,
@@ -293,7 +292,7 @@ def wait_for_result(api_key: str, request_id: str, wait_secs: int) -> dict:
             continue
         progress = f"{status.get('completed', 0)}/{status.get('total', '?')}"
         if (state, progress) != last:
-            log(f"   状态 status: {state} ({progress})")
+            log(f"   Status: {state} ({progress})")
             last = (state, progress)
         if state in FINAL_STATUSES:
             return status
@@ -304,7 +303,7 @@ def wait_for_result(api_key: str, request_id: str, wait_secs: int) -> dict:
 
 
 def summarize_results(status: dict) -> list[dict]:
-    """把各平台结果统一成 [{platform, status, url, postId, note, error, inbox}]。"""
+    """Normalize platform results to [{platform, status, url, postId, note, error, inbox}]."""
     raw = status.get("results") or []
     if isinstance(raw, dict):
         raw = [{"platform": p, **r} for p, r in raw.items()]
@@ -321,24 +320,24 @@ def summarize_results(status: dict) -> list[dict]:
         raw_url = r.get("post_url") or r.get("url")
         url = raw_url if raw_url and str(raw_url).startswith("http") else None
         if not url and platform == "youtube" and post_id:
-            url = f"https://www.youtube.com/watch?v={post_id}"  # private 视频本人也能打开
+            url = f"https://www.youtube.com/watch?v={post_id}"  # Private video link accessible to owner
         out.append({
             "platform": platform,
             "status": state,
             "url": url,
             "postId": post_id,
-            "note": raw_url if raw_url and not url else None,  # 如 "Post uploaded as Private..."
+            "note": raw_url if raw_url and not url else None,  # e.g. "Post uploaded as Private..."
             "error": (r.get("error_message") or r.get("error")) if state != "completed" else None,
             "inbox": bool(r.get("fallback_to_inbox")),
         })
     return out
 
 
-# ---------------------------------------------------------------- 校验与输出
+# ---------------------------------------------------------------- Validation & output
 def parse_schedule(value: str, tz: str | None) -> str:
     raw = value.strip()
     dt = datetime.fromisoformat(raw[:-1] + "+00:00" if raw.endswith("Z") else raw)
-    if tz:  # 带 --timezone 时保持本地时间，由 API 按该时区解释
+    if tz:  # Preserve local time when --timezone specified
         return dt.replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -349,7 +348,7 @@ def parse_schedule(value: str, tz: str | None) -> str:
 
 
 def validate_args(args) -> str | None:
-    """任何网络请求之前校验，参数错误不会浪费一次上传。"""
+    """Validate arguments before network requests to avoid wasted uploads."""
     if not args.video:
         return "Missing --video."
     vpath = Path(args.video)
@@ -394,7 +393,7 @@ def fail(msg: str, error_type: str, json_out: bool, **extra):
 
 
 def report_unknown(request_id: str, reason: str, json_out: bool, **extra) -> int:
-    """结果无法确认：给出 request_id 与查询命令，明确要求不要重跑发布。"""
+    """Ambiguous status: output request_id and query command, do not re-publish."""
     cmd = f"python3 publish/upload_post.py --status {request_id}"
     log(f"?? Outcome UNKNOWN ({reason}). The video may already be publishing.")
     log(f"?? DO NOT re-run the publish command: that can post it twice. Check with: {cmd}")
@@ -468,7 +467,7 @@ def main() -> None:
         fail("UPLOAD_POST_API_KEY is not set: see references/publish-upload-post.md.", "auth", args.json_out)
 
     if args.status:
-        # job_id 是 32 位十六进制；先查更可能的类型，另一种作兜底
+        # job_id is 32-char hex; probe most likely type first
         kinds = ["job_id", "request_id"] if re.fullmatch(r"[0-9a-f]{32}", args.status) else ["request_id", "job_id"]
         try:
             for kind in kinds:
@@ -514,13 +513,13 @@ def main() -> None:
               "connectedPlatforms": connected, "missingPlatforms": missing}, args.json_out)
         sys.exit(0)
 
-    # 发送前先记下恢复用的 id：进程中途退出时，用它查询而不是重跑发布
+    # Log recovery id prior to send
     log(f"-> request_id {request_id}. If this run is interrupted, do NOT re-run it; check with: "
         f"python3 publish/upload_post.py --status {request_id}")
     log(f"-> Uploading '{Path(args.video).name}' to {', '.join(args.platforms)} as '{args.user}'...")
     try:
         submitted = submit_upload(api_key, args.video, form, args.thumbnail, request_id)
-    except ApiError as e:  # 400/401/403/422：受理前明确拒绝
+    except ApiError as e:  # 400/401/403/422: explicit rejection
         fail(str(e), e.error_type, args.json_out, requestId=request_id)
     except AmbiguousSubmit as e:
         log(f"?? upload response unclear ({e}); checking request {request_id} instead of re-sending...")
@@ -532,7 +531,7 @@ def main() -> None:
 
     if args.schedule:
         job_id = submitted.get("job_id")
-        # 定时发布按文档用 job_id 查询；API 没返回 job_id 时才退回 request_id
+        # Scheduled posts queried by job_id
         cmd = f"python3 publish/upload_post.py --status {job_id or request_id}"
         log(f"OK scheduled for {args.schedule} {args.timezone or 'UTC'} (job {job_id}).")
         log(f"   check later: {cmd}")

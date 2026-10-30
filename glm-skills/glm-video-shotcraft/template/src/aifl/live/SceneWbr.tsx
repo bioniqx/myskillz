@@ -33,12 +33,12 @@ const WIPE = 8;
 // stacking, same vocabulary as the papers shot), landing below it. ----
 /** One past week per line: `week|date|title` */
 const PAST_WEEKS_DSL = [
-  '2026 第 27 周|7月3日|2026-W27 · Foundation Lab Weekly',
-  '2026 第 26 周|6月26日|2026-W26 · Foundation Lab Weekly',
-  '2026 第 25 周|6月19日|2026-W25 · Foundation Lab Weekly',
-  '2026 第 24 周|6月12日|2026-W24 · Foundation Lab Weekly',
-  '2026 第 23 周|6月5日|2026-W23 · Foundation Lab Weekly',
-  '2026 第 22 周|5月29日|2026-W22 · Foundation Lab Weekly',
+  '2026 Week 27|Jul 3|2026-W27 · Foundation Lab Weekly',
+  '2026 Week 26|Jun 26|2026-W26 · Foundation Lab Weekly',
+  '2026 Week 25|Jun 19|2026-W25 · Foundation Lab Weekly',
+  '2026 Week 24|Jun 12|2026-W24 · Foundation Lab Weekly',
+  '2026 Week 23|Jun 5|2026-W23 · Foundation Lab Weekly',
+  '2026 Week 22|May 29|2026-W22 · Foundation Lab Weekly',
 ].join('\n');
 const parsePastWeeks = (dsl: string) =>
   dsl

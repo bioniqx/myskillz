@@ -1,12 +1,12 @@
-// D 式 黑场字卡（black-card）——前镜收尾淡入黑场，字卡逐词压印出现（paper-title-card
-// 的暗场变体），再交棒后镜。章节级分段 + 呼吸位二合一；一支 30s 片 D 式 ≤2 次。
-// 参考实现（真实纹理）：A 景 = projects-full 项目板（前镜收尾 **8f** 淡入黑场，
-// 符合定义 6–10 帧）；暗底字卡 = "weekly brief, every project linked" 逐词 letterpress
-// （暗底 + 页面底色浅色字，不用强调色当正文字——浅底字卡才不像报错弹窗），等宽小字
-// 副行；完整标题落定后 **hold ~15 帧** 再退场，避免"最后一个字刚出现就淡出"；
-// 后镜 = wbr-full 周报页从黑场淡入 8f 交棒。
-// 节拍：0–8 A 淡出 → 8–20 黑场静 → 20–47 字卡逐词压印 → 47–62 完整标题 hold →
-// 62–70 字卡退场 → 70–78 淡入 B 景 → 78–120 B hold。
+// D-Style Black Card Transition (black-card) — Previous shot fades into black, title card reveals word-by-word with letterpress stamp
+// (dark-mode variant of paper-title-card), then hands off to next shot. Combines chapter divider + breathing room; <= 2 uses per 30s video.
+// Reference implementation (realistic textures): Scene A = projects-full board (ends with **8f** fade to black,
+// adhering to 6–10 frame spec); dark title card = "weekly brief, every project linked" word-by-word letterpress
+// (dark ground + page light-tone text, no accent color for body text — avoids feeling like an error alert modal), monospace secondary line;
+// once full title is revealed, **hold ~15 frames** before exit to avoid "fading out immediately as last word lands";
+// Scene B = wbr-full weekly report page fades in from black over 8f handoff.
+// Beats: 0–8 A fade-out -> 8–20 black hold -> 20–47 title word-by-word stamp -> 47–62 full title hold ->
+// 62–70 title exit -> 70–78 fade into Scene B -> 78–120 Scene B hold.
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 
 export const BLACKCARD_DUR = 120;
@@ -15,7 +15,7 @@ const A_VIEW_Y = -180;
 const SERIF = 'ui-serif, Georgia, "Times New Roman", serif';
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-// 暗底字卡的正文用页面底色（浅色），强调色只给重点词
+// Body text on dark card uses page ground tone (light); accent color reserved for key words
 const PAPER_LIGHT = 'oklch(92% 0.01 82)';
 const AMBER = 'oklch(68% 0.12 65)';
 const DIM = 'oklch(72% 0.01 82)';
@@ -33,28 +33,28 @@ const WORDS: { text: string; accent?: boolean }[] = [
 const Scene: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // A 景收尾：0→8 淡出到黑场（定义要求 6–10 帧，此处 8）
+  // Scene A outro: 0->8 fade out to black (spec requires 6–10 frames, here 8)
   const aOut = interpolate(frame, [0, 8], [1, 0], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.5, 0, 0.4, 1),
   });
 
-  // 字卡：20 起逐词压印（delay=20+i·3，最后词 i=6 delay=38 完成 47）
+  // Title card: word-by-word letterpress from 20 (delay = 20 + i*3, last word i=6 delay=38 completes at 47)
   const cardOpacity = interpolate(frame, [18, 26], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.2, 0.7, 0.3, 1),
   });
-  // 完整标题 47f 落定，hold 到 62 再退场（保留 ~15 帧完整展示）
+  // Full title settles at 47f, holds until 62 before exit (~15 frames full presentation)
   const cardOut = interpolate(frame, [62, 70], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.4, 0, 0.5, 1),
   });
 
-  // 后镜 B 淡入：70→78（字卡 62→70 完全淡出后再交棒）
+  // Scene B fade-in: 70->78 (hands off after title completely fades out across 62->70)
   const bIn = interpolate(frame, [70, 78], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.3, 0, 0.2, 1),
   });
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0c0c10', overflow: 'hidden' }}>
-      {/* A 景 */}
+      {/* Scene A */}
       {frame < 14 ? (
         <div style={{ position: 'absolute', opacity: aOut }}>
           <Img
@@ -64,7 +64,7 @@ const Scene: React.FC = () => {
         </div>
       ) : null}
 
-      {/* 黑场字卡（18–74） */}
+      {/* Black title card (18–74) */}
       {frame >= 18 && frame < 74 ? (
         <AbsoluteFill
           style={{
@@ -119,7 +119,7 @@ const Scene: React.FC = () => {
         </AbsoluteFill>
       ) : null}
 
-      {/* B 景（70 起淡入） */}
+      {/* Scene B (fades in from 70) */}
       {frame >= 70 ? (
         <div style={{ position: 'absolute', opacity: bIn }}>
           <Img

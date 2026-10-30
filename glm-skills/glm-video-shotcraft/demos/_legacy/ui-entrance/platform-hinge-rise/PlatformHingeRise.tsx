@@ -1,5 +1,5 @@
-// platform-hinge-rise — 平台建立后，两块主体从相邻底部铰点反向翻起，最后结论台升入。
-// 从独立 motion-blocking 研究中整理为纯 DOM/SVG 的通用 Remotion demo。
+// platform-hinge-rise — Once the platform is established, two subject panels flip up in opposite directions from adjacent bottom hinges, followed by the conclusion pedestal rising into place.
+// Refactored from a standalone motion-blocking study into a pure DOM/SVG generic Remotion demo.
 import React from 'react';
 import { Easing, interpolate, useCurrentFrame } from 'remotion';
 import { DesignStage } from '../../_fixtures/Motion';

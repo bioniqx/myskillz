@@ -1,45 +1,45 @@
 ---
 name: deck-deal-flyin
-一句话: 暗色石墨桌面上的实体牌堆特写环绕开局，灯从牌堆亮到旁边的页面板，一摞卡像发牌一样硬加速甩进网格，相机追着发牌升起后仰、落在整块满板的跑道式俯瞰上定格
-适用: 展示"内容量大/源源不断汇入"的列表页与卡片墙；建立信息密度的第一印象
-时长: 150f（约 5s：0–36 牌堆特写 + 预备，36–~101 发牌，108–150 满板 hold）
-能量: 高（节奏爬升段主力，不放开场第一镜）
+summary: A physical card stack opens the scene, then cards accelerate into a live grid as the camera follows the growing page.
+use: Showcasing list views and card walls with high content volume and continuous incoming streams; establishing immediate impressions of information density.
+duration: 150f (~5s: 0–36 deck close-up + anticipation, 36–~101 dealing, 108–150 full board hold)
+energy: High (Workhorse for rhythm ramp-up sections; avoid placing as opening shot)
 ---
 
-## 意图
-先给悬念（这一摞是什么？），再给答案（是几十个项目，它们自己飞进页面各就各位）。观众要感受到"东西源源不断地涌进来"，每张卡带着急迫感砸到位。
+## Intention
+Present suspense first (what is this stack?), then reveal the payoff (it is dozens of items flying into the page to take their places). Viewers must feel items streaming in endlessly, with each card snapping into position with urgent momentum.
 
-## 动效核心
-- 前半（pile-orbit-open，可选）：所有卡叠成有物理高度的实体牌堆，放在页面板旁的暗色拉丝石墨桌面上，顶光只打牌堆，相机侧斜特写绕堆环绕；拉远时"灯"从牌堆处以柔边光圈把暗着的页面板照亮——页面板始终是摆在暗桌上的一块展板，四周暗场贯穿到尾帧
-- **预备拍（anticipation，借鉴迪士尼法则 2）**：首张出牌前给一拍段落级预备——牌堆整体微下压 + 顶卡向出牌反方向回拉，观众的眼睛先被引到牌堆再看发牌。预备只做段落级一次，**不逐卡加**（逐卡预备会拖垮 R2 的硬加速节拍）
-- 后半（deck-deal）：26 张卡从牌堆按阅读序发向网格目标位，出牌间隔硬加速收缩；单卡飞行带 z 弧顶、过冲 settle、落地 press 回弹（settle/press 即法则 5 的 follow-through——快停配缓冲，砍掉读作硬冻结）
-- 相机追着发牌往板尾走（越来越快），同时升高、后仰、侧转，落在一张跑道式俯瞰：整块板沿对角线伸向远处、26 张卡全部在画，远端压暗做景深；满板后静止 hold（> 0.5s，只留 1.5% 极缓推近），左下升起标语 + mono 计数行（计数跟着落地张数跳）。收尾停顿期各层不同帧停稳——卡体先落定、阴影收敛滞后 ~3f、残影最后消散（拖拽层级，借鉴法则 5；全要素同帧冻结读作机械）
+## Motion Core
+- First half (pile-orbit-open, optional): All cards stack into a physical deck with real height resting on a dark brushed graphite surface beside the page board. Overhead spotlight illuminates only the deck while camera orbits tightly from a low angle. As camera pulls back, the light expands from the deck via soft-edge vignette to illuminate the dark page board—the page board remains a display board resting on a dark table throughout to the final frame.
+- **Anticipation (adapted from Disney Principle 2)**: Before first card launches, provide a section-level anticipation beat—the entire deck compresses slightly downward while top card pulls back opposite to deal direction, pulling viewers' eyes to the deck before dealing begins. Anticipation occurs once at section level, **never per card** (per-card anticipation destroys the hard-accelerating cadence).
+- Second half (deck-deal): 26 cards deal from deck toward grid target slots in reading order, with launch intervals hard-accelerating; individual card flight carries z-arc crest, overshoot settle, and landing press-bounce (settle/press embodies Principle 5 follow-through—rapid stop paired with cushioning, removing it reads as rigid freeze).
+- Camera tracks dealing toward board bottom (accelerating), simultaneously rising, tilting backward, and orbiting sideways to settle into a dramatic runway overhead view: entire board extends diagonally into the distance with all 26 cards visible and far edge shaded for depth of field; full board holds static (>0.5s with subtle 1.5% slow push), bottom-left reveals slogan + mono counter (counter increments on each landing). Settle rest phase stabilizes layers across staggered frames—card body lands first, shadow contraction lags ~3f, flight ghost fades last (drag hierarchy adapted from Principle 5; freezing all elements on the exact same frame reads robotic).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| orbit 环绕 | 相机关键帧走单调三次 Hermite 样条逐帧展开（关键帧处速度连续，无顿挫）。帧 0→30，rotX 48/rotY −30/rotZ 9/zoom 1.9 绕到 rotX 42/rotY 24/rotZ −6/zoom 1.8，persp 1100 | 特写四件套缺一不可：侧面倾斜角+可感知高度+orbit+反差深色材质（Q7，用户逐项点名） |
-| 堆叠高度 | STACK_STEP=3px 物理层高 × 26 张 → 顶卡 z≈78px；姿态抖动 px/py 按 `(((k*7)%9)−4)*2` 确定性公式 ±8px、rotZ ±3° | 抖动必须确定性伪随机（硬规则：渲染必须可复现），真随机会渲染间抖动 |
-| 石墨桌面 | 4 层叠加：随拉远扩大的顶光 radial + 104deg 宽幅镜面高光带 + 确定性 feTurbulence 各向异性拉丝纹小图平铺（baseFrequency 0.0018×0.62，alpha 0.4）+ 115deg 冷灰渐变；平面向外扩 4000px、远处柔边隐进暗场。页面板（截图内容区 x 352–1568 + 纸面延长）开场被 0.88 暗层盖住，34→64f 以牌堆为圆心柔边光圈揭开；落进未照亮区域的卡用同一公式压暗 | 别再整层淡出金属换成全屏白纸——暗/亮反差是这镜的质感来源；拉丝纹在 0.5x 俯瞰下对比要压低，否则出摩尔纹 |
-| 预备拍 | 首发 cue 前 10f（26→36）：牌堆整体下压 48px（约堆高六成）+ 顶卡向出牌反方向回拉 30px，缓动 easeOut，首发瞬间释放 | **幅度必须过肉眼阈值**：4px/2px 初版用户实测完全无感，放大 12 倍（48/30px）才裁决通过（判例 2026-07-09 进化轮 #2）——渲染后自查"不逐帧能否看出蓄力"，看不出等于没做；帧预算从 orbit 尾段挪，不挤占发牌段 |
-| 发牌节拍 | 第 k 张 cue = 36 + 4k − 0.0792·k(k−1)，间隔 4f 收缩到 0.2f | 均匀间隔立刻显得机械；匀加速不够狠也被否——要"hard-accelerating"级别（R2/B3） |
-| 卡量 | 10 真卡 + 16 extras = 26 张；网格向下扩 5 行、纸面延长 2036px | 卡不够多涌入感不成立——宁多勿少；extras 落进真实扩展格位，不悬浮（Q9） |
-| 单卡飞行 | deal 8f（bezier(0.3,0,0.2,1)，z 弧顶 +110px sin、scale 峰值 1.06）+ settle 4f（bezier(0.3,0,0.25,1.15) 轻过冲）+ press 0.996→1 回弹 2f | 落地要弹必须 y1>1 的 bezier；settle+press 合计 6f ≈ 飞行 8f 的 30%——快停配足缓冲（法则 5 比例）；落定后强制 identity transform 防斜板亚像素漂移 |
-| 收尾拖拽层级 | rest 段内分层停稳：卡体 press 回弹结束即锁定，落地阴影 `0 32px→0 2px` 收敛滞后卡体 2–4f，飞行残影 opacity 尾梢再拖 3–5f 消散 | 借鉴法则 5 的 drag hierarchy（根→主→次级错帧 2–4f）；0.5s rest 静止判例不变——层级错帧发生在 rest 段头部，rest 末端全部锁死（模式已沉为 assets/lib/helpers/motion.ts lagged） |
-| 运动模糊（单卡） | 飞行中 5% 路径滞后 blur(6px) 残影，opacity 0.25·(1−t) | ghost 残影比真 motion blur 便宜且够用——单卡层面维持此方案 |
-| 运动模糊（相机） | 追逐 scroll 等 ≥30px/f 的快速运镜段用 `@remotion/motion-blur` 的 `<CameraMotionBlur shutterAngle={180} samples={10}>` 包镜；用 `<Sequence>` 把包裹范围切到快速段起点，慢速特写段（<10px/f）不包 | 30fps 下相机每帧跳 50–70px 会频闪，快摇拖影是电影摄像机的物理本能；shutterAngle 越大拖影越长（>270 发糊），samples 按渲染预算调（每 +1 约 +1 倍渲染时间）；整镜全包会把慢速 orbit 段的 1px 级细纹理（拉丝金属）采样抹软——只包快速段；借鉴 Remotion 官方生态非用户判例（2026-07-11 进化轮 #8） |
-| 追逐 + 升起 | 锚点 f62 正视板顶（zoom 0.8，rotX 22）→ f86 板中（zoom 0.56，rotX 38，rotZ −10）→ f110 跑道俯瞰（zoom 0.5，rotX 52，rotY −6，rotZ −26，persp 3300，屏幕右移 300px 给左下标语让位）→ f150 zoom 0.508 | persp 要随后仰同步加大（1100→3300），否则近端越过相机平面穿帮；满板后静止是用户逐字要求（R2），hold 只许极缓推近 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| orbit rotation | Camera keyframes expand frame-by-frame via monotonic cubic Hermite spline (continuous velocity at keyframes, zero hitching). Frames 0→30, rotX 48 / rotY −30 / rotZ 9 / zoom 1.9 orbits to rotX 42 / rotY 24 / rotZ −6 / zoom 1.8, persp 1100 | Close-up quartet is indispensable: oblique tilt + perceptible physical height + orbit + contrasting dark material |
+| Stack height | STACK_STEP=3px physical thickness × 26 cards → top card z≈78px; jitter px/py uses deterministic formula `(((k*7)%9)−4)*2` ±8px, rotZ ±3° | Jitter must use deterministic pseudo-randomness (reproducible rendering rule); true randomness shakes across renders |
+| Graphite tabletop | 4 layered elements: overhead radial light expanding with zoom-out + 104deg specular highlight band + deterministic feTurbulence anisotropic brushed texture tile (baseFrequency 0.0018×0.62, alpha 0.4) + 115deg cool gray gradient; plane extends 4000px outward, soft edges fading into dark void. Page board (screenshot content area x 352–1568 + extended canvas) starts covered by 0.88 dark layer, revealed 34→64f via soft spotlight centered on deck; cards landing outside lit zone are shaded by same formula | Avoid fading out metal to full-screen white paper—dark/light contrast delivers the physical texture of this shot; brushed texture contrast must stay low at 0.5x overhead view to avoid moire |
+| Anticipation beat | 10f before first deal cue (26→36): entire deck compresses 48px (~60% stack height) + top card pulls back 30px against launch direction, easing easeOut, releasing instantly at first deal | **Amplitude must exceed visual threshold**: 4px/2px initial draft was imperceptible to human eye, requiring 12x amplification (48/30px) to pass review—verify without stepping frame-by-frame; frame budget taken from tail of orbit, preserving deal phase |
+| Deal cadence | Card k cue = 36 + 4k − 0.0792·k(k−1), interval shrinks from 4f down to 0.2f | Uniform intervals feel robotic; linear acceleration is insufficient—requires hard-accelerating level |
+| Card volume | 10 real cards + 16 extras = 26 cards; grid expands downward by 5 rows, canvas extends 2036px | Too few cards fails to convey flooding stream; extras land into real extended grid slots, never floating |
+| Single card flight | Deal 8f (bezier(0.3,0,0.2,1), z-arc crest +110px sin, scale peak 1.06) + settle 4f (bezier(0.3,0,0.25,1.15) subtle overshoot) + press 0.996→1 bounce 2f | Landing bounce requires bezier with y1>1; settle+press totals 6f ≈ 30% of 8f flight—fast stop paired with ample cushioning (Principle 5 ratio); force identity transform after settling to prevent sub-pixel drift on angled boards |
+| Settle drag hierarchy | Layered settling within rest phase: card body locks once press-bounce completes, landing shadow `0 32px→0 2px` contraction lags card body by 2–4f, flight ghost opacity tail drags 3–5f before fading | Adapted from Principle 5 drag hierarchy (root→primary→secondary staggered by 2–4f); 0.5s rest hold holds firm—stagger occurs at head of rest phase, while end of rest is completely locked |
+| Motion blur (single card) | 5% path lag blur(6px) ghost trail during flight, opacity 0.25·(1−t) | Ghost trails are cheaper and sufficient compared to full motion blur—maintain this approach per card |
+| Motion blur (camera) | Fast camera moves ≥30px/f (such as tracking scroll) wrap shot in `<CameraMotionBlur shutterAngle={180} samples={10}>` from `@remotion/motion-blur`; slice wrapping scope to fast phase via `<Sequence>`, omitting slow close-up phase (<10px/f) | At 30fps camera jumps of 50–70px per frame cause strobing; fast whip streaks are physical camera nature; larger shutterAngle yields longer streaks (>270 blurs heavily), samples adjust to render budget (+1 sample ≈ +1x render time); wrapping entire shot blurs fine 1px brushed metal textures during slow orbit—wrap only fast moves |
+| Tracking + Rise | Anchor f62 front-facing board top (zoom 0.8, rotX 22) → f86 board center (zoom 0.56, rotX 38, rotZ −10) → f110 runway overhead (zoom 0.5, rotX 52, rotY −6, rotZ −26, persp 3300, screen shifted right 300px for bottom-left slogan) → f150 zoom 0.508 | Persp must scale up alongside backward tilt (1100→3300) to prevent near plane clipping camera; full board must hold static at end, allowing only subtle push |
 
-## 声音
-orbit 拉远+首批发牌钉 whoosh-big（模板片钉在 f308），发牌加速段钉 whoosh-fast（f340/356）。连发落位音防机枪感三招：双样本交替、音量阶梯递减、间隔跟随动画曲线加速——密到糊成一片时让声音淡出成一条 swoosh，不逐卡配音（S2）。
+## Audio
+Anchor whoosh-big on orbit pull-back and initial deals (placed at f308 in template), anchor whoosh-fast on deal acceleration phase (f340/356). Three techniques prevent machine-gun fatigue during rapid landings: alternate two audio samples, decrease volume stepwise, and accelerate intervals alongside animation curve—as deals merge into dense cluster, fade audio into a single swoosh rather than scoring individual cards.
 
-## 已知坑
-- 抽象 flood 式多轮不收敛，换"发牌"物理隐喻一轮通过（R2/B3）——群体运动先找物理隐喻再写代码
-- 卡纹理必须真实页面元素切片（Q1），手搓假卡一眼假；extras 复用真卡切片错位摆放
-- 全部同时飞读作爆炸，错峰递加速是灵魂；前半 orbit 若砍掉，发牌起点要另给"牌堆从哪来"的交代
-- anticipation/follow-through 手法借鉴自迪士尼 12 法则（pixel2motion skill 内置提炼版）；预备拍幅度已有用户判例（2026-07-09："OK能看出来了"，此前两档小幅度均无感）；拖拽层级错帧仍是默认建议——与 R2 判例冲突时（如用户要求更快更硬）判例优先
-- 教科书比例（预备 = 主动作 20–30%）在拉远机位下产出的像素位移过小——**先算像素再算比例**，宣传片观众看的是全景不是特写
-- `<Sequence>` 重定基帧号 + CameraMotionBlur 内部 Freeze 会让 PageCam 采样错帧（横向错模糊穿帮）——绝对帧编排的镜头给 PageCam 传 `frame` prop 还原绝对帧（lib 组件已支持）
+## Known Pitfalls
+- Abstract flood animations failed multiple iterations; adopting physical "card dealing" metaphor passed in one round—ground collective motion in physical metaphors before writing code.
+- Card textures must use slices from real product pages; mock cards immediately look fake. Extras reuse real card slices arranged with offsets.
+- Launching all cards simultaneously reads as an explosion; staggered accelerating cascade is the soul of this shot. If cutting initial orbit, provide an alternative establishing beat for where the deck comes from.
+- Anticipation and follow-through derive from Disney's 12 Principles (distilled in pixel2motion skill); anticipation amplitude must exceed visual threshold—verify without stepping frame-by-frame whether energy wind-up is visible.
+- Textbook ratio (anticipation = 20–30% of main action) produces tiny pixel displacements under zoomed-out cameras—**calculate pixel displacements before ratios**; promo audiences watch panoramas, not micro close-ups.
+- `<Sequence>` base frame reset + CameraMotionBlur internal Freeze causes PageCam sampling frame misalignment (horizontal blur artifacts)—pass absolute `frame` prop to PageCam for shots using absolute frame timing.
 
-## 参考实现
-demos/ui-entrance/deck-deal-flyin/DeckDealFlyin.tsx（原 template/src/aifl/live/SceneFlyIn.tsx 0–113 段）
+## Reference Implementation
+demos/ui-entrance/deck-deal-flyin/DeckDealFlyin.tsx (formerly template/src/aifl/live/SceneFlyIn.tsx 0–113 section)

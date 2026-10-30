@@ -1,19 +1,19 @@
-// 乱码解码字（scramble-decode）——终端黑客感文字入场。
-// 标题 "DECODE SPEED" 每字符先高速跳随机字母/数字（每 2f 换一个，seed hash 取字符），
-// 从左到右逐个锁定：第 i 个字符在帧 20+i*6 锁定为真字符，锁定瞬间该字符反色闪
-// （G.ink 色块白字 2f）随即恢复。跳动期字符 G.mid，锁定后 G.ink。
-// 关键帧：0–20f 全员乱跳 → 20–86f 从左到右逐个锁定 → 87–130f 完全静止收尾。
+// scramble-decode — Hacker-terminal text entrance
+// Title "DECODE SPEED" has each character rapidly cycling through random letters/numbers (every 2f, hashed from seed),
+// locking in sequence from left to right: character i locks to target glyph at frame 20+i*6; on lock, char flashes inverted
+// (G.ink block with white text for 2f) then settles. Scrambling characters use G.mid, locked use G.ink.
+// Keyframes: 0–20f full scramble -> 20–86f sequential lock from left to right -> 87–130f fully static ending.
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
 
 const TEXT = 'DECODE SPEED';
 const CHARSET = 'ABCDEF0123456789#$%&';
-const LOCK_START = 20; // 第 0 个字符锁定帧
-const LOCK_STEP = 6; // 相邻字符锁定间隔
-const FLASH_LEN = 2; // 锁定反色闪持续帧数
+const LOCK_START = 20; // Lock frame for character 0
+const LOCK_STEP = 6; // Interval between adjacent character locks
+const FLASH_LEN = 2; // Lock invert flash duration in frames
 
-// 帧确定伪随机
+// Frame-deterministic pseudorandom generator
 const h = (n: number) => {
   const s = Math.sin(n * 127.3) * 43758.5453;
   return s - Math.floor(s);
@@ -54,7 +54,7 @@ export const ScrambleDecode: React.FC = () => {
           const lockFrame = LOCK_START + i * LOCK_STEP;
           const locked = frame >= lockFrame;
           const flashing = locked && frame < lockFrame + FLASH_LEN;
-          // 跳动期：每 2 帧换一个伪随机字符
+          // Scramble phase: changes pseudorandom character every 2 frames
           const tick = Math.floor(frame / 2);
           const scrambleChar = CHARSET[Math.floor(h(i * 101 + tick * 7 + 13) * CHARSET.length)];
           const shown = locked ? ch : scrambleChar;
@@ -74,7 +74,7 @@ export const ScrambleDecode: React.FC = () => {
           );
         })}
       </div>
-      {/* 底部进度提示条：已锁定字符数比例，帮助读出"从左到右扫过"的推进感 */}
+      {/* Bottom progress bar: ratio of locked characters, reinforcing the left-to-right sweep feel */}
       <div style={{ width: 900, height: 10, background: G.line, borderRadius: 5, overflow: 'hidden' }}>
         <div
           style={{

@@ -1,28 +1,29 @@
-// deck-deal-flyin —— 牌堆特写环绕 → 预备 → 一摞卡硬加速发进网格 → 相机追着发牌升起 → 满板定格（第二轮重设计）
-// 手法不变：实体牌堆（真实卡片切片）特写 orbit 开局，预备拍后 26 张卡按阅读序、出牌间隔硬加速地甩进页面网格，
-// 相机追着发牌走，满板后停住。
+// deck-deal-flyin —— Deck closeup orbit → Anticipation → Stack deals into grid with hard acceleration → Camera rises tracking deals → Full-board freeze (Round 2 redesign)
+// Core motif retained: physical deck (authentic card slices) closeup orbit opener, followed by anticipation beat where 26 cards deal into the page grid in reading order with hard acceleration;
+// camera tracks the deals, locking in after the board is filled.
 //
-// 设计决定
-// - look = graphite（近单色暗场 · 白为强调 · 一点香槟金）。整镜头发生在一张暗色拉丝石墨桌面上：
-//   牌堆放在页面板（真实 projects 截图，Q1 纹理保留）右侧的桌面上，一盏顶光只打牌堆；
-//   拉远时"灯"从牌堆亮到页面板（板面由暗到亮的光圈），页面板像一块被摆上桌的白色展板，四周始终是暗场——
-//   不再整屏切成白纸，暗/亮反差贯穿到最后一帧。
-// - 相机：一条连续的单调 Hermite 样条（关键帧处速度连续，无顿挫）——低机位侧斜绕牌堆 → 拉远正视板顶 →
-//   追着越发越快的牌往板尾走、同时升高后仰 → 落在一张"跑道式"俯瞰：整块板沿对角线伸向远处，
-//   26 张卡全部在画，近大远小（满板的体量一眼可见）。俯瞰位只保留极缓推近（1.5%）。
-// - 景深：俯瞰位远端（板首）压暗 + 降对比，近端最亮——光跟着最后几张卡走到镜头前。
-// - 版式：满板后左下升起两行标题「Your product, / in motion.」（video-shotcraft 标语，120px 800/300 字重对比）+ 一行 mono 计数
-//   「video-shotcraft 标志 · 26 REAL PAGE CAPTURES」——计数在发牌期间就跟着落地数跳（26 张卡 = 26）。
+// Design decisions
+// - look = graphite (near-monochrome dark field · white accents · touch of champagne gold). The entire shot takes place on a dark brushed graphite tabletop:
+//   the deck sits on the desk to the right of the page board (real projects screenshot, Q1 texture retained), illuminated by a single top spotlight;
+//   as the camera pulls out, the spotlight expands from the deck to the page board (soft-edged circle of light revealing the board from dark to bright);
+//   the page board appears as a white display board set on the desk, surrounded continuously by a dark field—
+//   no longer snapping the full screen to white paper; dark/bright contrast sustains through the final frame.
+// - Camera: single continuous monotonic Hermite spline (continuous velocity at keyframes, zero hitching) — low-angle oblique orbit around deck → zoom-out facing top of board →
+//   tracking accelerating cards down the board while elevating and pitching back → landing on a "runway" bird's-eye view: the board stretches diagonally into the distance,
+//   all 26 cards framed in perspective (scale of full board instantly readable). Bird's-eye position maintains a subtle 1.5% push-in.
+// - Depth of field: distant end in bird's-eye view (top of board) dimmed + reduced contrast, foreground brightest — light follows final cards into the foreground.
+// - Typography: after board fills, lower-left reveals two-line headline "Your product, / in motion." (video-shotcraft tagline, 120px 800/300 weight contrast) + mono counter
+//   "video-shotcraft mark · 26 REAL PAGE CAPTURES" — counter increments with landed cards during dealing (26 cards = 26).
 //
-// 时间表（30fps，共 150f）
-//   0–28    orbit：侧斜低机位绕牌堆（rotY −30°→+26°），顶光只打牌堆，板面暗
-//   26–36   预备：牌堆整体下压 48px、顶卡向出牌反方向回拉 30px（过肉眼阈值判例）
-//   36–~101 发牌：第 k 张 cue = 36 + 4k − 0.0792·k(k−1)（间隔 4f → 0.2f 硬加速），
-//           单卡 8f 俯冲（z 弧顶 + 峰值 1.06x）+ 4f 过冲落定 + 2f press；飞行残影
-//   34–62   拉远：板面光圈亮起，相机正视板顶
-//   62–108  追逐 + 升起：相机沿板往下追、升高后仰、侧转 → 跑道俯瞰
-//   100–126 标题逐词升起、计数行定格
-//   108–150 hold：满板静止（> 0.5s），极缓推近 + 光的呼吸
+// Timeline (30fps, 150f total)
+//   0–28    orbit: low-angle oblique orbit around deck (rotY −30°→+26°), top spotlight on deck only, board dark
+//   26–36   Anticipation: entire deck depresses 48px, top card pulls back 30px against deal direction (surpasses perceptual threshold)
+//   36–~101 Dealing: card k cue = 36 + 4k − 0.0792·k(k−1) (interval 4f → 0.2f hard acceleration),
+//           per card 8f dive (z-arc apex + peak 1.06x) + 4f overshoot landing + 2f press; flight motion blur
+//   34–62   Zoom out: board light circle illuminates, camera faces top of board
+//   62–108  Track + Rise: camera tracks down board, ascends, tilts back, banks → runway bird's-eye perspective
+//   100–126 Headline rises word-by-word, counter freezes
+//   108–150 Hold: full-board rest (> 0.5s), very slow push-in + light breathing
 import React from 'react';
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import { EASE, FONT, ramp } from '../../_fixtures/Polish';
@@ -37,7 +38,7 @@ const cards = layout.projects.cards;
 const PAGE_H = layout.projects.pageH;
 const PAPER = '#f9f6f1';
 
-// 页面板：只取内容区（左右各留一截页边），下方纸面延长容纳 16 张溢出卡
+// Page board: content area only (margins left/right), paper extended below to fit 16 overflow cards
 const BOARD = { x: 352, w: 1216 };
 const COLS = [408, 781.328125, 1154.65625];
 const CARD_W = 357.328125;
@@ -52,7 +53,7 @@ const extras = Array.from({ length: 16 }, (_, i) => ({
   h: 312,
 }));
 
-// 牌堆：放在板右侧的桌面上（页面坐标）
+// Deck: placed on tabletop to the right of board (page coordinates)
 const PILE = { x: 1640, y: 250 };
 const N_CARDS = 26;
 const DEAL_START = 36;
@@ -76,7 +77,7 @@ const SETTLE_EASE = Easing.bezier(0.3, 0, 0.25, 1.15);
 const DIVE_EASE = Easing.bezier(0.3, 0, 0.2, 1);
 const ANTICIPATE = { from: 26, to: 36, pileDown: 48, topPull: 30 };
 
-// ───────────── 相机：单调三次 Hermite 样条（各参数分别过锚点，关键帧处速度连续） ─────────────
+// ───────────── Camera: Monotonic cubic Hermite spline (parameters interpolate anchors with continuous velocity) ─────────────
 type Cam = { cx: number; cy: number; zoom: number; rotX: number; rotY: number; rotZ: number; persp: number; sx: number };
 type Key = Cam & { frame: number };
 const ANCHORS: Key[] = [
@@ -111,7 +112,7 @@ const hermite = (xs: number[], ys: number[]) => {
 const CURVES = Object.fromEntries(PARAMS.map((p) => [p, hermite(ANCHORS.map((k) => k.frame), ANCHORS.map((k) => k[p]))])) as Record<keyof Cam, (x: number) => number>;
 const camAt = (f: number): Cam => Object.fromEntries(PARAMS.map((p) => [p, CURVES[p](f)])) as Cam;
 
-// ───────────── 拉丝石墨桌面纹理（确定性 feTurbulence：x 极低频 / y 高频 = 横向拉丝） ─────────────
+// ------------- Brushed graphite desk texture (deterministic feTurbulence: x low-freq / y high-freq = horizontal brush) -------------
 const BRUSH_TILE = (() => {
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='640' height='640'>` +
@@ -122,30 +123,30 @@ const BRUSH_TILE = (() => {
   return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
 })();
 
-const T = 4000; // 桌面平面外扩（页面坐标），任意斜角不穿帮
+const T = 4000; // Desk plane margin (page coordinates) preventing edge visibility at oblique angles
 
 export const DeckDealFlyin: React.FC = () => {
   const frame = useCurrentFrame();
   const cam = camAt(frame);
 
-  // 板面"灯亮"：f34→64 以牌堆为圆心的柔边光圈把暗板照亮
+  // Board illumination: f34->64 soft radial vignette centered at deck illuminates board
   const lightUp = interpolate(frame, [34, 64], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.5, 0, 0.6, 1) });
   const holeR = 4200 * lightUp;
   const feather = 600 + 1000 * lightUp;
-  // 俯瞰位景深：远端（板首）压暗
+  // Overhead depth of field: far edge darkened
   const fog = ramp(frame, 80, 34, EASE.smooth);
 
-  // 预备拍
+  // Anticipation beat
   const antT = interpolate(frame, [ANTICIPATE.from, ANTICIPATE.to], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.quad) });
 
-  // 计数：已落地张数
+  // Counter: number of landed cards
   const landed = grid.filter((c) => frame >= c.cue + 8).length;
   const statIn = ramp(frame, 90, 12, EASE.out);
 
   const tableBg = [
-    // 顶光：落在牌堆上（开场最亮），随拉远扩大成照亮整块板的大光
+    // Top light: focuses on deck initially, expands as camera pulls back to light entire board
     `radial-gradient(${1100 + 1400 * lightUp}px ${800 + 1600 * lightUp}px at ${T + PILE_CX - 600 * lightUp}px ${T + PILE_CY + 900 * lightUp}px, rgba(235,232,224,${0.2 - 0.08 * lightUp}), rgba(220,216,206,0.05) 45%, transparent 70%)`,
-    // 宽幅镜面高光带
+    // Wide specular highlight streak
     `linear-gradient(104deg, transparent ${T + PILE_CX - 1600}px, rgba(220,226,236,0.07) ${T + PILE_CX - 500}px, rgba(240,244,252,0.11) ${T + PILE_CX}px, rgba(220,226,236,0.05) ${T + PILE_CX + 600}px, transparent ${T + PILE_CX + 1800}px)`,
     `${BRUSH_TILE} 0 0 / 640px 640px repeat`,
     'linear-gradient(115deg, #1b1c1f 0%, #24262a 30%, #18191c 56%, #202226 80%, #141518 100%)',
@@ -157,7 +158,7 @@ export const DeckDealFlyin: React.FC = () => {
     <AbsoluteFill style={{ fontFamily: FONT.sans, overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.6, y: 0.2 }} fill={null} intensity={0.5} grain={0} vignette={0} />
 
-      {/* 3D 相机（PageCam2D 同款坐标数学：CSS zoom 做放大，Q2 文字按放大后尺寸栅格化） */}
+      {/* 3D Camera (PageCam2D coordinate math: CSS zoom for magnification, native text rasterization) */}
       <AbsoluteFill style={{ transform: `translateX(${cam.sx.toFixed(2)}px)` }}>
         <div style={{ position: 'absolute', inset: 0, perspective: `${persp.toFixed(2)}px`, perspectiveOrigin: '960px 540px' }}>
           <div
@@ -168,7 +169,7 @@ export const DeckDealFlyin: React.FC = () => {
               transformStyle: 'preserve-3d',
             }}
           >
-            {/* 石墨桌面：远处柔边隐进暗场 */}
+            {/* Graphite desk: distant soft edges fade into dark field */}
             <div
               style={{
                 position: 'absolute', left: -T, top: -T, width: 1920 + 2 * T, height: BOARD_H + 2 * T, background: tableBg,
@@ -177,7 +178,7 @@ export const DeckDealFlyin: React.FC = () => {
               }}
             />
 
-            {/* 页面板：真实截图 + 纸面延长；落在桌上的大投影 + 上沿受光 */}
+            {/* Page board: screenshot + paper extension; deep drop shadow on desk + top edge highlight */}
             <div
               style={{
                 position: 'absolute', left: BOARD.x, top: 0, width: BOARD.w, height: BOARD_H, overflow: 'hidden', borderRadius: 18,
@@ -186,9 +187,9 @@ export const DeckDealFlyin: React.FC = () => {
               }}
             >
               <Img src={staticFile('textures/live/projects-empty.png')} style={{ position: 'absolute', left: -BOARD.x, top: 0, width: 1920, height: PAGE_H }} />
-              {/* 纸面延长段的分区小标（与截图同款排版：大写字距 + 计数） */}
+              {/* Section label on extended paper (uppercase tracking + count) */}
               <div style={{ position: 'absolute', left: 408 - BOARD.x, top: PAGE_H + 6, width: 1104, height: 1, background: 'rgba(60,45,30,0.08)' }} />
-              {/* 板面暗层：开场整块板在暗处，灯从牌堆处亮开（柔边光圈） */}
+              {/* Board dark layer: board starts in dark, radial light illuminates outward from deck */}
               {lightUp < 1 && (
                 <div
                   style={{
@@ -200,7 +201,7 @@ export const DeckDealFlyin: React.FC = () => {
               )}
             </div>
 
-            {/* 26 张卡：牌堆在板右侧桌面上，按硬加速节拍逐张发进网格 */}
+            {/* 26 Cards: deck on right desk surface, dealt sequentially into grid with accelerated rhythm */}
             {grid.map((c, i) => {
               const { cue } = c;
               const diveT = interpolate(frame, [cue, cue + 8], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: DIVE_EASE });
@@ -223,7 +224,7 @@ export const DeckDealFlyin: React.FC = () => {
                 : inPile
                   ? `translate3d(${c.px - c.x - antPull}px, ${c.py - c.y + antDy}px, ${c.pz}px) rotateZ(${c.protZ}deg)`
                   : `translate3d(${dx}px, ${dy}px, ${z}px) rotateZ(${rotFlight}deg) scale(${scale})`;
-              // 阴影：牌堆在暗桌上投重影；飞行时又高又虚；落地后在纸面上收成静置影（滞后卡体 ~3f 收敛）
+              // Shadow: deep shadow at rest on desk; tall and diffuse during flight; converges to resting shadow on landing (~3f lag)
               const shadowLag = interpolate(frame, [cue + 8, cue + 15], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: EASE.out });
               const shadow = isLanded
                 ? `0 ${(2 + 14 * (1 - shadowLag)).toFixed(1)}px ${(6 + 30 * (1 - shadowLag)).toFixed(1)}px rgba(40,30,20,${(0.1 + 0.12 * (1 - shadowLag)).toFixed(3)})`
@@ -235,8 +236,8 @@ export const DeckDealFlyin: React.FC = () => {
               const showGhost = diveT > 0.02 && diveT < 0.98;
               const gx = (c.px - c.x) * 0.06;
               const gy = (c.py - c.y) * 0.06;
-              // 牌堆里的卡带一点顶光暗部（开场只亮顶面），灯亮后恢复
-              // 落进还没被照亮的板面区域的卡同样在暗处（与板面光圈同一公式），牌堆本身只压一点暗部
+              // Deck cards have subtle shadow in stack, recovers as light expands
+              // Cards landing in unlit board areas remain in shadow (matching board illumination formula)
               const dist = Math.hypot(c.x + c.w / 2 - PILE_CX, c.y + c.h / 2 - PILE_CY);
               const dark = Math.min(1, Math.max(0, (dist - holeR) / feather)) * 0.88 * (lightUp < 1 ? 1 : 0);
               const pileShade = inPile ? 0.08 * (1 - lightUp) : diveT > 0.6 ? dark * Math.min(1, (diveT - 0.6) / 0.4) : 0;
@@ -279,10 +280,10 @@ export const DeckDealFlyin: React.FC = () => {
         </div>
       </AbsoluteFill>
 
-      {/* 暗角 + 颗粒（屏幕空间，全程） */}
+      {/* Vignette + grain (screen space, full duration) */}
       <AbsoluteFill style={{ pointerEvents: 'none', background: `radial-gradient(ellipse 75% 75% at 58% 46%, transparent 45%, ${alpha('#050506', 0.55)} 100%)` }} />
 
-      {/* 左下：标题 + 计数行 */}
+      {/* Bottom-left: title + counter row */}
       <div style={{ position: 'absolute', left: 120, top: 664, color: L.ink }}>
         <div style={{ ...type(120, 800) }}>
           <TextReveal text="Your product," by="word" variant="rise" start={100} each={16} gap={4} />
@@ -297,7 +298,7 @@ export const DeckDealFlyin: React.FC = () => {
           ...type(30, 600, { mono: true }), letterSpacing: '0.14em', color: L.ink2,
         }}
       >
-        {/* video-shotcraft 标志（暗底反白版，不加发光） */}
+        {/* video-shotcraft logo (reversed white on dark, no bloom) */}
         <ShotcraftMark size={34} tone="dark" style={{ margin: '-6px 0' }} />
         <span style={{ color: L.ink, fontVariantNumeric: 'tabular-nums', minWidth: '2.2ch' }}>{String(landed).padStart(2, '0')}</span>
         REAL PAGE CAPTURES

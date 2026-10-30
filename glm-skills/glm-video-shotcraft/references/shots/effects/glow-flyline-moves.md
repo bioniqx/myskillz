@@ -1,53 +1,43 @@
 ---
 name: glow-flyline-moves
-一句话: 暗场光斑与飞线三式——glow-orb-ambient 光斑底噪、flyline-arc 飞线连接、orb-flyline-relay 同帧共振组合
-适用: 全片唯一暗场段落的氛围与数据叙事：铺底噪用 A、讲数据流向用 B、要背景给前景搭腔用 C；Linear 官网味
-时长: A 170f（~5.7s）/ B 140f（~4.7s）/ C 165f（5.5s）
-能量: A 低（底噪级）/ B 中 / C 中高
-标签: data
+summary: Three dark-scene accents: ambient glow orbs, connecting flight arcs, and a synchronized orb-to-line relay.
+use: Atmosphere and data storytelling for the sole dark-scene sequence in a video: use A for ambient bed, B for data flow, C for background reacting to foreground; Linear landing page aesthetic
+duration: A 170f (~5.7s) / B 140f (~4.7s) / C 165f (5.5s)
+energy: A Low (ambient floor) / B Medium / C Medium-high
+tags: data
 ---
 
-## 意图
-这是库内第一张整卡住在**暗场**的卡。白底提亮不可见判例反过来读就是：
-要玩光，先去暗场。A 是空间的呼吸——深色底三团大光斑有机漂移，从中央
-磨砂玻璃卡背后游过、颜色透过玻璃染进卡面，卡缘随最近光斑靠近而泛光，
-背景不再是死的；B 是数据的动词——发光弧线从 A 卡"打"到 B 卡，
-亮点头领跑、渐隐光尾，落点描边脉冲点亮，指标关联第一次有了方向；C 是 A+B 的焊接——飞线落点帧邻近光斑同帧涨亮一拍，
-氛围层与事件层**同帧共振**，互相搭腔而非各演各的（组合命门：拆开共振帧
-就退化成两张卡并置）。
+## Intention
+The library's first card built entirely within a **dark environment**. The precedent that "brightening is invisible on white backgrounds" conversely implies: to play with light, step into the dark first. Variant A provides spatial breathing—three large ambient glow orbs drift organically across a dark canvas, swimming behind a central frosted glass card and tinting through the glass, while card edges catch glow as orbs approach, keeping the background alive. Variant B delivers data verbs—luminous arcs strike from Card A to Card B with bright leading heads and fading comet trails, pulsing target outlines upon arrival to give metric relationships directional intent. Variant C solders A and B together—as a flight line lands, the adjacent background glow orb surges in brightness on the exact same frame; atmospheric and event layers **resonate on the same frame**, conversing rather than acting independently (combination critical point: decoupling the resonance frame degrades the effect into two disjointed cards).
 
-## 三式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A glow-orb-ambient | 三团 760–1200px 多段径向渐变光斑（screen 叠加，不做实时 blur），双正弦漂移；中央 1100×600 磨砂玻璃卡（backdrop 模糊 + 提饱和）让光斑透色；卡缘辉光按光斑距离 [240,760]px→[1,0] 加权取 max 驱动 + 朝主导光斑的定向轮廓光 | 暗场段落铺底；卡呼吸感 |
-| B flyline-arc | 暗场 dashboard 压暗当底，卡心到卡心的手写 bezier 100 段采样，22f out-cubic 生长；光头 + 彗尾条件挂载领跑，段 opacity 按离头距离渐隐、到站 10f 抹匀；起点锚亮起、落点节点常驻；落点卡描边脉冲 + 冲击环，可接力 | 数据流向/指标关联；dashboard 叙事 |
-| C orb-flyline-relay | A+B 焊接：三颗玻璃节点各配一团背后光斑，光斑 surge 与节点点亮共用落点帧常量，涨亮 1+1.6×surge 并放大 12%、5f 起升 15f 消散；飞线到站后消散成细点虚线 | 暗场高光段；三站接力收束 |
+## Variant Selection
+| Variant | Method | Use Case |
+|---------|--------|----------|
+| A glow-orb-ambient | Three 760–1200px multi-stop radial gradient orbs (screen blend, no runtime blur), dual sine drift; central 1100x600 frosted glass card (backdrop blur + saturation boost) reveals passing orbs; card edge glow weighted max by orb distance [240,760]px -> [1,0] + directional rim light toward dominant orb | Dark section background bed; card breathing atmosphere |
+| B flyline-arc | Dark dashboard dimmed as backdrop, 100-segment sampled bezier arc connecting card centers, 22f out-cubic growth; leading light head + comet tail conditionally mounted during growth, segment opacity fading by distance from head, blended smooth across 10f upon arrival; source anchor lights up, destination node remains lit; landing card stroke pulse + shockwave ring, daisy-chainable | Data flow / metric correlation; dashboard narrative |
+| C orb-flyline-relay | A + B soldered: three glass nodes each backed by an ambient orb; orb surge and node illumination share destination frame constants, surging 1 + 1.6x and scaling +12%, rising over 5f and dissipating over 15f; flight line dissolves into a fine dotted line upon arrival | Dark sequence climax; three-station relay finale |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 光斑 | 潮青 / 深海蓝 / 珊瑚，峰值 0.55/0.5/0.42；漂移振幅 280–300px、周期 96–150f 交叉不等 | 同周期漂移读作整体晃动不是"有机" |
-| A 玻璃卡 | backdrop blur 44px + saturate 1.5；祖先不能带 filter / opacity<1 | 祖先成为 backdrop root 时玻璃里看不到光斑（入场淡入放在玻璃层自身） |
-| A 卡缘辉光 | box-shadow 0→90px 主导光斑色 0.32 + 1.5px 定向渐变轮廓光 | 无辉光光斑与卡互不认识 |
-| A 收敛 | 115–145f out-sine 收敛冻结（振幅 60/π，起始斜率 = 1 速度连续），末 25f 真静止 | 硬停一帧读作卡死；缓动收敛才有真静止 |
-| B 线体 | 暗场版（demo）：白芯 3.5px butt 分段 + 7px/18px 两层靛蓝辉光；浅底版：白线 4.5px + 9px 深色衬底 | 浅底无衬底白线直接消失（判例）；分段用圆头会在渐隐尾叠出珠串 |
-| B 光头 | 白点 r7 + r40 halo + 9 点彗尾，仅生长期条件挂载 | opacity 到 0 不算摘罩，永不真静止 |
-| B 脉冲 | 描边扩散 out-cubic 6f / 消散 12f 到残余 0.25；暗场版提亮（强调色描边 + 外辉光 + 极淡卡面提亮）+ 14f 冲击环；f86 后全静止 | 白底禁提亮——浅底版用加深罩 0.16 替代 |
-| C 共振 | 落点帧同帧起 surge（同一常量 LIT_B / LIT_C）；节点 8f 亮到 1 + 描边脉冲残余 0.35 + 20f 冲击环 | 错 2f 以上共振读不出"搭腔" |
-| C 时间轴 | 动作 f98 前结束、光斑 110–140f 收敛冻结，末 25f 真静止 | 氛围层最后冻，事件层先收 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Glow orbs | Teal / deep ocean blue / coral, peak 0.55/0.5/0.42; drift amplitude 280–300px, staggered periods 96–150f | Synchronized periods read as monolithic rigid sway rather than "organic" drift |
+| A Glass card | backdrop blur 44px + saturate 1.5; ancestors must not carry filter / opacity < 1 | Ancestors becoming backdrop roots hide orbs behind glass (place entry fade on the glass element itself) |
+| A Edge glow | box-shadow 0->90px dominant orb color 0.32 + 1.5px directional gradient rim light | Without edge glow, orbs and card feel disconnected |
+| A Convergence | 115–145f out-sine convergence to freeze (amplitude 60/pi, initial slope = 1 for continuous velocity), final 25f truly static | Abrupt single-frame stop reads as a freeze bug; eased convergence yields true rest |
+| B Line body | Dark version (demo): white core 3.5px butt segments + 7px/18px dual-layer indigo glow; Light version: white line 4.5px + 9px dark underlay | White line without underlay on light canvas vanishes entirely (precedent); round segment caps create bead artifacts along fading tails |
+| B Leading head | White dot r7 + r40 halo + 9-point comet tail, conditionally mounted only during growth phase | Opacity at 0 does not unmount the layer, preventing true rest |
+| B Pulse | Stroke expansion out-cubic 6f / dissipation 12f to residual 0.25; dark version brightening (accent stroke + outer glow + subtle card face lift) + 14f shock ring; full static after f86 | No brightening on white canvas—light version uses 0.16 darkening overlay instead |
+| C Resonance | Surge begins on exact destination frame (shared constants LIT_B / LIT_C); node brightens to 1 over 8f + stroke pulse residual 0.35 + 20f shock ring | Offsets >2f lose the perceived connection |
+| C Timeline | Action completes before f98, orbs ease and freeze 110–140f, final 25f truly static | Atmosphere layer freezes last, event layer settles first |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 暗场段与纸墨浅底主视觉切换成本高——全片暗场段 ≤1 段，进出
-  用 shot-transitions 藏切族垫，别生切明暗
-- 光斑漂移末段**必须**缓动收敛到静止再冻结——匀速漂移直接 clamp
-  是一次可见的急刹（A 式 out-sine 收敛判例）
-- 实战品牌色版：光斑用品牌色对（如蓝紫），灰阶参数只保证明度关系，
-  色相对比要重调
-- B 接力线 ≥3 条时改用 C——纯飞线连打读作大屏模板，共振才有作者感
-- 声音：B/C 每次落点一声轻打点，A 无声（sound-design §4.5）
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Switching between dark sections and light ink/paper visual identity carries high cognitive cost—limit dark sequences to <=1 per video, bridging entry/exit with hidden cut families in shot-transitions rather than raw hard cuts.
+- Orb drift **must** ease into rest before freezing at the tail—clamping constant velocity creates an obvious abrupt jolt (Variant A out-sine convergence precedent).
+- Production brand color adaptation: pair orbs with brand color duos (e.g., blue-violet); grayscale parameters guarantee only luminance balance, hue contrast must be re-tuned.
+- When Variant B daisy-chains >=3 lines, switch to Variant C—pure flight lines back-to-back read like generic dashboard templates; resonance imparts authored craft.
+- Audio: light hit on each B/C arrival, Variant A remains silent (sound-design §4.5).
 
-## 参考实现
+## Reference Implementation
 demos/effects/glow-flyline-moves/
-（FlylineArc.tsx / GlowOrbAmbient.tsx / OrbFlylineRelay.tsx）
+(FlylineArc.tsx / GlowOrbAmbient.tsx / OrbFlylineRelay.tsx)

@@ -1,23 +1,23 @@
-// blinds-slice｜百叶窗切条错峰翻换
-// 12 根 160px 竖条从左到右错峰翻面，波扫过后整页由 A 换成 B。
+// blinds-slice: staggered vertical blinds flip transition
+// 12 vertical 160px slats flip left-to-right staggered, transitioning scene from A to B as the wave passes.
 //
-// 第二轮重设计（纸 · 瑞士网格杂志的翻页）：
-// - look = paper。两页是 video-shotcraft 刊物的连续两页（刊头是 video-shotcraft 字标）：A 页暖白纸 + 墨色巨字「Frame.」，
-//   B 页整版朱红 + 奶白巨字「Craft.」（合起来是品牌短句 Frame motion. Craft the shot.）。明暗与色相反差让波的每一叶都读得清。
-//   版面用 12 栏网格（每栏 160px，发丝线可见）——**栏 = 叶片**，百叶窗就是沿着版式网格翻页，形式与手法同构。
-// - 真 3D 叶片：每叶是 preserve-3d 的双面板（正面 A 切片、背面 B 切片，backface hidden），绕自身竖轴
-//   rotateY 0→180°，共享 1900px 透视——翻到 90° 时叶片侧立、露出叶后的暗槽，暗带随波扫过。
-//   受光：转离主光的一面按 sin(θ) 变暗，转向主光的一面在 ~35° 掠过一道高光（裁在叶片内，Q4）；叶缘受光细线。
-// - 节奏：每叶用物理弹簧翻面（damping 13 / stiffness 75：~13f 到 180°、≈5° 过冲回落，像真的叶片拍到位）；
-//   起跳按 t^0.78 错峰（间隔 3.4f → 2.1f，前疏后密，波越翻越快，同时有 4–5 叶在转）；波期间相机极轻前推 1→1.02 再回 1。
-// - 波完成后摘罩（3D 结构全部卸载，B 整页直出、文字锐利），随后 B 页顶部一根奶白细线从左画到右、页码跳到 02。
+// Redesign (paper: Swiss grid magazine page flip):
+// - look = paper. Two pages of video-shotcraft publication: Page A warm white paper + ink headline "Frame.",
+//   Page B solid vermilion + cream headline "Craft." ("Frame motion. Craft the shot."). High contrast clarifies slat rotation wave.
+//   12-column grid layout (160px per column with visible hairlines) — each column equals one slat, aligning structure with motion.
+// - True 3D slats: preserve-3d double-sided panels (front A slice, back B slice, backface hidden), rotating around vertical axis
+//   rotateY 0->180 deg with 1900px perspective — edge-on at 90 deg reveals dark recess behind slats.
+//   Illumination: surfaces facing away dim via sin(theta), surfaces facing key light sweep specular highlight at ~35 deg; bright slat edge line.
+// - Rhythm: physical spring flip per slat (damping 13 / stiffness 75: ~13f travel, ~5 deg overshoot settle);
+//   staggered start along t^0.78 curve (interval 3.4f -> 2.1f accelerating); subtle camera push 1->1.02->1 during wave.
+// - Unmask on wave completion (3D structure unmounts, Page B renders natively sharp); cream hairline draws across top header, page number ticks to 02.
 //
-// 时间表（30fps，共 132f）：
-//   0–24    A 页 hold（相机 1→1.006 极缓推进，画面不死）
-//   24–52   起跳：叶 i 在 24 + stagger(i, 12, 28, t^0.78) 帧起翻（前疏后密）
-//   24–~76  翻面：每叶弹簧 ~13f 到位、≈5° 过冲回落；暗槽随波扫过
-//   ~80     摘罩：最后一叶弹簧收敛（|θ−180°|<0.3° 连续 4 帧）后，B 整页直出
-//   82–102  余波：刊头细线重新画出（snappy），相机 60–94f 落回 1
+// Timeline (30fps, total 132f):
+//   0-24    Page A hold (camera slow push 1->1.006)
+//   24-52   Launch: slat i starts flipping at 24 + stagger(i, 12, 28, t^0.78)
+//   24-~76  Flip: each slat ~13f travel with ~5 deg overshoot; dark shadow wave traverses
+//   ~80     Unmask: after final slat converges (|theta-180| < 0.3 deg for 4 frames), Page B renders native
+//   82-102  Aftermath: header line draws across, camera settles back to 1
 //   102–132 hold
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
@@ -29,16 +29,16 @@ export const BLINDS_SLICE_DURATION = 132;
 
 const L = LOOKS.paper;
 const STRIPS = 12;
-const W = 160; // 12 × 160 = 1920（= 版面 12 栏）
+const W = 160; // 12 x 160 = 1920 (12 layout columns)
 const WAVE0 = 24;
-const SPAN = 28; // 起跳错峰总跨度
-// t^0.78：间隔从 ~3.4f 渐缩到 ~2.1f——波越翻越快，但第一叶之后不会空等（EASE.out 首间隔 9f 太拖）
+const SPAN = 28; // Total stagger launch duration
+// t^0.78: interval tightens 3.4f -> 2.1f for accelerating wave without sluggish initial gap
 const startOf = (i: number) => WAVE0 + stagger(i, STRIPS, SPAN, (t) => Math.pow(t, 0.78));
 const angleOf = (f: number, i: number) => {
   const s = startOf(i);
   return f < s ? 0 : 180 * springAt(f, s, { damping: 13, stiffness: 75 });
 };
-// 摘罩帧：最后一叶弹簧收敛（|θ-180| < 0.3°）之后
+// Unmask frame: after final slat converges (|theta-180| < 0.3 deg)
 const UNMASK = (() => {
   for (let f = startOf(STRIPS - 1); f < 200; f++) {
     let ok = true;
@@ -51,18 +51,18 @@ const UNMASK = (() => {
 const RED = '#e5432d';
 const CREAM = '#fffaf3';
 
-// ───────────── 两页版面 ─────────────
+// ------------- Page Layouts (A & B) -------------
 type PageProps = { mark: 'dark' | 'light'; bg: string; ink: string; sub: string; accent: string; line: string; chapter: string; word: string; dot: string; body: string; page: string; rule?: number };
 
 const Page: React.FC<PageProps> = ({ mark, bg, ink, sub, accent, line, chapter, word, dot, body, page, rule = 1 }) => (
   <div style={{ position: 'absolute', left: 0, top: 0, width: 1920, height: 1080, background: bg, overflow: 'hidden' }}>
-    {/* 12 栏网格发丝线 */}
+    {/* 12-column grid hairlines */}
     {Array.from({ length: STRIPS - 1 }, (_, i) => (
       <div key={i} style={{ position: 'absolute', left: (i + 1) * W, top: 0, bottom: 0, width: 1, background: line }} />
     ))}
-    {/* 刊头 */}
+    {/* Header */}
     <div style={{ position: 'absolute', left: 96, right: 96, top: 92, display: 'flex', alignItems: 'baseline', color: ink }}>
-      {/* 刊头字标：video-shotcraft（全小写）；标志按页底色取 tone */}
+      {/* Header wordmark: video-shotcraft (all lowercase) */}
       <div style={{ width: 480, alignSelf: 'center' }}>
         <ShotcraftWordmark size={30} markScale={1.6} gap={14} tone={mark} color={ink} />
       </div>
@@ -70,12 +70,12 @@ const Page: React.FC<PageProps> = ({ mark, bg, ink, sub, accent, line, chapter, 
       <div style={{ ...type(26, 500, { mono: true }), color: sub }}>Nº 07 — 2026</div>
     </div>
     <div style={{ position: 'absolute', left: 96, right: 96, top: 152, height: 2, background: ink, transform: `scaleX(${rule})`, transformOrigin: '0 50%' }} />
-    {/* 右上：章节 + 正文（落在第 8–12 栏） */}
+    {/* Top right: chapter + body (columns 8-12) */}
     <div style={{ position: 'absolute', left: 7 * W, top: 250, width: 4 * W + 40, color: ink }}>
       <div style={{ ...type(28, 800, { caps: true }), letterSpacing: '0.2em', color: accent }}>{chapter}</div>
       <div style={{ ...type(52, 560), lineHeight: 1.14, letterSpacing: '-0.025em', marginTop: 26, whiteSpace: 'pre-line' }}>{body}</div>
     </div>
-    {/* 巨字：第 1 栏起（底边距按原「Rhythm」的下伸部留足） */}
+    {/* Headline: starts column 1 with descender clearance */}
     <div style={{
       position: 'absolute', left: 84, bottom: 156, color: ink, fontFamily: FONT.sans, fontSize: 400, fontWeight: 850,
       letterSpacing: '-0.065em', lineHeight: 0.8, whiteSpace: 'nowrap',
@@ -95,14 +95,14 @@ const PageB: React.FC<{ rule?: number }> = ({ rule }) => (
     word="Craft" dot={L.ink} body={"Direct the film.\nLet the agent shoot it."} page="02 / 02" rule={rule} />
 );
 
-// 一叶的切片：外层 160 宽裁剪，内层整页负偏移对位
+// Slat slice: outer 160px clip with inner negative offset
 const Slice: React.FC<{ x: number; children: React.ReactNode }> = ({ x, children }) => (
   <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
     <div style={{ position: 'absolute', left: -x, top: 0, width: 1920, height: 1080 }}>{children}</div>
   </div>
 );
 
-// 叶面受光：背光变暗 + 转向主光时掠过一道高光（θf = 该面相对正视的转角，0–90°）
+// Slat surface lighting: shadow when facing away + specular sheen when facing key light (theta 0-90 deg)
 const FaceLight: React.FC<{ th: number; lead: 'left' | 'right' }> = ({ th, lead }) => {
   const r = (th * Math.PI) / 180;
   const shade = 0.5 * Math.sin(r);
@@ -114,7 +114,7 @@ const FaceLight: React.FC<{ th: number; lead: 'left' | 'right' }> = ({ th, lead 
         background: `linear-gradient(${lead === 'left' ? 90 : 270}deg, rgba(20,12,6,${(shade * 0.7).toFixed(3)}) 0%, rgba(20,12,6,${shade.toFixed(3)}) 100%)`,
       }} />
       {spec > 0.005 && <div style={{ position: 'absolute', inset: 0, background: `rgba(255,248,236,${spec.toFixed(3)})`, mixBlendMode: 'screen' }} />}
-      {/* 叶缘受光细线 */}
+      {/* Bright slat edge line */}
       <div style={{ position: 'absolute', top: 0, bottom: 0, [lead]: 0, width: 2, background: `rgba(255,250,240,${(0.7 * Math.sin(r)).toFixed(3)})` } as React.CSSProperties} />
     </>
   );
@@ -130,12 +130,12 @@ export const BlindsSlice: React.FC = () => {
   if (frame < startOf(0)) {
     body = <PageA />;
   } else if (frame >= UNMASK) {
-    // 摘罩：B 整页直出，刊头细线重新画一遍（翻页后的"落定"一拍）
+    // Unmask: Page B native render, header line draws across as post-flip settle beat
     body = <PageB rule={rule} />;
   } else {
     body = (
       <>
-        {/* 叶后暗槽：叶片侧立时露出的墙体 */}
+        {/* Recessed dark groove revealed behind vertical slats */}
         <AbsoluteFill style={{ background: 'linear-gradient(180deg, #1d1712 0%, #120d0a 100%)' }} />
         <div style={{ position: 'absolute', inset: 0, perspective: 1900, perspectiveOrigin: '50% 50%' }}>
           {Array.from({ length: STRIPS }, (_, i) => {
@@ -147,12 +147,12 @@ export const BlindsSlice: React.FC = () => {
                 position: 'absolute', left: x, top: 0, width: W, height: 1080, transformStyle: 'preserve-3d',
                 transform: `rotateY(${(-th).toFixed(3)}deg)`, transformOrigin: '50% 50%',
               }}>
-                {/* 正面：A 切片 */}
+                {/* Front: Page A slice */}
                 <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', overflow: 'hidden' }}>
                   <Slice x={x}><PageA /></Slice>
                   {front && th > 0.05 && <FaceLight th={th} lead="left" />}
                 </div>
-                {/* 背面：B 切片（预转 180°，叶片转满后正好朝前、不镜像） */}
+                {/* Back: Page B slice (pre-rotated 180 deg) */}
                 <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', overflow: 'hidden', transform: 'rotateY(180deg)' }}>
                   <Slice x={x}><PageB /></Slice>
                   {!front && Math.abs(180 - th) > 0.05 && <FaceLight th={Math.min(90, Math.abs(180 - th))} lead="right" />}
@@ -170,7 +170,7 @@ export const BlindsSlice: React.FC = () => {
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${cam.toFixed(5)})`, transformOrigin: '50% 50%' }}>
         {body}
       </div>
-      {/* 共享暗角与纸面颗粒：只画一层，两页共用（转场接缝不叠暗角） */}
+      {/* Shared vignette and grain layer */}
       <Vignette strength={0.2} inner={0.5} color={L.shadow} />
       <Grain opacity={0.06} />
     </AbsoluteFill>

@@ -1,6 +1,6 @@
-// speed-ramp 变速（轮 C）——真实卡片流帧号 remap：快(斜率2.2) →
-// 0.2x 慢速展示窗 → 快。慢速窗中目标卡（card4-hires）清晰滑过屏中。
-// blur 联动速率：快段包 blur、慢段不包，反差即"凝视感"。
+// speed-ramp — Real card stream frame remap: fast (slope 2.2) ->
+// 0.2x slow-motion showcase window -> fast. Target card (card4-hires) slides clearly across screen center during slow window.
+// Motion blur velocity-linked: blurred during fast phase, sharp during slow phase; contrast creates "gaze" feel.
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import layout from '../../_textures/live-layout.json';
@@ -14,14 +14,14 @@ const TARGET_I = 5;
 
 const Scene: React.FC = () => {
   const frame = useCurrentFrame();
-  // remap：0–40f 走 88 源帧（快），40–85f 走 9 源帧（0.2x），85–135f 走 110（快）
+  // remap: 0–40f covers 88 source frames (fast), 40–85f covers 9 source frames (0.2x), 85–135f covers 110 (fast)
   const src = interpolate(frame, [0, 40, 85, 135], [0, 88, 97, 207], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
   const dx = src * 28;
   return (
     <AbsoluteFill style={{ backgroundColor: '#f9f6f1', overflow: 'hidden' }}>
-      {/* 偏移 717：让慢速窗中点（src≈92.4，dx≈2587）时目标卡 k=5 中心落屏中 */}
+      {/* Offset 717: centers target card k=5 on screen at midpoint of slow window (src≈92.4, dx≈2587) */}
       <div style={{ position: 'absolute', top: 360, transform: `translateX(${-dx + 717}px)` }}>
         {Array.from({ length: 16 }).map((_, k) => {
           const c = RAIL[k % RAIL.length];

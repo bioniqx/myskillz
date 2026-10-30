@@ -1,52 +1,43 @@
 ---
 name: chart-live-moves
-一句话: 活体图表三式——oscilloscope-stream 示波流线（曲线右端实时写入+突发尖峰）、unit-dot-swarm-regroup 点阵重组（点群三幕迁徙聚成数字）、axis-rescale-shock 轴爆表重标（新值冲出画框逼 y 轴重标）
-适用: 数据叙事段落；分别讲"实时性"、"每个数字是一个人"、"增长装不下"
-时长: 各 165–192f（5.5–6.4s）
-能量: 中高（数据即剧情）
+summary: Three data-driven motions: a live oscilloscope trace, dots regrouping into a figure, and an axis forced to rescale.
+use: Data storytelling segments; respectively conveying "real-time aliveness," "every data point is a person," and "growth that cannot be contained"
+duration: 165–192f each (5.5–6.4s)
+energy: Medium-high (data as drama)
 ---
 
-## 意图
-图表不是插图是剧情。三式共同前提（实测判例）：**必须真图表语境**
-——真轴标/真数据/真文案，灰阶占位条测不出数据叙事的表达力。
-A 示波流线：曲线写入点钉在右端上下起伏，旧数据左流出画，中途一次
-突发尖峰（振幅 2.2×、读数跳大变强调色）——"实时"不用说出口，还有事件；
-B 点阵重组：320 个点（每点≈40 renders）散布→聚三簇（浮 Promo/Launch film/
-Explainer 真标签）→列队成柱（真轴标）→聚成点阵大数字 "12,847"——
-同一批点，观众能跟着某一颗看它归队；
-C 轴爆表：折线正常爬升，新值顶破图表天花板规线冲出 226px（强调色粗线
-插进标题区、撞进右上 KPI 数字），停半拍，y 轴"哗"地重标（旧刻度飞出/新刻度滑入/网格
-加密/旧线压扁成地平线），新值落回+弹真值标签——用"坐标轴装不下"演增长。
+## Intention
+Charts are not illustrations—they are the narrative. A shared prerequisite across all three variants (production testing precedent): **authentic chart context is mandatory**—authentic axis labels, authentic data, authentic copy; grayscale placeholder bars fail to convey data storytelling power.
+Variant A Oscilloscope stream: the curve write head is pinned to the right edge oscillating up and down, while historical data streams off the left frame edge, interrupted by a sudden burst spike (amplitude 2.2x, readout jumps larger in accent color)—"real-time" needs no words, and events happen live.
+Variant B Unit dot swarm regroup: 320 dots (~40 renders per dot) disperse -> cluster into three swarms (floating authentic labels: Promo, Launch film, Explainer) -> march into bar columns (authentic axis markers) -> assemble into a large dot-matrix numeral "12,847"—the exact same dots throughout, allowing viewers to trace an individual dot joining the formation.
+Variant C Axis rescale shock: line climbs normally, then new values punch through the chart ceiling boundary by 226px (a thick accent line impaling the title area and crashing into top-right KPI numbers), pauses half a beat, and the y-axis dramatically rescales (old ticks fly out / new ticks slide in / grid lines densify / old line flattens into the horizon), with new values dropping into place alongside authentic value tags—enacting growth as "the axis cannot hold it."
 
-## 三式选型
-| 式 | 核心动作 | 适用 |
-|----|----------|------|
-| A oscilloscope-stream | 采样窗平移 8px/f + 高斯脉冲尖峰（带前兆/余震）+ 刹停真静止 + 刹停后缓推向尖峰 | 监控/实时类产品："活着"的系统 |
-| B unit-dot-swarm-regroup | 三幕 spring 错峰迁徙（stiffness 150、damping 13、错峰 8f），簇用向日葵螺旋紧排，终幕点阵拼数字 | 用户量/构成叙事："每个点是一个人" |
-| C axis-rescale-shock | 冲出天花板 226px（规线裂口 + 碎屑）+ 重标三联动（刻度换/网格密/旧线压扁）+ 震 10px | 增长曲线高光："off the charts" 字面化 |
+## Variant Selection
+| Variant | Core Motion | Use Case |
+|---|---|---|
+| A oscilloscope-stream | Sampling window translation 8px/f + Gaussian pulse spike (with precursor and aftershocks) + complete static freeze + slow post-freeze push toward spike | Monitoring / real-time products: a "living" system |
+| B unit-dot-swarm-regroup | Three-act spring staggered migration (stiffness 150, damping 13, stagger 8f), sunflower spiral packing for clusters, final act assembling dot-matrix number | User count / composition storytelling: "every dot is a person" |
+| C axis-rescale-shock | Punches 226px through ceiling (boundary fracture + debris) + 3-way coupled rescale (ticks swap / grid densifies / old line compresses) + 10px shake | Growth curve highlight: literal "off the charts" drama |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 真语境 | 真标题/真轴标/真单位/真读数 | **入库前提**：灰阶版三条全数被裁，换真语境后全过 |
-| 主角色 | 强调色标事件/主角（demo：A 珊瑚红尖峰、B 钴蓝 Launch film 簇、C 赤陶爆表段） | 全灰读不出"哪里是重点" |
-| A 流速 | 8px/f | 5.5 已可感，8 更明确；波形纯函数禁随机 |
-| B 点数/点径 | 320 / 直径 20px（迁徙中按速度拉成胶囊，封顶 +20px） | 点太少拼不出数字，太小看不见个体；拉伸过长会糊成一片 |
-| C 冲出幅度 | 天花板规线外 226px | 80px 版不够"爆"；真的插进标题区才是事故感 |
-| 收尾 | 三式都要 ≥36f 真静止 | 数据图表尾漂读作还没播完 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Authentic context | Authentic titles / axis ticks / units / readouts | **Acceptance prerequisite**: all 3 grayscale prototypes were rejected; all passed after switching to authentic context |
+| Hero color | Accent color highlights key events/heroes (demo: A coral red spike, B cobalt blue Launch film cluster, C terracotta overflow segment) | Monochromatic gray fails to signal "where to look" |
+| A Stream speed | 8px/f | 5.5px/f is perceptible, 8px/f is decisive; use pure mathematical functions for waveforms, no randomness |
+| B Dot count / radius | 320 / 20px diameter (stretching into capsules up to +20px based on speed during transit) | Too few dots cannot form numbers, too small obscures individuals; over-stretching smears into a blur |
+| C Overflow amplitude | 226px past ceiling guide | An 80px overshoot is not dramatic enough; piercing straight into the header zone creates the genuine sense of an incident |
+| Resolution | All three variants require >=36f pure static hold | Data charts that drift at the tail look unfinished |
 
-## 已知坑
-- demo 以 video-shotcraft 的示意渲染数据调校（A 深蓝示波屏·渲染农场 fps、B 瓷白信息图·按片型分的渲染量、
-  C 沙色瑞士海报·月度渲染量），数值是示意——参数是调校起点非实战定稿，首次实战须以真实素材回验
-- 三式的读数 / 刻度 / 标签都按成片字号做（≥32px，主读数 120–176px）；图表撑满画面而不是缩在卡片里
-- 三式是三种独立手法不是套餐——同片用两式以上时各 ≤1 次且错开段落
-- A 的尖峰事件、C 的重标只能发生一次；重复即廉价
-- B 终幕数字字形要预先手算（点数=位点数用满才整齐；参考实现用单线骨架等弧长采样、法向双排，恰好 320 颗无重叠）
-- 与 dataviz-landscape-open（抽象数据地景开场）分工：那是开场氛围，
-  这三式是段落内的具体数据论证
-- 声音：A 尖峰一声警示 tick；B 每幕迁徙一声 whoosh；C 冲出框
-  一声 riser、重标一声"哗啦"
+## Known Pitfalls
+- The demo was calibrated on illustrative video-shotcraft rendering metrics (A deep blue oscilloscope display: render farm fps, B porcelain infographic: volume by video type, C sand Swiss poster: monthly render volume); values are illustrative—parameters are starting points, not production finals, and must be re-verified with real assets.
+- Readouts, tick labels, and badges across all three variants are sized for final production (>=32px, primary readouts 120–176px); charts fill the screen rather than being constrained inside cards.
+- The three variants are distinct standalone techniques, not a bundled package—if using more than one in the same film, limit each to <=1 occurrence and separate them across chapters.
+- The spike in Variant A and the rescale in Variant C must occur only once; repeating them degrades their impact.
+- Variant B's final number glyph must be pre-calculated (dot count = target coordinate count to ensure neatness; the reference implementation uses arc-length sampling along single-line skeletons with normal-aligned dual rows, achieving exactly 320 non-overlapping dots).
+- Division of labor with dataviz-landscape-open (abstract data terrain opening): that card sets opening mood, whereas these three variants deliver concrete data arguments within chapters.
+- Audio: Variant A spike gets an alert tick; Variant B gets a whoosh per migration act; Variant C gets a riser bursting through the frame and a dramatic snap on rescale.
 
-## 参考实现
+## Reference Implementation
 demos/data/chart-live-moves/
-（AxisRescaleShockV2.tsx / OscilloscopeStreamV2.tsx / UnitDotSwarmRegroupV2.tsx）
+(AxisRescaleShockV2.tsx / OscilloscopeStreamV2.tsx / UnitDotSwarmRegroupV2.tsx)

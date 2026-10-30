@@ -1,22 +1,22 @@
-// flyline-arc —— 飞线连接
-// 暗场版 FakeDashboard A 压暗当底，左上卡→右下卡一条贝塞尔弧线"打"过去（22f, out-cubic 生长），
-// 亮点头部领跑、亮头暗尾拖尾；到达帧目标卡描边脉冲点亮。随后第二条线接力打到上中卡。
-// 收尾真静止：全部动画在 f86 前结束，之后所有元素冻结。
+// flyline-arc — glowing flyline trajectory connection
+// Dark-field FakeDashboard A as background; bezier curve launches from top-left card to bottom-right card (22f out-cubic growth),
+// bright leading beacon with comet trail; destination card stroke pulses on arrival. Second line relays to top-mid card.
+// Static hold at finish: all animations conclude before f86, freezing completely.
 //
-// 质感升级：本卡定位是暗场段落（md「库内第一张整卡住在暗场」），底图换 FakeDashboard 深色版并
-// 压暗 0.65 + 暗角，飞线成为前景层；线体从"白线 + 深灰衬底"改为暗场版"白芯 + 两层靛蓝辉光"，
-// butt 端分段消除珠串；光头加彗尾亮段与靛蓝光晕；起点亮起一个锚点、落点留下一个节点；
-// 卡脉冲在暗场里改为提亮（强调色描边 + 外辉光 + 极淡卡面提亮），落点同帧一圈冲击环；颗粒防色带。
+// Polish pass: dark-field dashboard dimmed to 0.65 + vignette; flyline becomes hero foreground;
+// line updated to white core + dual indigo glow layers;
+// butt-end segments eliminate overlap beads; beacon head features comet tail + indigo halo; start anchor and destination node;
+// card pulse illuminates with accent stroke + outer glow + shockwave ring on arrival; grain overlay.
 import React, { useId } from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard } from '../../_fixtures/Fixtures';
 import { Grain, Vignette } from '../../_fixtures/Polish';
 
-export const FLYLINE_ARC_DURATION = 140; // ~4.7s：动画 f86 前结束，末 54f 真静止
+export const FLYLINE_ARC_DURATION = 140; // ~4.7s: animation ends before f86, last 54f static hold
 
 type Pt = { x: number; y: number };
 
-// 手写 cubic bezier 采样
+// Cubic bezier path sampling
 const bez = (p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: number): Pt => {
   const u = 1 - t;
   return {
@@ -25,30 +25,30 @@ const bez = (p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: number): Pt => {
   };
 };
 
-const N = 100; // 采样段数
-const GLOW = '128,138,255'; // 飞线辉光色（与暗场 dashboard 的强调色同族）
+const N = 100; // Number of sampling segments
+const GLOW = '128,138,255'; // Flyline glow color (indigo palette)
 
-// 卡片几何（FakeDashboard variant A 实测网格）
-const CARD_LT = { x: 256, y: 108, w: 524, h: 454, cx: 518, cy: 335 }; // 左上
-const CARD_RB = { x: 1360, y: 590, w: 524, h: 454, cx: 1622, cy: 817 }; // 右下
-const CARD_TM = { x: 808, y: 108, w: 524, h: 454, cx: 1070, cy: 335 }; // 上中
+// Card layout geometry (FakeDashboard variant A grid)
+const CARD_LT = { x: 256, y: 108, w: 524, h: 454, cx: 518, cy: 335 }; // Top-left
+const CARD_RB = { x: 1360, y: 590, w: 524, h: 454, cx: 1622, cy: 817 }; // Bottom-right
+const CARD_TM = { x: 808, y: 108, w: 524, h: 454, cx: 1070, cy: 335 }; // Top-middle
 
 const clampX = { extrapolateLeft: 'clamp' as const, extrapolateRight: 'clamp' as const };
 
-// 一条飞线：靛蓝辉光衬底 + 亮头暗尾白芯分段 + 光头领跑（条件挂载）
+// Single flyline: indigo glow base + segmented white core with comet tail + leading beacon (conditionally mounted)
 const Flyline: React.FC<{
   frame: number;
-  start: number; // 生长起始帧
-  haloId: string; // 光头径向渐变 ID（父组件按实例生成）
+  start: number; // Growth start frame
+  haloId: string; // Beacon radial gradient ID
   p0: Pt; p1: Pt; p2: Pt; p3: Pt;
 }> = ({ frame, start, haloId, p0, p1, p2, p3 }) => {
   const DUR = 22;
   if (frame < start) return null;
   const e = interpolate(frame, [start, start + DUR], [0, 1], { easing: Easing.out(Easing.cubic), ...clampX });
   const growing = frame < start + DUR;
-  // 到达后 10f 内尾部亮度抹匀（ease-out）→ 之后完全静止
+  // Tail brightness homogenizes over 10f post-arrival (ease-out) -> static hold
   const settle = interpolate(frame, [start + DUR, start + DUR + 10], [0, 1], { easing: Easing.out(Easing.quad), ...clampX });
-  // 起点锚：生长前 6f 亮起
+  // Start anchor: illuminates 6f before launch
   const anchor = interpolate(frame, [start, start + 6], [0, 1], { easing: Easing.out(Easing.cubic), ...clampX });
 
   const pts: Pt[] = [];
@@ -62,10 +62,10 @@ const Flyline: React.FC<{
 
   const poly = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
-  // 亮头暗尾：每段按"离头距离"给 opacity；到达后 settle 抹匀到 1。butt 端，相邻段不叠加出珠串
+  // Segment opacity based on distance from head; settles to 1 on arrival without segment overlap beads
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) {
-    const tSeg = Math.min(i / N, e) / Math.max(e, 0.001); // 0 尾 → 1 头
+    const tSeg = Math.min(i / N, e) / Math.max(e, 0.001); // 0 tail -> 1 head
     const grad = 0.3 + 0.7 * tSeg * tSeg;
     const op = grad + (1 - grad) * settle;
     segs.push(
@@ -80,14 +80,14 @@ const Flyline: React.FC<{
 
   return (
     <g>
-      {/* 起点锚 */}
+      {/* Start anchor dot */}
       <circle cx={p0.x} cy={p0.y} r={9 * anchor} fill={`rgba(${GLOW},0.25)`} />
       <circle cx={p0.x} cy={p0.y} r={4.5 * anchor} fill="#ffffff" />
-      {/* 辉光衬底：宽幅低透明 + 次宽中透明两层 */}
+      {/* Glow backing: dual broad and medium glow layers */}
       <polyline points={poly} fill="none" stroke={`rgb(${GLOW})`} strokeWidth={18} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.1 + 0.04 * settle} />
       <polyline points={poly} fill="none" stroke="rgb(150,160,255)" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.24} />
       {segs}
-      {/* 光头 + 彗尾：仅生长期挂载，摘罩即真静止 */}
+      {/* Beacon head + comet tail: mounted only during growth phase */}
       {growing && (
         <g>
           <polyline points={comet} fill="none" stroke="#ffffff" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.55} />
@@ -95,7 +95,7 @@ const Flyline: React.FC<{
           <circle cx={head.x} cy={head.y} r={7} fill="#ffffff" />
         </g>
       )}
-      {/* 落点节点：到达后常驻 */}
+      {/* Destination node: persists post-arrival */}
       {!growing && (
         <g>
           <circle cx={p3.x} cy={p3.y} r={11} fill={`rgba(${GLOW},0.22)`} />
@@ -106,14 +106,14 @@ const Flyline: React.FC<{
   );
 };
 
-// 目标卡脉冲：暗场里提亮——强调色描边 + 外辉光 + 极淡卡面提亮；落点同帧一圈冲击环 —— 条件挂载
+// Destination card pulse: accent stroke + outer glow + shockwave ring on arrival (conditionally mounted)
 const CardPulse: React.FC<{
   frame: number;
-  at: number; // 触发帧
+  at: number; // Trigger frame
   rect: { x: number; y: number; w: number; h: number; cx: number; cy: number };
 }> = ({ frame, at, rect }) => {
   if (frame < at) return null;
-  // 扩散(起升)用 out-cubic 6f，消散 12f 到残余 0.25（被点亮的卡保持轻微描边，交代"已连接"）
+  // Rise over 6f out-cubic, decay over 12f to 0.25 residual stroke indicating connection
   const amp =
     frame <= at + 6
       ? interpolate(frame, [at, at + 6], [0, 1], { easing: Easing.out(Easing.cubic), ...clampX })
@@ -141,17 +141,17 @@ const CardPulse: React.FC<{
 
 export const FlylineArc: React.FC = () => {
   const frame = useCurrentFrame();
-  // 渐变 ID 按实例生成，多实例同场不串引（useId 的 «:» 在 url() 里非法，需清洗）
+  // Instance-unique gradient IDs (sanitized for url() syntax)
   const haloId = `headHalo-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
-  // 时间轴：线1 生长 10–32f → 卡RB脉冲 32–50f；线2 生长 46–68f → 卡TM脉冲 68–86f
-  // f86 后全静止（140f 总长 → 静止 54f ≥ 35f）
+  // Timeline: Line 1 grows 10-32f -> Card RB pulses 32-50f; Line 2 grows 46-68f -> Card TM pulses 68-86f
+  // Complete static hold after f86 (54f hold)
   const L1 = { p0: { x: CARD_LT.cx, y: CARD_LT.cy }, p1: { x: 818, y: 60 }, p2: { x: 1322, y: 380 }, p3: { x: CARD_RB.cx, y: CARD_RB.cy } };
   const L2 = { p0: { x: CARD_RB.cx, y: CARD_RB.cy }, p1: { x: 1760, y: 560 }, p2: { x: 1360, y: 150 }, p3: { x: CARD_TM.cx, y: CARD_TM.cy } };
 
   return (
     <div style={{ width: 1920, height: 1080, position: 'relative', background: '#0b0c10', overflow: 'hidden' }}>
-      {/* 背景：深色 dashboard 压暗 0.65，常量、不动画——让飞线成为前景层 */}
+      {/* Background: dark dashboard dimmed to 0.65, static */}
       <div style={{ filter: 'brightness(0.65) saturate(0.9)' }}>
         <FakeDashboard variant="A" tone="dark" />
       </div>

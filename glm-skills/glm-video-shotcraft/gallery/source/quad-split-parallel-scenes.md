@@ -1,38 +1,38 @@
 ---
 name: quad-split-parallel-scenes
-一句话: 画面硬切 2×2 四宫格，四个象限并行跑各自的微场景（打字、急推、逐词、交互链），关键节拍错开 3–6 帧制造信息轰炸
-适用: 节奏段"功能很多、同时发生"的蒙太奇拍；预告片中段的密度峰值
-时长: 90f（3s@30fps：0–62f 并行轰炸 + 28f 终态 hold，全程无转场）
-能量: 高（四线并行 + 错拍冲击，标准的 BGM 副歌位）
+summary: The frame hard-cuts into a 2×2 grid where four micro-scenes run in parallel — typing, a whip zoom, word pops, and a cursor interaction chain — with every beat offset by a few frames.
+use: Montage beats in rhythmic sections conveying "many features running concurrently"; peak density moments in trailer midsections
+duration: 90f (3s @ 30fps: 0–62f parallel bombardment + 28f final hold, zero transitions throughout)
+energy: High (four parallel threads + staggered beat impacts, textbook BGM chorus placement)
 ---
 
-## 意图
-用并行密度替代顺序展示：四件事同时在眼前发生，观众来不及逐一细读，但每 3–6 帧就有一个象限"动一下"——扫视节奏被牢牢钉住。这是手法卡：格内内容全部可替换，错拍编排才是配方。
+## Intention
+Substitute parallel density for sequential showcases: four events unfold simultaneously before the viewer's eyes. Audiences cannot read every detail line-by-line, but because one quadrant "acts" every 3–6 frames, the scanning rhythm is gripped tight. This is a methodology card: all in-panel content is replaceable—the staggered beat choreography is the true recipe.
 
-## 动效核心
-- 四象限独立场景（内容为示例：video-shotcraft 出一支宣传片时同时发生的四个现场）：TL 浏览器 tab 依次 overshoot 弹入 + 地址栏逐字打字 + 44f 页面载入大标题从下滑入 + 全程 inQuad 慢推 1→1.1；TR 终端命令打字 + 两行输出 + 末行出现同时 whip 急推 1→1.85（sin 包络 blur 5px，旧行退到 8%）；BL 三个 132px 大词逐个 overshoot 下落砸入；BR 审批卡滑入 → 光标贝塞尔飞向 Approve 点击 → 按钮变 Approved → 二段飞向 Publish 点击 → 上线通知弹出并计数
-- **错拍是灵魂**：TL tab 6/11/16/21、页面 44；TR 输出 27/33、急推 37；BL 词 14/30/49；BR 点击 25、变色 27、点击 52、通知 56——任意相邻重事件间隔 ≥3 帧，永远有东西在动但从不齐动
-- 两处打字光标闪烁周期错开（16 帧 vs 14 帧 +5 相位），避免同闪
-- 四格明度棋盘交错（ember：奶油 #f7eee4 / 暖黑 #160d09 / 橙实底 / 拿铁 #e9d7c4），8px 暖黑缝 + 20px 圆角分格；格内字按 1080p 重排（辅助 ≥32px、主词 132px）
-- 62f 后四格都停在终态（Launch film. / promo.mp4 ready / Prompt. Render. Ship. / Live · 3,214 views），拼成一张完整海报 hold 28f
+## Motion Core
+- Four independent quadrant scenes (sample content: four parallel moments during a video-shotcraft launch video production): TL browser tabs pop in with overshoot + address bar types out + page loads large title sliding up at 44f + continuous inQuad slow push 1->1.1; TR terminal command typing + two output lines + final line triggers whip zoom 1->1.85 (sine envelope blur 5px, old lines fade to 8%); BL three 132px headline words slam down with overshoot; BR review card slides in -> bezier cursor flies to Approve click -> button turns Approved -> secondary flight to Publish click -> deployment notification pops up and tallies.
+- **Staggered timing is the soul**: TL tabs 6/11/16/21, page 44; TR output 27/33, whip zoom 37; BL words 14/30/49; BR click 25, recolor 27, click 52, notification 56—intervals between adjacent heavy events are always >=3 frames; something is always moving, but never in lockstep unison.
+- Cursor blink cycles across the two typing scenes are intentionally offset (16f vs 14f + 5 phase) to prevent synchronous flashing.
+- Four quadrants alternate in checkerboard luminance (ember palette: cream #f7eee4 / warm black #160d09 / solid orange / latte #e9d7c4), separated by 8px warm black seams + 20px rounded corners; inner text scaled for 1080p (auxiliary >=32px, hero words 132px).
+- After frame 62, all four quadrants freeze in their final states (Launch film. / promo.mp4 ready / Prompt. Render. Ship. / Live · 3,214 views), composing a cohesive poster held for 28f.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 错拍间隔 | 相邻重事件 3–6 帧 | <2 帧读作同拍（齐动=呆板）；>8 帧密度散掉，轰炸感消失 |
-| TL 慢推 | inQuad 1→1.1，origin 50% 90% | 全程缓慢加速的"底噪运动"，让静格也不静；过大窗口会顶到角标 |
-| TR 急推 | 37–47f，scale 1.85 + blur 峰值 5px，旧行淡到 8% | 这是全卡最重的一拍，压 BGM 重音；blur 包络必须 sin（进出对称）|
-| 打字速度 | TL 20 字符 / 0–40f，TR 19 字符 / 0–24f | 换文案保持字符数近似，否则打字节奏与其他象限错拍关系漂移 |
-| BR 交互链 | 滑入 4→巡游 14→点击 25→变色 27→二段巡游 38→点击 52→通知 56 | 环环相扣，改任何一步需顺延后续；通知 overshoot 弹出是链尾重音 |
-| 底色 | 浅 / 深 / 强调 / 浅 棋盘交错 | 换项目主题色时保持相邻格明度差 ≥15%，否则格线感消失 |
-| 收尾 | 62f 后终态 hold 28f | 并行轰炸后必须给一拍让四格同时被读到 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Stagger interval | 3–6 frames between adjacent major events | <2 frames reads as simultaneous (unison motion = mechanical rigidity); >8 frames dilutes density, destroying bombardment feel |
+| TL Slow push | inQuad 1->1.1, origin 50% 90% | Accelerating "ambient floor motion" keeping static quadrants alive; excessive scale clips corner badges |
+| TR Whip zoom | 37–47f, scale 1.85 + blur peak 5px, old lines fade to 8% | The heaviest punch in the shot, locking to BGM accent beats; blur envelope must be sine (symmetric entry/exit) |
+| Typing speed | TL 20 chars / 0–40f, TR 19 chars / 0–24f | Maintain similar character counts when editing copy to prevent typing cadence from drifting out of sync with other quadrants |
+| BR Interaction chain | Slide-in 4 -> travel 14 -> click 25 -> recolor 27 -> secondary travel 38 -> click 52 -> notify 56 | Interlocked sequence; altering any step requires offsetting subsequent steps; notification overshoot pop provides chain finale accent |
+| Background tones | Checkerboard alternating light / dark / accent / light | Maintain >=15% lightness delta between adjacent quadrants when updating theme colors, or grid line separation dissolves |
+| Finale | All quadrants hold final state for 28f after 62f | After parallel bombardment, viewers must receive a resting beat to absorb all four quadrants together |
 
-## 已知坑
-- 这是手法卡：四格内容整体可换（产品截图/录屏/其他动效卡），但**错拍表必须重排**——新内容的关键帧继承原时刻表，否则四格变四个独立视频拼贴
-- 轰炸段 ~2.1s 是密度上限，再拉长需给每象限加第二轮事件，否则后半段"没东西动"；收尾 hold 另算
-- 光标闪烁按帧号计算（周期 16f / 14f+5），改时间表后重新核对两个光标的错相位
-- 四格同时打字/同时弹入是最常见的退化写法——检查方式：逐帧过一遍，任何一帧不应有两个象限同时发生"重事件"
+## Known Pitfalls
+- Methodology card: all quadrant content is modular and replaceable (product screenshots / screen recordings / other motion cards), but **the staggered timing schedule must be recomposed**—key moments in new content must map to the master timing chart, otherwise quadrants degrade into four disconnected video clips.
+- ~2.1s of bombardment represents the upper limit of cognitive density; extending longer requires introducing a second wave of events to each quadrant to avoid empty stagnation; ending hold is budgeted separately.
+- Cursor blinks calculate from frame numbers (periods 16f / 14f+5); verify phase offset when altering timelines.
+- Simultaneous typing or simultaneous pop-ins across quadrants are the most common regression errors—audit frame-by-frame: no single frame should exhibit "heavy events" in two quadrants simultaneously.
 
-## 参考实现
+## Reference Implementation
 demos/rhythm/quad-split-parallel-scenes/
-（QuadSplitParallelScenes.tsx）
+(QuadSplitParallelScenes.tsx)

@@ -4,30 +4,30 @@ import { FakeDashboard } from '../../_fixtures/Fixtures';
 import { MARK_PATHS } from '../../_fixtures/Brand';
 import { Grain, Vignette } from '../../_fixtures/Polish';
 
-// wireframe-draw-on〔入场退场〕：界面先以蓝图细线描画成形（stroke-dashoffset
-// 分组错峰），随后一条发光竖线从左向右扫过，扫过之处线框实体化为真实界面。
-// 节拍：0–20 hold 空底 → 20–82 分组描线 → 88–118 光线扫描实体化 → 118–150 hold。
-// 质感改版：
-// - 线框按 Phase 0 新版 FakeDashboard A 的真实几何逐件重排（侧栏 logo/导航/项目/用量卡、顶栏面包屑/
-//   分段控件/搜索/头像、六卡的表头/大数字/各自的图表形态/页脚），扫描线扫过时不再"跳位"；
-// - 蓝图化：冷灰蓝细线（外框 1.6px、内件 1.25px）+ 淡蓝点阵底 + 卡角裁切标记，读作设计稿而不是灰色占位；
-// - 扫描前沿身后带一段渐隐暖光（实体层刚"显影"的余温），竖线与 clip 前沿同一 scan 值驱动；
-// - 补 WIREFRAME_DRAW_ON_DURATION = 150。
-// 品牌：FakeDashboard 侧栏/面包屑换成 video-shotcraft 后，线框同步重排——logo 方块里描出镜刻标志两段路径，
-// 侧栏名、面包屑（整组右移 30px）、分段控件、项目名的线长按新字宽对位。
+// wireframe-draw-on (entrance / exit): Interface forms via blueprint thin-line drawing (stroke-dashoffset
+// staggered across groups), followed by a luminous vertical beam sweeping left-to-right, materializing wireframes into the actual UI.
+// Timing: 0–20 empty hold -> 20–82 grouped line draw-on -> 88–118 beam scan materialization -> 118–150 hold.
+// Texture improvements:
+// - Wireframes meticulously aligned to Phase 0 updated FakeDashboard A geometry (sidebar logo/nav/projects/usage card, top bar breadcrumbs/
+//   segmented controls/search/avatar, and 6 card headers/big numbers/chart shapes/footers) so the scan sweep no longer shifts position;
+// - Blueprint styling: cool gray-blue lines (outer frame 1.6px, inner elements 1.25px) + pale blue dot matrix + crop marks, reading as an architectural blueprint rather than gray placeholders;
+// - Scanning leading edge trails a fading warm afterglow (developing warmth of the materialized layer), driven by the same scan progress as the clip edge;
+// - Added WIREFRAME_DRAW_ON_DURATION = 150.
+// Brand: After updating FakeDashboard sidebar/breadcrumbs to video-shotcraft, wireframes re-aligned synchronously — logo square traces two-path mark,
+// with sidebar title, breadcrumbs (shifted 30px right), segmented controls, and project name lengths matched to actual text widths.
 export const WIREFRAME_DRAW_ON_DURATION = 150;
 
-// FakeDashboard variant A 的几何（1920×1080）：
-// 侧栏 220 宽；顶栏 x220–1920 h72；内容区 padding36 gap28，3×2 卡片
-// 卡 w524 h454，x = 256/808/1360，y = 108/590。
+// FakeDashboard variant A geometry (1920x1080):
+// Sidebar width 220; top bar x220-1920 h72; content area padding 36 gap 28, 3x2 cards
+// Cards w524 h454, x = 256/808/1360, y = 108/590.
 const CARD_W = 524;
 const CARD_H = 454;
 const CARD_X = [256, 808, 1360];
 const CARD_Y = [108, 590];
-const MARK_K = 26 / 128; // 侧栏 ShotcraftMark 26px ÷ viewBox 128
-// 侧栏项目名（Launch film / Feature tour / Release reel）与面包屑「video-shotcraft」按实体层实测字宽对位
+const MARK_K = 26 / 128; // Sidebar ShotcraftMark 26px / viewBox 128
+// Sidebar project names (Launch film / Feature tour / Release reel) and breadcrumb "video-shotcraft" aligned to measured rendered text widths
 const PROJ_W = [72, 77, 76];
-const INK = '#6c7894'; // 蓝图线色
+const INK = '#6c7894'; // Blueprint stroke color
 const PAPER = '#eef0f2';
 
 const seedFrac = (i: number) => {
@@ -36,7 +36,7 @@ const seedFrac = (i: number) => {
 };
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 
-// 平滑折线 → 贝塞尔（Catmull-Rom）
+// Smooth polyline -> Bezier (Catmull-Rom)
 const smoothPath = (pts: [number, number][]) => {
   let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -57,22 +57,22 @@ const wave = (x0: number, x1: number, yTop: number, yBot: number, seed: number) 
 export const WireframeDrawOn: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 描线进度：每组 30f 画完，start 错峰
+  // Line drawing progress: each group completes in 30f with staggered starts
   const draw = (start: number) =>
     interpolate(frame, [start, start + 30], [0, 1], { ...clamp, easing: Easing.bezier(0.4, 0, 0.3, 1) });
 
-  const tSide = draw(20); // 侧栏
-  const tTop = draw(30); // 顶栏
-  const tCards = Array.from({ length: 6 }, (_, i) => draw(40 + i * 3)); // 卡片错峰
-  const tChart = draw(52); // 图表
+  const tSide = draw(20); // Sidebar
+  const tTop = draw(30); // Top bar
+  const tCards = Array.from({ length: 6 }, (_, i) => draw(40 + i * 3)); // Staggered cards
+  const tChart = draw(52); // Charts
 
-  // 实体化扫描：88–118 从左向右
+  // Materialization scan: 88–118 left to right
   const scan = interpolate(frame, [88, 118], [0, 1], { ...clamp, easing: Easing.bezier(0.55, 0, 0.25, 1) });
   const scanX = scan * 1920;
   const lineOpacity = interpolate(frame, [86, 92, 112, 120], [0, 1, 1, 0], clamp);
   const gridIn = interpolate(frame, [0, 18], [0, 1], { ...clamp, easing: Easing.out(Easing.quad) });
 
-  // 描线小工具：pathLength=1 + dashoffset 从 1 → 0
+  // Stroke helper: pathLength=1 + dashoffset from 1 -> 0
   const stroke = (t: number, w = 1.25): React.SVGAttributes<SVGElement> => ({
     fill: 'none',
     stroke: INK,
@@ -87,18 +87,18 @@ export const WireframeDrawOn: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: PAPER, overflow: 'hidden' }}>
-      {/* 蓝图点阵底 */}
+      {/* Blueprint dot matrix background */}
       <AbsoluteFill style={{
         opacity: gridIn * 0.9,
         backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(108,120,148,0.28) 1px, rgba(0,0,0,0) 1.4px)',
         backgroundSize: '24px 24px',
       }} />
-      {/* —— 线框层（蓝图描线） —— */}
+      {/* —— Wireframe layer (blueprint line drawing) —— */}
       <svg width={1920} height={1080} viewBox="0 0 1920 1080" style={{ position: 'absolute', inset: 0 }}>
-        {/* 侧栏 */}
+        {/* Sidebar */}
         <rect x={1} y={1} width={219} height={1078} rx={2} {...stroke(tSide, 1.6)} />
         <rect x={22} y={28} width={40} height={40} rx={10} {...stroke(draw(24))} />
-        {/* video-shotcraft 标志（26px 居中于 logo 方块）：取景框 + 斜切两段先后描出；线宽按缩放反算回 1.25px */}
+        {/* video-shotcraft mark (26px centered in logo box): viewfinder frame + diagonal slice drawn sequentially; stroke width scaled back to 1.25px */}
         <g transform={`translate(29 35) scale(${MARK_K})`}>
           <path d={MARK_PATHS.frame} {...stroke(draw(25), 1.25 / MARK_K)} />
           <path d={MARK_PATHS.cut} {...stroke(draw(28), 1.25 / MARK_K)} />
@@ -126,7 +126,7 @@ export const WireframeDrawOn: React.FC = () => {
         <rect x={22} y={1001} width={176} height={50} rx={10} {...stroke(draw(46))} />
         <line x1={34} y1={1038} x2={186} y2={1038} {...stroke(draw(48))} />
 
-        {/* 顶栏 */}
+        {/* Top bar */}
         <line x1={220} y1={72} x2={1920} y2={72} {...stroke(tTop, 1.6)} />
         <line x1={252} y1={36} x2={358} y2={36} {...stroke(draw(33))} />
         <line x1={388} y1={36} x2={454} y2={36} {...stroke(draw(34))} />
@@ -134,7 +134,7 @@ export const WireframeDrawOn: React.FC = () => {
         <rect x={1512} y={18} width={320} height={36} rx={10} {...stroke(draw(36))} />
         <circle cx={1870} cy={36} r={18} {...stroke(draw(38))} />
 
-        {/* 3×2 卡片：轮廓 + 表头/大数字/页脚 + 卡角裁切标记 */}
+        {/* 3x2 cards: outlines + headers / big numbers / footers + corner crop marks */}
         {tCards.map((t, i) => {
           const cx = CARD_X[i % 3];
           const cy = CARD_Y[Math.floor(i / 3)];
@@ -144,7 +144,7 @@ export const WireframeDrawOn: React.FC = () => {
           return (
             <g key={`c${i}`}>
               <rect x={cx} y={cy} width={CARD_W} height={CARD_H} rx={14} {...stroke(t, 1.6)} />
-              {/* 裁切标记 */}
+              {/* Crop marks */}
               {[[cx - 10, cy - 10, 1, 1], [cx + CARD_W + 10, cy - 10, -1, 1], [cx - 10, cy + CARD_H + 10, 1, -1], [cx + CARD_W + 10, cy + CARD_H + 10, -1, -1]].map(([x, y, sx, sy], k) => (
                 <path key={k} d={`M${x},${y + sy * 14} L${x},${y} L${x + sx * 14},${y}`} {...stroke(t, 1)} opacity={t > 0 ? 0.55 : 0} />
               ))}
@@ -163,24 +163,24 @@ export const WireframeDrawOn: React.FC = () => {
           );
         })}
 
-        {/* 各卡的图表形态（与实体卡内容同构） */}
-        {/* 0 Active users / 5 Sessions：面积曲线 */}
+        {/* Chart representations for each card (isomorphic to concrete cards) */}
+        {/* 0 Active users / 5 Sessions: area curve */}
         <path d={wave(CARD_X[0] + 20, CARD_X[0] + CARD_W - 24, CARD_Y[0] + 170, CARD_Y[0] + 355, 1)} {...stroke(tChart, 2)} />
         <path d={wave(CARD_X[2] + 20, CARD_X[2] + CARD_W - 24, CARD_Y[1] + 165, CARD_Y[1] + 350, 4)} {...stroke(draw(60), 2)} />
-        {/* 1 Top pages：6 行条 */}
+        {/* 1 Top pages: 6 row bars */}
         {Array.from({ length: 6 }).map((_, k) => {
           const y = CARD_Y[0] + 85 + k * 42;
           const w = [484, 320, 212, 140, 92, 180][k];
           return <rect key={`tp${k}`} x={CARD_X[1] + 20} y={y - 12} width={w} height={24} rx={5} {...stroke(draw(54 + k * 2))} />;
         })}
-        {/* 2 Revenue：14 根柱 */}
+        {/* 2 Revenue: 14 bar columns */}
         {Array.from({ length: 14 }).map((_, k) => {
           const h = 30 + (0.25 + 0.75 * Math.min(1, k / 8)) * 150 * (0.75 + 0.25 * seedFrac(k + 9));
           const x = CARD_X[2] + 26 + k * 34.6;
           const base = CARD_Y[0] + 358;
           return <rect key={`rv${k}`} x={x} y={base - h} width={20} height={h} rx={3} {...stroke(draw(56 + k))} />;
         })}
-        {/* 3 Quarterly goals：5 条进度 */}
+        {/* 3 Quarterly goals: 5 progress bars */}
         {Array.from({ length: 5 }).map((_, k) => {
           const y = CARD_Y[1] + 178 + k * 46;
           return (
@@ -190,17 +190,17 @@ export const WireframeDrawOn: React.FC = () => {
             </g>
           );
         })}
-        {/* 4 Deploys：热力格（外框 + 行线） */}
+        {/* 4 Deploys: heatmap grid (border + row lines) */}
         <rect x={CARD_X[1] + 20} y={CARD_Y[1] + 144} width={CARD_W - 46} height={156} rx={4} {...stroke(draw(60))} />
         {Array.from({ length: 6 }).map((_, k) => (
           <line key={`dp${k}`} x1={CARD_X[1] + 20} y1={CARD_Y[1] + 167 + k * 23} x2={CARD_X[1] + CARD_W - 26} y2={CARD_Y[1] + 167 + k * 23} {...stroke(draw(62 + k), 1)} />
         ))}
       </svg>
 
-      {/* —— 实体层：clip-path inset 从左向右展开 —— */}
+      {/* —— Concrete layer: clip-path inset unfolds left to right —— */}
       <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 ${((1 - scan) * 100).toFixed(3)}% 0 0)` }}>
         <FakeDashboard variant="A" />
-        {/* 前沿余温：刚显影的一段带暖光，向左渐隐 */}
+        {/* Scan front afterglow: warm light trailing freshly revealed segment, fading to the left */}
         {scan > 0 && scan < 1 && (
           <div style={{
             position: 'absolute', top: 0, bottom: 0, left: scanX - 260, width: 260, pointerEvents: 'none',
@@ -210,7 +210,7 @@ export const WireframeDrawOn: React.FC = () => {
         )}
       </div>
 
-      {/* —— 4px 发光扫描竖线（琥珀微光） —— */}
+      {/* —— 4px glowing vertical scan line (amber shimmer) —— */}
       <div
         style={{
           position: 'absolute', left: scanX - 2, top: 0, width: 4, height: 1080,

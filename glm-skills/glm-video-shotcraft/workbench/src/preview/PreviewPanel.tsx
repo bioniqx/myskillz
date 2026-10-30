@@ -11,7 +11,7 @@ import { MANIFEST } from '../cards/projectCards';
 import { themedProps } from '../theme';
 import { cardName, t, useLocale, useT } from "../i18n";
 
-/** 素材库点击预览：占据画面区，循环播放；主工程 Player 保持挂载（display:none） */
+/** Asset library click preview: occupies canvas, loops playback; main Player remains mounted */
 const ItemPreview: React.FC<{ item: NonNullable<PreviewItem>; onClose: () => void }> = ({
   item,
   onClose,
@@ -75,8 +75,7 @@ const ItemPreview: React.FC<{ item: NonNullable<PreviewItem>; onClose: () => voi
   );
 };
 
-/** 走带控制：唯一订阅 playhead 的预览端组件——播放中每帧只重渲染它，
- *  不能让 frameupdate 波及包含 <Player> 的父组件。 */
+/** Playhead controls: only preview component subscribed to playhead — re-renders per frame during playback */
 const Transport: React.FC<{
   duration: number;
   fps: number;
@@ -128,7 +127,7 @@ const Transport: React.FC<{
 };
 
 export const PreviewPanel: React.FC = () => {
-  useLocale((s) => s.locale); // 语言切换时连带走带条一起重渲染
+  useLocale((s) => s.locale); // Re-renders controls on locale switch
   const project = useStore((s) => s.project);
   const previewItem = useStore((s) => s.previewItem);
   const setPreview = useStore((s) => s.setPreview);

@@ -1,34 +1,28 @@
-# music-beat-sync — BGM 节奏分析与卡点方法论
+# music-beat-sync — BGM Rhythm Analysis & Beat-Sync Methodology
 
-强节奏 BGM 的片子，**所有转场和关键动效必须落在拍上**。本文档给出从
-"拿到一首曲子"到"成片切点误差 ≤3 帧"的完整可复现流程。实测：一支
-70s、18 镜、131.97 BPM 的强鼓点宣传片按此法制作，渲后回测全部切点
-误差 ≤2.2f（感知阈值约 3f）。
+In promotional videos driven by strong rhythm, **all transitions and critical motion events must land squarely on the beat**. This document defines an end-to-end reproducible workflow from "receiving an audio track" to "post-render cut-point error ≤ 3 frames". Validated in production: a 70s, 18-shot, 131.97 BPM promotional video produced via this methodology achieved post-render retest errors ≤ 2.2f across all cut points (human perceptual threshold is ~3f).
 
-## 目录
+## Table of Contents
 
-- 何时启用
-- 节拍网格测定
-- 鼓点分类与能量结构
-- 网格验收与产物
-- 用拍号编排时间线
-- 渲后回测
-- 工具备忘
+- When to Activate
+- Beat Grid Determination
+- Transient Classification & Energy Structure
+- Grid Acceptance Criteria & Artifacts
+- Structuring Timelines via Beat Indices
+- Post-Render Retesting
+- Tooling Memo
 
-## 0. 何时启用
+## 0. When to Activate
 
-阶段 0 先检查用户是否已指定音乐。
-- 已选好 → 走本文档：先分析节奏，再让分镜的每个切点/动效锚到拍号
-- 未选 → BGM 选型放到阶段 6（见 pipeline.md），此时动效时间线按
-  内容节奏排，不强行卡点
+In Stage 0, verify whether the user has designated a soundtrack:
+- Music Selected → Follow this document: analyze rhythm first, then anchor storyboard cut points and motion cues to beat numbers.
+- No Music Selected → Defer soundtrack selection to Stage 6 (see `pipeline.md`); pace the motion timeline to content semantics without forced beat syncing.
 
-**铁律：音乐先行。** 网格没验收通过之前不设计分镜；时长对不上时改
-时间参数，不删改用户文案。分析全程用浮点秒记录时刻，**换算成帧只发生
-在进 Remotion 的最后一步**（提前取整会让误差在管线里滚雪球）。
+**Iron Law: Music Precedes Storyboard.** Do not storyboard until the beat grid passes acceptance. When durations conflict, adjust timing parameters; never mutate or delete user copy. Conduct all analysis in floating-point seconds; **conversion to discrete frames occurs solely at the final step entering Remotion** (premature rounding compounds errors throughout the pipeline).
 
-## 1. 节拍网格测定（不要相信 beat_track 的 tempo 标量）
+## 1. Beat Grid Determination (Never Trust `beat_track` Tempo Scalars Alone)
 
-用 `uv run --with librosa --with scipy --python 3.11` 跑一次性脚本：
+Run a one-off script via `uv run --with librosa --with scipy --python 3.11`:
 
 ```python
 import numpy as np, librosa
@@ -36,222 +30,167 @@ import numpy as np, librosa
 y, sr = librosa.load("bgm.mp3", sr=None, mono=True)
 tempo, beats = librosa.beat.beat_track(y=y, sr=sr, tightness=400, units="time")
 
-# 关键一步：对 beat 序列做最小二乘等距网格拟合，求真实 BPM 与相位。
-# beat_track 返回的 tempo 标量可能偏差 2%+（实测 129.2 vs 真值 131.97），
-# 但它输出的 beat 时刻序列本身是好的——用整个序列拟合直线 t_i = t0 + i*T：
+# Key Step: Fit an equidistant grid to the beat sequence using ordinary least squares (OLS)
+# to determine true BPM and phase. The scalar tempo returned by beat_track can deviate by 2%+
+# (measured 129.2 vs true 131.97), but its timestamp sequence is solid.
+# Fit a straight line: t_i = t0 + i * T
 i = np.arange(len(beats))
 A = np.vstack([i, np.ones_like(i)]).T
 (T, t0), *_ = np.linalg.lstsq(A, beats, rcond=None)
 bpm = 60.0 / T
 residual = beats - (t0 + i * T)
-print(f"BPM={bpm:.2f}  t0={t0:.4f}s  T={T:.5f}s  残差±{np.abs(residual).max()*1000:.0f}ms")
+print(f"BPM={bpm:.2f}  t0={t0:.4f}s  T={T:.5f}s  Residual ±{np.abs(residual).max()*1000:.0f}ms")
 ```
 
-验收标准：残差 ≤ ±15ms（半帧内）说明曲子是机器鼓点、网格可信；
-残差大说明有变速段，需要分段拟合。
+Acceptance Threshold: Residuals ≤ ±15ms (within half a frame at 30fps) indicate electronic/quantized percussion and a trustworthy grid. Large residuals suggest tempo variations requiring segmented piecewise fitting.
 
-**半倍/双倍歧义必查**：beat 检测常在 2x/0.5x 之间跳（70 BPM 报成
-140）。判据不是听感，是下一节的鼓点数据——正确的网格下 kick 应该
-主要落在整数拍；如果 kick 一半落拍一半落半拍，多半是网格快了一倍。
-拿 0.5x/1x/2x 三个候选按 §3 的指标各算一遍分数，选覆盖率最高的。
+**Resolve Half-Time / Double-Time Ambiguity**: Beat tracking frequently oscillates between 0.5× and 2× (reporting 70 BPM as 140 BPM). Do not decide by subjective ear; evaluate drum data in §2. Under a correct grid, kicks land predominantly on integer beats; if kicks land half on integer beats and half on off-beats, the grid is likely running at double speed. Calculate candidate scores for 0.5×, 1×, and 2× per §3 metrics and select the highest coverage.
 
-**复杂曲先分离鼓 stem**：人声/贝斯厚的编曲会把鼓的攻击埋掉，
-beat_track 和 onset 都会漂。轻量方案 `librosa.effects.hpss` 取打击
-成分；重方案 Demucs 分离整条鼓轨（见 §6），之后所有鼓点检测都在
-鼓 stem 上做，不在全混音上做。
+**Isolate Drum Stems for Dense Arrangements**: Thick vocals or bass obscure percussion attack transients, causing `beat_track` and onsets to drift. Use `librosa.effects.hpss` to isolate percussive components, or Demucs to isolate the drum stem completely (§6). Run all downstream detection on the isolated percussion stem.
 
-## 2. 鼓点分类与能量结构（决定什么钉在哪一拍）
+## 2. Drum Classification and Energy Architecture (Deciding What Lands Where)
 
-### 2a. 三分类瞬态检测
+### 2a. Tri-Band Transient Detection
 
-不同鼓件驱动不同类型的动效，分频段各测一遍（在鼓 stem 或 hpss
-打击成分上）：
+Different drum components drive distinct animation archetypes. Measure across separate frequency bands (on the drum stem or HPSS percussive component):
 
-| 类别 | 频段 | 驱动的动效 |
-|------|------|-----------|
-| kick | 40–160 Hz | 冲击 / slam / 骤缩——画面"被砸"的一拍 |
-| snare | 150–500 Hz 体 + 1–3 kHz 打击面（两者都要有） | 替换 / 闪切 / 构图切换——"换一件事"的一拍 |
-| hihat | 6–14 kHz | 微动密度——hihat 密的段落微动效可以密，稀的段落必须收 |
+| Band | Frequency Range | Driven Motion Archetype |
+|---|---|---|
+| Kick | 40–160 Hz | Impact / Slam / Scale snap — moments where the canvas is "struck" |
+| Snare | 150–500 Hz body + 1–3 kHz attack | Replacement / Flash cut / Framing cut — moments transitioning between ideas |
+| Hi-Hat | 6–14 kHz | Micro-motion density — dense hi-hat patterns permit rapid micro-animations; sparse patterns demand restraint |
 
 ```python
 from scipy.signal import butter, sosfilt
+
 def band_env(y, sr, lo, hi):
     sos = butter(4, [lo, hi], btype="band", fs=sr, output="sos")
     env = librosa.onset.onset_strength(y=sosfilt(sos, y), sr=sr)
     return env, librosa.times_like(env, sr=sr)
 
 kick_env, times = band_env(y, sr, 40, 160)
-# 把每个整数拍位置的 env 能量列出来，排序找最强 hit：
-for n in range(int((times[-1]-t0)/T)):
-    t = t0 + n*T
+# Extract energy at each integer beat to find peak hits:
+for n in range(int((times[-1] - t0) / T)):
+    t = t0 + n * T
     e = kick_env[np.argmin(np.abs(times - t))]
-    # 记录 (拍号 n, 能量 e)，取 top 若干作为"大 slam 候选拍"
+    # Log (beat n, energy e) to select top candidates for major slams
 ```
 
-命中记成 `{t 秒, s 强度, k 类别}` 的列表存档，设计分镜时按类别取用。
+Save detections as a list of `{t: seconds, s: strength, k: category}` in project archives.
 
-**命中表是候选池，不是触发器。** 检测到的每个 kick 不等于都要配一次
-画面冲击——强鼓点曲（tech-house 类）kick 几乎每拍都有，逐拍执行
-"被砸"就是"镜头随节奏抖动"（实际用户投诉，见 aesthetic-rules R4）。
-kick→冲击的映射只用于从候选池里选出 §2b 的最强 hit（全片 2–3 处）；
-其余 kick 只作为切点和元素级动效的**时机**参照，不驱动画面幅度。
+**Hit lists are candidate pools, not automated triggers.** Detected kicks do not require full-screen visual impacts. In driving electronic music, kicks occur on nearly every beat; firing full-screen slams on every kick causes visual fatigue and nausea (Aesthetic Rule R4). Map kick hits strictly to candidate pools for §2b's major slams (2–3 across the entire video); remaining kicks serve only as timing anchors for cuts and element-level animations without shaking the canvas.
 
-### 2b. RMS 能量曲线与结构表
+### 2b. RMS Energy Curves & Sectional Architecture
 
-`librosa.feature.rms` 拉全曲能量曲线，配合鼓点密度切出段落边界。
-产出两样东西进设计 spec：
+Extract full-track RMS energy curves via `librosa.feature.rms` alongside transient density to isolate segment boundaries:
 
-- **音乐结构表**：能量从第几拍起满、breakdown/静默段在第几拍——
-  分镜的能量曲线要贴着它排（breakdown 处放品牌呼吸位是天然结构），
-  高能段镜头可以多层动效并行，低能段收到 1–2 层
-- **最强 hit 拍号清单**：全片 2–3 个最大 slam（开题/高潮/收尾）
-  必须钉在这些拍上
+- **Musical Architecture Schedule**: Identifies when energy reaches full throttle and where breakdowns occur. Storyboard energy curves must track this structure (breakdowns naturally host brand breathing pauses); high-energy passages support concurrent multi-layer motion, while low-energy passages scale back to 1–2 layers.
+- **Peak Hit Manifest**: Identify 2–3 peak slam beats (thematic reveal, climax, finale) to anchor critical moments.
 
-**易错点（实测踩过）**：最大 slam 钉在了 b52.5（两拍之间）而最强
-kick 在整数拍 b52 上，渲后回测偏差 +5.75f。强鼓点曲的重音几乎总在
-整数拍上，半拍钉点必须有 env 数据支持，不能凭听感。
+**Common Failure Mode**: Placing a major slam on beat b52.5 (an off-beat) when the true kick transient lands on b52 causes post-render verification errors of +5.75f. In driving music, primary accents almost universally reside on integer beats; off-beat anchors require explicit envelope proof.
 
-## 3. 网格验收与产物（先验收，后分镜）
+## 3. Grid Acceptance Criteria & Artifacts (Validate Before Storyboarding)
 
-拿候选网格（含 0.5x/1x/2x）逐一对齐最近的真实鼓点瞬态，算四个指标：
+Align candidate grids (including 0.5×, 1×, 2×) against genuine transient onsets and evaluate four metrics:
 
-| 指标 | 含义 | 门槛 |
-|------|------|------|
-| match | 网格拍命中真实瞬态的比例 | ≥98% |
-| mean_abs_ms | 平均绝对对齐误差 | <10ms |
-| drift | 残差对时间做线性回归的斜率（漂移） | 全曲累计 <5ms |
-| 首拍有效性 | 网格第 0 拍是否落在真实的音乐攻击上 | 必须 |
+| Metric | Meaning | Threshold |
+|---|---|---|
+| Match Ratio | Percentage of grid beats aligning with real transients | ≥ 98% |
+| Mean Absolute Error | Average alignment deviation | < 10ms |
+| Drift | Slope of linear regression of residuals over time | Cumulative < 5ms across entire track |
+| Downbeat Validity | Beat 0 aligns with an authentic musical attack | Mandatory |
 
-按分数选出获胜网格，把**所有候选和获胜理由**写进分析产物留档。
-拿不准时给候选网格各合成一条 click 轨叠回原曲听一遍，但最终以
-指标定夺，不以听感定夺。
+Select the winning grid based on metrics, documenting all candidates and selection rationale in the analysis archive. If uncertain, render a synthetic click track over the audio for auditory inspection, but let metrics decide.
 
-分析产物随项目留档（是每一个切点的审计链）：
+Project Analysis Artifacts:
 
 ```text
 analysis/
   beat_data.json    # bpm, t0, T, beats[], hits[{t,s,k}], rms[], sections[]
-  grid_drift.json   # 各候选网格的 match/误差/漂移 与获胜理由
-  click_*.wav       # 候选 click 轨（可选，听感复核用）
+  grid_drift.json   # match ratio, errors, drift, and selection rationale for candidates
+  click_*.wav       # candidate click tracks (optional, for auditory review)
 ```
 
-`beat_data.json` 里的时刻永远是浮点秒、不预取整；下游只依赖
-`bpm / beats / hits / rms / sections` 这几个字段名。
+Timestamps in `beat_data.json` remain floating-point seconds. Downstream tools depend on fields: `bpm`, `beats`, `hits`, `rms`, `sections`.
 
-## 4. 时间线用拍号写，不用帧号写
+## 4. Structuring Timelines via Beat Indices
 
-Remotion 项目里把网格常量化，一切镜头边界/动效关键帧用 `beatF()` 表达：
+Store grid constants in the Remotion project and express shot boundaries and keyframes via `beatF()`:
 
 ```ts
 export const FPS = 30;
-export const SOURCE_BEAT0 = 0.2244;  // 源音乐分析 t0，秒，与 beat_data.json 一致
-export const BEAT_INT = 0.45465;     // T，秒
-export const OUTPUT_AUDIO_OFFSET_SEC = 0; // 渲后回测确认有输出音轨偏移时填实测值（§5b）
+export const SOURCE_BEAT0 = 0.2244;       // Source audio analysis t0 (seconds), matching beat_data.json
+export const BEAT_INT = 0.45465;          // Interval T (seconds)
+export const OUTPUT_AUDIO_OFFSET_SEC = 0; // Populated from post-render audio track offset (§5b)
 export const beatT = (n: number) =>
-  SOURCE_BEAT0 + OUTPUT_AUDIO_OFFSET_SEC + n * BEAT_INT;           // 拍→秒
-export const beatF = (n: number) => Math.round(beatT(n) * FPS);    // 拍→帧
+  SOURCE_BEAT0 + OUTPUT_AUDIO_OFFSET_SEC + n * BEAT_INT;           // beat -> seconds
+export const beatF = (n: number) => Math.round(beatT(n) * FPS);    // beat -> frames
 
 export const SHOTS = {
   s0_open:  { from: 0,        to: beatF(8) },
   s1_slam:  { from: beatF(8), to: beatF(16) },
-  // …每个镜头边界都是 beatF(整数拍)；镜头内部动效用局部拍：
+  // Each shot boundary is beatF(integer_beat); internal motion uses local beats:
 };
-export const localBeat = (shot: {from: number}, n: number) => beatF(n) - shot.from;
+export const localBeat = (shot: { from: number }, n: number) => beatF(n) - shot.from;
 ```
 
-好处：换曲/换段落时改两个常量全片重排；SFX 钉帧表也写 `beatF(n)`，
-与画面共用同一事实源，永不错位。源分析值与渲染偏移分开记账：
-`SOURCE_BEAT0` 是审计真值永不改，输出偏移只进 `OUTPUT_AUDIO_OFFSET_SEC`。
+Advantages: Changing soundtracks requires modifying only two constants to re-sync the entire project; SFX keyframe tables also reference `beatF(n)`, sharing the single source of truth. Separate source analysis from rendering offset: `SOURCE_BEAT0` is the audited ground truth; encoding latencies enter only via `OUTPUT_AUDIO_OFFSET_SEC`.
 
-**锚点绑定规则**（哪些用网格、哪些用真实瞬态）：
+**Anchor Binding Rules**:
+- Dense regular cuts (every 1 or 2 beats) → Use winning grid `beatF(n)`.
+- Sparse accents, isolated freezes → **Anchor to real transients**, not interpolated grid points.
+- Finale freeze → Anchor to final true transient + RMS silence confirmation (avoids locking to reverb tails).
+- Video assets and SFX align by **internal peak**, not file start: `asset_start = target_beat_time - (peak_time - trim_offset)`. Locate peaks via audio envelopes or FFmpeg frame differences.
 
-- 密集规则切点（每拍/每两拍一切）→ 用获胜网格的 `beatF(n)`
-- 稀疏重音、孤立定格 → **钉真实瞬态**，不用网格插值点（网格在稀疏
-  处的微小漂移会被单个重音放大成可感偏差）
-- 结尾定格 → 最后一个真实瞬态 + RMS 静默确认（防止钉在余韵尾巴上）
-- 视频素材/SFX 按**内部峰值**对齐，不按文件头对齐：
-  `素材起始 = 目标拍时刻 − (峰值时刻 − 裁剪偏移)`；峰值用音频能量
-  包络或 FFmpeg 帧差定位
+Design Guidelines:
+- Express shot durations in beats (4 or 8 beats per shot); accelerating passages may use half-beat or quarter-beat progressions (e.g. `CUT_BEATS = [48, 49.5, 50.5, 51, 51.25]`).
+- Stepping shots (itemized lists, mosaic grids) map directly to beat numbers.
+- When BGM drums are dense, practice SFX restraint: anchor only distinct visual actions, allow 2–3 major slams, and yield space to musical percussion.
+- **Hard caps on full-frame impacts**: Impacts affecting full frame or camera (scale pumps, screen shakes, flash frames, negative inversions) are capped at ≤ 3 across the entire video, mapped 1:1 to §2b's peak hit manifest, separated by ≥ 16 beats. Beat-pump bursts are capped at ≤ 4 consecutive beats, ≤ 1 time per video, followed by a full resting hold.
+  Count by set-piece technique application (one card use = one quota). Internal bursts within a card are governed by the card's documented limits.
+- **Beat-synced animations default to the hero element layer** (cards, headings, counters); full frame and camera layers do not participate in per-beat pulsing.
+- Structural motion (deformation, camera movement, transforms) uses continuous frame functions; impact events (appearances, cuts, flashes, snaps) trigger discretely on the designated frame. Multi-layer events hitting the same frame form an accent; deliberate offsets must be 1–2 frames and strictly intentional, never artifacts of rounding.
 
-设计规矩：
-- 镜头时长以拍为单位（4/8 拍一镜），加速段可用半拍/四分之一拍阶梯
-  （如 CUT_BEATS = [48, 49.5, 50.5, 51, 51.25] 的收敛逼近）
-- 每拍一动作的步进类镜头（清单逐项、马赛克逐格）直接 map 拍号
-- BGM 鼓点已密时 SFX 克制：只钉画面独有动作，大 slam 只给 2–3 处，
-  其余让位给 BGM 的鼓
-- **全画面级冲击有硬上限**（整画面 scale 泵/震屏/闪帧/负片帧等一切
-  作用于整画面或相机层的瞬时冲击）：全片 ≤3 处、与 §2b 最强 hit
-  清单一一对应、相邻两处间隔 ≥16 拍；节拍泵类连打单次 ≤4 拍
-  且全片 ≤1 次，打完接足 hold（各卡标注值是底线）。
-  计数单位是**一次手法使用**（一张卡的一次应用 = 一个名额），含
-  多次内部闪帧的卡（连闪/多刀切串）不逐帧重复计数，其内部
-  结构由各卡自身的参数表与次数上限管辖
-- **卡点动效默认落在主角元素层**（卡片/标题/数字），整画面与相机层
-  默认不参与逐拍运动；"每拍一动作"指内容步进（清单逐项/马赛克
-  逐格），不是画面幅度脉冲
-- 结构性运动（形变/运镜/位姿）用连续帧函数；冲击事件（出现/替换/
-  闪/骤缩）在选定的那一帧上开关。多层动效同帧命中构成重音；要错
-  开只错 1–2 帧且必须是设计意图，不允许来自取整的意外错位
+## 5. Post-Render Retesting (Mandatory Verification)
 
-## 5. 渲后回测（闭环，必做）
+### 5a. Report Two Error Classes Independently
 
-### 5a. 两种误差分开报，不混为一谈
+- **Audio Truth Error**: Distance between planned cut timestamp and true transient timestamp (seconds), validating the analysis pipeline. Thresholds: Mean < 5ms, 100% within ±33ms, 90% within ±15ms.
+- **Visual Quantization Error**: Rounding error introduced when converting seconds to nearest renderable frame, validating frame-rate sufficiency. Recorded at each anchor point.
 
-- **音频真值误差**：设计切点秒值 vs 真实瞬态秒值的距离，验的是
-  分析管线；门槛：平均 <5ms，全部 ±33ms 内，90% 在 ±15ms 内
-- **视觉量化误差**：秒值换算到最近可渲染帧引入的取整误差，验的是
-  帧率够不够；`beatF()` 取整那一步的误差就是它，逐锚点记录
+Rounding error limits are determined by FPS: ±16.7ms at 30fps, ±8.3ms at 60fps, ±4.2ms at 120fps. **Never claim < 5ms visual accuracy at 30fps.** If quantization error exceeds tolerance, increase frame rate rather than modifying audio analysis.
 
-最近帧取整的误差上限由 FPS 决定：30fps 是 ±16.7ms、60fps 是
-±8.3ms、120fps 是 ±4.2ms。**30fps 交付不要声称 <5ms 的视觉精度**；
-量化误差报表超出容忍时升帧率，而不是去改音频分析。
-
-### 5b. 渲出成片抽音轨回测
+### 5b. Extract Audio from Rendered MP4 for Retesting
 
 ```bash
 ffmpeg -i out/promo.mp4 -vn -acodec pcm_s16le /tmp/render-audio.wav
 ```
 
-对渲出音轨重跑第 1 步的网格拟合（BGM 从视频里量，不从源文件量——
-这样连音频编码/对齐偏移一起验），然后逐一对比：
-**设计切点帧号 vs 最近测得拍的帧号**，输出误差表。
+Rerun Step 1 grid fitting on the extracted audio track (measuring BGM from rendered video rather than raw source files to verify encoding and multiplexing latency), comparing:
+**Designed Cut Frame vs. Nearest Measured Beat Frame**, generating an error table:
 
-| 判定 | 误差 |
-|------|------|
-| 合格 | ≤3f（感知阈值） |
-| 理想 | ≤1.5f |
-| 必修 | >3f 的任何切点 |
+| Evaluation | Error |
+|---|---|
+| Pass | ≤ 3f (Perceptual Threshold) |
+| Ideal | ≤ 1.5f |
+| Must-Fix | Any cut > 3f |
 
-误差超标的钉点回第 4 步改拍号或帧偏移，重渲再测，直到全表合格。
+Anchors exceeding tolerance must have beat numbers or frame offsets adjusted in Step 4, rerendering until all points pass.
 
-**系统性同向偏移先查输出音轨偏移，不逐点手改。** 误差表若呈同向
-等量偏移（所有切点一致 +N 帧），根因几乎总是渲染输出链路的音轨
-偏移（AAC encoder priming 等编码/封装环节，48kHz 典型 ≈1.28f，
-机制与实测方法见 sound-design §4.6），不是节拍分析错。诊断：拿
-BGM 原文件与渲出音轨做归一化交叉相关量出偏移量。修复：**输出偏移
-单设常量，不写回源分析值**——`beat_data.json` 里的 t0 是源音乐的
-分析真值和审计基准，混入渲染偏移会在换 codec/重新分析时造成二次
-补偿。代码里分开记账：
+**Systematic directional offsets indicate output audio track latency; do not adjust points manually.** If the error table displays a uniform directional shift across all points (+N frames everywhere), the root cause is output pipeline latency (AAC encoder priming typically introduces ~1.28f at 48kHz; see `sound-design.md` §4.6), not flawed beat detection. Diagnose via normalized cross-correlation between source BGM and rendered audio. Fix: **Declare output offset as a separate constant without modifying source analysis values**. Code structure:
 
 ```ts
-export const SOURCE_BEAT0 = 0.2244;        // 源音乐分析 t0，与 beat_data.json 一致，永不掺入渲染偏移
-export const OUTPUT_AUDIO_OFFSET_SEC = 0.0427; // 输出音轨偏移，按渲染管线实测（sound-design §4.6）
+export const SOURCE_BEAT0 = 0.2244;            // Source audio t0, matching beat_data.json, never contaminated by rendering offset
+export const OUTPUT_AUDIO_OFFSET_SEC = 0.0427; // Output audio track offset measured empirically per pipeline (sound-design §4.6)
 export const beatT = (n: number) => SOURCE_BEAT0 + OUTPUT_AUDIO_OFFSET_SEC + n * BEAT_INT;
 ```
 
-全片切点随 `beatT` 一次归位，**不要逐锚点手改拍号**；SFX 侧的补偿
-走 sound-design §4.6 的同一常量。这类错位的观感危害不止"不准"：
-冲击画面差 2–3 帧听不出是跟着鼓的，合理的卡点动效会被读作无端抖动。
+All cuts shift uniformly via `beatT` without manual tweaking; SFX compensation references the same constant per `sound-design.md` §4.6. Visual desync of 2–3 frames causes impacts to detach from percussion, transforming deliberate sync into jarring camera jitter.
 
-## 6. 工具备忘
+## 6. Tooling Memo
 
-- librosa 不在系统 python：`uv run --with librosa --with scipy --python 3.11 script.py`
-- 只有人声/复杂编曲的曲子 beat_track 会漂：先用 `librosa.effects.hpss`
-  分离打击成分再测；仍不干净时上 Demucs 分离鼓轨——
-  `uvx --from demucs demucs --two-stems=drums -n htdemucs bgm.mp3 -o analysis/`，
-  之后 §1/§2 全部在 `drums.wav` 上跑
-- BPM 拿不稳（多方法交叉验证）：madmom 的 RNN+DBN 和 Essentia 的
-  RhythmExtractor2013 可作 librosa 之外的第二、第三票；三者对不齐时
-  回 §3 用瞬态覆盖率投票，不猜
-- 变速曲（DJ 转场、accelerando）：先用 librosa 局部 tempogram
-  （约 5s 窗）确认变速点，再按能量段分段拟合，各段各自 t0/T
+- librosa virtual environment: `uv run --with librosa --with scipy --python 3.11 script.py`
+- When dense vocals/arrangements cause `beat_track` to drift: isolate percussive elements with `librosa.effects.hpss`, or separate drum stems using Demucs:
+  `uvx --from demucs demucs --two-stems=drums -n htdemucs bgm.mp3 -o analysis/`, running §1 and §2 exclusively on `drums.wav`.
+- Resolving ambiguous BPM across multiple methods: Cross-verify with madmom (RNN+DBN) or Essentia (RhythmExtractor2013). If discrepancies arise, resolve via transient coverage metrics (§3).
+- Variable Tempo (DJ transitions, accelerando): Detect tempo inflection points via librosa local tempograms (~5s window), then fit piecewise grids per energy section with dedicated `t0` and `T` values.

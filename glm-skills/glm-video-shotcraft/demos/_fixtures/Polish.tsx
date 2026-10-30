@@ -1,16 +1,16 @@
-// Polish 质感工具件（Phase 0）——给 demo 做"成品感"收尾的小工具：贝塞尔缓动、
-// 胶片颗粒、暗角、两层软阴影 / 发丝线 / 内高光、按速度计算的方向性运动模糊、
-// 柔光渐变背景。全部是 props / frame 的纯函数，确定性渲染（无 Math.random / Date）。
-// 依赖仅 remotion + react；可选共享件——copy demo 时一并带上并改 import 路径。
+// Polish utility suite — finishing tools for polished demos: bezier easings,
+// film grain, vignette, two-layer soft shadows / hairlines / top highlights, directional motion blur,
+// and soft gradient backdrops. Pure functions of props/frame for deterministic Remotion rendering.
+// Depends only on remotion + react; copy alongside demos when extracting.
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 
-// ───────────────────────── 缓动 ─────────────────────────
+// ───────────────────────── Easings ─────────────────────────
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-// cubic-bezier(x1,y1,x2,y2) → (t)=>number，与 CSS 同义；Newton-Raphson 求解，失败退二分。
-// x1/x2 须在 [0,1]；y 可越界（做预备/过冲）。输入 t 自动钳到 [0,1]。
+// cubic-bezier(x1,y1,x2,y2) -> (t)=>number, matching CSS; Newton-Raphson solver with bisection fallback.
+// x1/x2 must be in [0,1]; y may exceed boundaries for anticipation/overshoot. Input t clamped to [0,1].
 export const bezier = (x1: number, y1: number, x2: number, y2: number) => {
   if (x1 === y1 && x2 === y2) return (t: number) => clamp01(t);
   const ax = 1 - 3 * x2 + 3 * x1, bx = 3 * x2 - 6 * x1, cx = 3 * x1;
@@ -40,42 +40,42 @@ export const bezier = (x1: number, y1: number, x2: number, y2: number) => {
   return (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : sy(solve(t)));
 };
 
-// 命名缓动预设（入场 snappy / 换位 smooth / 出场 exit / 预备 anticip / 过冲 overshoot）
+// Named easing presets (entrance: snappy / reposition: smooth / exit: exit / anticipation: anticip / overshoot: overshoot)
 export const EASE = {
-  snappy: bezier(0.16, 1, 0.3, 1), // 强 ease-out（≈ expo-out）：入场、急推落定
-  out: bezier(0.22, 1, 0.36, 1), // 柔一点的 ease-out（≈ quint-out）：次要元素入场、跟随
-  smooth: bezier(0.65, 0, 0.35, 1), // 对称 in-out：换位、相机平移
-  swift: bezier(0.4, 0, 0.2, 1), // 不对称 in-out（起步稍快、落点很软）：通用位移
-  exit: bezier(0.7, 0, 0.84, 0), // 强 ease-in（≈ quart-in）：出场、甩出画外
-  anticip: bezier(0.5, -0.32, 0.25, 1), // 先反向回拉 ~5% 再冲出：大动作前的预备
-  overshoot: bezier(0.34, 1.45, 0.64, 1), // 冲过头 ~8% 再回落：弹出、落座
+  snappy: bezier(0.16, 1, 0.3, 1), // Strong ease-out (~expo-out): entrances, rapid snaps
+  out: bezier(0.22, 1, 0.36, 1), // Gentle ease-out (~quint-out): secondary elements, follows
+  smooth: bezier(0.65, 0, 0.35, 1), // Symmetric in-out: repositioning, camera pans
+  swift: bezier(0.4, 0, 0.2, 1), // Asymmetric in-out (fast start, soft settle): general displacement
+  exit: bezier(0.7, 0, 0.84, 0), // Strong ease-in (~quart-in): exits, fling off-screen
+  anticip: bezier(0.5, -0.32, 0.25, 1), // ~5% anticipation pull-back before burst
+  overshoot: bezier(0.34, 1.45, 0.64, 1), // ~8% overshoot snap settle: popups, landing
   linear: (t: number) => clamp01(t),
 };
 
-// 分段进度：frame 在 [start, start+dur] 内归一化 → 缓动，越界钳位（所有动效的时间轴原语）
+// Segmented progress: normalized frame over [start, start+dur] through easing, clamped at boundaries
 export const ramp = (frame: number, start: number, dur: number, ease: (t: number) => number = EASE.snappy) =>
   ease(clamp01((frame - start) / Math.max(1e-6, dur)));
 
-// 线性混合 a→b（t 不钳位，配合 overshoot/anticip 的越界值使用）
+// Linear lerp a->b (unclamped t for overshoot/anticipation)
 export const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 
-// 数值速度（每帧位移）：中心差分 f(frame+0.5) - f(frame-0.5)。给 SpeedBlur 喂速度用
+// Numerical velocity (displacement per frame): central difference f(frame+0.5) - f(frame-0.5)
 export const velocity = (f: (frame: number) => number, frame: number) => f(frame + 0.5) - f(frame - 0.5);
 
-// ───────────────────────── 字体 ─────────────────────────
+// ───────────────────────── Typography ─────────────────────────
 
 export const FONT = {
   sans: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif',
   mono: '"SF Mono", "JetBrains Mono", Menlo, monospace',
 };
 
-// 按字号给字距（em）：大标题收紧、正文微收、小字放开；caps=true（全大写）整体放松一档
+// Optical letter-spacing (em) by font size; caps=true adds breathing room
 export const tracking = (size: number, caps = false) => {
   const base = size >= 96 ? -0.04 : size >= 56 ? -0.03 : size >= 28 ? -0.02 : size >= 16 ? -0.008 : 0.01;
   return `${(base + (caps ? 0.03 : 0)).toFixed(3)}em`;
 };
 
-// ───────────────────────── 表面材质 ─────────────────────────
+// ───────────────────────── Surface Materials ─────────────────────────
 
 const rgb = (hex: string) => {
   const h = hex.replace('#', '');
@@ -85,8 +85,8 @@ const rgb = (hex: string) => {
 };
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
-// 两层软阴影：近地接触影（小而实，随抬高变淡）+ 远地环境影（大而虚，随抬高变大变深）。
-// elevation ≈ 物体离地像素（0 贴地 / 4 卡片静置 / 16 悬浮 / 48+ 飞起）；color 用带色相的深色。
+// Two-layer soft shadows: near contact shadow + ambient environment shadow.
+// elevation ~= height in px (0 ground / 4 card rest / 16 floating / 48+ flying); color uses tinted dark.
 export const softShadow = (elevation: number, opts: { color?: string; strength?: number } = {}) => {
   const e = Math.max(0, elevation);
   const c = rgb(opts.color ?? '#10121a');
@@ -97,14 +97,14 @@ export const softShadow = (elevation: number, opts: { color?: string; strength?:
     `0 ${r1(e * 0.55)}px ${r1(e * 1.3)}px ${r1(-e * 0.22)}px rgba(${c},${ambientA.toFixed(3)})`;
 };
 
-// 1px 发丝线 border 值（用法：border: hairline()）；深色场景 tone='dark' 用白色低透明度
+// 1px hairline border (usage: border: hairline()); dark scenes use low-opacity white
 export const hairline = (alpha = 0.08, tone: 'light' | 'dark' = 'light') =>
   `1px solid ${tone === 'light' ? `rgba(20,22,28,${alpha})` : `rgba(255,255,255,${alpha})`}`;
 
-// 顶部 1px 内高光（box-shadow 片段，和 softShadow 用逗号拼接）：让面板有"受光的上沿"
+// Top 1px inner highlight (box-shadow segment) giving panels an illuminated top edge
 export const innerHighlight = (alpha = 0.8) => `inset 0 1px 0 rgba(255,255,255,${alpha})`;
 
-// 精致面板一把梭：背景 + 发丝线 + 圆角 + 内高光 + 两层软阴影（返回 style 对象，可再展开覆盖）
+// Polished panel style helper: background + hairline + radius + highlight + soft shadows
 export const surface = (opts: { tone?: 'light' | 'dark'; elevation?: number; radius?: number; background?: string } = {}): React.CSSProperties => {
   const tone = opts.tone ?? 'light';
   const dark = tone === 'dark';
@@ -116,14 +116,14 @@ export const surface = (opts: { tone?: 'light' | 'dark'; elevation?: number; rad
   };
 };
 
-// ───────────────────────── 叠层 ─────────────────────────
+// ───────────────────────── Overlays ─────────────────────────
 
 const hash = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
 
-// 颗粒贴图缓存：6 个 feTurbulence 种子各一张无缝 data-URI 小图，Chrome 只栅格化一次
+// Grain texture cache: 6 seamless data-URI textures rasterized once by Chrome
 const grainCache = new Map<string, string>();
 const grainTile = (variant: number, tile: number, freq: number) => {
   const key = `${variant}|${tile}|${freq}`;
@@ -142,9 +142,9 @@ const grainTile = (variant: number, tile: number, freq: number) => {
   return url;
 };
 
-// 胶片颗粒：铺满父级（absolute inset 0）的灰度噪点层，每 step 帧换一次纹理与偏移（确定性）。
-// 亮场 opacity 0.04–0.08、暗场 0.06–0.12；blend 默认 overlay（暗场可试 'soft-light' / 'screen'）。
-// 用途：大面积渐变防色带、给平面 UI 一点胶片质感。放在要覆盖的内容之后（上层）。
+// Film grain: full-coverage grayscale noise overlay, deterministic texture swap every step frames.
+// Light scenes: opacity 0.04-0.08; dark scenes: 0.06-0.12; blend mode default overlay.
+// Purpose: prevents color banding on gradients and adds filmic tactile quality.
 export const Grain: React.FC<{
   opacity?: number; step?: number; scale?: number; freq?: number;
   blend?: React.CSSProperties['mixBlendMode']; style?: React.CSSProperties;
@@ -163,8 +163,8 @@ export const Grain: React.FC<{
   );
 };
 
-// 暗角：铺满父级的径向渐变压边。strength = 四角最大不透明度（0.2 轻 / 0.4 中 / 0.6 重），
-// inner = 完全透明的中心半径比例（0–1），color 用带色相的深色而非纯黑；cx/cy 可偏移光心（0–1）。
+// Vignette: radial gradient edge darkening. strength = corner opacity (0.2 light / 0.4 med / 0.6 heavy),
+// inner = clear center ratio (0-1), tinted dark color; cx/cy can offset optical center.
 export const Vignette: React.FC<{
   strength?: number; inner?: number; color?: string; cx?: number; cy?: number; style?: React.CSSProperties;
 }> = ({ strength = 0.35, inner = 0.5, color = '#0b0c12', cx = 0.5, cy = 0.46, style }) => {
@@ -181,10 +181,10 @@ export const Vignette: React.FC<{
   );
 };
 
-// 方向性运动模糊：把运动物体包进来，按速度（px/帧）沿运动方向做高斯拖影；速度≈0 时不加滤镜（零开销）。
-// 原理：外层旋转到运动方向 → SVG feGaussianBlur 只在本地 x 轴模糊 → 内层反向旋转复位，任意方向都对。
-// 本身是 absolute inset 0 的铺满层（子元素请自行绝对定位）；amount = 每 1px/帧 速度给多少模糊（默认 0.45），
-// max 封顶。用 velocity() 由位置函数求速度；只在快速段生效，别全程常驻。
+// Directional motion blur: applies velocity-driven Gaussian trail along trajectory; zero overhead at rest.
+// Mechanism: outer rotation to velocity angle -> SVG blur along local x-axis -> inverse inner rotation.
+// Full-coverage overlay (absolute inset 0); amount = blur per px/frame velocity (default 0.45),
+// capped at max. Use velocity() from position function; active during high-speed segments only.
 export const SpeedBlur: React.FC<{
   vx: number; vy?: number; amount?: number; max?: number; children: React.ReactNode; style?: React.CSSProperties;
 }> = ({ vx, vy = 0, amount = 0.45, max = 36, children, style }) => {
@@ -209,8 +209,8 @@ export const SpeedBlur: React.FC<{
   );
 };
 
-// 柔光背景：低对比纵向渐变 + 一处柔和主光斑（+ 可选强调色余光）+ 暗角 + 颗粒，替代死平纯色底。
-// tone 亮/暗；light = 主光位置（0–1，默认左上偏中）；accent 给一抹极淡的色相余光；drift>0 时光斑缓慢漂移（px 幅度）。
+// Soft gradient backdrop: subtle vertical gradient + soft key light + vignette + grain.
+// tone: light/dark; light = key light position (0-1); accent = faint color tint; drift = slow drift in px.
 export const Backdrop: React.FC<{
   tone?: 'light' | 'dark'; light?: { x: number; y: number }; accent?: string;
   grain?: number; vignette?: number; drift?: number; style?: React.CSSProperties;

@@ -10,7 +10,7 @@ const baseClip = (): Omit<ClipData, "id" | "cardId" | "start" | "duration"> => (
   inOffset: 0, speed: 1, opacity: 1, scale: 1, x: 0, y: 0, props: {},
 });
 
-/** 音效使用次数（素材库「本片音效」列的 ×N） */
+/** SFX usage count (the xN shown in the asset library project SFX list) */
 export const sfxUsage = (m: WorkbenchManifest | null): Map<string, number> => {
   const out = new Map<string, number>();
   for (const s of m?.sfx ?? []) out.set(s.src, (out.get(s.src) ?? 0) + 1);
@@ -19,12 +19,12 @@ export const sfxUsage = (m: WorkbenchManifest | null): Map<string, number> => {
 
 const shortName = (src: string) => src.split("/").pop()!.replace(/\.[^.]+$/, "");
 
-/** 音频 cue → clip，贪心装箱进若干互不重叠的轨（同轨不重叠，便于单独挪动） */
+/** Audio cue -> clip: greedy bin-packing into non-overlapping tracks */
 const packAudio = (cues: ManifestAudio[], trackName: string, defaultDuration: number, total: number): TrackData[] => {
   const lanes: { end: number; clips: ClipData[] }[] = [];
   for (const c of [...cues].sort((a, b) => a.from - b.from)) {
     const start = Math.max(0, Math.round(c.from));
-    // 原片里 <Sequence> 超出合成尾部的部分被合成时长截掉；导出按最晚 clip 结束算时长，所以这里也截到 total
+    // Any Sequence extending past composition end is clipped in original film; clamped to total here as well
     const duration = Math.max(2, Math.min(Math.round(c.duration ?? defaultDuration), total - start));
     let lane = lanes.find((l) => l.end <= start);
     if (!lane) {
@@ -49,9 +49,8 @@ const packAudio = (cues: ManifestAudio[], trackName: string, defaultDuration: nu
   }));
 };
 
-/** 把成片按清单拆成独立单元：字幕 / 转场 / 叠加层 / 镜头 / 音乐 / 音效。
- *  每个单元的 start/duration 与 Main.tsx 里的 <Sequence> 逐帧一致，导入后先不改任何东西
- *  渲出来就是原片。 */
+/** Decomposes film by manifest into units: captions / transitions / overlays / shots / music / SFX.
+ *  Each unit start/duration strictly matches <Sequence> in Main.tsx frame-for-frame. */
 export const buildProjectFromManifest = (m: WorkbenchManifest = MANIFEST!): ProjectData => {
   const unitTrack = (kind: "shot" | "transition" | "caption" | "overlay", name: string): TrackData | null => {
     const units = unitsOf(m, kind);
@@ -78,7 +77,7 @@ export const buildProjectFromManifest = (m: WorkbenchManifest = MANIFEST!): Proj
     .filter((t): t is TrackData => !!t);
 
   const tracks: TrackData[] = [
-    // tracks[0] 为最上层，对应原片 z 序：转场 > 字幕 > 叠加层 > 镜头（缺省序，清单 order 可改）
+    // tracks[0] is top layer matching original film z-index: transitions > captions > overlays > shots
     ...upper,
     unitTrack("shot", t("track.shots"))!,
     ...(m.bgm?.length ? packAudio(m.bgm, t("track.music"), m.total, m.total) : []),

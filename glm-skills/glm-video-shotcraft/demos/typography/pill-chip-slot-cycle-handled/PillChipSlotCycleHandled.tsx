@@ -1,8 +1,8 @@
-// pill-chip-slot-cycle-handled — Chip Slot Cycle 胶囊滚轮挤开（motion-lab 定稿转原生 Remotion）
-// 白底句式 "Your [chip] Handled"：深色胶囊内词垂直滚轮轮换（Shots→Camera→Sound→Renders，
-// video-shotcraft 替你包办的四件事：镜头 / 运镜 / 音效 / 渲染），
-// 上下露出灰色幽灵项，胶囊宽度随词长平滑变化，两侧文字被自然挤开收拢。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// pill-chip-slot-cycle-handled — Chip Slot Cycle roller displacement (Remotion)
+// White-base layout "Your [chip] Handled": vertical word cycle inside dark capsule (Shots->Camera->Sound->Renders,
+// four workflow milestones handled by video-shotcraft: Shots / Camera / Sound / Renders),
+// revealing gray ghost items above and below; capsule width animates smoothly with word length, naturally displacing flanking text.
+// Design coordinates 480x270 (DesignStage proportional scale). Parameter values calibrated to this space.
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { DesignStage, E, lerp, seg, useT } from '../../_fixtures/Motion';
 
@@ -15,11 +15,11 @@ const WORDS = [
   { w: 'Renders', e: '🎞️' },
 ];
 const FONT = '700 22px -apple-system,system-ui,sans-serif';
-// 兜底词宽（原 effect.js 未挂载时的估算：字符数×13，再加胶囊内留白 74）；
-// 首帧 useLayoutEffect 用 offsetWidth 实测替换，与原渲染逐像素一致
+// Fallback word width (pre-mount estimate: charCount * 13 + 74 padding);
+// measured via offsetWidth in useLayoutEffect on first frame for pixel precision
 const FALLBACK_WIDTHS = WORDS.map((o) => o.w.length * 13 + 74);
 
-// 两侧静态文字（"Your" / "Handled"）
+// Static flanking text ("Your" / "Handled")
 const SIDE: React.CSSProperties = {
   color: '#15171d',
   fontWeight: 800,
@@ -31,8 +31,8 @@ const SIDE: React.CSSProperties = {
 export const PillChipSlotCycleHandled: React.FC = () => {
   const t = useT();
 
-  // 量宽：与原 effect.js 相同，用隐藏 span 实测每个词的 offsetWidth（+74 胶囊留白），
-  // 只在首次布局量一次；量到前用兜底估算，避免首帧闪动
+  // Width measurement: measures offsetWidth per word (+74 capsule padding) using hidden span,
+  // measured on first layout; fallback estimate prevents first-frame layout jump
   const measRef = useRef<HTMLDivElement>(null);
   const [widths, setWidths] = useState<number[]>(FALLBACK_WIDTHS);
   useLayoutEffect(() => {
@@ -43,15 +43,15 @@ export const PillChipSlotCycleHandled: React.FC = () => {
     );
   }, []);
 
-  // 三次切换：0.25 / 0.47 / 0.69，每次用 0.12 的 inOutCubic 推进一格
+  // Three transitions: 0.25 / 0.47 / 0.69, advancing one slot using 0.12 inOutCubic
   let pos = 0;
   for (const s0 of [0.25, 0.47, 0.69]) pos += seg(t, s0, s0 + 0.12, E.inOutCubic);
   const ci = Math.min(WORDS.length - 1, Math.floor(pos));
   const frac = pos - ci;
-  // 胶囊宽度随当前词→下一词插值，平滑挤开两侧文字
+  // Capsule width interpolates between current and next word, smoothly displacing flanking text
   const chipW = lerp(frac, widths[ci], widths[Math.min(ci + 1, WORDS.length - 1)]);
 
-  // 幽灵项：当前词的前/后邻居，随滚动微移，落定时回到基准透明度
+  // Ghost items: preceding and following neighbors moving subtly with scroll, settling to baseline opacity
   const near = Math.round(pos);
   const roll = (pos - near) * 48 * 0.5;
   const settle = 1 - Math.min(1, Math.abs(pos - near) * 3);
@@ -78,7 +78,7 @@ export const PillChipSlotCycleHandled: React.FC = () => {
           fontFamily: '-apple-system,system-ui,sans-serif',
         }}
       >
-        {/* 隐藏量宽 span（与原 setup 的 meas 等价，不参与布局显示） */}
+        {/* Hidden measurement span */} 
         <div ref={measRef} style={{ position: 'absolute', visibility: 'hidden' }}>
           {WORDS.map((o) => (
             <span key={o.w} style={{ whiteSpace: 'nowrap', font: FONT }}>
@@ -88,7 +88,7 @@ export const PillChipSlotCycleHandled: React.FC = () => {
         </div>
         <div style={SIDE}>Your</div>
         <div style={{ position: 'relative', flex: 'none' }}>
-          {/* 深色胶囊：overflow hidden 里放 4 行词的滚轮列 */}
+          {/* Dark capsule: overflow hidden housing 4-row word roller column */}
           <div
             style={{
               position: 'relative',
@@ -129,7 +129,7 @@ export const PillChipSlotCycleHandled: React.FC = () => {
               ))}
             </div>
           </div>
-          {/* 胶囊外上下的灰色幽灵项 */}
+          {/* Gray ghost items above and below capsule */}
           <div style={ghost(-38)}>{near > 0 ? WORDS[near - 1].w : ''}</div>
           <div style={ghost(58)}>{near < WORDS.length - 1 ? WORDS[near + 1].w : ''}</div>
         </div>

@@ -1,60 +1,44 @@
 ---
 name: autolayout-gap-dial
-一句话: 间距拨盘驱动布局——一排链接块带框选描边+缝隙间距标注，徽章数字逐格跳动、块被参数实时推开再弹簧回弹归位；"参数驱动布局"的可视化
-适用: 设计工具/低代码产品的"改一个数、界面跟着动"卖点镜头；"用设计工具语义做包装"的品类语言
-时长: ~5s（150f：框选入场 + 预备回收 10f + 拉松 34f + 屏息 hold 20f + 弹簧回弹 + 落定 hold）
-能量: 中（工具理性型，爽点在数字与位移的锁定同步）
+summary: A gap value dial pushes a row of blocks apart in real time while badge digits tick, then everything springs back into place.
+use: Feature showcase shots for design tools/low-code products highlighting "change a number, UI reacts in real time"; category language packaging using design tool semantics
+duration: ~5s (150f: marquee box-select entrance + prep pull-back 10f + expansion 34f + breath hold 20f + spring rebound + settle hold)
+energy: Medium (tool rationality style; satisfaction lies in locked synchronization between numbers and displacement)
 ---
 
-## 意图
-"参数改了、UI 变了"是设计工具的核心承诺，但通常拍成"点面板→切
-结果"的前后对比，因果被剪掉了。本卡把因果拍成连续镜头：间距徽章
-数字逐格跳，链接块**同帧**被推开，测量线实时拉长——数字就是缰绳，
-布局就是马。框选描边+8 手柄+间距标注全是设计工具的母语，观众一眼
-认出"这是在工具里调参数"。回程故意用欠阻尼弹簧过冲（缩到比起点
-更紧再回稳），把"归位"做成一次有弹性的收尾。与 type-and-filter
-分工：那是"输入内容→列表收敛"的检索因果，本卡是"拨数值→几何
-重排"的参数因果。
+## Intention
+"Parameters change, UI responds" is the core promise of design tools, but it is typically filmed as a before-and-after cut: "click panel -> switch result," discarding causality. This shot captures causality as a continuous take: the gap badge digits tick step-by-step, the linked blocks are pushed apart in the **same frame**, and measurement lines stretch in real time—the numbers are the reins, the layout is the horse. The marquee outline + 8 handles + gap annotations speak the native language of design tools, allowing viewers to immediately recognize "adjusting parameters inside a tool." The return journey deliberately uses an underdamped spring overshoot (compressing tighter than the starting point before restabilizing), turning "return to position" into an elastic resolution. Division of labor with type-and-filter: that card handles retrieval causality ("input content -> list converges"), while this card handles parameter causality ("dial value -> geometric rearrangement").
 
-## 动效核心
-- **gap 一个参数管全部**：块位置由 gap 重算（整排保持居中）、测量
-  线宽=gap、徽章钉缝隙中心、顶部大读数与拨盘刻度尺——所有元素从同一数值派生，锁定同步
-  是本卡的全部说服力
-- 参数曲线：先预备回收 12→6（10f swift，"往回收再冲出去"）；去程 6→104 走 34f swift
-  （不对称 in-out：起步稍快、落点很软）；屏息 hold 20f；回程 spring(damping 9, stiffness 80,
-  mass 1.1) 故意过冲到起点以下再回稳（过冲段 ×0.45 压缩：104→约 7 再回 12，gap 永不为负）
-- 读数做主角：顶部 196px 细体 tabular 数值 + px 单位 + 760px 拨盘刻度尺（刻度随 gap 横滚过中心
-  金针）；拨动中读数由白转测量金（带 ~6f 余温），松手回稳后褪回白；数值步进 2 显示，
-  跳数 scale 脉冲 1+0.06·|sin| × 速度门限
-- 导航块按自身速度做横向运动模糊（块速度 = (i−2)·dgap/dt，外侧块拖影最长），静止为 0
-- 框选描边 spring 从外侧 26px 收拢，8 手柄 1.2f 错峰弹出，图层名旁实时显示整排尺寸；
-  间距标注 = 虚线延长线 ×2 + 测量线带端刺 + 跟随徽章，错峰升起
-- demo 美术：graphite 暗场，选择白 + 测量金两色语义（画面里只有被拨动的数是有颜色的）；
-  相机整段极缓推近 2.5%
+## Motion Core
+- **One gap parameter controls everything**: Block positions are recalculated from gap (the entire row stays centered), measurement line width = gap, badge pinned to gap center, and top large readout + dial scale ruler—all elements derive from the same numerical value. Locked synchronization is the entire persuasive power of this shot.
+- Parameter curve: Preparation pull-back 12->6 (10f swift, "pull back before lunging forward"); outbound 6->104 over 34f swift (asymmetric in-out: slightly fast start, very soft landing); breath hold 20f; return spring(damping 9, stiffness 80, mass 1.1) deliberately overshoots below the starting point before restabilizing (overshoot segment compressed by x0.45: 104->~7 then back to 12, gap never goes negative).
+- Readout as the hero: Top 196px thin tabular digits + px unit + 760px dial scale ruler (ticks roll horizontally across center gold needle with gap); readout transitions from white to measurement gold during dial movement (with ~6f warm residual), fading back to white after stabilizing; numerical values step by 2; stepping scale pulse 1+0.06*|sin| * speed threshold.
+- Navigation blocks apply horizontal motion blur based on individual speed (block speed = (i-2)*dgap/dt, outermost blocks have the longest trail), zero when static.
+- Marquee outline springs inwards from 26px outer margin, 8 handles pop out staggered at 1.2f, real-time total row dimensions displayed alongside layer name; gap annotations = dashed extension lines x2 + measurement line with end barbs + follower badge, rising staggered.
+- Demo art direction: Graphite dark stage, dual-color semantics of selection white + measurement gold (only the manipulated numbers carry color in the frame); camera slowly pushes in 2.5% across the entire shot.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| gap 幅度 | 12→104px（原片 20→24，demo 按裁决加大） | 原片幅度肉眼几乎不可感——可感性判例：看不出就加大做极端版；实战至少 4–5 倍行程 |
-| 预备 | 12→6，10f swift | 先收后放给主动作蓄力；回收 >30% 读作数值抖动 |
-| 去程时长 | 34f swift | 快了读作抽搐；慢过 60f 数字跳动和位移的绑定感松掉 |
-| 屏息 hold | 20f | 让观众读清"最松"的那一帧；<12f 读不到峰值 |
-| 回程弹簧 | damping 9 → 过冲到起点以下再回稳（过冲段 ×0.45，最紧约 7px） | 过冲是"松手回弹"的手感来源；damping ≥13 直落可惜 |
-| 数字步进 | 步进 2 + 跳数 scale 脉冲 0.06 × 速度门限 | 逐 1 跳太碎读作毫秒表；步进是"拨盘咔哒"的颗粒感 |
-| 运动模糊 | 横向 stdDeviation = min(9, |块速度|×0.5) | 只在拨动段出现；全程常驻会让块字读不清 |
-| 标注几何 | 延长线 58px、测量线钉块底 +74px、徽章钉缝隙中心 | 标注必须随 gap 实时重算——任何一处滞后即穿帮 |
-| 块宽 | 不等宽（252/206/278/268/220，高 120） | 等宽读作示意图；不等宽才像真导航 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| gap amplitude | 12->104px (original video 20->24, expanded per demo adjudication) | Original amplitude almost imperceptible to the naked eye—perceptibility benchmark: if subtle, amplify into extreme version; in production use at least 4-5x travel |
+| Anticipation | 12->6, 10f swift | Pull back before release builds momentum for main action; pull-back >30% reads as value jitter |
+| Outbound duration | 34f swift | Faster reads as twitching; slower than 60f loosens binding between digit ticking and displacement |
+| Breath hold | 20f | Lets viewers clearly read the "loosest" frame; <12f peak cannot be registered |
+| Return spring | damping 9 -> overshoots below start then settles (overshoot x0.45, tightest ~7px) | Overshoot is the tactile source of "release rebound"; damping >=13 landing directly is a missed opportunity |
+| Digit stepping | Step 2 + stepping scale pulse 0.06 * speed threshold | Stepping by 1 is too granular, reading like a millisecond stopwatch; stepping gives tactile "dial click" granularity |
+| Motion blur | Horizontal stdDeviation = min(9, |block speed|*0.5) | Only appears during dial phase; persistent blur makes block text unreadable |
+| Annotation geometry | Extension line 58px, measurement line pinned to block bottom +74px, badge pinned to gap center | Annotations must recalculate in real time with gap—any lag breaks the illusion |
+| Block width | Unequal widths (252/206/278/268/220, height 120) | Equal widths read like a schematic diagram; unequal widths feel like real navigation |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 数字与位移必须同源同帧：徽章显示值和块坐标都从同一个 gap 派生，分开动画哪怕差 1f，"参数驱动"的信任即碎
-- demo 顶部大读数 + 拨盘刻度尺与布局同源同帧，实战里若画面已有真实工具面板（检查器数值框）就删掉大读数，别双重报数
-- 同族扩展：gap 只是一维，radius/padding/rotation 同语法可换参数——但一镜只拨一个参数，两个以上读作乱调
-- 框选描边+手柄是"设计工具语义"借用（figma/framer 母语），非设计工具受众的片子慎用，读不懂框选就只剩块在挪
-- 声音：徽章每跳一格一声极轻 tick（拨盘咔哒），回弹落定一声 pop；tick 密度跟步进走
+## Known Pitfalls
+- Demo calibrated on grayscale/placeholder assets—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- Numbers and displacement must share the same source and frame: badge values and block coordinates derive from the exact same gap; even a 1f desync breaks trust in "parameter-driven."
+- In demo, top large readout + dial scale ruler share the same source/frame as the layout; in production, if a real tool inspector panel exists on screen, omit the large readout to avoid redundant reporting.
+- Family expansion: gap is just one dimension; radius/padding/rotation can swap parameters with identical syntax—but only tweak one parameter per shot; tweaking two or more reads as chaotic tampering.
+- Marquee outline + handles borrow "design tool semantics" (native to Figma/Framer); use with caution for audiences outside design tools—viewers who don't understand selection boxes will only see blocks shifting around.
+- Audio: very light tick on each badge step (dial click), pop on rebound settle; tick density matches stepping cadence.
 
-## 参考实现
+## Reference Implementation
 demos/interaction/autolayout-gap-dial/
-（AutolayoutGapDial.tsx）
-原片出处：framer-ai 4.5–5.5s
+(AutolayoutGapDial.tsx)
+Source: framer-ai 4.5–5.5s

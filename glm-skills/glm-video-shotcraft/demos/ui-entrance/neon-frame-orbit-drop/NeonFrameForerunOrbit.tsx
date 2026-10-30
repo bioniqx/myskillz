@@ -1,24 +1,24 @@
-// neon-frame-forerun-orbit v5（批次 14 #1）。用户意见（逐字）：
-// "这个应该是所有组件和文字同时从空中往下贴合"
-// ——单点修正：v4 的错峰贴落改为**所有组件和文字同时**从空中往下贴合
-// （同帧起落、同帧贴合，同形软影同步收敛）。判例：整体登场镜=同时贴合，
-// 错峰是巡礼镜的语法。其余全部保留：同款霓虹渐变框+灰面板+背景霓虹管
-// 框群；镜头视角 rotateY 从左侧(+38°) 连续弧线旋到右侧(-26°)。
-// —— 质感层（改版）：与 neon-frame-forerun 同步升级——灰条面板换成出版级工作台首页（面板高 900→790）；
-// 同形软影改纯剪影、越高越大越虚越淡；悬空本体按高度微放大；面板补深色落地影；
-// 整体机位缩一档（原 scale 0.9–1.0 弧线中段面板左上角出画）；暗角 + 颗粒；补导出时长 140f。
-// —— 品牌轮：Northwind → video-shotcraft 标志 + 字标，页面内容换成镜头/渲染的世界。
+// neon-frame-forerun-orbit v5. Design intent:
+// "All components and text should drop from the air and snap into place simultaneously"
+// - Adjustment: changed staggered drop to all components and text dropping simultaneously from mid-air
+// (same-frame lift/land, soft shadows converging in sync). Precedent: full-assembly reveal = simultaneous snap,
+// staggered drop is tour syntax. Kept neon gradient frame + gray panel + background neon tube frames;
+// camera rotateY continuous arc from left (+38 deg) to right (-26 deg).
+// - Polish pass: upgraded workbench homepage (panel height 900 -> 790);
+// isomorphic soft shadows: higher elevation = larger, softer, lighter; airborne body slightly enlarged; deep floor shadow;
+// camera scale pulled back slightly; vignette + grain; total duration 140f.
+// - Brand: video-shotcraft logo + wordmark, page content updated to shots/renders domain.
 import React, { useId } from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FONT, Grain, Vignette } from '../../_fixtures/Polish';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
-export const NEON_FRAME_FORERUN_ORBIT_DURATION = 140; // 描框 0.5s + 旋转&同时贴落 3.8s + 落定
+export const NEON_FRAME_FORERUN_ORBIT_DURATION = 140; // Frame stroke 0.5s + orbit & simultaneous snap 3.8s + settle
 
-const easeFall = Easing.bezier(0.5, 0.05, 0.6, 1); // 加速下落、末端软着陆
+const easeFall = Easing.bezier(0.5, 0.05, 0.6, 1); // Accelerated drop, soft landing at end
 
-/* 悬浮 + 同形软影：h=悬浮高度(px)。本体向左上抬起（主光在左上），原位留同形剪影软影：
- * 越高越大、越虚、越淡，贴近时收小变实；h→0 时重合、影子消失（对标批次11 GrazeFaceTour FloatWrap） */
+/* Float + isomorphic soft shadow: h = float height (px). Body lifts toward top-left (key light at top-left), leaving shadow in place:
+ * higher = larger, softer, lighter; as h -> 0 shadow converges and disappears */
 const FloatWrap: React.FC<{ h: number; children: React.ReactNode }> = ({ h, children }) => (
   <div style={{ position: 'relative' }}>
     {h > 1 && (
@@ -34,9 +34,9 @@ const FloatWrap: React.FC<{ h: number; children: React.ReactNode }> = ({ h, chil
   </div>
 );
 
-/* v5：所有组件和文字**同时**从空中往下贴合——统一 land 时刻 LAND，
- * 同帧起落（t=LAND-FALL）、同帧贴合（t=LAND），软影同步收敛；
- * 各组件仅悬浮高度 H 略有差异（同窗下落，速度随高度自然区分） */
+/* v5: All components and text drop from mid-air and snap simultaneously — unified LAND time,
+ * same-frame departure (t=LAND-FALL), same-frame landing (t=LAND), shadows converging synchronously;
+ * components differ only slightly in float height H (same window, velocity scales naturally with elevation) */
 const LAND = 0.52;
 const liftOf = (t: number, land: number, H: number) => {
   const FALL = 0.3;
@@ -57,12 +57,12 @@ const ACC = '#6a5ae0';
 
 const PW = 1330;
 const PH = 790;
-const PL = 1000; // 归一路径长
+const PL = 1000; // Normalized path length
 
-// 直角矩形路径：从左缘中点出发（对应截图①左缘先亮）
+// Rectangular path: starts from left edge midpoint (left edge lights first)
 const FRAME_D = `M 0 ${PH / 2} L 0 0 L ${PW} 0 L ${PW} ${PH} L 0 ${PH} Z`;
 
-// 线性小图标（18 视框）
+// Linear micro-icons (18 viewBox)
 const Glyph: React.FC<{ k: number; c?: string }> = ({ k, c = INK2 }) => {
   const p = { fill: 'none', stroke: c, strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
@@ -112,19 +112,19 @@ const Chip: React.FC<{ w: number; i: number }> = ({ w, i }) => {
   );
 };
 
-/* 与 neon-frame-forerun 同款工作台首页；t=贴落进程。本变体 liftOf 忽略 land，全体同帧起落、同帧贴合 */
+/* Workbench homepage; t=snap progress. All elements depart and land in the same frame */
 const HomePage: React.FC<{ t?: number }> = ({ t = 1 }) => {
   const L = (land: number, H = 72) => liftOf(t, land, H * 1.7);
   return (
   <div style={{
     width: PW, height: PH, background: 'linear-gradient(180deg, #f8f8f7 0%, #f3f3f1 100%)', borderRadius: 6, display: 'flex',
-    // 不裁切：悬空组件按透视本就会探出面板边缘，裁掉会在半空被切成半截
+    // No overflow clip: floating elements project beyond panel edge under perspective
     overflow: 'visible', boxSizing: 'border-box', fontFamily: FONT.sans,
   }}>
     <div style={{ width: 290, background: '#f0f0ee', borderRadius: '6px 0 0 6px', boxShadow: `inset -1px 0 0 ${HAIR}`, padding: '26px 22px', boxSizing: 'border-box' }}>
       <FloatWrap h={L(0.24, 84)}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 26, padding: '0 4px' }}>
-          {/* 品牌：镜刻标志（亮底版）+ video-shotcraft 字标 */}
+          {/* Brand: etched logo (light base) + video-shotcraft wordmark */}
           <ShotcraftMark size={30} tone="light" />
           <div style={{ fontFamily: BRAND.font, fontSize: 17, fontWeight: 700, color: INK, letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>{BRAND.name}</div>
           <svg width={12} height={12} viewBox="0 0 12 12" style={{ marginLeft: 2 }}><path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke={INK3} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -220,14 +220,14 @@ const BG_FRAMES: BgFrame[] = Array.from({ length: 18 }).map(() => ({
 
 export const NeonFrameForerunOrbit: React.FC = () => {
   const frame = useCurrentFrame();
-  // 滤镜/渐变 ID 按实例生成，多实例同场不串引（useId 的 «:» 在 url() 里非法，需清洗）
+  // Unique filter/gradient IDs per instance (sanitize useId colons for url())
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
-  // 开场快速描框（同款左缘中点两头奔画，14 帧成型——样式与 v3 一致）
+  // Rapid frame outline stroke at start (starts at left midpoint, splits in both directions, 14 frames)
   const trace = interpolate(frame, [0, 14], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.bezier(0.3, 0.1, 0.3, 1),
   });
-  // 面板早亮：本变体主角是旋转+贴落，不复刻暗转亮长过程
+  // Early panel illumination: hero motion is orbit + landing snap
   const lit = interpolate(frame, [8, 30], [0.25, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.bezier(0.35, 0, 0.3, 1),
@@ -241,27 +241,27 @@ export const NeonFrameForerunOrbit: React.FC = () => {
   const bgLit = interpolate(frame, [0, 30, 100, 136], [0.3, 1, 0.85, 0.1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
-  // 视角弧线：从页面左侧(+38°)连续旋到右侧(-26°)，全程不停——
-  // ease-in-out 起止柔和、中段持续转动
+  // Camera angle arc: continuously rotates from left (+38 deg) to right (-26 deg), uninterrupted —
+  // ease-in-out: gentle start/stop, steady rotation mid-flight
   const orbit = interpolate(frame, [0, 128], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.bezier(0.42, 0.05, 0.32, 1),
   });
   const rotY = 38 - 64 * orbit;             // +38° → -26°
   const rotX = 6 - 2.5 * orbit;
-  const rotZ = 3 - 7.5 * orbit;             // 左视角微仰 → 右视角微俯（对齐 v3 落定姿态）
-  const scale = 0.8 + 0.08 * Math.sin(orbit * Math.PI) + 0.1 * orbit; // 弧线中段略推近，落定 0.9 与姊妹镜同框
-  // 透视原点随视角横移：镜头从左绕到右
+  const rotZ = 3 - 7.5 * orbit;             // Left view slight upward tilt -> right view slight downward tilt
+  const scale = 0.8 + 0.08 * Math.sin(orbit * Math.PI) + 0.1 * orbit; // Mid-arc push-in, settles at 0.9
+  // Perspective origin shifts horizontally with camera arc
   const pOrigin = 30 + 34 * orbit;
   const headP = trace * (PL / 2);
-  // 贴落进程：与旋转同时进行（帧 10–118），错峰起点+重叠下落
+  // Snap progress: runs concurrently with rotation (frames 10-118)
   const drop = interpolate(frame, [10, 118], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
 
   return (
     <AbsoluteFill style={{ background: '#060509', overflow: 'hidden' }}>
-      {/* 背景霓虹管框群（同款） */}
+      {/* Background neon tube frame group */}
       <svg width={1920} height={1080} style={{ position: 'absolute' }}>
         <defs>
           <filter id={`obgblur-${uid}`} x="-60%" y="-60%" width="220%" height="220%">
@@ -281,7 +281,7 @@ export const NeonFrameForerunOrbit: React.FC = () => {
           );
         })}
       </svg>
-      {/* 主体：视角弧线旋转中的框+面板 */}
+      {/* Main subject: frame and panel rotating along camera arc */}
       <div style={{ position: 'absolute', inset: 0, perspective: 1500, perspectiveOrigin: `${pOrigin}% 44%` }}>
         <div style={{
           position: 'absolute', left: (1920 - PW) / 2, top: (1080 - PH) / 2 - 10,
@@ -296,7 +296,7 @@ export const NeonFrameForerunOrbit: React.FC = () => {
               opacity: 1 - lit,
             }} />
           </div>
-          {/* 面板落地影：深色、大而虚，把面板从背景管群里托出来 */}
+          {/* Panel floor shadow: deep, broad, soft, elevating panel above background tubes */}
           <div style={{
             position: 'absolute', left: 0, top: 0, width: PW, height: PH, borderRadius: 6, pointerEvents: 'none',
             boxShadow: '0 30px 90px -10px rgba(0,0,0,0.75), 0 8px 24px rgba(0,0,0,0.45)', opacity: Math.min(1, trace * 1.4),

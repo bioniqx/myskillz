@@ -1,49 +1,44 @@
 ---
 name: mosaic-reframe
-一句话: 12 张瓦片在规则网格、feature mosaic、对角瀑布串三种排版间连续变形，位置宽高各自插值、逐片微错峰，段间留 hold
-适用: "同一批内容多种看法"的陈列转场：作品集/模板库/相册产品的布局能力展示
-时长: 约 7.1s（214f@30fps；浮现 0–22f · hold A · A→B 56–92f · hold B · B→C 132–176f · hold C 至 214f）
-能量: 中（连续流动的重排，无爆点，气质从容）
+summary: Twelve tiles morph continuously between a regular grid, a feature mosaic with one hero slot, and a rotated diagonal cascade, each tile interpolating position and size independently with a slight stagger.
+use: Display transition demonstrating "multiple ways of viewing the same content": showcase of layout versatility for portfolio, template library, or photo gallery products.
+duration: Approx. 7.1s (214f@30fps; emerge 0–22f · hold A · A→B 56–92f · hold B · B→C 132–176f · hold C through 214f).
+energy: Medium (continuously flowing rearrangement, no jarring burst, composed and confident demeanor).
 ---
 
-## 意图
-让观众看见"布局本身在思考"：同样 12 张内容，从整齐档案态（网格）变成有主次的策展态（feature mosaic），再变成有态度的动态态（对角瀑布）。## 动效核心
-- 三套布局按 1920×1080 原生像素硬编码为坐标表（内容区 x 96–1824、y 212–984）：A=4×3 规则网格（间距 24）；
-  B=6×4 单元格 mosaic（首片占 3×2 大位，间距 16）；C=竖幅相纸 300×372 沿 (850,214)→(1724,930) 对角摊开，
-  `rot = −15° + i·3°` 递增旋转
-- 每片对中心 x/y、w/h、rot **独立插值**，不走 transform 整体缩放——宽高真实变化，圆角阴影不变形；
-  位置先到：w/h 晚 2f、旋转晚 4f 收敛，B→C 的旋转带一次轻过冲（bezier 0.45,0,0.3,1.22）
-- 换位曲线 bezier(0.75,0,0.15,1)（慢起 → 急走 → 长尾软落），A→B 每片 26f、B→C 每片 30f；
-  途中按段进度 sin 包络抬起（放大 3.5% + 阴影变大变虚），落位贴回
-- 因果驱动：右上角分段控件 Grid / Mosaic / Cascade 的强调色胶囊先滑到下一档（snappy 12f，途中横向拉长），
-  瓦片晚 4f 才开始重排（父先动、子跟随）
-- 错峰：A→B 按序号先密后疏扫过（10f 跨度）；B→C 像发牌一样等间隔依次摊开（14f 跨度），
-  B→C 起叠放次序切换为"后发的压上面"（B 态无重叠，切换不可见）
-- 三态三种语气：B 态主图压衬线大字图注（Featured shot / Golden Hour / Shot 01 · Crash zoom · 4.5 s 逐词升起）；
-  C 态瓦片长出 14px 相纸白边，左下留白处升起衬线大标题 + 副行，尾帧是完整海报
-  （demo 是 video-shotcraft 的 12 镜分镜板：页眉标志 + 字标 + Storyboard，收尾「Every shot, in sequence.」+ 品牌 tagline）
-- 开场：12 张照片沿对角线错峰升起（16f snappy），全程相机极缓推近 1→1.025
+## Intention
+Let the audience witness "layout itself thinking": the exact same twelve pieces of content transform from an orderly archival state (regular grid) into an editorial hierarchy (feature mosaic), and finally into a dynamic, expressive composition (diagonal cascade).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 段时长 / hold | A→B 26f、B→C 30f；hold A 30f、B 36f、C 34f | hold 是读版面的呼吸位，压到 <20f 三段糊成一段 |
-| 控件→瓦片滞后 | 4f | 0 = 读不出因果；>8f 像控件失灵 |
-| 错峰跨度 | A→B 10f、B→C 14f | 0 = 整版机械闪变；>24f 波浪抢过版面本身 |
-| 瀑布参数 | 相纸 300×372，中心间距约 (79,65)px，rot −15°+3°/片 | 旋转递增是"串"的灵魂；等角会退化成斜排网格 |
-| mosaic 大位 | 首片 3×2 单元格 | 换 slots 表可重排主次；保证有一块 ≥2×2 的锚点位 |
-| 抬起包络 | scale +3.5%、阴影 elevation 6→40 | 太大像弹窗乱飞，0 读作平面滑块 |
-| 瓦片内容 | SVG 程序照片（viewBox + slice ≈ cover，八式暖调胶片风） | 换真实照片时保留 overflow:hidden 圆角容器 + object-fit: cover |
+## Motion Core
+- Three layout states are hardcoded into coordinate tables based on 1920×1080 native pixels (content bounds: x 96–1824, y 212–984):
+  - State A = 4×3 regular grid (gap 24px);
+  - State B = 6×4 cell mosaic (first tile occupies a 3×2 hero slot, gap 16px);
+  - State C = vertical photo cards 300×372 fanned out diagonally along (850, 214) → (1724, 930), with incrementally increasing rotation rot = −15° + i·3°.
+- Each tile **interpolates center x/y, w/h, and rot independently**, rather than applying a global container transform scale—true geometric width and height changes preserve border-radius and shadow dimensions without optical distortion; position converges first, w/h converges 2f later, and rotation converges 4f later, with the B→C rotation carrying a subtle overshoot (`cubic-bezier(0.45, 0, 0.3, 1.22)`).
+- Relocation curve uses `cubic-bezier(0.75, 0, 0.15, 1)` (slow start → rapid transit → soft landing with long tail); 26f per tile for A→B, 30f per tile for B→C; mid-flight elevation follows a sine envelope (scaling up +3.5% with deeper, softer shadows), snapping back down upon touchdown.
+- Causal drive: the top-right segmented control (Grid / Mosaic / Cascade) slides its accent capsule to the next tier first (snappy 12f, horizontally stretching mid-flight); tiles begin rearranging 4f later (parent acts first, children follow).
+- Stagger: A→B sweeps through tile indices with accelerating density (10f total span); B→C deals out tiles like playing cards at uniform intervals (14f total span); starting at B→C, stacking order switches to "later cards layered on top" (State B has zero overlap, making the z-index swap invisible).
+- Three states convey three tones: State B's hero card overlays a large serif photo caption (Featured shot / Golden Hour / Shot 01 · Crash zoom · 4.5s rising word by word); State C's tiles sprout a 14px white photo border, while the bottom-left negative space reveals a prominent serif headline + subline, concluding on a complete editorial poster (demo features video-shotcraft's 12-shot storyboard: header emblem + wordmark + Storyboard, closing on "Every shot, in sequence." + brand tagline).
+- Opening: 12 photos rise with diagonal stagger (16f snappy), while the camera maintains an ultra-slow push-in from 1 → 1.025 throughout.
 
-## 已知坑
-- 中心/宽高独立插值意味着**不能**换成 `transform: scale`——宽高动画会引发子元素重排，图片要用 `object-fit: cover`
-- C 段末片有意越出画框底边，画框裁切是构图的一部分；C 的对角线要避开左上字标和右上控件，左下留给标题
-- 竖幅相纸会把横幅照片裁成中间一条：照片主体放画面水平中心附近；主图的太阳偏右，给左下图注让位
-- 叠放次序只能在"无重叠"的态切换（B→C 起跳帧），在重叠中途换 zIndex 会看到瓦片跳层
-- 段窗口 + 错峰 + 滞后叠加后末片 B→C 约 176f 才落定，再加段落需压缩前段而不是顺延
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Segment duration / hold | A→B 26f, B→C 30f; hold A 30f, B 36f, C 34f | Hold durations provide breathing room to read layouts; compressing below 20f blurs the three states into a chaotic mess |
+| Control-to-tile lag | 4f | 0f loses causal connection; >8f makes controls feel unresponsive |
+| Stagger span | A→B 10f, B→C 14f | 0f produces mechanical simultaneous shifts; >24f makes the wave motion overpower the layout itself |
+| Cascade parameters | Photo cards 300×372, center spacing ~(79, 65)px, rot −15° + 3°/tile | Incremental rotation is the soul of the cascade; uniform rotation degenerates into a tilted grid |
+| Mosaic hero slot | First tile spans 3×2 grid cells | Reconfiguring the slots table adjusts visual weight; ensure at least one anchor slot is ≥2×2 |
+| Lift envelope | scale +3.5%, shadow elevation 6 → 40 | Too high resembles floating modal popups; 0 reads as flat sliding tiles |
+| Tile content | Procedural SVG artwork (viewBox + slice ≈ cover, warm 35mm film aesthetic) | When swapping to real photography, preserve overflow: hidden rounded containers + object-fit: cover |
 
-缩前段而不是顺延（保证 t=1 前全部落定）
+## Known Pitfalls
+- Independent center/dimension interpolation means you **cannot** substitute transform: scale—animating width/height triggers child layout passes, requiring child images to use object-fit: cover.
+- In Segment C, the final tile intentionally exceeds the bottom viewport boundary; frame cropping is part of the composition; State C's diagonal axis must avoid the top-left wordmark and top-right control, preserving bottom-left space for the headline.
+- Vertical photo cards crop landscape imagery into a central vertical slice: keep photographic focal points near the horizontal center; in the hero image, position the sun slightly to the right to leave room for the bottom-left caption.
+- Stacking order (zIndex) can only be safely swapped during non-overlapping states (the launch frame of B→C); swapping zIndex mid-overlap produces jarring layer pop.
+- Compounding segment windows, stagger spans, and control lag means the final tile in B→C settles around 176f; if adding further segments, compress earlier segments rather than pushing outward (ensuring all tiles settle before t=1).
 
-## 参考实现
+## Reference Implementation
 demos/transition/mosaic-reframe/
-（MosaicReframe.tsx）
+(MosaicReframe.tsx)

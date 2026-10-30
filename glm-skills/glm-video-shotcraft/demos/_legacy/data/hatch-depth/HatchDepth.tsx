@@ -1,14 +1,14 @@
-// hatch-depth — Hatch → Depth Chart 斜纹柱实体化（motion-lab 定稿转原生 Remotion）
-// 标签下的斜纹条逐条 wipe 伸长（保持 45° 斜纹占位质感），随后斜纹层淡出、强调色
-// 实心层淡入，蜕变为数据横柱条形图——几何无跳变、只换纹理与颜色，讲"占位变真数据"的隐喻。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// hatch-depth — Hatch -> Depth Chart hatching bar materialization (ported from motion-lab final to native Remotion)
+// Hatched bars under labels wipe and extend one by one (preserving 45° hatched placeholder texture); hatched layer then fades out while accent-colored
+// solid layer fades in, morphing into horizontal data bar chart — zero geometric jump, switching only texture and color, metaphor of "placeholder becoming real data".
+// Design canvas 480×270 (DesignStage proportional scale); parameter values calibrated in this coordinate space.
 import React from 'react';
 import { DesignStage, E, seg, useT } from '../../_fixtures/Motion';
 
 export const HATCH_DEPTH_DURATION = 132; // 4400ms @30fps
 
-const ACCENT = '#5B8DEF'; // 模板强调色，可按项目替换
-const ACCENT_HI = '#8FB2F7'; // 同族高亮（数值文字）
+const ACCENT = '#5B8DEF'; // Template accent color, customizable per project
+const ACCENT_HI = '#8FB2F7'; // Same-family highlight (value text)
 
 const ROWS = [
   { label: 'SERIES_A', w: 0.85 },
@@ -18,12 +18,12 @@ const ROWS = [
   { label: 'OTHER_E', w: 0.7 },
 ];
 
-// 头部信息条里的 &nbsp;&nbsp;（连续普通空格在 JSX 会被折叠，须用不换行空格）
+// &nbsp;&nbsp; in header info bar (consecutive standard spaces get collapsed in JSX, must use non-breaking spaces)
 const NBSP2 = '  ';
 
 export const HatchDepth: React.FC = () => {
   const t = useT();
-  // 头部信息条：下滑入场
+  // Header info bar: slides down into view
   const headIn = seg(t, 0.62, 0.78, E.outCubic);
   return (
     <DesignStage bg="#0a0a0c">
@@ -37,13 +37,13 @@ export const HatchDepth: React.FC = () => {
           flexDirection: 'column',
           justifyContent: 'center',
           gap: 13,
-          // 原栈 SF Mono 对无头 Chrome 不可见，真实 Chrome 落到 macOS 默认
-          // 等宽字体 Courier（衬线打字机形）；显式补 Courier 兜底对齐原片
+          // Original font stack SF Mono invisible in headless Chrome; real Chrome falls back to macOS default
+          // monospace font Courier (serif typewriter style); explicit Courier fallback aligns with reference
           fontFamily: '"SF Mono",Courier,monospace',
         }}
       >
         {ROWS.map(({ label, w }, i) => {
-          // 逐条 wipe 伸长 → 斜纹淡出/实心淡入 → 末段轻微 wiggle
+          // Staggered wipe extension -> hatch fades out / solid fades in -> subtle wiggle at end
           const grow = seg(t, 0.06 + i * 0.05, 0.06 + i * 0.05 + 0.22, E.outCubic);
           const morph = seg(t, 0.5 + i * 0.03, 0.5 + i * 0.03 + 0.14);
           const wiggle = 1 + Math.sin(t * 30 + i * 2.1) * 0.02 * seg(t, 0.7, 0.85);
@@ -62,7 +62,7 @@ export const HatchDepth: React.FC = () => {
                 {label}
               </span>
               <div style={{ position: 'relative', height: '100%', flex: 1 }}>
-                {/* 斜纹占位层 */}
+                {/* Hatch placeholder layer */}
                 <div
                   style={{
                     position: 'absolute',
@@ -73,13 +73,13 @@ export const HatchDepth: React.FC = () => {
                     borderRadius: 3,
                     background: 'repeating-linear-gradient(45deg,#565860 0 4px,transparent 4px 9px)',
                     border: '1px solid #565860',
-                    // 原渲染无全局 border-box：宽高为内容尺寸，1px 边框外扩
-                    // （斜纹相位随元素尺寸变化，box-sizing 不还原相位就对不上）
+                    // Original render lacked global border-box: width/height represent content size, 1px border expands outward
+                    // (hatch pattern phase shifts with element size; phase mismatches unless original box-sizing is preserved)
                     boxSizing: 'content-box',
                     opacity: 1 - morph,
                   }}
                 />
-                {/* 强调色实心层 */}
+                {/* Accent solid layer */}
                 <div
                   style={{
                     position: 'absolute',
@@ -92,7 +92,7 @@ export const HatchDepth: React.FC = () => {
                     opacity: morph,
                   }}
                 />
-                {/* 柱端数值 */}
+                {/* Bar-end value */}
                 <span
                   style={{
                     position: 'absolute',
@@ -110,7 +110,7 @@ export const HatchDepth: React.FC = () => {
             </div>
           );
         })}
-        {/* 头部信息条 */}
+        {/* Header info bar */}
         <div
           style={{
             position: 'absolute',
@@ -118,7 +118,7 @@ export const HatchDepth: React.FC = () => {
             left: 60,
             fontWeight: 600,
             fontSize: 12,
-            fontFamily: '"SF Mono",Courier,monospace', // 同上：Courier 兜底
+            fontFamily: '"SF Mono",Courier,monospace', // As above: Courier fallback
             letterSpacing: 1,
             transform: `translateY(${-30 + headIn * 30}px)`,
             opacity: headIn,

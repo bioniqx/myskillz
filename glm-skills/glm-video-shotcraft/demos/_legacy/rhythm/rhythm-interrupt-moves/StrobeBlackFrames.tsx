@@ -1,18 +1,18 @@
-// 频闪黑帧（strobe-black-frames）——节奏剪辑｜VJ strobe / 剪映闪黑。
-// FakeDashboard A 全程缓慢推近蓄张力（scale 1.0→1.05，Easing.in(quad)，
-// 越到后段越快）。40–80f 频闪窗：全屏纯黑 #0c0c0c 按写死帧号表闪现，
-// 每次持续 2f，间隔从 8f 收敛到 3f，窒息感逐渐逼近。最后一闪盖住 79–80，
-// 帧 81 掀开时构图已硬切到 scale 1.35 对准第 2 行中间卡（零补间一帧到位），
-// 叠 2f brightness 0.88 加深脉冲当落锤。
-// 关键帧：0–78 推近 1.0→~1.05 → 黑闪 [40,48,55,61,66,70,73,76,79]（各 2f）→
-// 79–80 全黑 → 帧 81 硬切 scale 1.35（81–82 加深脉冲）→ 83–134 全静止（52f ≥50f）。
-// 光敏警示：实战建议配乐渐强使用。
+// Strobe black frames (strobe-black-frames) — Rhythmic edit | VJ strobe / blackout flicker.
+// FakeDashboard A slowly zooms in to build tension (scale 1.0 -> 1.05, Easing.in(quad),
+// accelerating toward end). 40–80f strobe window: full-screen pure black #0c0c0c flashes on predetermined frames,
+// 2f duration each, intervals tightening from 8f to 3f to build escalating tension. Final flash covers 79–80;
+// at frame 81, view reveals a hard cut to scale 1.35 centered on row 2 middle card (zero-tween instantaneous cut),
+// overlaid with 2f brightness 0.88 impact pulse.
+// Keyframes: 0–78 zoom in 1.0 -> ~1.05 -> black strobes [40,48,55,61,66,70,73,76,79] (2f each) ->
+// 79–80 pure black -> frame 81 hard cut scale 1.35 (81–82 darkening pulse) -> 83–134 completely static (52f >= 50f).
+// Photosensitivity warning: recommended to pair with musical crescendo in production.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, FakeDashboard, TitleBlock } from '../../_fixtures/Fixtures';
 
-// punch-in 落点：3×2 网格第 2 行中间卡中心（同 JumpCutPunchIn 几何）
-// 侧栏 220 + 内边距 36；卡宽 (1920-220-72-56)/3 ≈ 524.67，卡高 (1080-72-72-28)/2 = 454
+// Punch-in focal point: 3x2 grid row 2 center card midpoint (matching JumpCutPunchIn geometry)
+// Sidebar 220 + padding 36; card width (1920-220-72-56)/3 ≈ 524.67, card height (1080-72-72-28)/2 = 454
 const CARD_L = 220 + 36 + 524.67 + 28; // ≈808.67
 const CARD_T = 72 + 36 + 454 + 28; // 590
 const CARD_W = 524.67;
@@ -20,13 +20,13 @@ const CARD_H = 454;
 const ORIGIN_X = CARD_L + CARD_W / 2; // ≈1071
 const ORIGIN_Y = CARD_T + CARD_H / 2; // 817
 
-// 黑闪帧号表（写死）：间隔 8→7→6→5→4→3→3→3，每次持续 2f（f0 与 f0+1）
+// Black strobe frame table (hardcoded): intervals 8->7->6->5->4->3->3->3, 2f duration each (f0 and f0+1)
 const FLASHES = [40, 48, 55, 61, 66, 70, 73, 76, 79];
 
 const isBlack = (f: number): boolean =>
   FLASHES.some((f0) => f >= f0 && f <= f0 + 1);
 
-// 帧 81 前缓慢推近（Easing.in 蓄力），81 起零补间硬切 1.35 定住
+// Slow zoom-in before frame 81 (Easing.in tension build), zero-tween hard cut to 1.35 freeze at 81
 const scaleAt = (f: number): number =>
   f < 81
     ? interpolate(f, [0, 80], [1.0, 1.05], {
@@ -36,7 +36,7 @@ const scaleAt = (f: number): number =>
       })
     : 1.35;
 
-// 落锤：81–82 两帧整画面加深脉冲
+// Impact gavel: 81–82 2-frame full-screen darkening pulse
 const pulseAt = (f: number): number => (f >= 81 && f <= 82 ? 0.88 : 1);
 
 export const StrobeBlackFrames: React.FC = () => {
@@ -65,7 +65,7 @@ export const StrobeBlackFrames: React.FC = () => {
         }}
       >
         <FakeDashboard variant="A" />
-        {/* 落点卡片标记：随构图一起缩放，提示硬切对准的核心卡 */}
+        {/* Target card marker: scales with composition to indicate focal card */}
         <div
           style={{
             position: 'absolute',
@@ -79,11 +79,11 @@ export const StrobeBlackFrames: React.FC = () => {
           }}
         />
       </div>
-      {/* 标签不随缩放，固定顶栏位置 */}
+      {/* Label exempt from zoom, fixed in topbar */}
       <div style={{ position: 'absolute', left: 260, top: 20 }}>
         <TitleBlock text="STROBE BLACK FRAMES" size={54} />
       </div>
-      {/* 全屏黑闪层：盖住一切（含标签），每次 2f */}
+      {/* Fullscreen black strobe overlay: covers everything (including label), 2f each */}
       {black && (
         <div
           style={{

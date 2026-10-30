@@ -5,21 +5,21 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
-// @proj = 外部成片工程源码（本机经 workbench/proj 符号链接接入，不进库；scripts/open.mjs 负责链接）。
-// 未链接时自动落到 proj-stub 降级实现：工程可构建可运行，素材 tab 显示接入提示。
-// @demos = 仓库 demos/（相对符号链接 demosrc，进库）——158 张镜头卡的 demo 源码直接当动效库。
-// preserveSymlinks 让两者按虚拟路径解析，其 'react'/'remotion' 裸导入
-// 落到本工程 node_modules（避免双实例）；src/proj.d.ts 让 tsc 不检查外部源码。
+// @proj = external project source (connected via workbench/proj symlink, not committed; managed by scripts/open.mjs).
+// Falls back to proj-stub when unlinked: builds and runs with a hint in Media tab.
+// @demos = repo demos/ (relative symlink demosrc, committed) — 158 demo cards served directly as motion library.
+// preserveSymlinks resolves virtual paths so 'react'/'remotion' bare imports resolve to local node_modules;
+// src/proj.d.ts prevents tsc from typechecking external source.
 const root = fileURLToPath(new URL(".", import.meta.url));
-// 工程链接了但没写 src/workbench.ts 清单时也回退到 stub（工作台只 import @proj/workbench 这一个模块）
+// Fall back to stub when project is linked without src/workbench.ts manifest (workbench imports @proj/workbench exclusively)
 const proj = existsSync(path.join(root, "proj", "workbench.ts")) ? "proj" : "proj-stub";
 
-/** 导出成片：dev server 内起 Remotion CLI 渲染，
- *  前端 POST /api/export 提交工程 JSON，轮询 GET /api/export/:id 取进度。 */
+/** Export video: launches Remotion CLI render within dev server.
+ *  Frontend submits project JSON via POST /api/export, polling GET /api/export/:id for progress. */
 type ExportJob = {
   status: "running" | "done" | "error";
   progress: number; // 0..1
-  output: string; // 相对 workbench 的输出路径
+  output: string; // output path relative to workbench
   lastLine: string;
   logTail: string[];
 };
@@ -31,7 +31,7 @@ const renderExportPlugin = (): Plugin => {
   return {
     name: "wb-render-export",
     configureServer(server) {
-      // 每个任务结束（成功/失败/同步失败）都即时删除 props 文件；启动时清掉历史残留
+      // Clean up temporary props files upon task completion (success/fail/sync error) and clear leftovers on startup
       const exportsDir = path.join(root, "exports");
       if (existsSync(exportsDir)) {
         for (const f of readdirSync(exportsDir)) {
@@ -46,10 +46,10 @@ const renderExportPlugin = (): Plugin => {
         };
         const sub = (req.url ?? "/").split("?")[0];
 
-        // POST /api/export —— 提交渲染
+        // POST /api/export — Submit render
         if (req.method === "POST" && (sub === "/" || sub === "")) {
           if ([...jobs.values()].some((j) => j.status === "running")) {
-            send(409, { error: "已有渲染在进行中" });
+            send(409, { error: "A render is already in progress" });
             return;
           }
           let raw = "";
@@ -60,7 +60,7 @@ const renderExportPlugin = (): Plugin => {
               project = JSON.parse(raw).project;
               if (!project) throw new Error("no project");
             } catch {
-              send(400, { error: "缺少工程 JSON" });
+              send(400, { error: "Missing project JSON" });
               return;
             }
             const id = Date.now().toString(36);
@@ -68,7 +68,7 @@ const renderExportPlugin = (): Plugin => {
             mkdirSync(outDir, { recursive: true });
             const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
             const safeName =
-              (project.name ?? "工程").replace(/[^\w一-龥·-]+/g, "_").slice(0, 40) || "工程";
+              (project.name ?? "project").replace(/[^\w·-]+/g, "_").slice(0, 40) || "project";
             const output = `exports/${safeName}-${stamp}.mp4`;
             const propsFile = path.join(outDir, `.props-${id}.json`);
             writeFileSync(propsFile, JSON.stringify({ project, renderExact: true }));
@@ -78,7 +78,7 @@ const renderExportPlugin = (): Plugin => {
               status: "running",
               progress: 0,
               output,
-              lastLine: "同步素材…",
+              lastLine: "Syncing assets…",
               logTail: [],
             };
             jobs.set(id, job);
@@ -88,15 +88,14 @@ const renderExportPlugin = (): Plugin => {
               for (const line of lines) {
                 job.lastLine = line.trim();
                 job.logTail = [...job.logTail, line.trim()].slice(-40);
-                // Remotion CLI 进度形如 "Rendered 123/5544"，取最后一处 a/b
+                // Remotion CLI progress format: "Rendered 123/5544", take last a/b
                 const m = [...line.matchAll(/(\d+)\/(\d+)/g)].pop();
                 if (m && Number(m[2]) > 0) job.progress = Number(m[1]) / Number(m[2]);
               }
             };
 
-            // Remotion 静态服务器默认拒绝服务符号链接（lstat 到 symlink 一律 404），
-            // 而 public/ 下全是指向成片工程 / 仓库素材库的符号链接——渲染前先解引用同步成
-            // 真实文件目录，再用 --public-dir 指过去。cardpreviews 仅 UI 用，排除。
+            // Remotion static server restricts symlinks (returns 404 for symlinked paths).
+            // Dereference and sync public/ to a real folder before rendering, pointing via --public-dir.
             const renderPublic = path.join(root, ".render-public");
             const rsync = spawn(
               "rsync",
@@ -108,7 +107,7 @@ const renderExportPlugin = (): Plugin => {
               if (rc !== 0) {
                 dropProps();
                 job.status = "error";
-                job.lastLine = `素材同步失败（rsync 退出码 ${rc}）：${job.lastLine}`;
+                job.lastLine = `Asset sync failed (rsync exit code ${rc}): ${job.lastLine}`;
                 return;
               }
               const bin = path.join(root, "node_modules", ".bin", "remotion");
@@ -127,11 +126,11 @@ const renderExportPlugin = (): Plugin => {
               child.stdout.on("data", onChunk);
               child.stderr.on("data", onChunk);
               child.on("close", (code) => {
-                dropProps(); // Remotion CLI 启动时已读完 props，成功失败都不再需要
+                dropProps(); // Props read at launch, safe to drop
                 job.status = code === 0 ? "done" : "error";
                 if (code === 0) job.progress = 1;
                 else {
-                  // 把最有信息量的错误行顶到 UI（否则 lastLine 常是堆栈尾行）
+                  // Surface most informative error line to UI
                   const err = job.logTail.find((l) => l.includes("Error"));
                   if (err) job.lastLine = err;
                 }
@@ -142,14 +141,14 @@ const renderExportPlugin = (): Plugin => {
           return;
         }
 
-        // GET /api/export/:id —— 查进度
+        // GET /api/export/:id — Poll progress
         const m = sub.match(/^\/([a-z0-9]+)(\/reveal)?$/);
         const job = m ? jobs.get(m[1]) : undefined;
         if (!job) {
-          send(404, { error: "任务不存在" });
+          send(404, { error: "Task not found" });
           return;
         }
-        // POST /api/export/:id/reveal —— Finder 里显示成片
+        // POST /api/export/:id/reveal — Reveal in Finder
         if (req.method === "POST" && m![2]) {
           if (process.platform === "darwin") spawn("open", ["-R", path.join(root, job.output)]);
           send(200, { ok: true });
@@ -163,12 +162,12 @@ const renderExportPlugin = (): Plugin => {
 
 export default defineConfig({
   plugins: [react(), renderExportPlugin()],
-  // 5198：与 video-talkcraft 的工作台（5199）错开，两边可同时开
+  // Port 5198: decoupled from video-talkcraft (5199), allowing concurrent runs
   server: { port: 5198, strictPort: true },
   resolve: {
     preserveSymlinks: true,
     alias: { "@proj": path.join(root, proj), "@demos": path.join(root, "demosrc") },
   },
-  // 外部工程 / demo 源码经符号链接进来，依赖预构建要认得它们的裸导入
+  // Ensure pre-bundle includes bare imports from symlinked external project / demos
   optimizeDeps: { include: ["react", "react-dom", "remotion", "@remotion/motion-blur"] },
 });

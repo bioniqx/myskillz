@@ -1,22 +1,22 @@
-// icon-field-colorize —— 灰阶图标原野错峰浮现铺满全屏，停一拍后多道品牌色横带波纹极快向下扫翻全场，
-// 终态多色横带。对标 bear-app.mp4 0–3s（密帧核实：非同帧硬翻，是极快多道波纹翻色）。
+// icon-field-colorize — Grayscale icon grid emerges staggered across screen, pauses, then rapid brand-color waves sweep downward,
+// settling into horizontal chromatic bands. Aligned to bear-app.mp4 0–3s (rapid multi-wave wipe rather than single-frame snap).
 //
-// 第二轮重设计（余烬暗场 · 熄灯的键帽阵列被一道道光点亮）：
-// - look = ember（暖黑 + 橙 / 金）。170 枚图标做成熄灯的深色键帽（暖黑底、发丝边、顶沿受光、暗灰字形）——
-//   灰阶在暗场里读作"还没通电"；翻色 = 通电：键帽变成发光的色块（深色字形），带同色泛光、翻转瞬间白闪 + 1.22× pop，
-//   同时这一行身后的舞台被染上同色的光（光溢出），整片原野真的"亮起来"。
-// - 色波是一组暖色日出渐变（金 → 琥珀 → 橙 → 珊瑚红）：4 道波依次从各自起始行向下快扫，后波覆盖更低的行带，
-//   终态四段横带由上到下由暖金过渡到珊瑚红——同色系分段，不是彩虹。
-// - 节奏：中心向外浮现（46f）→ 静置时整场轻轻"吸气"压暗 → 色波 ~28f 扫完 → 光稳定后中心起一层暗幕、
-//   落 video-shotcraft 字标 + 两行 132px 标题「Every shot, / one place.」，结尾帧是一张品牌海报。
+// Iteration 2 redesign (ember dark field · unlit keycap matrix illuminated by waves):
+// - look = ember (warm black + orange/gold). 170 icons styled as unlit dark keycaps (warm dark base, hairline border, top-edge specular, dark gray glyphs) —
+//   grayscale reads as "powered off"; color flip = power-on: keycaps become luminous color tiles (dark glyphs) with matching glow, momentary white flash + 1.22x pop,
+//   while background behind that row catches ambient spilled light, making the field genuinely come alive.
+// - Color waves form a warm sunrise progression (gold -> amber -> orange -> coral): 4 waves sweep downward starting from respective rows, each wave covering lower bands,
+//   culminating in 4 horizontal bands transitioning from warm gold to coral — a cohesive tonal gradation.
+// - Rhythm: Radial emergence from center (46f) -> subtle breath / prep dimming during hold -> ~28f color sweep -> ambient glow stabilizes -> center dark scrim rises,
+//   revealing video-shotcraft logotype + 2-line 132px headline "Every shot, / one place.", settling as a brand poster.
 //
-// 时间表（30fps，共 170f）：
-//   0–48    浮现：10 批按离中心距离（+噪声）错峰，批间 4f + 批内 ≤3f；每枚 0.6→1.06→1 过冲 + 上浮 10px
-//   48–66   静置（58–66 整场压暗 12% = 蓄力）
-//   66–96   翻色：4 道波（66/72/78/84f 起），行差 1.4f + 列微倾 0.25f + ≤1.5f 抖动，每枚 4f 翻转 + pop + 白闪
-//   96–118  余波：泛光与光溢出稳定
-//   118–140 暗幕 + 字标 + 标题两行升起
-//   140–170 hold；全程极缓推近 4%
+// Timeline (30fps, 170f total):
+//   0–48    Emergence: 10 batches staggered by distance from center (+noise), 4f batch gap + <=3f internal jitter; 0.6->1.06->1 pop + 10px rise
+//   48–66   Resting hold (58–66 whole field dims 12% for anticipation)
+//   66–96   Color sweep: 4 waves (launch at 66/72/78/84f), row delay 1.4f + column tilt 0.25f + <=1.5f jitter, 4f flip + pop + white flash per icon
+//   96–118  Aftermath: glow and ambient light spill stabilize
+//   118–140 Scrim + logotype + 2-line title rise
+//   140–170 Hold; continuous subtle 4% camera push-in
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, mix, ramp } from '../../_fixtures/Polish';
@@ -30,7 +30,7 @@ const mulberry32 = (a: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-// 16 个简笔图标（viewBox 0 0 24 24，纯填充），求可辨认不求精致
+// 16 simplified icons (viewBox 0 0 24 24, filled), optimized for silhouette recognition
 const SHAPES: ((c: string, k: string) => React.ReactNode)[] = [
   (c) => <path fill={c} d="M12 21s-7.5-4.7-9.6-9C.9 8.7 2.7 5 6.2 5c2 0 3.3 1 4 2.1h3.6C14.5 6 15.8 5 17.8 5c3.5 0 5.3 3.7 3.8 7-2.1 4.3-9.6 9-9.6 9z" transform="scale(0.92) translate(1,0)" />,
   (c) => <path fill={c} d="M12 2l2.7 6.3 6.8.5-5.2 4.4 1.6 6.6L12 16.2 6.1 19.8l1.6-6.6L2.5 8.8l6.8-.5z" />,
@@ -50,18 +50,18 @@ const SHAPES: ((c: string, k: string) => React.ReactNode)[] = [
   (c) => <path fill={c} d="M20 4C10 4 4.5 9 4 15.7 3.9 17.5 4 20 4 20s2.7-.2 4.4-.3C15 19.2 20 13.5 20 4zM6.8 17.2C10 11 15 8 15 8s-5.5 1.5-8.8 8z" />,
 ];
 
-export const ICON_FIELD_COLORIZE_DURATION = 170; // 浮现 ~48f + 静置 18f + 翻色 ~30f + 余波 / 标题 / hold
+export const ICON_FIELD_COLORIZE_DURATION = 170; // Emergence ~48f + hold 18f + colorize ~30f + aftermath / title / hold
 
 const L = LOOKS.ember;
 const COLS = 17, ROWS = 10;
-const CELL_X = 108, CELL_Y = 106; // 格距（行间半格错位）
-const TILE = 66; // 键帽边长
+const CELL_X = 108, CELL_Y = 106; // Cell pitch (half-cell alternating row stagger)
+const TILE = 66; // Keycap side length
 const GLYPH = 32;
 const X0 = (1920 - ((COLS - 1) * CELL_X + CELL_X / 2 + TILE)) / 2;
 const Y0 = (1080 - ((ROWS - 1) * CELL_Y + TILE)) / 2;
-// 熄灯态字形：3 档暖灰
+// Unlit glyph tones: 3 warm-gray steps
 const GRAYS = ['#6e5c50', '#806b5d', '#5f4f45'];
-// 四道色波：日出渐变（金 → 琥珀 → 橙 → 珊瑚红），后波覆盖更低的行带
+// Four color waves: sunrise progression (gold -> amber -> orange -> coral), subsequent waves wash lower bands
 type RGB = [number, number, number];
 const WAVES: { color: RGB; fromRow: number; start: number }[] = [
   { color: [255, 196, 84], fromRow: 0, start: 66 },
@@ -71,9 +71,9 @@ const WAVES: { color: RGB; fromRow: number; start: number }[] = [
 ];
 const shade = (c: RGB, k: number): RGB => c.map((v) => Math.round(Math.max(0, Math.min(255, v + k * 255)))) as RGB;
 const css = (c: RGB, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-const FLIP = 4; // 每枚翻转帧数
+const FLIP = 4; // Flip duration per tile (frames)
 
-// 预计算每枚图标的确定性属性
+// Precompute deterministic tile properties
 const rnd = mulberry32(20260718);
 const ICONS = Array.from({ length: ROWS * COLS }, (_, idx) => {
   const r = Math.floor(idx / COLS);
@@ -87,13 +87,13 @@ const ICONS = Array.from({ length: ROWS * COLS }, (_, idx) => {
     r, c, x, y,
     t0: 2 + batch * 4.4 + r2 * 3,
     gray: GRAYS[Math.floor(r2 * GRAYS.length)],
-    jit: (r1 - 0.5) * 0.08, // 同色带内 ±4% 明度微差
+    jit: (r1 - 0.5) * 0.08, // +/-4% subtle brightness variance within band
     shape: SHAPES[Math.floor(r3 * SHAPES.length) % SHAPES.length],
     arrive: WAVES.filter((w) => r >= w.fromRow).map((w) => ({ w, at: w.start + (r - w.fromRow) * 1.4 + c * 0.25 + r3 * 1.5 })),
   };
 });
 
-// 键帽：tint=null 为熄灯态
+// Keycap tile: tint=null represents unlit state
 const Key: React.FC<{ shape: (c: string, k: string) => React.ReactNode; gray: string; tint: RGB | null; glowK?: number }> = ({ shape, gray, tint, glowK = 1 }) => {
   const lit = tint !== null;
   const top = lit ? shade(tint, 0.08) : null;
@@ -115,7 +115,7 @@ const Key: React.FC<{ shape: (c: string, k: string) => React.ReactNode; gray: st
 
 export const IconFieldColorize: React.FC = () => {
   const frame = useCurrentFrame();
-  // 静置段"吸气"：翻色前整场压暗 12%，第一道波到达时回满
+  // Anticipation dim: entire field dims 12% before wave, restoring as wave 1 arrives
   const inhale = ramp(frame, 56, 10, EASE.smooth) * (1 - ramp(frame, 66, 8, EASE.out));
   const rowLit = new Array(ROWS).fill(0);
   const rowColor: (RGB | null)[] = new Array(ROWS).fill(null);
@@ -136,8 +136,8 @@ export const IconFieldColorize: React.FC = () => {
     if (cur) { rowLit[ic.r] += 1 / COLS; rowColor[ic.r] = cur; }
     const flipping = p > 0 && p < 1;
     const pop = flipping ? 1 + Math.sin(p * Math.PI) * 0.22 : 1;
-    // 通电白闪 + 泛光过冲：翻转后 ~10f 内由强到稳
-    // 白闪等新色灌满后才起，screen 叠加只提亮不发灰
+    // Power-on white flash + bloom overshoot: settles from peak over ~10f
+    // White flash triggers after color fills; screen blend adds specular lift without washing out
     const flash = since >= FLIP ? Math.max(0, 1 - (since - FLIP) / 5) : 0;
     const glowK = since >= 0 ? 1 + 1.2 * Math.max(0, 1 - since / 12) : 1;
     return (
@@ -147,7 +147,7 @@ export const IconFieldColorize: React.FC = () => {
       }}>
         <Key shape={ic.shape} gray={ic.gray} tint={flipping ? prev : cur} glowK={glowK} />
         {flipping && (
-          // 新色自上而下"灌满"键帽（与波的方向一致）：clip 擦入不做透明度混合，免得暖金叠在暗底上发橄榄色
+          // New color wipes in top-to-bottom (matching wave direction): clip wipe avoids muddy alpha blending over dark base
           <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 ${((1 - EASE.out(p)) * 100).toFixed(2)}% 0 round 18px)` }}>
             <Key shape={ic.shape} gray={ic.gray} tint={cur} glowK={glowK} />
           </div>
@@ -163,7 +163,7 @@ export const IconFieldColorize: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[2], overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.0 }} fill={{ x: 0.5, y: 1.1 }} intensity={0.45 + 0.35 * litAll} grain={0} vignette={0.62}>
-        {/* 光溢出：每一行亮起后身后染上同色的横向光带 */}
+        {/* Light spill: horizontal color glow bands illuminate behind activated rows */}
         <div style={{ position: 'absolute', inset: 0, transform: `scale(${push})` }}>
           {rowColor.map((c, r) => c && (
             <div key={r} style={{
@@ -175,13 +175,13 @@ export const IconFieldColorize: React.FC = () => {
       </Stage>
       <AbsoluteFill style={{ transform: `scale(${push})`, opacity: 1 - 0.12 * inhale }}>{icons}</AbsoluteFill>
 
-      {/* 收尾：中心暗幕 + 标题（暗幕只压中心，四周的光保留） */}
+      {/* Outro: central dark scrim + title (scrim darkens center, preserving perimeter glow) */}
       <AbsoluteFill style={{
         opacity: title, pointerEvents: 'none',
         background: `radial-gradient(ellipse 46% 44% at 50% 50%, ${alpha('#0a0503', 0.9)} 0%, ${alpha('#0a0503', 0.78)} 45%, ${alpha('#0a0503', 0)} 100%)`,
       }} />
       <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-        {/* 眉题位：video-shotcraft 字标（原「400+ INTEGRATIONS」） */}
+        {/* Eyebrow: video-shotcraft logotype (replaces legacy "400+ INTEGRATIONS") */}
         <div style={{
           opacity: ramp(frame, 120, 14, EASE.out), transform: `translateY(${((1 - ramp(frame, 120, 18, EASE.snappy)) * 12).toFixed(2)}px)`,
         }}>
@@ -190,7 +190,7 @@ export const IconFieldColorize: React.FC = () => {
         <div style={{ ...type(132, 750), color: L.ink, marginTop: 30, textAlign: 'center' }}>
           <TextReveal text="Every shot," by="word" variant="rise" start={124} each={20} gap={5} />
         </div>
-        {/* 第二行用第一道波的暖金（background-clip:text 遇到逐词 transform 的子元素会整行消失，不用渐变字） */}
+        {/* Second line uses warm gold from wave 1 (avoids background-clip:text clipping issues with word transforms) */}
         <div style={{ ...type(132, 750), marginTop: 6, textAlign: 'center', color: css(WAVES[0].color) }}>
           <TextReveal text="one place." by="word" variant="rise" start={132} each={20} gap={5} />
         </div>

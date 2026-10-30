@@ -1,24 +1,27 @@
-// portal-wipe 穿窗入景（纵深款）——网格里一张卡放大成全屏窗口，窗内是被点开那张卡的"世界"，
-// 只 2 层视差（远景面板 0.08 + 近景 2 枚浮卡 0.3，不加 blur），穿窗完成后 8f 缓停 → 静止读清新景。
+// portal-wipe (depth variant): A card in a grid scales up into a fullscreen window, revealing the "world" of the clicked card inside.
+// Only 2 parallax layers (background panel 0.08 + foreground 2 floating chips 0.3, without blur), easing to a gentle stop 8f after zoom-through -> static hold to read incoming scene clearly.
 //
-// 第二轮重设计（瓷白工作台 → 钴蓝预测世界）：
-// - look = porcelain（冷白 · 钴蓝）。不再用通用灰阶 FakeDashboard：外景是为镜头设计的 video-shotcraft
-//   「Workspace」主页（眉题前挂字标）——96px 问候标题 + 3×2 张「影片项目」卡，每张卡有自己的程序化封面
-//   （同心圆 / 柱 / 点阵 / 斜纹 / 弧 / 波形）、40px 标题与 32px 元信息。目标卡 = 第 2 行居中的
-//   「Premiere Forecast」（发布片的观看量预测，钴蓝封面 + 三道波形）。
-// - 语义闭环：目标卡的**封面就是窗内世界的样子**——窗内是深钴蓝空间，三道同款波形放大成背景地貌；
-//   远景层 = 一块玻璃预测面板（64px 标题 + 面积图：实线历史 + 虚线预测区间 + TODAY 标线），
-//   近景层 = 两枚浮卡（+18.4% vs last launch / 94% confidence 环），落点压住面板两角，做出前后景。
-// - 运动：目标卡先悬浮抬起作预备（−10px、1.03×、阴影变大变虚），邻卡同时退暗；窗放大 40f 用
-//   bezier(0.7,0,0.3,1) 先慢后快再缓收；窗内整景 0.42→1 与窗几何同一个 t；面积图的线随 t 画出、
-//   与穿窗同时完成；视差散开 Easing.out(cubic) 在穿窗完成后 8f 内速度归零，之后画面真静止。
+// Redesign (Porcelain desk -> Cobalt forecast world):
+// - look = porcelain (cool white / cobalt blue). Replaces generic grayscale FakeDashboard:
+//   Outgoing scene is a bespoke video-shotcraft "Workspace" homepage (wordmark before kicker)—
+//   96px greeting heading + 3x2 "Film Project" cards, each with its own procedural cover artwork
+//   (concentric rings / bars / dot matrix / diagonal stripes / arcs / waveforms), 40px title, and 32px meta info.
+//   Target card = row 2 center "Premiere Forecast" (analytics for release video, cobalt cover + 3 waveforms).
+// - Semantic loop: The target card cover directly previews the world inside—
+//   the window reveals a deep cobalt space with the same 3 waveforms scaled up into background terrain;
+//   background layer = glass forecast panel (64px heading + area chart: solid historical line + dashed forecast range + TODAY marker),
+//   foreground layer = 2 floating chips (+18.4% vs last launch / 94% confidence ring), anchoring panel corners to establish foreground/background depth.
+// - Motion: Target card hovers and elevates in anticipation (-10px, 1.03x, larger softer shadow) while neighboring cards dim;
+//   window expands over 40f using bezier(0.7, 0, 0.3, 1) starting slow, rushing, then softly decelerating;
+//   inner world scales 0.42 -> 1 tied to window geometric t; area chart line traces with t, completing synchronously with zoom-through;
+//   parallax spread Easing.out(cubic) settles to zero velocity within 8f after zoom-through, followed by a true static hold.
 //
-// 时间表（30fps，共 140f）：
-//   0–14    hold：Workspace 主页建立（第 0 帧即完整画面）
-//   14–26   预备：目标卡抬起、邻卡退暗 18%
-//   26–66   窗放大 40f：卡变全屏窗，卡面 0–28% 行程内渐隐露出窗内世界（再慢会被拉成巨字残影）
-//   42–74   近/远两层视差散开（66f 穿窗完成后 8f 缓停）
-//   74–140  静止 hold 66f：新世界完整可读
+// Timeline (30fps, 140f total):
+//   0–14    Hold: Workspace homepage established (full frame from frame 0)
+//   14–26   Anticipation: target card lifts, neighboring cards dim by 18%
+//   26–66   Window zoom 40f: card expands to fullscreen window, card face fades out over 0–28% progress to reveal inner world (slower would leave stretched text ghosting)
+//   42–74   Foreground/background parallax spread (gentle stop within 8f after zoom completion at 66f)
+//   74–140  Static hold 66f: incoming world fully legible
 import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 import { EASE, FONT, ramp, mix, softShadow } from '../../_fixtures/Polish';
@@ -30,7 +33,7 @@ export const PORTAL_WIPE_V2_DURATION = 140;
 const L = LOOKS.porcelain;
 const COBALT = { deep: '#040a26', mid: '#0b1a5c', hi: '#2f5bff', glow: '#7d9bff', mint: '#3fe0c5' };
 
-// ───────── 外景：Workspace 网格 ─────────
+// ───────── Workspace grid (outgoing scene) ─────────
 const TILE = { w: 520, h: 300, gap: 32, cover: 176 };
 const GRID_X = (1920 - (3 * TILE.w + 2 * TILE.gap)) / 2;
 const GRID_Y = 330;
@@ -46,7 +49,7 @@ const SPACES: Space[] = [
 const TARGET = 4;
 const slotOf = (i: number) => ({ x: GRID_X + (i % 3) * (TILE.w + TILE.gap), y: GRID_Y + Math.floor(i / 3) * (TILE.h + TILE.gap) });
 
-// 三道波形（封面与窗内世界共用同一组曲线 = 语义闭环）
+// Three waveforms (shared between cover and inner world = semantic loop)
 const wavePath = (w: number, h: number, k: number, phase: number) => {
   const pts: string[] = [];
   for (let i = 0; i <= 48; i++) {
@@ -82,8 +85,8 @@ const Tile: React.FC<{ s: Space }> = ({ s }) => (
   </div>
 );
 
-// ───────── 窗内世界：钴蓝预测空间 ─────────
-// 预测曲线：确定性序列（0–39 历史实线，39–59 预测虚线 + 区间带）
+// ───────── Inner world: Cobalt forecast space ─────────
+// Forecast curve: deterministic series (0–39 historical solid line, 39–59 forecast dashed line + range band)
 const SERIES = Array.from({ length: 60 }, (_, i) => 0.28 + i * 0.007 + 0.065 * Math.sin(i * 0.55) + 0.02 * Math.sin(i * 1.7 + 1));
 const NOW = 39;
 const CH = { x: 64, y: 196, w: 1112, h: 360 };
@@ -140,24 +143,24 @@ const ForecastPanel: React.FC<{ draw: number }> = ({ draw }) => (
   </div>
 );
 
-// 近景两枚浮卡的**终点**（散开 ×1.3 之后），按 960/540 中心反推散开前的位置
+// Final positions of the 2 foreground floating chips (after x1.3 spread), back-calculated from 960/540 center
 const NEAR_K = 1.3;
 const nearPos = (x: number, y: number) => ({ x: 960 + (x - 960) / NEAR_K, y: 540 + (y - 540) / NEAR_K });
-const CHIP_A = nearPos(1380, 64); // 右上：压住面板右上角
-const CHIP_B = nearPos(104, 790); // 左下：压住面板左下角
+const CHIP_A = nearPos(1380, 64); // Top-right: anchors top-right corner of panel
+const CHIP_B = nearPos(104, 790); // Bottom-left: anchors bottom-left corner of panel
 
 const World: React.FC<{ spread: number; draw: number }> = ({ spread, draw }) => (
   <AbsoluteFill style={{ background: `radial-gradient(ellipse 80% 70% at 50% 30%, ${COBALT.mid} 0%, #071244 50%, ${COBALT.deep} 100%)` }}>
-    {/* 背景地貌：封面同款三道波形放大成世界的地平线 */}
+    {/* Background terrain: same 3 waveforms from cover scaled up into world horizon */}
     <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, opacity: 0.5 }}>
       {[0, 1, 2].map((k) => <path key={k} d={wavePath(1920, 1080, k, 0)} transform="translate(0 210)" fill="none" stroke={k === 0 ? COBALT.mint : COBALT.glow} strokeOpacity={k === 0 ? 0.35 : 0.22} strokeWidth={k === 0 ? 3 : 2} />)}
     </svg>
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 40% 34% at 50% 18%, ${alpha(COBALT.hi, 0.35)} 0%, ${alpha(COBALT.hi, 0)} 100%)` }} />
-    {/* 远景层（系数 0.08） */}
+    {/* Background layer (factor 0.08) */}
     <div style={{ position: 'absolute', inset: 0, transform: `scale(${(1 + spread * 0.08).toFixed(4)})`, transformOrigin: '960px 540px' }}>
       <ForecastPanel draw={draw} />
     </div>
-    {/* 近景层（系数 0.3）：两枚浮卡 */}
+    {/* Foreground layer (factor 0.3): two floating chips */}
     <div style={{ position: 'absolute', inset: 0, transform: `scale(${(1 + spread * (NEAR_K - 1)).toFixed(4)})`, transformOrigin: '960px 540px' }}>
       <div style={{ position: 'absolute', left: CHIP_A.x, top: CHIP_A.y, width: 400 / NEAR_K, height: 200 / NEAR_K, borderRadius: 22 / NEAR_K, ...glass, background: 'linear-gradient(180deg, rgba(30,55,160,0.92), rgba(14,30,110,0.92))' }}>
         <div style={{ position: 'absolute', left: 30 / NEAR_K, top: 26 / NEAR_K, ...type(84 / NEAR_K, 750), color: COBALT.mint }}>+18.4%</div>
@@ -178,26 +181,26 @@ const World: React.FC<{ spread: number; draw: number }> = ({ spread, draw }) => 
 export const PortalWipeV2: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 预备：目标卡悬浮抬起、邻卡退暗
+  // Anticipation: target card hovers and lifts, neighboring cards dim
   const hover = ramp(frame, 14, 12, EASE.snappy);
   const slot = slotOf(TARGET);
   const s0 = 1 + 0.03 * hover;
   const c0 = { x: slot.x - (TILE.w * (s0 - 1)) / 2, y: slot.y - 10 * hover - (TILE.h * (s0 - 1)) / 2, w: TILE.w * s0, h: TILE.h * s0, r: 22 };
 
-  // 窗放大：40f 先慢后快再缓收
+  // Window expansion: 40f starting slow, accelerating, then gently settling
   const t = interpolate(frame, [26, 66], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.bezier(0.7, 0, 0.3, 1) });
   const x = mix(c0.x, 0, t), y = mix(c0.y, 0, t), w = mix(c0.w, 1920, t), h = mix(c0.h, 1080, t), r = mix(c0.r, 0, t);
-  // 视差散开：穿窗完成（66f）后 8f 内速度归零（74f）
+  // Parallax spread: reaches zero velocity within 8f (74f) after zoom completion (66f)
   const spread = interpolate(frame, [42, 74], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) });
   const innerScale = mix(0.42, 1, t);
-  const draw = ramp(frame, 34, 32, EASE.swift); // 曲线与穿窗同时画完
+  const draw = ramp(frame, 34, 32, EASE.swift); // Chart completes drawing simultaneously with window zoom
   const elev = (4 + 18 * hover) * (1 - t) + 56 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (1 - t);
   const oldDim = 0.26 * ramp(frame, 26, 34, EASE.out);
   const neighbours = 1 - 0.18 * hover;
 
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden' }}>
-      {/* 外景：Workspace 主页（穿窗完成后不再渲染） */}
+      {/* Outgoing scene: Workspace homepage (unmounted once zoom completes) */}
       {t < 1 && (
         <>
           <Stage look={L} keyLight={{ x: 0.35, y: 0.0 }} fill={{ x: 0.9, y: 0.95 }} />
@@ -221,7 +224,7 @@ export const PortalWipeV2: React.FC = () => {
         </>
       )}
 
-      {/* 窗（放大的卡）——内藏新世界 */}
+      {/* Window (enlarged card) — reveals new world inside */}
       <div style={{
         position: 'absolute', left: x, top: y, width: w, height: h, borderRadius: r, overflow: 'hidden',
         boxShadow: t < 1 ? softShadow(elev, { color: L.shadow, strength: 1.6 }) : 'none',
@@ -234,7 +237,7 @@ export const PortalWipeV2: React.FC = () => {
             <World spread={spread} draw={draw} />
           </div>
         )}
-        {/* 卡正面：放大初期渐隐，露出窗内世界 */}
+        {/* Card front: fades out during early expansion to reveal inner world */}
         {t < 0.3 && (
           <div style={{ position: 'absolute', inset: 0, opacity: Math.max(0, 1 - t * 3.6) }}>
             <div style={{ position: 'absolute', left: 0, top: 0, width: TILE.w, height: TILE.h, transform: `scale(${(w / TILE.w).toFixed(4)}, ${(h / TILE.h).toFixed(4)})`, transformOrigin: '0 0' }}>

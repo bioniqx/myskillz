@@ -1,28 +1,28 @@
-// terminal-3d —— 三个终端窗散布 3D 空间，相机窗间飞行（途中拉远），每到一窗打字机敲命令、结果逐行吐出。
-// 手法不变：窗口姿态表 → 相机逆变换；两段飞行各带一个正弦拉远鼓包；离焦窗虚化；飞行中不打字。
+// terminal-3d —— Three terminal windows distributed across 3D space; camera flies between windows (pulling back en route); at each window a typewriter types commands and results stream line-by-line.
+// Core technique preserved: window pose table → camera inverse transform; both flights feature a sinusoidal pull-back hump; out-of-focus windows blur; no typing during flight.
 //
-// 第二轮重设计（设计决定）
-// - look = lime（石墨暗场 · 荧光黄绿）：终端是技术感，单一强调色只给提示符、✓ 与最后的 READY 成片名。
-// - 内容编成一条完整的"三步出片"（品牌轮：video-shotcraft 的世界）：示意 CLI「shotcraft」——01 init 搭分镜
-//   → 02 render 渲染（镜头计数 + 进度格）→ 03 export 混音导出，最后一行 ● READY launch-film.mp4 是全片唯一的泛光（Q4）。
-// - 窗口按镜头重做：1240×700 的真实尺寸布局（相机落定时 1:1 栅格化，文字不糊，Q2），命令 46px、
-//   输出 34px 等宽（≥ 辅助字 32px，Q11）；标题栏写步骤号与路径，不再是通用 "~/workspace — zsh"。
-// - 空间：窗口沿一条弧线前后错落、各自偏转；每站相机不正对，留 8–10° 侧视（读得清且有体积）；
-//   地面是按相机矩阵逐线投影的 SVG 透视网格（线宽恒定不闪），焦点窗下方地面有一摊黄绿反光；
-//   每窗背后立一枚 560px 描边步骤号，飞行时与窗口产生视差。
-// - 打字有人手节奏：每字 1–2f 的确定性抖动、敲完停 2f 再"回车"；输出是终端式的快速打印（3f 淡入 +
-//   左移 10px 收回、行距 4f），状态位先转 braille 小菊花再落成 ✓。
+// Round 2 redesign (design decisions)
+// - look = lime (graphite dark field · fluorescent yellow-green): terminal aesthetic with tech feel, single accent reserved for prompts, ✓, and final READY artifact title.
+// - Content structured into a complete "3-step video production" pipeline (Brand round: video-shotcraft universe): hypothetical CLI "shotcraft" — 01 init sets up storyboard
+//   → 02 render renders shots (shot count + progress cells) → 03 export audio mix and export; final line ● READY launch-film.mp4 has the only bloom glow in the sequence (Q4).
+// - Windows redesigned specifically for camera moves: laid out at authentic 1240×700 resolution (rasterized 1:1 at camera settle, text never blurry, Q2), commands 46px,
+//   output 34px monospace (≥ auxiliary text 32px, Q11); title bar displays step number and path, no longer generic "~/workspace — zsh".
+// - Space: windows staggered along an arc in depth, each oriented with its own yaw; camera keeps an 8–10° side perspective at each station (clear legibility with volume);
+//   floor features a line-by-line SVG perspective grid projected via camera matrix (constant stroke width without flicker), with yellow-green floor reflection pool beneath focus window;
+//   each window is backed by a 560px stroked step number, creating parallax against the window during flight.
+// - Typing features human cadence: 1–2f deterministic jitter per keystroke, 2f pause after command before "Enter"; output prints rapidly in terminal fashion (3f fade-in +
+//   10px leftward settle, 4f line pitch), status column spins through braille spinners before resolving to ✓.
 //
-// 时间表（30fps，246f）
-//   0–24    开场：相机从拉远 260px 推近落定第一窗（out 曲线），窗口第 0 帧即在画面
-//   8–26    敲 `shotcraft init`（14 字）→ ~28 回车 → 30–50 四行输出（菊花 → ✓）
-//   48–62   hold 读秒
-//   62–92   飞行 1→2（30f，swift 不对称 in-out + sin 拉远 820px；按横向屏速加方向性模糊）
-//   94–111  敲 `shotcraft render` → ~113 回车 → 进度格 + 计数 0→24（20f，out）→ 三行 DONE → ✓ 汇总
-//   140–152 hold
-//   152–182 飞行 2→3
-//   184–201 敲 `shotcraft export` → ~203 回车 → 三行导出 → ~220 ● READY 成片名弹出 + 泛光
-//   222–246 hold：相机极缓推近 2%，尾帧是"成片已交付"的海报
+// Timeline (30fps, 246f total)
+//   0–24    Opening: camera pushes in from 260px pull-back to settle on first window (out curve), window in frame from frame 0
+//   8–26    Type `shotcraft init` (14 chars) → ~28 Enter → 30–50 four lines of output (spinner → ✓)
+//   48–62   Hold reading pause
+//   62–92   Flight 1→2 (30f, swift asymmetric in-out + sin pull-back 820px; directional motion blur based on lateral screen speed)
+//   94–111  Type `shotcraft render` → ~113 Enter → progress bar + counter 0→24 (20f, out curve) → three lines DONE → ✓ summary
+//   140–152 Hold
+//   152–182 Flight 2→3
+//   184–201 Type `shotcraft export` → ~203 Enter → three lines export → ~220 ● READY artifact title pops in with bloom
+//   222–246 Hold: camera ultra-slow push-in 2%, final frame is "delivery complete" poster
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, mix, ramp } from '../../_fixtures/Polish';
@@ -31,47 +31,47 @@ import { Dust, LOOKS, Stage, alpha, glow } from '../../_fixtures/Look';
 export const TERMINAL_3D_DURATION = 246;
 
 const L = LOOKS.lime;
-// 舞台主光降饱和成橄榄灰绿：荧光色只留给提示符 / ✓ / READY，背景不被染成一片绿
+// Stage key light desaturated to olive gray-green: fluorescent accent reserved for prompt / ✓ / READY, preventing background from washing out green
 const STAGE = { ...L, light: '#56613f', accent2: '#3a4a1c' };
 const MONO = FONT.mono;
-const W = 1180; // 窗口布局尺寸（= 落定时屏幕尺寸）
+const W = 1180; // Window layout size (= screen size at settle)
 const H = 620;
-const PERSP = 1800; // 场景透视距离
-const FLOOR_Y = 500; // 地面高度（世界坐标，y 向下）
+const PERSP = 1800; // Scene perspective distance
+const FLOOR_Y = 500; // Ground height (world coordinates, y downward)
 
-// ───────────── 窗口姿态表（世界坐标，px / 度）+ 每站相机侧视角 ─────────────
+// ───────────── Window Pose Table (world coordinates, px / degrees) + Station Camera Side Angle ─────────────
 type Pose = { x: number; y: number; z: number; ry: number };
 const POSES: Pose[] = [
   { x: -1500, y: -30, z: -220, ry: 24 },
   { x: 0, y: 30, z: 260, ry: -14 },
   { x: 1520, y: -40, z: -160, ry: 28 },
 ];
-const VIEW = [9, -8, 10]; // 每站相机相对窗口的侧视角（度）
-const TILT = -4; // 相机微俯（rotateX，度）
+const VIEW = [9, -8, 10]; // Camera side-angle relative to window at each station (degrees)
+const TILT = -4; // Camera slight tilt-down (rotateX, degrees)
 
-// 站点时序：每站 [到站帧, 打字起点]；飞行区间
+// Station schedule: each station [arrival frame, typing start]; flight intervals
 const FLY = [[62, 92], [152, 182]] as const;
 const TYPE_AT = [8, 94, 184];
-const PULL_PEAK = 1250; // 飞行中拉远量（峰值处画面缩到 ~0.6，三窗同框）
+const PULL_PEAK = 1250; // Pull-back distance during flight (scales down to ~0.6 at peak, framing all 3 windows)
 
-// 确定性伪随机
+// Deterministic pseudo-random
 const rand = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
 
-// ───────────── 相机 ─────────────
-// s = 连续站点参数（0..2），pull = 拉远量
+// ───────────── Camera ─────────────
+// s = continuous station parameter (0..2), pull = pull-back distance
 const camAt = (f: number) => {
   let s = 0;
-  let pull = 260 * (1 - ramp(f, 0, 24, EASE.out)); // 开场推近
+  let pull = 260 * (1 - ramp(f, 0, 24, EASE.out)); // Opening push-in
   FLY.forEach(([a, b], i) => {
     const u = ramp(f, a, b - a, EASE.swift);
     s += u;
     const raw = Math.min(1, Math.max(0, (f - a) / (b - a)));
     pull += Math.sin(Math.PI * Math.pow(raw, 0.85)) * PULL_PEAK * (i === 0 ? 1 : 1.05);
   });
-  pull -= 36 * ramp(f, 222, 24, EASE.smooth); // 尾段极缓推近 ~2%
+  pull -= 36 * ramp(f, 222, 24, EASE.smooth); // Tail ultra-slow push-in ~2%
   const i0 = Math.min(1, Math.floor(s));
   const k = s - i0;
   const a = POSES[i0], b = POSES[i0 + 1];
@@ -80,7 +80,7 @@ const camAt = (f: number) => {
   return { s, pull, pose, yaw: view - pose.ry };
 };
 
-// 与 world 的 CSS transform 完全同构的投影：translateZ(-pull) rotateX(TILT) rotateY(yaw) translate(-pose)
+// Projection strictly isomorphic to world CSS transform: translateZ(-pull) rotateX(TILT) rotateY(yaw) translate(-pose)
 const project = (cam: ReturnType<typeof camAt>, p: [number, number, number]) => {
   const x0 = p[0] - cam.pose.x, y0 = p[1] - cam.pose.y, z0 = p[2] - cam.pose.z;
   const ty = (cam.yaw * Math.PI) / 180, tx = (TILT * Math.PI) / 180;
@@ -95,7 +95,7 @@ const toScreen = (q: { x: number; y: number; z: number }) => {
   return { x: 960 + q.x * k, y: 540 + q.y * k, k };
 };
 
-// ───────────── 透视地面（SVG，逐线投影；近处亮、远处隐入暗场） ─────────────
+// ───────────── Perspective Floor (SVG, line-by-line projection; bright foreground, fading into dark field) ─────────────
 const Floor: React.FC<{ cam: ReturnType<typeof camAt>; frame: number }> = ({ cam }) => {
   const segs: React.ReactNode[] = [];
   const CELL = 240;
@@ -106,7 +106,7 @@ const Floor: React.FC<{ cam: ReturnType<typeof camAt>; frame: number }> = ({ cam
       const pa = project(cam, [mix(a[0], b[0], j / N), a[1], mix(a[2], b[2], j / N)]);
       const pb = project(cam, [mix(a[0], b[0], (j + 1) / N), a[1], mix(a[2], b[2], (j + 1) / N)]);
       if (pa.z > near || pb.z > near) continue;
-      const depth = PERSP - (pa.z + pb.z) / 2; // 到相机的距离
+      const depth = PERSP - (pa.z + pb.z) / 2; // Distance to camera
       const op = Math.max(0, Math.min(1, 1.25 - depth / 4200));
       if (op < 0.02) continue;
       const sa = toScreen(pa), sb = toScreen(pb);
@@ -122,7 +122,7 @@ const Floor: React.FC<{ cam: ReturnType<typeof camAt>; frame: number }> = ({ cam
   );
 };
 
-// 焦点窗下方的地面反光（投影到窗口脚下）
+// Floor reflection beneath focus window (projected below window base)
 const FloorPool: React.FC<{ cam: ReturnType<typeof camAt>; i: number; on: number }> = ({ cam, i, on }) => {
   if (on < 0.02) return null;
   const p = POSES[i];
@@ -138,7 +138,7 @@ const FloorPool: React.FC<{ cam: ReturnType<typeof camAt>; i: number; on: number
   );
 };
 
-// 焦点窗背后的背光（投影到窗心，屏幕空间）：把暗色窗体从暗场里剥离出来
+// Backlight behind focus window (projected to window center in screen space): lifts dark window body out of dark field
 const BackLight: React.FC<{ cam: ReturnType<typeof camAt>; i: number; on: number }> = ({ cam, i, on }) => {
   if (on < 0.02) return null;
   const p = POSES[i];
@@ -154,8 +154,8 @@ const BackLight: React.FC<{ cam: ReturnType<typeof camAt>; i: number; on: number
   );
 };
 
-// ───────────── 终端内容 ─────────────
-type Seg = [string, string]; // [文本, 颜色]
+// ───────────── Terminal Content ─────────────
+type Seg = [string, string]; // [text, color]
 type Line = { mark?: 'spin' | 'pass'; segs: Seg[]; at: number; big?: boolean };
 const C = { key: L.ink3, val: L.ink, dim: L.ink2, ok: L.accent };
 
@@ -173,7 +173,7 @@ const WINS: Win[] = [
   {
     step: '02', name: 'render', path: '~/promo', cmd: 'shotcraft render',
     lines: [
-      { at: 0, segs: [] }, // 进度格 + 计数（特殊绘制）
+      { at: 0, segs: [] }, // Progress bar + counter (custom rendering)
       { at: 10, segs: [['DONE ', C.ok], [' act-1/opening     ', C.val], [' 8', C.dim]] },
       { at: 14, segs: [['DONE ', C.ok], [' act-2/features    ', C.val], ['10', C.dim]] },
       { at: 18, segs: [['DONE ', C.ok], [' act-3/outro       ', C.val], [' 6', C.dim]] },
@@ -186,12 +186,12 @@ const WINS: Win[] = [
       { mark: 'spin', at: 0, segs: [['mix        ', C.key], ['voice + sfx', C.val], [' · -14 LUFS', C.dim]] },
       { mark: 'spin', at: 4, segs: [['encode     ', C.key], ['h264 · 1080p30', C.val]] },
       { mark: 'spin', at: 8, segs: [['jianying   ', C.key], ['draft exported', C.val]] },
-      { at: 15, big: true, segs: [] }, // ● READY 成片名（特殊绘制）
+      { at: 15, big: true, segs: [] }, // ● READY artifact title (custom rendering)
     ],
   },
 ];
 
-// 每字打字节奏：基础 1.15f/字 + 确定性抖动；返回第 k 字出现的帧偏移
+// Keystroke cadence: baseline 1.15f/char + deterministic jitter; returns frame offset of char k
 const charTimes = (cmd: string, seed: number) => {
   const out: number[] = [];
   let t = 0;
@@ -203,7 +203,7 @@ const charTimes = (cmd: string, seed: number) => {
   return { out, end: t };
 };
 const TYPING = WINS.map((w, i) => charTimes(w.cmd, i + 3));
-const enterAt = (i: number) => TYPE_AT[i] + TYPING[i].end + 2; // 敲完停 2f 再回车
+const enterAt = (i: number) => TYPE_AT[i] + TYPING[i].end + 2; // Pause 2f after typing before Enter
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 const Mark: React.FC<{ kind: 'spin' | 'pass'; t: number }> = ({ kind, t }) => {
@@ -233,7 +233,7 @@ const Terminal: React.FC<{ i: number; frame: number; focus: number }> = ({ i, fr
       boxShadow: `inset 0 0 0 1.5px ${alpha('#e8ffc0', 0.1 + 0.08 * focus)}, inset 0 2px 0 ${alpha('#ffffff', 0.08 + 0.1 * focus)}`,
       fontFamily: MONO,
     }}>
-      {/* 标题栏：三灯（降饱和）+ 步骤号 / 名称 + 路径 */}
+      {/* Title bar: three dots (desaturated) + step number / name + path */}
       <div style={{
         position: 'absolute', left: 0, top: 0, right: 0, height: 72, display: 'flex', alignItems: 'center',
         padding: '0 30px', gap: 14, borderBottom: `1.5px solid ${alpha('#e8ffc0', 0.07)}`,
@@ -247,7 +247,7 @@ const Terminal: React.FC<{ i: number; frame: number; focus: number }> = ({ i, fr
         <div style={{ marginLeft: 'auto', fontSize: 22, color: L.ink3 }}>{w.path} — zsh</div>
       </div>
 
-      {/* 命令行：常驻提示符 + 已打出字符 + 紧贴的块光标 */}
+      {/* Command line: permanent prompt + typed characters + adjacent block cursor */}
       <div style={{ position: 'absolute', left: 56, top: 124, fontSize: 52, fontWeight: 600, color: L.ink, whiteSpace: 'pre', lineHeight: 1 }}>
         <span style={{ color: L.accent }}>❯ </span>
         {w.cmd.slice(0, Math.max(0, n))}
@@ -259,7 +259,7 @@ const Terminal: React.FC<{ i: number; frame: number; focus: number }> = ({ i, fr
         )}
       </div>
 
-      {/* 输出 */}
+      {/* Output */}
       <div style={{ position: 'absolute', left: 56, right: 56, top: 220 }}>
         {w.lines.map((ln, k) => {
           const p = lineIn(ln.at);
@@ -270,7 +270,7 @@ const Terminal: React.FC<{ i: number; frame: number; focus: number }> = ({ i, fr
             opacity: Math.min(1, p * 1.8), transform: `translateX(${((1 - p) * -10).toFixed(2)}px)`,
           };
           if (i === 1 && k === 0) {
-            // 进度格 + 镜头计数（20f out 曲线；一格一个镜头）
+            // Progress cells + shot counter (20f out curve; one cell per shot)
             const c = ramp(frame, out0, 20, EASE.out);
             const N = 24;
             return (
@@ -289,7 +289,7 @@ const Terminal: React.FC<{ i: number; frame: number; focus: number }> = ({ i, fr
             );
           }
           if (ln.big) {
-            // ● READY 成片名：全片唯一泛光（Q4）
+            // ● READY artifact title: sequence's only bloom glow (Q4)
             const pop = ramp(frame, out0 + ln.at, 14, EASE.overshoot);
             const g = ramp(frame, out0 + ln.at, 26, EASE.out);
             const pulse = 0.55 + 0.45 * Math.cos(Math.max(0, lt) / 6);
@@ -325,13 +325,13 @@ const Terminal: React.FC<{ i: number; frame: number; focus: number }> = ({ i, fr
   );
 };
 
-// ───────────── 主组件 ─────────────
+// ───────────── Main Component ─────────────
 export const Terminal3D: React.FC = () => {
   const frame = useCurrentFrame();
   const cam = camAt(frame);
   const v = cam.pose;
 
-  // 横向屏速（px/帧）：相机目标在屏幕上的位移速度 → 方向性模糊，只在飞行段生效
+  // Lateral screen speed (px/frame): camera target screen translation speed → directional blur, active only during flight
   const a = camAt(frame - 0.5), b = camAt(frame + 0.5);
   const kS = PERSP / (PERSP + cam.pull);
   const vx = -(b.pose.x - a.pose.x) * kS;
@@ -355,20 +355,20 @@ export const Terminal3D: React.FC = () => {
         <div style={{ position: 'absolute', inset: 0, perspective: PERSP, overflow: 'hidden' }}>
           <div style={{ position: 'absolute', left: 960, top: 540, width: 0, height: 0, transformStyle: 'preserve-3d', transform: world }}>
             {POSES.map((p, i) => {
-              // 景深：离当前站越远越虚；拉远时景深变深（全景三窗都要看得出是终端），离焦量随拉远收窄
+              // Depth of field: farther stations blur more; depth expands during pull-back (all 3 visible as terminals), defocus narrows with pull-back
               const wide = Math.min(1, Math.max(0, cam.pull / PULL_PEAK));
               const focus = Math.min(1, Math.max(0, 1 - Math.abs(cam.s - i) * 1.25) + wide * 0.45);
               const blur = (1 - focus) * 3;
               return (
                 <React.Fragment key={i}>
-                  {/* 背后的描边步骤号（与窗口同朝向，位于窗后左上） */}
+                  {/* Stroked step number behind window (matches window yaw, located top-left behind window) */}
                   <div style={{
                     position: 'absolute', left: -W / 2 - 120, top: -H / 2 - 270, whiteSpace: 'nowrap',
                     transform: `translate3d(${p.x}px,${p.y}px,${p.z - 380}px) rotateY(${p.ry}deg)`,
                     fontFamily: FONT.sans, fontSize: 560, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.05em',
                     color: 'transparent', WebkitTextStroke: `2px ${alpha(L.accent, 0.07 + 0.3 * focus)}`,
                   }}>{WINS[i].step}</div>
-                  {/* 窗口 */}
+                  {/* Window */}
                   <div style={{
                     position: 'absolute', left: -W / 2, top: -H / 2, width: W, height: H,
                     transform: `translate3d(${p.x}px,${p.y}px,${p.z}px) rotateY(${p.ry}deg)`,

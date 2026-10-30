@@ -1,401 +1,240 @@
-# pipeline — 八阶段制作流水线
+# pipeline — 8-Stage Production Pipeline
 
-八阶段，方向性问题不进昂贵的逐镜头阶段。
-实证细节来自多支已交付宣传片的复盘（模板片见 `template/`）。
+Eight distinct stages, resolving directional decisions before entering expensive per-shot production.
+Empirical details are derived from post-mortems of delivered promotional videos (reference template in `template/`).
 
-## 目录
+## Table of Contents
 
-- 阶段 0：产品理解与执行约束
-- 阶段 1：视觉方向与 styleframe
-- 阶段 2：功能到镜头映射
-- 阶段 3：分镜与制作放行
-- 阶段 4：最终素材采集
-- 阶段 5：逐镜头实现
-- 阶段 6：声音设计
-- 阶段 7：独立终检与交付
+- Stage 0: Product Understanding & Execution Constraints
+- Stage 1: Visual Direction & Styleframes
+- Stage 2: Feature-to-Shot Mapping
+- Stage 3: Storyboarding & Production Gate
+- Stage 4: Final Asset Capture
+- Stage 5: Shot-by-Shot Implementation
+- Stage 6: Sound Design
+- Stage 7: Independent Final Review & Delivery
 
-本文件是**自主自由创作**的完整流水线：阶段 0–3 的判断由 Agent 根据项目内容
-自主完成并记录，不逐阶段等待用户确认，然后连续进入阶段 4–7。用户已给出的
-用途、受众、功能、画幅、音频或数据要求都是硬约束。
+This document serves as the complete pipeline for **Autonomous Free Creation**: assessments in Stages 0–3 are autonomously conducted and documented by the Agent based on project content without awaiting user confirmation at each step, transitioning continuously into Stages 4–7. Any explicit user constraints regarding purpose, audience, features, aspect ratio, audio, or data policies remain hard requirements.
 
-直接使用 Ink Press 模板不进入本流水线，按 `template/TEMPLATE.md` 的原有替换
-流程执行；模板文档引用阶段 4 时只借用其中的素材采集方法。
+Directly using the Ink Press template bypasses this pipeline; follow the replacement procedure in `template/TEMPLATE.md`. The template documentation borrows only the asset capture methodology from Stage 4.
 
-**共同创作从 `guided-free-creation.md` 进入本文件时，不要从头重跑。** 该流程
-已经完成并确认阶段 0–3；直接从阶段 4 最终素材采集继续，不重新询问或重新设计。
+**When entering this pipeline from `guided-free-creation.md` in Co-Creation mode, do not restart from the beginning.** That workflow has already completed and signed off Stages 0–3; proceed directly to Stage 4 (Final Asset Capture) without re-prompting or redesigning.
 
-两处执行原则（实战复盘已吸收）：
+Two core execution principles:
 
-1. **最终设计 spec 与分镜共同构成制作放行。** 分镜表长在设计 spec 里
-   （`| # | 时间 | 镜头 | 关键动效 |` 四列）；确认放行不重新打开已确认的
-   业务或创意问题，只补实现必要的未决项。
-2. **验收贯穿全程，不是最后一个阶段。** 每个镜头任务以 `npx remotion still`
-   静帧肉眼验收收尾（产物按版本归档 `out/qa/`），每轮反馈修改后整片重渲。
-   阶段 7 只是把这套贯穿动作升级为对照 aesthetic-rules.md 的正式自检报告。
+1. **The final design spec and storyboard together form the Production Gate.** The storyboard is embedded directly within the design spec (the 4 columns: `| # | Time | Shot | Key Motion |`). Production sign-off locks established business and creative decisions, resolving only unresolved implementation details.
+2. **Quality verification is continuous throughout, not deferred to the end.** Each shot implementation concludes with visual inspection of static keyframes via `npx remotion still` (archived by version in `out/qa/`), and full renders are generated after each feedback cycle. Stage 7 formalizes this continuous discipline into an official checklist report against `aesthetic-rules.md`.
 
-另注顺序弹性：styleframe 可以先用 HTML 与少量安全预检素材；重要的是**逐镜头
-实现开始前最终素材必须依据已定案的分镜采集**——素材方向错误拖到逐镜头阶段后
-才暴露，代价是整套场景报废。
+Sequence flexibility note: Styleframes may initially use HTML and minimal preflight assets. Critically, **final asset capture prior to shot implementation must be guided strictly by the approved storyboard** — discovering asset misalignments during shot development renders entire scenes obsolete.
 
 ---
 
-## 阶段 0：产品理解与执行约束
+## Stage 0: Product Understanding & Execution Constraints
 
-在写视频代码或采集最终素材前，只读检查项目的定位、主要功能、页面状态、视觉
-tokens、启动方式和数据风险。根据项目证据和用户已有描述，生成产品简报与需求到
-执行决策表，明确用途、受众、核心卖点、必须展示功能、时长/画幅/语言、音频和
-数据口径对本片的实际影响。
+Before authoring video code or capturing final assets, conduct a read-only audit of project positioning, core features, UI states, visual design tokens, startup procedures, and data risks. Generate a Product Brief and Requirements-to-Execution Decision Table based on project evidence and user inputs, establishing concrete impacts on video purpose, audience, core value proposition, mandatory features, duration / aspect ratio / language, audio, and data compliance.
 
-自主自由创作由 Agent 对缺省项作动态判断并写入设计 spec，不暂停要求用户确认。
-用户指定了 BGM 时，先按 `references/music-beat-sync.md` 分析节奏；未指定时由 Agent
-根据产品与发布场景在阶段 6 选型。公开演示数据可在确认其公开属性后使用；客户、
-个人、内部、密钥、实时或其他敏感数据一律先虚构、脱敏或冻结。
+In Autonomous Free Creation, the Agent makes dynamic assessments for unspecified items and logs them in the design spec without pausing for user confirmation. If the user specified a soundtrack, analyze rhythm first per `references/music-beat-sync.md`; otherwise, the Agent selects music in Stage 6 based on product and distribution context. Public demo data may be retained once verified as public; customer, personal, internal, credential, realtime, or sensitive data must be fictionalized, desensitized, or frozen.
 
-**产出**：产品简报；需求到执行决策表；明确的数据与音频约束。
+**Artifacts**: Product Brief; Requirements-to-Execution Decision Table; Explicit data and audio constraints.
 
 ---
 
-## 阶段 1：视觉方向与 styleframe
+## Stage 1: Visual Direction & Styleframes
 
-**目标**：用最便宜的产物锁定全片色板、字体、光感与运镜气质，
-让所有方向性争论发生在写第一行 Remotion 代码之前。
+**Objective**: Lock down color palette, typography, lighting atmosphere, and motion personality using minimal-cost artifacts, resolving all directional debates before writing a single line of Remotion code.
 
-**具体操作**：
+**Action Steps**:
 
-1. 根据当前项目生成最多 3 个文字方向。每个方向附一组**动效性格 tokens**
-   （推导法见下方“品牌→动效参数”表），但不要把 Ink Press 作为固定选项。
-2. Agent 依据产品视觉、用途和受众自主选择最合适的方向，并把选择与取舍写入
-   设计 spec；不暂停等待用户选择。
-3. 对选定方向**不渲染视频、不写 Remotion 代码**，写一个纯 HTML/CSS
-   styleframe 页，包含 2–3 张 1920×1080 静态关键画面。
-4. 用 Playwright/Puppeteer 截图验证字体、色板、材质、构图、光感与信息密度；
-   缓动和运镜速度仍以 tokens、Gallery 样片或短运动测试判断。若已有严格品牌规范
-   或明确参考片，可记录理由后跳过 styleframe。
-5. 若用户给了参考片：下载后 ffmpeg 抽帧（`select=eq(n,…)` 抽 ~100 帧、
-   `tile=4x5` 拼 contact sheet），逐个动画/转场/特效做 motion breakdown，
-   写成"手法｜参考片实现｜取舍"三列表进设计 spec——**选择性适配，
-   不强行套用**。图片参考同理：它描述的是"某一类镜头"的感觉，
-   不是全片风格令。
+1. Generate up to 3 textual visual directions tailored to the target project. Attach a set of **motion personality tokens** to each direction (derived via the "Brand -> Motion Parameters" matrix below), without treating Ink Press as an automatic default.
+2. The Agent autonomously selects the most appropriate direction based on product visuals, purpose, and audience, documenting choices and trade-offs in the design spec without pausing for user selection.
+3. For the chosen direction, **write zero Remotion code and render zero video**; build a standalone HTML/CSS styleframe page containing 2–3 static 1920×1080 keyframes.
+4. Capture screenshots via Playwright/Puppeteer to verify typography, color palette, materials, composition, lighting, and information density. Evaluate easing and camera velocities via motion tokens, Gallery samples, or brief motion tests. If strict brand guidelines or explicit reference videos exist, styleframes may be skipped provided the rationale is documented.
+5. If the user provided a reference video: download and extract keyframes with FFmpeg (`select=eq(n,...)` extracting ~100 frames; `tile=4x5` building contact sheets). Perform a motion breakdown for each animation, transition, and visual effect, logging a 3-column table (`Technique | Reference Implementation | Trade-Off`) in the spec — **adapt selectively without forcing mismatched techniques**. Reference images follow the same principle: they capture the mood of a specific shot type, not a global style mandate.
 
-**品牌→动效参数推导**。不凭手感挑 easing/时长，先把品牌放到两根轴上，
-再从最近的预设起步：
+**Brand -> Motion Parameter Derivation**. Do not pick easing and durations intuitively. Map the brand across two axes, starting from the closest preset:
 
-- **能量轴**：低（沉稳/premium/机构感）↔ 高（运动/startup/娱乐）——
-  决定时长、过冲、squash 幅度；
-- **调性轴**：严肃（金融/医疗/enterprise）↔ 活泼（消费/社交/儿童）——
-  决定路径曲直、次级动作多寡。产品视觉本身是证据（锐利几何形→工程感，
-  圆角+亮色→柔和活泼）；用户口述的品牌词覆盖视觉推断。
+- **Energy Axis**: Low (steady / premium / institutional) <-> High (athletic / startup / entertainment) — dictates durations, overshoots, and squash amplitude;
+- **Tone Axis**: Serious (finance / healthcare / enterprise) <-> Playful (consumer / social / children) — dictates path curvature and secondary animation complexity. Product visual design provides direct evidence (sharp geometric forms -> engineering precision; rounded corners + bright accents -> soft and lively); explicit user brand statements supersede visual inferences.
 
-| 预设（品类） | 主时长@30fps | 入场 easing | 过冲 | squash |
+| Preset (Category) | Primary Duration @30fps | Entrance Easing | Overshoot | Squash |
 |---|---|---|---|---|
-| 专业信赖（fintech/enterprise/B2B）| ~21f | bezier(0,0,0.2,1) | 1.0 不弹 | 0 |
-| 精致高端（奢侈品/时尚）| ~48f | bezier(0.4,0,0.6,1) | ≤1.02 | 0 |
-| 活力大胆（体育/游戏/startup）| ~18f | bezier(0.16,1,0.3,1) | 1.12 | 0.25 |
-| 活泼愉悦（消费/社交）| ~27f | bezier(0.34,1.56,0.64,1) | 1.08 | 0.18 |
-| 平静关怀（健康/教育）| ~42f | ease-in-out 对称 | 1.0 | ≤0.04 |
-| 亲和友好（小微/社区）| ~26f | bezier(0.25,0.46,0.45,0.94) | 1.04 | 0.08 |
+| Professional & Trustworthy (fintech / enterprise / B2B) | ~21f | bezier(0, 0, 0.2, 1) | 1.0 (no bounce) | 0 |
+| Refined & Premium (luxury / fashion) | ~48f | bezier(0.4, 0, 0.6, 1) | ≤ 1.02 | 0 |
+| Dynamic & Bold (sports / gaming / startup) | ~18f | bezier(0.16, 1, 0.3, 1) | 1.12 | 0.25 |
+| Playful & Delightful (consumer / social) | ~27f | bezier(0.34, 1.56, 0.64, 1) | 1.08 | 0.18 |
+| Calm & Caring (healthcare / education) | ~42f | ease-in-out symmetric | 1.0 | ≤ 0.04 |
+| Approachable & Friendly (SMB / community) | ~26f | bezier(0.25, 0.46, 0.45, 0.94) | 1.04 | 0.08 |
 
-用法：定预设 → 按两轴微调 → tokens 写进设计 spec。自检两条：
-①用三个词描述成片动效，与品牌词对得上吗；②同一套 tokens 必须同时管
-入场/转场/hold 节奏——一个品牌一种动效嗓音，混用两套读作拼盘。
-注意预设值与库内硬判例冲突时判例赢：落地要弹的场合 y1 必须 >1，
-"专业信赖不弹"指的是无落地隐喻的淡入/推移类动作。
+Usage: Select preset -> fine-tune along axes -> record tokens in design spec. Self-check:
+① Describe final motion in three words: do they align with brand adjectives?
+② The same token set must govern entrances, transitions, and holding pauses simultaneously — a single brand voice throughout; mixing divergent token sets feels disjointed.
+If presets conflict with codified case-law precedents, precedents take precedence: landing moments requiring bounce must have y1 > 1; "Professional Trustworthy no bounce" applies to non-landing fades and slides.
 
-**产出**：选定方向的 styleframe；色板/字体/光感 tokens + 动效性格 tokens；
-（有参考片时）motion breakdown 表。
+**Artifacts**: Styleframes for the selected direction; Palette / Typography / Lighting tokens + Motion personality tokens; (if reference video provided) Motion breakdown table.
 
-**常见坑**：
-
-- 用渲染视频做风格提案：太贵，改方向的心理成本也高。静态帧足够定调。
-- 参考驱动的风格 move 全局一刀切：风格化机位逐镜头决定（信息密集的
-  列表/堆叠镜头正视更可读）。
+**Common Pitfalls**:
+- Rendering video proposals for style exploration: overly expensive and creates psychological resistance to directional pivots. Static keyframes suffice.
+- Applying reference-driven moves globally: evaluate camera tilts shot-by-shot (dense list and grid shots remain eye-level for legibility).
 
 ---
 
-## 阶段 2：功能到镜头映射
+## Stage 2: Feature-to-Shot Mapping
 
-**目标**：为每个必须展示的功能选定合适的运动语法，不在此阶段提前写完整分镜。
+**Objective**: Select the appropriate motion grammar for each mandatory feature, without prematurely authoring the full storyboard.
 
-**具体操作**：
+**Action Steps**:
 
-1. **先列产品功能清单，逐一对应镜头**。核心功能漏拍等于返工；
-   一种动画手法（飞入/堆叠/翻页）全片只当一次主角，同质化即返工信号。
-2. 扫描 `references/shots/` 全部卡片的 frontmatter，根据用途、能量、建议时长、
-   限制和所需页面状态，为每项功能选择首选与备选卡；Agent 自主定案并记录依据。
-3. 完整读取选中卡片，并按“参考实现”定位准确 demo 源码。没有合适卡片时可新写，
-   但必须在设计 spec 中说明范围与验证风险。
+1. **Compile product feature list and map 1:1 to shots**. Omitting core features forces rework. Each motion technique (fly-in, stacking, card-flip) stars as hero only once; visual homogenization signals rework.
+2. Scan frontmatter across all cards in `references/shots/` for purpose, energy, recommended durations, constraints, and required UI states to assign primary and secondary cards per feature. The Agent autonomously decides and documents rationale.
+3. Read selected cards in full, resolving exact demo TSX source paths via "Reference Implementation". New shots may be authored if no existing card fits, documenting scope and verification risks in the spec.
 
-**产出**：功能到镜头映射表；选中卡名、变体、demo 源码和参考样片定位。
+**Artifacts**: Feature-to-shot mapping table; selected card names, variants, demo source paths, and reference sample video locations.
 
 ---
 
-## 阶段 3：分镜与制作放行
+## Stage 3: Storyboarding & Production Gate
 
-**目标**：把已定案的功能与镜头映射排成有能量曲线的完整镜头序列，并转成帧级
-实施计划。自主自由创作由 Agent 自行放行，不暂停等待确认。
+**Objective**: Arrange mapped features and shots into a coherent sequence with a deliberate energy arc, translating it into a frame-accurate implementation plan. In Autonomous Free Creation, the Agent signs off autonomously without pausing for confirmation.
 
-**具体操作**：
+**Action Steps**:
 
-1. 先查 `references/sequences/` 有无适用的桥段模板；有则按其填空流程分配段位
-   与帧预算，再把映射好的镜头排成低能量开场→功能段与呼吸位交替→高能量收尾。
-2. **已有指定 BGM 时**：先出音乐结构表（满能量起点/breakdown 拍号，
-   见 music-beat-sync.md §2），镜头边界全部锚到拍号，最强 hit 分给
-   全片 2–3 个大 slam；breakdown 段天然是品牌呼吸位。
-3. 写完整分镜表：镜头顺序、时长、功能信息、具体页面状态、镜头卡与变体、主动作、
-   素材来源、字幕、转场和 SFX。每镜只讲一个主要动效。
-4. 排时间线时**预留 hold/rest 帧预算**：品牌字标落定 hold ≥1s（30f）、
-   批量动效收尾 0.5s 静止、开场主体动作 ≥3s。节奏返工是单向的——
-   过快必返工、放慢从未被否。
-5. Agent 检查分镜与产品简报、需求决策、视觉方向和镜头映射一致后自行放行，
-   把分镜转译成帧级时间轴进实施计划：
-   `| shot | from | duration | 内容 |`（卡点片则 from/to 全用 `beatF(n)`
-   表达），并给每镜头指定源文件与验收帧号。
+1. Check `references/sequences/` for applicable sequence templates (e.g. `promo-energy-arc.md`); follow the filling workflow to allocate segment budgets and arrange mapped shots: low-energy opening -> alternating feature climbing and breathing pauses -> peak outro.
+2. **When a BGM track is designated**: generate the musical architecture schedule first (peak energy points, breakdown beat numbers per `music-beat-sync.md` §2); anchor all shot boundaries to beat numbers, reserving peak hits for the 2–3 major slams; breakdowns naturally serve as brand breathing pauses.
+3. Author the full storyboard: shot sequence, duration, feature context, specific UI states, shot cards and variants, hero actions, asset sources, captions, transitions, and SFX. Each shot focuses on a single hero movement.
+4. **Reserve hold and rest frame budgets during timeline layout**: brand wordmark landing holds ≥ 1s (30f); batch motion endings rest 0.5s; opening hero movements span ≥ 3s. Rhythm adjustments are one-way: rushing invites rejection, while deliberate pacing never faces backlash.
+5. The Agent validates consistency between storyboard, product brief, decision table, visual direction, and shot mapping before approving the gate. Translate the storyboard into a frame-accurate implementation schedule:
+   `| shot | from | duration | content |` (or express boundaries in `beatF(n)` for rhythm-synced cuts), designating source files and verification frame numbers per shot.
 
-**产出**：设计 spec（含风格 tokens + motion breakdown + 分镜表）；
-帧级时间轴。
+**Artifacts**: Design spec (including design tokens, motion breakdown, and storyboard); Frame-accurate timeline.
 
-**常见坑**：
-
-- 没对功能清单，凭手感排镜头：核心功能漏拍、动画手法同质化，两种都返工。
-- 开场贪多：开场信息宁少而聚焦，一个主角、一条完整动作弧。
-- 时长预算不含呼吸位：动效排满每一帧，后期逐镜头补 hold 等于全线挪帧。
+**Common Pitfalls**:
+- Storyboarding intuitively without checking feature lists: leads to missing features or homogeneous animations.
+- Overcrowding the opening: focus on one hero element and one complete movement arc.
+- Omitting rest budgets: packing motion into every frame requires sliding the entire timeline later to insert pauses.
 
 ---
 
-## 阶段 4：最终素材采集
+## Stage 4: Final Asset Capture
 
-**前置条件**：最终设计 spec 与分镜已经放行。共同创作以用户确认作为放行；自主
-自由创作以 Agent 完成一致性检查并记录为放行。此前为 styleframe 采过的少量安全
-截图只能作为方向验证，不得直接替代最终素材。
+**Prerequisites**: Design spec and storyboard approved at the Production Gate. In Co-Creation mode, user confirmation unlocks this gate; in Autonomous Free Creation, the Agent's consistency check serves as the gate. Preliminary screenshots used for styleframes cannot substitute for final assets.
 
-**目标**：严格按最终分镜拿到全部镜头所需的真实页面素材，包括全页纹理、元素
-切片和坐标表，为 2.5D 运镜与页面空间动画打地基。
+**Objective**: Capture authentic product assets required across all storyboarded shots, including full-page textures, element cutouts, and coordinate manifests, laying the foundation for 2.5D camera moves and page-space animations.
 
-**具体操作**：
+**Action Steps**:
 
-1. 起产品本地 dev server（桌面端产品则用窗口截图工具，同样出三件套）。
-2. 复制 `assets/scripts/capture-template.mjs` 进项目，改 BASE_URL 与选择器，
-   跑一次产出三件套：
-   - **全页 2x 截图**：viewport 1920×1080、`deviceScaleFactor: 2`；截图前
-     `document.fonts.ready` + 600ms settle，实时同步页额外再等 1.5–2s。
-   - **per-element cutout**：按语义选择器逐元素截图；悬浮件用透明底，需要
-     “卡片飞入空板”的镜头则额外截空 backplate。
-   - **layout.json**：记录每个元素在整页坐标系下的 `{x,y,w,h}` bbox 与每页
-     `pageH`，供飞行目标位、遮罩位置和入场区域直接使用。
-3. 支持按页/按元素增量重采。活数据源先按阶段 0 的数据口径冻结、虚构或脱敏，
-   再进行最终采集。
+1. Launch target product local dev server (for desktop apps, use window capture utilities to produce the same three deliverables).
+2. Copy `assets/scripts/capture-template.mjs` into the project, configure `BASE_URL` and selectors, and execute to generate the three core assets:
+   - **Full-page 2× screenshots**: viewport 1920×1080, `deviceScaleFactor: 2`; settle with `document.fonts.ready` + 600ms pause, extending by 1.5–2s for realtime collaborative pages.
+   - **Per-element cutouts**: capture element cutouts via semantic selectors; use transparent backgrounds for floating chips; capture empty backplates for cards flying into empty layouts.
+   - **layout.json**: records bounding boxes `{x, y, w, h}` in page coordinate space and page height `pageH` per route, consumed directly by flight target coordinates, masking boundaries, and entrance zones.
+3. Support incremental recaptures per page/element. Freeze, fictionalize, or desensitize live data per Stage 0 data policies before final capture.
 
-**产出**：`public/textures/` 全页图、元素切片与空 backplate；`layout.json`；
-可重跑的 capture 脚本。
+**Artifacts**: `public/textures/` full-page plates, element cutouts, and empty backplates; `layout.json`; reproducible capture script.
 
-**常见坑**：
-
-- 在分镜放行前做全量采集：页面状态和素材范围尚未确定，会造成重复采集。
-- 手搓 HTML 复刻既有页面：复刻默认走真实截图；手搓 UI 只用于非复刻场景。
-- 活数据源不锁定，或只截整页不记录 layout 坐标。
+**Common Pitfalls**:
+- Bulk capture before storyboard sign-off: page states and asset boundaries remain uncertain, resulting in duplicated capture work.
+- Hand-coding HTML replicas of existing pages: replicas must use authentic screenshots; hand-coded UI is restricted to non-replica scenes.
+- Capturing dynamic data without freezing, or capturing screenshots without logging layout bounding boxes.
 
 ---
 
-## 阶段 5：逐镜头实现
+## Stage 5: Shot-by-Shot Implementation
 
-**前置条件**：需已有可跑的 Remotion 项目（30fps、1920×1080，`src/index.ts`
-注册 Composition；新项目可 `npx create-video@latest` 初始化后把
-`assets/lib/` 组件 copy 进去；走模板路线则直接从 `template/` 起步）。
+**Prerequisites**: A runnable Remotion project (30fps, 1920×1080, `src/index.ts` registering Compositions; initialize via `npx create-video@latest` and copy `assets/lib/` components, or clone from `template/`).
 
-**目标**：按帧级时间轴逐镜头落地，每镜头完成即自证质量——
-验收在这个阶段就开始，不留到最后。
+**Objective**: Implement shots sequentially against the frame-accurate schedule, proving quality per shot — verification begins during development, not after completion.
 
-**具体操作**：
+**Action Steps**:
 
-1. **每镜头先解析再三读**（硬规则，不可跳）：用
-   `gallery/api/library.json` 校验卡名和 `style-key` → 读对应配方卡全文 →
-   按卡片“参考实现”定位并读准确的 demo TSX 全文 → copy `assets/lib/`
-   对应组件进项目。同时保存该 style 的 Gallery 参考样片路径，供实现对照和终检。
-   标为“仅供参考，需要自定义实现”的样式不默认推荐，用户明确点名后才可实现并
-   标注风险；标为“缺少预览”的样式不得声称已按动态样片复刻。
-   demo 代码是调校过的参数真相（缓动、时值配比、
-   摘罩时机、已知坑的规避写法都在里面）——允许按目标产品做适配性
-   改动，但配方卡"已知坑/命门"标注的参数不得降档，质量标准只升不降。
-   凭卡名和理解新写＝放弃全部调校积累，实测质感差一档。
-2. **PageCam 是一切"真实页面"镜头的地基**：整页纹理 + 关键帧 2.5D 相机 +
-   页面空间 overlay，children 按页面 CSS px 定位、与 layout.json 共坐标系。
-3. **静帧验收（最高频动作）**：每镜头在计划里写死 2 个验收帧号，
-   完成即跑 `npx remotion still src/index.ts <Comp> out/qa/<name>.png
-   --frame=<N>`，自己肉眼检查构图/穿帮/文字锐度后才算完成。
-   静帧产物按迭代版本归档 `out/qa/`，用户贴帧反馈时可直接对号。
-4. **每轮修改后整片渲染**：`npx remotion render src/index.ts <Comp>
-   out/promo.mp4`，再用 `ffmpeg -i out/promo.mp4 -vf "select=eq(n,…)"`
-   从成片抽关键帧回看。实际形态是"改哪个镜头就 still 哪几帧，
-   然后整片重渲"，成本可接受且杜绝接缝意外。
-5. 像素级自检备小工具：裁剪放大看文字锐度（crop）、两帧像素 diff、
-   量元素 bbox 对构图。
-6. **确定性渲染铁律**：禁 `Date.now()` / `Math.random()` / 无参 `new Date()`。
-   一切伪随机用固定种子（mulberry32/哈希函数，seed 从 index 派生），
-   保证逐帧可复现、渲染间零抖动。
-7. 对照 `references/aesthetic-rules.md` 边做边自检（不等阶段 7）：
-   落地要弹的缓动 y1 必须 >1、光效裁进圆角、3D 下文字糊先查
-   栅格化路径（CSS `zoom` 布局级放大，而非 transform scale）而不是调 DoF。
-8. 指代含糊的用户反馈（"第一个标题"）先确认对象再动手；改错立即整
-   commit revert 重来，不在错误版本上打补丁——每个改动独立 commit
-   以便干净回滚。
-9. **为交付后的动效工作台留好接口**（`references/workbench.md` §2–3）：时间表只写一份
-   （`SHOTS` 是唯一事实源，字幕表 / SFX 钉帧 / 转场点从它派生并 `export`）；镜头的语境级
-   参数（文案 / 颜色 / 字号 / 位置）做成带默认值的 props，节奏命门保持常量；
-   `src/workbench.ts` 里 import 这些表、给每个单元补 `component` / `props` / `schema`。
-   模板路线已自带（`template/src/workbench.ts`），自由创作在时间线定稿后补写，
-   交付前 `cd workbench && npm run parity` 证明拆解无损。
+1. **Resolve Before Reading** (Mandatory rule, cannot be skipped): Validate card name and `style-key` against `gallery/api/library.json` -> read full card document -> read exact demo TSX source located via "Reference Implementation" -> copy corresponding components from `assets/lib/`. Save the local Gallery reference video path for implementation comparison and final review. Styles marked "For reference only, requires custom implementation" are not recommended by default; implement only upon explicit user request with risks logged. Styles marked "Missing preview" must not claim fidelity to dynamic samples.
+   Demo source holds tuned parameters (easing, timing ratios, matte timing, pitfall evasions) — adapt screenshots, coordinates, and branding to the target product, but never downgrade parameters marked under "Known Pitfalls / Critical Vulnerabilities". Rewriting from card name semantics discards battle-tested tuning, degrading visual quality.
+2. **PageCam forms the foundation for all real-page shots**: full-page texture + keyframed 2.5D camera + page-space overlay, with children positioned via page CSS pixels sharing coordinates with `layout.json`.
+3. **Static Keyframe Verification (Highest frequency action)**: Designate 2 verification frame numbers per shot in the plan. Upon shot completion, run:
+   `npx remotion still src/index.ts <Comp> out/qa/<name>.png --frame=<N>`
+   Inspect composition, rendering artifacts, and text sharpness visually before marking complete. Archive keyframes by version in `out/qa/` for direct reference during feedback.
+4. **Full Render After Each Pass**: Execute `npx remotion render src/index.ts <Comp> out/promo.mp4`, extracting verification frames via `ffmpeg -i out/promo.mp4 -vf "select=eq(n,...)"`. The operational pattern is: "render still frames for modified shots, then render full video".
+5. Pixel-level inspection tools: crop and magnify text to verify sharpness, diff two frames pixel-by-pixel, and measure bounding boxes to verify composition.
+6. **Deterministic Rendering Rule**: Forbid `Date.now()`, `Math.random()`, or unseeded `new Date()`. Generate pseudo-randomness via fixed-seed generators (mulberry32 / hash functions seeded from index), guaranteeing reproducible frames and zero inter-render jitter.
+7. Continuously verify against `references/aesthetic-rules.md`: landing bounces require y1 > 1, highlights must clip inside border radii, and blurry 3D text points to rasterization pipelines (CSS layout `zoom` rather than transform scale) before camera adjustments.
+8. Clarify ambiguous user feedback before editing; revert erroneous commits cleanly via git instead of patching over bad versions.
+9. **Interface with Motion Workbench** (`references/workbench.md` §2–3): Maintain a single timeline source of truth (`SHOTS` exported from `timeline.ts` / `Main.tsx` to derive captions, SFX cues, and transitions); expose contextual parameters as defaulted props, locking rhythm invariants; import schedules into `src/workbench.ts` with `component`, `props`, and `schema`. Verify lossless export via `cd workbench && npm run parity` before delivery.
 
-**产出**：逐镜头 commit；`out/qa/` 静帧档案；每轮全片渲染 mp4；`src/workbench.ts` 清单。
+**Artifacts**: Per-shot git commits; `out/qa/` static keyframe archive; Full video MP4 render per pass; `src/workbench.ts` manifest.
 
-**阶段输出**：整片渲染视频（每轮迭代一版）+ 关键静帧。自主自由创作不因该输出
-暂停等待确认；用户主动反馈时再纳入下一轮。
-用户可能以"从成片截帧贴图"方式给反馈，双方基于帧评审。
+**Stage Output**: Full video render + key static frames. Autonomous Free Creation proceeds without pausing for approval; integrate user feedback into subsequent passes.
 
-**常见坑**：
-
-- 首检交给用户：交付前必须自己抽帧看片，"镜头视角很差，
-  而且有小抖动"这种问题不该由用户发现。
-- 跳过 demo 代码直接写：参数是几轮真实裁决调校出来的，
-  新写的版本几乎必然回踩已知坑。
-- 产品宣传片默认不加手持 shake；相机噪声只在明确追求纪实感时用。
-- 装饰性 glint/泛光群发：批量元素入场靠运动本身。单点高质量光效可做，
-  群发即廉价。
-- 3D 推进下文字发糊：根因是纹理源分辨率/栅格化路径，先查素材链路
-  （2x 纹理 + CSS zoom + 关键元素 4x 单独截图），别先动相机和景深。
-- 飞入动画终点悬空：元素必须落进页面布局的真实槽位（嵌入、归位、
-  排进滚动流），悬浮在页面上方不落地会显得假。
+**Common Pitfalls**:
+- Delegating initial review to the user: never deliver without prior keyframe inspection.
+- Skipping demo source code to author from scratch: ignores tuned parameters and re-triggers known bugs.
+- Adding handheld camera shake to promotional tech videos.
+- Broadcasting decorative glints and sweeps across element batches.
+- Blurry text during 3D push-in caused by Chromium rasterization downsampling.
+- Element fly-ins hovering detached without snapping into layout coordinates.
 
 ---
 
-## 阶段 6：声音设计
+## Stage 6: Sound Design
 
-**目标**：BGM 定全片能量骨架，SFX 逐拍钉在动效关键帧上，
-音色符合"产品宣传片"片种而非 UI 事件语义。
+**Objective**: BGM establishes the energy skeleton, SFX lock to visual keyframes on beat, and timbres embody product promotional polish rather than gaming UI feedback.
 
-**前置条件（最贵的顺序教训）**：**画面时间线锁定后才开始。**
-画面每动一次，钉帧表就要全体重对。若画面确实又改了，收尾动作固定
-包含"全表 SFX 帧号重对"，音画错位是必查项。
+**Prerequisites (Most expensive sequencing lesson)**: **Begin only after visual timing is locked.** Any timeline adjustment invalidates the entire SFX schedule. If visuals are revised, re-verifying the full SFX keyframe schedule is mandatory.
 
-**具体操作**（细节与判例见 `references/sound-design.md`）：
+**Action Steps** (see `references/sound-design.md`):
 
-1. 读 `references/sound-design.md`，从 `assets/audio/sfx/<类别>/` 复制音效
-   （免费商用授权，来源见 `assets/audio/ATTRIBUTION.md`）。音效按场景分 16
-   个类别目录，先按需要的动作定类别（运镜→transition、落地→impact、
-   打字→text、翻页→paper、光效→**light**…），再在类别里挑音色。
-   注意词汇表的 `sparkle` 对应的目录名是 `light/`，库里没有 `sparkle/`。
-2. **BGM**：用户已指定 → 阶段 0 已做节奏分析，此处只做混音
-   （音量压低 ~0.34 给 SFX 留 headroom，interpolate 首尾淡入淡出）。
-   未指定 → 按片种选强鼓点、强节奏的电子底（tech-house 类），判据是
-   "典型的产品宣传视频"气质而不是"好听"；候选曲必须垫进成片试听，
-   单听曲子选型不可靠；`assets/audio/bgm/` 有节奏感强的备选。
-   BGM 的 `<Audio>` 用布尔 inputProp（如 `bgm`，默认 `true`）单独包住，
-   与 SFX 解耦——终渲要从同一时间线出带 BGM / 无 BGM 两版成片。
-3. **SFX 用电影系词汇按镜头语言选**：运镜=whoosh、落地=impact、
-   铺垫=riser、光效=sparkle（目录 `light/`）、转场=transition；
-   禁用游戏音包**音色**（合成器 pluck/bloop、卡通弹跳一耳朵出戏）。
-   注意"禁游戏音"禁的是音色不是动作——画面真有点击/开关/碎裂就该配
-   它的拟音，判别问句见 aesthetic-rules S1。但 **`ui/` 要逐个试听、不能
-   整目录放行**：18 个里只有 `switch-*` 等少数是真实开关拟音，一半以上是
-   合成反馈音（tone/bleep/notification），正属 S1 排除的质感——逐文件
-   取舍表见 sound-design 3.3。`glass/` 是真实碎裂材质音，不在禁列。
-4. **声明式钉帧表集中管理 + 相对钉帧**：单文件 `{ from, src, volume }[]`
-   数组，逐条注释对应的画面动作，每条包 `<Sequence from={s.from}>`。
-   **from 一律写相对表达式**——`SHOTS.x.from + offset`，卡点片写
-   `beatF(n)`——绝不写裸数字帧号。时间线平移时钉帧表自动跟随，
-   免除全表重钉。**长样本（>5s，库里 21 个）必须显式给 `durationInFrames`**
-   ——靠 Sequence 截断而非剪音频文件；漏给会拖到动作结束后还在响。
-   清单与截断判据见 sound-design 4.1。
-5. 连发防机枪感三招：双样本交替、音量阶梯递减（如 pop 六连
-   0.40→0.25）、间隔加速贴动画曲线（密到糊成一片时让声音淡出成 swoosh）。
-6. 通用音之外留"贴画面定制"槽位：有辨识度的画面动作配它自己的拟音
-   （打字画面配键盘声、逐条落入配逐个 pop），泛用 swoosh 盖不住。
-7. 强鼓点 BGM 的片子 SFX 克制：鼓点本身就是节拍音，SFX 只钉画面
-   独有动作，大 slam 只给 2–3 处峰值。
-8. 结尾固定句式：riser（组装段起）→ impact（字标落地，全片音量峰值）
-   → sparkle（余韵，取自 `sfx/light/`）。
-9. **音量按素材实测峰值给，不照抄区间**：`volume` 是乘法系数不是目标
-   音量——常规 0.2–0.6 的前提是素材峰值贴近 0dB。库里 7 个录得轻的素材
-   （峰值 <-12dB，最轻 -24.6dB）给到 1.0 仍比 BGM 低十几 dB，会被鼓底
-   盖住：**首选换同类别里录得好的素材，或预归一化后入库**；必要时可给
-   >1 的增益（Remotion 支持真实放大，但预览钳到 1.0，须以渲染产物验峰
-   防削波）。名单与三条出路见 sound-design 4.1。
+1. Consult `references/sound-design.md` and copy audio assets from `assets/audio/sfx/<category>/` (free commercial license; see `assets/audio/ATTRIBUTION.md`). Assets are organized into 16 categories: select category by visual action (camera -> `transition/`, landing -> `impact/`, typing -> `text/`, page flip -> `paper/`, sparkle -> **`light/`**...), then audition within that category. Notice that `sparkle` resides in `light/`.
+2. **BGM**:
+   - Specified by user: rhythm analysis completed in Stage 0; handle mixing here (attenuate to ~0.34 for SFX headroom, shape head/tail fades via `interpolate`).
+   - Unspecified: select a driving electronic bed (tech-house tier) matching promotional keynote character rather than superficial pleasantness. Candidate tracks must be auditioned beneath rendered video; candidate tracks reside in `assets/audio/bgm/`.
+   - Wrap BGM `<Audio>` tags with a boolean inputProp (`bgm`, default `true`), decoupled from SFX, ensuring twin renders (with BGM / without BGM) from the identical timeline.
+3. **Select SFX Vocabulary by Genre**: camera = whoosh, landing = impact, buildup = riser, highlights = sparkle (directory: `light/`), cuts = transition; forbid gaming sound pack timbres (synth plucks, cartoon boings). Banning gaming timbres does not ban physical action foley (clicks, switches, glass breaks).
+   **Audition `ui/` individually rather than granting blanket approval**: only a few files represent physical switches; over half are synthetic notification chimes (tone/bleep/notification) banned by S1 (see `sound-design.md` §3.3). `glass/` contains authentic physical break foley and is fully approved.
+4. **Centralized Declarative Keyframing + Relative Offsets**: Store in a single `{ from, src, volume }[]` table, annotating each line with screen actions, wrapped with `<Sequence from={s.from}>`. **Always express `from` via relative offsets** (`SHOTS.x.from + offset` or `beatF(n)`), never bare frame numbers. Shifting shot boundaries automatically updates SFX schedules. **Samples >5s (21 in library) must explicitly declare `durationInFrames`** via Sequence boundaries to prevent audio trailing beyond action completion (§4.1).
+5. Eliminate burst repetition via dual-sample alternation, stepped volume attenuation (e.g. pop burst 0.40 -> 0.25), and accelerating intervals matching animation curves.
+6. Provide custom foley slots beyond generic swooshes (typing uses keyboard strokes; sequential drops use pops).
+7. Practice SFX restraint in rhythm-dense cuts: percussion already provides cadence; anchor only distinct visual actions, reserving major slams for 2–3 peak moments.
+8. Finale Cadence: Riser (assembly starts) -> Impact (wordmark lands, peak volume) -> Sparkle (shimmer aftermath, from `sfx/light/`).
+9. **Set Volume by Measured Asset Peak**: `volume` is a multiplier, not target loudness. Assets recorded quietly (peaks < -12dB) remain buried under BGM even at `volume=1.0`. Swap for better-recorded assets in the same category, or pre-normalize before importing; apply >1 gain only when necessary, verifying peak levels on rendered output to prevent clipping (see `sound-design.md` §4.1).
 
-**产出**：带声整片；SFX 钉帧表（相对帧表达式+音源+音量+注释）；
-音频文件入 repo 并记录来源授权。
+**Artifacts**: Video with full audio mix; SFX keyframe table (relative offsets + source + volume + annotations); Audio assets committed with licensing documentation.
 
-**阶段输出**：带声整片渲染。自主自由创作继续进入终检，不暂停等待确认。
+**Stage Output**: Full video render with audio mix. Autonomous Free Creation proceeds directly to Stage 7 without pausing for confirmation.
 
-**常见坑**：
-
-- 画面没锁就铺音效：全表重对的连带成本（见前置条件）。
-- 按 UI 事件语义选音色（合成器 confirmation/minimize 提示音）：片种错位，整批推翻。
-  但别过度矫正到"完全不给交互动作配音"——那违反 S4 拟音优先。
-- 长样本不给 durationInFrames：声音盖过后续镜头（库里 21 个 >5s）。
-- 照抄 0.2–0.6 音量区间不看素材峰值：轻音素材钉了等于没钉。
-- 凭感觉散铺音效不建表：帧号漂移后无法整体平移，也无法和分镜表对照。
+**Common Pitfalls**:
+- Designing audio before visuals are locked: collateral rework cost.
+- Choosing timbres by UI event semantics (synthetic confirmation chimes): genre misalignment.
+- Omitting `durationInFrames` on long samples (>5s).
+- Copying 0.2–0.6 volume ranges without verifying asset peak levels.
+- Scattering audio intuitively without centralized tables.
 
 ---
 
-## 阶段 7：验收
+## Stage 7: Independent Final Review & Delivery
 
-**目标**：把贯穿全程的静帧/整片自检升级为一次正式的全片过检，
-同时验证成片是否忠实执行当前模式下确认或记录的产品简报、需求到执行决策表、视觉方向、镜头映射和分镜，
-对照终检与审美准则逐条出报告，然后终渲交付。
+**Objective**: Elevate continuous static-frame and full-video checks into a formal audit, validating that the final render faithfully executes the approved Product Brief, Decision Table, Visual Direction, Shot Mapping, and Storyboard, generating an itemized evaluation against final review and aesthetic rules before final delivery.
 
-**具体操作**：
+**Action Steps**:
 
-1. 全片渲染最新版，ffmpeg 抽全部关键帧（每镜头至少：入场中、
-   动作峰值、落定后三帧）。配了 BGM 的片子在此处就渲出两版——带 BGM 版
-   和无 BGM 版（保留 SFX），无 BGM 版靠阶段 6 预留的 `bgm` inputProp
-   从同一时间线渲出：写一个 `props-nobgm.json`（内容 `{"bgm":false}`）
-   然后 `npx remotion render … --props=props-nobgm.json`（跨平台可靠；
-   macOS/Linux 也可内联 `--props='{"bgm":false}'`，Windows shell 会剥掉
-   内联 JSON 的双引号，必须走文件）。不另建工程、不用 ffmpeg 后期抽轨。
-   命名区分（如 `promo.mp4` / `promo-nobgm.mp4`）。
-2. **独立终检（必做）**：派一个干净上下文的 subagent（通过 Agent 工具一次性派发全新上下文，例如 general-purpose）做第三方审查。
-   不给它制作过程中的辩解、修改历史或“应该通过”的暗示，只提供：最新版成片
-   （配 BGM 的片子含两版，供 A8 校验）、
-   抽出的关键帧、创作模式、产品简报、需求到执行决策表、确认或记录的视觉方向/tokens、styleframe 或跳过理由、
-   功能到镜头映射、
-   Gallery 卡名与具体变体、`library.json` 中对应记录、卡片文档定位到的准确
-   demo TSX、Gallery 参考样片或从中抽出的关键帧、最终分镜、选中的镜头卡、
-   `references/final-review.md` 和 `references/aesthetic-rules.md`。
-3. 审查 Agent 按 `final-review.md` 检查产品目标、功能完整性、视觉方向一致性、
-   镜头卡/变体还原度、分镜一致性、数据安全、音画同步和视觉技术质量。逐镜头
-   看帧+看片，给出 "F2 ✗（第 340 帧缺少已确认的知识图谱功能）" 或
-   "Q2 ✗（第 615 帧文字发糊）" 式结论，每条问题附可复核帧号/截图。
-   镜头卡适配不要求和 Gallery 样片像素级相同，但必须保留动作语法、关键时值、
-   已知坑/命门参数和用户点名的具体变体。
-4. 内容级自查：每个镜头问"给了什么新信息"，重复镜头/重复 tagline 删；
-   文案按最终画面重写一遍，纯动画段落也要有解说 caption，不留哑巴段落。
-5. 音画对齐终检：逐条 SFX 对帧回放，确认无错位（时间线若在阶段 6 后
-   还动过，先重对再验）。卡点片按 music-beat-sync.md §5 做渲后回测，
-   全部切点误差 ≤3f 才算过。
-6. 审查报告的修复项回到阶段 3/5/6 小循环：方案或分镜偏差回阶段 3，画面实现
-   问题回阶段 5，声音问题回阶段 6；直到 checklist 通过后终渲出片。
-   终渲重复步骤 1 的双版本渲染——配 BGM 的片子交付带 BGM / 无 BGM 两版，
-   无 BGM 版方便用户后期自配音乐或平台配乐。
+1. Render latest cut and extract all keyframes with FFmpeg (at minimum: entrance, peak action, post-settle for each shot). For videos with BGM, render two cuts from the identical timeline: with BGM and without BGM (preserving SFX), using the `bgm` inputProp configured via `props-nobgm.json` (`{"bgm":false}`):
+   `npx remotion render … --props=props-nobgm.json`
+   Distinguish by filename (`promo.mp4` / `promo-nobgm.mp4`).
+2. **Independent Final Review (Mandatory)**: Dispatch an independent subagent in a clean context (via the Agent tool with a brand new context, e.g. general-purpose) to conduct a third-party review. Do not provide production rationale, revision histories, or hints that it "ought to pass". Provide strictly: latest final cuts (both versions if BGM used), extracted keyframes, creation mode, Product Brief, Decision Table, visual direction / tokens, styleframes or skip justification, feature-to-shot mapping, Gallery card names and variants, corresponding `library.json` entries, exact demo TSX source, Gallery reference video or contact sheets, final storyboard, selected shot cards, `references/final-review.md`, and `references/aesthetic-rules.md`.
+3. The reviewer Agent executes `final-review.md` across product goals, functional completeness, visual consistency, shot card fidelity, storyboard alignment, data safety, audio sync, and technical quality. Reviewing frame-by-frame and full video, output findings formatted as `F2 ✗ (Frame 340 missing confirmed Knowledge Graph feature)` or `Q2 ✗ (Frame 615 blurry text)`, attaching verifiable frame numbers / screenshots for every issue. Shot adaptations do not require pixel-perfect identity with Gallery samples, but must preserve action syntax, timing ratios, pitfall parameters, and requested variants.
+4. Content Audit: Ask "What new information does this shot provide?"; delete redundant shots or duplicate taglines. Rewrite copy against final visuals; provide captions for animated shots, eliminating voiceless voids.
+5. Audio-Visual Sync Audit: Review each SFX against video frames to verify zero desync. For rhythm cuts, run post-render retesting per `music-beat-sync.md` §5, ensuring all cut errors ≤ 3f.
+6. Remediation loop: storyboard deviations return to Stage 3, visual bugs return to Stage 5, audio bugs return to Stage 6; loop until the checklist passes. Repeat dual-version rendering for the final delivery (with BGM / without BGM).
 
-**产出**：独立审查报告（final-review + aesthetic-rules checklist + 帧号证据）
-+ 终渲成片（带 BGM / 无 BGM 两版）。
+**Artifacts**: Independent Review Report (`final-review` + `aesthetic-rules` checklist + frame evidence) + Final Video Renders (with BGM / without BGM).
 
-**交付物**：审查报告 + 成片两版（带 BGM + 无 BGM）。
+**Deliverables**: Review Report + Final Video Renders.
 
-交付后先 `node workbench/scripts/open.mjs <工程目录>` 主动打开动效工作台（浏览器自动
-把成片拆成多轨，用户可视化微调后直接导出；见 `references/workbench.md`），再在最后按
-1-2-3 依次说三件事：① 发布时推荐（非强制）在简介 @ 一下
-skill 作者（三个平台账号都带链接）；② 邀请把成片放到作品展示页（用日常语言
-说，可留自己的账号）；③ 可以导出剪映工程文件（需要则读
-`references/jianying-export.md` 执行）。逐条口径与账号链接见 `SKILL.md`
-「交付收尾」。
+After delivery, launch the Motion Workbench via `node workbench/scripts/open.mjs <project_dir>` (the browser automatically decomposes the video into multi-track clips for visual fine-tuning and export; see `references/workbench.md`), then present the 1-2-3 delivery wrap-up steps:
+① Recommend (optional) crediting the skill author with social handles;
+② Invite the user to feature the final video on the showcase page (using approachable phrasing, optionally leaving their own handle);
+③ Inform that the video can be exported as a JianYing project draft (execute via `references/jianying-export.md` upon request).
+Exact scripts and links are provided in `SKILL.md` "Delivery Wrap-Up".
 
-**常见坑**：
-
-- 把验收当"最后才做的事"：本阶段只是收口。若前五阶段没做静帧自检，
-  这里堆积的问题量会让 checklist 失去意义——验收贯穿全程是定式。
-- 自检报告流于"全部 ✓"：用户会读清屏幕上每个字、会自己截帧对比——
-  报告里每条结论都应附可复核的帧号/截图。
-- 制作 agent 自己出审查报告：确认偏差不可避免，独立 subagent 审查
-  不可省略。
-- 只查“好不好看”不查“是否符合当前模式的制作基准”：功能漏拍、视觉方向漂移、
-  镜头变体用错和未经确认的数据都属于终检失败。
+**Common Pitfalls**:
+- Treating acceptance as a late-stage task: this stage merely closes the loop. Without continuous frame checks in earlier stages, accumulated bugs render the checklist ineffective.
+- Superficial reports marking everything passed: users will read every word and inspect frames; attach verifiable frame numbers and screenshots to every finding.
+- Production agent reviewing its own work: confirmation bias is inevitable; independent subagent review is mandatory.
+- Evaluating only visual polish without checking production baselines: omitted features, visual drift, wrong shot variants, and unauthorized data constitute review failures.

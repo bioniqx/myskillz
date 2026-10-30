@@ -1,6 +1,6 @@
-// 标准占位素材包（孵化轮 PLAYBOOK ③）——灰阶卡片组 + 假 dashboard 面板 +
-// 标题字块。首轮孵化建一次，之后终身复用。demo 只求把运动演清楚，
-// 不求页面质感，全部灰阶。
+// Standard placeholder fixtures — grayscale card deck + mock dashboard panel +
+// title block. Reusable fixture set focused on clear motion demonstration
+// without page polish; pure grayscale.
 import React from 'react';
 
 export const G = {
@@ -40,7 +40,7 @@ export const Card: React.FC<{
   );
 };
 
-// 假 dashboard 面板：A = 3×2 卡片网格，B = 列表行。1920×1080。
+// Mock dashboard panel: A = 3x2 card grid, B = list rows. 1920x1080.
 export const FakeDashboard: React.FC<{ variant?: 'A' | 'B' }> = ({ variant = 'A' }) => (
   <div style={{ width: 1920, height: 1080, background: G.bg, display: 'flex' }}>
     <div style={{ width: 220, background: G.side, padding: '28px 22px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 18 }}>

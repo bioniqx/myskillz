@@ -1,22 +1,22 @@
-// 拉远孤立收束（pull-back-isolation）——pull-back shot。
-// 相机容器 scale 2.2→0.62（0–110f，Easing.out(cubic)）：开场怼在主卡
-// "99.9%" 特写上，缓缓后拉露出周围 8 张兄弟卡。帧 30 起兄弟卡按离主卡
-// 距离由近到远错峰熄灭（每 8f 一张，opacity→0 + brightness 压暗）；
-// 背景 60–110f 从亮场沉入带色相的深场 #111216；主卡白光晕 60–100f 淡入。
-// 帧 110–150 完全静止：暗场中央孤悬一张发光小卡——全片只为这一个数字。
+// pull-back-isolation — pull-back camera move.
+// Camera scale 2.2 -> 0.62 (0-110f, Easing.out(cubic)): starts tight on hero card
+// "99.9%" close-up, slowly pulling back to reveal 8 surrounding cards.
+// Surrounding cards extinguish radially from near to far (every 8f, opacity->0 + brightness down);
+// Background sinks from light canvas to tinted dark #111216 (60-110f); hero white glow fades in (60-100f).
+// Frames 110-150 absolute stillness: isolated glowing metric card — climax moment for one number.
 //
-// 改版要点：主卡从"白罩压在占位卡上"改为出版级指标卡（标签 + 大数字 +
-// 90 天可用率条带 + 页脚）；相机按 2.2 倍布局（CSS zoom）再缩小，开场特写
-// 文字锐利（审美准则 Q2）；兄弟卡熄灭时轻微下沉（scale 0.97）+ 失焦，而非原地变灰；
-// 背景由柔光亮底交叉沉入深场，光晕带冷色相，卡面受光上沿随暗场浮现。
+// Redesign highlights: hero card upgraded to editorial metric card (label + large value +
+// 90-day uptime strip + footer); camera laid out at 2.2x zoom for sharp typography;
+// surrounding cards sink slightly (scale 0.97) + defocus as they extinguish;
+// background cross-fades from soft light to dark, illuminated card top edge emerges.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing, AbsoluteFill } from 'remotion';
 import { Card, G } from '../../_fixtures/Fixtures';
 import { Backdrop, EASE, FONT, Grain, mix, softShadow } from '../../_fixtures/Polish';
 
-export const PULL_BACK_ISOLATION_DURATION = 150; // 110f 后拉 + 40f 孤悬静止
+export const PULL_BACK_ISOLATION_DURATION = 150; // 110f pull-back + 40f isolated hold
 
-// 8 张兄弟卡：相对主卡中心 (960,540) 的偏移 + 尺寸 + seed
+// 8 surrounding cards: offset relative to hero center (960,540) + dimensions + seed
 const SIBS = [
   { dx: -620, dy: -330, w: 360, h: 240, seed: 3 },
   { dx: 10, dy: -390, w: 420, h: 220, seed: 4 },
@@ -28,7 +28,7 @@ const SIBS = [
   { dx: 640, dy: 350, w: 370, h: 250, seed: 10 },
 ].map((s) => ({ ...s, dist: Math.hypot(s.dx, s.dy) }));
 
-// 按离主卡距离排名 → 错峰熄灭顺序（近的先灭）
+// Stagger extinguish order by distance to hero card (near cards extinguish first)
 const RANKED = SIBS.map((s, i) => i).sort((a, b) => SIBS[a].dist - SIBS[b].dist);
 const FADE_START = RANKED.reduce<number[]>((acc, idx, rank) => {
   acc[idx] = 30 + rank * 8;
@@ -38,10 +38,10 @@ const FADE_DUR = 16;
 
 const clamp = { extrapolateLeft: 'clamp' as const, extrapolateRight: 'clamp' as const };
 
-// 相机布局倍率 = 起始特写倍率：按 2.2 倍栅格化，之后只做缩小
+// Camera layout scale = initial close-up scale: rasterized at 2.2x, scales down only
 const Z = 2.2;
 
-// 90 天渲染成功率条带：确定性，大部分全绿、2 天降级（让 99.9% 可信）
+// 90-day render success strip: mostly green with 2 degraded days for realistic credibility
 const DAYS = Array.from({ length: 45 }, (_, i) => (i === 17 ? 1 : i === 33 ? 2 : 0));
 
 const HeroCard: React.FC<{ rim: number }> = ({ rim }) => (
@@ -103,16 +103,16 @@ const HeroCard: React.FC<{ rim: number }> = ({ rim }) => (
 export const PullBackIsolation: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 相机后拉：2.2（怼脸特写）→ 0.62（大远景孤悬）
+  // Camera pull-back: 2.2 (extreme close-up) -> 0.62 (isolated wide)
   const scale = interpolate(frame, [0, 110], [2.2, 0.62], {
     easing: Easing.out(Easing.cubic),
     ...clamp,
   });
 
-  // 背景沉入黑暗（60–110f）：亮柔光底 → 带色相深场，交叉淡化
+  // Background sinks into darkness (60-110f): cross-fade to tinted dark
   const bgT = interpolate(frame, [60, 110], [0, 1], { easing: Easing.inOut(Easing.quad), ...clamp });
 
-  // 主卡光晕淡入（60–100f）
+  // Hero card glow fade-in (60-100f)
   const glow = interpolate(frame, [60, 100], [0, 1], { easing: Easing.inOut(Easing.quad), ...clamp });
 
   return (
@@ -122,7 +122,7 @@ export const PullBackIsolation: React.FC = () => {
         <Backdrop tone="dark" light={{ x: 0.5, y: 0.5 }} accent="#5b63d3" grain={0} vignette={0.6} />
       </AbsoluteFill>
 
-      {/* 相机容器：按 Z 倍布局，再以主卡中心（画面中心）为原点 scale(scale/Z) */}
+      {/* Camera container: laid out at Z scale, scaled around hero center */}
       <div
         style={{
           position: 'absolute',
@@ -135,11 +135,11 @@ export const PullBackIsolation: React.FC = () => {
         }}
       >
         <div style={{ position: 'relative', width: 1920, height: 1080, zoom: Z }}>
-          {/* 兄弟卡：由近到远错峰熄灭，熄灭时轻微下沉 */}
+          {/* Surrounding cards: stagger extinguish near-to-far with subtle sink */}
           {SIBS.map((s, i) => {
             const t0 = FADE_START[i];
             const k = interpolate(frame, [t0, t0 + FADE_DUR], [0, 1], clamp);
-            // 透明度先走（ease-out），压暗后走（k²）：熄灭过程不会在亮底上停成一块灰板
+            // Opacity fades first, followed by darkening to avoid flat gray patches
             const op = 1 - EASE.out(k);
             const dk = k * k;
             return (
@@ -150,7 +150,7 @@ export const PullBackIsolation: React.FC = () => {
                   left: 960 + s.dx - s.w / 2,
                   top: 540 + s.dy - s.h / 2,
                   opacity: op,
-                  // 压暗 + 轻微失焦：像沉进暗处
+                  // Darken + slight defocus: sinking into darkness
                   filter: k > 0.001 ? `brightness(${mix(1, 0.3, dk).toFixed(3)}) blur(${(k * 5).toFixed(2)}px)` : undefined,
                   transform: `scale(${mix(1, 0.97, k)})`,
                 }}
@@ -160,7 +160,7 @@ export const PullBackIsolation: React.FC = () => {
             );
           })}
 
-          {/* 主卡：520×340 居中；落入暗场后外圈冷白光晕 */}
+          {/* Hero card: 520x340 centered; cool white glow in dark environment */}
           <div
             style={{
               position: 'absolute',

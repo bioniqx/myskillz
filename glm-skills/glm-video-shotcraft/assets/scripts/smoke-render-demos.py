@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""smoke-render-demos.py — demo 渲染冒烟测试。
+"""smoke-render-demos.py — Demo rendering smoke tests.
 
-堵住"能编译不能运行"的漏洞：现有 CI 只做 tsc 编译，不验证 demo 能否
-真的渲染。本脚本扫描所有带时长导出（`_DURATION` / `_DUR`）的 demo，
-自动生成一个临时 Root 注册全部，然后逐个渲染首帧，断言输出文件非空、
-渲染不崩。
+Closes the loophole of "compiles but cannot run": existing CI only performs tsc
+compilation without verifying whether demos can actually render. This script
+scans all demos exporting duration (`_DURATION` / `_DUR`), automatically
+generates a temporary Root registering all of them, renders the first frame for
+each one, and asserts the output file is non-empty and rendering does not crash.
 
-用法（从仓库根）：
+Usage (from repository root):
     python3 assets/scripts/smoke-render-demos.py [--subset a,b,c] [--list]
 
-前置条件：
-    - template/ 已 `npm install`（remotion 4.0.484）
-    - demos/ 用到的 @remotion/motion-blur 已装到 template（CI 里临时装）
-    - 需要纹理的 demo：demos/_textures/ 的文件已复制到
-      template/public/textures/live/（脚本会自动复制缺失的）
-    - 需要素材 mp4 的 demo（如 clipcard-looping）：跳过并报告，不失败
+Prerequisites:
+    - template/ has run `npm install` (remotion 4.0.484)
+    - @remotion/motion-blur used by demos is installed in template (temporarily installed in CI)
+    - Demos requiring textures: files in demos/_textures/ are copied to
+      template/public/textures/live/ (the script automatically copies missing files)
+    - Demos requiring external MP4 assets (e.g. clipcard-looping): skipped and reported, not failed
 
-退出码：全通过 0；任一 demo 渲染失败 1（列出失败清单）。
+Exit codes: 0 if all pass; 1 if any demo fails to render (lists failure manifest).
 """
 
 import argparse
@@ -35,15 +36,15 @@ TEXTURES_SRC = ROOT / 'demos' / '_textures'
 TEXTURES_DST = TEMPLATE / 'public' / 'textures' / 'live'
 DUR_PAT = re.compile(r'export const (\w+_DURATION|\w+_DUR)\s*=')
 
-# demo 需要真实 mp4 素材、无法自动生成的（跳过，脚本只报告）
+# Demos requiring external MP4 assets that cannot be synthesized (skipped with report)
 MATERIAL_REQUIRED = {'ClipCardLooping'}
 
 
 def find_demos():
-    """返回 [(路径, 时长导出名, 组件名)], 按路径排序。"""
+    """Return [(path, duration_export_name, component_name)], sorted by path."""
     out = []
     for f in sorted((ROOT / 'demos').rglob('*.tsx')):
-        # 下架镜头只为工作台旧工程保留，不重新成为当前镜头库的样片。
+        # Legacy shots preserved for backward compatibility only
         if '_legacy' in f.relative_to(ROOT / 'demos').parts:
             continue
         src = f.read_text(encoding='utf-8')
@@ -52,8 +53,8 @@ def find_demos():
             continue
         durname = m.group(1)
         stem = f.stem
-        # 组件导出必须真实存在（`export const <stem>` 且是组件而非常量）。
-        # 正则精确匹配，避免文件名出现在注释/字符串里造成的误判。
+        # Export must exist as React component
+        # Strict regex matching to avoid false positives in comments
         if not re.search(rf'export const {re.escape(stem)}\s*:\s*React\.FC\s*=', src):
             continue
         out.append((f, durname, stem))
@@ -61,7 +62,7 @@ def find_demos():
 
 
 def write_smoke_root(demos):
-    """生成 template/src/smoke-root.tsx 注册所有 demo。"""
+    """Generate template/src/smoke-root.tsx registering all demos."""
     lines = ["import { Composition, registerRoot } from 'remotion';"]
     regs = []
     for f, durname, stem in demos:
@@ -80,9 +81,9 @@ def write_smoke_root(demos):
 
 
 def ensure_textures():
-    """把 demos/_textures 的图片纹理复制到 template/public/textures/live。
-    只复制图片（.png/.jpg/.webp），跳过 layout.json 等数据文件——它们是
-    import 进 TS 的，不是运行时纹理。"""
+    """Copy image textures from demos/_textures to template/public/textures/live.
+    Only copies image files (.png/.jpg/.webp), skipping data files like layout.json
+    since they are imported into TS rather than used as runtime textures."""
     if not TEXTURES_SRC.exists():
         return 0
     os.makedirs(TEXTURES_DST, exist_ok=True)
@@ -96,7 +97,7 @@ def ensure_textures():
 
 
 def render_one(stem, out_dir):
-    """渲染单个 demo 首帧, 返回 (ok, 输出路径或错误信息)。"""
+    """Render single demo first frame, returning (ok, output_path_or_error)."""
     out = out_dir / f'{stem}.png'
     r = subprocess.run(
         ['npx', 'remotion', 'still', 'src/smoke-root.tsx', stem,
@@ -114,8 +115,8 @@ def render_one(stem, out_dir):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--subset', help='逗号分隔的组件名, 只渲染这些')
-    ap.add_argument('--list', action='store_true', help='只列出可渲染 demo')
+    ap.add_argument('--subset', help='Comma-separated component names to render')
+    ap.add_argument('--list', action='store_true', help='List renderable demos only')
     args = ap.parse_args()
 
     demos = find_demos()
@@ -129,18 +130,18 @@ def main():
         available = {s for _, _, s in demos}
         unknown = wanted - available
         if unknown:
-            print(f'error: subset 含未找到的 demo: {sorted(unknown)}')
+            print(f'error: subset contains unknown demo(s): {sorted(unknown)}')
             return 1
         demos = [(f, d, s) for f, d, s in demos if s in wanted]
 
-    # 过滤需要素材的 demo
+    # Filter demos requiring external media
     skip = [(f, d, s) for f, d, s in demos if s in MATERIAL_REQUIRED]
     run = [(f, d, s) for f, d, s in demos if s not in MATERIAL_REQUIRED]
 
-    print(f'扫描到 {len(demos)} 个带时长导出的 demo; '
-          f'跳过(需素材) {len(skip)}; 将渲染 {len(run)} 个')
+    print(f'Found {len(demos)} demos exporting duration; '
+          f'Skipped (requires media): {len(skip)}; Rendering: {len(run)}')
     if skip:
-        print(f'  跳过: {", ".join(s for _, _, s in skip)}')
+        print(f'  Skipped: {", ".join(s for _, _, s in skip)}')
 
     write_smoke_root(run)
     ensure_textures()
@@ -156,13 +157,13 @@ def main():
                 print(f'  ✗ {stem}: {err}')
                 failed.append(stem)
 
-    # 清理生成的 smoke-root
+    # Clean up generated smoke-root
     (TEMPLATE_SRC / 'smoke-root.tsx').unlink(missing_ok=True)
 
     if failed:
-        print(f'\n失败 {len(failed)} 个: {failed}')
+        print(f'\nFailed ({len(failed)}): {failed}')
         return 1
-    print(f'\n全部 {len(run)} 个 demo 首帧渲染通过 ✓')
+    print(f'\nAll {len(run)} demo first frames rendered successfully ✓')
     return 0
 
 

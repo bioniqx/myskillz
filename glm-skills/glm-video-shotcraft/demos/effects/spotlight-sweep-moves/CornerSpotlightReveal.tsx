@@ -1,12 +1,12 @@
-// corner-spotlight-reveal —— 对标 clickup-30.mp4 41.5–44.6s：
-// 黑场上，左上角径向聚光从小到大扩张，把白色 video-shotcraft 镜头库界面逐步"点亮"，
-// 照到的区域显影、照不到的沉黑，最终全屏亮起。光即转场。
+// corner-spotlight-reveal — referenced from clickup-30.mp4 41.5-44.6s:
+// On dark field, top-left radial spotlight expands outward, progressively illuminating white video-shotcraft library UI,
+// illuminated areas reveal while unlit areas stay in deep shadow, culminating in full screen reveal. Light as transition.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 
 const FONT = '"Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
 
-// 灰阶镜头库界面（video-shotcraft 的 Shots 页，自绘，替代真 UI）
+// Grayscale shot library interface (video-shotcraft Shots page, procedural UI)
 const InboxPanel: React.FC = () => (
   <div
     style={{
@@ -61,22 +61,22 @@ const InboxPanel: React.FC = () => (
 export const CornerSpotlightReveal: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 聚光半径扩张：全程匀速（用户裁决"整个过程要匀速"——严格 linear，无缓动）
-  // r+feather=1.85r 是光前沿；1.85*1300≈2400 恰在片尾盖满全屏对角，
-  // 保证扩张动作占满全片时长而不是前 1/3 就饱和
+  // Spotlight radius expansion: constant linear velocity throughout without easing
+  // r+feather=1.85r represents leading light edge; 1.85*1300 ~ 2400 covers screen diagonal at tail,
+  // ensuring expansion spans the full shot duration rather than saturating early
   const r = interpolate(frame, [0, 100], [160, 1300], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
 
-  // 光心沿左上角匀速游移（linear）
+  // Light center drifts linearly along top-left quadrant
   const cx = interpolate(frame, [0, 96], [140, 420], { extrapolateRight: 'clamp' });
   const cy = interpolate(frame, [0, 96], [90, 260], { extrapolateRight: 'clamp' });
 
-  // 软边宽度：扩张时边缘更羽化
+  // Feather width: broader edge feathering during expansion
   const feather = r * 0.85;
 
-  // UI 轻微透视漂移（原片相机贴着界面缓推）
+  // Subtle UI perspective drift simulating close camera push
   const drift = interpolate(frame, [0, 100], [0, 1]);
   const scale = 1.75 - 0.28 * drift;
   const tx = -40 + 70 * drift;
@@ -99,7 +99,7 @@ export const CornerSpotlightReveal: React.FC = () => {
       >
         <InboxPanel />
       </AbsoluteFill>
-      {/* 聚光自身的白热光晕（叠在界面上方，光心最亮） */}
+      {/* White-hot center spotlight bloom (layered above UI) */}
       <div
         style={{
           position: 'absolute',

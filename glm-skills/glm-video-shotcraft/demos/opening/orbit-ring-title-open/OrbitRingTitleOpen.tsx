@@ -1,27 +1,27 @@
-// orbit-ring-title-open — 环形卡阵标题开场
-// 八张 16:9 内容卡按 45° 均布在椭圆上匀速公转（卡身永不倾斜，纵深只由 sin(θ) 给出缩放、
-// z 序、景深与明暗），入场期卡内容冻结首帧、环撑开落定后统一开播；居中标题逐字解糊下沉落定，
-// 关键词全部到位那一刻荧光马克块自左横扫铺满（扫过处字色反白为墨），mono 副行随后浮出。
+// orbit-ring-title-open — Orbiting card ring title opening
+// Eight 16:9 content cards spaced at 45 deg orbit uniformly along an ellipse (cards stay upright, depth driven by sin(theta) for scaling,
+// z-order, depth of field, and shading). Card content freezes on frame 0 during ring expansion, playing synchronously once settled; centered headline resolves word-by-word,
+// followed by a fluorescent marker highlight sweeping across the keyword, flipping text to dark ink, with a mono subline surfacing beneath.
 //
-// 第二轮重设计（石墨夜 · 荧光笔）：
-// - look = lime：石墨暗场 + 荧光黄绿。马克块从"黄色便利贴"变成一支荧光笔——暗场里唯一的高饱和色块，
-//   只给关键词「每一个动效」。八张卡全部换成暗色产品卡（深石墨底 + 发丝线 + 顶部内高光），
-//   卡内小动效统一用荧光绿做唯一强调，卡内字只做纹理（读的是标题）。
-// - 标题从 64px 单行改成两级：上行 64px 次级灰「让镜头卡替你想好」，下行 156px「每一个动效」做主角；
-//   马克块扫过时用两层裁切让字从白翻成墨色（反白在块的前沿同步发生，读作"被荧光笔划过"）。
-// - 空间：椭圆轨道本身画成一圈极淡的发丝线（入场时描出来），卡的纵深除了 ±12% 缩放，
-//   远处（上方）的卡再压暗 + 轻微失焦，近处（下方）全亮全清——环有前后，标题在焦平面上。
-//   标题后垫一团暗色 scrim，保证卡从背后经过时标题始终压得住。
-// - 收尾：原版末段整行失焦退场做交棒；单镜头演示改为停在完整海报（HANDOFF_EXIT 开关保留退场逻辑）。
+// Iteration 2 redesign (graphite night · highlighter):
+// - look = lime: dark graphite field + fluorescent lime. Highlighter sweep serves as the sole high-saturation accent in the dark field,
+//   applied to the hero keyword. All 8 cards styled as dark product recipe cards (dark graphite base + hairline borders + top specular rim),
+//   with card motion accented in fluorescent lime while card text serves as visual texture subordinate to the headline.
+// - Headline structured in two tiers: top line secondary gray, bottom hero line 156px;
+//   dual-layer clipping flips text from white to dark ink in sync with the marker leading edge.
+// - Space: Elliptical orbit rendered as subtle hairline stroke drawn on entry; card depth incorporates +/-12% scale,
+//   with distant (top) cards dimmed and softly defocused while near (bottom) cards remain bright and sharp.
+//   Dark scrim placed behind headline ensures legibility as cards pass behind.
+// - Outro: Settles into a complete poster frame (HANDOFF_EXIT toggle preserves defocus handoff exit logic if needed).
 //
-// 时间表（30fps，共 150f）：
-//   0–24    环从 0.62 撑开到满径（snappy）+ 逐卡淡入；轨道发丝线 0–30 描出
-//   24      八张卡同时开播（冻结首帧 → 正常时间轴）
-//   10–40   上行逐字解糊下沉（错峰 1f）
-//   18–52   下行大字逐字解糊下沉（错峰 2f，更重更慢）
-//   50–64   荧光马克块横扫（弹簧，damping 20），扫过处字反白为墨
-//   60–76   副行（标志 + video-shotcraft + mono 代号）浮出
-//   76–150  hold：环持续匀速公转 + 整体极缓推近 2.5%；最后 2.5s 是一张完整海报
+// Timeline (30fps, 150f total):
+//   0–24    Ring expands from 0.62 to full radius (snappy) + cards fade in; orbit hairline drawn 0–30
+//   24      All 8 cards begin playback (frozen first frame -> normal timeline)
+//   10–40   Top line resolves word-by-word with slight drop (1f stagger)
+//   18–52   Bottom hero line resolves word-by-word (2f stagger, heavier cadence)
+//   50–64   Fluorescent marker sweeps across (spring damping 20), text flips to dark ink
+//   60–76   Subline (mark + video-shotcraft + mono code) surfaces
+//   76–150  Hold: ring orbits continuously at constant speed + subtle 2.5% camera push-in; final 2.5s locks as poster
 import React from 'react';
 import { AbsoluteFill, Easing, Freeze, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { EASE, FONT, ramp } from '../../_fixtures/Polish';
@@ -33,27 +33,27 @@ export const ORBIT_RING_TITLE_OPEN_DURATION = 150; // 5s @30fps
 const L = LOOKS.lime;
 const LIME = L.accent;
 
-// ---- 环 ----
-const RX = 720; // 椭圆长半轴
-const RY = 380; // 椭圆短半轴（RY/RX≈0.53 → 读作俯视的环，不是正圆转盘）
-const CW = 400; // 卡宽（16:9）
+// ---- Ring ----
+const RX = 720; // Ellipse semi-major axis
+const RY = 380; // Ellipse semi-minor axis (RY/RX≈0.53 -> viewed as tilted orbit)
+const CW = 400; // Card width (16:9)
 const CH = 225;
 const N = 8;
-const ROT_SPEED = 0.3; // rad/s，正值 = 顺时针
-const RING_IN = 24; // f：从中心撑开到满径
+const ROT_SPEED = 0.3; // rad/s, positive = clockwise
+const RING_IN = 24; // f: expand from center to full radius
 const RING_SCALE_FROM = 0.62;
-const PLAY_START = 24; // f：环撑开后卡内容才开播
-const DEPTH_SCALE = 0.12; // 近大远小幅度（底部近、顶部远）
+const PLAY_START = 24; // f: card content plays once ring expands
+const DEPTH_SCALE = 0.12; // Perspective depth scale (+/-12%)
 
-// ---- 标题 ----
-const LINE1 = '让镜头卡替你想好';
-const LINE2 = '每一个动效';
+// ---- Headline ----
+const LINE1 = 'Let recipe cards craft';
+const LINE2 = 'every single motion';
 const S1 = 64;
 const S2 = 156;
-const MARKER_AT = 50; // 下行末字视觉到位那一刻起扫
-// 副行 = video-shotcraft 标志 + 小写字标 + mono 产品代号（不写卡片数：会过时）
+const MARKER_AT = 50; // Marker sweep starts as last word lands
+// Subline = video-shotcraft mark + lowercase logotype + mono product code
 const KICKER = 'SHOT RECIPE CARDS';
-const HANDOFF_EXIT = false; // true = 末段整行失焦淡出、环继续转着交棒下一镜（成片里接下一镜时打开）
+const HANDOFF_EXIT = false; // true = outro row defocus and fade out while ring continues for handoff
 const EXIT_AT = 118;
 
 const SANS = `${FONT.sans.replace('Arial, sans-serif', '')}"PingFang SC", "Hiragino Sans GB", sans-serif`;
@@ -61,7 +61,7 @@ const MONO = FONT.mono;
 const INK = L.ink;
 const DIM = '#8d937f';
 
-// ── 卡内占位内容（暗色产品卡，960×540 作画后整体缩到卡宽）──────────────────
+// ── Card Placeholder Content (Dark product cards drawn at 960x540, scaled to card width) ──
 const F = (frame: number, a: number, b: number, ease = Easing.out(Easing.cubic)) =>
   interpolate(frame, [a, b], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: ease });
 
@@ -81,7 +81,7 @@ const Caps: React.FC<{ children: React.ReactNode; color?: string }> = ({ childre
   <div style={{ fontSize: 24, fontWeight: 650, letterSpacing: '0.16em', color }}>{children}</div>
 );
 
-/** 1 荧光笔扫读 */
+/** 1 Highlighter sweep */
 const TileSweep: React.FC = () => {
   const f = useCurrentFrame();
   const s = F(f, 14, 32, EASE.snappy);
@@ -98,7 +98,7 @@ const TileSweep: React.FC = () => {
   );
 };
 
-/** 2 指标 + sparkline 描线 */
+/** 2 Metrics + sparkline draw */
 const SPARK = 'M8 118 L118 92 L228 104 L338 56 L448 68 L558 20 L632 34';
 const TileMetric: React.FC = () => {
   const f = useCurrentFrame();
@@ -127,7 +127,7 @@ const TileMetric: React.FC = () => {
   );
 };
 
-/** 3 竖向步骤清单逐条勾选 */
+/** 3 Vertical step checklist */
 const STEPS = ['Draft the storyboard', 'Pick shot cards', 'Tune easing curves', 'Render & review'];
 const TileSteps: React.FC = () => {
   const f = useCurrentFrame();
@@ -157,7 +157,7 @@ const TileSteps: React.FC = () => {
   );
 };
 
-/** 4 路线描线 + 落点钉针（暗网格地图底） */
+/** 4 Route line + pin drop on dark grid */
 const ROUTE = 'M40 380 C 200 380 190 210 340 200 C 500 190 500 90 700 70';
 const TileRoute: React.FC = () => {
   const f = useCurrentFrame();
@@ -184,7 +184,7 @@ const TileRoute: React.FC = () => {
   );
 };
 
-/** 5 终端打字（打字是机械匀速语义，逐字线性揭示） */
+/** 5 Terminal typing (linear typewriter reveal) */
 const TERM = [
   { t: '$ npx remotion render Open', c: '#e8ecdf' },
   { t: '✓ Bundled in 2.1s', c: LIME },
@@ -210,7 +210,7 @@ const TileTerminal: React.FC = () => {
   );
 };
 
-/** 6 线稿描画（点阵纸底） */
+/** 6 Line drawing on dot grid */
 const SKETCH = ['M80 380 L768 380', 'M140 380 L200 90 L648 90 L708 380', 'M280 90 L280 380', 'M500 90 L500 380'];
 const TileSketch: React.FC = () => {
   const f = useCurrentFrame();
@@ -228,7 +228,7 @@ const TileSketch: React.FC = () => {
   );
 };
 
-/** 7 卡片缩成胶囊（主体让位） */
+/** 7 Card collapses to capsule */
 const TileShrink: React.FC = () => {
   const f = useCurrentFrame();
   const p = F(f, 16, 44, EASE.smooth);
@@ -260,7 +260,7 @@ const TileShrink: React.FC = () => {
   );
 };
 
-/** 8 冲击字卡 */
+/** 8 Kinetic impact title card */
 const TileImpact: React.FC = () => {
   const f = useCurrentFrame();
   const p = springAt(f, 8, { damping: 13, mass: 0.7 });
@@ -276,7 +276,7 @@ const TileImpact: React.FC = () => {
 
 const TILES: React.FC[] = [TileSweep, TileShrink, TileMetric, TileRoute, TileSteps, TileTerminal, TileSketch, TileImpact];
 
-// ── 标题逐字：位移只占前 1/3，解糊走满（同起不同终 = blur-slide 的手感）──
+// ── Per-word headline: translation completes in first 1/3, de-blur spans full duration ──
 const charStyle = (frame: number, at: number, size: number, dur: number): React.CSSProperties => {
   const pMain = ramp(frame, at, dur, EASE.out);
   const pTravel = ramp(frame, at, dur / 3, EASE.out);
@@ -287,7 +287,7 @@ const charStyle = (frame: number, at: number, size: number, dur: number): React.
   };
 };
 
-// ── 主体 ───────────────────────────────────────────────────────────────────
+// ── Main Component ──
 export const OrbitRingTitleOpen: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -297,7 +297,7 @@ export const OrbitRingTitleOpen: React.FC = () => {
   const ringScale = RING_SCALE_FROM + (1 - RING_SCALE_FROM) * ringIn;
   const rot = t * ROT_SPEED;
   const track = ramp(frame, 0, 30, EASE.out);
-  const push = 1 + 0.025 * ramp(frame, 40, 110, EASE.smooth); // hold 段极缓推近
+  const push = 1 + 0.025 * ramp(frame, 40, 110, EASE.smooth); // Subtle camera push during hold
 
   const marker = Math.min(1.03, springAt(frame, MARKER_AT, { damping: 20, stiffness: 190 }));
   const kickerIn = ramp(frame, 60, 16, EASE.out);
@@ -307,7 +307,7 @@ export const OrbitRingTitleOpen: React.FC = () => {
   const l1 = Array.from(LINE1);
   const l2 = Array.from(LINE2);
   const line2 = (color: string) => l2.map((ch, j) => <span key={j} style={{ ...charStyle(frame, 18 + j * 2, S2, 32), color }}>{ch}</span>);
-  // 马克块比字宽出左右各 0.14em：块前沿在字盒里的位置 = (m·(W+0.28em) − 0.14em) / W，W ≈ 5.05em
+  // Marker extends 0.14em on left and right: leading edge pos = (m*(W+0.28em) - 0.14em) / W, W ≈ 5.05em
   const edge = Math.min(1, Math.max(0, (Math.min(1, marker) * 5.33 - 0.14) / 5.05));
   const clipR = ((1 - edge) * 100).toFixed(2);
   const clipL = (edge * 100).toFixed(2);
@@ -315,12 +315,12 @@ export const OrbitRingTitleOpen: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], fontFamily: SANS }}>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.0 }} fill={null} intensity={0.5} vignette={0.62}>
-        {/* 标题背后的暗 scrim：卡从背后经过时标题始终压得住 */}
+        {/* Dark scrim behind title: preserves contrast as cards pass behind */}
         <div style={{ position: 'absolute', left: 360, top: 300, width: 1200, height: 480, background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#050604', 0.75)} 0%, ${alpha('#050604', 0)} 70%)` }} />
       </Stage>
 
       <AbsoluteFill style={{ transform: `scale(${push})` }}>
-        {/* 椭圆轨道发丝线：入场时描出来，给环一个看得见的几何 */}
+        {/* Elliptical orbit hairline: drawn on entry to establish orbit geometry */}
         <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
           <ellipse cx={960} cy={540} rx={RX * ringScale} ry={RY * ringScale} fill="none" stroke={alpha(LIME, 0.16)} strokeWidth={1.5}
             pathLength={1} strokeDasharray="1" strokeDashoffset={1 - track} />
@@ -330,11 +330,11 @@ export const OrbitRingTitleOpen: React.FC = () => {
           const theta = -Math.PI / 2 + (i * Math.PI * 2) / N + rot;
           const x = 960 + Math.cos(theta) * RX * ringScale;
           const y = 540 + Math.sin(theta) * RY * ringScale;
-          const depth = Math.sin(theta); // +1 = 画面下方（近），−1 = 上方（远）
+          const depth = Math.sin(theta); // +1 = foreground (bottom), -1 = background (top)
           const s = 1 + DEPTH_SCALE * depth;
           const op = ramp(frame, 2 + i * 1.5, 11, EASE.out);
           const grow = 0.9 + 0.1 * op;
-          const far = Math.max(0, -depth); // 远处：压暗 + 轻微失焦
+          const far = Math.max(0, -depth); // Distant cards: dimmed and subtly blurred
           const elev = 14 + 12 * depth;
           return (
             <div key={i} style={{
@@ -343,33 +343,33 @@ export const OrbitRingTitleOpen: React.FC = () => {
               boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px ${L.line}, 0 ${(elev * 0.6).toFixed(1)}px ${(elev * 1.6).toFixed(1)}px rgba(0,0,0,${(0.45 + 0.2 * depth).toFixed(2)})`,
               filter: far > 0.05 ? `blur(${(far * 1.6).toFixed(2)}px)` : undefined,
             }}>
-              {/* 卡内按 960×540 作画再整体缩到卡宽——内容组件不需要知道自己被缩小了 */}
+              {/* Card content authored at 960x540 and scaled down */}
               <div style={{ position: 'absolute', left: 0, top: 0, width: 960, height: 540, transform: `scale(${(CW * s) / 960})`, transformOrigin: 'top left' }}>
                 <Freeze frame={Math.max(0, frame - PLAY_START)}>
                   <Comp />
                 </Freeze>
               </div>
-              {/* 纵深明暗：远处压暗、近处带一点顶光 */}
+              {/* Depth shading: distant cards darkened, near cards catch top specular light */}
               <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, rgba(255,255,255,${(0.04 * Math.max(0, depth)).toFixed(3)}) 0%, rgba(5,6,4,${(0.5 * far).toFixed(3)}) 100%), rgba(5,6,4,${(0.25 * far).toFixed(3)})` }} />
             </div>
           );
         })}
 
-        {/* 卡与标题之间的暗 scrim（在卡之上、字之下）：近处卡从标题背后经过时被压暗，字始终压得住 */}
+        {/* Dark scrim between cards and title: ensures text legibility as near cards orbit */}
         <div style={{ position: 'absolute', left: 260, top: 250, width: 1400, height: 560, zIndex: 25, background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#060705', 0.82)} 0%, ${alpha('#060705', 0.55)} 45%, ${alpha('#060705', 0)} 72%)` }} />
 
-        {/* 标题：上行次级灰、下行主角大字 + 荧光马克 */}
+        {/* Title: secondary upper line, hero lower line + highlighter accent */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: 336, textAlign: 'center', zIndex: 30, ...titleExit }}>
           <div style={{ fontSize: S1, fontWeight: 500, letterSpacing: '0.02em', color: '#b7bdaa', whiteSpace: 'nowrap', lineHeight: 1 }}>
             {l1.map((ch, i) => <span key={i} style={charStyle(frame, 10 + i, S1, 27)}>{ch}</span>)}
           </div>
           <div style={{ marginTop: 34, display: 'inline-block', position: 'relative', fontSize: S2, fontWeight: 600, letterSpacing: '0.01em', lineHeight: 1.12, whiteSpace: 'nowrap' }}>
-            {/* 马克块：自左横扫铺满（垫在字下） */}
+            {/* Highlighter marker: sweeps left-to-right beneath typography */}
             <span aria-hidden style={{
               position: 'absolute', left: '-0.14em', right: '-0.14em', top: '0.1em', bottom: '0.04em', background: LIME, borderRadius: 8,
               transformOrigin: 'left center', transform: `scaleX(${marker.toFixed(4)})`, boxShadow: marker > 0.02 ? `0 0 60px ${alpha(LIME, 0.28)}` : undefined,
             }} />
-            {/* 两层字：块的前沿左边是墨色、右边是白色——扫过即反白 */}
+            {/* Two-layer text: dark ink to left of marker edge, white to right (instant contrast flip) */}
             <span style={{ position: 'relative', display: 'inline-block', clipPath: `inset(-20% 0 -20% ${clipL}%)`, color: INK }}>{line2(INK)}</span>
             <span aria-hidden style={{ position: 'absolute', left: 0, top: 0, display: 'inline-block', clipPath: `inset(-20% ${clipR}% -20% 0)` }}>{line2(L.onAccent)}</span>
           </div>

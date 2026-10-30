@@ -1,17 +1,17 @@
-// card-footage-cadence｜字卡穿插节奏
-// UI 镜头 ↔ 黑底字卡像对话接拍：0–14f UI A 缓推 → 硬切 8f 字卡 SHIP →
-// 硬切 12f UI B 1.6x 裁切缓移 → 8f 字卡 FASTER → 10f UI A 2x 裁切 →
-// 10f 字卡 TODAY(下划线) → 62f 硬切收尾全景定格。
-// UI 段全部带微动（推/移），字卡段除落定微缩(1.05→1, out-cubic)外全静，
-// 动↔静对比即手法本体。所有切换零过渡（条件挂载，无 crossfade）。
-// 收尾 62–105f 轻推收完，105–150f 真静止 45f ≥ 40f。帧确定，无随机。
+// card-footage-cadence — Title card intercut cadence
+// UI shots <-> black title cards exchange beats like dialogue: 0–14f UI A slow push -> hard cut 8f title card SHIP ->
+// hard cut 12f UI B 1.6x crop slow pan -> 8f title card FASTER -> 10f UI A 2x crop ->
+// 10f title card TODAY (underlined) -> 62f hard cut concluding panorama freeze.
+// All UI segments feature micro-motion (push/pan); title cards stay completely static aside from a subtle settle scale-down (1.05 -> 1, out-cubic);
+// motion <-> stillness contrast is the core device. All transitions use zero crossfade (conditional mount, no crossfade).
+// Concluding 62–105f finishes with gentle push, 105–150f completely static 45f >= 40f. Deterministic, zero randomness.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard } from '../../_fixtures/Fixtures';
 
 const CLAMP = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 
-// 黑底白字字卡：落定微缩 1.05→1（out-cubic，段内前 5f 完成），其余全静
+// White text on black title card: settle scale-down 1.05 -> 1 (out-cubic, completed in first 5f of segment), otherwise completely static
 const TitleCard: React.FC<{ text: string; local: number; underline?: boolean }> = ({
   text,
   local,
@@ -54,7 +54,7 @@ const TitleCard: React.FC<{ text: string; local: number; underline?: boolean }> 
   );
 };
 
-// UI 镜头：包一层 transform 做缓推/缓移，硬切由外层条件挂载保证
+// UI shot: wrapped in transform layer for slow push/pan; hard cuts guaranteed via outer conditional mounting
 const UiShot: React.FC<{
   variant: 'A' | 'B';
   transform: string;
@@ -70,21 +70,21 @@ const UiShot: React.FC<{
 export const CardFootageCadence: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ---- 分段：切点 14 / 22 / 34 / 42 / 52 / 62，总长 150 ----
+  // ---- Segments: cut points 14 / 22 / 34 / 42 / 52 / 62, total length 150 ----
 
-  // 段1 0–14f：UI A 全景缓推 1.0→1.08
+  // Seg 1 0–14f: UI A full view slow push 1.0 -> 1.08
   if (frame < 14) {
     const s = interpolate(frame, [0, 14], [1, 1.08], CLAMP);
     return <UiShot variant="A" transform={`scale(${s})`} />;
   }
 
-  // 段2 14–22f：字卡 SHIP
+  // Seg 2 14–22f: Title card SHIP
   if (frame < 22) {
     return <TitleCard text="SHIP" local={frame - 14} />;
   }
 
-  // 段3 22–34f：UI B 1.6x 裁切 + 横向缓移（120px 内容位移，屏上 ~192px）。
-  // origin 偏左让列表行图标入画，读得出是 UI（QA 后调：50%→35%）
+  // Seg 3 22–34f: UI B 1.6x crop + horizontal slow pan (120px content displacement, ~192px on screen).
+  // origin shifted left to bring list item icons into view, ensuring readable UI context (QA adjustment: 50% -> 35%)
   if (frame < 34) {
     const tx = interpolate(frame - 22, [0, 12], [60, -60], CLAMP);
     return (
@@ -92,24 +92,24 @@ export const CardFootageCadence: React.FC = () => {
     );
   }
 
-  // 段4 34–42f：字卡 FASTER
+  // Seg 4 34–42f: Title card FASTER
   if (frame < 42) {
     return <TitleCard text="FASTER" local={frame - 34} />;
   }
 
-  // 段5 42–52f：UI A 另一处 2x 裁切（左上卡片区）+ 继续缓推 2.0→2.14
+  // Seg 5 42–52f: UI A alternative 2x crop (top-left card area) + continued slow push 2.0 -> 2.14
   if (frame < 52) {
     const s = interpolate(frame - 42, [0, 10], [2, 2.14], CLAMP);
     return <UiShot variant="A" transform={`scale(${s})`} origin="32% 30%" />;
   }
 
-  // 段6 52–62f：字卡 TODAY + 下划线
+  // Seg 6 52–62f: Title card TODAY + underline
   if (frame < 62) {
     return <TitleCard text="TODAY" local={frame - 52} underline />;
   }
 
-  // 段7 62–150f：收尾全景 UI 定格。62–105f 极缓推收完（out-cubic），
-  // 105f 后 transform 值恒为 1.02，105–150f 真静止 45f。
+  // Seg 7 62–150f: Concluding panorama UI freeze. 62–105f ultra-slow push settles (out-cubic),
+  // transform constant at 1.02 after 105f, completely static 45f from 105–150f.
   const s = interpolate(frame, [62, 105], [1, 1.02], {
     ...CLAMP,
     easing: Easing.out(Easing.cubic),

@@ -1,59 +1,44 @@
 ---
 name: neon-triple-marquee
-一句话: 三行对向霓虹跑马灯 recap——三连词空心霓虹灯管巨字上中下排满一面斜拍的砖墙，奇偶行反向匀速无限横滚，三行按 1/3 相位轮流点亮，结尾逐行断电
-适用: 片尾主题词复读机段落；三连词口号的"余韵"拍法；音乐段无旁白铺陈
-时长: 4–5s（demo 150f：18f 逐行点火上电 + 循环体 + 18f 逐行断电 + 8f 熄灯 hold）
-能量: 中高（持续流动 + 逐行脉冲，无瞬时冲击）
-标签: typography
+summary: Three rows of outlined neon giants scroll in opposite directions across the full screen, lighting up in turn on a one-third phase offset.
+use: Outro theme word repetition sections; shooting the "lingering resonance" of a three-word slogan; background musical sequences without voiceover
+duration: 4–5s (demo 150f: 18f staggered ignition + loop body + 18f staggered power-off + 8f dark hold)
+energy: Medium-high (continuous flow + sequential pulses, no abrupt impacts)
+tags: typography
 ---
 
-## 意图
-一行 marquee 只是网页装饰；三行叠起来、奇偶反向、再让亮度按相位轮流
-走，就成了"主题词在观众眼前列队巡游"。命门是**明暗轮唱**：任一时刻
-只有一行是霓虹主角，其余压暗成细描边背景——三行全亮是灯牌事故，
-轮流亮才是 recap。反向对滚制造"包围感"：上下行向右、中行向左，
-视线被夹在中间，词从两侧源源不断流过，读作"这三个词说不完"。
+## Intention
+A single marquee line is merely web decoration; stacking three lines in counter-directions and cycling luminance in phase becomes "theme words marching in review before the audience." The critical core is **alternating illumination**: at any given moment, only one line is the neon protagonist, while the other two recede into subtle stroked silhouettes—all three blazing at once is a signage malfunction; rotating illumination is a recap. Counter-scrolling creates an "immersive enclosure": top and bottom rows roll right while the middle row rolls left, pinning the viewer's gaze in between as words stream continuously from both edges, conveying "there is no end to these three principles."
 
-## 动效核心
-- 无缝回绕：副本按固定 unitW 等距绝对定位，`(frame*speed) % unitW`
-  取模平移——匀速 linear（marquee 类是库内 linear 豁免项）
-- 空心灯管字三层：`-webkit-text-stroke`，color transparent——暗态玻璃管（同色 0.3 透明度、常亮，三行结构永远在）
-  → 通电彩色管体（描边 6→10px + 三层 drop-shadow 辉光 9/36/90px）→ 近白热芯（2→3.8px）；亮度同时驱动
-  身后砖墙上的同色溢光（screen 叠加，砖缝被照出来）——只调 opacity 不调辉光读不出"霓虹通电"
-- 轮唱：周期 42f，每行一个 14f 槽，槽长 16f（与下一行重叠 2f 交接，不出现全暗空拍）；槽内前 2 帧启辉闪烁
-  （0.6 → 0.25 → 满）、3f 升满、平台、末 5f ease-in 熄灭——保证"一亮俩暗"永远成立
-- 机位：整面墙放在 perspective 1700 的 3D 平面里斜拍，rotateY −17°→−9° 全程 smooth 极缓摇近 + scale 1→1.05；
-  墙脚下一条湿地面，最下一行的翻转倒影（模糊 3px + 渐隐遮罩）与三行各自的地面色光池随亮度呼吸
-- 三行配色冰青/洋红/钠灯琥珀（#38d9ff/#ff3d9a/#ffae34），蓝黑砖墙 #0a0b14；中行反向且略快（9/11/9 px/f）
-- 上电 / 断电：开场三行按 0/5/10f 依次跑一段确定性点火闪烁序列；124f 起自上而下每行错峰 6f 闪两下熄灭，
-  落到只剩暗态玻璃管的熄灯海报（不淡到死黑）
-- 字体 Avenir Next Condensed Heavy 286px（回退 DIN Condensed / Impact），词距按 canvas 实测宽度排，分隔用空心菱形 ◇（边框与同层灯管同色同粗）
+## Motion Core
+- Seamless loop: duplicates are spaced via absolute positioning at fixed unitW intervals, wrapped via `(frame * speed) % unitW`—constant linear velocity (marquee cards are exempt from the anti-linear rule).
+- Three-tier hollow neon tube type: `-webkit-text-stroke` with transparent color—unlit glass tube (matching color, 0.3 opacity, constantly lit to preserve three-line structure) -> energized color tube (stroke expands 6 -> 10px + 3 drop-shadow glow tiers at 9/36/90px) -> near-white thermal core (2 -> 3.8px); luminance simultaneously drives color spill onto the brick wall behind (screen blend, illuminating brick mortar)—adjusting only opacity without glow fails to convey "energized neon."
+- Alternating phase cycle: 42f period with a 14f slot per line; slot duration is 16f (2f overlap with next line to avoid total blackouts); each slot begins with 2f strike flicker (0.6 -> 0.25 -> 1.0), 3f ramp to peak, plateau, and final 5f ease-in power-off—ensuring "one bright, two dim" holds true at all times.
+- Camera: entire wall is set in a 3D plane with perspective 1700 at an angle, smooth ultra-slow pan-in rotateY -17 deg -> -9 deg + scale 1 -> 1.05; wet ground beneath the wall reflects an inverted mirror of the bottom row (blur 3px + gradient fade mask) alongside light pools breathing in sync with row luminance.
+- Row color scheme: ice cyan / magenta / sodium amber (#38d9ff / #ff3d9a / #ffae34) against a blue-black brick wall (#0a0b14); middle row runs in reverse slightly faster (9 / 11 / 9 px/f).
+- Power-on / power-off: opening lines run deterministic strike sequences at 0/5/10f; from 124f onward, rows power off top-to-bottom staggered by 6f with two flickers, resolving to unlit glass tubes on a dark poster (never fading to pitch black).
+- Typography: Avenir Next Condensed Heavy 286px (fallback DIN Condensed / Impact), word spacing measured via canvas, separated by hollow diamond glyphs (borders match current tube color and thickness).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 字号/行距 | 286px 窄体，行距 290px 排满墙面 | 行间留白 >80px 读作三条横幅广告而非一面词墙 |
-| 滚速 | 9/11/9 px/f，中行反向 | 窄体字更密，比宽体慢一档；>20 读不清词只见光带；三行同速同向读作整版平移 |
-| 脉冲周期 | 42f，每行 14f 槽 + 2f 交接重叠 | 周期 <30f 三行抢闪读作故障；>70f 轮唱感断掉；不留重叠会每 14f 出现一次全暗空拍 |
-| 亮度区间 | 暗态玻璃 0.3 + 通电描边 6→10px + 三层辉光 | 暗态 <0.2 暗行消失，"三行"结构丢了 |
-| 辉光 | 三层 drop-shadow，亮态 9/36/90px + 墙面溢光 0.55 | 单层或 <20px 读作普通描边字不读作霓虹；没有墙面溢光读作"屏上的字"不是"墙上的灯" |
-| 斜拍 | rotateY −17°→−9°，perspective 1700 | >25° 远端词挤成一团读不清；0° 回到平铺，失去纵深 |
-| 上电/断电 | 入：逐行错峰 5f 点火；出：124f 起逐行错峰 6f 断电 | 硬切进出读作素材没铺满；整组同时淡出没有"关灯"的仪式感 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Font size / line height | 286px condensed, 290px line height filling the wall | Line gap >80px reads as three banner ads instead of a word wall |
+| Scroll speed | 9 / 11 / 9 px/f, middle row reversed | Condensed text is denser and runs one tier slower than wide fonts; >20px/f makes words unreadable light bands; uniform direction reads as flat page pan |
+| Pulse period | 42f, 14f slot per row + 2f overlap | Period <30f creates chaotic flashing; >70f breaks the round-robin rhythm; omitting overlap creates an unlit blackout every 14f |
+| Luminance range | Unlit glass 0.3 + energized stroke 6 -> 10px + 3 glow tiers | Unlit opacity <0.2 makes unlit rows vanish, losing the 3-row architecture |
+| Bloom | 3-tier drop-shadow: 9/36/90px in bright state + 0.55 wall spill | Single layer or <20px looks like stroked text, not neon; lack of wall spill looks like screen graphics rather than physical lights mounted on a wall |
+| Angled view | rotateY -17 deg -> -9 deg, perspective 1700 | >25 deg bunches distant words into an illegible knot; 0 deg flattens the view, losing depth |
+| Power on / off | In: staggered 5f ignition; Out: staggered 6f cutoff from 124f | Hard cuts look like truncated footage; fading all rows at once lacks the ceremony of switching off lights |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 page-waterfall-wall 分工：那卡是页面截图纵向瀑布做"内容体量感"，
-  本卡是文字行横向对滚做"主题词余韵"——素材是词不是页，位置在片尾不在中段
-- 与 outro-group-photo-launch 分工：全家福是峰值终镜（元素合影+发布会收场），
-  本卡是终镜前的 recap 铺垫或低成本备选终镜，两者可串（本卡→淡出→全家福）不可叠
-- 副本数按 `ceil(1920/unitW)+3` 留冗余——短词（≤4 字符）unitW 小，
-  副本不足会在回绕瞬间露右侧空缺
-- 实战品牌色版：三行可统一品牌色靠明暗区分，但辉光对比须 ≥ demo 的
-  暗态 0.3 → 通电满亮 + 三层辉光的幅度，不然轮唱读不出来
-- 3D 斜拍平面里的 drop-shadow 辉光开销不小（demo 1080p 约 7s 渲完 150f）；倒影层只画管体不画辉光（cheap）
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Division of labor with page-waterfall-wall: that card uses vertical screenshot cascades to convey "content volume"; this card uses horizontal counter-scrolling words to deliver "thematic echo"—the assets are words, not pages, placed at the outro rather than mid-video.
+- Division of labor with outro-group-photo-launch: the ensemble photo is a peak climax shot (element family portrait + launch event finish); this card is an outro recap setup or a lightweight alternative climax; the two can run in sequence (this card -> fade out -> ensemble photo) but should not overlap.
+- Keep replica redundancy: calculate count via `ceil(1920/unitW) + 3`—short words (<=4 characters) have small unitW; insufficient duplicates expose gaps on the right during wrapping.
+- Custom brand palettes: all three rows can share brand colors distinguished by luminance, but glow contrast must match or exceed the demo's ratio of 0.3 unlit to energized full bloom; otherwise alternating cycles cannot be distinguished.
+- Drop-shadow glow inside a 3D tilted plane is computationally intensive (demo 1080p renders 150f in ~7s); reflections render only tube geometry without glow to remain fast.
 
-## 参考实现
+## Reference Implementation
 demos/outro/neon-triple-marquee/
-（NeonTripleMarquee.tsx）
-原片出处：clickup-30 61–64.5s
+(NeonTripleMarquee.tsx)
+Original source: clickup-30 61–64.5s

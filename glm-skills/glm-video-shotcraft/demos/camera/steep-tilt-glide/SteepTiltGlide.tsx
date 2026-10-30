@@ -1,17 +1,17 @@
-// steep-tilt-glide v5（批次 14 #2）。用户意见（逐字）：
-// "角度不对，你看看原片这个镜头的角度；以及镜头是固定的，但是页面本身
-// 往其3d空间的横面方向移动的效果"
-// ——两点落实：①角度对照原片密帧校准（右缘近、左缘远的陡峭 rotateY，
-// 顶缘向右上扬、透视灭点在左中下）；②运动模型改"物动镜不动"：
-// perspective / perspectiveOrigin / rotateY / rotateZ 全程一个常数不动，
-// 动的只有页面自身沿其 3D 平面横向（局部 X 轴）的滑移 translateX。
-// v4 的悬空贴落（FloatWrap 同形软影）保留。
+// steep-tilt-glide v5 (Batch 14 #2). User feedback (verbatim):
+// "Angle is wrong, look at the angle of this shot in the original clip; and the camera is fixed, but the page itself
+// moves laterally along its 3D space plane."
+// ——Two fixes implemented: ① Calibrated angles against source clip frames (steep rotateY with right edge near and left edge far,
+// top edge slanting upward to the right, perspective vanishing point at mid-lower left); ② Motion model changed to "moving object, fixed camera":
+// perspective / perspectiveOrigin / rotateY / rotateZ remain strictly constant throughout,
+// only the page's own in-plane translation translateX along its 3D local X-axis animates.
+// Retains v4 suspended landing (FloatWrap isomorphic soft shadow).
 //
-// 质感改版（镜头常数 / 滑移曲线 / 贴落节拍全部不动）：字体换系统栈 + 按字号的字距；
-// 同形软影加大虚化、压低不透明度——读作影子而不是一份重叠的字；速度重影从两层
-// 离散拷贝改为三层更密的拖尾（f-1.6/-3.2/-4.8，权重递减），读作拖影而不是双影；
-// 主区空白圆角砖填入克制的小组件内容；右段白页加发丝边与投影分层；屏幕空间
-// 左侧景深雾 + 颗粒，远端更沉、近端更亮，强化 60° 斜墙的纵深。
+// Polish pass (camera constants / glide curve / landing cadence kept intact): typography updated to system font stack + size-dependent tracking;
+// isomorphic soft shadow increases blur, lowers opacity — reading as shadow rather than duplicate text; motion ghosting upgraded from two
+// discrete copies to three denser trails (f-1.6/-3.2/-4.8, decaying weights) reading as a continuous blur rather than dual ghosts;
+// empty rounded tiles in main area filled with restrained mini-widgets; right white page adds hairline border and shadow layering; screen space
+// left depth-of-field fog + grain, far field darker, near field brighter, reinforcing depth of the 60° oblique wall.
 import React from 'react';
 import { AbsoluteFill, interpolate, useCurrentFrame, Easing } from 'remotion';
 import { FONT as PFONT, Grain } from '../../_fixtures/Polish';
@@ -20,16 +20,16 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 const FONT = PFONT.sans;
 const INK = '#2a2a31';
 
-const easeFall = Easing.bezier(0.5, 0.05, 0.6, 1); // 加速贴落、末端软着陆
+const easeFall = Easing.bezier(0.5, 0.05, 0.6, 1); // Accelerated landing, soft touchdown at end
 
-/* 悬浮 + 同形软影（GrazeFaceTour FloatWrap 模式） */
+/* Float + isomorphic soft shadow (GrazeFaceTour FloatWrap pattern) */
 const FloatWrap: React.FC<{ h: number; children: React.ReactNode }> = ({ h, children }) => (
   <div style={{ position: 'relative' }}>
     {h > 2 && (
       <div style={{
         position: 'absolute', inset: 0,
         transform: `translate(${h * 0.24}px, ${h * 0.46}px) scale(${1 + h * 0.0012})`,
-        // 影子要读作"影"：随高度更虚、更淡，压成无字形的冷灰团（不再是一份可读的重叠字）
+        // Shadow must read as "shadow": blurrier and fainter with height, crushed into a shapeless cool gray silhouette (no longer legible ghost text)
         filter: `blur(${9 + h * 0.13}px) brightness(0.2) saturate(0)`,
         opacity: Math.min(0.26, 0.1 + h * 0.0011),
         pointerEvents: 'none',
@@ -39,31 +39,31 @@ const FloatWrap: React.FC<{ h: number; children: React.ReactNode }> = ({ h, chil
   </div>
 );
 
-/* land=贴合完成时刻(0..1)，之前从 H 高度加速贴落 */
+/* land = moment landing finishes (0..1), accelerates down from height H beforehand */
 const liftOf = (t: number, land: number, H = 230) => {
   const FALL = 0.32;
   const p = Math.min(1, Math.max(0, (t - (land - FALL)) / FALL));
   return (1 - easeFall(p)) * H;
 };
 
-/* 主区圆角灰砖里的图标：场记板（镜头 / 分镜的通用符号，取代原片的第三方 logo） */
+/* Clapperboard icon inside rounded gray tile (universal symbol for shot/storyboard, replacing third-party logo from original) */
 const ClapperGlyph: React.FC<{ size: number }> = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 100 100">
-    {/* 拍板：墨色条 + 琥珀斜纹 */}
+    {/* Clapper stick: ink strip + amber stripes */}
     <g transform="rotate(-12 10 34)">
       <rect x={10} y={20} width={80} height={16} rx={3} fill={BRAND.ink} />
       {[0, 1, 2, 3].map((i) => (
         <path key={i} d={`M ${18 + i * 19} 36 L ${28 + i * 19} 20 L ${36 + i * 19} 20 L ${26 + i * 19} 36 Z`} fill={BRAND.amber} />
       ))}
     </g>
-    {/* 板身 */}
+    {/* Clapper body */}
     <rect x={10} y={40} width={80} height={46} rx={6} fill={BRAND.ink} />
     <rect x={20} y={54} width={34} height={6} rx={3} fill={BRAND.paper} opacity={0.85} />
     <rect x={20} y={68} width={52} height={6} rx={3} fill={BRAND.paper} opacity={0.5} />
   </svg>
 );
 
-/* 主区小组件：三张白砖各一种（进度 / 待办 / 走势），内容坐标同页面（6200 宽体系） */
+/* Main area mini-widgets: one per white tile (progress / todo / trend), content coordinates match page (6200 width system) */
 const MiniWidget: React.FC<{ kind: number }> = ({ kind }) => {
   const title = ['Render queue', 'Shot list', 'Renders'][kind];
   return (
@@ -101,8 +101,8 @@ const MiniWidget: React.FC<{ kind: number }> = ({ kind }) => {
   );
 };
 
-/* 页面：宽 6200 —— 左段=video-shotcraft 顶栏+侧栏（版式对齐原片用户截图三张），
-   右段=原片后程滑入的图标砖、大 W 字、Launch film shots 列表 */
+/* Page: width 6200 —— Left section = video-shotcraft topbar + sidebar (layout aligned with original user screenshots),
+   Right section = icon tiles, large W glyph, Launch film shots list sliding in during second half */
 const PW = 6200;
 const PH = 2400;
 
@@ -113,7 +113,7 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
     boxShadow: '0 0 220px rgba(220,210,255,0.35)',
     fontFamily: FONT,
   }}>
-    {/* 顶部 tab 条（贯穿整页；文字悬空贴落） */}
+    {/* Top tab bar (spans full page; text floats down onto surface) */}
     <div style={{
       position: 'absolute', top: 0, left: 0, width: PW, height: 230,
       borderBottom: '4px solid #dcdce2', display: 'flex', alignItems: 'center', paddingLeft: 130,
@@ -130,17 +130,17 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
       </FloatWrap>
       <FloatWrap h={liftOf(t, 0.42, 280)}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          {/* 标题前的品牌方块 → video-shotcraft 标志；标题字标全小写 */}
+          {/* Brand square before title → video-shotcraft logo; title wordmark in all lowercase */}
           <ShotcraftMark size={150} tone="light" style={{ marginLeft: 110, flexShrink: 0 }} />
           <div style={{ fontSize: 165, color: '#222228', fontWeight: 600, marginLeft: 70, letterSpacing: '-0.035em', whiteSpace: 'nowrap', fontFamily: BRAND.font }}>{BRAND.name}</div>
         </div>
       </FloatWrap>
-      {/* 顶栏右延的淡 tab（版式对齐原片 clickup04 顶栏） */}
+      {/* Dim tabs extending right along top bar (layout aligned with original clickup04 top bar) */}
       {[['Launch storyboard', 3050], ['Camera moves', 3900], ['Renders', 4650]].map(([tb, x]) => (
         <div key={tb as string} style={{ position: 'absolute', left: x as number, top: 88, fontSize: 58, color: '#8d8d96' }}>{tb}</div>
       ))}
     </div>
-    {/* 工作区 logo 行：video-shotcraft 标志 + 简称 */}
+    {/* Workspace logo row: video-shotcraft mark + abbreviation */}
     <div style={{ position: 'absolute', left: 120, top: 560 }}>
       <FloatWrap h={liftOf(t, 0.54, 250)}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
@@ -149,7 +149,7 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         </div>
       </FloatWrap>
     </div>
-    {/* 主区圆角灰砖：场记板图标 + 下拉 chevron（原片 f45–f60） */}
+    {/* Main area rounded gray tile: clapperboard icon + dropdown chevron (source f45–f60) */}
     <div style={{ position: 'absolute', left: 1330, top: 440 }}>
       <FloatWrap h={liftOf(t, 0.62, 260)}>
         <div style={{
@@ -169,7 +169,7 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         </div>
       </FloatWrap>
     </div>
-    {/* Home 宽药丸（紫边细线横贯面板） */}
+    {/* Home wide pill (purple hairline border spans across panel) */}
     <div style={{ position: 'absolute', left: 110, top: 830, width: 2900 }}>
       <FloatWrap h={liftOf(t, 0.68, 260)}>
         <div style={{
@@ -185,7 +185,7 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         </div>
       </FloatWrap>
     </div>
-    {/* Inbox 行 */}
+    {/* Inbox row */}
     <div style={{ position: 'absolute', left: 166, top: 1070 }}>
       <FloatWrap h={liftOf(t, 0.8, 240)}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
@@ -197,7 +197,7 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         </div>
       </FloatWrap>
     </div>
-    {/* 更多侧栏行 */}
+    {/* Additional sidebar rows */}
     {['Docs', 'Dashboards'].map((tb, i) => (
       <div key={tb} style={{ position: 'absolute', left: 166, top: 1310 + i * 240 }}>
         <FloatWrap h={liftOf(t, 0.86 + i * 0.06, 230)}>
@@ -208,15 +208,15 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         </FloatWrap>
       </div>
     ))}
-    {/* 主区轮播左箭头（原片 f60 中景的 "<"） */}
+    {/* Main area carousel left arrow ("<" in source f60 midground) */}
     <div style={{ position: 'absolute', left: 2440, top: 1060 }}>
       <svg width={120} height={120} viewBox="0 0 40 40">
         <path d="M 26 6 L 12 20 L 26 34" fill="none" stroke="#2c2c33" strokeWidth={4.4} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </div>
-    {/* 大 W 字形（原片中程右上滑入的大字残段） */}
+    {/* Large W glyph (fragment sliding in top-right mid-shot in source) */}
     <div style={{ position: 'absolute', left: 3050, top: 300, fontSize: 430, fontWeight: 700, color: '#232329', letterSpacing: '-0.04em' }}>W</div>
-    {/* 主区白色圆角卡群（右下白砖）：填入克制的小组件内容，不再是空白块 */}
+    {/* Main area white rounded card cluster (bottom-right white tiles): filled with restrained mini-widgets, no longer blank */}
     {[[2620, 620, 640, 380], [2740, 1360, 720, 420], [2620, 1900, 560, 330]].map(([x, y, w, h], i) => (
       <div key={i} style={{
         position: 'absolute', left: x, top: y, width: w, height: h, boxSizing: 'border-box',
@@ -228,11 +228,11 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         <MiniWidget kind={i} />
       </div>
     ))}
-    {/* —— 右段：Launch film shots 列表（原片尾程满幅白页） —— */}
+    {/* —— Right section: Launch film shots list (full-bleed white page in source outro) —— */}
     <div style={{
       position: 'absolute', left: 3560, top: 230, width: PW - 3560, height: PH - 230,
       background: 'linear-gradient(180deg, #fdfdfe 0%, #f9f9fb 100%)',
-      // 发丝边 + 左侧投影：白页叠在主区之上，而不是一条生硬的色块分界
+      // Hairline border + left shadow: white page layers atop main area rather than an abrupt hard seam
       boxShadow: '-3px 0 0 rgba(28,28,40,0.06), -40px 0 90px -20px rgba(110,110,140,0.22)',
     }}>
       <div style={{ position: 'absolute', left: 220, top: 200, fontSize: 150, fontWeight: 700, color: '#1f1f25', letterSpacing: '-0.035em', whiteSpace: 'nowrap' }}>Launch film shots</div>
@@ -268,7 +268,7 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         fontSize: 46, fontWeight: 650, letterSpacing: '0.06em', padding: '14px 30px', borderRadius: 14,
       }}>IN PROGRESS</div>
       <div style={{ position: 'absolute', left: 244, top: 1030, fontSize: 44, fontWeight: 600, color: '#8f8f98', letterSpacing: '0.08em' }}>SHOT NAME</div>
-      {/* 任务行 */}
+      {/* Task rows */}
       {[['Crash zoom opener', '#3a3a42'], ['Steep tilt glide', '#55555e'], ['Beat-synced cuts', '#83838d'], ['Logo sting', '#b3b3bc']].map(([name, col], i) => (
         <div key={name as string} style={{ position: 'absolute', left: 280, top: 1180 + i * 210, display: 'flex', alignItems: 'center', gap: 56 }}>
           <div style={{ width: 42, height: 42, borderRadius: 12, background: '#e33bc6' }} />
@@ -276,9 +276,9 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
         </div>
       ))}
     </div>
-    {/* 亮度：面板内黑罩（随进度揭亮） */}
+    {/* Brightness: black scrim inside panel (reveals bright with progress) */}
     <div style={{ position: 'absolute', inset: 0, background: '#050409', opacity: shade }} />
-    {/* 左缘额外阴影（起始更暗，随亮度一同退去） */}
+    {/* Extra shadow on left edge (starts darker, recedes alongside brightness) */}
     <div style={{
       position: 'absolute', inset: 0,
       background: 'linear-gradient(90deg, rgba(5,4,9,0.9), rgba(5,4,9,0) 42%)',
@@ -287,11 +287,11 @@ const Panel: React.FC<{ shade: number; t?: number }> = ({ shade, t = 1 }) => (
   </div>
 );
 
-/* 固定镜头 + 页面沿自身平面横向滑移。
- * 镜头常数（对照原片密帧校准）：perspective 1150、origin 24% 62%、
- * rotateY(-38°)（右缘近、左缘远，顶缘向右上扬）+ rotateZ(-2°)。
- * lx = 页面局部 X 平移（页面自己的横面方向），全程唯一动的量 */
-// v7（批次 16）：用户意见"改成60度吧"——rotY -53 → -60（精确定值）
+/* Fixed camera + page slides laterally along its own plane.
+ * Camera constants (calibrated against source clip dense frames): perspective 1150, origin 24% 62%,
+ * rotateY(-38°) (right edge near, left edge far, top edge slants top-right) + rotateZ(-2°).
+ * lx = page local X translation (page's own lateral direction), sole animated property */
+// v7 (Batch 16): user feedback "change to 60 degrees" — rotY -53 → -60 (exact value)
 const CAM = { persp: 1100, origin: '30% 58%', rotY: -60, rotZ: -2, left: '40%', top: '15%', scale: 0.62 };
 
 const PanelLayer: React.FC<{ lx: number; shade: number; opacity: number; t: number }> = ({ lx, shade, opacity, t }) => (
@@ -301,7 +301,7 @@ const PanelLayer: React.FC<{ lx: number; shade: number; opacity: number; t: numb
         position: 'absolute', left: CAM.left, top: CAM.top,
         transform: `rotateY(${CAM.rotY}deg) rotateZ(${CAM.rotZ}deg)`, transformOrigin: 'left top',
       }}>
-        {/* 页面自身在其 3D 平面内横移（局部 X 轴） */}
+        {/* Page translates in its own 3D plane (local X-axis) */}
         <div style={{ transform: `scale(${CAM.scale}) translateX(${lx}px)`, transformOrigin: 'left top' }}>
           <Panel shade={shade} t={t} />
         </div>
@@ -310,13 +310,13 @@ const PanelLayer: React.FC<{ lx: number; shade: number; opacity: number; t: numb
   </AbsoluteFill>
 );
 
-export const STEEP_TILT_GLIDE_DURATION = 120; // 4s 单镜（滑移曲线按 0–120f 标定）
+export const STEEP_TILT_GLIDE_DURATION = 120; // 4s single shot (glide curve calibrated to 0–120f)
 
 export const SteepTiltGlide: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 页面滑移（物动镜不动）：局部 X 从 +140 → -2680，起步柔和后近匀速，
-  // 全程不安定停死（bezier 尾段斜率不归零）
+  // Page glide (moving object, fixed camera): local X from +140 → -2680, gentle start then nearly uniform,
+  // never completely stops (bezier curve slope does not zero out at tail)
   const glide = Easing.bezier(0.3, 0.12, 0.72, 0.9);
   const lxAt = (f: number) => {
     const p = interpolate(f, [0, 120], [0, 1], { easing: glide, extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
@@ -324,38 +324,38 @@ export const SteepTiltGlide: React.FC = () => {
   };
 
   const lx = lxAt(frame);
-  // 面板黑罩：起始暗 → 约 1.4s 全亮（对齐原片节奏）
+  // Panel dark scrim: starts dark → fully bright at ~1.4s (aligned with source pacing)
   const shade = interpolate(frame, [0, 18, 44], [0.7, 0.4, 0], { extrapolateRight: 'clamp' });
-  // 重影强度 ∝ 滑移速度（拖尾=过去时刻的局部位置，同一固定镜头下重投影）
+  // Motion blur intensity ∝ glide speed (trails = local positions at past frames, reprojected under identical fixed camera)
   const speed = Math.abs(lxAt(frame - 1) - lxAt(frame + 1)) / 2;
-  // 三层更密的拖尾（权重递减），叠出连续拖影而非离散双影
+  // Three denser ghosting layers (decaying weights), blending into a continuous motion blur rather than discrete echoes
   const g1 = Math.min(0.3, speed * 0.021);
   const g2 = Math.min(0.2, speed * 0.014);
   const g3 = Math.min(0.11, speed * 0.008);
-  // 文字悬空贴落进程（v4 保留）
+  // Text floating touchdown progress (retained from v4)
   const drop = interpolate(frame, [4, 100], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 紫晕随亮度浮现
+  // Purple glow emerges with brightness
   const glow = interpolate(frame, [14, 70], [0.15, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <AbsoluteFill style={{ background: '#060409' }}>
-      {/* 左侧紫晕 */}
+      {/* Left purple glow */}
       <AbsoluteFill style={{
         opacity: glow,
         background: 'radial-gradient(ellipse 40% 50% at 20% 66%, rgba(118,58,190,0.30), transparent 70%)',
       }} />
-      {/* 重影（先画，垫在本体后面；位置=过去时刻的页面局部位移） */}
+      {/* Motion ghosting (rendered first, layered beneath body; position = past page local translation) */}
       {g3 > 0.02 && <PanelLayer lx={lxAt(frame - 4.8)} shade={shade} opacity={g3} t={drop} />}
       {g2 > 0.02 && <PanelLayer lx={lxAt(frame - 3.2)} shade={shade} opacity={g2} t={drop} />}
       {g1 > 0.02 && <PanelLayer lx={lxAt(frame - 1.6)} shade={shade} opacity={g1} t={drop} />}
-      {/* 本体 */}
+      {/* Main body */}
       <PanelLayer lx={lx} shade={shade} opacity={1} t={drop} />
-      {/* 景深雾（屏幕空间）：斜墙远端（画面左侧）沉进暗场，近端保持亮 */}
+      {/* Depth-of-field fog (screen space): far end of tilted wall (screen left) recedes into dark field, near end stays bright */}
       <AbsoluteFill style={{
         background: 'linear-gradient(100deg, rgba(6,4,10,0.62) 0%, rgba(6,4,10,0.28) 18%, rgba(6,4,10,0) 40%)',
         pointerEvents: 'none',
       }} />
-      {/* 暗角 */}
+      {/* Vignette */}
       <AbsoluteFill style={{
         background: 'radial-gradient(ellipse 105% 95% at 55% 42%, transparent 60%, rgba(3,2,8,0.25) 85%, rgba(2,1,6,0.5) 100%)',
         pointerEvents: 'none',

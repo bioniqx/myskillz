@@ -1,5 +1,5 @@
-// cycle-glass-node-morph — 单主体缩入机制图，循环标签随后被上升的玻璃节点接管。
-// 运动顺序：上下文主体 → 对角擦除 → 循环箭头与标签 → 连续推近 → 节点托起 → 诊断标记。
+// cycle-glass-node-morph — Single subject scales down into a mechanism diagram, with cycle labels then taken over by rising glass nodes.
+// Motion sequence: Context subject → diagonal wipe → cycle arrows and labels → continuous push-in → node lift → diagnostic markers.
 import React from 'react';
 import { Easing, interpolate, useCurrentFrame } from 'remotion';
 import { DesignStage, E, lerp } from '../../_fixtures/Motion';

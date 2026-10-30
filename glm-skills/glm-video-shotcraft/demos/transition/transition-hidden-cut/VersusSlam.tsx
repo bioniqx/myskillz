@@ -1,24 +1,24 @@
-// versus-slam 对撞开屏：左右两个半屏（78° 斜切边）从画外加速对冲，沿斜缝砰地撞合；
-// 撞击帧白闪 + 整机震屏指数衰减 + "VS" 圆章盖章压出，切点就是撞击本身，结尾静止 hold。
+// versus-slam collision reveal: Left and right half-screens (78° angled seams) accelerate and slam together from off-screen along the diagonal seam;
+// the impact frame triggers a white flash + exponentially decaying screen shake + "VS" circular stamp stamped down. The cut point is the collision itself, ending in a static hold.
 //
-// 第二轮重设计（瑞士海报 · 对阵比较 "一支发布片要花多少"）：
-// - look = paper（暖白纸 · 墨 · 朱红），粗黑体海报排版，不用 dashboard。两方 = 两张色块海报：
-//   左「THE OLD WAY」墨黑底 + 纸白 340px「14 days」，右「WITH VIDEO-SHOTCRAFT」朱红底 + 纸白「1 prompt」——
-//   一墨一朱撞在一起，数字本身就是对比结论；说明文字 44px、清单 32px，都按"能读"排。
-// - 建立段（0–18f）不是空屏：纸面上一行「What does a promo take?」（124px，墨线在字带处留空），
-//   斜缝位置一根墨线从中点向两端长出（预示撞线）；两半屏 ease-in(cubic) 10f 对冲，扫过时把设问吞掉。
-// - 撞击三件套同帧起跑（28f）：纸白闪 0.85→0 共 3f、整机震屏 16px·e^(−t/1.7)、VS 圆章弹簧压出
-//   （damping 12，一次可见过冲）；同帧再发一圈墨色冲击环 + 12 根放射速度线（6f 收）。
-//   撞合后斜缝是一道 6px 纸白"切口"，两侧各压窄投影——像两张卡纸被压在一起。
-// - 对冲按速度给横向运动模糊（末速 ~360px/帧，封顶 36px）；撞后两侧数字 1.04→1 回弹落座（晚 2f，跟随）。
+// Round 2 redesign (Swiss poster · head-to-head comparison "What does a promo take?"):
+// - look = paper (warm white paper · ink · vermilion), bold grotesque poster typography rather than a dashboard. Two sides = two solid poster color blocks:
+//   left "THE OLD WAY" ink black background + paper white 340px "14 days", right "WITH VIDEO-SHOTCRAFT" vermilion background + paper white "1 prompt" —
+//   ink and vermilion slamming together, where the numbers themselves deliver the contrast conclusion; explanatory text at 44px, list at 32px, all set for readability.
+// - Setup phase (0–18f) is not empty: a line on paper reading "What does a promo take?" (124px, ink line masked out where text appears);
+//   an ink line grows from the center outward along the seam position (foreshadowing the impact line); the two half-screens rush toward each other with ease-in (cubic) across 10f, swallowing the question as they sweep past.
+// - Collision triad launches on the same frame (28f): paper white flash 0.85 -> 0 over 3f, full screen shake 16px·e^(−t/1.7), VS circular stamp spring drop
+//   (damping 12, single visible overshoot); on the same frame, emit an ink shockwave ring + 12 radial speed lines (receding over 6f).
+//   After slamming shut, the seam forms a 6px paper white "slit" with narrow drop shadows on both sides — like two sheets of cardboard pressed together.
+// - Rushing halves apply horizontal motion blur proportional to velocity (final velocity ~360px/frame, capped at 36px); after impact, numbers on both sides rebound and settle 1.04 -> 1 (delayed 2f, follow-through).
 //
-// 时间表（30fps，共 105f）：
-//   0–18    建立：设问逐词升起（1–14），斜缝墨线长出
-//   18–28   对冲 10f（ease-in cubic：越来越快 = 砸）
-//   28      撞击：闪 / 震 / 章 / 冲击环 / 速度线
-//   30–44   数字回弹落座；36–60 两侧说明与清单错峰升起（左先右后，4f 错位）
-//   54–70   底部结论条（镜刻标志 +「Direct the film. Let the agent shoot it.」）从下升起，压在斜缝上
-//   70–105  hold 35f：整机 1 → 1.015 极缓推进
+// Timeline (30fps, 105f total):
+//   0–18    Setup: question rises word-by-word (1–14), diagonal seam ink line grows
+//   18–28   Rush 10f (ease-in cubic: accelerating into the slam)
+//   28      Collision: flash / shake / stamp / shockwave / speed lines
+//   30–44   Numbers rebound and settle; 36–60 copy and lists on both sides rise staggered (left first, right 4f later)
+//   54–70   Bottom takeaway bar (shotcraft mark + "Direct the film. Let the agent shoot it.") rises from below, anchored across the seam
+//   70–105  Hold 35f: entire screen pushes in very slowly 1 -> 1.015
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, SpeedBlur, mix, ramp, velocity } from '../../_fixtures/Polish';
@@ -32,26 +32,26 @@ const INK = P.ink;
 const RED = P.accent;
 const PAPER = '#f8f4ec';
 const PAD = 120;
-const RUSH = 18; // 对冲起
-const IMPACT = 28; // 撞击帧
+const RUSH = 18; // Rush starts
+const IMPACT = 28; // Impact frame
 
-// 斜缝几何：78° 斜边 → 1080 高度上水平偏移 ≈ 230px，中线 x=960 ±115
+// Seam geometry: 78° angled edge -> horizontal offset ≈ 230px over 1080 height, center line x=960 ±115
 const SEAM_TOP_X = 1075;
 const SEAM_BOT_X = 845;
 const SEAM_DEG = (Math.atan2(SEAM_TOP_X - SEAM_BOT_X, 1080) * 180) / Math.PI; // ≈ +12°
-// 建立段墨线的留空带（线长 1400，从 y=−160 起；字在 y≈380–560 → 线内 39%–52%）
+// Mask gap for setup ink line (line length 1400, starting from y=-160; text at y≈380–560 -> 39%–52% along line)
 const SEAM_GAP = 'linear-gradient(180deg, #000 0%, #000 35%, transparent 37.5%, transparent 53%, #000 55.5%, #000 100%)';
 
-// 两半屏对冲：ease-in cubic，10f 从 ±1240px 冲到位
+// Two half-screens rush together: ease-in cubic, 10f from ±1240px into position
 const leftXAt = (f: number) => -1240 * (1 - Math.pow(ramp(f, RUSH, IMPACT - RUSH, EASE.linear), 3));
 
-// 一侧海报
+// Single side poster
 const Side: React.FC<{ side: 'L' | 'R'; f: number }> = ({ side, f }) => {
   const left = side === 'L';
   const fg = PAPER;
   const sub = left ? alpha(PAPER, 0.62) : alpha(INK, 0.82);
   const x0 = left ? PAD : 1190;
-  // 撞后数字回弹落座（晚 2f 跟随）
+  // Post-collision numbers rebound and settle (delayed 2f follow-through)
   const settle = springAt(f, IMPACT + 2, { damping: 14, stiffness: 220 });
   const numScale = f < IMPACT ? 1 : mix(1.05, 1, settle);
   const d = left ? 0 : 4;
@@ -94,7 +94,7 @@ export const VersusSlam: React.FC = () => {
   const v = velocity(leftXAt, frame);
   const impacted = frame >= IMPACT;
 
-  // 撞击帧起：整机震屏指数衰减（~5f 收干）
+  // Impact frame: screen shake exponential decay (~5f settling)
   const since = frame - IMPACT;
   const env = since >= 0 ? 16 * Math.exp(-since / 1.7) : 0;
   const shakeX = env * Math.sin(since * 3.3);
@@ -106,7 +106,7 @@ export const VersusSlam: React.FC = () => {
   const wave = ramp(frame, IMPACT, 16, EASE.out);
   const lines = ramp(frame, IMPACT, 7, EASE.out);
 
-  // 建立段墨线：中点向两端长出，逼近时加粗
+  // Setup ink line: grows outward from midpoint, thickens on approach
   const preGrow = ramp(frame, 2, 14, EASE.snappy);
   const preW = mix(2, 6, ramp(frame, RUSH, IMPACT - RUSH, EASE.exit));
   const verdict = ramp(frame, IMPACT + 26, 18, EASE.snappy);
@@ -133,7 +133,7 @@ export const VersusSlam: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: P.bg[1], overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX.toFixed(2)}px, ${shakeY.toFixed(2)}px) scale(${push.toFixed(5)})` }}>
-        {/* 建立段：纸面 + 设问 + 斜缝墨线 */}
+        {/* Setup phase: paper background + question + diagonal seam line */}
         {!impacted && (
           <>
             <Stage look={P} keyLight={{ x: 0.5, y: 0.2 }} fill={null} vignette={0.14} grain={0} />
@@ -146,7 +146,7 @@ export const VersusSlam: React.FC = () => {
             <div style={{
               position: 'absolute', left: 960 - preW / 2, top: 540 - 700, width: preW, height: 1400, background: INK,
               transform: `rotate(${SEAM_DEG}deg) scaleY(${preGrow.toFixed(4)})`,
-              // 设问那一带留空：墨线只在字的上下长出，不划过字
+              // Negative space around question text: line grows above and below without intersecting text
               WebkitMaskImage: SEAM_GAP, maskImage: SEAM_GAP,
             }} />
           </>
@@ -157,12 +157,12 @@ export const VersusSlam: React.FC = () => {
 
         {impacted && (
           <>
-            {/* 撞合切口：纸白 6px + 两侧窄投影 */}
+            {/* Impact seam: paper white 6px + bilateral narrow drop shadow */}
             <div style={{
               position: 'absolute', left: 960 - 22, top: 540 - 700, width: 44, height: 1400, transform: `rotate(${SEAM_DEG}deg)`,
               background: `linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(10,6,4,0.35) 38%, ${PAPER} 43%, ${PAPER} 57%, rgba(10,6,4,0.35) 62%, rgba(0,0,0,0) 100%)`,
             }} />
-            {/* 冲击环 + 放射速度线（单次） */}
+            {/* Shockwave ring + radial speed lines (single burst) */}
             {wave < 1 && (
               <div style={{
                 position: 'absolute', left: 960 - mix(130, 640, wave), top: 540 - mix(130, 640, wave),
@@ -183,7 +183,7 @@ export const VersusSlam: React.FC = () => {
                 })}
               </svg>
             )}
-            {/* VS 圆章 */}
+            {/* VS badge seal */}
             <div style={{
               position: 'absolute', left: 960 - 130, top: 540 - 130, width: 260, height: 260, borderRadius: '50%',
               transform: `rotate(${(SEAM_DEG - 8 * (1 - stamp)).toFixed(3)}deg) scale(${mix(1.9, 1, stamp).toFixed(4)})`,
@@ -197,7 +197,7 @@ export const VersusSlam: React.FC = () => {
                 VS
               </span>
             </div>
-            {/* 结论条 */}
+            {/* Conclusion banner */}
             <div style={{
               position: 'absolute', left: 960, top: 930, transform: `translate(-50%, ${((1 - verdict) * 40).toFixed(2)}px)`, opacity: verdict,
               height: 84, padding: '0 44px', borderRadius: 42, background: PAPER, display: 'flex', alignItems: 'center', gap: 18, whiteSpace: 'nowrap',
@@ -209,7 +209,7 @@ export const VersusSlam: React.FC = () => {
           </>
         )}
       </div>
-      {/* 撞击白闪（不随震屏） */}
+      {/* Impact white flash (independent of screen shake) */}
       <AbsoluteFill style={{ background: PAPER, opacity: flash, pointerEvents: 'none' }} />
       <Grain opacity={0.06} step={2} blend="overlay" />
     </AbsoluteFill>

@@ -49,9 +49,9 @@ jobs:
             gallery/ site/
           touch site/.nojekyll
 
-      # Pages 给静态资源发 cache-control: max-age=600，部署后十分钟内浏览器
-      # 会拿旧 styles.css / app.js 配新 HTML（实际踩过：侧栏与顶栏样式全崩）。
-      # 按文件内容哈希给资源链接打 ?v=，每个 HTML 版本只引用自己那代资源。
+      # Pages sends cache-control: max-age=600 for static assets. Within 10 mins after deploy,
+      # browsers may fetch old styles.css / app.js with new HTML.
+      # Append ?v= hash to asset links so each HTML version references its own assets.
       - name: Stamp asset URLs for cache busting
         run: |
           python3 - <<'EOF'
@@ -84,7 +84,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p site/showcase-media
-          # 尚无投稿时 release 不存在：Showcase 页照常部署，列表为空
+          # If no submissions yet and release does not exist: deploy showcase page with empty list
           if gh release view showcase-media --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release download showcase-media \
               --repo "$GITHUB_REPOSITORY" \

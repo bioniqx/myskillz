@@ -1,23 +1,23 @@
 // panel-to-canvas-materialize —— miro-promo 84–92s
-// 侧面板列表行逐个打勾 → 按钮按下 → 三行沿上抛弧线错峰飞出面板、跨容器变形成画布上的三张卡（行→卡形态迁移）。
+// Sidebar list rows checked sequentially -> button clicked -> three rows launch on parabolic arcs, morphing across containers into three cards on canvas (row-to-card migration).
 //
-// 第二轮重设计（沙色暖场 · 研究洞察上墙）：
-// - look = sand（米色纸面 · 赤陶强调 · 藏青点缀）。产品即 video-shotcraft：右侧「Shot recipes」面板列着 5 张镜头配方卡
-//   （32px 行标题、分类标签与挑卡人），左侧是一块开放的分镜板（标志 + 衬线大标题「Launch film」+ 淡点阵画布）。
-// - 动作链有因果：光标逐个点三个复选框（赤陶色勾 spring 弹出、勾线描出）→ 移到「Add 3 to board」按下 →
-//   三行先"拔起"（预备：放大 2% + 阴影加深 4f）再沿二次贝塞尔上抛弧线飞向画布，错峰 6f。
-// - 形态迁移（本式命门）：位置走弧线先到，宽高 / 圆角晚 3f 收敛（父先子后）；行内容在 u<0.4 淡出、卡内容 u>0.5 淡入，
-//   中段两态绝不同显；飞行中按速度做方向性运动模糊，阴影随弧线抬高变大变虚，落地 4f 压扁回弹 + 接触影收紧。
-// - 行槽不复原：飞走的行塌成赤陶虚线留白「On board」，"迁移"不是"复制"。
-// - 相机：起飞后整体极缓推近（总 2.5%）；落定后板头计数「3 shots pinned」升起，hold 成海报。
+// Iteration 2 redesign (sand warm field · research insights to storyboard):
+// - look = sand (beige paper · terracotta accent · navy secondary). Product is video-shotcraft: right sidebar lists 5 shot recipe cards,
+//   left area features an open storyboard canvas (brand mark + serif title "Launch film" + dot grid).
+// - Causal action chain: cursor checks three checkboxes sequentially (terracotta checkmark springs in and draws stroke) -> moves to "Add 3 to board" and clicks ->
+//   three rows lift in anticipation (scale up 2% + shadow deepens over 4f) then fly along quadratic bezier parabolic arcs to canvas, staggered 6f apart.
+// - Morphing mechanics: position lands first, dimensions and border-radius converge 3f later; row content fades out by u<0.4, card content fades in at u>0.5,
+//   never rendering simultaneously; directional motion blur scales with velocity, shadows soften with altitude, and landing settles with 4f squish rebound and contact shadow.
+// - Non-restoring sockets: vacated row slots collapse into dashed terracotta placeholders labeled "On board" (migration rather than duplication).
+// - Camera: subtle push-in post-launch (2.5% total); header counter "3 shots pinned" rises upon settling.
 //
-// 时间表（30fps，共 150f）：
-//   0–18    面板从右滑入（snappy）、5 行错峰；板头衬线标题逐词升起
-//   14/24/34 光标依次点中三个复选框（勾 spring damping 11，勾线 7f 描出），按钮计数 1→2→3
-//   48      光标到按钮，52f 按下（scale 0.94 → 回弹）
-//   56/62/68 三行拔起 4f → 起飞 40f（spring damping 17，弧线中点上抬 220px）
-//   ~104–112 三卡依次落地（压扁回弹、倾角 −2.5/1.8/−1.2°），行槽塌成虚线
-//   112–150 hold：板头「3 shots pinned」计数升起，相机极缓推进
+// Timeline (30fps, 150f total):
+//   0–18    Panel slides in from right (snappy), 5 rows stagger; board serif title reveals word-by-word
+//   14/24/34 Cursor checks three boxes (spring damping 11, checkmark draws 7f), button counter 1->2->3
+//   48      Cursor navigates to button, clicks at 52f (scale 0.94 -> rebound)
+//   56/62/68 Three rows lift 4f -> launch 40f (spring damping 17, arc apex +220px)
+//   ~104–112 Three cards land sequentially (squish rebound, tilts −2.5/1.8/−1.2 deg), row slots collapse to dashed borders
+//   112–150 Hold: board counter "3 shots pinned" rises, gentle camera push
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -27,10 +27,10 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const PANEL_TO_CANVAS_MATERIALIZE_DURATION = 150;
 
 const L = LOOKS.sand;
-const ACC = L.accent; // 赤陶
-const NAVY = L.accent2; // 藏青（点缀：标签）
+const ACC = L.accent; // Terracotta
+const NAVY = L.accent2; // Navy accent (tags)
 
-// ── 面板几何 ──
+// ── Panel Geometry ──
 const PANEL_X = 1164;
 const PANEL_Y = 96;
 const PANEL_W = 656;
@@ -39,9 +39,9 @@ const ROW_X = PANEL_X + 24;
 const ROW_W = PANEL_W - 48;
 const ROW_H = 104;
 const ROW_STEP = 116;
-const ROWS_TOP = 262; // 第一行的画面 y（面板内布局与飞行起点共用，起飞零跳变）
+const ROWS_TOP = 262; // First row y in frame (shared between panel layout and flight start for seamless takeoff)
 
-// ── 卡片落位（画布左区）──
+// ── Card Destination Slots (Canvas Left) ──
 const CARD_W = 486;
 const CARD_H = 300;
 const TARGETS = [
@@ -53,31 +53,31 @@ const TARGETS = [
 const CHECK_AT = [14, 24, 34];
 const PRESS = 52;
 const LIFT_AT = [56, 62, 68];
-const LIFT = 4; // 拔起预备帧
+const LIFT = 4; // Lift anticipation frames
 const FLY_DUR = 40;
 
 type Item = { title: string; tag: string; who: string; name: string; quote: string; meta: string };
 const ITEMS: Item[] = [
-  // 镜头配方卡（库里真有的卡名）；quote = 挑卡人的备注，meta = 示意时长
+  // Shot recipe cards; quote = curator notes, meta = duration
   { title: 'Crash zoom punch-in', tag: 'Camera', who: 'AO', name: 'Ama Owusu', quote: '“Lands right on the beat drop.”', meta: '24 frames' },
   { title: 'Text as mask opener', tag: 'Opening', who: 'LB', name: 'Lars Berg', quote: '', meta: '' },
   { title: 'Cursor flyover tour', tag: 'Interaction', who: 'PS', name: 'Priya Sethi', quote: '“Reads like a real screen take.”', meta: '96 frames' },
   { title: 'Chart axis rescale shock', tag: 'Data', who: 'TM', name: 'Tomás Mena', quote: 'Rescales on the cut, holds two beats.', meta: '72 frames' },
   { title: 'Grain dissolve outro', tag: 'Outro', who: 'AO', name: 'Ama Owusu', quote: '', meta: '' },
 ];
-const SLOTS = [0, 2, 3]; // 被勾选的行（不连续：读作"挑选"而非"全选"）
+const SLOTS = [0, 2, 3]; // Selected rows (non-consecutive: reads as curated pick rather than select-all)
 const AV = ['#c4552d', '#3d5a80', '#7c6a4f', '#9a5b3f'];
 
 const rowY = (slot: number) => ROWS_TOP + slot * ROW_STEP;
 
-// 飞行进度（spring，可能短暂 >1）
+// Flight progress (spring, may briefly overshoot >1)
 const flyU = (f: number, k: number) => springAt(f, LIFT_AT[k] + LIFT, { damping: 17, stiffness: 95, mass: 0.9 });
 
-// 飞行几何：位置走二次贝塞尔（中点上抬），尺寸晚 3f 收敛
+// Flight trajectory: position traces quadratic bezier (elevated apex), dimensions converge 3f later
 const flyGeom = (f: number, k: number) => {
   const slot = SLOTS[k];
   const u = flyU(f, k);
-  const us = flyU(f - 3, k); // 尺寸晚 3f
+  const us = flyU(f - 3, k); // Dimensions lag by 3f
   const t = TARGETS[k];
   const sx = ROW_X + ROW_W / 2, sy = rowY(slot) + ROW_H / 2;
   const ex = t.x + CARD_W / 2, ey = t.y + CARD_H / 2;
@@ -128,7 +128,7 @@ const CheckBox: React.FC<{ frame: number; at: number | null }> = ({ frame, at })
   );
 };
 
-// 行形态内容（面板内的行与飞行中的行共用，保证起飞同形）
+// Row content view (shared between panel and in-flight row to guarantee visual continuity)
 const RowContent: React.FC<{ item: Item; hue: string; check: React.ReactNode }> = ({ item, hue, check }) => (
   <div style={{ position: 'absolute', left: 0, top: 0, width: ROW_W, height: ROW_H, display: 'flex', alignItems: 'center', gap: 22, padding: '0 24px', boxSizing: 'border-box' }}>
     {check}
@@ -137,7 +137,7 @@ const RowContent: React.FC<{ item: Item; hue: string; check: React.ReactNode }> 
   </div>
 );
 
-// 卡形态内容（按卡终态尺寸布局，飞行中由外框裁切）
+// Card content view (authored at destination scale, clipped by outer bounds during flight)
 const CardContent: React.FC<{ item: Item; hue: string }> = ({ item, hue }) => (
   <div style={{ position: 'absolute', left: 0, top: 0, width: CARD_W, height: CARD_H, padding: '26px 30px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -154,7 +154,7 @@ const CardContent: React.FC<{ item: Item; hue: string }> = ({ item, hue }) => (
 );
 
 const Cursor: React.FC<{ frame: number }> = ({ frame }) => {
-  // 光标路径：入画 → 三个复选框 → 按钮；段间 swift 缓动 + 轻弧线，点击时缩一下
+  // Cursor path: entrance -> three checkboxes -> button; swift easing along gentle arc, micro-compression on click
   const cb = (slot: number) => ({ x: ROW_X + 24 + 18 + 6, y: rowY(slot) + ROW_H / 2 + 6 });
   const btn = { x: PANEL_X + PANEL_W / 2 + 190, y: PANEL_Y + PANEL_H - 70 };
   const keys = [
@@ -197,14 +197,14 @@ export const PanelToCanvasMaterialize: React.FC = () => {
   const landed = (k: number) => flyU(frame, k) > 0.96;
   const doneCount = [0, 1, 2].filter((k) => frame >= LIFT_AT[k] + LIFT + 30).length;
 
-  // 相机：起飞后极缓左移 + 推近，跟着内容看向画布
+  // Camera: subtle leftward dolly + push-in post-launch, following cards onto canvas
   const camP = ramp(frame, LIFT_AT[0], 94, EASE.smooth);
   const camS = 1 + 0.025 * camP;
 
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden', fontFamily: FONT.sans }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.1 }} fill={{ x: 0.9, y: 0.9 }}>
-        {/* 画布点阵（板区） */}
+        {/* Canvas dot grid (board area) */}
         <AbsoluteFill style={{
           backgroundImage: `radial-gradient(${alpha(L.ink, 0.13)} 1.5px, transparent 1.8px)`,
           backgroundSize: '38px 38px', backgroundPosition: '10px 14px',
@@ -214,7 +214,7 @@ export const PanelToCanvasMaterialize: React.FC = () => {
       </Stage>
 
       <AbsoluteFill style={{ transform: `scale(${camS.toFixed(4)})`, transformOrigin: '52% 50%' }}>
-        {/* ── 板头 ── */}
+        {/* ── Board Header ── */}
         <div style={{ position: 'absolute', left: 120, top: 92 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, opacity: ramp(frame, 2, 12, EASE.out) }}>
             <ShotcraftMark size={34} tone="light" />
@@ -235,7 +235,7 @@ export const PanelToCanvasMaterialize: React.FC = () => {
           </div>
         </div>
 
-        {/* ── 右侧面板 ── */}
+        {/* ── Right Panel ── */}
         <div style={{
           position: 'absolute', left: PANEL_X, top: PANEL_Y, width: PANEL_W, height: PANEL_H, boxSizing: 'border-box',
           borderRadius: 30, background: `linear-gradient(180deg, ${L.surface}, #f7f0e6)`,
@@ -249,7 +249,7 @@ export const PanelToCanvasMaterialize: React.FC = () => {
             </div>
             <div style={{ marginTop: 14, ...type(26, 450), color: L.ink2 }}>Pick the shots for this cut.</div>
           </div>
-          {/* 按钮 */}
+          {/* Button */}
           <div style={{
             position: 'absolute', left: 24, right: 24, bottom: 24, height: 92, borderRadius: 20,
             background: `linear-gradient(180deg, #2c241b, ${L.ink})`, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.12), ${softShadow(10 - 6 * btnPress, { color: L.shadow, strength: 1.6 })}`,
@@ -264,7 +264,7 @@ export const PanelToCanvasMaterialize: React.FC = () => {
           </div>
         </div>
 
-        {/* ── 面板行（未飞走的 / 塌陷成虚线留白的） ── */}
+        {/* ── Panel rows (remaining rows / collapsed dashed sockets) ── */}
         {ITEMS.map((item, slot) => {
           const k = SLOTS.indexOf(slot);
           const inP = ramp(frame, 6 + slot * 2.5, 16, EASE.snappy);
@@ -300,18 +300,18 @@ export const PanelToCanvasMaterialize: React.FC = () => {
           );
         })}
 
-        {/* ── 飞行 / 落定的卡 ── */}
+        {/* ── In-flight / Landed cards ── */}
         {SLOTS.map((slot, k) => {
           const liftStart = LIFT_AT[k];
           if (frame < liftStart) return null;
           const item = ITEMS[slot];
-          const pre = ramp(frame, liftStart, LIFT, EASE.out); // 拔起预备
+          const pre = ramp(frame, liftStart, LIFT, EASE.out); // Lift anticipation
           const g = flyGeom(frame, k);
           const flying = frame >= liftStart + LIFT;
-          // 速度（px/帧）→ 方向性模糊
+          // Velocity (px/frame) -> directional blur
           const g0 = flyGeom(frame - 0.5, k), g1 = flyGeom(frame + 0.5, k);
           const vx = flying ? g1.cx - g0.cx : 0, vy = flying ? g1.cy - g0.cy : 0;
-          // 落地压扁：u 首次越过 1 附近给一个 4f 的 scaleY 0.97 回弹
+          // Landing compression: 4f scaleY 0.97 rebound upon reaching u ≈ 1
           const landF = liftStart + LIFT + 22;
           const squash = 1 - 0.03 * Math.sin(Math.PI * Math.min(1, Math.max(0, (frame - landF) / 6)));
           const rowOp = 1 - ramp(g.us, 0.08, 0.32, EASE.linear);
@@ -332,7 +332,7 @@ export const PanelToCanvasMaterialize: React.FC = () => {
                 border: `1px solid ${alpha(ACC, 0.35 * (1 - cardOp))}`,
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.95), ${softShadow(elev, { color: L.shadow, strength: 1.5 })}`,
               }}>
-                {/* 赤陶顶线：卡形态的身份标记 */}
+                {/* Terracotta top edge: card identity indicator */}
                 <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 6, background: ACC, opacity: cardOp }} />
                 <div style={{ position: 'absolute', inset: 0, opacity: rowOp }}>
                   <RowContent item={item} hue={AV[slot % 4]} check={<CheckBox frame={frame} at={CHECK_AT[k]} />} />

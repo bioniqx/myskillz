@@ -1,24 +1,24 @@
-// 子弹时间冻结环绕（bullet-time-freeze-orbit）——The Matrix bullet time：时间停住，相机却在动。
+// Bullet-time freeze orbit (bullet-time-freeze-orbit) — The Matrix bullet time: time stops while the camera moves.
 //
-// 第二轮重设计（midnight · 深蓝夜 + 电光蓝）：
-// - 主体是一块悬在暗场里的玻璃数据面板（1180×640）：7 根柱子按周错峰生长，每根柱顶向上喷出一串
-//   "数据火花"（确定性粒子 ×140，带真实 z 深度 -300…+600px），右上角 120px 的六位滚轮计数器跟着冲。
-// - 双时钟（命门）：内容全部吃 eff（内容时钟），相机吃真实帧。eff 不是硬停，而是 8f 的速度坡道
-//   "急刹"进冻结（40–48f）、冻结 52 帧、再 8f 坡道恢复（100–108f）——像升格摄影的变速。
-//   冻结期：柱子停在半途的波浪形、火花悬在半空并保留拖尾（拖尾长度按内容时钟的速度算，所以冻住的是
-//   "运动中的瞬间"而不是静止画面）、计数器低位的滚动模糊也一起冻住。
-// - 环绕：真实 3D 场景（preserve-3d）——面板、火花、透视网格地面、远处点阵墙各在自己的深度。
-//   相机 rotateY 0→-52°（26f，smooth）→ 顶点慢漂 12f → 回 0（22f，swift），同时 rotateX 抬 6°、
-//   推近 160px。火花与面板、地面与背墙之间的视差把"相机在绕"讲清楚。
-// - 恢复：柱子长完、火花散尽、柱顶数值标签逐个弹出，主角柱（周日）电光蓝 + 泛光，其余石板蓝。
+// Redesign (midnight: deep blue night + electric blue):
+// - Main subject: a glass data panel (1180x640) suspended in dark field: 7 bars grow staggered by day,
+//   each bar top spraying upward data sparks (140 deterministic particles with real z-depth -300...+600px); 120px 6-digit odometer counter races in top right.
+// - Dual clocks (core mechanic): content driven by eff (content clock), camera driven by real frames. eff does not hard-stop, but uses an 8f velocity ramp
+//   into freeze (40-48f), freezes for 52 frames, then an 8f ramp resumes (100-108f) — like high-speed ramping photography.
+//   Freeze period: bars freeze in mid-flight wave shape, sparks suspend in mid-air retaining trails (trail length computed from content clock speed,
+//   freezing a "moment in motion" rather than a static still), low-digit motion blur on odometer also freezes.
+// - Orbit: true 3D scene (preserve-3d) — panel, sparks, perspective grid floor, distant dot wall each at their own depths.
+//   Camera rotateY 0->-52 deg (26f, smooth) -> apex slow drift 12f -> return to 0 (22f, swift), while rotateX lifts 6 deg,
+//   pushes in 160px. Parallax between sparks and panel, floor and back wall clarifies camera orbital motion.
+// - Resume: bars finish growing, sparks dissipate, top value tags pop out; hero bar (Sunday) electric blue + bloom, others slate blue.
 //
-// 时间表（30fps，共 170f）：
-//   0–40    正常时间：柱子错峰生长（每根晚 5f）、火花上喷、计数器冲刺
-//   40–48   速度坡道刹停（eff 速度 1→0）
-//   48–100  冻结：相机 46–72 绕到 -52°，72–84 顶点慢漂，84–106 回正（推近 / 抬升同步）
-//   100–108 速度坡道恢复
-//   108–140 余波：柱子长完、火花散尽、数值标签弹出（eff 驱动）
-//   140–170 hold：光的极缓呼吸，海报落定
+// Timeline (30fps, total 170f):
+//   0-40    Normal time: bars grow staggered (+5f each), sparks spray upward, counter surges
+//   40-48   Velocity ramp down (eff speed 1->0)
+//   48-100  Freeze: camera 46-72 orbits to -52 deg, 72-84 apex slow drift, 84-106 re-centers (push in / lift in sync)
+//   100-108 Velocity ramp up (eff speed 0->1)
+//   108-140 Aftermath: bars finish growing, sparks dissipate, value tags pop out (eff driven)
+//   140-170 Hold: slow subtle light breathing, final poster layout
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -29,13 +29,13 @@ export const BULLET_TIME_FREEZE_ORBIT_DURATION = 170;
 
 const L = LOOKS.midnight;
 const PANEL = { w: 1180, h: 640 };
-const CH = { x: 90, y: 250, w: 1000, h: 300 }; // 图表区（面板内坐标）
+const CH = { x: 90, y: 250, w: 1000, h: 300 }; // Chart area (in-panel coordinates)
 const BARS = [0.46, 0.58, 0.52, 0.7, 0.64, 0.82, 1.0];
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const BAR_W = 96;
 const BAR_GAP = (CH.w - BARS.length * BAR_W) / (BARS.length - 1);
-const GROW = 40; // 每根柱子的生长时长（内容时钟）
-const startOf = (i: number) => 2 + i * 5; // 冻结时（eff≈40）柱顶正好是一道由高到低的波浪
+const GROW = 40; // Growth duration per bar (content clock)
+const startOf = (i: number) => 2 + i * 5; // At freeze (eff ~ 40) bar tops form a high-to-low wave
 const TOTAL = 184920;
 
 const hash = (n: number) => {
@@ -43,7 +43,7 @@ const hash = (n: number) => {
   return x - Math.floor(x);
 };
 
-// —— 内容时钟：速度坡道进出冻结 ——
+// --- Content clock: velocity ramp in and out of freeze ---
 const speedAt = (f: number) =>
   f < 40 ? 1 : f < 48 ? 1 - EASE.smooth((f - 40) / 8) : f < 100 ? 0 : f < 108 ? EASE.smooth((f - 100) / 8) : 1;
 const EFF: number[] = (() => {
@@ -61,10 +61,10 @@ const effAt = (f: number) => {
 };
 
 const growth = (i: number, e: number) => ramp(e, startOf(i), GROW, EASE.swift);
-const barTop = (i: number, e: number) => CH.y + CH.h - CH.h * BARS[i] * growth(i, e); // 面板内 y
+const barTop = (i: number, e: number) => CH.y + CH.h - CH.h * BARS[i] * growth(i, e); // In-panel y
 const barCx = (i: number) => CH.x + i * (BAR_W + BAR_GAP) + BAR_W / 2;
 
-// —— 火花：每根柱 12 颗，出生于柱顶（出生时刻的柱顶），向上减速飞散，带 z 深度 ——
+// --- Sparks: 12 per bar, emitted from bar top at emission time, decelerating upward with z-depth ---
 const SPARKS = BARS.flatMap((_, i) =>
   Array.from({ length: 20 }, (_, k) => {
     const r = (n: number) => hash(i * 97.1 + k * 13.7 + n);
@@ -77,7 +77,7 @@ const SPARKS = BARS.flatMap((_, i) =>
   }),
 );
 
-// —— 滚轮计数器：每位一条数字带，按内容时钟的转速竖向模糊 ——
+// --- Roller counter: one number strip per digit, vertically blurred by content clock speed ---
 const valueAt = (e: number) => TOTAL * ramp(e, 4, 68, EASE.out);
 const digitPos = (v: number, k: number) => {
   const p10 = Math.pow(10, k);
@@ -99,7 +99,7 @@ const Odometer: React.FC<{ e: number }> = ({ e }) => {
         const k = cols - 1 - ci;
         const pos = digitPos(v, k);
         const speed = Math.abs(digitPos(v2, k) - digitPos(v1, k));
-        const sp = speed > 5 ? 10 - speed : speed; // 跨 9→0 回绕时修正
+        const sp = speed > 5 ? 10 - speed : speed; // Fix wrap-around when crossing 9->0
         const blur = Math.min(9, sp * 112 * 0.1);
         const lit = v >= Math.pow(10, k) || k === 0;
         return (
@@ -107,7 +107,7 @@ const Odometer: React.FC<{ e: number }> = ({ e }) => {
             {ci === 3 && <span style={{ width: '0.28em', textAlign: 'center', color: lit ? L.ink2 : L.ink3 }}>,</span>}
             <div style={{
               position: 'relative', width: '0.62em', height: '1.24em', margin: '-0.12em 0', overflow: 'hidden',
-              // 滚轮窗口上下渐隐：冻住的模糊数字带不留硬边
+              // Roller window vertical fade: frozen blurred digit strips leave no hard edges
               WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%)',
               maskImage: 'linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%)',
             }}>
@@ -133,7 +133,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
   const e = effAt(frame);
   const frozen = 1 - speedAt(frame);
 
-  // —— 相机（真实时钟）——
+  // --- Camera (real-time clock) ---
   const out = ramp(frame, 46, 26, EASE.smooth);
   const back = ramp(frame, 84, 22, EASE.swift);
   const drift = ramp(frame, 72, 12, EASE.linear);
@@ -143,7 +143,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
   const dolly = 160 * orbit;
   const breathe = 1 + 0.05 * Math.sin(frame / 26);
 
-  // 冻结时的空气：冷光微微加亮、四周收拢
+  // Atmospheric lighting during freeze: cold light subtly brightens, edges tighten
   const chill = ramp(frame, 40, 10, EASE.out) * (1 - ramp(frame, 98, 12, EASE.smooth));
 
   return (
@@ -155,7 +155,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
           position: 'absolute', left: 960, top: 520, width: 0, height: 0, transformStyle: 'preserve-3d',
           transform: `translateZ(${dolly.toFixed(2)}px) rotateX(${rx.toFixed(3)}deg) rotateY(${ry.toFixed(3)}deg)`,
         }}>
-          {/* 远处点阵墙 */}
+          {/* Distant dot grid wall */}
           <div style={{
             position: 'absolute', left: -2600, top: -1500, width: 5200, height: 3000,
             transform: 'translateZ(-1200px)',
@@ -165,7 +165,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
             maskImage: 'radial-gradient(ellipse 40% 42% at 50% 50%, #000 0%, transparent 100%)',
             opacity: 0.55,
           }} />
-          {/* 透视网格地面（面板下沿下方 70px） */}
+          {/* Perspective grid floor (70px below panel bottom) */}
           <div style={{
             position: 'absolute', left: -1800, top: PANEL.h / 2 + 70 - 1800, width: 3600, height: 3600,
             transform: 'rotateX(90deg)',
@@ -178,7 +178,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
             maskImage: 'radial-gradient(circle at 50% 50%, #000 0%, transparent 46%)',
           }} />
 
-          {/* 面板 */}
+          {/* Panel */}
           <div style={{
             position: 'absolute', left: -PANEL.w / 2, top: -PANEL.h / 2, width: PANEL.w, height: PANEL.h, boxSizing: 'border-box',
             borderRadius: 32, overflow: 'hidden',
@@ -186,7 +186,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
             border: `1.5px solid ${alpha('#a0beff', 0.18)}`,
             boxShadow: `inset 0 1.5px 0 ${alpha('#ffffff', 0.12)}, 0 50px 120px -30px ${alpha('#000208', 0.9)}`,
           }}>
-            {/* 头部：video-shotcraft 渲染面板（标志 + 眉题 + 指标名） */}
+            {/* Header: video-shotcraft render panel (logo + kicker + metric name) */}
             <div style={{ position: 'absolute', left: 64, top: 52 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <ShotcraftMark size={40} tone="dark" style={{ margin: '-6px -2px -6px -5px' }} />
@@ -196,11 +196,11 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
             </div>
             <div style={{ position: 'absolute', right: 64, top: 46 }}><Odometer e={e} /></div>
 
-            {/* 刻度线 */}
+            {/* Grid scale lines */}
             {[0, 1, 2, 3].map((g) => (
               <div key={g} style={{ position: 'absolute', left: CH.x, width: CH.w, top: CH.y + (CH.h / 3) * g, height: 1, background: g === 3 ? alpha(L.ink, 0.25) : L.line }} />
             ))}
-            {/* 柱子 */}
+            {/* Bar elements */}
             {BARS.map((b, i) => {
               const top = barTop(i, e);
               const hgt = CH.y + CH.h - top;
@@ -217,7 +217,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
                       ? `inset 0 2px 0 rgba(255,255,255,0.5), 0 0 40px ${alpha(L.accent, 0.55)}`
                       : `inset 0 2px 0 rgba(255,255,255,0.18)`,
                   }} />
-                  {/* 柱顶亮边（生长中的"刀口"） */}
+                  {/* Bar top bright edge (growing leading edge) */}
                   {growth(i, e) < 1 && growth(i, e) > 0 && (
                     <div style={{ position: 'absolute', left: barCx(i) - BAR_W / 2 - 6, top: top - 3, width: BAR_W + 12, height: 6, borderRadius: 3, background: '#dfe8ff', boxShadow: `0 0 18px ${alpha(L.accent, 0.9)}` }} />
                   )}
@@ -234,14 +234,14 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
                 </React.Fragment>
               );
             })}
-            {/* 冻结时面板表面的冷光（裁进圆角，跟相机角度横移） */}
+            {/* Cold sheen on panel surface during freeze (clipped to rounded corners, pans with camera) */}
             <div style={{
               position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.5 * orbit,
               background: `linear-gradient(105deg, transparent ${(30 + 50 * orbit).toFixed(1)}%, ${alpha('#cfdcff', 0.16)} ${(45 + 50 * orbit).toFixed(1)}%, transparent ${(60 + 50 * orbit).toFixed(1)}%)`,
             }} />
           </div>
 
-          {/* 火花（真实 z 深度，冻结时悬停并保留拖尾） */}
+          {/* Sparks (real z-depth, hover during freeze retaining trails) */}
           {SPARKS.map((s, idx) => {
             const age = e - s.born;
             if (age < 0 || age > s.life) return null;
@@ -250,7 +250,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
             const x = barCx(s.bar) + s.dx + s.vx * age - PANEL.w / 2;
             const y = birthTop - s.v0 * s.tau * k - PANEL.h / 2;
             const z = s.z * k;
-            const v = s.v0 * Math.exp(-age / s.tau); // 内容时钟下的速度
+            const v = s.v0 * Math.exp(-age / s.tau); // Velocity under content clock
             const len = s.size + v * 3.2;
             const fade = Math.min(1, age / 3) * (1 - Math.pow(age / s.life, 2));
             const c = s.hot ? '#ffffff' : '#9cb8ff';
@@ -267,7 +267,7 @@ export const BulletTimeFreezeOrbit: React.FC = () => {
         </div>
       </AbsoluteFill>
 
-      {/* 冻结期暗角收拢（屏幕空间） */}
+      {/* Freeze period vignette tightening (screen space) */}
       {frozen > 0.001 || chill > 0.001 ? (
         <AbsoluteFill style={{
           pointerEvents: 'none', opacity: chill,

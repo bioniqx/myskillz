@@ -1,29 +1,29 @@
-// paparazzi-flash（B 连闪定格）—— 高光时刻三连白闪，每闪硬切同一画面的不同裁切
-// （全景 → 奖牌卡 → 数字特写），快门余韵沉降，第三闪停在数字上收束。
+// paparazzi-flash (B continuous flash freeze) — Triple white flashes at highlight moments, each flash hard-cutting to different crops of the same scene
+// (wide view -> award card -> number close-up), shutter afterglow settles, third flash resolves on the number.
 //
-// 第二轮重设计（颁奖夜 · 你就是那台相机）：
-// - look = graphite（近单色暗场，白为闪光，香槟金只给奖项信息）。画面是颁奖背板（step-and-repeat：
-//   video-shotcraft 标志 / 字标砖砌平铺）前的一块年度大奖卡：「Shot of the Year」「Take 1 · first prompt,
-//   final cut.」「video-shotcraft」。三个裁切层层逼近：全景 → 卡片 → 280px 的「Take 1」。
-// - 取景器 HUD（屏幕层，不随裁切缩放）：四角取景框、曝光读数、张数计数、闪光灯充电指示。
-//   每一闪之前 8f，对焦框从大收到"下一张要拍的裁切范围"并在第 3f 前转香槟色锁定 = 预备拍；
-//   白闪 = 主动作；切入画面 1.03→1 回落 + 沉降 = 快门余韵；张数 +1、充电灯清零重充 = 跟随。
-// - 闪前 30f 是"活"的：背板上不断有别家相机的小闪光、画面缓推；闪后每张都是死的定格（照片），
-//   轻微去饱和 + 提对比，活 / 死的反差让三闪读作"被拍下"。
+// Redesign (Awards night · you are the camera):
+// - look = graphite (near-monochrome dark field; white for flashes, champagne gold reserved for award info). Scene is an annual award plaque in front of a step-and-repeat backdrop
+//   (tiled video-shotcraft mark / wordmark brickwork): "Shot of the Year", "Take 1 · first prompt,
+//   final cut.", "video-shotcraft". Three crops step closer: wide view -> card -> 280px "Take 1".
+// - Viewfinder HUD (screen layer, unscaled by crops): four-corner bracket, exposure readouts, frame counter, flash recharge indicator.
+//   8f before each flash, focus box shrinks from large to target crop area, turning champagne gold 3f before lock = anticipation beat;
+//   white flash = primary action; cut-in settles 1.03->1 + downward drop = shutter recoil; shot counter increments, flash recharge resets = follow-through.
+// - 30f before flash is "live": ambient background flashes from other cameras, slow camera push; each post-flash frame is a static photo,
+//   subtly desaturated with boosted contrast; live vs frozen contrast makes each flash feel captured.
 //
-// 时间表（30fps，共 140f）：
-//   0–30    活素材：缓推 + 背板上 6 次远处小闪光；22f 起对焦框锁卡片
-//   30      第一闪 → 全景定格（间隔 22f）；44–52 对焦框收向卡片裁切
-//   52      第二闪 → 卡片定格（间隔 18f）；62–70 对焦框收向「Take 1」
-//   70      第三闪 → 数字特写定格
-//   70–140  hold 70f：极缓 1→1.015 推近；84f 起右下「Saved」淡入，尾帧是一张完整的获奖照
+// Timeline (30fps, 140f total):
+//   0–30    Live footage: slow push + 6 distant background flashes; focus locks card starting 22f
+//   30      First flash -> wide freeze (22f interval); 44–52 focus bracket shrinks to card crop
+//   52      Second flash -> card freeze (18f interval); 62–70 focus bracket shrinks to "Take 1"
+//   70      Third flash -> digit close-up freeze
+//   70–140  Hold 70f: subtle 1->1.015 push-in; 84f bottom-right "Saved" fades in, final frame is a complete award photograph
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, Vignette, mix, ramp } from '../../_fixtures/Polish';
 import { LOOKS, alpha, type } from '../../_fixtures/Look';
 import { BRAND, PITCH, ShotcraftMark } from '../../_fixtures/Brand';
 
-export const PAPARAZZI_FLASH_DURATION = 140; // 活素材 30f + 三闪 40f + hold 70f
+export const PAPARAZZI_FLASH_DURATION = 140; // Live footage 30f + triple flash 40f + hold 70f
 
 const L = LOOKS.graphite;
 const GOLD = L.accent2;
@@ -31,21 +31,21 @@ const F1 = 30;
 const F2 = 52;
 const F3 = 70;
 const FLASHES = [F1, F2, F3];
-const SETTLE = 6; // 切入回落
-const DECAY = 4; // 白闪衰减
-const BLOOM = 7; // 闪后过曝回落
-const AF = 8; // 对焦框提前量
+const SETTLE = 6; // Cut-in settle
+const DECAY = 4; // White flash decay
+const BLOOM = 7; // Post-flash bloom decay
+const AF = 8; // Focus bracket lead-in
 
 const hash = (i: number) => {
   const s = Math.sin(i * 127.3 + 11.7) * 43758.5453;
   return s - Math.floor(s);
 };
 
-// ───────────── 场景（1920×1080 全景坐标） ─────────────
+// ───────────── Scene (1920x1080 wide coordinates) ─────────────
 const CARD = { x: 610, y: 176, w: 700, h: 780 };
-const DIGIT = { cx: CARD.x + 350, cy: CARD.y + 412 }; // 「Take 1」+ 右侧说明的中心
+const DIGIT = { cx: CARD.x + 350, cy: CARD.y + 412 }; // Center of "Take 1" + right description
 
-// 远处别家相机的小闪光（只在活素材段）
+// Distant flashes from other cameras (live section only)
 const POPS = [
   { f: 3, x: 300, y: 300 }, { f: 9, x: 1620, y: 220 }, { f: 13, x: 420, y: 780 },
   { f: 18, x: 1500, y: 700 }, { f: 23, x: 220, y: 520 }, { f: 27, x: 1760, y: 480 },
@@ -60,7 +60,7 @@ const Wall: React.FC = () => {
       {Array.from({ length: rows }, (_, r) => (
         <div key={r} style={{ position: 'absolute', left: (r % 2) * -170 - 60, top: 20 + r * 124, display: 'flex', gap: 0, whiteSpace: 'nowrap' }}>
           {Array.from({ length: cols + 1 }, (_, c) => {
-            // 背板砖：video-shotcraft 标志 / 字标交错（整体压到 9%，标志按规范原色、只降透明度）
+            // Backdrop tile: alternating video-shotcraft mark / wordmark (dimmed to 9% overall; mark preserves brand color with reduced opacity)
             const mark = (r + c) % 2 === 0;
             return (
               <div key={c} style={{ width: 340, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -95,9 +95,9 @@ const Laurel: React.FC<{ s?: number }> = ({ s = 70 }) => (
 const Scene: React.FC<{ f: number; live: boolean }> = ({ f, live }) => (
   <div style={{ position: 'absolute', inset: 0, fontFamily: FONT.sans, color: L.ink }}>
     <Wall />
-    {/* 舞台顶光 */}
+    {/* Stage overhead light */}
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 34% 60% at 50% 40%, rgba(255,250,240,0.12) 0%, rgba(255,250,240,0) 70%)` }} />
-    {/* 别家相机的远处闪光：4 角星芒 + 柔光，每次 3f */}
+    {/* Distant flashes from other cameras: 4-point starburst + soft glow, 3f each */}
     {live && POPS.map((p, i) => {
       const t = f - p.f;
       if (t < 0 || t > 3) return null;
@@ -110,11 +110,11 @@ const Scene: React.FC<{ f: number; live: boolean }> = ({ f, live }) => (
         </div>
       );
     })}
-    {/* 奖牌卡 */}
+    {/* Award plaque card */}
     <div style={{ position: 'absolute', left: CARD.x, top: CARD.y, width: CARD.w, height: CARD.h, borderRadius: 40, overflow: 'hidden',
       background: 'linear-gradient(165deg, #2a2b30 0%, #18191c 45%, #121315 100%)',
       boxShadow: `inset 0 0 0 1.5px ${alpha('#ffffff', 0.12)}, inset 0 1.5px 0 ${alpha('#ffffff', 0.22)}, 0 60px 120px -40px rgba(0,0,0,0.95), 0 0 0 1px rgba(0,0,0,0.6)` }}>
-      {/* 卡面受光：顶部一片柔高光 */}
+      {/* Card surface light: soft highlight across top edge */}
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 80% 40% at 30% 0%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 70%)' }} />
       <div style={{ position: 'absolute', left: 60, top: 56, display: 'flex', alignItems: 'center', gap: 20 }}>
         <Laurel s={52} />
@@ -144,14 +144,14 @@ const Scene: React.FC<{ f: number; live: boolean }> = ({ f, live }) => (
   </div>
 );
 
-// ───────────── 裁切与 HUD ─────────────
+// ───────────── Crop & HUD ─────────────
 type View = { scale: number; cx: number; cy: number };
 const VIEW_WIDE: View = { scale: 1.0, cx: 960, cy: 540 };
 const VIEW_CARD: View = { scale: 1.6, cx: CARD.x + CARD.w / 2, cy: CARD.y + 290 };
 const VIEW_DIGIT: View = { scale: 2.8, cx: DIGIT.cx, cy: DIGIT.cy };
 const STILLS = [VIEW_WIDE, VIEW_CARD, VIEW_DIGIT];
 
-// 全景坐标矩形 → 某视图下的屏幕矩形
+// Wide-coordinate rect -> screen rect under specified view
 const project = (r: { x: number; y: number; w: number; h: number }, v: View) => ({
   x: (r.x - v.cx) * v.scale + 960, y: (r.y - v.cy) * v.scale + 540, w: r.w * v.scale, h: r.h * v.scale,
 });
@@ -174,7 +174,7 @@ export const PaparazziFlash: React.FC = () => {
   let seg = -1;
   for (let i = 0; i < FLASHES.length; i++) if (frame >= FLASHES[i]) seg = i;
 
-  // 闪后余韵：1.03→1 回落 + 半格沉降；过曝回落
+  // Shutter recoil: 1.03->1 settle + downward drop; bloom decay
   let settleScale = 1;
   let settleY = 0;
   let bloom = 0;
@@ -190,14 +190,14 @@ export const PaparazziFlash: React.FC = () => {
   const jx = inFlash ? 2 * (hash(frame * 7 + 1) * 2 - 1) : 0;
   const jy = inFlash ? 2 * (hash(frame * 13 + 5) * 2 - 1) : 0;
 
-  // 活素材：全景缓推（in-out）；hold 段极缓推近
+  // Live footage: wide slow push (in-out); subtle push-in during hold phase
   const liveP = ramp(frame, 0, F1, EASE.smooth);
   const liveScale = mix(1.04, 1.1, liveP);
   const holdPush = seg === 2 ? mix(1, 1.015, ramp(frame, F3 + SETTLE, 64, EASE.smooth)) : 1;
-  // 背板别家闪光带来的环境亮度起伏
+  // Ambient brightness fluctuations from background camera flashes
   const popLift = seg === -1 ? POPS.reduce((m, p) => Math.max(m, frame >= p.f && frame <= p.f + 2 ? 0.06 * (1 - (frame - p.f) / 3) : 0), 0) : 0;
 
-  // 对焦框：下一闪前 AF 帧从大收到目标（屏幕坐标），锁定后转金
+  // Focus bracket: shrinks from outer frame to target (screen coords) AF frames before next flash, turning gold on lock
   const curView: View = seg === -1 ? { scale: liveScale, cx: 960, cy: 540 } : STILLS[seg];
   const nextIdx = seg + 1;
   let af: React.ReactNode = null;
@@ -215,7 +215,7 @@ export const PaparazziFlash: React.FC = () => {
     }
   }
 
-  // HUD 数据
+  // HUD telemetry
   const shots = 23 + Math.max(0, seg + 1);
   const lastFlash = seg >= 0 ? FLASHES[seg] : -40;
   const charge = Math.min(1, (frame - lastFlash) / 16);
@@ -226,7 +226,7 @@ export const PaparazziFlash: React.FC = () => {
       <div style={{
         position: 'absolute', inset: 0, transformOrigin: '960px 540px',
         transform: `translate(${jx.toFixed(2)}px, ${(jy + settleY).toFixed(2)}px) scale(${(settleScale * holdPush * 1.012).toFixed(5)})`,
-        // 定格 = 照片：微去饱和 + 提对比；闪后 7f 过曝回落
+        // Freeze = photograph: subtle desaturation + boosted contrast; 7f bloom decay post-flash
         filter: seg >= 0
           ? `brightness(${(1 + 0.22 * bloom).toFixed(3)}) contrast(${(1.06 - 0.14 * bloom).toFixed(3)}) saturate(${(0.82 - 0.2 * bloom).toFixed(3)})`
           : popLift > 0 ? `brightness(${(1 + popLift).toFixed(3)})` : undefined,
@@ -242,7 +242,7 @@ export const PaparazziFlash: React.FC = () => {
       <Vignette strength={[0.5, 0.5, 0.56, 0.62][seg + 1]} inner={0.42} color="#000000" />
       <Grain opacity={0.1} blend="soft-light" />
 
-      {/* 取景器 HUD（屏幕层） */}
+      {/* Viewfinder HUD (screen layer) */}
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
         <Brackets x={96} y={84} w={1728} h={912} color="#ffffff" opacity={0.5} arm={70} width={3} />
         {af}
@@ -265,7 +265,7 @@ export const PaparazziFlash: React.FC = () => {
         <span style={{ fontSize: 40, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{String(shots).padStart(3, '0')}</span>
       </div>
 
-      {/* 白闪：中心满白、四角留一点画面（闪光灯的径向衰减） */}
+      {/* White flash: solid center white with edge falloff (radial flash decay) */}
       {flash > 0.004 && (
         <AbsoluteFill style={{ opacity: flash, background: 'radial-gradient(ellipse 80% 90% at 50% 45%, #ffffff 0%, #ffffff 45%, rgba(250,250,255,0.86) 100%)' }} />
       )}

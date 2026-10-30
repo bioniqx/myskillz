@@ -1,38 +1,38 @@
-# audio/ 授权记录
+# audio/ Licensing and Attribution Records
 
-规矩：**下载音频素材时当场记录曲名/URL**，事后无法反查。
+Rule: **Always record track titles and URLs upon downloading audio assets**; retroactive tracking is impossible.
 
-目录结构：`bgm/` 5 首 BGM 备选；`sfx/<类别>/` 149 个音效分 16 类（transition impact riser camera ui text paper film light data scifi mech glass fluid crowd counter）。类别含义与找音路径见 `references/sound-design.md` 3.0。
+Directory structure: `bgm/` holds 5 BGM candidates; `sfx/<category>/` holds 149 SFX across 16 categories (transition, impact, riser, camera, ui, text, paper, film, light, data, scifi, mech, glass, fluid, crowd, counter). For category semantics and sound discovery paths, see `references/sound-design.md` §3.0.
 
-下表「路径」列为 `assets/audio/` 下的相对路径。
+The "Path" column below lists paths relative to `assets/audio/`.
 
-## 基础 SFX（首批沿用）
+## Base SFX (First Batch)
 
-批量下载时 metadata 被抹掉，原本无逐文件 URL。**2026-07-27 用 md5 比对补回了 7 个**——
-这批文件与已登记 URL 的扩充批次字节完全相同（同一个 Mixkit 素材下了两次、存成两个名字），
-据此反查出原始条目，下表「原名 / URL」列即比对结果。剩余 6 个仍无法反查，商用前须逐个确认。
+Batch downloads stripped metadata originally leaving individual files without URLs. **On 2026-07-27, 7 were recovered via MD5 hash matching**—
+these files matched byte-for-byte with files in the expanded batch,
+allowing reverse lookup of original entries. The remaining 6 cannot be verified automatically and must be confirmed prior to commercial use.
 
-（原 13 个，2026-07-27 筛选删掉 `impact-cine.mp3`、`typewriter.mp3` 两个，现存 11 个；`impact-cine` 的等价文件是字节相同的 `sfx/impact/impact-deep-whoosh.mp3`，详见 sound-design 3.1。）
+(Originally 13 files; 2 removed on 2026-07-27 leaving 11 files; `impact-cine` is identical to `sfx/impact/impact-deep-whoosh.mp3`, see sound-design §3.1.)
 
-| 文件 | 路径 | 来源 | 原名 / URL |
+| File | Path | Source | Original Name / URL |
 |---|---|---|---|
 | `click-camera.mp3` | `sfx/camera/` | Mixkit SFX Free License | Camera shutter click · https://assets.mixkit.co/active_storage/sfx/1133/1133-preview.mp3 |
 | `impact-transition.mp3` | `sfx/impact/` | Mixkit SFX Free License | Movie trailer epic impact · https://assets.mixkit.co/active_storage/sfx/2908/2908-preview.mp3 |
-| `keyboard.mp3` | `sfx/text/` | Mixkit License | **无法反查**，商用前须确认 |
-| `pop.mp3` | `sfx/ui/` | 来源待考，商用前须确认 | 无法反查 |
-| `riser-cine.mp3` | `sfx/riser/` | Mixkit License | **无法反查**，商用前须确认 |
-| `sparkle.mp3` | `sfx/light/` | Mixkit License | **无法反查**，商用前须确认 |
+| `keyboard.mp3` | `sfx/text/` | Mixkit License | **Cannot reverse-match**, verify prior to commercial use |
+| `pop.mp3` | `sfx/ui/` | Source pending verification, verify prior to commercial use | Cannot reverse-match |
+| `riser-cine.mp3` | `sfx/riser/` | Mixkit License | **Cannot reverse-match**, verify prior to commercial use |
+| `sparkle.mp3` | `sfx/light/` | Mixkit License | **Cannot reverse-match**, verify prior to commercial use |
 | `swoosh-quick.mp3` | `sfx/transition/` | Mixkit SFX Free License | Fast small sweep transition · https://assets.mixkit.co/active_storage/sfx/166/166-preview.mp3 |
 | `transition-snap.mp3` | `sfx/transition/` | Mixkit SFX Free License | Fast transitions swoosh · https://assets.mixkit.co/active_storage/sfx/3115/3115-preview.mp3 |
 | `transition-soft.mp3` | `sfx/transition/` | Mixkit SFX Free License | Air zoom vacuum · https://assets.mixkit.co/active_storage/sfx/2608/2608-preview.mp3 |
-| `whoosh-big.mp3` | `sfx/transition/` | Mixkit License | **无法反查**，商用前须确认 |
+| `whoosh-big.mp3` | `sfx/transition/` | Mixkit License | **Cannot reverse-match**, verify prior to commercial use |
 | `whoosh-fast.mp3` | `sfx/transition/` | Mixkit SFX Free License | Fast whoosh transition · https://assets.mixkit.co/active_storage/sfx/1490/1490-preview.mp3 |
 
-## 扩充 SFX 第一批（2026-07-19 下载，当场记录 URL）
+## Expanded SFX Batch 1 (Downloaded 2026-07-19)
 
-全部 Mixkit Sound Effects Free License（免署名可商用）。
+All licensed under Mixkit Sound Effects Free License (free commercial use, no attribution required).
 
-| 文件 | 路径 | 原名 | URL |
+| File | Path | Original Name | URL |
 |---|---|---|---|
 | `air-zoom-vacuum.mp3` | `sfx/transition/` | Air zoom vacuum | https://assets.mixkit.co/active_storage/sfx/2608/2608-preview.mp3 |
 | `bass-hit-futuristic.mp3` | `sfx/impact/` | Futuristic bass hit | https://assets.mixkit.co/active_storage/sfx/2303/2303-preview.mp3 |
@@ -49,11 +49,11 @@
 | `sweep-metal-quick.mp3` | `sfx/transition/` | Quick metal transition sweep | https://assets.mixkit.co/active_storage/sfx/2639/2639-preview.mp3 |
 | `sweep-scifi-fast.mp3` | `sfx/transition/` | Fast sci fi transition sweep | https://assets.mixkit.co/active_storage/sfx/3114/3114-preview.mp3 |
 
-## 扩充 SFX 第二批（2026-07-27 下载，当场记录 URL）
+## Expanded SFX Batch 2 (Downloaded 2026-07-27)
 
-下载 165 个 → md5 去重删 3 个 → 试听筛选删 38 个 → **留用 124 个**（下表即最终入仓的）（纸张/打字机/书写/胶片/计数器/人群/流体等）。全部 Mixkit Sound Effects Free License（免署名可商用）。逐条时长/峰值/建议钉点见 `AUDITION-2026-07-27.md`。
+Downloaded 165 files -> MD5 deduplication removed 3 -> audition screening removed 38 -> **124 retained** (paper, typewriter, writing, film, counter, crowd, fluid, etc.). All licensed under Mixkit Sound Effects Free License (free commercial use, no attribution required). Durations, peaks, and recommended anchors documented in `AUDITION-2026-07-27.md`.
 
-| 文件 | 路径 | 原名 | URL |
+| File | Path | Original Name | URL |
 |---|---|---|---|
 | `camera-autofocus.mp3` | `sfx/camera/` | Camera lens autofocus | https://assets.mixkit.co/active_storage/sfx/1437/1437-preview.mp3 |
 | `camera-lens-shutter.mp3` | `sfx/camera/` | Camera lens shutter | https://assets.mixkit.co/active_storage/sfx/1433/1433-preview.mp3 |
@@ -180,14 +180,14 @@
 | `ui-success-soft.mp3` | `sfx/ui/` | Success software tone | https://assets.mixkit.co/active_storage/sfx/2865/2865-preview.mp3 |
 | `ui-tone-quick.mp3` | `sfx/ui/` | Digital quick tone | https://assets.mixkit.co/active_storage/sfx/2866/2866-preview.mp3 |
 
-## bgm/（BGM 备选，Mixkit Stock Music Free License 免署名可商用）
+## bgm/ (BGM Candidates, Mixkit Stock Music Free License)
 
-| 文件名 | 原曲名 | 艺术家 | 风格 | BPM | URL |
+| Filename | Original Title | Artist | Genre | BPM | URL |
 |---|---|---|---|---|---|
-| `bgm-tech-house.mp3` | （首批沿用，无法逐曲反查） | — | Tech House | ~124 | Mixkit，商用前复核 |
+| `bgm-tech-house.mp3` | (Legacy batch, verify prior to commercial use) | — | Tech House | ~124 | Mixkit, verify prior to commercial use |
 | `cat-walk.mp3` | Cat Walk | Arulo | House | ~129 | https://assets.mixkit.co/music/371/371.mp3 |
 | `g-eazy-nba-type.mp3` | G Eazy NBA type | Arulo | Hip Hop | ~86 | https://assets.mixkit.co/music/403/403.mp3 |
 | `house-vibez.mp3` | House Vibez | Lily J | House | ~123 | https://assets.mixkit.co/music/745/745.mp3 |
 | `tonight-hiphop.mp3` | Tonight | Michael Ramir C. | Hip Hop | ~103 | https://assets.mixkit.co/music/841/841.mp3 |
 
-BPM 为 librosa 实测（beat grid 最小二乘拟合法，见 references/music-beat-sync.md）。
+BPM measured via librosa (least-squares beat grid fitting, see references/music-beat-sync.md).

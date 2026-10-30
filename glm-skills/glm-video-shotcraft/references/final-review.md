@@ -1,116 +1,100 @@
-# final-review — 成片独立终检
+# final-review — Independent Final Review Checklist
 
-独立审查 Agent 使用本清单验证“成片是否符合当前创作模式的制作基准”，并结合
-`aesthetic-rules.md` 检查视觉技术质量。审查 Agent 必须处于干净上下文，不参与
-制作；不要给它制作过程中的理由、辩解、修改历史或预期结论。
+An independent reviewer Agent uses this checklist to verify whether the final render satisfies the baseline criteria for the current creation mode, combined with `aesthetic-rules.md` to check visual technical quality. The reviewer Agent must operate in a clean context without having participated in production; do not provide production rationale, justifications, revision histories, or expected conclusions.
 
-## 审查输入
+## Review Inputs
 
-- 最新成片 MP4 和每镜头关键帧；
-- 创作模式：直接使用模板、自主自由创作或共同创作；
-- 产品视频简报与必须展示的功能；
-- 需求到执行决策表；
-- 共同创作中用户确认、自主自由创作中 Agent 记录的视觉方向、品牌 tokens、
-  styleframe（或跳过理由）和禁用风格；模板模式则提供原模板结构与实际替换记录；
-- 功能到镜头映射；
-- 用户指定或 Agent 在设计 spec 中记录的 Gallery 卡名与具体变体；
-- `gallery/api/library.json` 中对应卡片与 `style-key` 记录；
-- 卡片文档定位到的准确 demo TSX 源码；
-- 对应 Gallery 参考样片，或从参考样片抽出的关键帧/contact sheet；
-- 最终分镜、字幕、页面状态和 SFX 计划；
-- 选中的 `references/shots/*.md`；
-- `aesthetic-rules.md`；
-- 数据合规口径。
+- Latest final MP4 render and per-shot keyframes;
+- Creation mode: Direct Template, Autonomous Free Creation, or Co-Creation;
+- Product video brief and mandatory features to showcase;
+- Requirements-to-execution decision table;
+- Visual direction, brand tokens, styleframes (or justification for skipping), and forbidden styles confirmed by user (in Co-Creation) or logged by Agent (in Autonomous Free Creation); for Template mode, the original template structure and actual replacement records;
+- Feature-to-shot mapping;
+- Gallery card names and specific variants specified by user or logged by Agent in design spec;
+- Corresponding cards and `style-key` records in `gallery/api/library.json`;
+- Exact demo TSX source code located from card documentation;
+- Corresponding Gallery reference sample video, or keyframes / contact sheet extracted from reference sample video;
+- Final storyboard, subtitles, page states, and SFX schedule;
+- Selected `references/shots/*.md`;
+- `aesthetic-rules.md`;
+- Data compliance specifications.
 
-缺少某项输入时标记“无法验证”，不要自行猜测制作基准。索引、卡片文档、
-demo 源码与 Gallery 参考样片互相冲突时，明确报告冲突来源，不自行挑一个当真相。
+When any input is missing, mark as "Unverifiable"; do not guess the production baseline. When the index, card documentation, demo source, and Gallery reference video conflict with each other, report the conflict source explicitly rather than picking one arbitrarily as ground truth.
 
-## 检查项
+## Checklist Items
 
-### P — 产品目标
+### P — Product Goals
 
-- P1：产品定位、目标用户和核心卖点是否清楚；
-- P2：成片是否把注意力放在当前模式确认或记录的功能优先级上；
-- P3：是否出现项目不存在、未经确认或容易误导的功能宣称。
-- P4：需求到执行决策表中的执行选择，是否能在分镜、文案、页面状态、音频和素材中
-  找到对应落地；不得用固定的“受众/用途→风格”刻板映射替代项目依据。
+- P1: Are product positioning, target audience, and core value propositions clear?
+- P2: Does the video focus attention on feature priorities confirmed or logged for the current mode?
+- P3: Are there any non-existent, unconfirmed, or misleading feature claims?
+- P4: Can execution choices in the requirements-to-execution decision table be traced directly to storyboarding, copy, page states, audio, and assets? Never substitute project rationale with rigid "audience/use case → style" stereotypes.
 
-### F — 功能完整性
+### F — Functional Completeness
 
-- F1：每个“必须展示的功能”是否至少有一个清楚可辨的镜头；
-- F2：每镜头是否提供新信息，是否存在重复功能或重复 tagline；
-- F3：页面状态是否能让观众理解功能，而不只是装饰性运动。
+- F1: Does every "mandatory feature" have at least one clearly discernible shot?
+- F2: Does each shot deliver new information, without duplicate features or repetitive taglines?
+- F3: Do page states enable viewers to understand product functions, rather than presenting purely decorative motion?
 
-### V — 视觉方向
+### V — Visual Direction
 
-- V1：字体、色板、材质、圆角、光感和信息密度是否符合确认或记录的视觉方向；
-- V2：动效速度、过冲、停留和能量曲线是否符合确认或记录的动效性格；
-- V3：是否偏离制作基准，漂移到 Ink Press、赛博霓虹或其他无关风格；
-- V4：禁用的颜色、效果或品牌特征是否被使用。
+- V1: Do typography, color palette, materials, border radii, lighting feel, and information density match confirmed or logged visual directions?
+- V2: Do motion velocity, overshoot, dwell times, and energy curves match confirmed or logged motion personality?
+- V3: Has the video drifted from production baselines into Ink Press, cyber neon, or unrelated aesthetics?
+- V4: Have any forbidden colors, effects, or brand characteristics been accidentally used?
 
-### S — 镜头卡与 Gallery 变体
+### S — Shot Cards and Gallery Variants
 
-- S1：功能映射中的镜头卡是否实际出现在对应镜头；
-- S2：用户点名 `卡名 · 样式名` 时，`style-key`、准确 demo TSX 和 Gallery
-  参考样片是否指向同一变体，成片是否使用该变体；
-- S3：对照准确 demo TSX 与 Gallery 参考样片，是否保留配方卡/demo 的动作
-  语法、关键时值、缓动关系和遮罩时机；
-- S4：是否违反卡片标注的“已知坑/命门”；
-- S5：适配后的产品截图、坐标和品牌 token 是否自然。
-- S6：标为“仅供参考，需要自定义实现”的样式是否得到用户明确点名，并在报告中标注
-  其实现风险；标为“缺少预览”的样式是否避免声称与动态样片一致。
+- S1: Do the shot cards planned in feature mapping actually appear in the corresponding shots?
+- S2: When a user requests `CardName · StyleName`, do `style-key`, exact demo TSX, and Gallery reference video point to the same variant, and does the final render use that variant?
+- S3: Compared against exact demo TSX and Gallery reference sample, are action syntax, critical durations, easing relationships, and matte timing preserved from the recipe card/demo?
+- S4: Does the implementation violate any "Known Pitfalls / Critical Vulnerabilities" noted on the card?
+- S5: Are adapted product screenshots, coordinates, and brand tokens natural?
+- S6: For styles marked "For reference only, requires custom implementation", was explicit user request obtained and implementation risk noted in the report? For styles marked "Missing preview", did the report avoid claiming fidelity to dynamic samples?
 
-不要求和 Gallery 样片像素级一致。检查的是运动语法和关键参数是否忠实，同时
-允许为目标产品调整截图、坐标、文案、品牌视觉和必要构图。
+Pixel-perfect identity with Gallery samples is not required. Verification checks whether motion grammar and key parameters remain faithful, allowing adjustments to screenshots, coordinates, copy, brand visuals, and necessary compositions for the target product.
 
-### B — 分镜一致性
+### B — Storyboard Consistency
 
-- B1：镜头顺序、时长和功能信息是否符合确认或记录的最终分镜；
-- B2：主动作、页面状态、素材来源、字幕、转场和 SFX 是否一致；
-- B3：品牌字标 hold 是否至少 1 秒，批量动效收尾是否至少静止 0.5 秒；
-- B4：是否在最终分镜放行后，无依据地删除、替换或增加关键镜头。
+- B1: Do shot sequence, durations, and feature information match the confirmed or logged final storyboard?
+- B2: Are hero actions, page states, asset sources, subtitles, transitions, and SFX consistent?
+- B3: Does brand wordmark hold for at least 1 second, and do batch motion endings rest for at least 0.5 seconds?
+- B4: Were key shots deleted, replaced, or added without justification after the final storyboard was approved?
 
-### D — 数据与素材安全
+### D — Data and Asset Safety
 
-- D1：是否遵守真实数据、虚构数据或脱敏口径；
-- D2：是否暴露客户、个人、密钥、内部地址或其他敏感信息；
-- D3：表现真实产品页面时是否使用真实截图，而非低质量手搓复刻；
-- D4：截图状态、字体、图片和动态数据是否完整加载。
-- D5：公开演示数据是否有可复核的公开属性；客户、个人、内部、密钥、实时
-  或其他敏感数据是否已虚构、脱敏或冻结。
+- D1: Are policies regarding real data, fictional data, or desensitization strictly respected?
+- D2: Are customer info, personal identities, API keys, internal URLs, or other sensitive details exposed?
+- D3: Are real screenshots used when showcasing real product pages, avoiding low-quality hand-coded replicas?
+- D4: Are screenshot states, fonts, images, and dynamic data fully loaded without FOUT or skeleton artifacts?
+- D5: Do public demo data have verifiable public provenance? Are customer, personal, internal, key, realtime, or sensitive data fictionalized, desensitized, or frozen?
 
-### A — 音频与节奏
+### A — Audio and Rhythm
 
-- A1：BGM 是否符合确认或记录的音频方向，音量是否给 SFX 和可选配音留出空间；
-- A2：SFX 是否钉在真实动作关键帧，是否出现明显错位；
-- A3：强节奏音乐的切点误差是否不超过 3 帧；
-- A4：结尾能量峰值和 riser→impact→sparkle 句式是否成立（若分镜采用；sparkle 一拍取自 `sfx/light/`）；
-- A5：长样本（>5s，库里 21 个）是否都显式给了 `durationInFrames`，有没有音效拖到动作结束后还在响；
-- A6：每条 SFX 在**渲染产物**里是否真的听得见（不看预览——预览把 volume 钳到 1.0）；本身录得轻的素材（峰值 <-12dB，库里 7 个）即便给 1.0 仍可能被 BGM 盖住，是否已换素材／预归一化／给足 >1 的增益，且渲染后 max_volume 未削波；
-- A7：UI 类音效是否为真实物件质感而非合成反馈提示音（S1 判别问句）——`sfx/ui/` 中 `ui-confirm-*` `ui-*-tone` `ui-notify-*` 等合成音若出现在成片，是否有“系统在说话”的叙事理由并已写入项目说明文档（逐文件质感表见 sound-design 3.3）。
-- A8：配了 BGM 的片子是否交付了带 BGM / 无 BGM（保留 SFX）两版成片，
-  且两版出自同一时间线（无 BGM 版画面与 SFX 与带 BGM 版逐帧一致）；
-- A9：卡点/SFX 密集片是否对成片实测并补偿了输出音轨偏移与音源峰值
-  滞后（sound-design §4.6），补偿常数是否附实测记录（渲染管线四要素、
-  探针、测法、日期），源分析值与输出偏移是否分开记账（SOURCE_BEAT0
-  未被污染）；渲后回测误差表是否无系统性同向偏移（music-beat-sync §5b）。
+- A1: Does BGM align with confirmed or logged audio direction, leaving sufficient headroom for SFX and optional voiceover?
+- A2: Are SFX locked to true action keyframes without noticeable desync?
+- A3: For rhythm-driven music, is cut point alignment error within 3 frames?
+- A4: Does the ending energy peak and riser → impact → sparkle phrase resolve properly (if used in storyboard; sparkle beat taken from `sfx/light/`)?
+- A5: Do all long samples (>5s, 21 in library) explicitly declare `durationInFrames` to prevent audio trailing beyond action completion?
+- A6: Is every SFX audible in the **rendered artifact** (do not rely on preview — preview clamps volume to 1.0)? For soft-recorded assets (peaks <-12dB, 7 in library), check whether they were replaced, pre-normalized, or given >1 gain without clipping max_volume after render.
+- A7: Do UI sound effects possess physical material textures rather than synthetic notification tones (S1 test)? If synthetic tones from `sfx/ui/` (`ui-confirm-*`, `ui-*-tone`, `ui-notify-*`) appear, is there a narrative reason ("the system is speaking") documented in project specs (see sound-design 3.3)?
+- A8: For videos with BGM, are both versions (with BGM / without BGM with SFX preserved) delivered from the identical timeline (frame-accurate alignment between visuals and SFX)?
+- A9: For sync/SFX-dense videos, have output audio track offset and source peak latency been empirically measured and compensated (sound-design §4.6)? Are compensation constants accompanied by measurement logs (pipeline quad-tuple, probe, method, date), and are source analysis values kept separate from output offset (`SOURCE_BEAT0` uncontaminated)? Does post-render verification show no systematic directional bias (music-beat-sync §5b)?
 
-### Q — 视觉技术质量
+### Q — Visual Technical Quality
 
-完整执行 `aesthetic-rules.md`。至少检查文字锐度、构图、圆角遮罩、3D 纹理
-清晰度、元素落位、相机抖动、转场接缝、光效廉价感、可读时长和确定性渲染。
+Execute `aesthetic-rules.md` in full. Inspect at minimum text sharpness, composition balance, rounded-corner masking, 3D texture crispness, element landing settle, camera jitter, transition seams, cheap lighting effects, readable dwell times, and deterministic rendering.
 
-## 报告格式
+## Report Format
 
-每条结论使用编号，并给问题附帧号或截图：
+Use item codes for each finding, attaching frame numbers or screenshots for issues:
 
 ```text
-P1 ✓ 产品定位和核心卖点清楚。
-F2 ✗ 第 340 帧：已确认的知识图谱功能没有出现在成片。
-V3 ✗ 第 420 帧：大面积琥珀纸张材质偏离已确认的深蓝科技方向。
-S2 ✗ 第 515 帧：用户选择 whip-pan，实际实现为 flash-cut。
-Q2 ✗ 第 615 帧：3D 推近后正文文字发糊，见关键帧 f615.png。
+P1 ✓ Product positioning and core value propositions are clear.
+F2 ✗ Frame 340: Confirmed Knowledge Graph feature does not appear in final render.
+V3 ✗ Frame 420: Heavy amber paper material drifts from confirmed deep blue tech direction.
+S2 ✗ Frame 515: User selected whip-pan; actual implementation is flash-cut.
+Q2 ✗ Frame 615: Body text blurs after 3D push-in; see keyframe f615.png.
 ```
 
-最后按严重程度列出必须修复项、建议优化项和无法验证项。不要用没有证据的
-“整体不错”代替逐项检查，也不要为了报告好看而全部标记通过。
+Conclude with items categorized by severity: Must-Fix, Recommended Optimizations, and Unverifiable. Never substitute itemized verification with unsubstantiated "looks good overall" remarks, and never mark everything passed merely for report aesthetics.

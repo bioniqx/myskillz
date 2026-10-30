@@ -1,58 +1,42 @@
 ---
 name: brand-frame-snap
-一句话: 品牌色画框语法——一圈粗纯色画框先于内容长出包住全屏，录屏窗口落进框内；模式切换时整圈画框同帧硬翻色+窗内布局同帧换，一个 borderColor 干完章节导航/状态提示/品牌露出三件事
-适用: 双模式/双章节产品片的全片包装层（蓝=模式A、绿=模式B 颜色编码）；真实录屏素材的品牌化包裹
-时长: 单次翻色 ~4.7s（140f）；画框本身可全片驻场
-能量: 中（翻色瞬间高，其余时间是安静的包装层）
-标签: transition
+summary: A thick brand-color frame grows around the screen before content arrives, then hard-flips its color on the same frame the inner layout switches.
+use: Global packaging layer for dual-mode or dual-chapter product videos (blue = Mode A, green = Mode B color coding); branded wrapping for live screen recordings
+duration: Single color flip ~4.7s (140f); the frame itself can persist across the full video
+energy: Medium (high at the flip moment, quiet packaging layer otherwise)
+tags: transition
 ---
 
-## 意图
-真实录屏直接铺满屏没有品牌存在感，加 logo 水印又廉价。本卡用一圈
-粗品牌色画框把录屏"装裱"起来：画框**先于内容出现**（先立画框再放
-画，仪式感），之后画框颜色成为全片的语义编码——demo 里钴蓝=Design、
-橘红=Dev Mode（原片是蓝/绿；关键是色相对冲 + 明度差）。章节切换时整圈画框一帧内硬翻色，无渐变，颜色硬切就是"换挡"
-声效的视觉等价物；窗内布局同帧 A→B、角标与徽标同步换字，三处同帧
-共振把"模式切换"砸实。与 theme-switch-moves 分工：那换的是 UI 本体
-肤色（有扫过边界），本卡换的是"画框"这个包装层（同帧无边界），
-语义是模式/章节切换不是主题切换。
+## Intention
+Raw screen recordings filling the entire canvas lack brand presence, while logo watermarks feel cheap. This card frames screen recordings with a thick brand-color border: the frame **appears before content** (establishing the frame before hanging the picture creates ceremony), after which the frame color becomes the semantic code for the entire video—in the demo, cobalt blue = Design, orange-red = Dev Mode (original reference was blue/green; the key is complementary hue clash + lightness contrast). During chapter switches, the full frame snaps color within a single frame with zero gradient; this hard cut visually equals a mechanical gear-shift sound effect. Simultaneously, the inner window layout switches A->B and corner badges/wordmarks update synchronously, locking in the "mode switch" through 3-point harmonic resonance. Division of labor with theme-switch-moves: that card alters the UI body theme (with sweeping wipe boundaries), whereas this card switches the outer "framing layer" (single-frame boundaryless cut) to signal mode/chapter switches rather than UI skinning.
 
-## 动效核心
-- 画框用 4 条实体色带（非 border 属性），厚度 0→60px snappy 19f
-  长出（第 2 帧就有可见框）；洞口是 22px 圆角（四角补色块），色带叠一层
-  顶亮底暗的薄釉；翻色 = 同一帧换 background，帧确定
-- 产品窗口（1560×864，原生像素布局）spring(damping 15, stiffness 115)
-  从下方 660px + 前倾 18°→0 + scale 0.88→1 落进框内（帧 10 起，画框长出
-  中段），下落按速度纵向运动模糊，阴影随高度 70→22 收紧
-- 动机：光标 56–80f 弧线滑向标题栏 Design | Dev 开关，80 按下、84 松开 = 翻色帧
-- 翻色帧四件事同帧：画框换色 + 窗内布局 A→B 硬切（右栏浅色检查器→深色
-  CSS 面板、左栏图层→tokens、蓝选框→橘标注）+ 框带角标换字
-  （DESIGN→DEV MODE，右上 video-shotcraft 字标常驻，色带上用单色白版标志）+ 开关态
-- 翻色瞬间叠 3 帧径向白闪（0.6 起阶梯衰减，框带最亮）+ 画框厚度阻尼
-  弹跳（exp(-0.24t)·cos(0.95t)·12px）+ 内容 ~1% 顿挫，给"换挡"打击感；
-  余波：标注线 3f 错峰画出、数值胶囊过冲弹出
+## Motion Core
+- The frame consists of 4 solid color bands (not CSS border properties), snapping 0->60px over 19f snappy growth (visible frame from frame 2); inner aperture features 22px rounded corners (corner filler blocks) with a subtle glaze gradient (bright top, dark bottom); color flip = instant background swap on the exact same frame.
+- Product window (1560x864, native pixel layout) drops into the frame via `spring(damping: 15, stiffness: 115)` from y: 660px + 18 deg -> 0 forward tilt + scale 0.88->1 (starting at frame 10, mid-way through frame growth), with vertical motion blur scaled to velocity and shadow tightening from 70->22px based on elevation.
+- Motivation: cursor glides in an arc from 56–80f toward the title bar Design | Dev switch, clicks at 80, releases at 84 = flip frame.
+- Four events lock to the exact flip frame: frame color swap + inner window layout A->B hard cut (right light inspector -> dark CSS panel, left layers -> tokens, blue selection -> orange callouts) + frame corner badge label swap (DESIGN -> DEV MODE, top-right video-shotcraft wordmark remains, monochrome white logo on color band) + switch button toggle state.
+- Flip moment layers a 3f radial white flash (stepped decay from 0.6, brightest at frame bands) + frame thickness damped bounce (`exp(-0.24t) * cos(0.95t) * 12px`) + ~1% content hitch to deliver physical gear-shift impact; aftershocks: dimension callout lines draw on staggered by 3f, value pills pop out with overshoot.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 画框厚度 | 60px（1080p），角标 30px 粗体全大写 | 太薄读作描边、角标也放不下可读字号；>64px 开始吃内容区 |
-| 画框生长 | 19f snappy，先于窗口 10f | 画框必须先立——内容先到画框后包读作补救 |
-| 窗口落位 | spring(damping 15, stiffness 115)，y 660→0 + rotateX 18°→0 + scale 0.88→1 | 落进"框内"是语义关键，落点必须完全在框带内侧 |
-| 翻色时刻 | demo 84f（光标松开帧）；停一拍（窗口落定后 ≥30f）再翻 | 落定没坐稳就翻，观众还没建立"蓝=当前模式"的编码 |
-| 白闪脉冲 | 3f，0.6→0.2 阶梯，径向（框带处最亮） | 帮眼睛登记"这一帧变了"；>4f 读作底色频闪，抢了翻色的戏 |
-| 厚度弹跳 | exp 衰减 cos，初幅 12px | 纯硬切略干；弹跳是"挡位卡进去"的机械回馈 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Frame thickness | 60px (1080p), corner badge 30px bold all-caps | Too thin reads as an outline with insufficient room for readable badges; >64px encroaches on content area |
+| Frame growth | 19f snappy, leads window by 10f | Frame must establish first—content arriving before frame packaging reads as an afterthought |
+| Window landing | spring(damping: 15, stiffness: 115), y 660->0 + rotateX 18 deg -> 0 + scale 0.88->1 | Landing "inside the frame" is the semantic anchor; landing position must sit fully within the frame band |
+| Flip timing | Demo 84f (cursor release frame); hold steady (>=30f after window settles) before flipping | Flipping before the window settles prevents viewers from establishing the "blue = current mode" mental anchor |
+| White flash pulse | 3f, 0.6->0.2 stepped decay, radial (brightest at frame bands) | Helps the eye register "this frame changed"; >4f reads as canvas strobe and steals focus from the color flip |
+| Thickness bounce | Damped cosine decay, 12px initial amplitude | Pure hard cuts feel dry; bounce provides mechanical feedback of "locking into gear" |
 
-## 已知坑
-- demo 用手搓的设计工具窗口调校通过（框带角标是 video-shotcraft 标志 + 字标，画布上是一张 video-shotcraft 推广卡）——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 翻色必须真同帧：画框、窗内布局、角标文字三者错开哪怕 2f，"换挡"就散成三个小动画
-- 颜色编码要全片守约：蓝框段落里不许出现绿色主 UI 元素，编码被稀释后翻色就只是换色
-- 画框是包装层不是主角：全片翻色 ≤2 次，翻多了读作霓虹灯（P4 克制原则）
-- 两个模式的品牌色对比度要够（demo 钴蓝 #2F55FF / 橘红 #FF5B1F，色相对冲 + 明度差）；同明度邻近色翻了等于没翻
-- 窗内 UI 保持中性墨色，强调色只跟模式走（蓝段的选中态是蓝、橘段的标注是橘），否则编码被 UI 自身颜色稀释
-- 声音：翻色帧钉一声干脆的机械 click/换挡声，白闪与声同帧；画框生长段可静
+## Known Pitfalls
+- Demo calibrated using a custom design tool window (frame corner badge is video-shotcraft logo + wordmark, canvas displays a video-shotcraft promo card)—parameters serve as a tuning baseline, verify against real assets in production.
+- Flip must be strictly frame-accurate: if frame, inner layout, and badge copy drift apart by even 2f, the "gear shift" scatters into three disconnected micro-animations.
+- Color coding must remain consistent across the video: avoid dominant green UI elements during blue-frame sections; diluting the code degrades the flip into a superficial color swap.
+- The frame is packaging, not the hero: flip <=2 times per video; excessive flips read like neon signage (P4 restraint principle).
+- Brand color contrast between modes must be strong (demo: cobalt blue #2F55FF vs orange-red #FF5B1F, complementary hue clash + lightness delta); adjacent hues with identical lightness produce negligible perceived change.
+- Keep inner UI neutral ink tones, reserving accent color strictly for active mode cues (selection state is blue in blue sections, callouts are orange in orange sections), preventing UI noise from diluting the code.
+- Audio: punch a crisp mechanical click / gear shift on the flip frame, locked synchronously with the white flash; frame growth phase can remain silent.
 
-## 参考实现
+## Reference Implementation
 demos/effects/brand-frame-snap/
-（BrandFrameSnap.tsx）
-原片出处：figma-devmode 0:28–0:32 + 0:43–0:47
+(BrandFrameSnap.tsx)
+Original source: figma-devmode 0:28–0:32 + 0:43–0:47

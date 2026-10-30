@@ -1,19 +1,19 @@
-// 残像分身（smear-multiples）——smear frame 多重残像。
-// 卡片高速横移时身后拖 4 个"可数"的半透明完整分身（各取当前帧减 k*2 帧
-// 时刻的位置，同一条插值函数换帧号求值，天然帧确定），与运动模糊的连续糊
-// 相区别。分身仅在本体速度 >25px/f 时可见（速度 = 相邻帧位置差）。
-// 关键帧：0–25 左槽 hold → 25–37 横移 900px（inOut cubic，带 3% 过冲）→
-// 35–38 分身延迟收缩至 0 合拢进本体 + opacity 归零 → 37–43 过冲回弹 → 43–130 全静止。
+// smear-multiples — Multiple smear-frame afterimages
+// When card translates at high speed, it trails 4 distinct translucent clones (each sampled at frame - k*2,
+// evaluated from same interpolation function with frame offset, purely frame-deterministic), distinct from continuous motion blur.
+// Clones visible only when body velocity >25px/f (velocity = adjacent frame position difference).
+// Keyframes: 0–25 left slot hold -> 25–37 translates 900px (inOut cubic, 3% overshoot) ->
+// 35–38 clones delay-collapse to 0 into body + opacity to zero -> 37–43 overshoot rebound -> 43–130 fully static.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, Card, TitleBlock } from '../../_fixtures/Fixtures';
 
-const X0 = 240; // 左槽卡片左边缘
-const X1 = 1140; // 右槽卡片左边缘（横移 900px）
-const OVER = 27; // 3% 过冲
-const Y = 380; // 卡片顶边（垂直居中 1080-320）
+const X0 = 240; // Left slot card left edge
+const X1 = 1140; // Right slot card left edge (900px translation)
+const OVER = 27; // 3% overshoot
+const Y = 380; // Card top edge (vertically centered 1080-320)
 
-// 本体位置：25–37 高速横移到过冲点，37–43 回弹落座，之后恒定 → 帧确定
+// Body position: 25–37 high-speed move to overshoot point, 37–43 rebound settle, constant thereafter -> frame deterministic
 const posAt = (f: number): number =>
   f < 37
     ? interpolate(f, [25, 37], [X0, X1 + OVER], {
@@ -45,13 +45,13 @@ const Slot: React.FC<{ x: number }> = ({ x }) => (
 export const SmearMultiples: React.FC = () => {
   const frame = useCurrentFrame();
   const bodyX = posAt(frame);
-  // 本体速度 = 相邻帧位置差；>25px/f 才渲染分身
+  // Body speed = adjacent frame position delta; clones render only when >25px/f
   const speed = Math.abs(posAt(frame) - posAt(frame - 1));
   const speedGate = interpolate(speed, [25, 60], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  // 落位合拢：35–38 三帧内分身延迟收缩到 0（位置滑向本体）+ 不透明度归零
+  // Landing convergence: clones collapse delay to 0 over 3 frames (35–38) sliding into body + opacity fades to zero
   const cv = interpolate(frame, [35, 38], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -68,7 +68,7 @@ export const SmearMultiples: React.FC = () => {
       </div>
       <Slot x={X0} />
       <Slot x={X1} />
-      {/* 4 个分身：第 k 个取 frame - k*2 帧时刻的位置；合拢期延迟×(1-cv) 收缩到 0 */}
+      {/* 4 clones: k-th takes position at frame - k*2; during convergence, delay*(1-cv) shrinks to 0 */}
       {ghostOps.map((baseOp, i) => {
         const k = i + 1;
         const gx = posAt(frame - k * 2 * (1 - cv));

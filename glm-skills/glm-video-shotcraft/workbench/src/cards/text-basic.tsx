@@ -3,7 +3,7 @@ import { AbsoluteFill, useCurrentFrame } from "remotion";
 import type { CardDef } from "./types";
 import { FONT_STACK, lerp, power2Out, power3Out, power4Out, tw } from "./shared";
 
-// text-basic · 通用文字卡 —— 工作台原生卡：内容/字号/颜色/入场动画全部属性化
+// text-basic · Basic text card — fully parameterized content, size, color, animation
 const FPS = 30;
 
 interface Props {
@@ -120,47 +120,47 @@ const TextBasic: React.FC<Props> = ({
 
 export const textBasicCard: CardDef = {
   id: "text-basic",
-  name: "通用文字",
-  category: "工作台",
+  name: "Basic Text",
+  category: "Workbench",
   durationInFrames: 120,
   accent: "#0a84ff",
   component: TextBasic as React.ComponentType<Record<string, unknown>>,
   schema: [
-    { type: "textarea", key: "content", label: "文字内容", default: "Type your text here" },
-    { type: "slider", key: "fontSize", label: "字号", default: 64, min: 16, max: 180, step: 1, unit: "px" },
-    { type: "color", key: "color", label: "文字颜色", default: "#1d1d1f" },
+    { type: "textarea", key: "content", label: "Text Content", default: "Type your text here" },
+    { type: "slider", key: "fontSize", label: "Font Size", default: 64, min: 16, max: 180, step: 1, unit: "px" },
+    { type: "color", key: "color", label: "Text Color", default: "#1d1d1f" },
     {
-      type: "select", key: "fontWeight", label: "字重", default: "700",
+      type: "select", key: "fontWeight", label: "Font Weight", default: "700",
       options: [
-        { value: "400", label: "常规 400" },
-        { value: "600", label: "半粗 600" },
-        { value: "700", label: "加粗 700" },
-        { value: "900", label: "特粗 900" },
+        { value: "400", label: "Regular 400" },
+        { value: "600", label: "Semi-Bold 600" },
+        { value: "700", label: "Bold 700" },
+        { value: "900", label: "Black 900" },
       ],
     },
-    { type: "slider", key: "letterSpacing", label: "字距", default: 0, min: -4, max: 24, step: 0.5, unit: "px" },
+    { type: "slider", key: "letterSpacing", label: "Letter Spacing", default: 0, min: -4, max: 24, step: 0.5, unit: "px" },
     {
-      type: "select", key: "align", label: "对齐", default: "center",
+      type: "select", key: "align", label: "Alignment", default: "center",
       options: [
-        { value: "left", label: "左对齐" },
-        { value: "center", label: "居中" },
-        { value: "right", label: "右对齐" },
+        { value: "left", label: "Left" },
+        { value: "center", label: "Center" },
+        { value: "right", label: "Right" },
       ],
     },
     {
-      type: "select", key: "anim", label: "入场动画", default: "fade-up",
+      type: "select", key: "anim", label: "Entrance Animation", default: "fade-up",
       options: [
-        { value: "fade-up", label: "淡入上浮" },
-        { value: "slam", label: "砸出" },
-        { value: "mask", label: "遮罩揭示" },
-        { value: "typewriter", label: "打字机" },
-        { value: "fade", label: "纯淡入" },
-        { value: "none", label: "无" },
+        { value: "fade-up", label: "Fade Up" },
+        { value: "slam", label: "Slam" },
+        { value: "mask", label: "Mask Reveal" },
+        { value: "typewriter", label: "Typewriter" },
+        { value: "fade", label: "Fade" },
+        { value: "none", label: "None" },
       ],
     },
-    { type: "slider", key: "delay", label: "入场延迟", default: 0.3, min: 0, max: 3, step: 0.05, unit: "s" },
-    { type: "slider", key: "animDur", label: "动画时长", default: 0.4, min: 0.1, max: 2, step: 0.05, unit: "s" },
-    { type: "color", key: "bg", label: "背景色", default: "#ffffff" },
-    { type: "boolean", key: "transparentBg", label: "透明背景", default: false },
+    { type: "slider", key: "delay", label: "Entrance Delay", default: 0.3, min: 0, max: 3, step: 0.05, unit: "s" },
+    { type: "slider", key: "animDur", label: "Animation Duration", default: 0.4, min: 0.1, max: 2, step: 0.05, unit: "s" },
+    { type: "color", key: "bg", label: "Background Color", default: "#ffffff" },
+    { type: "boolean", key: "transparentBg", label: "Transparent Background", default: false },
   ],
 };

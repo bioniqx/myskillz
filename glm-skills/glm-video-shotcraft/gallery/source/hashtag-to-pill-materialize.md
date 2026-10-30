@@ -1,60 +1,40 @@
 ---
 name: hashtag-to-pill-materialize
-一句话: 话题词打字实体化——居中打出 "#word"（红实心光标恒亮），1 帧硬切变成宽大胶囊标签，hold 后缩小左移落到页面标签位，再 1 帧硬切揭示成品页；"两次硬切一次滑动"的节奏骨架
-适用: 标签/分类/关键词功能的演示段（笔记 app 打 tag、话题聚合）；"输入 → 变成 UI 实体 → 归位到成品"的三段式叙事
-时长: 120f（4s）——打字 ~40f + 硬切胶囊 hold ~18f + 缩移 ~14f + 硬切揭示后静置 ~1.2s（原片 18–21.5s）
-能量: 中（干脆利落，靠硬切给劲，不靠弹跳）
-标签: typography
+summary: A typed "#word" hard-cuts into a wide pill tag, holds, shrinks into its slot on the page, then hard-cuts again to reveal the finished view.
+use: Demonstration segments for tagging, categorization, and keyword features (tagging in note apps, topic aggregation); three-stage narrative of "input -> transform into UI entity -> settle into final product"
+duration: 120f (4s) — typing ~40f + hard-cut pill hold ~18f + shrink-move ~14f + post-reveal rest ~1.2s (original video 18–21.5s)
+energy: Medium (crisp and decisive; derives punch from hard cuts rather than bouncy springs)
+tags: typography
 ---
 
-## 意图
-文字变实体的常规做法是渐变/morph/展开，原片帧级拆解证明 Bear 反着
-来：**实体化是 1 帧硬切**——上一帧还是文字+光标，下一帧就是完整
-胶囊，无展开无 cross-fade 无回弹。硬切给的是"啪、成了"的确定感，
-任何渐变都会把"实体"软化成"特效"。全段骨架是**两次硬切夹一次
-滑动**：硬切实体化 → 平滑缩移归位 → 硬切揭示成品页。唯一的连续
-运动（缩移）被两记硬切框住，才显得又快又稳。这个节奏骨架是命门，
-三段挪动任何一段的性质（把硬切改渐变、把滑动改硬切）整卡就塌。
+## Intention
+The conventional technique for turning text into entities is gradient/morph/expand. Frame-by-frame breakdown of the original video proves Bear does the opposite: **materialization is a 1-frame hard cut**—one frame text + cursor, the very next frame a complete pill, with zero expansion, zero cross-fade, zero rebound. A hard cut delivers the certainty of "snap, done"; any gradient softens an "entity" into a "special effect." The backbone of the entire shot is **one slide sandwiched between two hard cuts**: hard cut materialization -> smooth shrink-move settling -> hard cut reveal of finished page. The sole continuous motion (shrink-move) is framed between two hard cuts, rendering it fast yet grounded. This rhythmic backbone is essential; altering the character of any of the three stages (replacing hard cuts with fades, or slide with cuts) collapses the shot.
 
-## 动效核心
-- 打字段：几何无衬线（Futura 气质）居中打 "#word"，**红实心光标
-  恒亮不闪**（原片实测，别加 blink）；人手节奏 4–6f/字带确定性抖动
-- **实体化 = 1 帧硬切**：文字+光标整层消失，同帧出现无描边浅灰
-  胶囊 + 图标 + 词（字号不变、原位等大，# 被图标替换）；仅允许
-  3f 1.03→1 微落定防死板
-- 胶囊 hold ~0.6s → 一段 bezier easeInOut 缩小左移（~0.55x、
-  ~14f）落到页面标签位，位置/缩放同曲线同起止，中途不分段
-- 落位后**再 1 帧硬切**揭示成品页：底色/标题/正文/胶囊配色同帧
-  全变，之后真静止收尾
-- 实现要点：胶囊按大字号绘制、整体 transform 缩放，且
-  transformOrigin 必须 0 0 + translate 先行，否则落位中心漂移
+## Motion Core
+- Typing stage: Geometric sans-serif (Futura aesthetic) centered typing "#word", **solid red cursor steadily illuminated without blinking** (verified in original video, do not add blink); human cadence 4–6f/char with deterministic jitter.
+- **Materialization = 1-frame hard cut**: Text + cursor layer vanishes completely; in the exact same frame, borderless light grey pill + icon + word appears (identical font size, 1:1 scale in place, # replaced by icon); only a 3f 1.03->1 subtle settle allowed to prevent stiffness.
+- Pill hold ~0.6s -> Bezier easeInOut shrink-and-slide (~0.55x, ~14f) into page tag slot, position and scale sharing identical curve and start/end points without mid-flight staging.
+- Settle followed by **another 1-frame hard cut** revealing finished page: background, title, body, and pill color palette change simultaneously in a single frame, concluding with true static hold.
+- Implementation note: Pill drawn at large font size and scaled via outer transform; transformOrigin must be set to `0 0` with translate executed first, otherwise landing center drifts.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 打字节奏 | 4–6f/字（原片 ~6 字/秒），mulberry32 抖动 | 均匀间隔读作机打；光标必须恒亮（**原片实测**不闪烁） |
-| 实体化 | **1 帧硬切**（原片帧级实测无任何过渡）+ 3f 1.03→1 微落定 | 加淡入/展开立刻降级成普通 morph；微落定 >4f 读作弹跳 |
-| 胶囊几何 | 740×236@1920（**原片实测** 493×157@720p ×1.5），无描边 | 胶囊要"宽大过头"才有实体感；加描边读作按钮 |
-| hold | ~18f（0.6s，**原片实测**） | <12f 观众没看清胶囊长啥样就飞了 |
-| 缩移 | ~0.55x（**原片实测** 273/493）、14f、bezier(0.5,0,0.25,1) | 缩放与位移必须同曲线；分开调会读作两个动画 |
-| 揭示 | 落位 +3f 再 1 帧硬切全页 | 揭示若做转场，第二记硬切没了，骨架塌一半 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Typing cadence | 4–6f/char (original video ~6 char/s), mulberry32 jitter | Uniform intervals read like machine typing; cursor must stay solid (**verified in original video** without blinking) |
+| Materialization | **1-frame hard cut** (verified frame-by-frame with zero transition) + 3f 1.03->1 micro-settle | Adding fade-in/expansion immediately downgrades it to a standard morph; micro-settle >4f reads as bouncy |
+| Pill geometry | 740x236 @1920 (**verified from original** 493x157 @720p x1.5), no border | Pill must be "excessively wide" to convey physical entity presence; adding borders reads like a button |
+| Hold | ~18f (0.6s, **verified in original**) | <12f leaves viewers no time to parse pill appearance before it flies away |
+| Shrink-move | ~0.55x (**verified in original** 273/493), 14f, bezier(0.5,0,0.25,1) | Scale and displacement must share identical curve; tuning separately reads as two disjointed animations |
+| Reveal | Landing +3f then 1-frame hard cut to full page | Using transitions for reveal destroys the second hard cut, collapsing half the backbone |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 typewriter-moves（打字呈现）、ui-to-brand-morph（渐变变形成形）
-  撞领域：本卡命门是**硬切实体化非渐变变形**——只要你想加过渡，
-  就该去用那两张卡而不是改这张
-- 早期版本曾杜撰"胶囊飞入下方滑入笔记卡"段，原片对照证伪已砍；
-  别复活飞行段
-- transformOrigin 默认 50% 50% 会让缩放落位中心漂移 (1−s)×半宽，
-  必须 origin 0 0 + translate 到目标中心再 scale（demo 内注释）
-- 与原片残余差距：Futura 回退字重、揭示帧正文间距 ~10px 级别偏差；
-  节奏与硬切时点已密帧对齐。demo 内容已换成 video-shotcraft 的世界
-  （原片 "#music" + 音符 → "#shots" + 场记板图标，成品页 "My favorite shots"），
-  话题词与原词等长，胶囊几何不变
+## Known Pitfalls
+- Demo calibrated on grayscale/placeholder assets—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- Overlaps with typewriter-moves (typing presentation) and ui-to-brand-morph (gradient morphing formation): this card's essence is **hard-cut materialization, not gradient morphing**—if you want to add transitions, use those two cards instead.
+- Earlier versions invented a segment where "pill flies in and note card slides up from below"; debunked and removed via original video comparison; do not resurrect flight segments.
+- Default transformOrigin `50% 50%` causes landing center to drift by `(1-s)*half-width`; must use `origin 0 0` + translate to target center before scaling (annotated in demo).
+- Residual variance with original: Futura fallback font weight, ~10px body text spacing discrepancy on reveal frame; rhythm and hard-cut timing are tightly aligned. Demo content adapted to video-shotcraft context (original "#music" + note icon -> "#shots" + clapperboard icon, finished page "My favorite shots"); topic keyword matches original length, preserving pill geometry.
 
-## 参考实现
+## Reference Implementation
 demos/interaction/hashtag-to-pill-materialize/
-（HashtagToPillMaterialize.tsx）
-原片出处：bear-app.mp4 18–21.5s
+(HashtagToPillMaterialize.tsx)
+Source: bear-app.mp4 18–21.5s

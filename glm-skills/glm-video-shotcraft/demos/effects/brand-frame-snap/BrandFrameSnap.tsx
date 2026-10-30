@@ -1,26 +1,26 @@
 // brand-frame-snap —— figma-devmode 0:28–0:32 (brand-frame-snap) + 0:43–0:47 (frame-color-flip)
-// 一圈粗品牌色画框先于内容长出包住全屏 → 产品窗口落进框内 → 光标点下模式开关 →
-// 画框整圈钴蓝→橘红同帧硬翻色，窗口布局同帧 Design→Dev 换版，框带角标同帧换字。
+// Bold brand color border grows to enclose full viewport before content -> Product window drops into frame -> Cursor clicks mode toggle ->
+// Entire frame hard-flips cobalt blue to orange-red on same frame, window layout switches Design to Dev, frame corner badge text swaps synchronously.
 //
-// 第二轮重设计（瓷白工作室 · 双模式设计工具）：品牌轮把产品换成 video-shotcraft——框带右上是镜刻标志 + 字标，
-// 画布上设计的是一张 video-shotcraft 推广卡（开源 $0 / 三条卖点 / Render launch film 按钮）。
-// - look = porcelain（冷白舞台）。画框是唯一的强色：Design = 钴蓝 #2F55FF、Dev = 橘红 #FF5B1F——
-//   色相对冲 + 明度差，翻了一眼就知道"换挡"；窗内 UI 全是中性墨色，强调色只跟着模式走（蓝段不出现橘，橘段不出现蓝）。
-// - 主体是为镜头设计的设计工具窗口（1560×864，原生像素布局不缩放）：左图层栏 / 中画布（一张大字号定价卡，
-//   选中的是 "Render launch film" 按钮）/ 右检查器。翻色同帧：右栏由浅色属性面板换成深色代码面板（CSS），
-//   左栏由图层树换成资产与 token，画布上的蓝色选框换成橘色标注线。版式整体换脸，"模式切换"砸实。
-// - 动机：光标从画布滑向标题栏的 Design | Dev 开关、按下（预备缩 0.9）→ 松开那一帧翻色。
-// - 框带 60px，模式角标 32px 粗体全大写（要读的字 ≥32px），右上角是 video-shotcraft 标志 + 字标
-//   （色带上用单色白版标志，琥珀斜切在橘红带上会糊掉）。
+// Second-round redesign (Porcelain studio · Dual-mode design tool): Product themed around video-shotcraft — top-right border hosts Mirror Cut emblem + wordmark,
+// canvas showcases video-shotcraft promotional pricing card (Open source $0 / 3 feature bullets / "Render launch film" CTA).
+// - look = porcelain (cool white studio). Frame is sole saturated color: Design = Cobalt blue #2F55FF, Dev = Orange-red #FF5B1F —
+//   hue clash + luminance difference makes mode switch immediately unmistakable; inner window UI remains neutral ink tones, accent color strictly bound to active mode (no orange in blue mode, no blue in orange mode).
+// - Hero is a design tool window tailored for the camera (1560×864, native pixel layout without scaling): Left layer panel / Center canvas (large-type pricing card with
+//   "Render launch film" button selected) / Right inspector. On flip frame: Right column transforms from light property inspector to dark code panel (CSS),
+//   left column transforms from layer tree to assets & tokens, canvas blue selection box transforms into orange measurement lines. Complete UI identity shift, anchoring "mode switch".
+// - Motivation: Cursor glides from canvas toward Design | Dev switch in title bar, depresses (0.9 scale anticipation) -> releases on flip frame.
+// - 60px frame border, 32px bold uppercase mode badge (legible text >= 32px), top right features video-shotcraft emblem + wordmark
+//   (monochrome white emblem on color band, amber diagonal cut would muddy over orange-red).
 //
-// 时间表（30fps，共 140f）：
-//   0–18    预备：画框从 0 长到 60px（snappy，2 帧内就有框）；角标 6f 起从框带下沿升入
-//   10–40   主动作：窗口从框下沿 660px 弹簧落进框内（damping 15）+ 18° 前倾回正，按速度纵向模糊，阴影随高度收紧
-//   36–52   跟随：按钮选框描边（8 个手柄错峰弹出）+ 尺寸胶囊 440 × 76
-//   56–80   光标从画布滑向 Dev 开关（不对称 in-out）；80–84 按下
-//   84      翻色帧：画框色 / 窗口版式 / 角标文字 / 开关态 同帧硬切 + 3 帧径向白闪 + 框厚阻尼弹跳
-//   86–104  余波：标注线逐条画出（3f 错峰）、数值胶囊过冲弹出
-//   104–140 hold：内容区极缓推近 2%，干净落定
+// Timeline (30fps, total 140f):
+//   0–18    Preparation: Border expands from 0 to 60px (snappy, visible within 2 frames); badge rises from bottom edge of border at 6f
+//   10–40   Main action: Window spring-drops 660px into frame (damping 15) + tilts 18° forward to upright, vertical motion blur with speed, shadows tighten with altitude
+//   36–52   Follow-through: Button selection outline (8 handles stagger pop) + dimension pill 440 × 76
+//   56–80   Cursor glides from canvas toward Dev switch (asymmetric in-out); 80–84 mouse press
+//   84      Flip frame: Border color / window layout / badge text / switch state hard cut on same frame + 3f radial white flash + border thickness damped bounce
+//   86–104  Aftermath: Measurement lines draw sequentially (3f stagger), numeric pills overshoot-pop
+//   104–140 Hold: Content area subtle 2% camera push, clean settlement
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { EASE, FONT, SpeedBlur, mix, ramp, softShadow } from '../../_fixtures/Polish';
@@ -30,19 +30,19 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const BRAND_FRAME_SNAP_DURATION = 140;
 
 const L = LOOKS.porcelain;
-const BLUE = '#2F55FF'; // Design 模式品牌色
-const ORANGE = '#FF5B1F'; // Dev 模式品牌色
-const FLIP = 84; // 同帧硬翻色
-const BAND = 60; // 画框厚度
+const BLUE = '#2F55FF'; // Design mode brand color
+const ORANGE = '#FF5B1F'; // Dev mode brand color
+const FLIP = 84; // Synchronous hard color flip frame
+const BAND = 60; // Border thickness
 const WIN_W = 1560;
 const WIN_H = 864;
-const BAR_H = 64; // 窗口标题栏
+const BAR_H = 64; // Window title bar height
 const LEFT_W = 300;
 const RIGHT_W = 400;
 const INK = '#14161f';
 const MONO = FONT.mono;
 
-// 窗口内坐标（相对窗口左上）：画布区与推广卡、按钮
+// Window inner coordinates (relative to window top-left): Canvas area, promo card, button
 const CANVAS_X = LEFT_W;
 const CANVAS_W = WIN_W - LEFT_W - RIGHT_W; // 860
 const BODY_H = WIN_H - BAR_H; // 800
@@ -54,7 +54,7 @@ const BTN_W = 404;
 const BTN_H = 76;
 const BTN_X = CARD_X + 32;
 const BTN_Y = CARD_Y + CARD_H - 32 - BTN_H;
-// 标题栏模式开关里 "Dev" 段的中心（光标目标）
+// Center coordinates of "Dev" segment within mode toggle (cursor target)
 const TOG_W = 230;
 const TOG_X = WIN_W - 24 - TOG_W;
 const DEV_CX = TOG_X + TOG_W * 0.75;
@@ -62,7 +62,7 @@ const DEV_CY = BAR_H / 2;
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
-// ───────── 小图标 ─────────
+// ───────── Micro Icons ─────────
 const ModeIcon: React.FC<{ dev: boolean; size: number; color: string }> = ({ dev, size, color }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
     {dev ? (
@@ -88,7 +88,7 @@ const Check: React.FC = () => (
   </svg>
 );
 
-// 光标（白描边黑芯，中性色，不参与颜色编码）
+// Cursor (white border black fill, neutral tone, excluded from color coding)
 const Cursor: React.FC<{ x: number; y: number; press: number }> = ({ x, y, press }) => (
   <svg width={44} height={44} viewBox="0 0 24 24" style={{
     position: 'absolute', left: x - 7, top: y - 4, transform: `scale(${1 - 0.12 * press})`, transformOrigin: '7px 4px',
@@ -98,7 +98,7 @@ const Cursor: React.FC<{ x: number; y: number; press: number }> = ({ x, y, press
   </svg>
 );
 
-// ───────── 窗口：标题栏 ─────────
+// ───────── Window: Title Bar ─────────
 const TitleBar: React.FC<{ dev: boolean; color: string }> = ({ dev, color }) => (
   <div style={{
     position: 'absolute', left: 0, top: 0, width: WIN_W, height: BAR_H, boxSizing: 'border-box',
@@ -113,7 +113,7 @@ const TitleBar: React.FC<{ dev: boolean; color: string }> = ({ dev, color }) => 
       <span style={{ color: L.ink3 }}>/</span>
       <span style={{ color: L.ink, fontWeight: 600 }}>Promo card</span>
     </div>
-    {/* 模式开关：active 段 = 当前模式色（翻色帧同步换） */}
+    {/* Mode toggle: active segment = active mode color (swaps on flip frame) */}
     <div style={{
       position: 'absolute', left: TOG_X, top: (BAR_H - 44) / 2, width: TOG_W, height: 44, borderRadius: 12,
       background: '#e9ecf2', boxShadow: 'inset 0 1px 2px rgba(15,30,60,0.08)', display: 'flex', padding: 4, boxSizing: 'border-box',
@@ -135,7 +135,7 @@ const TitleBar: React.FC<{ dev: boolean; color: string }> = ({ dev, color }) => 
   </div>
 );
 
-// ───────── 左栏 ─────────
+// ───────── Left Column ─────────
 const PanelHead: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: L.ink3, margin: '0 0 14px' }}>{children}</div>
 );
@@ -188,7 +188,7 @@ const LeftPanel: React.FC<{ dev: boolean; color: string }> = ({ dev, color }) =>
   </div>
 );
 
-// ───────── 右栏：Design = 浅色检查器；Dev = 深色代码面板 ─────────
+// ───────── Right Column: Design = Light inspector; Dev = Dark code panel ─────────
 const Field: React.FC<{ k: string; v: string; w?: number }> = ({ k, v, w = 150 }) => (
   <div style={{ width: w, height: 48, borderRadius: 10, background: '#f1f3f7', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', boxSizing: 'border-box', fontSize: 20 }}>
     <span style={{ color: L.ink3, fontWeight: 600 }}>{k}</span>
@@ -276,7 +276,7 @@ const RightPanel: React.FC<{ dev: boolean; color: string }> = ({ dev, color }) =
     </div>
   );
 
-// ───────── 画布与推广卡（video-shotcraft 开源 skill） ─────────
+// ───────── Canvas and Promo Card (video-shotcraft open source skill) ─────────
 const PricingCard: React.FC = () => (
   <div style={{
     position: 'absolute', left: CARD_X, top: CARD_Y, width: CARD_W, height: CARD_H, borderRadius: 28, background: '#ffffff',
@@ -310,7 +310,7 @@ const PricingCard: React.FC = () => (
   </div>
 );
 
-// Design 模式：按钮选框 + 8 个手柄（错峰弹出）+ 尺寸胶囊
+// Design mode: Button selection box + 8 handles (staggered pop) + dimension pill
 const Selection: React.FC<{ f: number; color: string }> = ({ f, color }) => {
   const draw = ramp(f, 36, 12, EASE.snappy);
   const pad = 6;
@@ -342,21 +342,21 @@ const Selection: React.FC<{ f: number; color: string }> = ({ f, color }) => {
   );
 };
 
-// Dev 模式：橘色标注线（逐条画出）+ 数值胶囊（过冲弹出）
+// Dev mode: Orange measurement lines (drawn sequentially) + value pills (overshoot pop)
 const Redlines: React.FC<{ f: number; color: string }> = ({ f, color }) => {
   const lines: Array<{ x1: number; y1: number; x2: number; y2: number; label: string; lx: number; ly: number }> = [
-    // 按钮宽度（按钮上方）
+    // Button width (above button)
     { x1: BTN_X, y1: BTN_Y - 22, x2: BTN_X + BTN_W, y2: BTN_Y - 22, label: '404', lx: BTN_X + BTN_W / 2, ly: BTN_Y - 22 },
-    // 按钮高度（卡片右侧外）
+    // Button height (outside card right edge)
     { x1: CARD_X + CARD_W + 28, y1: BTN_Y, x2: CARD_X + CARD_W + 28, y2: BTN_Y + BTN_H, label: '76', lx: CARD_X + CARD_W + 28, ly: BTN_Y + BTN_H / 2 },
-    // 卡片内边距（按钮左侧）
+    // Card inner padding (left of button)
     { x1: CARD_X, y1: BTN_Y + BTN_H / 2, x2: BTN_X, y2: BTN_Y + BTN_H / 2, label: '32', lx: CARD_X - 34, ly: BTN_Y + BTN_H / 2 },
-    // 按钮距卡底
+    // Button distance to card bottom
     { x1: BTN_X + BTN_W * 0.78, y1: BTN_Y + BTN_H, x2: BTN_X + BTN_W * 0.78, y2: CARD_Y + CARD_H, label: '32', lx: BTN_X + BTN_W * 0.78 + 34, ly: BTN_Y + BTN_H + 16 },
   ];
   return (
     <>
-      {/* 按钮外框：橘色虚线（Dev 模式的"被检查"态） */}
+      {/* Button bounding box: Orange dashed border (Dev mode "inspected" state) */}
       <div style={{
         position: 'absolute', left: BTN_X - 1, top: BTN_Y - 1, width: BTN_W + 2, height: BTN_H + 2, borderRadius: 21,
         border: `2px dashed ${color}`, boxSizing: 'border-box',
@@ -404,15 +404,15 @@ export const BrandFrameSnap: React.FC = () => {
   const dev = f >= FLIP;
   const color = dev ? ORANGE : BLUE;
 
-  // 1) 画框先立：0 → 60px（snappy，第 2 帧就有可见框）
+  // 1) Border erects first: 0 -> 60px (snappy, visible frame by frame 2)
   const grow = ramp(f, -1, 19, EASE.snappy);
-  // 翻色帧：3 帧径向白闪 + 框厚阻尼弹跳（"挡位卡进去"的机械回馈）
+  // Flip frame: 3f radial white flash + border thickness damped bounce (mechanical feedback of "clicking into gear")
   const since = f - FLIP;
   const flash = since >= 0 && since < 3 ? 0.6 - since * 0.2 : 0;
   const bounce = since >= 0 ? Math.exp(-since * 0.24) * Math.cos(since * 0.95) * 12 : 0;
   const band = BAND * grow + bounce;
 
-  // 2) 窗口落进框内：弹簧 y 660 → 0、前倾 18° → 0、scale 0.88 → 1
+  // 2) Window drops into frame: Spring y 660 -> 0, forward tilt 18° -> 0, scale 0.88 -> 1
   const dropAt = (fr: number) => springAt(fr, 10, { damping: 15, stiffness: 115 });
   const yAt = (fr: number) => mix(660, 0, dropAt(fr));
   const d = dropAt(f);
@@ -422,15 +422,15 @@ export const BrandFrameSnap: React.FC = () => {
   const winS = mix(0.88, 1, d);
   const elev = mix(70, 22, clamp01(d));
 
-  // 3) 光标：56–80 从画布右下滑向 Dev 开关；80–84 按下，84 松开（=翻色帧）
+  // 3) Cursor: 56–80 glides from bottom-right canvas toward Dev switch; 80–84 presses, 84 releases (= flip frame)
   const cT = ramp(f, 56, 24, EASE.swift);
   const cx = mix(CARD_X + CARD_W + 120, DEV_CX, cT);
-  const cy = mix(CARD_Y + CARD_H - 40, DEV_CY + 6, cT) - Math.sin(cT * Math.PI) * 60; // 轻微弧线，不走直线
+  const cy = mix(CARD_Y + CARD_H - 40, DEV_CY + 6, cT) - Math.sin(cT * Math.PI) * 60; // Gentle curve, non-linear trajectory
   const press = f >= 80 && f < FLIP ? ramp(f, 80, 3, EASE.out) : f >= FLIP ? 1 - ramp(f, FLIP, 6, EASE.out) : 0;
   const cursorOp = ramp(f, 54, 6, EASE.out) * (1 - ramp(f, FLIP + 16, 10, EASE.exit));
 
-  // 4) 内容区极缓推近（从窗口落定后起，smooth 无速度突变）
-  // 翻色帧换挡顿挫：内容整体 1 → 1.012 → 1（8f 阻尼），与框厚弹跳同帧
+  // 4) Content area subtle camera push (starts after window settles, smooth with zero abrupt velocity jumps)
+  // Flip frame gear shift recoil: Content scale 1 -> 1.012 -> 1 (8f damping), synchronized with border thickness bounce
   const punch = since >= 0 ? Math.exp(-since * 0.35) * Math.sin(Math.min(Math.PI, since * 0.9) + 0.0001) * 0.012 : 0;
   const push = mix(1, 1.02, ramp(f, 40, 100, EASE.smooth)) + punch;
 
@@ -439,7 +439,7 @@ export const BrandFrameSnap: React.FC = () => {
 
   return (
     <div style={{ width: 1920, height: 1080, background: '#0c1020', position: 'relative', overflow: 'hidden', fontFamily: FONT.sans }}>
-      {/* 框内内容区：瓷白舞台（带当前模式色的极淡地光，同帧翻） */}
+      {/* Inner content area: Porcelain studio (subtle ambient light tinted with active mode, flips on same frame) */}
       <div style={{ position: 'absolute', inset: inner, overflow: 'hidden', borderRadius: 22 }}>
         <Stage look={L} keyLight={{ x: 0.5, y: 0.0 }} fill={null} vignette={0.07} intensity={1.15}>
           <div style={{
@@ -458,7 +458,7 @@ export const BrandFrameSnap: React.FC = () => {
                 borderRadius: 18, overflow: 'hidden', background: '#eef1f6',
                 boxShadow: `0 0 0 1px rgba(15,30,60,0.10), inset 0 1px 0 rgba(255,255,255,0.9), ${softShadow(elev, { color: '#0c1a3a', strength: 1.3 })}`,
               }}>
-                {/* 画布：点阵 */}
+                {/* Canvas: Dot matrix */}
                 <div style={{
                   position: 'absolute', left: CANVAS_X, top: BAR_H, width: CANVAS_W, height: BODY_H,
                   backgroundImage: 'radial-gradient(circle, rgba(15,30,60,0.13) 1.2px, transparent 1.5px)', backgroundSize: '28px 28px',
@@ -478,14 +478,14 @@ export const BrandFrameSnap: React.FC = () => {
             </div>
           </SpeedBlur>
         </div>
-        {/* 画框内缘：内凹阴影 = 卡纸厚度 */}
+        {/* Frame inner rim: Inset shadow = matboard depth */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 22, pointerEvents: 'none',
           boxShadow: 'inset 0 0 0 1px rgba(10,16,40,0.10), inset 0 4px 14px rgba(10,16,40,0.18)',
         }} />
       </div>
 
-      {/* 品牌色画框：4 条实体色带，翻色 = 同帧换 background */}
+      {/* Brand color frame: 4 solid color bands, flip = swap background on same frame */}
       {([
         { left: 0, top: 0, right: 0, height: inner },
         { left: 0, bottom: 0, right: 0, height: inner },
@@ -494,19 +494,19 @@ export const BrandFrameSnap: React.FC = () => {
       ] as React.CSSProperties[]).map((pos, i) => (
         <div key={i} style={{ position: 'absolute', background: color, ...pos }} />
       ))}
-      {/* 色带受光薄釉：顶亮底暗（与舞台主光同向）；内圆角处补色，让框是"一整块挖了洞的板" */}
+      {/* Frame surface glaze: Top bright bottom dark (aligned with stage key light); corner color patch ensures frame feels like a single cut plate */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         background: 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.10) 100%)',
         clipPath: `polygon(0 0,100% 0,100% 100%,0 100%,0 0,${inner}px ${inner}px,${inner}px calc(100% - ${inner}px),calc(100% - ${inner}px) calc(100% - ${inner}px),calc(100% - ${inner}px) ${inner}px,${inner}px ${inner}px)`,
       }} />
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        {/* 内圆角：四个角的色块（框带是直角板，洞口是圆角） */}
+        {/* Inner rounded corners: Four corner color patches (frame bands are rectangular plates, cutout has rounded corners) */}
         <path fillRule="evenodd" fill={color}
           d={`M${inner} ${inner}H${1920 - inner}V${1080 - inner}H${inner}Z M${inner} ${inner + 22}A22 22 0 0 1 ${inner + 22} ${inner}H${1920 - inner - 22}A22 22 0 0 1 ${1920 - inner} ${inner + 22}V${1080 - inner - 22}A22 22 0 0 1 ${1920 - inner - 22} ${1080 - inner}H${inner + 22}A22 22 0 0 1 ${inner} ${1080 - inner - 22}Z`} />
       </svg>
 
-      {/* 框带角标：左上模式名（32px 粗体全大写），右上 video-shotcraft 标志 + 字标（全小写）；翻色帧同帧换字 */}
+      {/* Frame corner badges: Top-left mode title (32px bold uppercase), top-right video-shotcraft emblem + wordmark (all lowercase); text swaps on flip frame */}
       <div style={{
         position: 'absolute', left: 66, top: 0, height: inner, display: 'flex', alignItems: 'center', gap: 14,
         fontWeight: 800, fontSize: 30, letterSpacing: '0.16em', color: '#fff', whiteSpace: 'nowrap',
@@ -524,7 +524,7 @@ export const BrandFrameSnap: React.FC = () => {
         {BRAND.name}
       </div>
 
-      {/* 翻色白闪：从画框向内的径向闪（框带处最亮、中心约 1/3） */}
+      {/* Flip white flash: Inward radial burst from frame (brightest at border, ~1/3 intensity at center) */}
       {flash > 0 && (
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', opacity: flash,

@@ -1,25 +1,25 @@
-// cloner-depth-echo —— 克隆纵队（第二轮重设计 · 酸柠暗场 · 边缘部署）
-// 手法不变：一张主卡"复印"出 7 个克隆体沿纵深等距排开成队 → 停一拍让观众数清 → 全体同步加速吸回本体 → 合体弹一下。
+// cloner-depth-echo — Clone Column (Round 2 redesign · Lime dark stage · Edge deployment)
+// Technique unchanged: A main card "photocopies" 7 clones arranged equidistantly along depth into a column → pause a beat for viewers to count → all synchronously accelerate and absorb back into origin → merge and pop bounce.
 //
-// 设计决定
-// - look = lime（石墨黑 + 荧光黄绿）。主角是一张 video-shotcraft 渲染卡「launch-film」（顶栏 video-shotcraft 标志）：
-//   大号 30fps 读数 + 柠檬绿折线 + 底部 8 个镜头位。语义从"多副本"落到具体卖点：一句提示词 = 8 个镜头同时出片。
-// - 纵深：真 3D 透视（perspective 1500），消失点放在左上——克隆体只做 translateZ 后退就自动排向左上，
-//   再叠一点 dx/dy 让纵队张开；越远越淡、越虚、越"只剩轮廓"（填充褪掉、柠檬绿描边留下），像 C4D Cloner 的线框回声。
-//   每个克隆体顶栏换成它自己的镜头号（S02 / S03 …）——同一配方、不同镜头。
-// - 版式：主卡右侧中位（占画宽 ~36%），纵队伸向左上；左下是全片的计数器「×8」（260px 柠檬绿 tabular），
-//   克隆每弹出一个它就滚一格；合体后左上空出的位置升起标题「One prompt. / Eight shots.」，尾帧是一张海报。
-// - 合体：8 个镜头位在吸回到达的同一帧全部点亮（克隆"回到"本体里），主卡 1→1.06→1 单脉冲 + 一次柠檬绿描边光（Q4 只给主角一次）。
+// Design decisions:
+// - look = lime (graphite black + fluorescent yellow-green). Protagonist is a video-shotcraft render card "launch-film" (video-shotcraft badge in header):
+//   Large 30fps readout + lime green polyline + 8 shot slots at the bottom. Semantic shifts from "multiple replicas" to specific selling point: one prompt = 8 shots rendered simultaneously.
+// - Depth: True 3D perspective (perspective 1500), vanishing point at top-left — clones retreat along translateZ to automatically fan toward top-left,
+//   with slight dx/dy layering to open up the column; further clones become fainter, blurrier, and "wireframe only" (fill fades, lime green stroke remains), resembling C4D Cloner wireframe echo.
+//   Each clone's header switches to its own shot number (S02 / S03 ...) — same recipe, different shots.
+// - Layout: Main card right-center (occupying ~36% frame width), column extends toward top-left; bottom-left houses the counter "×8" (260px lime green tabular),
+//   advancing one tick per clone pop; after merge, the cleared top-left space reveals the title "One prompt. / Eight shots.", ending as a poster frame.
+// - Merge: All 8 shot slots light up simultaneously the exact frame clones return into origin (clones "re-enter" base card), main card undergoes 1→1.06→1 single pulse + one lime green rim flash (Q4 hero-only flash).
 //
-// 时间表（30fps，共 138f）
-//   0–16    入场：主卡自下 40px 升起 + 由虚到实（snappy），卡内内容 2f 错峰；计数器 ×1 已在左下
-//   16–24   预备：主卡按压到 0.96、描边提亮（"复印键按下"）
-//   24–44   排开：7 个克隆 spring 错峰 2.2f/个弹向纵深（damping 15，一次轻过冲），每弹出一个计数 +1，顶栏镜头号同时浮现
-//   44–76   停 32f：相机极缓推近 2%、纵队整体轻微视差漂移——数得清"有很多个"
-//   76–86   吸回 10f：全体同步强 ease-in（越来越快），沿纵深方向按速度加拖影模糊
-//   86–104  合体：镜头位全亮、主卡单脉冲 1.06、描边光一次；计数器同帧一记缩放回弹
-//   92–118  标题逐词从线下升起（左上），副行淡入
-//   118–138 hold 20f：光的呼吸 + 0.6% 极缓推近，干净落定
+// Timeline (30fps, 138f total):
+//   0–16    Entrance: Main card rises 40px from below + blurs in (snappy), internal content staggered by 2f; counter ×1 already at bottom-left
+//   16–24   Anticipation: Main card presses to 0.96, stroke brightens ("copy key pressed")
+//   24–44   Fan-out: 7 clones spring-staggered at 2.2f/card into depth (damping 15, slight overshoot), counter +1 per pop, header shot numbers emerge
+//   44–76   Hold 32f: Camera ultra-slow push-in 2%, subtle parallax drift across column — legible count of "many cards"
+//   76–86   Absorb 10f: All clones ease-in synchronously (accelerating), motion blur along depth proportional to velocity
+//   86–104  Merge: Shot slots fully illuminate, main card single pulse 1.06, rim flash once; counter scale-rebounds on same frame
+//   92–118  Title rises word-by-word from baseline (top-left), subtitle fades in
+//   118–138 Hold 20f: Light breathing + 0.6% ultra-slow push-in, clean settle
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, mix, ramp } from '../../_fixtures/Polish';
@@ -29,40 +29,40 @@ import { ShotcraftMark } from '../../_fixtures/Brand';
 export const CLONER_DEPTH_ECHO_DURATION = 138;
 
 const L = LOOKS.lime;
-const N = 7; // 克隆数
-const GAP_Z = 250; // 相邻克隆的纵深间隔（px）
-const SPREAD = 24; // 排开起始帧
-const EACH = 2.2; // 克隆错峰（帧/个）
-const MERGE = 76; // 吸回起始帧
+const N = 7; // Clone count
+const GAP_Z = 250; // Depth spacing between adjacent clones (px)
+const SPREAD = 24; // Fan-out start frame
+const EACH = 2.2; // Clone stagger (frames/item)
+const MERGE = 76; // Absorb start frame
 const MERGE_DUR = 10;
-const LAND = MERGE + MERGE_DUR; // 合体帧 86
+const LAND = MERGE + MERGE_DUR; // Merge frame 86
 
-// 主卡几何（屏幕 px，z=0 平面）
+// Main card geometry (screen px, z=0 plane)
 const CW = 660;
 const CH = 420;
-const CX = 1130; // 左上角
+const CX = 1130; // Top-left corner
 const CY = 352;
-// 透视：消失点在左上，克隆体后退即排向左上
+// Perspective: Vanishing point at top-left; retreating clones fan toward top-left
 const PERSP = 1500;
 const VP = { x: 360, y: 120 };
 
-const TYPE_H1 = 112; // 标题字号（h1 档略收，两行放进左上空位）
+const TYPE_H1 = 112; // Title font size (slightly reduced h1, fits two lines into top-left vacancy)
 
-const REGIONS = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08']; // 镜头号（沿用原变量名）
+const REGIONS = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08']; // Shot numbers (retaining original variable name)
 const SPARK = [0.62, 0.58, 0.66, 0.52, 0.55, 0.44, 0.48, 0.36, 0.4, 0.3, 0.33, 0.26, 0.3, 0.22];
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-// 第 idx（1..N）个克隆的排开进度：物理弹簧，错峰 EACH 帧
+// Fan-out progress for clone idx (1..N): physics spring, staggered by EACH frames
 const spreadOf = (f: number, idx: number) => (f < SPREAD + (idx - 1) * EACH ? 0 : springAt(f, SPREAD + (idx - 1) * EACH, { damping: 15, stiffness: 150, mass: 0.9 }));
-// 吸回：全体同步强 ease-in
+// Absorb: Synchronous strong ease-in across all clones
 const mergeOf = (f: number) => ramp(f, MERGE, MERGE_DUR, EASE.exit);
-// 克隆的纵深位置（0 = 本体平面，1 = 排开位）
+// Clone depth position (0 = base plane, 1 = fanned-out position)
 const depthOf = (f: number, idx: number) => spreadOf(f, idx) * (1 - mergeOf(f));
 
-// ───────────── 实例卡 ─────────────
+// ───────────── Instance Card ─────────────
 const InstanceCard: React.FC<{ region: string; clone: number; lit: number; frame: number; inP: number }> = ({ region, clone, lit, frame, inP }) => {
-  // clone: 0 = 本体，>0 越大越远 —— 越远填充越淡、只剩轮廓
+  // clone: 0 = base card, >0 further away — greater distance fades fill to wireframe outline
   const c = clone / N;
   const fill = clone === 0 ? 1 : mix(0.55, 0.06, c);
   const rise = (k: number) => {
@@ -82,12 +82,12 @@ const InstanceCard: React.FC<{ region: string; clone: number; lit: number; frame
         fontFamily: FONT.sans, color: L.ink,
       }}
     >
-      {/* 卡面顶部受光：一道很淡的柠檬绿内光（只本体） */}
+      {/* Top edge lighting on card surface: faint lime green inner glow (base only) */}
       {clone === 0 && (
         <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 70% 50% at 30% 0%, ${alpha(L.accent, 0.1)} 0%, transparent 70%)` }} />
       )}
       <div style={{ position: 'absolute', left: 42, right: 42, top: 36, display: 'flex', alignItems: 'center', gap: 14, ...rise(0) }}>
-        {/* video-shotcraft 标志（暗底反白版）；克隆体上随卡一起变淡 */}
+        {/* video-shotcraft mark (dark-mode inverted); clones fade along with card */}
         <ShotcraftMark size={34} tone="dark" style={{ margin: '-4px 0' }} />
         <div style={{ ...type(32, 600, { mono: true }), color: clone === 0 ? L.ink : alpha(L.ink, 0.85) }}>launch-film</div>
         <div style={{ flex: 1 }} />
@@ -101,7 +101,7 @@ const InstanceCard: React.FC<{ region: string; clone: number; lit: number; frame
           {region}
         </div>
       </div>
-      {/* 读数：30fps 出片 —— 克隆体上降成轮廓字（纹理），只有本体是实心 */}
+      {/* Readout: 30fps rendering — reduced to stroked outline on clones (texture), solid only on base card */}
       <div style={{ position: 'absolute', left: 40, top: 104, display: clone === 0 ? 'flex' : 'none', alignItems: 'baseline', gap: 16, ...rise(1) }}>
         <div
           style={{
@@ -114,7 +114,7 @@ const InstanceCard: React.FC<{ region: string; clone: number; lit: number; frame
         </div>
         <div style={{ ...type(26, 500, { caps: true }), color: L.ink3, letterSpacing: '0.12em', opacity: clone === 0 ? 1 : 0 }}>1080p</div>
       </div>
-      {/* 折线 */}
+      {/* Polyline */}
       <svg width={576} height={130} style={{ position: 'absolute', left: 42, top: 246, overflow: 'visible', ...rise(2) }}>
         {clone === 0 && (
           <polygon points={`0,130 ${pts} 576,130`} fill={`url(#cdeFill)`} opacity={0.9} />
@@ -127,7 +127,7 @@ const InstanceCard: React.FC<{ region: string; clone: number; lit: number; frame
         </defs>
         <polyline points={pts} fill="none" stroke={L.accent} strokeWidth={clone === 0 ? 4 : 2.5} strokeLinejoin="round" strokeLinecap="round" opacity={clone === 0 ? 1 : 0.8} />
       </svg>
-      {/* 镜头位：本体底部 8 格，合体时全部点亮 */}
+      {/* Shot slots: 8 bottom slots on base card, all illuminate on merge */}
       {clone === 0 && (
         <div style={{ position: 'absolute', left: 42, right: 42, bottom: 30, display: 'flex', gap: 8, ...rise(3) }}>
           {REGIONS.map((r, i) => {
@@ -153,20 +153,20 @@ const InstanceCard: React.FC<{ region: string; clone: number; lit: number; frame
   );
 };
 
-// ───────────── 计数器：每一格从下滚上来 ─────────────
+// ───────────── Counter: Each tick rolls up from below ─────────────
 const Counter: React.FC<{ value: number; tickAge: number; punch: number }> = ({ value, tickAge, punch }) => {
-  // tickAge：距上一次 +1 过了几帧（滚动 5f）；punch：合体回弹 0..1..0
+  // tickAge: frames elapsed since last +1 (5f scroll duration); punch: merge bounce 0..1..0
   const roll = ramp(tickAge, 0, 5, EASE.snappy);
   const size = 260;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', transform: `scale(${(1 + 0.06 * punch).toFixed(4)})`, transformOrigin: '0% 70%' }}>
       <span style={{ ...type(size * 0.62, 500), color: alpha(L.accent, 0.55), marginTop: size * 0.2, marginRight: 8 }}>×</span>
-      {/* 不用 overflow 裁切（会把泛光裁出方框）：出场格上移淡出、入场格自下升起淡入 */}
+      {/* Avoid overflow clipping (would clip glow into a box): exiting digit shifts up/fades out, entering digit rises/fades in */}
       <div style={{ position: 'relative', height: size * 1.02, width: size * 0.62 }}>
         {[value - 1, value].map((v, k) => {
           if (v < 1) return null;
           const y = k === 0 ? -roll * 45 : (1 - roll) * 45;
-          // 滚动中两格都按速度竖向虚化（静止为 0）
+          // Both digits vertically blur by speed during scroll (0 when stationary)
           const spd = roll < 1 ? 1 - roll : 0;
           return (
             <div
@@ -190,7 +190,7 @@ const Counter: React.FC<{ value: number; tickAge: number; punch: number }> = ({ 
 export const ClonerDepthEcho: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 主卡入场 / 预备按压 / 合体脉冲
+  // Main card entrance / prep press / merge pulse
   const enter = ramp(frame, 0, 16, EASE.snappy);
   const press = ramp(frame, 16, 8, EASE.swift) * (1 - ramp(frame, SPREAD, 10, EASE.overshoot));
   const popT = clamp01((frame - LAND) / 16);
@@ -199,7 +199,7 @@ export const ClonerDepthEcho: React.FC = () => {
   const rimFlash = frame >= LAND ? Math.max(0, 1 - (frame - LAND) / 14) : 0;
   const lit = ramp(frame, LAND - 1, 5, EASE.snappy);
 
-  // 计数：每个克隆弹出过 30% 就 +1；记录最近一次 +1 的帧给滚动用
+  // Counter: ticks +1 once clone extends past 30%; track last tick frame for roll animation
   let count = 1;
   let lastTick = -99;
   for (let idx = 1; idx <= N; idx++) {
@@ -208,18 +208,18 @@ export const ClonerDepthEcho: React.FC = () => {
   }
   const counterPunch = frame >= LAND ? Math.sin(clamp01((frame - LAND) / 12) * Math.PI) : 0;
 
-  // 相机：停留段极缓推近；合体后再极缓推进；纵队在停留段轻微视差漂移
+  // Camera: Ultra-slow push-in during hold; gentle push after merge; subtle parallax drift across column during hold
   const dolly = 1 + 0.02 * ramp(frame, 40, 40, EASE.smooth) + 0.006 * ramp(frame, 100, 38, EASE.smooth);
   const drift = 14 * ramp(frame, 40, 40, EASE.smooth) * (1 - mergeOf(frame));
 
-  // 标题 & 计数器标签
+  // Title & counter labels
   const labelIn = ramp(frame, 6, 16, EASE.out);
 
   return (
     <AbsoluteFill style={{ fontFamily: FONT.sans, overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.62, y: 0.42 }} fill={{ x: 0.1, y: 0.95 }} breathe={0.6} intensity={0.45}>
         <Dust look={L} count={26} seed={5} drift={0.18} opacity={0.35} color={L.accent} />
-        {/* 主卡脚下的柠檬绿地光 */}
+        {/* Lime ground glow beneath main card */}
         <div
           style={{
             position: 'absolute', left: CX - 160, top: CY + CH - 40, width: CW + 320, height: 220,
@@ -229,11 +229,11 @@ export const ClonerDepthEcho: React.FC = () => {
         />
       </Stage>
 
-      {/* 相机层：推近以主卡中心为锚 */}
+      {/* Camera layer: push-in anchored to main card center */}
       <AbsoluteFill style={{ transform: `scale(${dolly.toFixed(5)})`, transformOrigin: `${CX + CW / 2}px ${CY + CH / 2}px` }}>
         <AbsoluteFill style={{ perspective: PERSP, perspectiveOrigin: `${VP.x}px ${VP.y}px` }}>
           <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d' }}>
-            {/* 克隆纵队：从远到近渲染，遮挡正确 */}
+            {/* Clone column: rendered back-to-front for correct occlusion */}
             {Array.from({ length: N }, (_, k) => N - k).map((idx) => {
               const d = depthOf(frame, idx);
               const sp = spreadOf(frame, idx);
@@ -242,10 +242,10 @@ export const ClonerDepthEcho: React.FC = () => {
               const z = -GAP_Z * idx * d;
               const dx = (-58 * idx - drift * idx * 0.4) * d;
               const dy = -6 * idx * d;
-              // 速度 → 拖影模糊（沿纵深的屏幕方向，近似用各向同性小模糊 + 方向拉伸）
+              // Velocity → motion blur (screen direction along depth, approximated by slight isotropic blur + directional stretch)
               const v = Math.abs(depthOf(frame + 0.5, idx) - depthOf(frame - 0.5, idx)) * GAP_Z * idx;
               const blur = Math.min(10, v * 0.06);
-              // 出生闪：弹出的前 8 帧描边更亮（一次复印的"啪"）
+              // Birth flash: brighter stroke for first 8f of fan-out (photocopy snap)
               const born = clamp01(1 - (frame - (SPREAD + (idx - 1) * EACH)) / 8);
               return (
                 <div
@@ -262,7 +262,7 @@ export const ClonerDepthEcho: React.FC = () => {
               );
             })}
 
-            {/* 本体 */}
+            {/* Base card */}
             <div
               style={{
                 position: 'absolute', left: CX, top: CY, width: CW, height: CH,
@@ -272,7 +272,7 @@ export const ClonerDepthEcho: React.FC = () => {
               }}
             >
               <InstanceCard region={REGIONS[0]} clone={0} lit={lit} frame={frame} inP={1} />
-              {/* 合体描边光（一次，裁在圆角里） */}
+              {/* Merge rim flash (one-shot, clipped within rounded corners) */}
               <div
                 style={{
                   position: 'absolute', inset: 0, borderRadius: 30, pointerEvents: 'none',
@@ -285,14 +285,14 @@ export const ClonerDepthEcho: React.FC = () => {
         </AbsoluteFill>
       </AbsoluteFill>
 
-      {/* 左上：合体后升起的标题 */}
+      {/* Top-left: title rising after merge */}
       <div style={{ position: 'absolute', left: 140, top: 168, ...type(TYPE_H1, 780), color: L.ink }}>
         <TextReveal text={'One prompt.'} by="word" variant="rise" start={92} each={16} gap={4} />
         <br />
         <TextReveal text={'Eight shots.'} by="word" variant="rise" start={98} each={16} gap={4} unitStyle={(i) => (i === 1 ? { color: L.accent } : {})} />
       </div>
 
-      {/* 左下：计数器 */}
+      {/* Bottom-left: counter */}
       <div style={{ position: 'absolute', left: 128, top: 622, opacity: labelIn, transform: `translateY(${((1 - labelIn) * 20).toFixed(2)}px)` }}>
         <Counter value={count} tickAge={frame - lastTick} punch={counterPunch} />
       </div>

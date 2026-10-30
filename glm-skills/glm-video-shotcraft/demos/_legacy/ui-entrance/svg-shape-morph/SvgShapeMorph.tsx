@@ -1,8 +1,8 @@
-// svg-shape-morph — Shape Morph 轮廓变形（motion-lab 定稿转原生 Remotion）
-// 一个 SVG 轮廓平滑变形为另一个再变回：两条闭合轮廓先重采样到相同点数
-// （极坐标 140 点），逐点插值 + inOutCubic，变形中段加轻微 scale 呼吸与
-// 色相漂移，得到有机的流动感。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// svg-shape-morph — Shape Morph outline deformation (ported from motion-lab final to native Remotion)
+// Smoothly morphs one SVG outline into another and back: both closed paths resampled to identical point counts
+// (140 polar coordinates points), point-by-point interpolation + inOutCubic; subtle scale breathing and
+// hue drift added mid-morph for organic fluidity.
+// Design canvas 480×270 (DesignStage proportional scale); parameter values calibrated in this coordinate space.
 import React from 'react';
 import { DesignStage, E, lerp, seg, useT } from '../../_fixtures/Motion';
 
@@ -13,7 +13,7 @@ const CY = 138;
 const N = 140;
 const BASE = 76;
 
-// 两个形状：同一采样点数（等价 morphTo 的点数对齐）
+// Two shapes: identical sample count (equivalent to morphTo point alignment)
 const rA = (th: number) => BASE * (1 + 0.3 * Math.cos(th * 3) + 0.05 * Math.sin(th * 7 + 0.8));
 const rB = (th: number) => BASE * (1 + 0.26 * Math.sin(th * 5 + 1.2) + 0.06 * Math.cos(th * 2));
 const RAD_A: number[] = [];
@@ -24,7 +24,7 @@ for (let i = 0; i < N; i++) {
   RAD_B.push(rB(th));
 }
 
-// 按混合系数 m 逐点插值两条轮廓，拼 path d
+// Interpolate point-by-point across both outlines via blend factor m, building path d
 const build = (m: number) => {
   let d = '';
   for (let i = 0; i < N; i++) {
@@ -44,7 +44,7 @@ export const SvgShapeMorph: React.FC = () => {
   const m = m1 - m2; // 0=A 1=B
   const d = build(m);
   const hue = lerp(m, 185, 305);
-  // 变形中段的 scale 呼吸 + 缓慢自转
+  // Mid-morph scale breathing + gentle rotation
   const breath = 1 + 0.045 * (Math.sin(m1 * Math.PI) + Math.sin(m2 * Math.PI));
   const rot = Math.sin(t * Math.PI * 2) * 4;
   return (

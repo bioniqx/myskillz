@@ -1,55 +1,43 @@
 ---
 name: transition-hidden-cut
-一句话: 藏切点转场三式——前景遮挡隐形切、对撞开屏、暖色漏光，硬切藏进遮挡/撞击/光峰的 1-3 帧里，观众看不见剪刀
-适用: 两镜衔接处需要"无痕换景"或"仪式感开屏"时（技法卡，与 shot-transitions 三式同层选型）
-时长: n/a（技法卡；各式占用帧数见参数表，从相邻镜头预算里划）
-能量: n/a（技法卡，不占能量位）
+summary: Three ways to conceal the edit: foreground occlusion, opposing impacts, and a brief amber light leak at the cut.
+use: Shot junctions requiring "seamless scene swaps" or "ceremonial impact reveals" (technique card: evaluated at the same layer as the three shot-transitions variants).
+duration: n/a (technique card; frame allocations for each variant are detailed in the parameter table, deducted from adjacent shot budgets).
+energy: n/a (technique card, does not consume an energy slot).
 ---
 
-## 意图
-与 shot-transitions A 式 flash-cut 同族：flash-cut 用一层白闪盖住硬切，
-这三式换了三种"障眼物"——扫过的前景卡片（A）、对撞的撞击帧（B）、
-爬到顶峰的漏光（C）。共同原理是魔术误导：观众的眼睛被大动作/强光
-吸走的那 1-3 帧里完成硬切，回过神来景已经换了，全程"看不见剪刀"。
-flash-cut 是最素的一款；要方向感选 A，要仪式感选 B，要温度选 C。
+## Intention
+Belonging to the same lineage as shot-transitions Variant A (flash-cut): while flash-cut masks a hard cut beneath a burst of white light, these three variants employ three distinct "distractions"—a foreground card sweeping past the lens (A), the collision frame of an opposing impact (B), or an amber light leak climbing to its peak (C). The shared governing principle is magician's misdirection: executing the hard cut during the 1–3 frames when the viewer's gaze is captured by massive motion or blinding light; by the time attention returns, the scene has already changed, leaving the audience "unable to spot the scissors." Flash-cut is the most utilitarian option; choose A for directional momentum, B for ceremonial impact, and C for warmth and organic texture.
 
-## 三式选型
-| 式 | 做法 | 适用接缝 |
-|----|------|----------|
-| A invisible-cut 前景遮挡隐形切 | 一块贴着镜头掠过的失焦前景物（超画幅、软边 = 失焦+运动模糊）横扫，盖满全屏的遮挡帧内背景 A→B 硬切，前景扫出观众以为还是同一镜 | 想让换景完全无痕的页面→页面；伪"一条 take"的主力款 |
-| B versus-slam 对撞开屏 | 左右两半屏（两张对比海报）带斜切边从画外加速对冲撞合，撞击帧白闪+震屏+VS 盖章，切点就是撞击本身 | 对比/对阵语义的开屏或章节头（新旧方案、双产品、before/after）|
-| C light-leak-burn 暖色漏光 | 三段色温的暖色漏光沿对角线斜扫，光峰帧吞掉旧画面七成以上时硬切新画面，光退散时新画面已就位 | 想要暖调/胶片味的章节过渡；比白闪柔、有方向、有温度 |
+## Variant Selection
+| Variant | Method | Applicable Seams |
+|---|---|---|
+| A Invisible Cut (Foreground Occlusion) | An out-of-focus foreground object (oversized canvas, soft blurred edges = defocus + motion blur) sweeps tightly past the lens, executing a hard cut from Scene A → B during the frame where it completely occludes the viewport; as it exits, the audience perceives it as a continuous single take | Page-to-page transitions seeking completely seamless scene shifts; workhorse for pseudo "one-take" sequences |
+| B Versus Slam (Opposing Collision Reveal) | Two split-screen halves (two comparison posters) with diagonal cut edges charge inward from off-screen, colliding at center; collision frame triggers a white flash + screen shake + VS stamp, making the impact point the cut itself | Comparisons / head-to-head opening reveals or chapter openers (legacy vs. modern solutions, dual products, before/after) |
+| C Light Leak Burn (Warm Light Leak) | A three-tier color temperature warm light leak sweeps diagonally across the frame; as peak luminance consumes over 70% of the outgoing frame, a hard cut snaps to the incoming scene, which is fully seated once the light dissipates | Chapter transitions desiring warm-toned or cinematic 35mm film aesthetics; softer, directional, and warmer than a harsh white flash |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 遮挡物 | 纯渐变绘制的深棕失焦前景：实心核 2600px + 两侧 340px 软边（总宽 3280），前缘一道赤陶轮廓光；右→左 14f（32–46f），bezier(0.3,0,0.7,1)；切点 = 实心核盖满 0..1920 的那一帧（demo 里 f39，前后各一帧由软边盖住） | 软边渐变本身就是失焦+运动模糊，不必 CameraMotionBlur（12 倍采样太贵）；遮挡物上的明暗叠层要用 mask 限在实心区，否则在透明软边上画出硬边 |
-| A 近物遮光 | 遮挡物前方 640px 软投影（0→0.38→0.5）随之扫过页面 | 卖"贴着镜头掠过"的距离感 |
-| A 一条 take | 全程内容慢横移 +40→−40px（smooth）贯穿切点；切前 A 被拖左 28px（ease-in），切后 B 从右 28px 14f 回稳（ease-out）；B 页排版整体右移 40px 抵消横移终点 | 卖"同一镜被风带了一下"的错觉，是无痕感的一半功劳；横移会吃安全边，终点要预留 |
-| A 因果 | 24f 按下 Render（0.96 缩放 + 压暗 + Rendering… 转圈）→ 扫过 → B「That's a wrap.」渲染完成票根 + 印章弹簧落座、对勾描画 | 遮挡前给一个动作，切后给结果，观众读成"一晃就办好了" |
-| B 斜缝几何 | clip-path polygon 斜边约 78°（缝顶 x=1075→缝底 x=845）；两半屏从 ±1240px 以 ease-in(cubic) 10f 对冲到位（18–28f），按速度横向运动模糊（封顶 36px） | ease-in 加速才有"砸"感；垂直缝读作 PPT 分屏 |
-| B 撞击三件套 | 撞击帧（28f）同发：纸白闪 0.85→0 共 3f + 整机 shake 16px·e^(−t/1.7) 约 5f 收干 + VS 圆章弹簧压出（damping 12 / stiffness 260，scale 1.9→1，一次可见过冲）；另加冲击环 16f + 12 根放射速度线 7f | 三件必须同帧起跑，错开一帧就散；震屏幅度须过肉眼阈值（可感性判例）|
-| B 版式 | 两方做成色块海报：墨黑「The old way」vs 朱红「With video-shotcraft」，各一个 340px 大数字（14 days / 1 prompt）+ 44px 说明 + 32px 清单；撞后数字 1.05→1 回弹（晚 2f），说明左先右后错峰；54f 起底部结论条（镜刻标志 + 品牌口号）压在斜缝上 | 数字本身就是对比结论；建立段放一句设问，墨线预示斜缝（字带处留空不划字） |
-| C 光层 | 3 团沿对角线拉长（1.35:1、转 −34°）的径向渐变椭圆（#c2311a / #ff5a1f / #ffb347，长径 3000/2300/1700px，screen，不用 blur 滤镜）+ 右上缘片门溢光线性光带，沿右上→左下扫 71f | 光团偏移沿扫掠方向拖尾排布，避免完美同心的"手电筒感"；渐变本身就软，省掉 90px 大模糊 |
-| C 光强包络 | ease-in（t²）爬升 28f（24–52，蓄力）→ 峰值帧藏切 → ease-out 收敛 43f（余温）；峰值叠 40% 全屏暖罩 + 近白热核（opacity=intensity³）+ 切点 2f 轻抬 | 爬升慢收敛快会读作故障闪光；热核只在临近峰值烧起来 |
-| C 冲淡 | 峰值时页面 filter：brightness 抬 85%、contrast 降 50%、saturate 降 25%；旧画面标题随光强淡到 ~25% | 这是"烧穿"感的来源——光只叠不冲淡，读作贴了张贴纸；标题不跟着烧淡，切点会看到字突然换掉 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Occlusion object | Pure procedural gradient rendering a dark brown out-of-focus foreground: 2600px solid core + 340px soft edges on both sides (total width 3280px), leading edge traced by a terracotta rim highlight; sweeps right → left across 14f (32–46f), driven by bezier(0.3, 0, 0.7, 1); cut point = the frame where the solid core fully blankets 0..1920 (f39 in demo, with preceding and following frames covered by soft edges) | Soft gradient edges simulate defocus + motion blur natively, avoiding expensive CameraMotionBlur (12x sub-sampling is too heavy); shading layers on the occluder must be constrained to the solid core via masking, preventing hard seams on transparent feathered edges |
+| A Near-field shadow | 640px soft shadow (0 → 0.38 → 0.5) leading the occluder as it sweeps across the page | Sells the tactile spatial proximity of an object grazing past the front of the lens |
+| A Single-take continuity | Content maintains a continuous subtle lateral pan +40 → −40px (smooth) straight through the cut point; prior to cut, Scene A is dragged left by 28px (ease-in); post-cut, Scene B stabilizes from +28px right over 14f (ease-out); Scene B layout is offset 40px rightward to counter the pan endpoint | Creates the optical illusion that "the camera was merely nudged by the wind," accounting for half the seamless sensation; lateral panning eats safety margins, preserve endpoint margins |
+| A Causal motivation | At 24f, user clicks "Render" (0.96 scale + dim + "Rendering..." spinner) → occluder sweeps past → Scene B displays "That's a wrap." ticket stub + spring-damped approval stamp + checkmark drawing on | Trigger an action before occlusion and reveal the completed result after the cut, leading the viewer to register "it finished in a flash" |
+| B Diagonal seam geometry | clip-path polygon diagonal edge angled at ~78° (seam top x=1075 → seam bottom x=845); both screen halves charge inward from ±1240px over 10f via ease-in(cubic) (18–28f), applying horizontal motion blur proportional to speed (capped at 36px) | ease-in acceleration delivers genuine collision weight; vertical seams look like pedestrian PowerPoint split-screens |
+| B Collision trio | Detonates simultaneously on collision frame (28f): paper-white flash 0.85 → 0 over 3f + full-frame shake 16px·e^(−t/1.7) damping out over ~5f + circular VS stamp spring landing (damping 12 / stiffness 260, scale 1.9 → 1, single visible overshoot); reinforced with a 16f shockwave ring + 12 radial speedlines over 7f | All three elements must launch on the exact same frame; desyncing by a single frame ruins impact; screen shake amplitude must exceed conscious perceptual threshold (perceptibility precedent) |
+| B Poster layouts | Both sides structured as bold color-block posters: Ink Black "The old way" vs. Vermilion "With video-shotcraft", each featuring a 340px hero metric (14 days / 1 prompt) + 44px description + 32px checklist; numbers bounce 1.05 → 1 post-impact (delayed 2f), descriptions stagger left-then-right; from 54f, a bottom conclusion bar (lens emblem + brand tagline) locks across the diagonal seam | The numbers themselves represent the comparative verdict; opening section poses a premise, ink lines foreshadow the diagonal fault line (reserving empty space where text would intersect) |
+| C Light leak layers | 3 diagonally stretched radial gradient ellipses (1.35:1 aspect ratio, rotated −34°, #c2311a / #ff5a1f / #ffb347, major axes 3000/2300/1700px, screen blend mode, zero blur filters) + top-right gate-flare linear light band, sweeping top-right → bottom-left across 71f | Offsetting light blobs along the sweep trajectory produces natural trailing streaks, preventing a perfectly concentric "flashlight" look; soft native gradients bypass 90px heavy blur filters |
+| C Intensity envelope | ease-in (t²) climb across 28f (24–52f, anticipation) → hard cut concealed on peak frame → ease-out dissipation across 43f (afterglow); peak adds a 40% full-screen warm tint + near-white thermal core (opacity = intensity³) + subtle 2f exposure lift at cut | Slow ramp with rapid decay reads like an electrical short; thermal core ignites only immediately adjacent to peak |
+| C Washout | At peak, underlying page applies filters: brightness +85%, contrast −50%, saturation −25%; outgoing headline fades to ~25% proportional to light intensity | Crux of the "film burn" sensation—stacking light without washing out the base looks like a transparent decal; failing to wash out the headline exposes the sudden text swap at the cut |
 
-## 已知坑
-- demo 在程序绘制的画面上调校（A 暖沙 video-shotcraft 渲染页 / B 纸面对比海报 / C 暗场 video-shotcraft 取景器夜→黄昏，
-  品牌短句「Frame motion. / Craft the shot.」被光峰切成两半）——
-  参数是调校起点非实战定稿，首次实战须以真实素材回验
-- C 式是 Q4 光效判例解封后首个入库光效手法——严守 Q4 三约束：
-  单点使用（一支片一处，不群发）、正常速度回放自检好看才算过、
-  光效服务切点而非装饰；与 flash-cut 同片混用算两次光效藏切
-- A 式遮挡物必须真的全遮：demo 里实心核 2600px 才留出约 1 帧的全遮窗口
-  （中段速度 ~530px/帧）——改扫掠时长或宽度后先逐帧算/看切点帧有没有露出背景边缘，
-  露一条缝整个魔术就穿帮
-- B 式 VS 字块语义仅适配"对比/对阵"内容——没有两方对峙关系时
-  别当通用转场用；去掉 VS 只留对撞则退化为一款斜缝 wipe，语义要求同降
-- 转场不叠加（规矩同 shot-transitions）：一个接缝只用一式；
-  这三式与 shot-transitions 三式同层选型，同片同类接缝别既用 flash-cut 又用 C 式
-- 分镜表阶段就逐接缝标注（写进"关键动效"列），帧预算从相邻镜头划（R3）
+## Known Pitfalls
+- Demo was calibrated on procedurally drawn scenes (Scene A warm sand video-shotcraft render page / Scene B paper contrast poster / Scene C dark-stage video-shotcraft viewfinder night → dusk, with brand tagline "Frame motion. / Craft the shot." cleaved in two by the light peak)—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- Variant C is the first lighting technique added following the unfreezing of the Q4 lighting precedent—strictly adhere to the three Q4 constraints: single-instance use (one spot per film, no indiscriminate scattering), passes self-inspection at 1x playback speed, and lighting strictly serves the edit point rather than decorative flair; mixing with flash-cut in the same film counts as two lighting-concealed cuts.
+- Variant A occluders must achieve absolute 100% coverage: in the demo, a 2600px solid core yields only ~1 frame of total occlusion (mid-flight velocity ~530px/frame)—if sweep duration or width is altered, verify frame-by-frame that no background edges peek through at the cut frame; a single open slit breaks the entire illusion.
+- Variant B VS lockup semantics strictly fit "comparison / head-to-head" content—do not use as a generic transition when opposing forces are absent; omitting the VS stamp degrades the technique into an angled split wipe with relaxed semantic constraints.
+- Do not stack transitions (rule identical to shot-transitions): use only one technique per seam; these three variants sit at the same architectural layer as shot-transitions, do not use both flash-cut and Variant C on similar seams within the same video.
+- Annotate seams during the storyboard phase (recorded in "Key Motion" column), deducting frame allocations from adjacent shot budgets (R3).
 
-## 参考实现
+## Reference Implementation
 demos/transition/transition-hidden-cut/
-（InvisibleCut.tsx / LightLeakBurn.tsx / VersusSlam.tsx）
+(InvisibleCut.tsx / LightLeakBurn.tsx / VersusSlam.tsx)

@@ -2,28 +2,29 @@ import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 import { FakeDashboard, Card, G } from '../../_fixtures/Fixtures';
 
-// 斜角滚正（dutch-roll-to-level）：呈现痛点时整帧带 -10° 斜角悬着（叠极缓慢
-// 正弦漂移防止读作静态歪图），帧 70 解决方案的一拍整帧带单次过冲滚回水平
-// （-10° → +1.2° → 0），同时警示条淡出、干净卡浮现——"世界被扶正"打在节拍上。
-// 帧 0–70 斜置漂移 / 70–84 滚正冲过头 / 84–94 收回 0 / 94–140 真静止。
+// Dutch roll to level (dutch-roll-to-level): The entire frame hangs at a -10° Dutch angle during pain point presentation
+// (layered with an ultra-slow sine drift to avoid reading as a static crooked image); on the beat of the solution at frame 70,
+// the entire frame rolls back to level with a single overshoot (-10° -> +1.2° -> 0°), while warning banner fades out and clean card emerges —
+// "the world is righted" landing right on the beat.
+// Frames 0–70 tilted drift / 70–84 roll to level overshoot / 84–94 settle back to 0 / 94–140 true rest.
 
-const ROLL = 70; // 滚正起拍
-const LEVEL = 94; // 完全归位帧
+const ROLL = 70; // Roll-to-level start beat
+const LEVEL = 94; // Fully leveled frame
 
 export const DutchRollToLevel: React.FC = () => {
   const f = useCurrentFrame();
 
-  // —— 斜置期的缓慢漂移（帧 70 前）：±0.8° 长周期正弦 + 2px 纵漂 ——
+  // —— Slow drift during tilted phase (before frame 70): ±0.8° long-period sine + 2px vertical drift ——
   const driftT = Math.min(f, ROLL);
   const driftRot = Math.sin(driftT * 0.035) * 0.8;
   const driftY = Math.sin(driftT * 0.05) * 2;
-  // 滚正期间漂移随进度淡出
+  // Drift fades out as roll-to-level progresses
   const driftFade = interpolate(f, [ROLL, ROLL + 6], [1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
 
-  // —— 滚正：-10° 用 14f 冲过 0 到 +1.2°，再 10f 收回 0（单次过冲不振荡） ——
+  // —— Roll to level: -10° overshoots 0 to +1.2° across 14f, then settles back to 0 over 10f (single overshoot without oscillation) ——
   const baseRot =
     f < ROLL
       ? -10
@@ -39,14 +40,14 @@ export const DutchRollToLevel: React.FC = () => {
   const rot = baseRot + driftRot * driftFade;
   const y = driftY * driftFade;
 
-  // scale 1.15（防旋转露边）→ 滚正同步收到 1.08
+  // scale 1.15 (prevents corner cut-off from rotation) -> scales down in sync to 1.08 upon leveling
   const scale = interpolate(f, [ROLL, LEVEL], [1.15, 1.08], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.inOut(Easing.cubic),
   });
 
-  // —— 警示条（痛点）：斜置期悬在上方，滚正一拍淡出；干净卡反向淡入 ——
+  // —— Warning banner (pain point): hangs above during tilt, fades out on leveling beat; clean card inversely fades in ——
   const alertOpacity = interpolate(f, [ROLL, ROLL + 12], [1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -68,7 +69,7 @@ export const DutchRollToLevel: React.FC = () => {
       >
         <FakeDashboard variant="B" />
 
-        {/* 痛点警示条：深色横幅压在页面上方（斜着更显歪） */}
+        {/* Pain point alert banner: dark banner pinned to page top (accentuating tilt) */}
         <div
           style={{
             position: 'absolute',
@@ -87,7 +88,7 @@ export const DutchRollToLevel: React.FC = () => {
             boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
           }}
         >
-          {/* 警示三角 */}
+          {/* Warning triangle */}
           <div
             style={{
               width: 0,
@@ -100,7 +101,7 @@ export const DutchRollToLevel: React.FC = () => {
           <div style={{ height: 16, width: 420, background: G.mid, borderRadius: 8 }} />
         </div>
 
-        {/* 解决方案：干净卡随滚正浮现在同一位置 */}
+        {/* Solution: clean card surfaces at the same spot in sync with leveling */}
         <div style={{ position: 'absolute', left: 560, top: 96, opacity: cleanOpacity }}>
           <Card w={800} h={140} seed={2} style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.12)' }} />
         </div>

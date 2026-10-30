@@ -1,51 +1,39 @@
 ---
 name: page-waterfall-wall
-一句话: 页面瀑布墙——真实页面截图切成 3–4 列在 3D 后仰墙面上差速反向无限滚动，视差 + 镜头缓推做"内容多到流不完"的一览
-适用: "多页面/多功能/多模板"体量感段落；montage 中段铺陈或 intro 后的产品广度镜头
-时长: 4–6s（无限循环体，时长由段落需要裁）
-能量: 中（流动陈列型）
+summary: Real page captures flow at different speeds across a tilted 3D wall, creating an endless field of content.
+use: Showcasing scale across "multiple pages / features / templates"; montage mid-sections or post-intro product breadth showcases.
+duration: 4–6s (Seamless loop; trimmed to section requirements)
+energy: Medium (Flowing showcase type)
 ---
 
-## 意图
-流动式一览：让观众在几秒内"看到很多页面流过"，读感是体量而非细节。
-与 outro-group-photo-launch 分工：那是**聚拢式**一览（元素飞来围住
-字标定格合影，语义"属于同一产品"），本卡是**流动式**一览（内容持续
-流过不定格，语义"还有很多没给你看完"）。
-与 wall-reveal-moves 分工：那是整墙**入场动作**，本卡是墙的**持续状态**，
-可用那卡入场后交棒本卡续流。
+## Intention
+A flowing overview: lets viewers absorb dozens of pages streaming past within seconds, communicating sheer scale rather than individual detail.
+Division with outro-group-photo-launch: that is a **converging** overview (elements fly in to frame the wordmark for a final portrait, conveying "all part of one unified product"), whereas this card is a **flowing** overview (content streams continuously without freezing, conveying "vast volume yet to explore").
+Division with wall-reveal-moves: that is a wall **entrance action**, whereas this card represents a wall's **continuous state**; an entrance card can hand off to this card to continue streaming.
 
-## 动效核心
-- lib 组件 `assets/lib/VerticalTicker.tsx`：父层 perspective(1000px)
-  rotateX(20°) scale(1.2) 后仰成墙；每列 [...items,...items] 翻倍 +
-  progress 取模 translateY 0→-50% 无缝循环；上下渐变遮罩收边
-- 差速反向是视差命门：3 列 loop 时长错开（如 12/9/14s），中列反向——
-  等速同向读作一张大图在滚，差速反向才读出"独立的列"
-- 镜头缓推寄生在外层（scale 1→1.06 线性铺满全镜），墙自身循环、
-  镜头单向，两个运动源方向不同不打架
-- 素材：真实页面截图切片（Q1 脱敏后），卡片级切块比整页长图好——
-  整页切片滚动时观众来不及读，卡片块有完整轮廓可辨识
+## Motion Core
+- Library component `assets/lib/VerticalTicker.tsx`: parent container perspective(1000px) rotateX(20°) scale(1.2) tilts backward into a wall; each column duplicates items `[...items, ...items]` with progress modulo `translateY 0→-50%` for seamless looping; top and bottom vertical gradient masks feather edges.
+- Differential counter-flow is the engine of parallax: 3 columns stagger loop durations (such as 12/9/14s), with center column reversing direction—identical speeds in the same direction read as a single rolling texture, while differential counter-flow establishes independent vertical columns.
+- Slow camera push nests on outer wrapper (scale 1→1.06 linear across shot); wall loops internally while camera moves unidirectionally—divergent motion axes prevent visual competition.
+- Source assets: sanitized screenshots of real product pages (Q1); card-sized modules outperform full-page screenshots—viewers cannot read full pages during motion, whereas modular cards maintain identifiable silhouettes.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 列数 | 3（1080p）/ 4（超宽） | 2 列读不出"墙"，5 列单列过窄纹理糊 |
-| loop 时长 | 相邻列差 ≥25%（12/9/14s） | 差速太小视差读不出；最快列 <7s 开始读作"刷屏" |
-| 方向 | 中列反向（-1,1,-1 或交替） | 全同向=一张大图；反向列是"独立列"的最强证据 |
-| 倾角/透视 | rotateX 20° / perspective 1000px | >25° 顶部行文字透视压糊（Q2）；<12° 读不出墙面后仰 |
-| scale | 1.2 基础 + 缓推至 ~1.26 | 1.2 是补透视收缩的底值，低于它四角露底；demo 把放大与缓推放到外层 CSS zoom（布局级缩放），切片文字不被放大发软（Q2） |
-| 遮罩高度 | 200px | 太矮行硬进硬出；太高可视区剩不下 2 行 |
-| 循环周期 | -50% 位移必须恰等于单副本周期（内容高+n·gap） | lib 已用 marginBottom 保证；自写实现用 flex gap 会差 gap/2 跳帧 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Column count | 3 (1080p) / 4 (ultrawide) | 2 columns fails to read as a "wall", 5 columns makes individual tracks too narrow and textures blurry |
+| Loop duration | Adjacent columns differ by ≥25% (12/9/14s) | Insufficient differential flattens parallax; fastest column <7s feels like aggressive scrolling |
+| Direction | Center column inverted (-1, 1, -1 or alternating) | All moving same direction = single giant sheet; inverted column is strongest evidence of independent tracks |
+| Tilt / Perspective | rotateX 20° / perspective 1000px | >25° squashes top row text perspective into blur (Q2); <12° fails to convey backward tilt |
+| Scale | 1.2 baseline + push to ~1.26 | 1.2 compensates for perspective shrinkage to avoid clipping corners; demo assigns zoom and push to outer CSS zoom layout, preserving screenshot sharpness (Q2) |
+| Gradient mask height | 200px | Too short cuts off rows abruptly; too tall leaves fewer than 2 visible rows in viewport |
+| Loop period | -50% travel must precisely equal single-replica height (content height + n·gap) | Ensured via marginBottom in library; custom implementations using flex gap risk half-gap frame hitching |
 
-## 已知坑
-- **参数借鉴自外部实现（remotion-3d-ticker），非实战定稿；
-  首次实战须以真实素材回验**
-- 每列 items 总高必须 ≥ 视口有效高（否则同屏见同一切片两次，穿帮）；
-  列间切片不要复用同一张图，同图同时出现在两列读作素材穷
-- 本卡是氛围/铺陈镜头不是信息镜头：切片上文字只求"看得出是真页面"
-  不求读完；想让观众读某一块，交棒 spotlight-hero-card 单主角处理
-- P4 去重：与 outro 合影同片共存没问题（一流动一聚拢），但全片
-  瀑布墙只出现一次，二次出现读作凑时长
+## Known Pitfalls
+- **Parameters adapted from external implementation (remotion-3d-ticker), not final production spec; verify against real assets in production.**
+- Total items height per column must exceed effective viewport height (otherwise identical slices appear twice simultaneously); never duplicate screenshots across adjacent columns, as identical cards appearing side-by-side reveals asset limitations.
+- This card is an atmospheric establishing shot rather than an information delivery mechanism: text only needs to be recognizable as real software interfaces, not fully read; to draw focus to a specific module, hand off to spotlight-hero-card.
+- P4 de-duplication: can coexist with outro group portrait in the same video (flowing vs. converging), but waterfall walls should only appear once per film; repeating feels like padding runtime.
 
-## 参考实现
-assets/lib/VerticalTicker.tsx（核心组件）；
-demo 见 demos/ui-entrance/page-waterfall-wall/（PageWaterfallWall.tsx / VerticalTicker.tsx）。
+## Reference Implementation
+assets/lib/VerticalTicker.tsx (core component);
+Demo at demos/ui-entrance/page-waterfall-wall/ (PageWaterfallWall.tsx / VerticalTicker.tsx).

@@ -1,21 +1,19 @@
-// letterspace-materialize v3 —— 按批次 11 用户意见修正（截图 superhuman，4 张）：
-// ① 字形比例改宽：v2 竖长（60x100），对照终态截图字高≈50/字宽≈58（宽高比≈1.15），
-//    v3 重绘全部骨架字形到 78x64 视框（字面 58x54），方正略宽 + 细笔画 + 大字距；
-// ② 所有字母同时开始同时完成：去掉 v2 的逐字错峰（PER/jitter），全字符同一帧起笔、
-//    pathLength 归一保证不同笔画长度的字母在同一帧齐收（截图 2/3 的全行并行半截态）。
-// v4 质感：底景从"三块模糊色块"重做为暮色湖景——分层天空渐变 + 两层程序山脊（大气透视：远淡近深）
-//    + 宽幅地平线霞光（铺出画外，不露光带两端）+ 水面（天光倒影 + 缓慢漂移的细波光）+ 字标水面倒影；
-//    颗粒防渐变色带；背景极缓推近 3%（远山/近山不同速，微视差），字标本身不位移。
-// 品牌轮：SUPERHUMAN → video-shotcraft（全小写字标），字形库换成 13 个几何小写骨架字形（见 GLYPHS），
-//    描画节奏、同步齐收、底景与时长不变。
+// letterspace-materialize v3 — Refined per reference (superhuman screenshots):
+// 1. Wider glyph proportions: v3 redraws skeleton glyphs within 78x64 viewbox (58x54 optical), slightly square + thin strokes + wide letter-spacing;
+// 2. Synchronous stroke animation: all letters start and complete together (normalized pathLength guarantees uniform completion across differing stroke lengths).
+// v4 polish: background redesigned as dusk lake landscape — layered sky gradient + dual procedural mountain ridges (atmospheric depth)
+//    + wide horizon twilight glow + water surface with sky reflection and gentle shimmering wavelets + wordmark reflection;
+//    film grain prevents banding; background slowly dollies in 3% (subtle parallax), wordmark remains anchored.
+// Brand identity: SUPERHUMAN -> video-shotcraft (lowercase logotype) using 13 geometric lowercase skeleton glyphs (see GLYPHS),
+//    maintaining rhythm, synchronous finish, landscape backdrop, and timing.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { bezier, ramp, EASE, Grain, Vignette } from '../../_fixtures/Polish';
 
-// 品牌轮：字标换成 video-shotcraft（品牌规范要求全小写），骨架字形重绘为几何小写单线体。
-// 统一 64 高视框：基线 y=59、x 高 y=22、升部 y=5（与原大写字面同高），每个字形有自己的宽度 w；
-// 渲染时整体 ×GLYPH_SCALE 放大（小写 x 高比大写矮，放大后与原 SUPERHUMAN 字标同等存在感、整行宽度相近），
-// 笔画宽度反向缩放，屏幕上仍是 5.5px 细线。子笔画顺序 = 描画顺序。
+// Brand identity: Wordmark updated to video-shotcraft (lowercase per brand guidelines), skeleton glyphs redrawn as geometric monoline.
+// Standard 64-height viewbox: baseline y=59, x-height y=22, ascender y=5, each glyph carries its own width w;
+// Rendered scaled by GLYPH_SCALE (compensating for lowercase optical weight to match visual prominence),
+// stroke width scales inversely to maintain a crisp 5.5px hairline on screen. Sub-stroke order = draw order.
 const GLYPHS: Record<string, { w: number; d: string }> = {
   v: { w: 42, d: 'M 4 22 L 21 59 L 38 22' },
   i: { w: 14, d: 'M 7 22 L 7 59 M 7 9.5 L 7 10' },
@@ -33,19 +31,19 @@ const GLYPHS: Record<string, { w: number; d: string }> = {
 };
 
 const WORD = 'video-shotcraft';
-const GLYPH_SCALE = 1.3; // 视框 → 屏幕放大倍数
-const GLYPH_H = 64 * GLYPH_SCALE; // 字行高（屏幕 px）
-const TRACK = 30; // 字距（屏幕 px）：大字距是本卡身份
-const START = 16;   // 全字符统一起画帧（无错峰）
-const DUR = 52;     // 全字符统一画完帧数（pathLength 归一→同帧齐收）
-export const LETTERSPACE_MATERIALIZE_DURATION = 105; // 静置 16f + 描画 52f + 终态 hold 37f（>1s，R1）
+const GLYPH_SCALE = 1.3; // Viewbox -> screen scale multiplier
+const GLYPH_H = 64 * GLYPH_SCALE; // Line height (screen px)
+const TRACK = 30; // Letter spacing (screen px): wide spacing defines this card
+const START = 16;   // Synchronized draw start frame (no stagger)
+const DUR = 52;     // Synchronized draw duration (normalized pathLength -> simultaneous finish)
+export const LETTERSPACE_MATERIALIZE_DURATION = 105; // Rest 16f + draw 52f + final hold 37f (>1s, R1)
 
-const HORIZON = 640; // 水天线 y
-const MARK_Y = 470; // 字标中心 y（落在霞光区，水天线之上）
-// 描画曲线：起笔缓、中段快、收笔略长（手写的落笔→行笔→收笔）
+const HORIZON = 640; // Horizon / shoreline y
+const MARK_Y = 470; // Wordmark center y (within twilight glow above horizon)
+// Draw curve: soft attack, brisk mid-stroke, gentle release (calligraphic pen cadence)
 const strokeEase = bezier(0.5, 0, 0.3, 1);
 
-// 程序山脊：若干正弦叠加的确定性轮廓（无随机源）
+// Procedural mountain ridge: deterministic silhouette via superimposed sine waves
 const ridge = (seed: number, base: number, amp: number) => {
   const pts: string[] = [];
   for (let x = -60; x <= 1980; x += 20) {
@@ -59,13 +57,13 @@ const ridge = (seed: number, base: number, amp: number) => {
 const FAR_RIDGE = ridge(1.3, HORIZON, 70);
 const NEAR_RIDGE = ridge(4.1, HORIZON + 2, 34);
 
-// 水面细波光：确定性的若干条横向短亮线，缓慢左右漂移
+// Water wavelets: deterministic horizontal specular dashes gently drifting horizontally
 const GLINTS = Array.from({ length: 22 }, (_, i) => {
   const s = Math.sin(i * 91.7) * 43758.5453;
   const r = s - Math.floor(s);
   const s2 = Math.sin(i * 47.3 + 5) * 24634.6345;
   const r2 = s2 - Math.floor(s2);
-  const depth = (i + 0.5) / 22; // 0 = 近水天线，1 = 近画面底
+  const depth = (i + 0.5) / 22; // 0 = horizon, 1 = bottom of frame
   return {
     y: HORIZON + 8 + depth * depth * 400,
     x: 960 + (r - 0.5) * (500 + depth * 1100),
@@ -106,23 +104,23 @@ const Word: React.FC<{ e: number; glowAmt: number }> = ({ e, glowAmt }) => (
 export const LetterspaceMaterialize: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 全字符共享同一进度：同时开始、同时完成
+  // All glyphs share identical progress: synchronized start and finish
   const e = ramp(frame, START, DUR, strokeEase);
-  // 画完瞬间轻微提亮回落（结晶收束）——全字符同帧发生；收笔前 30% 逐渐蓄亮
+  // Completion crystallization flash: brief luminance bloom on stroke close; builds over final 30%
   const rise = ramp(frame, START + DUR * 0.7, DUR * 0.3, EASE.swift);
   const fall = 1 - ramp(frame, START + DUR, 14, EASE.out);
   const glowAmt = e >= 1 ? fall : rise;
 
-  // 背景极缓推近：远山 1→1.02，近景/水面 1→1.035（微视差）；字标不动
+  // Subtle background push: distant mountains 1->1.02, foreground/water 1->1.035 (micro-parallax); wordmark stays anchored
   const push = ramp(frame, 0, LETTERSPACE_MATERIALIZE_DURATION, EASE.smooth);
   const sFar = 1 + 0.02 * push;
   const sNear = 1 + 0.035 * push;
-  // 霞光随结晶微微升亮（字标"点亮"了天边）
+  // Twilight glow brightens subtly on crystallization ("lighting up" the horizon)
   const dawn = 0.85 + 0.15 * ramp(frame, START + DUR * 0.5, DUR, EASE.out);
 
   return (
     <AbsoluteFill style={{ background: '#120f24', overflow: 'hidden' }}>
-      {/* 天空 + 远山（远层） */}
+      {/* Sky + distant mountains (far layer) */}
       <AbsoluteFill style={{ transform: `scale(${sFar})`, transformOrigin: `50% ${HORIZON}px` }}>
         <AbsoluteFill
           style={{
@@ -130,7 +128,7 @@ export const LetterspaceMaterialize: React.FC = () => {
               `linear-gradient(180deg, #17153a 0%, #24204f 24%, #3a2f63 42%, #5f4270 53%, #8a5878 ${((HORIZON - 14) / 1080) * 100}%, #1c1838 ${(HORIZON / 1080) * 100}%, #0b0a17 100%)`,
           }}
         />
-        {/* 宽幅地平线霞光：椭圆铺出画外，两端无断口 */}
+        {/* Wide horizon glow: ellipse bleeds off-screen without clipped edges */}
         <div
           style={{
             position: 'absolute', left: -480, right: -480, top: HORIZON - 260, height: 520, opacity: dawn,
@@ -144,17 +142,17 @@ export const LetterspaceMaterialize: React.FC = () => {
               <stop offset="1" stopColor="#3e3260" />
             </linearGradient>
           </defs>
-          {/* 远山：偏亮、偏霞色（大气透视） */}
+          {/* Distant mountains: lighter, tinted with twilight (atmospheric haze) */}
           <path d={FAR_RIDGE} fill="url(#lm-far)" opacity={0.75} style={{ filter: 'blur(1.2px)' }} />
         </svg>
       </AbsoluteFill>
 
-      {/* 近山 + 水面（近层，推得更快） */}
+      {/* Near mountains + water (near layer, faster parallax push) */}
       <AbsoluteFill style={{ transform: `scale(${sNear})`, transformOrigin: `50% ${HORIZON}px` }}>
         <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
           <path d={NEAR_RIDGE} fill="#271f43" />
         </svg>
-        {/* 水面：天光倒影（霞光在水里拉长变淡）+ 渐深到画面底 */}
+        {/* Water surface: sky reflection (glow stretches and dims) + deepens toward bottom */}
         <div
           style={{
             position: 'absolute', left: 0, right: 0, top: HORIZON, bottom: 0,
@@ -163,14 +161,14 @@ export const LetterspaceMaterialize: React.FC = () => {
               'linear-gradient(180deg, #2a2346 0%, #18142e 30%, #0d0b1a 100%)',
           }}
         />
-        {/* 水天线一道极细亮边 */}
+        {/* Hairline specular edge along horizon */}
         <div
           style={{
             position: 'absolute', left: 0, right: 0, top: HORIZON - 1, height: 2,
             background: 'linear-gradient(90deg, rgba(255,200,210,0) 8%, rgba(255,200,210,0.35) 54%, rgba(255,200,210,0) 92%)',
           }}
         />
-        {/* 细波光：缓慢漂移 */}
+        {/* Gentle drifting specular wavelets */}
         {GLINTS.map((g, i) => (
           <div
             key={i}
@@ -183,7 +181,7 @@ export const LetterspaceMaterialize: React.FC = () => {
         ))}
       </AbsoluteFill>
 
-      {/* 字标水面倒影：以水天线为轴镜像，低透明 + 轻虚 + 向下渐隐 */}
+      {/* Wordmark reflection: mirrored across horizon, low opacity + soft blur + downward falloff */}
       <div
         style={{
           position: 'absolute', left: 0, right: 0, top: 2 * HORIZON - MARK_Y - GLYPH_H / 2, height: GLYPH_H,
@@ -196,7 +194,7 @@ export const LetterspaceMaterialize: React.FC = () => {
         <Word e={e} glowAmt={glowAmt * 0.5} />
       </div>
 
-      {/* 大字距字标：全字符并行连续描画 */}
+      {/* Wide-tracked wordmark: parallel continuous stroke draw-on */}
       <div style={{ position: 'absolute', left: 0, right: 0, top: MARK_Y - GLYPH_H / 2, height: GLYPH_H, display: 'flex', justifyContent: 'center' }}>
         <Word e={e} glowAmt={glowAmt} />
       </div>

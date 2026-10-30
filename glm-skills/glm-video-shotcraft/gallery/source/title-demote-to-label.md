@@ -1,64 +1,50 @@
 ---
 name: title-demote-to-label
-一句话: 大标题降格为节标签两式——A 大标题居中显影站稳一拍后连续缩小 0.3x 平移到左上角落成小节标签、内容区在其下生长；B 同套路但登场时带文本选中态高亮块扫入再撤掉
-适用: 章节开场（标题先当主角再让位给内容）；教程/功能演示片的小节交接；B 式给"文字/编辑"类产品加身份暗示
-时长: A ~3.7s（112f）/ B ~4.5s（134f）；demo 两式串播 246f
-能量: 低中（版式变换型，氛围镜头）
-标签: transition
+summary: A centered headline stands for a beat, then shrinks and slides to the top-left corner to become a section label as content grows beneath it.
+use: Chapter openers (headline claims the spotlight first, then yields to content); section transitions in tutorials / feature demos; Variant B adds product cues for text/editor tools
+duration: A ~3.7s (112f) / B ~4.5s (134f); demo chains both variants in 246f
+energy: Low-medium (editorial layout transformation, atmospheric shot)
+tags: transition
 ---
 
-## 意图
-章节标题的常规命运是"出现→消失→内容登场"，标题和内容互不认识。
-本卡让标题**降格而不退场**：居中大字站稳一拍宣告主题，然后一次连续
-补间缩到 0.3x 飞到左上角，落成这一节的栏目标签——它还在屏幕上，
-只是从主角变成了门牌。观众获得免费的空间记忆：刚才那个大词就是
-现在左上角那个小词，本节讲的就是它。内容骨架在降格进行中就开始
-生长，交接零空档。
+## Intention
+The conventional fate of chapter headings is "enter → vanish → content appears," leaving heading and content disconnected. This card lets the heading **demote rather than exit**: large centered type holds for a beat to declare the topic, then in a single continuous tween scales to 0.3x and glides to the top-left corner, landing as the section label — remaining on screen, but transitioning from protagonist to signpost. Viewers receive effortless spatial continuity: the massive word they just saw is now the label in the upper-left corner, signaling what the section discusses. The content skeleton begins growing while demotion is underway, achieving a zero-dead-air handoff.
 
-## 动效核心
-- 降格是**单次连续补间**，26f 不对称 in-out（bezier(0.6,0,0.18,1)：起步果断、落点很软）：
-  scale 1→0.22（220px 标题 → ≈48px 标签）+ 位置 (960,540)→(216,196) 同一条曲线——分两段（先缩后飞）读作两个动作
-- transform-origin 左中；居中修正量 translate(-50%) 随补间同步归零
-  （`translate(${-(1-dem)*50}%, -50%)`）——不归零终点会偏一个半宽
-- 登场显影：标题逐字从遮罩线下升起（rise，16f/字、1.6f 错峰），朱红句点晚 10f 过冲弹出；
-  mono 眉题「CHAPTER 01」字距由宽收紧。显影后必须站稳 ≥18f 再降格（demo 20f，期间 1.5% 极缓推近）——
-  没站稳就缩，宣告拍被吃掉。眉题随起飞 6f 淡出，落位前标签前缀「01 /」从左擦入接班
-- 内容错峰生长（demo 为 video-shotcraft 的分镜工作台页，两节标题取品牌短句「Frame.」「Craft.」：
-  A = 60px 导语 + 三张卡（镜头配方卡 / 用户评价 / 卡点节拍）；B = 58px 分镜脚本 + 句内选区 → 连线 → 旁注匹配镜头卡）：每块裁切从左揭开（宽 0.3→1，字不压扁）+ 上移 30px 淡入，
-  先密后疏错峰；生长起点在降格进行到 12f 时，标题还在飞内容已在长——这个重叠是"交接无空档"的来源。
-  横跨全宽的分隔线晚几帧再画，别让它在标题飞行路径上同帧生长
-- B 式选中高亮：左缘/宽度两个百分比分别补间——扫入时宽度 0→100%
-  （盖住，10f），撤掉时左缘 0→100%（从左让开，8f）；高亮撤净后再起降格
-- 降格飞行按位置差分速度加方向性运动模糊（静止为 0）；B 式选区用强调色 20% 透明 + 跟随右缘的插入光标
-- 两式串播不再白闪：共用一个舞台，A 内容 ease-in 上移 12f 退场 → B 大标题原地显影；
-  B 降格前 A 标签上移一行、缩到 0.7、变灰成"上一节"，B 标签落进同一个槽位（多节连用不叠放的做法）
-  （demo 导出 `TITLE_DEMOTE_TO_LABEL_DURATION` = 246f，look = paper）
+## Motion Core
+- Demotion is a **single continuous tween**, 26f asymmetric in-out (bezier(0.6,0,0.18,1): decisive takeoff, soft landing):
+  scale 1→0.22 (220px title → ≈48px label) + position (960,540)→(216,196) sharing the same curve — splitting into two phases (shrink first, slide second) reads as two disjointed actions.
+- transform-origin anchored at left-center; centering correction translate(-50%) smoothly zeros out with the tween (`translate(${-(1-dem)*50}%, -50%)`) — without zeroing out, the destination offsets by half a width.
+- Reveal entrance: Title letters rise sequentially from below an invisible mask line (16f/letter, 1.6f stagger), with a vermilion period popping in 10f later with overshoot;
+  monospace eyebrow "CHAPTER 01" tightens kerning inward. After revealing, the title must hold static for ≥18f before demoting (demo: 20f with 1.5% subtle push-in) —
+  demoting without a hold obliterates the declaration beat. The eyebrow fades out across 6f upon takeoff, while label prefix "01 /" wipes in from the left to take over before settling.
+- Staggered content growth (demo: storyboard canvas for video-shotcraft, using chapter titles "Frame." and "Craft.":
+  A = 60px intro + three cards [recipe card / user quote / beat grid]; B = 58px script + inline selection → connector line → matched recipe card note): each block wipes in from left (width 0.3→1, text uncompressed) + 30px upward fade-in, staggered from dense to sparse; growth begins at frame 12 of demotion, so content expands while the title is still in flight — this overlap is the source of seamless handoff.
+  The full-width divider line draws a few frames later to avoid intersecting the title's flight path.
+- Variant B selection highlight: Left edge and width percentages tween independently — width expands 0→100% to cover (10f), left edge advances 0→100% to clear from left (8f); demotion triggers only after highlight clears completely.
+- Directional motion blur proportional to positional velocity is applied during demotion flight (0 at rest); Variant B selection uses 20% accent opacity + an insertion caret tracking its right edge.
+- Chained sequence avoids white flashes: Sharing a single stage, Section A content exits upward in 12f ease-in → Section B headline reveals in place;
+  prior to Section B demotion, Section A label shifts up one row, scales to 0.7, and grays out into "previous section," allowing Section B label to occupy the same slot (pattern for multi-section continuity without stacking).
+  (Demo exports `TITLE_DEMOTE_TO_LABEL_DURATION` = 246f, look = paper).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 降格补间 | 26f 不对称 in-out，scale→0.22（落成 ≈48px） | <14f 读作标题被弹走；终点 >0.45 标签太大压内容；标签 <40px 不可读 |
-| 站稳拍 | 显影后 ≥18f 静置 | 省掉这拍，观众没读完标题它就跑了，降格白做 |
-| 内容错峰 | 先密后疏，块 18–22f，宽 0.3→1 | 全部同时长出读作页面刷新而非"生长" |
-| 生长起点 | 降格开始后 +12f | 等标题完全落位才生长会空 8f 冷场 |
-| 选中高亮 | 扫入 10f / hold 10f / 撤 8f，强调色 20% 透明 | 高亮 hold <5f 读作闪烁 bug；不撤干净就降格，色块跟着飞很脏 |
-| 两节交接 | 旧内容 exit 12f 上移退场；旧标签 16f 上移一行变灰 | 旧标签不让位，新标签落在它身上 = 标签坟场 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Demotion tween | 26f asymmetric in-out, scale→0.22 (settles at ≈48px) | <14f feels like title was flung away; destination >0.45 crowds content; label <40px is unreadable |
+| Hold beat | Static pause ≥18f after reveal | Skipping this beat moves the title before viewers can read it, wasting the demotion |
+| Content stagger | Dense-to-sparse, blocks 18–22f, width 0.3→1 | Simultaneous growth reads like a page reload rather than organic expansion |
+| Growth start | +12f after demotion begins | Waiting until title fully settles leaves an awkward 8f dead freeze |
+| Selection highlight | Wipe-in 10f / hold 10f / clear 8f, 20% accent opacity | Highlight hold <5f reads like a glitch; demoting before clear carries dirty colored blocks |
+| Section handoff | Old content exit 12f upward shift; old label 16f upward shift to gray out | Failing to clear old label lands new label directly on top = label graveyard |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与"标题钉进 3D 空间随相机透视变形"的场景锁定拍法（已退役）分工
-  （空间型），本卡是 2D 版式层级的连续降格（版式型）——要"标题住进
-  产品空间"用那卡，要"标题变栏目名"用本卡，同片选一
-- 降格路径上不许有其他元素动——标题飞行是全屏唯一焦点，骨架生长
-  在它落点下方不抢（起点错开），但弹窗/光标类同帧入场必抢
-- 多节连用（每节一次降格）时左上角标签要**换行不叠放**：新标签落位
-  旧标签上移让位，否则第二节起左上角变成标签坟场
-- B 式的选中高亮是"文字可被选中"的产品暗示，非编辑器/文档类产品
-  用了语义空转，别为了好看加
-- 标题文案 ≤3 个词——降格到 0.3x 后还要当可读标签，长句缩完就是一条灰线
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Division of labor with 3D space scene-locking (deprecated, spatial style): this card represents continuous 2D editorial typographic demotion (editorial layout style) — use spatial cards when titles inhabit 3D product space; use this card when titles transform into section headers; choose one per video.
+- Zero movement allowed along the demotion flight path: the flying title is the sole focal point on screen; content growing beneath its destination does not compete (due to staggered start), but popups or cursors entering simultaneously will cause chaos.
+- When chaining multiple sections, **advance labels to new lines without stacking**: the active label shifts upward to yield space to the incoming label, preventing upper-left clutter.
+- Variant B text selection simulates an editor environment — applying it to non-editor products carries empty semantics; do not add it merely for visual flair.
+- Title copy should contain ≤3 words — after scaling to 0.3x, it must still function as a legible label; long sentences compress into a thin grey streak.
 
-## 参考实现
+## Reference Implementation
 demos/typography/title-demote-to-label/
-（TitleDemoteToLabel.tsx）
-原片出处：perplexity-promo 16–18.5s；B 式变体源自 framer text-selection-title
+(TitleDemoteToLabel.tsx)
+Original source: perplexity-promo 16–18.5s; Variant B derived from Framer text-selection-title

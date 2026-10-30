@@ -1,24 +1,24 @@
-// glitch-cycle — 乱码轮播：同一行等宽槽位循环轮播 4 条状态短语，每条头尾按概率关键帧
-// [1,0,0,0.1,0,0,1] 全乱码、中段偶发单字抖动，切换瞬间叠 RGB 分离、整行位移与水平撕裂；
-// 末条概率收 0 保证收尾干净。
+// glitch-cycle — cycling status phrases in fixed monospace slots with probabilistic scramble keyframes
+// [1,0,0,0.1,0,0,1] full scramble, mid-phrase single character jitters, RGB split and horizontal tear on switch;
+// final phrase probability converges to 0 for a clean lock.
 //
-// 第二轮重设计（极光夜 · 渲染控制台）：
-// - look = aurora（深紫黑 · 紫 · 粉）。原生 1920 作画：短语是 104px 等宽大写、固定 17 个槽位
-//   （短语居中补空格，字符不增删、整行永不重排），四角细括号框住槽位，像一块广播级状态屏。
-// - 噪声浓度 g 一个变量同时驱动：逐字换乱码（粉 / 暗紫）、整行横向抖动（±g·36px，纵向只 ±g·10）、
-//   RGB 分离（粉左 / 冰蓝右各 g·10px）、g>0.25 的水平撕裂带（中段横移 ±g·80px）、g>0.45 的 3 块
-//   像素块残影——所以几种故障永不打架。每 2f 重掷一次（1f 一换糊成灰带，4f 以上看得清是另一个词）。
-// - 上方状态行（脉冲点 + RENDERING · shotcraft/launch-film · #4127）、下方 1100px 进度轨（线性走满，四拍刻度 +
-//   发光头）+ STEP n/4 与百分比（tabular-nums）——给噪声一个稳定的"在推进"参照。
-// - 收尾：末条 READY TO SHIP 收干净的那一刻给一次柔和泛光（Q4：只给主角一次），进度到 100% 后
-//   状态行转 RENDERED、脉冲点转实心，下方升起一行强调色署名（镜刻标志 + video-shotcraft）；最后 ~28f 干净海报。
+// Redesign (aurora night: render console):
+// - look = aurora (deep violet-black, violet, pink). Native 1920 layout: 104px uppercase monospace, 17 fixed slots
+//   (space-padded center, fixed width without reflow), corner brackets framing slots like broadcast monitor.
+// - Single noise variable g drives: character scramble (pink/purple), horizontal jitter (+/- g*36px, vertical +/- g*10px),
+//   RGB split (+/- g*10px), horizontal displacement tears for g > 0.25, and block artifacts for g > 0.45
+//   resampled every 2 frames for coherent glitch texture.
+// - Header status line (pulse dot + RENDERING info) and 1100px linear progress bar with 4-beat ticks
+//   and tabular-nums readouts provide a stable grounding reference against the noise.
+// - Finish: subtle bloom as READY TO SHIP resolves cleanly; at 100% progress,
+//   status switches to RENDERED, solid beacon, brand mark rises below; final 28f clean poster.
 //
-// 时间表（30fps，共 168f）：每条短语 38f（乱 → 定 → 0.1 抽字 → 定 → 乱熔进下一条）
-//   0–38    STORYBOARDING（第 0 帧即满乱码 = 开场就有画面）
+// Timeline (30fps, total 168f): 38f per phrase (scramble -> settle -> jitter -> settle -> melt into next)
+//   0-38    STORYBOARDING (scramble on frame 0)
 //   38–76   LOCKING BEAT GRID
 //   76–114  RENDERING FRAMES
-//   114–168 READY TO SHIP：按 38f 走 KF_LAST，~139f 起干净；进度 0→100% 线性走到 140f
-//   140–168 RENDERED 状态 + 署名升起 + hold
+//   114-168 READY TO SHIP: resolves clean at ~139f; progress linearly fills to 140f
+//   140-168 RENDERED status + brand mark rises + hold
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, ramp } from '../../_fixtures/Polish';
@@ -28,18 +28,18 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const GLITCH_CYCLE_DURATION = 168;
 
 const L = LOOKS.aurora;
-// video-shotcraft 渲染一支宣传片的四步；最长 17 字符（LOCKING BEAT GRID）= 槽位数，别超
+// 4 production steps; max 17 characters (LOCKING BEAT GRID) defines slot width
 const PHRASES = ['STORYBOARDING', 'LOCKING BEAT GRID', 'RENDERING FRAMES', 'READY TO SHIP'];
 const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&<>/\\';
 const KF = [1, 0, 0, 0.1, 0, 0, 1];
 const KF_LAST = [1, 0, 0, 0.1, 0, 0, 0];
 const MAXCH = Math.max(...PHRASES.map((p) => p.length));
-const SLOT = 38; // 每条短语帧数（末条之后一直延续到片尾）
-const DONE = 140; // 进度走满帧
+const SLOT = 38; // Frames per phrase
+const DONE = 140; // Progress complete frame
 const SIZE = 104;
-const CELL = 0.64; // 槽宽（em）
-const SPLIT_A = '#ff4fa3'; // RGB 分离：粉
-const SPLIT_B = '#6fd8ff'; // RGB 分离：冰蓝
+const CELL = 0.64; // Slot width (em)
+const SPLIT_A = '#ff4fa3'; // RGB split: magenta
+const SPLIT_B = '#6fd8ff'; // RGB split: cyan
 const BAR_W = 1100;
 
 const rand = (n: number) => {
@@ -76,7 +76,7 @@ export const GlitchCycle: React.FC = () => {
 
   const prog = Math.min(1, frame / DONE);
   const done = frame >= DONE;
-  const landed = slot === N - 1 && p > 0.66; // 末条干净
+  const landed = slot === N - 1 && p > 0.66; // Final phrase cleanly resolved
   const bloom = landed ? Math.max(0, 1 - (frame - (slot * SLOT + SLOT * 0.66)) / 26) : 0;
   const link = ramp(frame, DONE + 2, 16, EASE.snappy);
   const pulse = 0.55 + 0.45 * Math.sin(frame / 4);
@@ -106,7 +106,7 @@ export const GlitchCycle: React.FC = () => {
     </div>
   );
 
-  // 像素块残影：g 高时 3 块小矩形在槽位里闪现（每 2f 重掷）
+  // Block artifacts: 3 flashing rects when glitch intensity g is elevated
   const blocks = g > 0.45
     ? Array.from({ length: 3 }, (_, k) => ({
       x: rand(bucket * 19 + k * 7) * 100, y: rand(bucket * 23 + k * 5) * 90,
@@ -119,12 +119,12 @@ export const GlitchCycle: React.FC = () => {
   return (
     <AbsoluteFill>
       <Stage look={L} keyLight={{ x: 0.5, y: 0.45 }} fill={{ x: 0.82, y: 0.12 }} breathe={0.4} vignette={0.65}>
-        {/* 信号带：短语背后一条横向柔光 */}
+        {/* Signal backlight strip behind phrase */}
         <div style={{
           position: 'absolute', left: 0, right: 0, top: 380, height: 300,
           background: `radial-gradient(ellipse 45% 50% at 50% 50%, ${alpha(L.accent, 0.16 + 0.1 * g)} 0%, ${alpha(L.accent, 0)} 70%)`,
         }} />
-        {/* 扫描线（静态、极淡） */}
+        {/* Static subtle scanline overlay */}
         <div style={{
           position: 'absolute', inset: 0, opacity: 0.5,
           background: `repeating-linear-gradient(180deg, ${alpha('#000000', 0)} 0px, ${alpha('#000000', 0)} 3px, ${alpha('#000000', 0.22)} 4px)`,
@@ -133,7 +133,7 @@ export const GlitchCycle: React.FC = () => {
 
       <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
         <div style={{ position: 'relative', width: slotW, opacity: intro }}>
-          {/* 状态行 */}
+          {/* Status line */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 18, marginBottom: 54, fontFamily: FONT.mono, fontSize: 30,
             letterSpacing: '0.14em', color: L.ink2,
@@ -149,7 +149,7 @@ export const GlitchCycle: React.FC = () => {
             <span style={{ marginLeft: 'auto', color: L.ink3 }}>#4127</span>
           </div>
 
-          {/* 槽位：四角括号 + 短语 */}
+          {/* Phrase slot: corner brackets + typography */}
           <div style={{ position: 'relative', padding: '30px 0' }}>
             {[[0, 0], [1, 0], [0, 1], [1, 1]].map(([rx, ry], k) => (
               <div key={k} style={{
@@ -180,7 +180,7 @@ export const GlitchCycle: React.FC = () => {
             </div>
           </div>
 
-          {/* 进度轨：线性走满（全片唯一线性元素），四拍刻度 + 发光头 */}
+          {/* Progress track: linear fill with 4-beat ticks + glowing head */}
           <div style={{ position: 'relative', marginTop: 56, width: BAR_W, marginLeft: (slotW - BAR_W) / 2, height: 4, borderRadius: 2, background: alpha(L.ink, 0.1) }}>
             <div style={{
               position: 'absolute', left: 0, top: 0, bottom: 0, width: `${prog * 100}%`, borderRadius: 2,
@@ -205,7 +205,7 @@ export const GlitchCycle: React.FC = () => {
             </div>
           </div>
 
-          {/* 收尾署名：镜刻标志 + 品牌名 */}
+          {/* Closing mark: ShotcraftMark + brand name */}
           <div style={{
             position: 'absolute', left: 0, right: 0, bottom: -170, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 16, fontFamily: FONT.sans, fontSize: 40,

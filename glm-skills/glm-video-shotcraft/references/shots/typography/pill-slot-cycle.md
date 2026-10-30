@@ -1,58 +1,42 @@
 ---
 name: pill-slot-cycle
-一句话: 句中词槽轮换——固定句干钉死不动，句尾 pill 徽章每 ~0.7s 老虎机滚一格（旧的上飞加速淡出、新的从下带模糊滑入），连换 N 个功能词后落成完整句子收束
-适用: "功能列举"类文案的最优雅解法（比逐条列表快、比字符级滚动有语义）；一句话卖点 + 多个动词短语的段落
-时长: 入场 12f + 每拍 21f × 词数 + 收束 14f + hold；6 词约 6.7s（demo 200f，含 48f 完整句 hold）
-能量: 中（稳定节拍器，无峰值）
+summary: A fixed sentence keeps its trailing pill slot spinning like a slot machine through feature words until the final word locks the sentence.
+use: The most elegant solution for feature enumerations (faster than itemized lists, more semantic than character reels); one-sentence value props with multiple verb phrases
+duration: Entrance 12f + 21f per beat × word count + resolution 14f + hold; 6 words ≈6.7s (demo 200f, including 48f complete sentence hold)
+energy: Medium (steady metronome, no peak)
 ---
 
-## 意图
-罗列六个功能，列表要六行、逐条淡入要六拍还占满屏。词槽轮换把它们
-塞进**一句话的一个槽位**里：句干 "One skill to ___"（demo 讲 video-shotcraft：Storyboard it → Capture the page →
-Move the camera → Cut on the beat → Design the sound → Render the film）是承诺，槽里
-滚过的每个 pill 是证据，最后 pill 飞走、"do it all." 落位——证据
-列举完毕，结论盖章。结构自带三幕：承诺→列举→收束。命门是句干
-**纹丝不动**：观众的眼睛全程钉在槽位上，句干一晃列举感就散。
+## Intention
+Listing six capabilities with an itemized list requires six rows, taking six beats of sequential fades that consume the entire screen. Word slot cycling condenses them into **a single slot within a single sentence**: the sentence stem "One skill to ___" (in demo: Storyboard it → Capture the page → Move the camera → Cut on the beat → Design the sound → Render the film) is the promise, each rolling pill badge in the slot is proof, and finally the pill launches away as "do it all." locks into place — evidence completed, conclusion stamped. The structure carries an innate three-act narrative: promise → enumeration → resolution. The critical requirement is that the sentence stem **remains completely motionless**: the viewer's eyes stay locked on the slot; any movement in the stem scatters the sense of enumeration.
 
-## 动效核心
-- 句干绝对定位左端锚死——**不能用 flex 居中**，pill 宽度变化会带着
-  句干重排（首轮踩过的坑，已是判例）
-- 每拍 21f（~0.7s），前 8f 完成换位、后 13f 静置——静置段是给观众
-  读词的，读不完的拍子等于没换
-- 入场：translateY 120→0 + blur 14→4→0，Easing.out(cubic)；
-  离场：translateY 0→-130 + blur 0→10，Easing.in(cubic) 加速飞出
-  ——新来的减速落定、旧的加速逃走，方向感是"向上翻页"
-- 槽内用隐形占位 pill（visibility hidden）撑宽度，新旧两枚绝对定位
-  叠放——槽宽随当前词自然变化但不抖
-- 收束拍：末 pill 上飞（7f ease-in），"do it all." 从下 90px 带
-  Easing.back(1.4) 过冲落位——全片唯一一次过冲，留给结论；落位后整行用 smooth 26f 缓缓居中
-  （列举期间句干仍左锚死，只在结论句完整后才移动），"to do" 之间收回普通词距
+## Motion Core
+- Sentence stem is absolutely positioned with left edge anchored dead — **never use flex centering**, as pill width changes will trigger stem reflow (an early bug turned design precedent).
+- Each beat is 21f (~0.7s): first 8f execute transition, followed by 13f static hold — the hold segment allows viewers to read words; unreadable beats defeat the purpose of swapping.
+- Entrance: translateY 120→0 + blur 14→4→0, Easing.out(cubic);
+  Exit: translateY 0→-130 + blur 0→10, Easing.in(cubic) accelerating upward
+  — incoming words decelerate into place while outgoing words accelerate away, establishing an upward "page flip" directionality.
+- Inside the slot, an invisible placeholder pill (visibility hidden) holds the container width, while incoming and outgoing pills overlay via absolute positioning — slot width adapts naturally to active words without jitter.
+- Resolution beat: Final pill shoots upward (7f ease-in), while "do it all." enters from +90px below with Easing.back(1.4) overshoot — the sole overshoot in the entire shot, reserved for the conclusion; once landed, the full line glides smoothly to center across 26f (stem stays left-anchored during enumeration, moving only after the conclusion is complete), restoring normal word spacing between "to" and "do".
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 拍长 | 21f/词，5–7 词 | <16f 读不完短语；>28f 节拍器感散掉；8+ 词观众开始数数 |
-| 换位窗 | 拍内前 8f | 拉长到 12f+ 新旧同屏太久，读作两个 pill 打架 |
-| 飞行距离 | 入 +120 / 出 -130px | <80px 读作原地闪换；入出不对称（出略远）让离场更决绝 |
-| 运动模糊 | 入 ≤14 / 出 ≤12px 竖向 blur，按真实速度计算（静止为 0）；入 rotateX -38°→0、出 0→34° 绕滚筒翻页 | 去掉 blur 换位读作硬弹；>20px 中间帧糊成色块 |
-| 收束过冲 | Easing.back(1.4)，14f | >2 结论落位像卡通；无过冲结论与列举没有档次差 |
-| 收尾 hold | 完整句静置 ≥45f | 这句话是全段目的，不 hold 等于白列举 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Beat duration | 21f per word, 5–7 words | <16f is too fast to read phrases; >28f loses metronome drive; 8+ words make viewers count beats |
+| Transition window | First 8f of each beat | Stretching to 12f+ keeps old and new on screen too long, looking like competing pills |
+| Flight distance | In +120px / Out -130px | <80px feels like a stationary flash swap; asymmetric travel (exit slightly farther) makes departures decisive |
+| Motion blur | In ≤14 / Out ≤12px vertical blur, calculated from real velocity (0 at rest); In rotateX -38°→0, Out 0→34° rotating along drum | Removing blur feels like a stiff bounce; >20px smears intermediate frames into colored blocks |
+| Resolution overshoot | Easing.back(1.4), 14f | >2 makes conclusion look like a cartoon bounce; zero overshoot creates no tier separation from enumeration |
+| Ending hold | Complete sentence holds static ≥45f | This sentence is the goal of the entire sequence; failing to hold renders the enumeration pointless |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 本卡是整词级 pill 轮换且嵌在活句子里（不是字符/数位级机械滚动）——文案是
-  "句干+动词短语"结构才用本卡，纯数字/纯标题词别硬套
-- 与 typewriter-moves 分工：打字机是"一个字一个字造句"，本卡是
-  "句子造好了换零件"——同片可共存但别在同一句文案上连用
-- 与 type-rhythm-sync 分工：那是既有文字随音轨变属性（不换内容），
-  本卡换内容——绑音轨时本卡拍点对鼓点即可，别再叠字重脉冲
-- pill 短语长度要接近（demo 最长 "Capture the page" / "Design the sound"）——长短差 >2 倍
-  槽宽跳变太猛，句子重心左右甩
-- 收束句与句干字号字重必须完全一致（demo 都是 96px/800）——
-  "do it all." 若比句干大，读作新标题而非句子补完
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- This card performs full-word pill cycling embedded within living sentences (not character-level or numeric reels) — use only when copy follows a "stem + verb phrase" structure; do not force-fit onto pure numbers or standalone headlines.
+- Division of labor with typewriter-moves: typewriter builds sentences character-by-character; this card swaps modular parts within an established sentence — both can coexist in a film, but avoid chaining on the same line of copy.
+- Division of labor with type-rhythm-sync: that card modulates properties of existing text to audio without swapping content; this card actively swaps content — when syncing with audio, simply align beat points with drum hits, avoiding redundant font-weight pulses.
+- Keep pill phrase lengths comparable (demo longest: "Capture the page" / "Design the sound") — length variance >2x causes abrupt width jumps that jerk sentence balance.
+- Concluding phrase must match stem font size and weight exactly (demo uses 96px/800 for both) — if "do it all." is larger than the stem, it reads as an unrelated new title rather than a sentence resolution.
 
-## 参考实现
+## Reference Implementation
 demos/typography/pill-slot-cycle/
-（PillSlotCycle.tsx）
-原片出处：notion-ai 4.5–8.5s
+(PillSlotCycle.tsx)
+Original source: notion-ai 4.5–8.5s

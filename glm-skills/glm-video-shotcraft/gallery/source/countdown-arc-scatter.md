@@ -1,65 +1,53 @@
 ---
 name: countdown-arc-scatter
-一句话: 纸面表盘 9 个等大数字沿大弧切向排布，整盘扫过 96° 后减速急停，"5" 停在弧顶随即平移落位成标题首字符，其余数字带 blur 原地散去，标题逐词模糊淡入、末词转强调色
-适用: 倒计时/时长承诺类文案（"5 min to install"）；数据揭晓的一拍；需要"仪表盘"语汇的浅底短镜
-时长: 约 3.3s（100f@30fps：扫动 ~30f + 落位 20f + 标题成句 + hold 22f；最短可压到 33f 单拍）
-能量: 高（96° 大幅扫动压进 ~20 帧，纯冲击）
+summary: Numbers arranged tangentially along a large arc sweep past and brake to a stop, the winning digit sliding out of the dial to become the first character of the headline.
+use: Countdown/time-commitment copy ("5 min to install"); data reveal moments; short light-background shots requiring an "instrument dial" vocabulary
+duration: ~3.3s (100f@30fps: dial sweep ~30f + landing 20f + headline assembly + hold 22f; can be compressed to 33f single-shot minimum)
+energy: High (large 96° sweep compressed into ~20 frames, pure impact)
 ---
 
-## 意图
-"5 分钟装完"写成静态字卡没人信。表盘扫过的做法把这个数字放进一个
-**量程**里：45、35、28、22、17、10 一路扫过去，停在 5——观众看到的是
-"从很多降到很少"，数字自带论证。停下后 "5" 不消失而是**平移变成标题的
-首字符**，一个元素完成从仪表到文案的身份切换，这是本卡最值钱的一手。
+## Intention
+Writing "installs in 5 minutes" as a static title card carries zero credibility. Sweeping an instrument dial places this number into a **scale**: 45, 35, 28, 22, 17, 10 sweep past and brake hard at 5 — the audience sees a decline "from a lot down to very little," where the number proves its own claim. After stopping, "5" does not vanish; instead, it **translates directly to become the first character of the headline**. Having a single element transition seamlessly from gauge to copy is the highest-value technique in this card.
 
-## 动效核心
-- 弧线排布：9 个数字挂在同一圆心上（demo 按 1920×1080 原生作画：圆心 (960,1150)、R=700，弧顶 y=450），
-  `ang = (i-6)·24`°，位置 `x = cx + sin·R`、`y = cy - cos·R`，自身再 `rotate(位置角)` —— **切向排布**，
-  数字随弧倾斜像刻在盘面上；数字 112px Helvetica 粗体 tabular，等大同字重
-- 整盘扫动：先 5f 反向蓄力 +3°（anticipation），再一记物理弹簧 99°→0°（damping 12 / stiffness 60，
-  ~24f 冲过 0° 约 2°、~34f 落定）——"减速急停 + 一次表针回弹"是"到位"的全部力道
-- 弧两端淡入淡出：`op = clamp((70 - |pa|)/22)`，位置角超过 ±70° 就归零、±48° 起渐显——
-  **不用遮罩，用角度算透明度**，所以数字是"转进视野"的
-- `i=6` 的 "5" 角度设计为 0（扫完正停弧顶），回弹落定前 2f 即起飞：20f 不对称 in-out（EASE.swift）
-  平移到标题首字符槽，同一条曲线做 112→150px 放大与自转回正。标题首槽是固定宽 0.6em 的空位，
-  飞行的 "5" 也用同宽居中盒，所以落点与槽中心严格对齐、不需要换元素
-- 其余 8 个数字 28→44f 原地失焦淡出（`blur(out·6)`，**不位移**，位移会跟 "5" 的平移抢戏），早于 "5"
-  起飞 4f 先让路；扫动快速段每个数字按切向速度做方向性运动模糊（停稳归零）
-- 盘面层次：数字内侧一圈随盘同速转的细刻度（每 4° 一根、数字位加长）；强调色指针挂在 `rot·0.35`
-  上跟转——**0.35 倍差速**，两条转速造出"盘面 + 指针"的层次；外侧一道静止发丝弧 + 顶部强调色读数标，
-  盘面散去后以 35% 留在海报上（标题像是从仪表上读出来的）
-- 标题三词逐词 `blur((1-p)·10)` + 淡入 + 0.12em 上浮，窗 42–56 / 46–60 / 50–66f（重叠 = 一句话）；
-  末词在 64–76f 从墨色插值到强调色（demo 朱红）——全片唯一的颜色事件；下方 mono 34px 命令行补一句产品事实（demo 为 video-shotcraft 的真实安装命令 `npx skills add Vincentwei1021/video-shotcraft`；右上角是 video-shotcraft 字标）
+## Motion Core
+- Arc layout: 9 digits placed around a shared center (native 1920×1080 canvas: center (960,1150), R=700, arc apex y=450),
+  `ang = (i-6)·24`°, position `x = cx + sin·R`, `y = cy - cos·R`, rotated by its own position angle (`rotate(position angle)`) — **tangential layout**,
+  tilting digits along the arc as if engraved on the dial; digits are 112px Helvetica bold tabular, identical size and weight.
+- Full dial sweep: 5f reverse anticipation (+3°), followed by a physical spring 99°→0° (damping 12 / stiffness 60,
+  overshooting 0° by ~2° at ~24f, settling at ~34f) — "decelerating hard stop + single pointer rebound" delivers all the landing force.
+- Arc ends fade in/out: `op = clamp((70 - |pa|)/22)`, dropping to zero when position angle exceeds ±70°, gradually appearing within ±48° —
+  **opacity calculated from angle instead of masks**, making digits appear to rotate naturally into view.
+- Digit "5" at `i=6` is configured at angle 0 (resting dead center at arc apex upon sweep completion), launching 2f before rebound settles: 20f asymmetric in-out (EASE.swift)
+  translates into the headline's first character slot, with the same curve driving 112→150px scaling and rotation leveling out. The first headline slot is a fixed-width 0.6em empty box,
+  and the flying "5" uses a matching centered box, aligning landing position with slot center without swapping elements.
+- The remaining 8 digits fade and defocus in place from 28 to 44f (`blur(out·6)`, **no displacement**, as movement would clash with the translation of "5"), clearing out 4f before "5" takes flight; directional motion blur along tangential velocity is applied during the sweep phase (dropping to zero when stopped).
+- Dial visual hierarchy: a ring of fine tick marks rotates at dial speed inside the numbers (one tick every 4°, extended at digit locations); an accent-colored needle rotates at `rot·0.35`
+  — a **0.35x differential speed**, creating layered depth between the dial face and pointer; outside sits a static hairline arc + top accent reading mark,
+  retained at 35% opacity on the poster after the dial scatters (making the headline appear read directly from the instrument).
+- Three headline words enter sequentially with `blur((1-p)·10)` + fade-in + 0.12em rise, across windows 42–56 / 46–60 / 50–66f (overlapping = one sentence);
+  the final word interpolates from ink color to accent color (vermilion in demo) across 64–76f — the only color transition event in the shot; below sits a 34px monospace command line providing product proof (in demo: the real video-shotcraft install command `npx skills add Vincentwei1021/video-shotcraft`; upper right features the video-shotcraft wordmark).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 数列 | `[45,35,28,22,17,10,5,4,3]`，间距 24° | 递减不等距（45→35→28…）才像真量程，等差数列读作刻度尺；"5" 必须在 i=6 位（前 6 个扫过、后 2 个预留） |
-| 弧半径 | R=700px，圆心在画面下方（弧顶 y≈450） | 半径决定弧的曲度：<R/3 帧宽数字挤成小圈，弧近乎直线时表盘感消失；整条可视弧应横跨画面 60–70% |
-| 扫动 | 蓄力 +3° 5f → 弹簧 99°→0°（damping 12 / stiffness 60，~2° 过冲） | 过冲 >4° 读作弹簧玩具；无过冲的 inOut 缓停没有仪表的干脆 |
-| 可视角窗 | `(70-|pa|)/22`（±70° 外全透） | 22 是渐变宽度（约一格）；调大成 40 数字半透着进出，糊；调 0 就是硬切出现 |
-| "5" 落位 | 32→52f（20f，EASE.swift），112→150px，同步回正 | 落位紧接扫停，中间不留静置——留了就断成两个动作；落点必须是标题首字符槽（固定槽宽保证对齐） |
-| 其余淡出 | 28→44f + `blur(out·6)` | 淡出**早于** "5" 起飞起手，先让路；blur 让散去像失焦而非消失 |
-| 刻度差速 | 指针 `rot·0.35`；标题逐词窗重叠约 10f、`blur (1-p)·10`px | 差速是"盘 vs 指针"的层次来源，1.0（同速）读作一整块贴图在转；逐词窗重叠才是"一句话"，排队读作三个词各自出场 |
-| 末词染色 | 64→76f → 强调色 | 全片唯一的颜色事件，落在最后一个词上就是句子的落点 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Number sequence | `[45,35,28,22,17,10,5,4,3]`, 24° spacing | Unequal descending intervals (45→35→28…) feel like an authentic scale, whereas arithmetic progressions look like a ruler; "5" must sit at index i=6 (6 sweep past, 2 follow as padding) |
+| Arc radius | R=700px, center below screen (arc apex y≈450) | Radius determines arc curvature: <R/3 bunches digits into a small circle, while near-flat arcs destroy dial feel; visible arc should span 60–70% of screen width |
+| Sweep motion | +3° anticipation (5f) → spring 99°→0° (damping 12 / stiffness 60, ~2° overshoot) | Overshoot >4° feels like a spring toy; zero-overshoot in-out lacks instrument snap |
+| Visible window | `(70-|pa|)/22` (fully transparent outside ±70°) | 22 is gradient width (~one slot); increasing to 40 makes digits enter semitransparent and blurry; setting to 0 hard-cuts them |
+| "5" landing | 32→52f (20f, EASE.swift), 112→150px, simultaneous rotation leveling | Landing begins immediately upon sweep stop with zero pause — pausing splits the motion into two disconnected actions; landing target must be headline slot 1 (fixed slot width guarantees alignment) |
+| Remaining digits fade | 28→44f + `blur(out·6)` | Fade begins **before** "5" launches to clear visual noise; blur ensures dissolution feels like defocusing rather than vanishing |
+| Tick differential | Needle `rot·0.35`; headline word stagger overlaps ~10f, `blur (1-p)·10`px | Differential speed creates dial vs. pointer depth, whereas 1.0x reads as a flat spinning texture; overlapping word windows create a cohesive sentence |
+| Final word recolor | 64→76f → accent color | The sole color event in the shot, landing on the final word as the sentence punctuation mark |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **33f 是极限压缩**（motion-lab 原稿：扫动 17f、"5" 落位 6f、三词淡入各约 5f），信息密度远高于可读上限；
-  demo 已拉到 100f。再改时长时把各时间窗按**同一比例**缩放（比例关系是调校过的），别只拉扫动段
-- **换文案时要重估标题宽度**：demo 用 `TITLE_EM`（按字宽估算的整行 em 宽）把标题居中，"5" 的落点
-  由固定 0.6em 首槽推出——文案变了只改 `WORDS` 与 `TITLE_EM`，落点自动对齐，但整行居中要重估
-- 盘面数字必须**等大同字重**（demo 112px/700）：大小不一读作数据可视化，
-  不是仪表盘扫过
-- "5" 的角度设计（i=6 → ang=0）是本卡的地基：改数列长度或改哪个数字
-  是主角，都必须让主角的 `ang` 算出来正好是 0，否则扫停时它不在弧顶
-- 浅底优先：暖白纸底 + 墨色数字 + 单一强调色是这卡的干净感来源；深底版
-  需整套重配（且淡出用的 blur 在深底上会发灰）
-- 声音：扫停那一下 + 落位那一下是两个紧连的节奏点（相隔仅数帧），
-  配两记不同音色的短音（扫停用机械止停、落位用轻质落定）；同音连发
-  会糊成一声，配法纪律见 sound-design.md
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **33f is the absolute limit of compression** (motion-lab prototype: 17f sweep, 6f landing of "5", ~5f fade-in per word), where information density exceeds readability limits; the demo is tuned to 100f. When adjusting duration, scale windows by the **same proportional ratio** (proportions are balanced); do not stretch only the sweep phase.
+- **Re-evaluate headline width when changing copy**: the demo uses `TITLE_EM` (estimated line em-width from char widths) to center the headline, and the landing target of "5" is derived from the fixed 0.6em initial slot — when copy changes, only update `WORDS` and `TITLE_EM` to auto-align landing, but recalculate line centering.
+- Dial digits must be **identical in size and font weight** (demo: 112px/700): varying sizes read as data visualization rather than an instrument dial sweep.
+- Angle design for "5" (i=6 → ang=0) is the foundation of this card: changing sequence length or selecting another hero digit requires recalculating angles so the hero digit evaluates strictly to 0 at sweep stop.
+- Light backgrounds preferred: warm white paper background + ink digits + single accent color create this card's crisp feel; dark backgrounds require a complete palette redesign (and blur fade-out produces grey haze on dark backdrops).
+- Audio: The sweep brake and the digit landing form two tightly linked rhythmic beats (separated by only a few frames); pair with two distinct short sounds (mechanical latch for braking, crisp snap for landing). Identical consecutive sounds blur into a single indistinct click; see sound-design.md for guidelines.
 
-## 参考实现
+## Reference Implementation
 demos/typography/countdown-arc-scatter/
-（CountdownArcScatter.tsx）
+(CountdownArcScatter.tsx)

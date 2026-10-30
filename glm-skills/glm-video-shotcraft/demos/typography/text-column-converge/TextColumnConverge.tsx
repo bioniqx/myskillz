@@ -1,24 +1,24 @@
-// text-column-converge —— raycast-teams（实测素材 28–36s 段）重做版：
-// 原片测量（1280 宽）：NEW 左缘钉死 x=412，特性词右缘钉死 x=867，
-// 两词到左右屏边距相等（412 vs 413），轮换期间间距完全不收缩；
-// 词换到 RAYCAST 后才发生唯一一次合拢——约 1.2s ease-in-out 连续滑动
-// （左缘 412→554 / 右缘 867→725），"NEW RAYCAST" 以屏幕中线居中定格；
-// 定格后约 0.6s，斜体 "COMING 2026" 在下方近乎硬切浮现。
-// （以上为原片测量记录；demo 内容已换成 video-shotcraft：特性词轮换 → 合拢成 "NEW video-shotcraft"，
-//  小字为品牌短句后半 "CRAFT THE SHOT."；合拢终点按字标字符数重算。）
+// text-column-converge — raycast-teams (measured source 28–36s) remake:
+// Original footage measurements (1280w): NEW left edge fixed at x=412, feature words right edge fixed at x=867;
+// Margins from both words to screen edges are equal (412 vs 413), gap does not shrink during cycling;
+// Only once the word cycles to RAYCAST does the single convergence happen — ~1.2s ease-in-out continuous slide
+// (left edge 412→554 / right edge 867→725), "NEW RAYCAST" settles centered on screen midline;
+// ~0.6s after settling, italic "COMING 2026" appears below in a near-hard-cut.
+// (Measurements from original footage; demo content updated to video-shotcraft: feature words cycle -> converge to "NEW video-shotcraft",
+//  subtext is brand tagline ending "CRAFT THE SHOT."; convergence target recomputed for wordmark length.)
 //
-// 质感升级（节拍/钉死/唯一合拢全部不动）：
-// - 暗场不再是 #050506 死黑：带冷色相的深底 + 中线上方极淡顶光 + 暗角 + soft-light 颗粒。
-// - 词换瞬间 1 帧提亮（原片的打字机换行感，>1f 读作故障所以只给 1f）。
-// - NEW 轮换期是次级灰（像目录页标签），合拢过程中随进度提亮到与特性词同色——两半变成一句话。
-// - 合拢滑动按真实速度给水平方向运动模糊（两词方向相反），静止为 0；落定后背后柔光微微亮起。
-// - 斜体小字降为三级色，层级清楚；补导出时长常量（原工作台按 16f 推断，只剩开头半秒）。
+// Polish upgrades (tempo / fixed anchors / single convergence preserved):
+// - Dark backdrop is no longer dead black #050506: cool deep base + subtle overhead spotlight above midline + vignette + soft-light grain.
+// - 1-frame flash on word swap (typewriter carriage-return effect from original; >1f reads as a glitch so kept to 1f).
+// - NEW starts as secondary gray during cycling (like an index tab), ramping to match feature word color during convergence — unifying into one sentence.
+// - Convergence sliding gets horizontal motion blur based on real velocity (opposing directions), 0 at rest; soft background glow fades in after landing.
+// - Italic subtext dropped to tertiary color for clear hierarchy; exported duration constant added (original workbench inferred 16f, keeping only 0.5s).
 import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 import { FONT, Grain, SpeedBlur, Vignette, ramp, EASE } from '../../_fixtures/Polish';
 
-// 词轮换表：停留帧数不均（机器节奏），全程钉在右缘，不做间距收缩
-// 内容换成 video-shotcraft：八个特性词轮换，末词是全小写字标 video-shotcraft（字标规范：不做全大写）
+// Word cycle table: variable hold frames (mechanical cadence), anchored to right edge throughout, no gap shrinking
+// Content tailored for video-shotcraft: 8 feature words cycling, ending in lowercase wordmark video-shotcraft (brand spec: no all-caps)
 const BRAND_WORD = 'video-shotcraft';
 const STEPS: { word: string; dur: number }[] = [
   { word: 'SHOT RECIPE CARDS', dur: 16 },
@@ -29,35 +29,35 @@ const STEPS: { word: string; dur: number }[] = [
   { word: 'MOTION WORKBENCH', dur: 8 },
   { word: 'REMOTION RENDER', dur: 10 },
   { word: 'JIANYING EXPORT', dur: 12 },
-  { word: BRAND_WORD, dur: 999 }, // 最后一词：停稳后触发唯一一次合拢
+  { word: BRAND_WORD, dur: 999 }, // Final word: triggers single convergence after settling
 ];
 
-const START = 8; // 开场黑场立静
+const START = 8; // Opening hold on black
 
-// 原片 1280 宽 → 1920 宽换算（×1.5）
-const NEW_LEFT_EDGE = 618; // 412×1.5：NEW 左缘（= 左屏边距）
-const WORD_RIGHT_EDGE = 1302; // 868×1.5：特性词右缘（= 右屏边距，1920-1302=618 对称）
+// Original 1280w -> 1920w scaling (×1.5)
+const NEW_LEFT_EDGE = 618; // 412×1.5: NEW left edge (= left screen margin)
+const WORD_RIGHT_EDGE = 1302; // 868×1.5: feature word right edge (= right screen margin, 1920-1302=618 symmetric)
 
-const FS = 42; // 原片字高很小（720p 下 cap ~20px → 1080p ~30px → 字号 ~42）
+const FS = 42; // Original type scale is small (cap height ~20px @720p -> ~30px @1080p -> font size ~42)
 const LSP = 3; // letterSpacing
-// 合拢终点按本字体实际步进计算（监视器等宽：0.6em + letterSpacing），
-// 保证 "NEW video-shotcraft" 恰好一个空格咬合、整行居中于 960，不会重叠
-const ADV = 0.6 * FS + LSP; // 每字符步进
-const LINE_W = (4 + BRAND_WORD.length) * ADV; // "NEW " + 字标，共 19 字符
-const MERGED_LEFT = 960 - LINE_W / 2; // 合拢后 NEW 左缘
-const MERGED_RIGHT = 960 + LINE_W / 2; // 合拢后字标右缘
-const CONVERGE_DUR = 36; // 合拢时长：原片 ~1.2s ≈ 36 帧
-const CONVERGE_DELAY = 10; // 字标停稳后先静置 10 帧再合拢（原片 32.4→32.7s）
-const SUB_DELAY = 18; // 合拢定格后 ~0.6s 出斜体小字
+// Convergence destination computed from actual font advance (monospaced: 0.6em + letterSpacing),
+// ensuring "NEW video-shotcraft" meshes with exactly one space, centered at 960 without overlap
+const ADV = 0.6 * FS + LSP; // Advance per character
+const LINE_W = (4 + BRAND_WORD.length) * ADV; // "NEW " + wordmark, 19 characters total
+const MERGED_LEFT = 960 - LINE_W / 2; // NEW left edge after convergence
+const MERGED_RIGHT = 960 + LINE_W / 2; // Wordmark right edge after convergence
+const CONVERGE_DUR = 36; // Convergence duration: original ~1.2s ≈ 36 frames
+const CONVERGE_DELAY = 10; // Pause 10 frames after wordmark settles before converging (original 32.4→32.7s)
+const SUB_DELAY = 18; // ~0.6s hold after convergence before italic subtext appears
 
-// 8f 黑场 + 82f 轮换 + 10f 停稳 + 36f 合拢 + 18f 定格 + 4f 小字 + 22f 静置 = 180f（6.0s）
+// 8f black + 82f cycling + 10f settle + 36f converge + 18f hold + 4f subtext + 22f rest = 180f (6.0s)
 export const TEXT_COLUMN_CONVERGE_DURATION = 180;
 
 const INK = '#eeeef2';
-const INK_NEW = '#8a8c96'; // 轮换期 NEW 的次级灰
+const INK_NEW = '#8a8c96'; // Secondary gray for NEW during cycling
 const INK_SUB = '#a3a5ae';
 
-// 合拢进度（以帧为自变量，供求速度）
+// Convergence progress (frame-dependent, for velocity calculation)
 const LAST_START = START + STEPS.slice(0, -1).reduce((a, s) => a + s.dur, 0);
 const cvAt = (frame: number) =>
   interpolate(frame - LAST_START - CONVERGE_DELAY, [0, CONVERGE_DUR], [0, 1], {
@@ -65,7 +65,7 @@ const cvAt = (frame: number) =>
     easing: Easing.inOut(Easing.cubic),
   });
 
-// 简单 hex 混色（NEW 由次级灰提亮到主色）
+// Simple hex blend (NEW brightens from secondary gray to primary ink)
 const mixHex = (a: string, b: string, t: number) => {
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
   const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
@@ -76,7 +76,7 @@ export const TextColumnConverge: React.FC = () => {
   const f = useCurrentFrame();
   const t = f - START;
 
-  // 定位当前步
+  // Locate current step
   let acc = 0;
   let idx = 0;
   let stepStart = 0;
@@ -88,20 +88,20 @@ export const TextColumnConverge: React.FC = () => {
   const isLast = idx === STEPS.length - 1;
   const local = t - stepStart;
 
-  // 唯一一次合拢：字标停稳 CONVERGE_DELAY 帧后，ease-in-out 连续滑动
+  // Single convergence: ease-in-out continuous slide after wordmark settles for CONVERGE_DELAY frames
   const cvT = isLast ? local - CONVERGE_DELAY : -1;
   const cv = interpolate(cvT, [0, CONVERGE_DUR], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.inOut(Easing.cubic),
   });
 
-  // NEW 左缘：618 → 692；特性词右缘：1302 → 1228
+  // NEW left edge: 618 → 692; feature word right edge: 1302 → 1228
   const newLeft = interpolate(cv, [0, 1], [NEW_LEFT_EDGE, MERGED_LEFT]);
   const wordRight = interpolate(cv, [0, 1], [WORD_RIGHT_EDGE, MERGED_RIGHT]);
 
   const converged = cv >= 1;
 
-  // 斜体小字：合拢定格后 SUB_DELAY 帧，近乎硬切（4 帧快速淡入，无位移）
+  // Italic subtext: SUB_DELAY frames after convergence settles, near-hard-cut (4-frame quick fade, no shift)
   const subT = converged ? cvT - CONVERGE_DUR - SUB_DELAY : -1;
   const subOp = interpolate(subT, [0, 4], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
@@ -119,20 +119,20 @@ export const TextColumnConverge: React.FC = () => {
     lineHeight: 1,
   };
 
-  // 词换瞬间 1 帧提亮（首词不闪）
+  // 1-frame flash on word swap (first word does not flash)
   const flash = local === 0 && idx > 0 ? 1 : 0;
   const wordColor = flash ? '#ffffff' : INK;
   const wordGlow = flash ? '0 0 14px rgba(200,210,255,0.35)' : 'none';
 
-  // 合拢速度（px/帧）→ 水平运动模糊；两词相向
+  // Convergence velocity (px/frame) -> horizontal motion blur; opposing directions
   const span = MERGED_LEFT - NEW_LEFT_EDGE;
   const v = (cvAt(f + 0.5) - cvAt(f - 0.5)) * span;
-  // 落定后背后柔光
+  // Soft background glow after landing
   const glow = ramp(cvT, CONVERGE_DUR - 6, 24, EASE.out);
 
   return (
     <AbsoluteFill style={{ background: '#08090c', overflow: 'hidden' }}>
-      {/* 冷色深底 + 中线上方极淡顶光 */}
+      {/* Cool deep base + subtle overhead spotlight above midline */}
       <AbsoluteFill
         style={{
           background:
@@ -140,7 +140,7 @@ export const TextColumnConverge: React.FC = () => {
             'linear-gradient(180deg, #0d0e12 0%, #08090c 60%, #060709 100%)',
         }}
       />
-      {/* 合拢落定后背后柔光微亮 */}
+      {/* Soft background glow brightening after convergence */}
       <div
         style={{
           position: 'absolute', left: 960 - 520, top: 540 - 150, width: 1040, height: 300,
@@ -150,7 +150,7 @@ export const TextColumnConverge: React.FC = () => {
       />
       {visible && (
         <div style={{ position: 'absolute', inset: 0 }}>
-          {/* NEW：左缘定位（轮换期间钉死在左屏边距处）；随合拢由次级灰提亮 */}
+          {/* NEW: left-aligned (pinned at left screen margin during cycling); brightens from secondary gray during convergence */}
           <SpeedBlur vx={v} amount={0.35} max={4}>
             <div style={{
               ...font, position: 'absolute',
@@ -160,7 +160,7 @@ export const TextColumnConverge: React.FC = () => {
               NEW
             </div>
           </SpeedBlur>
-          {/* 特性词：右缘定位（词换长换短，右缘不动） */}
+          {/* Feature word: right-aligned (right edge remains fixed regardless of word length) */}
           <SpeedBlur vx={-v} amount={0.35} max={4}>
             <div style={{
               ...font, position: 'absolute',
@@ -171,7 +171,7 @@ export const TextColumnConverge: React.FC = () => {
             </div>
           </SpeedBlur>
 
-          {/* 斜体小字：合拢后在整行正下方浮现，与整行同左缘 */}
+          {/* Italic subtext: appears directly below the line after convergence, sharing left edge */}
           <div style={{
             ...font,
             fontStyle: 'italic',

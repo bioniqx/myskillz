@@ -14,7 +14,7 @@ const isEditable = (el: EventTarget | null) =>
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** 面板尺寸：可拖拽调整，落 localStorage */
+/** Panel dimensions: resizable, persisted to localStorage */
 const usePanelSize = (key: string, def: number) => {
   const [v, setV] = useState<number>(() => {
     const s = localStorage.getItem(key);
@@ -26,7 +26,7 @@ const usePanelSize = (key: string, def: number) => {
   return [v, setV] as const;
 };
 
-/** 拖拽分隔条：pointerdown 后跟踪位移，交给回调换算尺寸 */
+/** Drag divider: tracks pointerdown delta and triggers size callbacks */
 const startSplit = (
   e: React.PointerEvent,
   onMove: (dx: number, dy: number) => void,
@@ -40,7 +40,7 @@ const startSplit = (
   window.addEventListener("pointerup", up, { once: true });
 };
 
-/** 导出成片：提交当前工程给 dev server 的 Remotion 渲染任务，轮询进度 */
+/** Video export: submits current project to dev server Remotion render task and polls progress */
 const ExportButton: React.FC = () => {
   const t = useT();
   const [job, setJob] = useState<{

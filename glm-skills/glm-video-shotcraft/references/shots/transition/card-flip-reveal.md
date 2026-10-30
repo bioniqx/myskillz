@@ -1,57 +1,39 @@
 ---
 name: card-flip-reveal
-一句话: 功能卡 3D 翻面揭示——卡片沿 Y 轴翻 180°，正面 UI 翻到侧棱最薄处掠过一道随角度移动的受光，背面揭出大号结论数字，逐张错峰扫过整排
-适用: "功能→成果"的成对叙事：一排功能卡逐张翻出各自的指标/结论；元素级转场卡
-时长: 全程 150f（~5s，含 hold）；单卡 4f 预备 + 16f 翻 + ~10f 弹簧落定，三卡错峰 12f
-能量: 中高
-标签: data
+summary: Feature cards rotate 180 degrees around the Y axis, flash at the edge, and reveal a large result on the back.
+use: Paired "feature → outcome" narratives: a row of feature cards flipping one by one to reveal their respective metrics/conclusions; element-level transition card.
+duration: Total 150f (~5s, including hold); per card: 4f prep + 16f flip + ~10f spring settle; 12f stagger across three cards.
+energy: Medium-high
+tags: data
 ---
 
-## 意图
-库内"翻"字辈已有 wipe-transitions 百叶窗（叶片逐条翻面，讲换页）。
-本卡是**语义翻面**：一张卡的正反两面是一对因果——正面是功能界面，
-背面是它带来的数字结论。翻面动作本身
-就是"所以呢？"的回答，Apple bento 段落的标准语法。逐张错峰 10f 扫过
-一排，三张卡三个数字节奏读作"成果连报"。
+## Intention
+The library's "flip" family already includes the wipe-transitions blinds-slice (vanes flipping sequentially to execute a page turn). This card represents a **semantic flip**: the front and back of a card form a cause-and-effect pair—the front displays the feature UI, while the back reveals the quantitative conclusion it produces. The flip gesture itself serves as the answer to "So what?", a staple visual grammar of Apple bento segments. Staggered by 10f–12f across a row, three cards unveiling three figures deliver the distinct rhythm of a "rapid-fire impact report."
 
-## 动效核心
-- perspective 1600px + transformStyle preserve-3d；双面各自
-  backfaceVisibility hidden，背面预转 rotateY(180°)
-- 翻转三段：4f 预备（反向后仰 −10°，ease-out）→ 16f
-  bezier(0.55,0,0.3,1) 加速翻到 194°（14° 过冲）→ 物理弹簧
-  （damping 15）回落 180°；翻转中 translateZ 抬起 60px（sin 包络）
-- **受光**：面按偏离正面的角度着色（`(1−|cos θ|)` 压暗，暗面 0.55 /
-  亮面 0.4）；侧棱 56°→124° 区间一道窄受光带随角度从卡左扫到右，
-  强度三角包络在 90°（最薄瞬间）达峰——高光与角度联动才读作"光扫过
-  转动的面"，它是物理光照，不是额外的 glint 特效
-- **正反反相**：demo 正面是暗色功能卡（graphite 暗场），背面是瓷白
-  结论卡——翻面 = 从暗到亮，三张翻完画面从一排暗卡变成一排白色数字
-  海报；背面 158px 数字落定时 1.08→1 收拢，结论标签晚 4f 升起，上方
-  「之前 / 用上之后」对照条在落定后收短
-- 空间：卡片立在暗色镜面地板上，每张卡有一份同步翻转的竖直镜像倒影
-  （遮罩渐隐 26%、opacity 0.22），接地影宽度跟投影宽度 |cos θ| 收放
-- 错峰 delay 12f/卡；全部翻完真静止 ≥40f（demo 72f 后 hold 78f），
-  相机全程 1→1.03 极缓推近
+## Motion Core
+- `perspective: 1600px` + `transformStyle: preserve-3d`; both faces set `backfaceVisibility: hidden`, with the back face pre-rotated via `rotateY(180deg)`.
+- Three flip phases: 4f preparation (anticipatory backward lean of −10°, ease-out) → 16f `cubic-bezier(0.55, 0, 0.3, 1)` accelerating flip to 194° (14° overshoot) → physical spring (`damping: 15`) settling back to 180°; during the flip, `translateZ` lifts by 60px on a sine envelope.
+- **Lighting / Sheen**: Card surfaces darken based on angular deviation from facing the camera (`(1 − |cos θ|)` dimming, 0.55 on the dark side / 0.4 on the light side); across the 56° → 124° side-edge window, a narrow specular sheen band sweeps from left to right across the card, peaking in a triangular envelope at 90° (the thinnest knife-edge instant)—linking specular intensity to rotational angle ensures it reads as "light grazing a turning surface", providing physical illumination rather than an artificial glint overlay.
+- **Front-to-Back Contrast Inversion**: In the demo, the front is a dark feature card (graphite dark stage), while the back is a porcelain-white conclusion card—flipping transitions from dark to light. Once all three cards flip, the screen transforms from a row of dark cards into a row of bright white numeric posters; the 158px back-face number snaps in from 1.08 → 1 upon landing, the outcome label rises 4f later, and the top "Before / After" comparison bar contracts upon settling.
+- **Spatial Staging**: Cards stand on a dark specular floor; each card features a vertically mirrored reflection that flips in sync (mask fade at 26%, `opacity: 0.22`), with floor contact shadow width scaling dynamically with projected profile `|cos θ|`.
+- Stagger delay is 12f per card; true static hold ≥40f after all cards finish settling (demo holds for 78f after 72f); camera maintains an ultra-slow push-in from 1 → 1.03 throughout.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 翻转时长 | 4f 预备 + 16f 翻 + ~10f 弹簧 | <14f 看不到侧棱瞬间；>28f 读作慢慢转；砍掉预备读作被弹开而不是"翻" |
-| 过冲 | 194°→180°（14°），spring damping 15 | 无过冲落定读作生硬停表；damping <12 回弹两次读作果冻 |
-| 受光 | 面压暗 ≤0.55 + 侧棱窄带峰值 @90° | 峰值错开 90° 读作贴图错误；只有扫光没有面压暗读作贴了一道白条 |
-| 错峰 | 12f/卡，≤4 卡 | 同时翻读作整墙翻面，"成果连报"的逐张节奏就没了 |
-| 背面内容 | 大号数字（150–170px 级）+ 一行标签 + 至多一组对照条 | 背面塞完整 UI 读不完——翻面后只有一拍注意力；数字超 160px 时 "−41%" 这类宽字会顶出卡边 |
-| 收尾 | 末卡落定真静止 ≥40f | R1 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Flip duration | 4f prep + 16f flip + ~10f spring | <14f loses the knife-edge profile glance; >28f feels like a lazy rotation; cutting prep reads as being flicked away rather than intentionally flipped |
+| Overshoot | 194° → 180° (14°), spring damping 15 | Settling with zero overshoot reads as an abrupt mechanical stop; damping <12 creates a double bounce resembling jelly |
+| Surface lighting | Face dimming ≤0.55 + side-edge narrow band peaking at 90° | Peaking offset from 90° reads as a texture mapping error; sheen sweep without surface dimming looks like an overlaid white strip |
+| Stagger | 12f/card, ≤4 cards | Simultaneous flipping reads as a solid wall turning, eliminating the sequential rhythm of a rapid-fire outcome report |
+| Back content | Large-scale number (150–170px range) + single-line label + at most one comparison bar | Packing a full UI on the back is unreadable—the viewer only grants a single beat of attention post-flip; wide text like "−41%" above 160px may overflow card boundaries |
+| Outro settle | True static hold ≥40f after final card settles | R1 |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 正反两面必须语义成对（界面→它的成果）；翻出无关内容，翻面就
-  只是花哨的换图
-- 真实素材正面用截图时注意 backface 渲染开销，三卡以上分 Sequence
-- 声音候选位：每卡翻停帧一声轻"啪"（sound-design §4.5），三连啪
-  节奏感翻倍
+## Known Pitfalls
+- The demo was calibrated and passed on grayscale/placeholder assets—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- The front and back faces must form a semantic pair (interface → its outcome); flipping to unrelated content reduces the motion to a gimmicky image swap.
+- When using actual screenshots on the front face, beware of backface rendering overhead; split into separate Sequences if using more than three cards.
+- Audio candidate cue: a subtle, crisp "snap/click" on each card's settle frame (sound-design §4.5); a triple snap multiplies rhythmic impact.
 
-## 参考实现
+## Reference Implementation
 demos/transition/card-flip-reveal/
-（CardFlipReveal.tsx）
+(CardFlipReveal.tsx)

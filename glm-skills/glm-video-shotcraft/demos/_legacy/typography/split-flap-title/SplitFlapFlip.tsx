@@ -2,20 +2,20 @@ import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 import { FakeDashboard, G } from '../../_fixtures/Fixtures';
 
-// split-flap-flip：机场翻牌字。每字符一个深底翻牌格（上下两半），
-// 逐格翻过 3 个乱码中间态后咔哒停在目标字，左→右 4f 级联成波。
-// 节拍：0–21 建立（整排乱码静止）→ 22 起级联翻牌 → 78 全部停定 → 静止到 140。
+// split-flap-flip: Airport split-flap display text. Each character has a dark-background flap cell (top/bottom halves),
+// flipping through 3 intermediate garbled states before clicking to a stop at the target character, cascading left-to-right with a 4f stagger wave.
+// Beat: 0–21 establishing (full row garbled static) → cascade flip from 22 → all settle at 78 → static until 140.
 
 const TEXT = 'SHIP FASTER';
 const CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&';
-const START = 22; // 级联起始帧
-const STAGGER = 4; // 字符间级联延迟
-const FLIP = 5; // 单次翻牌时长
-const NFLIP = 3; // 每字符翻 3 次（2 个乱码中间态 + 1 次落到目标字）
+const START = 22; // Cascade start frame
+const STAGGER = 4; // Inter-character cascade stagger
+const FLIP = 5; // Duration of single flip
+const NFLIP = 3; // 3 flips per character (2 garbled intermediate states + 1 landing on target character)
 const CELL_W = 118;
 const CELL_H = 156;
 
-// seed 正弦哈希（禁 Math.random）
+// Seeded sine hash (Math.random forbidden)
 const rnd = (a: number) => {
   const x = Math.sin(a * 127.3) * 43758.5453;
   return x - Math.floor(x);
@@ -26,7 +26,7 @@ const garble = (i: number, k: number) =>
 const FLAP_BG = '#262624';
 const FLAP_INK = '#f4f4f2';
 
-// 半格：上/下半各自 overflow hidden，内部整字定位错半格露出对应一半
+// Half-cell: top/bottom each has overflow hidden; inner full letter positioned offset by half a cell to reveal corresponding half
 const Half: React.FC<{ ch: string; part: 'top' | 'bottom' }> = ({ ch, part }) => (
   <div
     style={{
@@ -66,12 +66,12 @@ const FlapCell: React.FC<{ target: string; i: number; frame: number }> = ({
   i,
   frame,
 }) => {
-  // 该格的字符序列：2 个乱码 → 1 个乱码 → 目标字（首态也是乱码，建立段可见）
+  // Character sequence for cell: 2 garbled → 1 garbled → target char (initial state is also garbled, visible during establishing phase)
   const seq = [garble(i, 0), garble(i, 1), garble(i, 2), target];
   const local = frame - (START + i * STAGGER);
   const done = local >= NFLIP * FLIP;
 
-  // 停定咔哒：整格下沉回弹（1px 肉眼无感，放大到 6px 才有"咔哒"）
+  // Click upon landing: cell sinks and rebounds (1px is imperceptible, boosted to 6px for perceptible "click")
   const clickY = done
     ? interpolate(local, [15, 17, 19, 22], [0, 6, -1.5, 0], {
         extrapolateLeft: 'clamp',
@@ -91,11 +91,11 @@ const FlapCell: React.FC<{ target: string; i: number; frame: number }> = ({
     const k = Math.min(NFLIP - 1, Math.floor(local / FLIP));
     const from = seq[k];
     const to = seq[k + 1];
-    const p = Easing.in(Easing.quad)((local - k * FLIP) / FLIP); // 重力感：越掉越快
-    topCh = to; // 上半静态：翻开后露出下一字符的上半
-    bottomCh = from; // 下半静态：保持旧字符直到活动叶盖下来
+    const p = Easing.in(Easing.quad)((local - k * FLIP) / FLIP); // Gravity feel: accelerates as it falls
+    topCh = to; // Static top: reveals next character's top half after opening
+    bottomCh = from; // Static bottom: keeps previous character until falling flap covers it
     if (p < 0.5) {
-      // 前半程：旧字符上半叶 0→-90 掉下
+      // First half: old character top flap falls 0→-90deg
       const deg = p * 2 * 90;
       flap = (
         <div
@@ -113,7 +113,7 @@ const FlapCell: React.FC<{ target: string; i: number; frame: number }> = ({
         </div>
       );
     } else {
-      // 后半程：新字符下半叶 90→0 拍下盖住旧下半
+      // Second half: new character bottom flap flaps down 90→0deg covering old bottom half
       const deg = 90 - (p - 0.5) * 2 * 90;
       flap = (
         <div
@@ -148,7 +148,7 @@ const FlapCell: React.FC<{ target: string; i: number; frame: number }> = ({
       <Half ch={topCh} part="top" />
       <Half ch={bottomCh} part="bottom" />
       {flap}
-      {/* 中缝铰链线 */}
+      {/* Center hinge seam */}
       <div
         style={{
           position: 'absolute',
@@ -169,7 +169,7 @@ export const SplitFlapFlip: React.FC = () => {
   let letterIdx = 0;
   return (
     <AbsoluteFill style={{ background: G.bg, overflow: 'hidden' }}>
-      {/* 背景假页面压暗，突出翻牌板 */}
+      {/* Dimmed background mock page to emphasize split-flap board */}
       <div style={{ position: 'absolute', inset: 0, opacity: 0.3, filter: 'saturate(0.8)' }}>
         <FakeDashboard variant="A" />
       </div>

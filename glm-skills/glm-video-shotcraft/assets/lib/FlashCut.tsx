@@ -1,4 +1,4 @@
-// origin: template/src/aifl/FlashCut.tsx（模板片同源组件）
+// origin: template/src/aifl/FlashCut.tsx (shared template component)
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 
 /** Bright-field cut: a warm-white bloom that flashes over the hard cut. */

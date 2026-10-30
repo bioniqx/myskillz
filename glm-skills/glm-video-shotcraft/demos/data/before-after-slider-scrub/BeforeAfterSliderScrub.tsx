@@ -1,27 +1,27 @@
-// before-after-slider-scrub —— 前后对比拉杆
-// FakeDashboard 两版叠放：before = 低对比灰蒙版（"处理前"），after = 正常清晰版。
-// 竖分割杆带圆手柄：从左端 8% 快甩到 70%（overshoot 至 76% 回弹），
-// 再慢速回扫到 40% 停住。杆经过处 after 揭出（clip-path inset 跟随杆 x）。
-// 先快甩后慢扫速度对比是节奏关键。f=110 后全静止（40f）。
+// before-after-slider-scrub — before/after comparison slider
+// FakeDashboard stacked in two versions: before = low-contrast hazy version ("pre-processed"), after = normal crisp version.
+// Vertical divider bar with round handle: flicks quickly from 8% on the left to 70% (overshooting to 76% before bouncing back),
+// then slowly sweeps back to 40% and halts. The after version is revealed as the bar sweeps across (clip-path inset tracks bar x).
+// The speed contrast between the quick fling and slow sweep is the key to rhythm. Full freeze after f=110 (40f).
 //
-// 质感升级：before 从"灰度 + 灰罩"的自黑版改成可信的未处理态（轻微失焦 + 降饱和 + 低对比雾面）；
-// 角标换成真正的 Before / After 胶囊，各自长在自己那一层里、被分割线一起裁切；分割杆换成 2px 白线 +
-// 发丝描边 + 两侧软影，手柄是带内高光的白色圆钮 + 矢量双箭头；快甩前有 4f 预备回拉，甩出时手柄
-// 按速度横向拉伸 + 方向性运动模糊，落定后归零。
+// Polish upgrade: "before" state updated from crude grayscale overlay to a believable raw state (subtle defocus + desaturation + low-contrast matte);
+// corner badges upgraded to proper Before/After capsules, each embedded in its respective layer and clipped together with the divider line; divider bar updated to 2px white line +
+// hairline stroke + soft shadows on both sides; handle is a white circular button with inner highlight + vector double arrows; 4f anticipation pull-back before the fling;
+// handle stretches horizontally with directional motion blur proportional to speed during fling, returning to rest upon landing.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { G, FakeDashboard } from '../../_fixtures/Fixtures';
 import { EASE, FONT, Grain, SpeedBlur, mix, ramp, softShadow, tracking, velocity } from '../../_fixtures/Polish';
 
-export const BEFORE_AFTER_SLIDER_SCRUB_DURATION = 150; // 110f 动作 + 40f 真静止
+export const BEFORE_AFTER_SLIDER_SCRUB_DURATION = 150; // 110f animation + 40f true freeze
 
-// 时间轴（杆位置以画面宽度百分比表示）
-const PRE = 10; // 预备：10→14 先向左回拉 1.5%（甩之前"蓄力"）
-const T0 = 14; // 快甩起点
-const FLING = 26; // 快甩：14→26（12f 冲到 76%）
-const BOUNCE = 38; // 回弹：26→38 落到 70%
-const HOLD = 56; // 停顿看清
-const SCRUB = 104; // 慢扫：56→104（48f 回到 40%）——速度约为快甩的 1/5
+// Timeline (bar position expressed as a percentage of screen width)
+const PRE = 10; // Anticipation: 10->14 pulls back 1.5% leftward ("wind-up" before fling)
+const T0 = 14; // Start of fast fling
+const FLING = 26; // Fast fling: 14->26 (12f dash to 76%)
+const BOUNCE = 38; // Bounce back: 26->38 settles to 70%
+const HOLD = 56; // Pause for readability
+const SCRUB = 104; // Slow sweep: 56->104 (48f return to 40%) - speed is roughly 1/5 of the fling
 
 const posAt = (f: number): number => {
   if (f < T0) return mix(8, 6.5, ramp(f, PRE, T0 - PRE, EASE.smooth));
@@ -34,7 +34,7 @@ const posAt = (f: number): number => {
 const W = 1920;
 const H = 1080;
 
-// 角标胶囊：放在顶栏中段的空白处（不压卡片标题/侧栏）；before 白底暗字，after 深底白字 + 强调色点
+// Badge capsule: placed in empty space of top bar (avoids overlapping card titles/sidebar); before has white background with dark text, after has dark background with white text + accent dot
 const Tag: React.FC<{ label: string; x: number; accent?: boolean; muted?: boolean }> = ({ label, x, accent, muted }) => (
   <div
     style={{
@@ -73,32 +73,32 @@ const Tag: React.FC<{ label: string; x: number; accent?: boolean; muted?: boolea
 
 export const BeforeAfterSliderScrub: React.FC = () => {
   const frame = useCurrentFrame();
-  const p = posAt(frame); // 杆位置 %
+  const p = posAt(frame); // Bar position %
   const x = (p / 100) * W;
 
-  // 速度（px/帧）：驱动手柄拉伸与运动模糊，静止时为 0
+  // Velocity (px/frame): drives handle stretching and motion blur, 0 when stationary
   const vx = velocity((f) => (posAt(f) / 100) * W, frame);
   const speed = Math.abs(vx);
-  const squish = 1 + Math.min(speed / 110, 1) * 0.18; // 峰值 1.18
-  const press = 1 - 0.06 * Math.sin(Math.PI * ramp(frame, PRE, FLING - PRE, EASE.linear)); // 甩动期间手柄被"捏住"微缩
+  const squish = 1 + Math.min(speed / 110, 1) * 0.18; // Peak 1.18
+  const press = 1 - 0.06 * Math.sin(Math.PI * ramp(frame, PRE, FLING - PRE, EASE.linear)); // Handle slightly pinches/shrinks during fling
 
   return (
     <AbsoluteFill style={{ background: G.bg, overflow: 'hidden' }}>
-      {/* before：可信的"处理前"——轻微失焦 + 降饱和 + 低对比，再盖一层暖灰雾面 */}
+      {/* before: believable "raw" state — subtle blur + desaturation + low contrast, overlaid with warm gray haze */}
       <div style={{ position: 'absolute', inset: 0, filter: 'blur(1.6px) saturate(0.18) contrast(0.72) brightness(1.04)' }}>
         <FakeDashboard variant="A" />
       </div>
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(214,212,206,0.30), rgba(196,194,188,0.38))' }} />
       <Tag label="Before" x={1372} muted />
 
-      {/* after：正常清晰版，杆左侧揭出；After 角标长在这一层，随分割线一起被裁 */}
+      {/* after: normal crisp version, revealed to the left of the bar; After badge belongs to this layer and is clipped by the divider line */}
       <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 ${W - x}px 0 0)` }}>
         <FakeDashboard variant="A" />
-        {/* x 随 FakeDashboard 品牌化后变长的面包屑（video-shotcraft › Overview）右移，两侧（时段切换 / 定格时的分割杆）各留 ~20px */}
+        {/* x shifted right to accommodate the longer branded breadcrumb (video-shotcraft > Overview), leaving ~20px clearance on both sides (time toggle / divider bar at hold) */}
         <Tag label="After" x={646} accent />
       </div>
 
-      {/* 揭示边沿：after 一侧 24px 极淡的接触暗影，让两层有前后关系（裁进 after 内） */}
+      {/* Reveal edge: faint 24px contact shadow on the after side to establish depth separation between layers (clipped within after) */}
       <div
         style={{
           position: 'absolute',
@@ -110,9 +110,9 @@ export const BeforeAfterSliderScrub: React.FC = () => {
         }}
       />
 
-      {/* 分割杆 + 圆手柄：快甩时手柄按速度横向拉伸，杆与手柄一起做方向性运动模糊 */}
+      {/* Divider bar + round handle: handle stretches horizontally with speed during fast fling; bar and handle blur together directionally */}
       <SpeedBlur vx={vx} amount={0.12} max={14}>
-        {/* 分割杆：2px 白线 + 发丝描边 + 两侧软影 */}
+        {/* Divider bar: 2px white line + hairline border + soft shadows on both sides */}
         <div
           style={{
             position: 'absolute',

@@ -1,13 +1,13 @@
-// grain-dissolve — Grain Dissolve → Condense 文字砂化凝聚（motion-lab 定稿转原生 Remotion）
-// 干净的整行字 "{ video-shotcraft. Now Live }" 先爆裂成沸腾颗粒噪点（轮廓隐约可辨、白色辉光），
-// 同时出现带 45° 斜纹填充和像素方块角柄的选区框；噪点沸腾约半程后选区框消失，
-// 噪点云急速凝聚成更大号的颗粒短字标（video-shotcraft 字标，全小写），位移量衰减归零、辉光冲高回落，
-// 凝固为清晰发光短字标。四角 HUD 括角/圆点与左右中线短划全程常驻。
-// 滤镜链：feTurbulence seed 逐帧 + displacement scale 双向动画，终字同走滤镜再解除。
-// 质感升级：SVG 直接按 1920×1080 原生分辨率栅格化（viewBox 640×360，1 单位 = 3px），
-// 噪点颗粒细到 2–3px 而不是 4 倍放大的糊团；辉光改在滤镜链内做"紧 + 宽"两层冷白 bloom；
-// 外加一团确定性游离砂粒——砂化时被吹散、凝聚时加速吸回字标（越来越快），凝固时熄灭；
-// 字标凝聚时从 1.06 收缩到 1（"被压实"），凝聚冲高的那一下给一道只出现一次的横向光痕。
+// grain-dissolve — Grain Dissolve -> Condense text granularization and convergence (motion-lab final spec ported to native Remotion)
+// The clean text line "{ video-shotcraft. Now Live }" bursts into boiling granular noise (silhouette faintly discernible, white glow),
+// accompanied by a selection box featuring 45° hatch lines and pixel-block corner handles; mid-boil, the selection box dismisses,
+// and the noise cloud rapidly condenses into a larger granular short wordmark ("video-shotcraft", all lowercase),
+// with displacement decaying to zero, glow peaking then settling, solidifying into a crisp luminous wordmark. Four-corner HUD brackets/dots and side tick marks persist throughout.
+// Filter chain: feTurbulence frame-by-frame seed + bidirectional displacement scale animation, final wordmark shares filter before releasing.
+// Polish upgrades: SVG rasterized at native 1920×1080 (viewBox 640×360, 1 unit = 3px),
+// sharpening noise particles down to 2–3px instead of 4x blurred blobs; two-layer cool white bloom ("tight + wide") implemented inside filter chain;
+// adds deterministic free-floating sand particles — scattered on granularization, accelerating back into wordmark on condense, extinguishing upon lock;
+// wordmark contracts from 1.06 to 1 during condensation ("compressed"), accented by a one-off horizontal streak at the condensation peak.
 import React, { useId } from 'react';
 import { AbsoluteFill } from 'remotion';
 import { E, rand, seg, useT } from '../../_fixtures/Motion';
@@ -16,36 +16,36 @@ import { BRAND } from '../../_fixtures/Brand';
 
 export const GRAIN_DISSOLVE_DURATION = 60; // 2000ms @30fps
 
-// 选区框几何（viewBox 坐标）
+// Selection box geometry (viewBox coordinates)
 const BX = 128;
 const BY = 148;
 const BW = 384;
 const BH = 62;
 
-// 45° 斜纹：x 从 bx-bh 起每 34 一根，右下→左上
+// 45° hatching: every 34 units starting from BX - BH, bottom-right -> top-left
 const HATCH_XS: number[] = [];
 for (let x = BX - BH; x < BX + BW; x += 34) HATCH_XS.push(x);
 
-// 游离砂粒：起点散在整行字的带状区域，终点落进短字标的字面范围（确定性种子）
+// Free sand particles: spawn across the full text ribbon, settle into short wordmark bounds (deterministic seed)
 const SAND = Array.from({ length: 150 }, (_, i) => {
   const r = (k: number) => rand(i * 13.7 + k * 101.3);
-  const hx = 140 + r(1) * 360; // 整行字带：x 140–500
+  const hx = 140 + r(1) * 360; // Full text ribbon: x 140–500
   const hy = 168 + r(2) * 26; // y 168–194
   const ang = r(3) * Math.PI * 2;
   return {
     hx, hy,
-    dx: Math.cos(ang) * (8 + r(4) * 26), // 砂化时被吹散的位移
+    dx: Math.cos(ang) * (8 + r(4) * 26), // Displacement scattered during granularization
     dy: Math.sin(ang) * (5 + r(5) * 14),
-    tx: 140 + r(6) * 360, // 短字标字面（video-shotcraft 44px）：x 140–500
+    tx: 140 + r(6) * 360, // Short wordmark bounds (video-shotcraft 44px): x 140–500
     ty: 170 + r(7) * 28, // y 170–198
     size: 0.35 + r(8) * 0.75,
     alpha: 0.25 + r(9) * 0.6,
-    lag: r(10) * 0.05, // 吸回的起跑错峰（非等差）
+    lag: r(10) * 0.05, // Staggered attraction start (non-uniform)
     ph: r(11) * Math.PI * 2,
   };
 });
 
-// 四角像素棋盘手柄（两块 5×5 错位方块）
+// Four-corner pixel checkerboard handles (two 5×5 offset blocks)
 const Handle: React.FC<{ x: number; y: number }> = ({ x, y }) => (
   <g transform={`translate(${x - 5},${y - 5})`} fill="#d6d9e0">
     <rect width={5} height={5} />
@@ -53,7 +53,7 @@ const Handle: React.FC<{ x: number; y: number }> = ({ x, y }) => (
   </g>
 );
 
-// HUD 括角 + 圆点（sx/sy 控制朝向）
+// HUD bracket corners + dots (sx/sy control orientation)
 const Corner: React.FC<{ x: number; y: number; sx: number; sy: number }> = ({ x, y, sx, sy }) => (
   <>
     <path
@@ -69,27 +69,27 @@ const Corner: React.FC<{ x: number; y: number; sx: number; sy: number }> = ({ x,
 
 export const GrainDissolve: React.FC = () => {
   const t = useT();
-  // 滤镜/clipPath ID 按实例生成，同一 Composition 放多个实例时互不串引
-  // （useId 的 «:» 在 CSS url() 里非法，清洗成纯字母数字）
+  // Filter / clipPath IDs generated per instance to avoid cross-referencing when multiple instances share a Composition
+  // (colons in useId are invalid inside CSS url(), sanitized to alphanumeric)
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const fid = `gd-${uid}`;
   const cid = `gd-${uid}-clip`;
   const sid = `gd-${uid}-streak`;
-  const burst = seg(t, 0.13, 0.28, E.outCubic); // 干净字 → 砂化
-  const cond = seg(t, 0.60, 0.71, E.inOutCubic); // 整行噪点云 → 短字标噪点云
-  const lock = seg(t, 0.68, 0.90, E.outCubic); // 位移衰减凝固
-  const settle = seg(t, 0.88, 1, E.outCubic); // 辉光回落
-  // 白色辉光：砂化期轻微，凝聚时冲高，凝固后回落到柔光
+  const burst = seg(t, 0.13, 0.28, E.outCubic); // Clean text -> granularization
+  const cond = seg(t, 0.60, 0.71, E.inOutCubic); // Full noise cloud -> short wordmark cloud
+  const lock = seg(t, 0.68, 0.90, E.outCubic); // Displacement decays to lock
+  const settle = seg(t, 0.88, 1, E.outCubic); // Glow settles down
+  // White glow: subtle during granularization, spikes during condensation, settles to soft glow after lock
   const glow = Math.max(0, burst * 0.3 + cond * 0.7 - settle * 0.45);
-  // 选区框：随 burst 从中线横向展开，0.55–0.64 收拢撤场（早于凝聚完成）
+  // Selection box: expands horizontally from centerline with burst, dismisses 0.55–0.64 (before condensation finishes)
   const boxOut = seg(t, 0.55, 0.64, E.inCubic);
   const boxOpen = burst * (1 - boxOut * 0.35);
   const boxOp = Math.min(1, burst * 1.4) * (1 - boxOut);
-  // 字标被压实：凝聚中 1.06 → 1（lock 曲线收敛）
+  // Wordmark compaction: 1.06 -> 1 during condensation (converges via lock curve)
   const markScale = 1 + 0.06 * (1 - lock);
-  // 横向光痕：只在凝聚冲高处出现一次（cond 升、lock 后段熄）
+  // Horizontal streak: appears once at condensation peak (rises with cond, dims in latter half of lock)
   const streak = cond * (1 - seg(t, 0.74, 0.92, E.outCubic));
-  const boil = Math.floor(t * 46); // 与 seed 同步的沸腾节拍
+  const boil = Math.floor(t * 46); // Boiling rate synchronized with seed
 
   return (
     <AbsoluteFill style={{ background: '#0a0b0e' }}>
@@ -118,7 +118,7 @@ export const GrainDissolve: React.FC = () => {
               result="d"
             />
             <feGaussianBlur in="d" stdDeviation={burst * 1.1 * (1 - lock)} result="core" />
-            {/* 两层 bloom：紧光（字边的亮晕）+ 宽光（空气里的散射），偏冷白，强度跟 glow 包络 */}
+            {/* Two-layer bloom: tight glow (edge highlight) + wide glow (air scatter), cool white, tracked by glow envelope */}
             <feGaussianBlur in="core" stdDeviation={1.2 + glow * 1.6} result="g1" />
             <feColorMatrix in="g1" type="matrix" result="g1c"
               values={`0 0 0 0 0.86  0 0 0 0 0.9  0 0 0 0 1  0 0 0 ${(0.15 + glow * 0.95).toFixed(3)} 0`} />
@@ -137,7 +137,7 @@ export const GrainDissolve: React.FC = () => {
             <stop offset="1" stopColor="#9fb0ff" stopOpacity="0" />
           </linearGradient>
         </defs>
-        {/* 四角 HUD 括角 + 圆点 + 左右中线短划（全程常驻） */}
+        {/* Four-corner HUD brackets + dots + side tick marks (persist throughout) */}
         <g>
           <Corner x={88} y={96} sx={1} sy={1} />
           <Corner x={552} y={96} sx={-1} sy={1} />
@@ -146,7 +146,7 @@ export const GrainDissolve: React.FC = () => {
           <line x1={52} y1={180} x2={76} y2={180} stroke="#4c4f5a" strokeWidth={1.1} strokeDasharray="4 3" />
           <line x1={564} y1={180} x2={588} y2={180} stroke="#4c4f5a" strokeWidth={1.1} strokeDasharray="4 3" />
         </g>
-        {/* 选区框：砂化时从中线横向展开浮现，凝聚前收拢撤掉 */}
+        {/* Selection box: unfolds horizontally from centerline during burst, retracts before condensation */}
         {boxOp > 0.002 && (
           <g opacity={boxOp} transform={`translate(320 0) scale(${(0.2 + 0.8 * boxOpen).toFixed(4)} 1) translate(-320 0)`}>
             <clipPath id={cid}>
@@ -165,17 +165,17 @@ export const GrainDissolve: React.FC = () => {
             <Handle x={BX + BW} y={BY + BH} />
           </g>
         )}
-        {/* 横向光痕：凝聚冲高时一次，细芯 + 宽晕 */}
+        {/* Horizontal streak: one-off pulse at condensation peak, thin core + wide halo */}
         {streak > 0.002 && (
           <g opacity={streak}>
             <ellipse cx={320} cy={182} rx={250} ry={7} fill={`url(#${sid})`} opacity={0.12} />
             <ellipse cx={320} cy={182} rx={230} ry={0.7} fill={`url(#${sid})`} opacity={0.7} />
           </g>
         )}
-        {/* 游离砂粒：砂化时被吹散、沸腾；凝聚时加速吸回字标；凝固时熄灭 */}
+        {/* Free sand particles: scatter and boil during burst, accelerate back into wordmark during condensation, extinguish upon lock */}
         <g>
           {SAND.map((s, i) => {
-            const pull = seg(t, 0.56 + s.lag, 0.71 + s.lag * 0.4, E.inQuart); // 越来越快的吸回
+            const pull = seg(t, 0.56 + s.lag, 0.71 + s.lag * 0.4, E.inQuart); // Accelerating pull-back
             const jitter = Math.sin(boil * 1.7 + s.ph) * 1.2 * burst * (1 - pull);
             const sx = s.hx + s.dx * burst;
             const sy = s.hy + s.dy * burst + jitter;
@@ -186,7 +186,7 @@ export const GrainDissolve: React.FC = () => {
             return <circle key={i} cx={x} cy={y} r={s.size * (1 - 0.4 * pull)} fill="#e9ecff" opacity={a} />;
           })}
         </g>
-        {/* 文字组：整行字与终字标同走滤镜链（含 bloom） */}
+        {/* Text group: full line and final wordmark share filter chain (including bloom) */}
         <g filter={`url(#${fid})`}>
           <text
             x={320}
@@ -195,7 +195,7 @@ export const GrainDissolve: React.FC = () => {
             opacity={1 - cond}
             style={{
               fill: '#eceef3',
-              font: `500 26px ${FONT.sans}`, // 品牌名比占位词长：字号 33→26 收进选区框
+              font: `500 26px ${FONT.sans}`, // Brand name is longer than placeholder: size adjusted 33 -> 26 to fit selection box
               letterSpacing: '1.2px',
             }}
           >
@@ -209,7 +209,7 @@ export const GrainDissolve: React.FC = () => {
             transform={`translate(320 180) scale(${markScale.toFixed(4)}) translate(-320 -180)`}
             style={{
               fill: '#ffffff',
-              font: `750 44px ${BRAND.font}`, // 15 字符字标：54→44px，凝固后仍落在 HUD 括角之内
+              font: `750 44px ${BRAND.font}`, // 15-char wordmark: 54 -> 44px, stays within HUD brackets after locking
               letterSpacing: '1.5px',
             }}
           >

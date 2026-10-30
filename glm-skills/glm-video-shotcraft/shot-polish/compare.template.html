@@ -56,7 +56,7 @@
   .tag.b { color: var(--before); } .tag.a { color: var(--after); }
   .tag.r { left: auto; right: 10px; }
   .missing { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 13px; }
-  /* wipe 模式：同一画框里叠两层，拖把手看切分 */
+  /* wipe mode: two layers in one frame, drag handle to inspect split */
   .stage.trio { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .vbox.picked { outline: 3px solid var(--pick, #4ade80); outline-offset: -3px; }
   .stage.wipe { grid-template-columns: 1fr; }
@@ -115,7 +115,7 @@
         <button data-v="0.25">0.25×</button><button data-v="0.5">0.5×</button><button data-v="1" class="on">1×</button>
       </div>
       <div class="seg" id="lang">
-        <button data-v="zh" class="on">中文</button><button data-v="en">EN</button>
+        <button data-v="en" class="on">EN</button><button data-v="zh">ZH</button>
       </div>
     </div>
     <div class="bar2">
@@ -136,14 +136,16 @@
 const DATA = /*__DATA__*/null;
 const FPS = 30;
 const T = {
-  zh: { subtitle: '216 个镜头改版对照', trio: '三方', side: '并排', wipe: '划像', pick: '选用', notePh: '备注（可选，例如想改哪里）',
-        dAll: '全部', dNone: '未决定', drop: '去掉', decided: '已决定', undecided: '未决定', export: '导出决策 JSON',
-        savedFile: '已保存到 shot-polish/decisions.json', savedLocal: '仅保存在浏览器（用 serve.py 启动可写入文件）', autoplay: '进入视野自动播放', search: '搜索卡名 / 组件名…',
-        all: '全部', before: '原版', v1: '第一版', after: '第二版', issues: '原版的问题', changes: '第二版做了什么', nonotes: '（暂无说明）',
-        vsBefore: '对比原版', vsV1: '对比第一版', onlydone: '只看第二版已完成',
-        notyet: '尚未渲染', play: '播放', pause: '暂停', shots: '个镜头', polished: '第二版已完成', empty: '没有匹配的镜头',
-        cats: { opening: '开场', camera: '运镜与空间', transition: '转场', typography: '文字排版', 'ui-entrance': 'UI 入场',
-                interaction: '交互演示', data: '数据', effects: '特效', rhythm: '节奏', outro: '收尾' } },
+  zh: { subtitle: 'redesign comparison for 216 shots', trio: 'All three', side: 'Side by side', wipe: 'Wipe', pick: 'Use', notePh: 'Note (optional, e.g. what to change)',
+        dAll: 'All', dNone: 'Undecided', drop: 'Drop', decided: 'decided', undecided: 'undecided', export: 'Export decisions JSON',
+        savedFile: 'Saved to shot-polish/decisions.json', savedLocal: 'Saved in browser only (start with serve.py to write the file)', autoplay: 'Autoplay in view', search: 'Search card / component…',
+        all: 'All', before: 'Original', v1: 'V1', after: 'V2', issues: 'What was rough', changes: 'What V2 changed', nonotes: '(no notes yet)',
+        vsBefore: 'vs original', vsV1: 'vs V1', onlydone: 'V2 done only',
+        notyet: 'not rendered yet', play: 'Play', pause: 'Pause', shots: 'shots', polished: 'V2 done', empty: 'No matching shots',
+        cats: Object.fromEntries(DATA.cats.map(c => [c.key, c.en])) },
+};
+const state = { lang: localStorage.getItem('sp-lang') || 'zh', cat: 'all', q: '', mode: 'trio', speed: 1, autoplay: true, base: 'before', onlyDone: false, dfilter: 'all' };
+// Decisions: { [stem]: { pick: 'before'|'v1'|'after', note, at } },
   en: { subtitle: 'redesign comparison for 216 shots', trio: 'All three', side: 'Side by side', wipe: 'Wipe', pick: 'Use', notePh: 'Note (optional, e.g. what to change)',
         dAll: 'All', dNone: 'Undecided', drop: 'Drop', decided: 'decided', undecided: 'undecided', export: 'Export decisions JSON',
         savedFile: 'Saved to shot-polish/decisions.json', savedLocal: 'Saved in browser only (start with serve.py to write the file)', autoplay: 'Autoplay in view', search: 'Search card / component…',
@@ -153,7 +155,7 @@ const T = {
         cats: Object.fromEntries(DATA.cats.map(c => [c.key, c.en])) },
 };
 const state = { lang: localStorage.getItem('sp-lang') || 'zh', cat: 'all', q: '', mode: 'trio', speed: 1, autoplay: true, base: 'before', onlyDone: false, dfilter: 'all' };
-// 决策：{ [stem]: { pick: 'before'|'v1'|'after', note, at } }。serve.py 启动时读写 shot-polish/decisions.json，否则落 localStorage
+// Decisions: { [stem]: { pick: 'before'|'v1'|'after', note, at } }. Read/written from shot-polish/decisions.json when running serve.py, otherwise localStorage.
 let decisions = JSON.parse(localStorage.getItem('sp-decisions') || '{}');
 let serverOK = false;
 const PICK_COLOR = { before: '#8b93a1', v1: '#60a5fa', after: '#4ade80', drop: '#f87171' };
@@ -256,15 +258,15 @@ function renderList() {
   root.querySelectorAll('.card').forEach(c => io.observe(c));
 }
 
-// 每张卡：after 为主时钟，before 跟随；共享进度条与逐帧步进
+// Each card: after is primary clock, before follows; shared timeline scrub and frame stepping
 function setupCard(card) {
   const vids = [...card.querySelectorAll('video.vid')];
   const master = card.querySelector('.v-after') || vids[0];
-  // 与主时钟（第二版）帧数相同的视频逐帧跟随；不同的（改了节奏）各自循环，进度条按比例同时定位
+  // Videos with same frame count as primary clock follow frame-by-frame; different lengths loop independently
   const followers = vids.filter(v => v !== master && v.dataset.frames && v.dataset.frames === master?.dataset.frames);
   const sameLen = vids.every(v => v.dataset.frames === master?.dataset.frames);
   card._vids = vids;
-  // 决策按钮 / 备注
+  // Decision buttons / notes
   card.querySelectorAll('.dk').forEach(btn => btn.onclick = () => setDecision(card.dataset.stem, { pick: decisions[card.dataset.stem]?.pick === btn.dataset.k ? null : btn.dataset.k }, card));
   const note = card.querySelector('.note');
   if (note) { note.onclick = ev => ev.stopPropagation(); note.oninput = () => setDecision(card.dataset.stem, { note: note.value }, card, true); }
@@ -294,7 +296,7 @@ function setupCard(card) {
     };
     card._tick = tick;
   }
-  // 划像把手
+  // Wipe divider handle
   const vb = card.querySelector('.vbox.single');
   if (vb) {
     let drag = false;
@@ -363,7 +365,7 @@ async function loadFromServer() {
     if (j && Array.isArray(j.decisions)) {
       const fromFile = {};
       j.decisions.forEach(d => { if (d.pick || d.note) fromFile[d.stem] = { pick: d.pick, note: d.note, at: j.savedAt }; });
-      // 文件为准；浏览器里有而文件里没有的（离线时做的）合并进来
+      // File authoritative; merge offline changes from browser
       decisions = { ...decisions, ...fromFile };
       localStorage.setItem('sp-decisions', JSON.stringify(decisions));
     }

@@ -1,21 +1,21 @@
-// smash-cut｜猛切（喧闹→死寂）
-// 0–41f 轰鸣段：5 张 Card 多方向高速飞掠冲镜（穿屏 translate + scale 1.5→3
-// 冲脸 + 微 rotate，各卡错峰跑两轮，第二轮更快=整体仍在加速），背景
-// FakeDashboard A 以 ease-in 持续加速推近 1→1.55 并滚动 rotate 1.8°——
-// 切点前一刻动势最猛。42f 一帧硬切 variant B 整齐静止全景，无一物在动，
-// 停满 93f（>50f）。反差即手法本体。总 135f。
+// smash-cut — Smash cut (chaos -> dead silence)
+// 0–41f crescendo phase: 5 cards rush past camera at high speed from multiple directions (cross-screen translate + scale 1.5 -> 3
+// zoom-in + slight rotate, cards run two staggered passes, second pass faster = overall acceleration), background
+// FakeDashboard A accelerates push-in 1 -> 1.55 with ease-in and rolls rotate 1.8 degrees —
+// momentum peaks right before the cut. At 42f, hard cut snaps to variant B static wide shot, completely still,
+// holding for 93f (>50f). The contrast is the technique itself. Total 135f.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, Card, FakeDashboard } from '../../_fixtures/Fixtures';
 
-const CUT = 42; // 硬切帧：>=42 全静止
+const CUT = 42; // Hard-cut frame: >=42 fully static
 
-// 每张飞卡：两轮 pass，第二轮更短（更快），ease-in 让每一程都在加速。
-// from/to 为屏幕外起终点（中心系坐标），飞行中 scale 1.5→3 冲脸。
+// Each flying card: two passes, second pass shorter (faster), ease-in keeps accelerating each pass.
+// from/to are off-screen start/end points (center-relative coordinates), scale 1.5 -> 3 in-flight rush.
 type Fly = {
   from: [number, number];
   to: [number, number];
-  rot: [number, number]; // 微旋转 起→终
+  rot: [number, number]; // Slight rotation start -> end
   seed: number;
   w: number;
   h: number;
@@ -29,8 +29,8 @@ const FLIES: Fly[] = [
   { from: [1350, -780], to: [-1350, 820], rot: [-8, 4], seed: 5, w: 480, h: 310 },
 ];
 
-// 卡 i 的第 k 轮：start = i*4 + k*20，时长 16 / 12（第二轮更快）。
-// card4 第二轮 36–48f 在切点 42f 被硬切截断——正中"绝不减速迎接切点"。
+// Card i pass k: start = i*4 + k*20, duration 16 / 12 (second pass faster).
+// card4 second pass 36–48f is truncated at cut frame 42f — precisely "never decelerate into the cut".
 const passWindow = (i: number, k: number): [number, number] => {
   const start = i * 4 + k * 20;
   const dur = k === 0 ? 16 : 12;
@@ -38,7 +38,7 @@ const passWindow = (i: number, k: number): [number, number] => {
 };
 
 const FlyCard: React.FC<{ fly: Fly; i: number; frame: number }> = ({ fly, i, frame }) => {
-  // 找当前活跃的 pass（两轮）
+  // Find currently active pass (2 passes)
   let active: [number, number] | null = null;
   for (let k = 0; k < 2; k++) {
     const [s, e] = passWindow(i, k);
@@ -46,7 +46,7 @@ const FlyCard: React.FC<{ fly: Fly; i: number; frame: number }> = ({ fly, i, fra
   }
   if (!active) return null;
   const [s, e] = active;
-  // ease-in：全程加速，越接近终点越快
+  // ease-in: accelerates throughout, faster toward end
   const p = interpolate(frame, [s, e], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.in(Easing.quad),
@@ -54,8 +54,8 @@ const FlyCard: React.FC<{ fly: Fly; i: number; frame: number }> = ({ fly, i, fra
   const x = fly.from[0] + (fly.to[0] - fly.from[0]) * p;
   const y = fly.from[1] + (fly.to[1] - fly.from[1]) * p;
   const rot = fly.rot[0] + (fly.rot[1] - fly.rot[0]) * p;
-  const scale = 1.5 + 1.5 * p; // 1.5 → 3 冲脸
-  // 速度门控方向模糊感：ease-in 下瞬时速度 ∝ p，速度越快越糊
+  const scale = 1.5 + 1.5 * p; // 1.5 -> 3 camera rush
+  // Velocity-gated directional blur feel: instantaneous speed proportional to p under ease-in, faster = blurrier
   const blur = 1 + 4 * p;
   return (
     <div style={{
@@ -72,12 +72,12 @@ const FlyCard: React.FC<{ fly: Fly; i: number; frame: number }> = ({ fly, i, fra
 export const SmashCut: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // —— 死寂段：42f 起 variant B 整齐静止全景，无任何动画属性 ——
+  // —— Dead silence phase: variant B static wide shot from 42f, zero animated properties ——
   if (frame >= CUT) {
     return <FakeDashboard variant="B" />;
   }
 
-  // —— 轰鸣段：背景 ease-in 加速推近 + 滚动，切点前 3f 仍在加速 ——
+  // —— Crescendo phase: background ease-in accelerated push-in + roll, still accelerating 3f before cut ——
   const bgScale = interpolate(frame, [0, CUT], [1, 1.55], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.in(Easing.quad),
@@ -93,7 +93,7 @@ export const SmashCut: React.FC = () => {
         width: 1920, height: 1080,
         transform: `scale(${bgScale}) rotate(${bgRot}deg)`,
         transformOrigin: '50% 50%',
-        filter: 'blur(1.5px)', // 背景轻糊，衬前景飞卡
+        filter: 'blur(1.5px)', // Slight background blur to highlight foreground flying cards
       }}>
         <FakeDashboard variant="A" />
       </div>

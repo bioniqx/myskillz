@@ -1,54 +1,40 @@
 ---
 name: aurora-bloom-bg-flip
-一句话: 浅灰底从底部升起紫橙柔焦 blob，随后整个底色在约 0.36s 内压暗到近黑、blob 压成余晖；文案同步 blur-out 换句 blur-in，换句间留空档不 cross-fade
-适用: 叙事转折点（"多年以来…→一切都变了"）；品牌片从铺垫拉到重音的那一拍；深浅色系之间的段落切换
-时长: 约5.2s（156f@30fps）
-能量: 由低到高（前 2/3 是酝酿，压暗那一瞬是全片重音）
+summary: A soft purple-orange aurora blob rises from the bottom of a light frame, then the whole background slams dark in under half a second while the copy blur-swaps to a new line.
+use: Narrative turning points ("For many years... -> everything changed"); the pivotal beat shifting from prelude to main emphasis in brand films; chapter transitions between light and dark palettes
+duration: ~5.2s (156f @ 30fps)
+energy: Low to high (first 2/3 builds anticipation; the darkening snap delivers the primary accent)
 ---
 
-## 意图
-把"底色反转"当成重音符号用：前 56% 让极光慢慢升起、观众适应浅底，
-然后用不到 0.4s 把整个画面压到近黑——这一下比任何缩放/闪白都更像
-"翻页"。文案的换句必须卡在反转之后，且中间留空档，让观众先接住画面
-变化再读新句。
+## Intention
+Treat "background inversion" as an accent mark: let the aurora slowly rise over the first 56% so viewers adapt to the light canvas, then snap the entire screen to near-black in under 0.4s—this impact reads more decisively as "turning the page" than any zoom or white flash. The copy swap must lock immediately after the inversion, leaving a distinct gap between lines so viewers absorb the visual change before reading the new message.
 
-## 动效核心
-- 三层 `blur(60px)` blob 从画框底部升起：主紫 `rgba(107,79,224,.85)`
-  90%×85%、橙核 `rgba(217,122,74,.9)`、白色融边 `rgba(255,255,255,.8)`
-- 升起 `seg(0.04→0.56, outCubic)`：`translateY 32%→−6%` + `scale 1→1.25`
-- 反转 `flip = seg(0.57→0.64, inOutQuad)`（归一化 0.07 ≈ 0.36s）：
-  底色 `mix([236,236,236] → [10,10,18])`，blob opacity 1→0.4 压成余晖，
-  白色融边层 `1−flip` 直接收掉
-- 橙核独立 `translateX ±8%`（2.2 周期/全片）横向慢漂，让 blob 内部
-  有相对运动而不是整块升降
-- A 句逐词 `blur 0→8px` + 淡出（t 0.40 起、stagger 0.04、各 0.10、inQuad）；
-  B 句逐词 `outQuint` blur-in（t 0.70 起、stagger 0.05、各 0.11），落位后 0.09 内
-  由 DEEPP 紫收色到白，t≈0.90 定稿后静止 ≈0.5s
+## Motion Core
+- Three `blur(60px)` blob layers rise from the bottom of the frame: primary purple `rgba(107,79,224,.85)` at 90%x85%, orange core `rgba(217,122,74,.9)`, and white blending perimeter `rgba(255,255,255,.8)`.
+- Rise `seg(0.04->0.56, outCubic)`: `translateY 32%->−6%` + `scale 1->1.25`.
+- Inversion `flip = seg(0.57->0.64, inOutQuad)` (normalized 0.07 ≈ 0.36s): background `mix([236,236,236] -> [10,10,18])`, blob opacity 1->0.4 compressed into an afterglow, white blending perimeter layer directly removed via `1 - flip`.
+- Orange core drifts laterally with independent `translateX ±8%` (2.2 cycles across the shot), creating internal relative motion within the blob rather than a monolithic block move.
+- Phrase A word-by-word `blur 0->8px` + fade-out (starting at t 0.40, stagger 0.04, duration 0.10 each, inQuad); Phrase B word-by-word `outQuint` blur-in (starting at t 0.70, stagger 0.05, duration 0.11 each), settling from DEEPP purple to white within 0.09, resting motionless for ≈0.5s after settling at t ≈ 0.90.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| blob 模糊/尺寸 | blur(60px)，主层 90%×85%，容器 inset −10% | 模糊小于 40px 就看得出是圆，成了"色球"不是"光" |
-| 升起 | translateY 32%→−6% + scale 1→1.25，t 0.04→0.56 outCubic | 占掉一半以上时长是故意的：酝酿越长，反转越有分量 |
-| 反转时长 | t 0.57→0.64 inOutQuad ≈ 0.36s | **命门**：拉到 1s 就不是重音而是渐变过场 |
-| 底色 | #ececec → #0a0a12（不是纯黑） | 纯黑会让余晖 blob 边缘出现色阶断层 |
-| blob 压暗 | opacity 1→0.4，白色融边层同步归零 | 不压暗 blob，暗场里紫橙会过曝糊成一团 |
-| 橙核漂移 | translateX ±8%，2.2 周期/全片 | 幅度到 15% 就看得出是"一个球在动" |
-| A 句 blur-out | 逐词 stagger 0.04、各 0.10、inQuad、blur→8px | inQuad 让消失是加速的，读作"被光吞掉" |
-| B 句 blur-in | 逐词 stagger 0.05、各 0.11 outQuint + 0.09 内紫→白 | 收色比入场晚一点，落定瞬间才转白，是"定稿"的信号 |
-| 换句空档 | A 收完 t≈0.58 → B 起 0.70（≈0.6s 无字） | cross-fade 会把两句糊在一起，空档才读出"翻篇" |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Blob blur / size | blur(60px), main layer 90%x85%, container inset −10% | Blur below 40px exposes circular outlines, reading as "colored balls" instead of "ambient light" |
+| Rise phase | translateY 32%->−6% + scale 1->1.25, t 0.04->0.56 outCubic | Occupying over half the total duration is intentional: longer buildup gives the flip greater impact |
+| Inversion duration | t 0.57->0.64 inOutQuad ≈ 0.36s | **Critical core**: stretching to 1s turns an accent beat into a sluggish gradient transition |
+| Canvas color | #ececec -> #0a0a12 (not pure black) | Pure black introduces banding artifacts around the afterglow blob edges |
+| Blob dimming | opacity 1->0.4, white blending layer zeroes synchronously | Failing to dim the blob results in overexposed blown-out purple/orange mud in dark scenes |
+| Orange core drift | translateX ±8%, 2.2 cycles across shot | Exceeding 15% makes it visibly obvious that "a single ball is moving" |
+| Phrase A blur-out | Word-by-word stagger 0.04, duration 0.10 each, inQuad, blur->8px | inQuad accelerates the exit, reading as "swallowed by light" |
+| Phrase B blur-in | Word-by-word stagger 0.05, duration 0.11 each outQuint + purple->white within 0.09 | Color settles slightly after entry, turning white upon rest as a "final lock" cue |
+| Phrase gap | Phrase A exits t ≈ 0.58 -> Phrase B enters 0.70 (≈0.6s textless) | Cross-fading blurs the two phrases together; an empty gap clearly signals "a new chapter" |
 
-## 已知坑
-- 白色融边层（blobC）只在浅底成立，反转时必须 `1−flip` 收掉，
-  否则暗场里留一团灰雾
-- DEEPP/PURPLE 是这个效果的**本体光色**，不是品牌色槽位；要换成项目色
-  必须 blob 三层 + B 句文字色整组一起换，只换文字色会和背景脱节
-- demo 文案是 video-shotcraft 的叙事转折（"Promos took weeks" / "Meet video-shotcraft"，
-  词数与字长贴近原片的 "For many years" / "everything changed"），逐词
-  stagger 的节奏依赖词数与字长，换句要回调 0.04/0.06 两个间隔
-- 底色用 JS 逐帧写 `background`（`mix()` 出实色），不要用 CSS transition，
-  否则 seek 到任意帧时颜色不确定
+## Known Pitfalls
+- The white blending layer (blobC) works only over light backgrounds; it must be suppressed via `1 - flip` during inversion, otherwise it leaves a gray haze in dark scenes.
+- DEEPP/PURPLE is the **intrinsic light color** of this effect, not an arbitrary brand slot. To adapt to project branding, all three blob layers plus Phrase B text colors must be updated as a unified set; changing only text color decouples it from the background.
+- Demo copy reflects video-shotcraft's narrative transition ("Promos took weeks" / "Meet video-shotcraft", matching word counts and lengths of reference "For many years" / "everything changed"); word-by-word stagger rhythm depends on word count and length, requiring interval adjustments (0.04/0.06) when editing copy.
+- Canvas background must be updated frame-by-frame via JS `background` (`mix()` computing solid color) rather than CSS transitions, ensuring deterministic colors when seeking to arbitrary frames.
 
-## 参考实现
+## Reference Implementation
 demos/effects/aurora-bloom-bg-flip/
-（AuroraBloomBgFlip.tsx）
+(AuroraBloomBgFlip.tsx)

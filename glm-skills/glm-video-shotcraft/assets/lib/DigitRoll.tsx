@@ -1,4 +1,4 @@
-// origin: template/src/aifl/DigitRoll.tsx（模板片同源组件）
+// origin: template/src/aifl/DigitRoll.tsx (shared template component)
 import { interpolate, useCurrentFrame, Easing } from 'remotion';
 
 const DIGITS = '0123456789';

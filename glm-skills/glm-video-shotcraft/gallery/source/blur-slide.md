@@ -1,59 +1,54 @@
 ---
 name: blur-slide
-一句话: 标题逐词入场，y 0.38em→0 + blur 18→0 + opacity 0→1 三通道走同一条 ease-out 同步收敛，词间隔约 4f；副标题在标题收完前就错峰跟进
-适用: 几乎所有标题/副标题成对出现的场合；产品页首屏文案、章节小标题；需要"专业但不抢戏"的默认文字 reveal
-时长: 约 4.0s（120f@30fps）
-能量: 低（一次性收敛，无峰值无循环）
+summary: Title words rise into place one after another as vertical offset, blur, and opacity converge on a single shared ease, with the subtitle following before the title settles.
+use: Ideal for almost all paired title/subtitle scenarios; hero section copy on product pages, chapter subtitles; the default text reveal when seeking a "professional yet understated" feel
+duration: ~4.0s (120f@30fps)
+energy: Low (single-shot convergence, no peak, no loop)
 ---
 
-## 意图
-这是文字 reveal 的**默认解**——没有奇观、没有机械感，只是把词一个个
-柔和地放到位。它的专业感全来自一件事：y、blur、opacity 三个通道共用
-同一个进度 `p`、同一条缓动，所以词是"从虚焦里浮出来"而不是"滑进来
-顺便淡一下"。当一支片里已经有别的重手法（乱码/滚轮），标题就该
-用这一卡，让位给主角。
+## Intention
+This is the **default solution** for text reveals — no spectacle, no mechanical gimmick, just placing words gently into position one by one. Its sense of professionalism comes entirely from one thing: the three channels of y, blur, and opacity share the same progress `p` and the same easing curve, so words "emerge from defocus" rather than "slide in and happen to fade in." When a video already has heavy techniques elsewhere (glitch, reels), the title should use this card to yield the spotlight to the hero.
 
-## 动效核心
-- 单词进度 `p = ramp(frame, start, dur, EASE.out)`（quint-out 级），三通道全绑同一个 p：
-  `opacity = p`、`translateY = (1-p)·dy`、`blur = (1-p)·B`px（demo 里主角词的字距收紧也挂在同一个 p 上）
-- 主标题（170px 衬线两行）：第一行 3 词 10f 起、词间 4f、每词 22f；第二行先停 6f 换气，
-  "feel" 26f、主角词 "cinematic." 30f 起且入场窗 30f（最后落定）；`dy = 64`px、`B = 18`px
-- 副标题（46px 无衬线，9 词）：34f 起、词间 2.4f、每词 20f、`dy = 26`px、`B = 9`px
-  ——间隔更密、位移更小，**层级差是靠幅度不是靠时长**
-- 错峰而非排队：副标题在 34f 起手，标题要到 60f 才收完，两段有 26f 重叠——
-  排队会读作两拍，重叠才是一句话
-- 拆词不拆字：`text.split(' ')` 后每词一个 span，`line` 用 `gap:0.32em`
-  撑词距（不靠空格）——逐字入场太碎，词级才有"念出来"的语感
-- demo 版式：paper look（暖白纸 + 墨 + 朱红），杂志刊头（video-shotcraft 字标）/刊脚发丝线框成一页，朱红全大写眉题 →
-  170px 衬线主标题（主角词斜体朱红）→ 46px 无衬线副标题，左对齐 168px 网格；后景一枚 5% 墨色的
-  760px 刊号数字反向慢漂做视差；文字层全程极缓推近 1→1.03（smooth），刊脚发丝线 72f 起画给 hold 段收尾
+## Motion Core
+- Word progress `p = ramp(frame, start, dur, EASE.out)` (quint-out grade), with all three channels bound to the exact same p:
+  `opacity = p`, `translateY = (1-p)·dy`, `blur = (1-p)·B`px (in the demo, the lead word's kerning tightening is also hooked to this same p).
+- Main title (170px serif, two lines): Line 1 has 3 words starting at 10f, 4f word gap, 22f per word; Line 2 pauses 6f to breathe,
+  "feel" at 26f, hero word "cinematic." starting at 30f with a 30f entrance window (settles last); `dy = 64`px, `B = 18`px.
+- Subtitle (46px sans-serif, 9 words): starts at 34f, 2.4f word gap, 20f per word, `dy = 26`px, `B = 9`px
+  — denser gaps and smaller displacements; **hierarchy comes from amplitude, not duration**.
+- Staggered rather than queued: The subtitle begins at 34f, while the main title does not finish settling until 60f, overlapping by 26f —
+  queuing reads like two separate beats, while overlapping reads like a single sentence.
+- Split by word, not by character: Each word is wrapped in a span via `text.split(' ')`, and `line` uses `gap:0.32em`
+  for word spacing (instead of spaces) — character-by-character entrances feel too fragmented, whereas word-level reveals provide a natural "spoken" cadence.
+- Demo layout: paper look (warm white paper + ink + vermilion), magazine masthead (video-shotcraft wordmark) / footer hairline framing a page, vermilion all-caps eyebrow →
+  170px serif main title (hero word in italic vermilion) → 46px sans-serif subtitle, left-aligned to a 168px grid; in the background, a 5% ink
+  760px issue number slowly drifts in reverse for parallax; the text layer undergoes an ultra-slow push-in 1→1.03 (smooth) throughout, and the footer hairline draws from 72f to conclude the hold section.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 词间 stagger | 主 4f / 副 2.4f | 3–4f 是"逐词"的甜点；<2f 整行齐入没有 stagger，>8f 观众开始一个个数词 |
-| 单词入场窗 | 主 22f（主角词 30f）/ 副 20f，`EASE.out` | <10f 读作硬弹；>30f 每个词都在慢慢浮，整句拖沓 |
-| y 位移 | 主 64px（≈0.38em）/ 副 26px | 主副不等幅是层级来源；<0.15em 位移无感，>0.6em 词从画外飞进来变成滑入 |
-| blur 通道 | 主 `(1-p)·18`px / 副 `(1-p)·9`px | 这一通道就是"专业感"，删了退化成普通淡入上移；超过字号的 ~12% 中间帧糊成色块 |
-| 主副错峰 | 主 10f–60f / 副 34f–80f | 重叠 ~26f 是"一句话"；副标题起点推到主标题收完之后就读成两拍 |
-| 字号字重 | 170px 衬线 400 对 46px 无衬线 400 | 差 2 倍以上才有主副关系；字重相同时靠字体家族区分，副标题上 600+ 字重会和主标打架 |
-| 收尾 hold | 副标题 80f 收完，尾部约 40f（只剩极缓推近与刊脚收尾） | 静置 <8f 观众还没读完就切了 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Word stagger | Main 4f / Sub 2.4f | 3–4f is the sweet spot for "word-by-word"; <2f feels like the entire line enters at once with no stagger; >8f and the audience starts counting individual words |
+| Single-word entrance window | Main 22f (hero word 30f) / Sub 20f, `EASE.out` | <10f reads like a hard bounce; >30f makes each word float too slowly, dragging down the sentence |
+| y displacement | Main 64px (≈0.38em) / Sub 26px | Unequal amplitude between main and sub creates hierarchy; <0.15em displacement is unnoticeable; >0.6em feels like words fly in from offscreen into a slide |
+| Blur channel | Main `(1-p)·18`px / Sub `(1-p)·9`px | This channel creates the "professional feel"; removing it degrades the motion into a generic fade-and-rise; exceeding ~12% of font size turns intermediate frames into blurry color patches |
+| Main/sub stagger | Main 10f–60f / Sub 34f–80f | Overlapping ~26f forms "one cohesive sentence"; delaying subtitle start until after main title settles reads like two disconnected beats |
+| Font size & weight | 170px serif 400 vs 46px sans-serif 400 | A size difference >2x establishes primary-secondary hierarchy; when weights are equal, differentiate by font family; 600+ weight on subtitles clashes with the main title |
+| Ending hold | Subtitle settles at 80f, leaving ~40f at the tail (only ultra-slow push-in and footer finish) | Static hold <8f cuts away before the audience finishes reading |
 
-## 已知坑
-- demo 在占位文案上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **占位文案是主 5 词（两行）/ 副 9 词，换项目文案时词数要贴近**：stagger 总长
-  = `gap × 词数`，词数翻倍末词起点就往后挪一倍，末词的入场会被挤到收尾 hold
-  ——超过 8 词就该同步把 gap 压到 2–2.5f
-- 三通道必须共用同一个 `p`：分开写三条缓动（哪怕曲线相同）就会出现
-  "位移到了但还糊着"的错位，柔和感立刻散掉
-- 词级拆分对中文文案要手动切：`split(' ')` 在中文上得到一整块，
-  须自己按语义分段成 3–5 个 span，别退化成逐字
-- 每行是绝对定位的 `flex` 行（左对齐 168px 网格），词距靠 `gap` 而非空格；
-  换文案时注意第一行不要超过 ~1450px 宽（170px 衬线约 17 个字符），否则撞右侧刊号后景
-- 这是**低能量默认卡**：与本类里的乱码/滚轮属于不同职能，同片可以
-  也应该共存（主角用重手法，其余标题全用本卡）
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **The placeholder copy uses 5 words (two lines) for the main title and 9 words for the subtitle; keep word counts close when replacing copy**: total stagger length
+  = `gap × word count`. Doubling the word count pushes the start of the final word back by 2x, squeezing its entrance into the ending hold
+  — if exceeding 8 words, compress the gap down to 2–2.5f in tandem.
+- All three channels must share the exact same `p`: writing separate easing curves (even with identical shapes) causes misalignments
+  where "displacement arrives while still blurry," instantly shattering the smooth feel.
+- Word-level splitting requires manual segmentation for non-space-delimited scripts (e.g., CJK): `split(' ')` yields a single block,
+  so manually split by semantics into 3–5 spans instead of degrading into character-by-character reveals.
+- Each line is an absolutely positioned `flex` row (left-aligned to a 168px grid) with spacing driven by `gap` rather than spaces;
+  when updating copy, ensure line 1 does not exceed ~1450px width (~17 characters in 170px serif), or it will collide with the background issue number on the right.
+- This is a **low-energy default card**: it serves a different role from glitches/reels in this category, and can and should coexist in the same video
+  (use heavy techniques for the hero element, and this card for all other titles).
 
-## 参考实现
+## Reference Implementation
 demos/typography/blur-slide/
-（BlurSlide.tsx）
+(BlurSlide.tsx)

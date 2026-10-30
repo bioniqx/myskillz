@@ -1,12 +1,12 @@
-// 字符坠落堆积（letter-drop-physics）——FallingLetterAnimation。
-// 品牌名 "Shotcraft"（BRAND.short）9 字符按字体自然字宽排成一行（flex 布局只管槽位，所有运动走 transform 不改排版），
-// 第 i 字符从帧 4+36·(1−(1−i/8)^1.5) 起下落（间隔 6.5→1.6f 越来越密，R2 硬加速）：
-// ① 重力加速 y = D*(t/24)^2 掉 720px 到地面，下落中按速度纵向拉伸 + 竖向运动模糊；
-// ② 落地后 2 次衰减弹跳（高度 30% / 9%，抛物线 4u(1-u) 拼段），每次触地挤压（squash）
-//    并阻尼回弹；落地瞬间 rotate 到 seed hash ±6° 小歪角并保持（歪歪扭扭站定）；
-//    每个字符脚下一枚接触影：离地越高越大越虚越淡，落地收成小而实的一抹；
-// ③ 帧 110 一拍：先 2f 吸气撑到 1.06，再 6f ease-out 全体齐整回正（rotate→0、错位→0、
-//    scale 1.06→1），副标题「Every shot lands on the beat.」随后浮出；帧 116–150 真静止（≥34f）收尾。
+// Letter drop and stack (letter-drop-physics) — FallingLetterAnimation.
+// Brand name "Shotcraft" (BRAND.short), 9 characters arranged in a row according to natural font advance widths (flex layout defines slots only, all motion uses transform without altering layout).
+// Character i begins dropping from frame 4+36*(1-(1-i/8)^1.5) (spacing shrinks from 6.5f to 1.6f, R2 hard acceleration):
+// 1) Gravity acceleration y = D*(t/24)^2 dropping 720px to the floor, with vertical stretch proportional to velocity + vertical motion blur during the fall;
+// 2) Upon landing, 2 decaying bounces (heights 30% / 9%, parabolic 4u(1-u) segments), with squash on each impact
+//    and damped rebound; on initial impact, rotate to a seed hash tilt of +/-6 deg and hold (standing slightly askew);
+//    a contact shadow beneath each character: larger, blurrier, and fainter with height, condensing into a sharp, compact footprint on touchdown;
+// 3) Frame 110 snap beat: 2f inhale expanding to 1.06, then 6f ease-out to snap everything straight (rotate->0, offset->0,
+//    scale 1.06->1), subtitle "Every shot lands on the beat." fades in afterward; frames 116-150 hold completely still (>=34f) to finish.
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -15,47 +15,47 @@ import { BRAND } from '../../_fixtures/Brand';
 
 export const LETTER_DROP_PHYSICS_DURATION = 150;
 
-// 确定性伪随机
+// Deterministic pseudo-random number generator
 const h = (n: number) => {
   const s = Math.sin(n * 127.3) * 43758.5453;
   return s - Math.floor(s);
 };
 
-const WORD = BRAND.short; // 'Shotcraft'（无下行字母，全员基线贴地）
-const SIZE = 176; // 字号
-const FLOOR_Y = 600; // 地面线（字符基线）
-const BASE = Math.round(SIZE * 0.886); // 字行盒顶到基线（SF Pro，lineHeight 1 实测）
-const ROW_TOP = FLOOR_Y - BASE; // 字行盒顶：基线正好压在地面线上
+const WORD = BRAND.short; // 'Shotcraft' (no descenders, all baselines sit flush on the floor)
+const SIZE = 176; // Font size
+const FLOOR_Y = 600; // Floor line (character baseline)
+const BASE = Math.round(SIZE * 0.886); // Line box top to baseline (measured for SF Pro with lineHeight 1)
+const ROW_TOP = FLOOR_Y - BASE; // Line box top: baseline sits directly on the floor line
 
-const PAD = 200; // 运动模糊层外扩
-const DROP = 720; // 下落距离
-const T_FALL = 24; // 落到地面用时
-const T_B1 = 16; // 第一次弹跳时长（高 30%）
-const T_B2 = 8; // 第二次弹跳时长（高 9%）
-const SNAP = 110; // 齐整回正的一拍
+const PAD = 200; // Motion blur container padding
+const DROP = 720; // Drop distance
+const T_FALL = 24; // Duration to hit the floor
+const T_B1 = 16; // Duration of first bounce (30% height)
+const T_B2 = 8; // Duration of second bounce (9% height)
+const SNAP = 110; // Beat where characters snap back into alignment
 const SNAP_DUR = 6;
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
-// 起跳帧：非等差错峰，越来越密
+// Start frame: non-linear stagger, accelerating density
 const startOf = (i: number) => 4 + 36 * (1 - Math.pow(1 - i / (WORD.length - 1), 1.5));
 
-// 单字符纵向位移（相对地面，负 = 在上方）
+// Vertical displacement for a single character (relative to floor, negative = above)
 const dropY = (t: number): number => {
   if (t <= 0) return -DROP;
-  if (t < T_FALL) return -DROP + DROP * (t / T_FALL) ** 2; // 重力加速
+  if (t < T_FALL) return -DROP + DROP * (t / T_FALL) ** 2; // Gravity acceleration
   if (t < T_FALL + T_B1) {
     const u = (t - T_FALL) / T_B1;
-    return -DROP * 0.3 * 4 * u * (1 - u); // 弹跳 1：30%
+    return -DROP * 0.3 * 4 * u * (1 - u); // Bounce 1: 30%
   }
   if (t < T_FALL + T_B1 + T_B2) {
     const u = (t - T_FALL - T_B1) / T_B2;
-    return -DROP * 0.09 * 4 * u * (1 - u); // 弹跳 2：9%
+    return -DROP * 0.09 * 4 * u * (1 - u); // Bounce 2: 9%
   }
   return 0;
 };
 
-// 触地挤压量：三次触地（落地 / 一跳落 / 二跳落）各给一次阻尼振荡，强度 1 / 0.45 / 0.18
+// Ground impact squash: damped oscillation for each of the three impacts (initial landing / bounce 1 / bounce 2) at intensities 1 / 0.45 / 0.18
 const IMPACTS: [number, number][] = [
   [T_FALL, 1],
   [T_FALL + T_B1, 0.45],
@@ -73,19 +73,19 @@ const squashAt = (t: number) => {
 
 export const LetterDropPhysics: React.FC = () => {
   const frame = useCurrentFrame();
-  // 帧 110 回正：108–110 吸气撑起，110–116 ease-out 回落
+  // Snap alignment at frame 110: 108-110 inhale expand, 110-116 ease-out settle
   const inhale = ramp(frame, SNAP - 2, 2, EASE.out);
   const snap = ramp(frame, SNAP, SNAP_DUR, EASE.snappy);
-  const snapRot = ramp(frame, SNAP, SNAP_DUR + 2, EASE.overshoot); // 歪角回正带一点过冲
+  const snapRot = ramp(frame, SNAP, SNAP_DUR + 2, EASE.overshoot); // Snap rotation with slight overshoot
   const pulse = 0.06 * inhale * (1 - snap);
-  // 副标题：回正后浮出
+  // Subtitle: fades in after alignment snap
   const sub = ramp(frame, SNAP + 4, 18, EASE.out);
 
   return (
     <div style={{ width: 1920, height: 1080, overflow: 'hidden', position: 'relative', fontFamily: FONT.sans }}>
       <Backdrop tone="light" light={{ x: 0.5, y: 0.16 }} grain={0} vignette={0.16} />
 
-      {/* 地面：地平线以下一块向下渐深的台面 + 两端淡出的发丝地平线 */}
+      {/* Floor: darkening surface gradient below horizon + faded hairline horizon */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: FLOOR_Y, bottom: 0,
         background: 'linear-gradient(180deg, rgba(40,42,52,0.035) 0%, rgba(40,42,52,0.012) 30%, rgba(40,42,52,0) 64%)',
@@ -99,7 +99,7 @@ export const LetterDropPhysics: React.FC = () => {
         background: 'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 30%, rgba(255,255,255,0.7) 70%, rgba(255,255,255,0) 100%)',
       }} />
 
-      {/* 字行：flex 按自然字宽排槽位，每个槽内字符只做 transform */}
+      {/* Letter row: flex slots sized to natural character widths; characters transform inside slots */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: ROW_TOP, height: SIZE,
         display: 'flex', justifyContent: 'center',
@@ -109,36 +109,36 @@ export const LetterDropPhysics: React.FC = () => {
           const t = frame - startOf(i);
           const y = dropY(t);
           const vy = dropY(t + 0.5) - dropY(t - 0.5);
-          const air = -y; // 离地高度
-          // 落地瞬间歪到 seed 小角度（±6°），落地前为 0；snap 一拍齐整归零
+          const air = -y; // Height above ground
+          // Tilt to seed angle (+/-6 deg) on landing, 0 before landing; snaps to zero on snap beat
           const tiltTarget = (h(i + 1) - 0.5) * 12;
           const landP = EASE.out(clamp01((t - T_FALL) / 6));
           const rot = tiltTarget * landP * (1 - snapRot);
-          // 歪着站 = 一个底角着地：按歪角把字抬起 sin|θ|·半字宽，底角始终贴地不穿地面
+          // Standing tilted = resting on one bottom corner: elevate by sin|theta| * half-width so corner stays on floor
           const jitter = -Math.sin((Math.abs(rot) * Math.PI) / 180) * 48;
-          // 拉伸（下落速度）+ 挤压（触地），保体积：scaleX ≈ 1/scaleY
+          // Stretch (fall velocity) + squash (touchdown), volume-preserving: scaleX ~= 1/scaleY
           const stretch = Math.min(1, Math.abs(vy) / 60) * 0.1 * (t < T_FALL ? 1 : 0.6);
           const sq = squashAt(t);
           const sy = (1 + stretch) * (1 - 0.2 * sq) + pulse;
           const sx = (1 - stretch * 0.55) * (1 + 0.15 * sq) + pulse;
-          // 接触影：贴地小而实，离地大而虚而淡；未入画时几乎不可见
+          // Contact shadow: sharp and compact near ground, broad and diffuse at height; hidden offscreen
           const lift = clamp01(air / 420);
           const shOp = (t < 0 ? 0 : 0.2) * (1 - lift * 0.85) * clamp01((t + 2) / 8);
           const shW = mix(0.74, 1.3, lift) * (1 + 0.12 * Math.max(0, sq));
           const shBlur = mix(7, 28, lift);
           return (
             <span key={i} style={{ position: 'relative', display: 'inline-block' }}>
-              {/* 占位字：撑出自然字宽，不可见 */}
+              {/* Spacer character: reserves natural advance width, invisible */}
               <span style={{ visibility: 'hidden' }}>{ch}</span>
-              {/* 接触影 */}
+              {/* Contact shadow */}
               <div style={{
                 position: 'absolute', left: '50%', top: BASE - 7, width: '84%', height: 14,
                 transform: `translateX(-50%) scaleX(${shW.toFixed(3)})`,
                 borderRadius: '50%', background: 'rgba(22,24,34,1)',
                 opacity: shOp, filter: `blur(${shBlur.toFixed(1)}px)`,
               }} />
-              {/* 运动层：位移在外，模糊随之移动（下落段全量、弹跳段减半，防触地时糊成一团）；挤压 / 歪角绕触地点 */}
-              {/* 模糊层四周外扩 PAD：SVG 滤镜区域按元素盒计算，盒子太紧会把拖影裁成硬边 */}
+              {/* Motion layer: outer translation carries blur (full during fall, half during bounces to avoid muddy landing); squash/tilt pivots at contact point */}
+              {/* Blur layer padded with PAD: SVG filter bounds follow element box, tight box clips blur into hard edges */}
               <div style={{
                 position: 'absolute', left: -PAD, right: -PAD, top: -PAD, bottom: -PAD,
                 transform: `translateY(${(y + jitter).toFixed(2)}px)`,
@@ -158,7 +158,7 @@ export const LetterDropPhysics: React.FC = () => {
         })}
       </div>
 
-      {/* 副标题：回正一拍后的句号 */}
+      {/* Subtitle: final statement following the alignment snap */}
       <div style={{
         position: 'absolute', left: 0, right: 0, top: FLOOR_Y + 70, textAlign: 'center',
         fontSize: 36, fontWeight: 500, letterSpacing: tracking(36), color: G.ink2,

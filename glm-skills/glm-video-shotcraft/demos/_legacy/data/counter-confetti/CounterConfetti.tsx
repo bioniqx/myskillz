@@ -1,16 +1,16 @@
-// counter-confetti — Counter Confetti 数字冲刺纸屑（motion-lab 定稿转原生 Remotion）
-// 大数字 0 → 1000 用 easeOutQuart 冲刺，scale 走 [0.2,1.3,1.3,1] 过冲；数字到位前
-// 5 帧就从两侧 burst 出 8 色纸屑，带重力下落与自转飘散。
-// 设计坐标 480×270（DesignStage 等比放大），参数表数值以此坐标系标定。
+// counter-confetti — Number sprint with confetti burst (motion-lab finalized to native Remotion)
+// Large counter 0 -> 1000 sprints with easeOutQuart, scale follows [0.2, 1.3, 1.3, 1] overshoot;
+// 5 frames before counter settles, 8-color confetti bursts from both sides with gravity drop and spin drift.
+// Design coordinates 480x270 (uniformly scaled via DesignStage); parameters are calibrated to this coordinate space.
 import React from 'react';
 import { DesignStage, E, lerp, rand, seg, useT } from '../../_fixtures/Motion';
 
 export const COUNTER_CONFETTI_DURATION = 138; // 4600ms @30fps
 
 const PAL = ['#ff6b8b', '#ffb347', '#ffe86b', '#7bff9e', '#5fd8ff', '#6c8cff', '#c86cff', '#ff6cf0'];
-const BURST = 0.52; // 计数到位(0.56)前"抢拍"
+const BURST = 0.52; // Anticipatory burst before count reaches target (0.56)
 
-// 52 片纸屑的静态参数（种子与 effect.js 完全一致，确定性可复现）
+// Static parameters for 52 confetti pieces (seeds match effect.js exactly for deterministic reproducibility)
 const BITS = Array.from({ length: 52 }, (_, i) => {
   const isRect = rand(i * 3) > 0.4;
   const w = 5 + rand(i + 2) * 6;
@@ -21,30 +21,30 @@ const BITS = Array.from({ length: 52 }, (_, i) => {
     h,
     isRect,
     color: PAL[i % 8],
-    x0: side * 250, // 从画面两侧出发（px，相对中心）
+    x0: side * 250, // Originates from screen sides (px, relative to center)
     y0: (rand(i + 30) - 0.5) * 60,
-    vx: -side * (150 + rand(i * 5 + 1) * 300), // 向画面中间冲
+    vx: -side * (150 + rand(i * 5 + 1) * 300), // Rushes toward screen center
     vy: -(230 + rand(i * 7 + 3) * 220),
     g: 900 + rand(i + 60) * 520,
     spin: (rand(i + 90) - 0.5) * 1500,
-    d: rand(i + 120) * 0.06, // 每片略微错峰
+    d: rand(i + 120) * 0.06, // Slight per-piece stagger
   };
 });
 
 export const CounterConfetti: React.FC = () => {
   const t = useT();
-  // 计数：easeOutQuart 冲刺
+  // Counter: easeOutQuart sprint
   const p = seg(t, 0.06, 0.56, E.outQuart);
   const val = Math.round(p * 1000);
-  // scale 过冲 [0.2,1.3,1.3,1]
+  // Scale overshoot [0.2, 1.3, 1.3, 1]
   const s1 = seg(t, 0.06, 0.3, E.outCubic);
   const s2 = seg(t, 0.56, 0.72, E.outBack);
   const sc = lerp(s1, 0.2, 1.3) + s2 * (1 - 1.3);
-  // 到位冲击环
+  // Impact shockwave ring
   const rp = seg(t, 0.545, 0.75, E.outQuart);
   return (
     <DesignStage bg="radial-gradient(80% 80% at 50% 45%,#161a2b,#07080e 75%)">
-      {/* 中心辉光 */}
+      {/* Central glow */}
       <div
         style={{
           position: 'absolute',
@@ -58,7 +58,7 @@ export const CounterConfetti: React.FC = () => {
           opacity: 0.35 + seg(t, 0.5, 0.62, E.outCubic) * 0.65 - seg(t, 0.72, 1) * 0.5,
         }}
       />
-      {/* 大数字（渐变填充文字，外层 scale 过冲） */}
+      {/* Large counter (gradient fill text with outer scale overshoot) */}
       <div style={{ position: 'absolute', left: '50%', top: '47%', transformOrigin: '50% 50%', transform: `scale(${sc})` }}>
         <div
           style={{
@@ -70,8 +70,8 @@ export const CounterConfetti: React.FC = () => {
             fontWeight: 800,
             fontSize: 74,
             lineHeight: 1,
-            // 原栈 -apple-system 在 Remotion 无头浏览器解析不到（落到 Arial），
-            // 补 Helvetica 兜底——度量与原片的 SF Pro 逐字形吻合
+            // Original font -apple-system is not resolved in Remotion headless browser (falls back to Arial);
+            // add Helvetica fallback — metrics match original SF Pro glyph-for-glyph
             fontFamily: "-apple-system,Helvetica,'Segoe UI',sans-serif",
             letterSpacing: -2,
             background: 'linear-gradient(180deg,#ffffff,#a9bcff)',
@@ -85,7 +85,7 @@ export const CounterConfetti: React.FC = () => {
           {val.toLocaleString('en-US')}
         </div>
       </div>
-      {/* 底部标签：淡入 + letter-spacing 收拢 */}
+      {/* Bottom label: fade-in + letter-spacing tightening */}
       <div
         style={{
           position: 'absolute',
@@ -95,7 +95,7 @@ export const CounterConfetti: React.FC = () => {
           fontWeight: 700,
           fontSize: 10,
           lineHeight: 1,
-          fontFamily: '-apple-system,Helvetica,sans-serif', // 同上：Helvetica 兜底对齐原片
+          fontFamily: '-apple-system,Helvetica,sans-serif', // Same as above: Helvetica fallback to align with source
 
           color: '#7d88a8',
           opacity: seg(t, 0.62, 0.78, E.outCubic),
@@ -104,7 +104,7 @@ export const CounterConfetti: React.FC = () => {
       >
         METRIC THIS WEEK
       </div>
-      {/* 到位冲击环 */}
+      {/* Impact shockwave ring */}
       <div
         style={{
           position: 'absolute',
@@ -115,17 +115,17 @@ export const CounterConfetti: React.FC = () => {
           margin: -60,
           borderRadius: '50%',
           border: '2px solid rgba(160,190,255,.8)',
-          // 原渲染无全局 border-box：120px 是内容宽，2px 边框外扩到 124px
-          // （Remotion 注入了 * { box-sizing:border-box }，显式还原才对得上原片）
+          // Original render lacked global border-box: 120px was content-width, 2px border expanded to 124px
+          // (Remotion injected * { box-sizing: border-box }, explicit content-box matches original)
           boxSizing: 'content-box',
           opacity: rp > 0 ? (1 - rp) * 0.9 : 0,
           transform: `scale(${0.35 + rp * 2.6})`,
         }}
       />
-      {/* 纸屑：抢拍 burst + 重力下落 + 自转 */}
+      {/* Confetti: anticipatory burst + gravity drop + rotation */}
       {BITS.map((b, i) => {
         const u = seg(t, BURST + b.d, 1);
-        const life = u * 1.1; // 秒级时间尺度
+        const life = u * 1.1; // Second-scale timeframe
         const x = b.x0 + b.vx * life;
         const y = b.y0 + b.vy * life + 0.5 * b.g * life * life;
         return (

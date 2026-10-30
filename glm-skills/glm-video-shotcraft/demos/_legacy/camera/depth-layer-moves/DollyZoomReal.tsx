@@ -1,6 +1,6 @@
-// dolly-zoom 滑动变焦（轮 F）——主体卡（card4-hires）大小锁定屏中，
-// 背景真实卡群 + 整页反向膨胀逼近（scale + blur 渐深），
-// "世界压过来"而主角纹丝不动。伪 dolly-zoom：无需 3D，分层反向补偿。
+// dolly-zoom: hero card (card4-hires) locked at center,
+// background card flock + full page expand inward (scale + blur),
+// "world pushes in" while subject stays motionless. Pseudo dolly-zoom via layered inverse compensation.
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 import layout from '../../_textures/live-layout.json';
 
@@ -18,7 +18,7 @@ export const DollyZoomReal: React.FC = () => {
   const bgBlur = t * 3.5;
   return (
     <AbsoluteFill style={{ backgroundColor: '#efece6', overflow: 'hidden' }}>
-      {/* 背景：整页 + 卡群，从画面中心膨胀逼近 */}
+      {/* Background: full page + card flock expanding inward from screen center */}
       <div
         style={{
           position: 'absolute', inset: 0,
@@ -41,7 +41,7 @@ export const DollyZoomReal: React.FC = () => {
           />
         ))}
       </div>
-      {/* 主体：高清卡视觉大小恒定钉在屏中，落影渐深强调"世界在动我不动" */}
+      {/* Subject: hero card pinned at center, deepening shadow emphasizes motionless subject */}
       <Img
         src={staticFile('legacy-textures/card4-hires.png')}
         style={{

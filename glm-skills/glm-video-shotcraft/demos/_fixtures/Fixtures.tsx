@@ -1,19 +1,19 @@
-// 标准占位素材包（孵化轮 PLAYBOOK ③）——卡片组 + 假 dashboard 面板 + 标题字块。
-// Phase 0 质感升级后：外形几何与导出签名完全不变（Card 填满 w×h、同 padding 盒；
-// FakeDashboard 1920×1080、侧栏 220、顶栏 72、A=3×2 网格 pad36/gap28、B=5 行 pad36/gap20；
-// TitleBlock 默认 88 号），只把渲染从灰阶骨架条换成克制的出版级产品 UI：发丝线细边、
-// 两层软阴影 + 顶部内高光、真实感假内容（指标数字 / sparkline / 首字母头像 / 状态 chip /
-// 内联 SVG 图标）、系统字体栈与字重层级。中性暖灰 + 1 个安静的强调色，永远不抢运动的戏。
-// 全部内容由 seed 确定性生成（无随机源）。可选 tone="dark" 出同布局深色版（换肤类 demo 用）。
-// 依赖 react + ./Brand（侧栏/顶栏的 video-shotcraft 标志与名字）；copy demo 时一并带上这两个文件并改 import 路径。
+// Standard placeholder fixtures — card deck + mock dashboard panel + title block.
+// Preserves geometry and export signatures: Card fills wxh, identical padding;
+// FakeDashboard 1920x1080, sidebar 220, topbar 72, A=3x2 grid pad36/gap28, B=5 rows pad36/gap20;
+// TitleBlock default 88px, styled as polished editorial product UI: hairline borders,
+// two-layer soft shadows, realistic mock data (metrics / sparklines / avatars / chips / icons),
+// system font stack and weight hierarchy. Neutral warm dark/gray + calm accent.
+// Deterministic content generated from seed. Optional tone="dark" for dark layout.
+// Depends on react + ./Brand; bundle both files when copying demos.
 import React from 'react';
 import { ShotcraftMark } from './Brand';
 
 const SANS = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif';
 const MONO = '"SF Mono", "JetBrains Mono", Menlo, monospace';
 
-// 调色板：前 10 个键是历史值，demo 大量直接引用，键名与取值永远不改；
-// 后面是 Phase 0 新增的精致 UI 令牌，per-demo 自绘元素可直接取用。
+// Palette: first 10 keys are legacy values preserved for compatibility;
+// followed by refined UI tokens available for per-demo elements.
 export const G = {
   bg: '#ececea',
   panel: '#f7f7f6',
@@ -25,21 +25,21 @@ export const G = {
   border: '#d8d8d6',
   side: '#3a3a3a',
   sideBar: '#5a5a58',
-  // —— 新增令牌 ——
-  font: SANS, // 系统无衬线字体栈
-  mono: MONO, // 等宽字体栈
-  canvas: '#f1f1ef', // dashboard 内容区底色（比 bg 略亮）
-  ink1: '#17181c', // 主文字（带一点冷调的近黑，替代纯黑）
-  ink2: '#5d5f66', // 次级文字
-  ink3: '#9b9da3', // 三级文字 / 占位提示
-  fill: '#f3f3f1', // 浅填充（chip / 图标底 / 输入框）
-  fill2: '#e7e7e4', // 中填充（图表底色 / 未激活柱）
-  hairline: 'rgba(20,22,28,0.08)', // 1px 发丝线颜色（用法：border: `1px solid ${G.hairline}`）
-  hairlineStrong: 'rgba(20,22,28,0.13)', // 稍强的发丝线（输入框 / 分隔）
-  accent: '#5b63d3', // 唯一强调色：安静的靛蓝
-  accentSoft: 'rgba(91,99,211,0.11)', // 强调色浅底（chip / 选中态）
-  dark: '#111216', // 带色相的深色场景底（替代 #000）
-  darkSurface: '#18191e', // 深色场景里的卡片面
+  // —— Modern Tokens ——
+  font: SANS, // System sans-serif stack
+  mono: MONO, // Monospace stack
+  canvas: '#f1f1ef', // Dashboard content area background
+  ink1: '#17181c', // Primary text (cool near-black)
+  ink2: '#5d5f66', // Secondary text
+  ink3: '#9b9da3', // Muted text / placeholder
+  fill: '#f3f3f1', // Light fill (chip / icon ground / input)
+  fill2: '#e7e7e4', // Medium fill (chart backdrop / inactive bar)
+  hairline: 'rgba(20,22,28,0.08)', // 1px hairline border color
+  hairlineStrong: 'rgba(20,22,28,0.13)', // Prominent hairline (input / divider)
+  accent: '#5b63d3', // Sole accent: indigo
+  accentSoft: 'rgba(91,99,211,0.11)', // Soft accent ground (chip / selected state)
+  dark: '#111216', // Tinted dark background (replaces pure black)
+  darkSurface: '#18191e', // Dark theme card surface
   shadowSm: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 1px 2px rgba(16,18,24,0.06), 0 6px 18px -6px rgba(16,18,24,0.10)',
   shadowMd: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 2px 4px rgba(16,18,24,0.06), 0 16px 40px -12px rgba(16,18,24,0.18)',
   shadowLg: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 4px 10px rgba(16,18,24,0.08), 0 36px 80px -20px rgba(16,18,24,0.30)',
@@ -47,7 +47,7 @@ export const G = {
 
 type Tone = 'light' | 'dark';
 
-// 内部双主题令牌（light 与 G 新增键一致；dark 为同布局深色版）
+// Dual-theme tokens (light matches G tokens; dark provides dark mode equivalent)
 const P = {
   light: {
     canvas: 'linear-gradient(180deg, #f4f4f2 0%, #eeeeeb 100%)',
@@ -73,14 +73,14 @@ const P = {
 };
 type Pal = typeof P.light;
 
-// —— 确定性小工具 ——
+// —— Deterministic Utilities ——
 const hash = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
 const pick = <T,>(arr: T[], i: number) => arr[((i % arr.length) + arr.length) % arr.length];
 const fmt = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-// 平滑的伪数据序列：两组正弦 + 趋势 + 微噪，归一化到 [0,1]
+// Smooth mock data series: two sines + trend + micro-noise, normalized to [0,1]
 const series = (seed: number, n: number, trend = 0.35) => {
   const raw = Array.from({ length: n }, (_, i) =>
     trend * (i / (n - 1)) +
@@ -92,7 +92,7 @@ const series = (seed: number, n: number, trend = 0.35) => {
   const hi = Math.max(...raw);
   return raw.map((v) => (v - lo) / (hi - lo || 1));
 };
-// Catmull-Rom → 三次贝塞尔，折线变顺滑曲线
+// Catmull-Rom -> cubic bezier, polyline to smooth curve
 const smooth = (pts: [number, number][]) => {
   let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -109,7 +109,7 @@ const smooth = (pts: [number, number][]) => {
   return d;
 };
 
-// —— 16×16 线性图标（1.5 描边，圆头圆角）——
+// —— 16x16 Line Icons (1.5 stroke, rounded caps) ——
 const ICONS: Record<string, string[]> = {
   home: ['M2.75 7.25 8 3l5.25 4.25', 'M4.25 6.25v6.5h7.5v-6.5'],
   chart: ['M3 13V9', 'M6.5 13V4.5', 'M10 13V7', 'M13.5 13V3'],
@@ -170,7 +170,7 @@ const Chip: React.FC<{ p: Pal; children: React.ReactNode; accent?: boolean; dot?
   </div>
 );
 
-// —— 卡片内容表（seed 决定类型与文案；全部虚构、通用）——
+// —— Card Content Recipes (seed determines mock copy) ——
 type Kind = 'area' | 'list' | 'bars' | 'progress' | 'heat';
 const KINDS: Kind[] = ['area', 'list', 'bars', 'progress', 'heat'];
 const COPY: Record<Kind, { title: string; icon: string; value: string; delta?: string; caption: string; chip: string }[]> = {
@@ -200,7 +200,7 @@ const PAGES = ['/pricing', '/docs/getting-started', '/changelog', '/blog/release
 const EVENTS = ['merged #482 into main', 'commented on Roadmap', 'deployed v2.14.0', 'opened Billing v2', 'closed 3 issues', 'invited 2 members'];
 const GOALS = ['Design system', 'Mobile app', 'Billing v2', 'Docs refresh', 'Search'];
 
-// 卡片设计基准：网格卡 524×454 的内容区（减去 border+padding 20）
+// Card design baseline: grid card 524x454 content box (minus border+padding 20)
 const BASE_W = 484;
 const BASE_H = 414;
 const HEADER = 28;
@@ -245,7 +245,7 @@ const Body: React.FC<{ kind: Kind; w: number; h: number; seed: number; p: Pal; i
     const slot = w / n;
     const bw = slot * 0.56;
     const peak = v.indexOf(Math.max(...v));
-    const step = Math.ceil(n / 6); // 每 step 根柱一个月份刻度
+  const step = Math.ceil(n / 6); // Tick mark every step bars
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return (
       <svg width={w} height={h} style={{ display: 'block' }}>
@@ -325,11 +325,11 @@ const Body: React.FC<{ kind: Kind; w: number; h: number; seed: number; p: Pal; i
       </div>
     );
   }
-  // heat：活动热力格（7 行 × N 列）
+  // heat: activity heatmap (7 rows x N cols)
   const gap = 5;
   const cell = Math.max(6, Math.min(18, Math.floor((h - gap * 6) / 7)));
   const cols = Math.max(4, Math.floor((w + gap) / (cell + gap)));
-  // 克制配色：低档用中性灰，只有高档才上强调色
+  // Neutral gray for low tiers, accent for peak tier
   const fills = [p.fill2, p.chart, p.accent, p.accent, p.accent];
   const alphas = [1, 1, 0.32, 0.58, 0.9];
   return (
@@ -347,7 +347,7 @@ const Body: React.FC<{ kind: Kind; w: number; h: number; seed: number; p: Pal; i
   );
 };
 
-// 卡片内容（设计坐标 Wd×Hd，外层用 CSS zoom 放到实际尺寸——布局期放大，文字按目标尺寸栅格化）
+// Card content (design coords WdxHd, CSS zoom scales to actual size)
 const CardContent: React.FC<{ Wd: number; Hd: number; seed: number; p: Pal; tone: Tone }> = ({ Wd, Hd, seed, p, tone }) => {
   const kind = pick(KINDS, seed - 1);
   const c = pick(COPY[kind], Math.floor((seed - 1) / KINDS.length));
@@ -426,13 +426,13 @@ export const Card: React.FC<{
   w: number; h: number; seed?: number; style?: React.CSSProperties; tone?: Tone;
 }> = ({ w, h, seed = 0, style, tone = 'light' }) => {
   const p = P[tone];
-  // w/h 为 0（父级用 style 100% 撑满）时按 dashboard 网格卡 524×454 排内容
+// Default 524x454 when w/h is 0 (fills container)
   const W = w > 0 ? w : 524;
   const H = h > 0 ? h : 454;
   const pad = typeof style?.padding === 'number' ? style.padding : 19;
   const innerW0 = Math.max(40, W - 2 * (pad + 1));
   const innerH0 = Math.max(40, H - 2 * (pad + 1));
-  // 内容缩放系数：按面积等比（几何平均），小卡保底 0.62、大卡封顶 2.4；大卡额外内缩一点留白
+// Geometric scaling factor based on area ratio
   const kOf = (iw: number, ih: number) =>
     Math.min(Math.max(Math.sqrt((iw / BASE_W) * (ih / BASE_H)), 0.62), 2.4, iw / 300, ih / 110);
   const extra = Math.max(0, kOf(innerW0, innerH0) - 1) * 12;
@@ -441,7 +441,7 @@ export const Card: React.FC<{
   const k = kOf(innerW, innerH);
   return (
     <div style={{
-      // 外形与旧版一致：w×h、圆角 14、border+padding 合计 20 的内容内缩（2px 灰边 → 1px 发丝线 + 19 padding）
+// Geometry consistent with baseline: wxh, radius 14, border+padding 20
       width: w, height: h, background: p.surface, border: `1px solid ${p.line}`,
       borderRadius: 14, padding: 19, boxSizing: 'border-box',
       display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden',
@@ -468,7 +468,7 @@ const ROWS = [
   { icon: 'pulse', title: 'Realtime alerts', sub: 'Infra · Updated 3d ago', status: 'Planned', val: '214', unit: 'rules', pct: 12, due: 'Due Dec 8' },
 ];
 
-// 列表行（variant B）：外形同旧版（flex:1、圆角 14、gap 24、内容左缘 28+2）
+// List row (variant B): geometry matches baseline (flex:1, radius 14, gap 24)
 const ListRow: React.FC<{ i: number; p: Pal }> = ({ i, p }) => {
   const r = ROWS[i % ROWS.length];
   const live = r.status === 'Live';
@@ -524,15 +524,15 @@ const ListRow: React.FC<{ i: number; p: Pal }> = ({ i, p }) => {
   );
 };
 
-// 假 dashboard 面板：A = 3×2 卡片网格，B = 列表行。1920×1080。
-// 几何（demo 依赖，勿改）：侧栏 220；顶栏 72；A 卡 524×454 @ x=256/808/1360, y=108/590；
-// B 行 1628×171.2 @ y=108+i×191.2，行首 44px 图标块圆心 x=308。
+// Mock dashboard panel: A = 3x2 card grid, B = list rows. 1920x1080.
+// Geometry: sidebar 220; topbar 72; A cards 524x454 @ x=256/808/1360, y=108/590;
+// B rows 1628x171.2 @ y=108+i*191.2, icon center x=308.
 export const FakeDashboard: React.FC<{ variant?: 'A' | 'B'; tone?: Tone }> = ({ variant = 'A', tone = 'light' }) => {
   const p = P[tone];
-  const active = variant === 'A' ? 0 : 2; // 侧栏高亮项与顶栏页名一致
+  const active = variant === 'A' ? 0 : 2; // Sidebar active item matches page title
   return (
     <div style={{ width: 1920, height: 1080, background: p.canvas, display: 'flex', fontFamily: SANS }}>
-      {/* 侧栏 */}
+{/* Sidebar */}
       <div style={{
         width: 220, background: p.side, padding: '28px 22px', boxSizing: 'border-box', display: 'flex',
         flexDirection: 'column', gap: 6, boxShadow: `inset -1px 0 0 ${p.sideLine}`, flex: 'none',
@@ -578,7 +578,7 @@ export const FakeDashboard: React.FC<{ variant?: 'A' | 'B'; tone?: Tone }> = ({ 
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* 顶栏 */}
+{/* Topbar */}
         <div style={{
           height: 72, background: p.raised, borderBottom: `1px solid ${p.line}`, display: 'flex', alignItems: 'center',
           padding: '0 32px', gap: 20, boxSizing: 'border-box', flex: 'none',
@@ -632,7 +632,7 @@ export const FakeDashboard: React.FC<{ variant?: 'A' | 'B'; tone?: Tone }> = ({ 
   );
 };
 
-// 标题字块：系统字体栈 + 700 字重 + 随字号的负字距（全大写放松字距），默认 88 号，占位面积与旧版相当
+// Title block: system font + 700 weight + optical negative letter-spacing, default 88px
 export const TitleBlock: React.FC<{ text: string; size?: number }> = ({ text, size = 88 }) => {
   const caps = /[A-Z]/.test(text) && text === text.toUpperCase();
   return (

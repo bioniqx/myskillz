@@ -1,6 +1,6 @@
 // bubble-swarm-takeover —— loom-ai 9–12s
-// 无剪切转场：珠光气泡群从画外飘入、越来越大遮满整屏，页面同时被"洗白"，
-// 遮蔽峰值处藏场景切换，气泡散开后已是新场景。混入 i18n 文字胶囊变体元素。
+// Seamless cut transition: Pearlescent bubble swarm drifts in from offscreen, expanding to cover the entire screen while the page "whites out";
+// scene switch hidden at peak occlusion; bubbles disperse to reveal the new scene. Blended with i18n text pill variants.
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { FakeDashboard } from '../../_fixtures/Fixtures';
@@ -12,13 +12,13 @@ const mulberry32 = (a: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-const PEAK = 75; // 遮蔽峰值帧（藏切点）
+const PEAK = 75; // Peak occlusion frame (hidden cut point)
 const W = 1920;
 const H = 1080;
 const CX = W / 2;
 const CY = H / 2;
 
-// 珠光色相微差（粉/紫/蓝/青）
+// Pearlescent subtle hue variations (pink / purple / blue / cyan)
 const TINTS = [
   ['rgba(226,208,255,0.55)', 'rgba(255,200,235,0.45)'],
   ['rgba(190,225,255,0.55)', 'rgba(215,200,255,0.45)'],
@@ -34,7 +34,7 @@ type BubbleSpec = {
 
 const makeBubbles = (): BubbleSpec[] => {
   const specs: BubbleSpec[] = [];
-  // 34 颗常规气泡（三层景深）
+  // 34 standard bubbles (3 depth layers)
   for (let i = 0; i < 34; i++) {
     const rng = mulberry32(1000 + i * 97);
     const edge = Math.floor(rng() * 4);
@@ -44,7 +44,7 @@ const makeBubbles = (): BubbleSpec[] => {
     if (edge === 1) { startX = W + 320; startY = along * H; }
     if (edge === 2) { startX = along * W; startY = H + 320; }
     if (edge === 3) { startX = -320; startY = along * H; }
-    const layer = i % 3; // 0 远 1 中 2 近
+    const layer = i % 3; // 0 far 1 mid 2 near
     const r = layer === 0 ? 45 + rng() * 55 : layer === 1 ? 100 + rng() * 90 : 210 + rng() * 150;
     specs.push({
       startX, startY,
@@ -59,7 +59,7 @@ const makeBubbles = (): BubbleSpec[] => {
       z: layer,
     });
   }
-  // 6 颗巨型气泡，峰值时铺满屏（网格落点保证覆盖）
+  // 6 giant bubbles covering full screen at peak (grid distribution guarantees full coverage)
   const grid = [
     [340, 300], [960, 240], [1580, 330],
     [320, 800], [980, 860], [1600, 780],
@@ -97,7 +97,7 @@ const Bubble: React.FC<{ spec: BubbleSpec; frame: number }> = ({ spec, frame }) 
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.out(Easing.cubic),
   });
-  // 峰值后向外散开（加速离场）
+  // Disperse outward after peak (accelerated exit)
   const disperse = interpolate(frame, [PEAK + 2, 118], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.in(Easing.quad),
@@ -132,7 +132,7 @@ const Bubble: React.FC<{ spec: BubbleSpec; frame: number }> = ({ spec, frame }) 
 
 export const BubbleSwarmTakeover: React.FC = () => {
   const frame = useCurrentFrame();
-  // 页面"洗白"：靠近峰值时整体亮度提升
+  // Page "whiteout": overall brightness increases nearing peak
   const whiteout = interpolate(frame, [42, 68, 82, 104], [0, 0.92, 0.92, 0], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.inOut(Easing.quad),
@@ -143,13 +143,13 @@ export const BubbleSwarmTakeover: React.FC = () => {
       <AbsoluteFill style={{ transform: `scale(${breathe})` }}>
         {frame < PEAK ? <FakeDashboard variant="A" /> : <FakeDashboard variant="B" />}
       </AbsoluteFill>
-      {/* 洗白层压在页面之上、气泡之下 */}
+      {/* Whiteout layer sits above page and below bubbles */}
       <AbsoluteFill style={{ background: '#ffffff', opacity: whiteout }} />
-      {/* 远/中层气泡 */}
+      {/* Far / mid depth bubbles */}
       {BUBBLES.filter((b) => b.z < 2).map((b, i) => (
         <Bubble key={i} spec={b} frame={frame} />
       ))}
-      {/* i18n 文字胶囊混在中层气泡里漂 */}
+      {/* i18n text pills drift mingled among mid-layer bubbles */}
       {CAPSULES.map((c, i) => {
         const host = BUBBLES[c.idx];
         const pIn = interpolate(frame, [host.t0 + 4, PEAK], [0, 1], {
@@ -180,7 +180,7 @@ export const BubbleSwarmTakeover: React.FC = () => {
           }}>{c.text}</div>
         );
       })}
-      {/* 前景大气泡（焦外） */}
+      {/* Foreground large bubbles (bokeh / out-of-focus) */}
       {BUBBLES.filter((b) => b.z === 2).map((b, i) => (
         <Bubble key={i} spec={b} frame={frame} />
       ))}

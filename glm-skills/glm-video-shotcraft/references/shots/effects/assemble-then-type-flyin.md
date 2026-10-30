@@ -1,63 +1,45 @@
 ---
 name: assemble-then-type-flyin
-一句话: 空的暗底网格上，无文字的组件骨架先从四面八方飞入贴合；随后各处文字逐字从 3D 空间旋转着飞来落位，先大标题后小标注，全部落位后页面成形
-适用: 页面/海报"自己长出来"的开场；排版类产品的能力展示；从骨架到成稿的两段式叙事
-时长: 约5.6s（168f@30fps）
-能量: 中高（骨架段稀疏、文字段密集，能量单调上升到收尾）
+summary: Textless component shells fly in from every direction onto an empty dark grid, then every character arrives from 3D space with its own large rotation and settles into position.
+use: Openings where a page or poster "grows itself"; capability showcases for typography and layout products; two-stage narrative from wireframe to finished design
+duration: ~5.6s (168f @ 30fps)
+energy: Medium-high (sparse during wireframe phase, dense during text phase, monotonically rising toward the finale)
 ---
 
-## 意图
-把"页面生成"拆成两个语义清楚的阶段：先立骨架（框、卡片、分隔线、
-色块，全部无字），再填文字。文字用逐字 3D 旋转落位，是因为骨架段
-只有平面位移——两段的运动维度必须不同，否则观众读不出"这是第二步"。
+## Intention
+Split "page generation" into two semantically distinct stages: first assemble the wireframe skeleton (frames, cards, dividers, color blocks, all textless), then populate the text. Text characters arrive with individual 3D rotational landings because the skeleton stage uses only 2D planar translation—the two stages must inhabit different motion dimensions, otherwise viewers cannot register that "this is step two."
 
-## 动效核心
-- demo 成形后是 video-shotcraft 的暗场发布页（graphite look，胶片金 accent2 是唯一强调色；导航条是镜刻标志 +
-  video-shotcraft 字标，大标题是品牌短句「Frame motion. / Craft the shot.」），
-  1920×1080 原生坐标；开场第 1 帧先有 12 栏版式参考线，骨架齐后退淡
-- 10 个骨架件（导航条、调色台卡 + 胶片画面色块、镜刻标志、三只色轮圈、分隔线、CTA、次按钮、三枚指标块）
-  按起飞帧 6/10/15/19/23/27/31/35/39/44 依次飞入，每件 16f `EASE.overshoot` 过冲贴合，
-  `from` 位移 120–420px + ±7° 旋转（旋转晚 4f 收敛）
-- 骨架运动中按真实速度（px/帧）给方向性运动模糊（`SpeedBlur` ×0.32，上限 18px），静止即为 0
-- 19 个文字块按起始帧 58→114 依次开始：112px 衬线大标题最先（58/66），
-  然后导航、eyebrow、说明句、按钮字（76–95），指标数字（96–102），最后各处 mono 小标注（104–114）
-- 逐字 3D：每个字符持有确定性种子随机的
-  `dx ±260px / dy ±200px / dz −200→−760 / rotateX ±170° / rotateY ±190° /
-  rotateZ ±120°`，走 `perspective(900px) translate3d + rotateX/Y/Z`，
-  每字 16f `EASE.snappy` 落位，飞行中按离焦距离给景深模糊，`a>=1` 时 transform 直接设 `none`
-- 块内字符间隔自适应：`step = clamp((128 − start − 16)/字符数, 0.35, 1.6)` 帧
-  ——保证不论块多长都在 f128 前落完，尾段留 40f 整页静止呼吸（1.5% 极缓推近）
-- 落定后的"定稿"一笔：CTA 由描边通电成金色实底（118–132），胶片画面被一道金色竖线从 log 灰片
-  擦除成暖调成片（124–146），三只色轮控制点同步从中性位推到偏色位
-- 随机全部来自 `rand(i) = frac(sin(i*127.1 + 311.7) * 43758.5453)`，
-  确定性、可 seek
+## Motion Core
+- The assembled demo result is video-shotcraft's dark launch page (graphite look; film gold accent2 is the sole accent color; navigation bar features engraved mark + video-shotcraft wordmark; headline is the brand tagline "Frame motion. / Craft the shot."), in 1920x1080 native coordinates. At frame 1, 12-column layout guide rules appear first, fading out after the skeleton completes.
+- 10 skeleton components (navigation bar, colorist desk card + film frame block, engraved mark, three color wheel rings, divider, CTA, secondary button, three metric blocks) fly in sequentially at launch frames 6/10/15/19/23/27/31/35/39/44, each with 16f `EASE.overshoot` snapping into place, with `from` translation 120–420px + ±7 deg rotation (rotation settles 4f later).
+- Skeleton motion applies directional motion blur based on real velocity (px/frame) (`SpeedBlur` x0.32, capped at 18px), decaying to 0 when stationary.
+- 19 text blocks begin sequentially across start frames 58->114: 112px serif headline lands first (58/66), followed by navigation, eyebrow, explanatory copy, button text (76–95), metric numbers (96–102), and finally mono micro-annotations everywhere (104–114).
+- Character-by-character 3D: each character holds deterministic seed-randomized `dx ±260px / dy ±200px / dz −200->−760 / rotateX ±170 deg / rotateY ±190 deg / rotateZ ±120 deg`, driven by `perspective(900px) translate3d + rotateX/Y/Z`. Each character takes 16f `EASE.snappy` to land, with depth-of-field blur based on defocus distance during flight; when `a >= 1`, transform resets directly to `none`.
+- Adaptive character stagger within blocks: `step = clamp((128 - start - 16) / charCount, 0.35, 1.6)` frames—guaranteeing that regardless of block length, all characters finish landing before frame 128, leaving a 40f static breathing tail (1.5% very slow push-in).
+- The final "print proof" flourish upon settling: CTA charges from stroke into solid gold fill (118–132), film visual wipes from log gray to warm graded final look along a vertical gold line (124–146), and three color wheel control points slide synchronously from neutral to graded positions.
+- All randomness originates from `rand(i) = frac(sin(i * 127.1 + 311.7) * 43758.5453)`, deterministic and seekable.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 骨架时序 | 10 件，起飞帧 6→44（间隔 4–5f） | 骨架段占前 30%；压缩到 20f 内就和文字段糊在一起 |
-| 骨架飞入 | overshoot、16f、位移 120–420px + ±7° | 与 `scanline-assemble-flyin` 同一手法，去掉扫描线后靠时序读顺序 |
-| 骨架残影 | 方向性运动模糊，按速度 ×0.32、封顶 18px | 只在快速段出现；常驻模糊读作失焦 |
-| 两段断点 | 骨架齐（f50）→ 文字起（f58）留 8f，参考线同期退淡 | 没有这半拍观众读不出"这是第二步" |
-| 文字起点 | 大标题 58/66，小标注 104→114 | 大字先落是可读性要求：小字先落观众会去读小字 |
-| 逐字位移 | dx ±260 / dy ±200 / dz −200→−760 | dz 是"从远处来"的主力；只给 dx/dy 就成了平面散入 |
-| 逐字旋转 | rotateX/Y/Z 各 ±120°–190° | 大角度才有"翻着飞"的手感；±30° 只像抖动 |
-| perspective | 900px（写在每个字符自己的 transform 里） | 112px 大字配 600px 会过度畸变；1400px 以上 3D 感基本消失 |
-| 字间隔 | clamp((128−start−16)/n, 0.35, 1.6) 帧 | 上限 1.6f 是"逐字可辨"的下限速度 |
-| 落位清零 | a>=1 → transform:'none' | 不清零会留下 19 个块的合成层，长片会掉帧 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Skeleton timing | 10 items, launch frames 6->44 (4–5f intervals) | Skeleton phase occupies the first 30%; compressing within 20f blurs together with the text phase |
+| Skeleton fly-in | overshoot, 16f, translation 120–420px + ±7 deg | Same technique as `scanline-assemble-flyin`; removing the scanline requires relying on sequence timing to communicate order |
+| Skeleton trails | Directional motion blur, velocity x 0.32, capped at 18px | Appears only during rapid motion; permanent blur reads as out-of-focus |
+| Inter-phase gap | Skeleton complete (f50) -> text start (f58) leaves 8f gap, guide rules fade out concurrently | Without this half-beat pause, viewers cannot register that "this is the second step" |
+| Text start points | Headline 58/66, micro-annotations 104->114 | Large text landing first is a readability mandate: if small text lands first, viewers focus on small text |
+| Per-character translation | dx ±260 / dy ±200 / dz −200->−760 | dz is the primary driver for "arriving from afar"; giving only dx/dy degrades into flat planar scatter |
+| Per-character rotation | rotateX/Y/Z each ±120–190 deg | Large angles provide the tactile feel of "flipping in flight"; ±30 deg merely looks like jitter |
+| perspective | 900px (declared on each character's own transform) | 112px headline with 600px causes excessive distortion; above 1400px the 3D depth virtually vanishes |
+| Character interval | clamp((128 - start - 16) / n, 0.35, 1.6) frames | Upper bound of 1.6f is the lower threshold for "individually discernible characters" |
+| Landing cleanup | a >= 1 -> transform: 'none' | Omitting cleanup leaves compositor layers for 19 blocks, causing frame drops in long videos |
 
-## 已知坑
-- 字符 span 走正常排版流（`display:inline-block`），动画只动 transform——
-  不要用绝对定位逐字摆位，换文案就全乱
-- 空格字符必须显式塞成不换行空格（代码里用 `ch === ' ' ? '\u00a0' : ch`），
-  否则 inline-block 的空 span 宽度归零，词间距消失
-- `start` 是手写的 19 个数值，换文案（尤其字符数变化大时）要回看
-  最后一块是否仍在 f128 前落完；`step` 只保证块内，不保证块间
-- 内容是 video-shotcraft 的示例发布页（标题 / 指标 / 色轮标注），落地换成项目自己的；
-  GOLD（graphite 的 accent2 `#e4c58a`）为强调色槽位，CTA 字色随通电由金转深要一起换
-- 与 `scanline-assemble-flyin` 的区别是**没有扫描线**：那张靠扫描线
-  解释顺序，这张靠"先骨架后文字"的两段式解释顺序，两者不要混用
+## Known Pitfalls
+- Character spans must follow normal layout flow (`display: inline-block`) with animation modifying transforms only—never use absolute positioning for character layout, or text edits will break everything.
+- Space characters must be explicitly passed as non-breaking spaces (in code: `ch === ' ' ? '\u00a0' : ch`), otherwise empty inline-block spans collapse to zero width, losing word spacing.
+- `start` uses 19 hand-tuned values; when updating copy (especially with large character count changes), verify that the final block still finishes landing before f128; `step` only guarantees constraints within blocks, not across blocks.
+- Content uses video-shotcraft's sample landing page (headline / metrics / color wheel annotations); replace with project assets in production. GOLD (`#e4c58a`, graphite accent2) is the accent slot; CTA text color must switch from gold to dark upon charging.
+- Distinction from `scanline-assemble-flyin`: this card has **no scanline**. That card relies on a scanline to explain assembly sequence; this card relies on a two-stage "skeleton first, text second" narrative. Do not conflate the two.
 
-## 参考实现
+## Reference Implementation
 demos/effects/assemble-then-type-flyin/
-（AssembleThenTypeFlyin.tsx）
+(AssembleThenTypeFlyin.tsx)

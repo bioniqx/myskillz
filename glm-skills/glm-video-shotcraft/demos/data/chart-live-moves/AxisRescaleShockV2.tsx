@@ -1,25 +1,25 @@
-// axis-rescale-shock-v2 —— 轴爆表重标：折线正常爬升，新值顶破图表上沿冲进标题区，
-// 停半拍，y 轴"哗"地重标（旧刻度飞出 / 新刻度滑入 / 网格加密 / 旧线压扁成地平线），新值落回 + 弹真值标签。
+// axis-rescale-shock-v2 — axis rescale blowout shock: line climbs normally, new value bursts through the top into the title zone,
+// pauses for half a beat, and the y-axis dramatically rescales (old ticks fly out / new ticks slide in / grid densifies / old line compresses toward baseline), new value settles + true value badge pops up.
 //
-// 第二轮重设计（沙色瑞士海报 · 渲染月报）：
-// - look = sand（米色纸 + 墨黑 + 赤陶）。不再是"卡片里的小图表"，而是整张画面就是一页瑞士网格财务海报：
-//   左上 120px 粗黑体标题「Monthly renders」、右上同字号年度合计 KPI，下面是满版图表（1540×540 绘图区），
-//   3px 墨黑基线 + 3px "天花板"粗规线 + 发丝网格，历史面积用 45° 斜线排线（印刷感），月份/刻度 32px。
-// - 主角是赤陶色爆表段：Dec 新值从 Nov 起跳，越冲越快顶破天花板规线（规线在穿透点裂开、两片碎屑弹飞），
-//   一路冲进右上角的 KPI 数字里（KPI 被撞得一颤），悬停半拍带柔光——"装不下"字面化。
-// - 重标：14f 内旧刻度 25k–100k 向下飞出、新刻度 100k–400k 从上滑入，网格 4→8 根从左展开，
-//   旧折线与斜线面积被压扁成地平线；爆表点落回 340k，弹出赤陶真值标签，KPI 滚到 833k。
-// - 品牌轮：眉题换成 video-shotcraft 标志 + 字标，内容从财务营收换成渲染量（数值与版式不变）。
+// Second redesign pass (sand Swiss poster / monthly render report):
+// - look = sand (beige paper + jet black + terracotta). Instead of "a small chart inside a card", the entire screen is a Swiss-grid financial poster:
+//   top-left 120px bold headline "Monthly renders", top-right matching FY total KPI, beneath which sits a full-bleed chart (1540x540 plot area),
+//   3px ink baseline + 3px "ceiling" rule line + hairline grid, historical area styled with 45° cross-hatch lines (print feel), month/tick labels 32px.
+// - The highlight is the terracotta blowout segment: Dec value launches from Nov, accelerating up to rupture the ceiling rule line (line cracks at impact point, scattering debris),
+//   surging directly into the top-right KPI number (shaking the KPI), hovering for half a beat with a soft glow — literally "overflowing the container".
+// - Rescale: over 14f old ticks 25k–100k fly out downward, new ticks 100k–400k slide in from top, grid expands from 4 to 8 lines left-to-right,
+//   historical polyline and hatched area flatten toward the baseline; blowout point settles to 340k, popping terracotta true value tag, KPI rolls to 833k.
+// - Brand pass: overline updated with video-shotcraft mark + wordmark, content updated from revenue to render volume (values and layout preserved).
 //
-// 时间表（30fps，共 168f）：
-//   0–20    规线从左画出、标题逐词升起、刻度/月份淡入（第 1 帧已有纸面与规线起点）
-//   14–56   历史段 Jan→Nov 写入（42f，不对称 in-out），笔尖带墨点
-//   50–62   预警：天花板规线与 100k 刻度转赤陶，Nov 点一圈脉冲（预备）
-//   62–76   爆表 14f：越冲越快（ease-in 主导）顶破规线（~69f 穿透：裂口 + 碎屑 + 图表震 10px）→ 冲进 KPI
-//   76–94   悬停 18f：笔尖亮头 + 柔光，KPI 被撞后阻尼回位
-//   94–108  重标 14f（expo-out）：刻度换、网格密、旧线压扁、端点落回
-//   106–126 端点标记 overshoot 落座 + 真值标签弹出；KPI 493k → 833k
-//   126–168 hold 42f：只有极缓推镜（1 → 1.018）
+// Timeline (30fps, 168f total):
+//   0–20    Rule lines draw in from left, headline words rise, ticks/months fade in (paper and rule start visible at frame 1)
+//   14–56   Historical Jan->Nov drawn (42f, asymmetric in-out), pen tip carries ink dot
+//   50–62   Warning: ceiling rule line and 100k tick turn terracotta, Nov dot pulses once (anticipation)
+//   62–76   Blowout 14f: accelerating surge (ease-in dominant) pierces rule line (~69f rupture: fracture + debris + 10px chart shake) -> strikes KPI
+//   76–94   Hover 18f: glowing tip + soft bloom, KPI damped rebound after impact
+//   94–108  Rescale 14f (expo-out): ticks swap, grid densifies, old line flattens, endpoint settles back
+//   106–126 Endpoint marker settles with overshoot + true value tag pops up; KPI rolls 493k -> 833k
+//   126–168 Hold 42f: subtle camera push-in only (1 -> 1.018)
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -29,18 +29,18 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 export const AXIS_RESCALE_SHOCK_V2_DURATION = 168;
 
 const L = LOOKS.sand;
-const ACC = L.accent; // 赤陶：只给爆表段 / 事件
+const ACC = L.accent; // Terracotta: reserved for blowout segment / events
 const INK = L.ink;
 
-// 版式网格
+// Layout grid
 const M = 96;
-const X0 = 268; // 绘图区左
-const X1 = 1800; // 绘图区右（Dec）
+const X0 = 268; // Plot area left
+const X1 = 1800; // Plot area right (Dec)
 const PW = X1 - X0;
-const CEIL = 362; // 天花板规线
-const BASE = 902; // 基线
+const CEIL = 362; // Ceiling rule line
+const BASE = 902; // Baseline
 const PH = BASE - CEIL;
-const SHOCK_TOP = CEIL - 226; // 冲出天花板 226px，扎进标题行
+const SHOCK_TOP = CEIL - 226; // Bursts 226px past ceiling, penetrating headline row
 
 const DATA = [22, 30, 26, 38, 35, 47, 44, 58, 55, 66, 72, 340];
 const N = DATA.length;
@@ -55,7 +55,7 @@ const BEAT = 94;
 const RESCALE1 = 108;
 const MARK = 106;
 
-// 冲顶：起步慢、越冲越快，到顶微过冲
+// Shock burst: slow start, accelerating surge, slight overshoot at peak
 const easeShock = bezier(0.7, 0, 0.36, 1.06);
 
 const xOf = (i: number) => X0 + (i / (N - 1)) * PW;
@@ -67,7 +67,7 @@ export const AxisRescaleShockV2: React.FC = () => {
   const range = mix(100, 400, rescaleP);
   const yOf = (v: number) => BASE - (v / range) * PH;
 
-  // 历史段写入
+  // Historical segment draw-in
   const drawT = ramp(frame, DRAW0, DRAW1 - DRAW0, EASE.swift) * (N - 2);
   const pts: Array<[number, number]> = [];
   for (let i = 0; i <= Math.floor(drawT); i++) pts.push([xOf(i), yOf(DATA[i])]);
@@ -78,7 +78,7 @@ export const AxisRescaleShockV2: React.FC = () => {
   }
   const lineD = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
 
-  // 爆表段
+  // Blowout segment
   const shockT = ramp(frame, SHOCK0, SHOCK1 - SHOCK0, easeShock);
   const nx = xOf(N - 2);
   const ny = yOf(DATA[N - 2]);
@@ -87,16 +87,16 @@ export const AxisRescaleShockV2: React.FC = () => {
   const hy = mix(ny, topY, shockT);
   const shockOn = frame >= SHOCK0;
 
-  // 面积（含爆表段）
+  // Area fill (including blowout segment)
   const all: Array<[number, number]> = shockOn ? [...pts, [hx, hy]] : pts;
   const areaD = all.length > 1
     ? `M${all[0][0]},${BASE} ` + all.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(' ') + ` L${all[all.length - 1][0].toFixed(2)},${BASE} Z`
     : '';
 
-  // 穿透天花板：线段与 y=CEIL 的交点
+  // Ceiling penetration: intersection of segment with y=CEIL
   const crossX = nx + ((ny - CEIL) / (ny - SHOCK_TOP)) * (X1 - nx);
   const pierced = shockOn && hy <= CEIL + 0.5 && rescaleP < 0.02;
-  // 穿透帧（求一次）：shockT 使 hy 过 CEIL 的帧
+  // Rupture frame (precomputed once): frame where shockT drives hy across CEIL
   let PIERCE = SHOCK1;
   for (let f = SHOCK0; f <= SHOCK1; f += 0.25) {
     if (mix(ny, SHOCK_TOP, ramp(f, SHOCK0, SHOCK1 - SHOCK0, easeShock)) <= CEIL) { PIERCE = f; break; }
@@ -104,9 +104,9 @@ export const AxisRescaleShockV2: React.FC = () => {
   const sinceP = frame - PIERCE;
   const crack = sinceP >= 0 ? ramp(frame, PIERCE, 8, EASE.snappy) * (1 - ramp(frame, BEAT, 14, EASE.smooth)) : 0;
 
-  // 图表震：阻尼正弦，穿透帧起 12f
+  // Chart shake: damped sine wave, 12f starting at rupture frame
   const kick = sinceP >= 0 && sinceP < 14 ? 10 * Math.exp(-sinceP / 3.4) * Math.sin(sinceP * 1.8) : 0;
-  // KPI 被撞：冲到顶（SHOCK1）时向上一颤
+  // KPI impact: jolts upward upon peak impact (SHOCK1)
   const sinceTop = frame - (SHOCK1 - 2);
   const kpiKick = sinceTop >= 0 && sinceTop < 16 ? -14 * Math.exp(-sinceTop / 3.8) * Math.cos(sinceTop * 1.5) : 0;
 
@@ -126,7 +126,7 @@ export const AxisRescaleShockV2: React.FC = () => {
   const NEW = ['100k', '200k', '300k', '400k'];
   const tickY = (i: number) => BASE - ((i + 1) / 4) * PH;
 
-  // 碎屑（两片规线残段从穿透点弹飞）
+  // Debris (line fragments ejected from penetration point)
   const shard = (k: number) => {
     if (sinceP < 0 || sinceP > 32) return null;
     const t = sinceP / 32;
@@ -146,7 +146,7 @@ export const AxisRescaleShockV2: React.FC = () => {
       <Stage look={L} keyLight={{ x: 0.3, y: 0.0 }} fill={{ x: 0.95, y: 0.95 }} />
 
       <div style={{ position: 'absolute', inset: 0, transform: `scale(${cam})`, transformOrigin: '60% 45%' }}>
-        {/* 标题行 */}
+        {/* Headline row */}
         <div style={{ position: 'absolute', left: M, top: 92, display: 'flex', alignItems: 'center', gap: 12, ...type(32, 650, { caps: true }), color: L.ink2, opacity: ramp(frame, 0, 12, EASE.out) }}>
           <ShotcraftMark size={38} tone="light" style={{ marginTop: -2 }} />
           <span style={{ fontFamily: BRAND.font, fontWeight: 700, textTransform: 'none', letterSpacing: '0.03em', color: INK }}>{BRAND.name}</span>
@@ -156,7 +156,7 @@ export const AxisRescaleShockV2: React.FC = () => {
           <TextReveal text="Monthly renders" by="word" variant="rise" start={2} each={18} gap={5} />
         </div>
 
-        {/* 右上 KPI：爆表段会冲进这里 */}
+        {/* Top-right KPI: blowout segment surges into here */}
         <div style={{ position: 'absolute', right: 1920 - 1824, top: 92, textAlign: 'right', opacity: ramp(frame, 6, 14, EASE.out) }}>
           <div style={{ ...type(32, 650, { caps: true }), color: totalP > 0.5 ? ACC : L.ink2 }}>FY total</div>
         </div>
@@ -167,9 +167,9 @@ export const AxisRescaleShockV2: React.FC = () => {
           {Math.round(mix(493, 833, totalP))}k
         </div>
 
-        {/* 图表组（震动只作用在这里） */}
+        {/* Chart group (shake effect applies only here) */}
         <div style={{ position: 'absolute', inset: 0, transform: `translateY(${kick.toFixed(2)}px)` }}>
-          {/* 刻度 */}
+          {/* Ticks */}
           <div style={{ position: 'absolute', left: M, top: BASE - 48, width: 200, ...type(32, 500), color: L.ink2, opacity: rule(4) }}>0</div>
           {OLD.map((v, i) => {
             const sw = ramp(frame, BEAT + (3 - i) * 2, 12, EASE.snappy);
@@ -190,7 +190,7 @@ export const AxisRescaleShockV2: React.FC = () => {
             );
           })}
 
-          {/* 月份 */}
+          {/* Months */}
           {MONTHS.map((m, i) => (
             <div key={m} style={{
               position: 'absolute', left: xOf(i) - 50, top: BASE + 22, width: 100, textAlign: 'center',
@@ -209,7 +209,7 @@ export const AxisRescaleShockV2: React.FC = () => {
               </filter>
             </defs>
 
-            {/* 网格：基础 3 根 + 重标加密 4 根 */}
+            {/* Grid: 3 base lines + 4 densified lines during rescale */}
             {[0, 1, 2].map((i) => (
               <line key={`g${i}`} x1={M} x2={mix(M, 1824, rule(2 + i * 2))} y1={tickY(i)} y2={tickY(i)} stroke={INK} strokeOpacity={0.14} strokeWidth={1.5} />
             ))}
@@ -219,13 +219,13 @@ export const AxisRescaleShockV2: React.FC = () => {
               return d > 0 ? <line key={`d${k}`} x1={M} x2={mix(M, 1824, d)} y1={y} y2={y} stroke={INK} strokeOpacity={0.08} strokeWidth={1.5} strokeDasharray="2 8" /> : null;
             })}
 
-            {/* 面积：45° 排线 */}
+            {/* Area fill: 45° hatching */}
             {areaD && <path d={areaD} fill="url(#arsHatch)" />}
 
-            {/* 基线 */}
+            {/* Baseline */}
             <line x1={M} x2={mix(M, 1824, rule(0))} y1={BASE} y2={BASE} stroke={INK} strokeWidth={3} />
 
-            {/* 天花板规线：预警转赤陶，被穿透处裂开 */}
+            {/* Ceiling rule line: turns terracotta on warning, fractures where penetrated */}
             {(() => {
               const c = warn > 0.02 ? ACC : INK;
               const xr = mix(M, 1824, rule(2));
@@ -243,21 +243,21 @@ export const AxisRescaleShockV2: React.FC = () => {
             {shard(1)}
             {shard(2)}
 
-            {/* 历史折线 */}
+            {/* Historical polyline */}
             {lineD && <path d={lineD} fill="none" stroke={INK} strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" />}
-            {/* 历史段数据点 */}
+            {/* Historical data points */}
             {pts.map(([x, y], i) => (i < pts.length - (drawT < N - 2 ? 1 : 0) ? <circle key={i} cx={x} cy={y} r={6} fill={L.bg[0]} stroke={INK} strokeWidth={3.5} /> : null))}
-            {/* 写入笔尖 */}
+            {/* Drawing pen tip */}
             {frame >= DRAW0 && frame < DRAW1 + 1 && pts.length > 0 && (
               <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={9} fill={INK} />
             )}
-            {/* 预警脉冲：Nov 点 */}
+            {/* Warning pulse: Nov point */}
             {frame >= WARN && frame < SHOCK0 + 6 && (() => {
               const t = ramp(frame, WARN, 16, EASE.out);
               return <circle cx={nx} cy={ny} r={mix(10, 46, t)} fill="none" stroke={ACC} strokeWidth={3} opacity={0.7 * (1 - t)} />;
             })()}
 
-            {/* 爆表段 */}
+            {/* Blowout segment */}
             {shockOn && (
               <>
                 {hang > 0.01 && <line x1={nx} y1={ny} x2={hx} y2={hy} stroke={ACC} strokeWidth={shockW + 16} strokeLinecap="round" opacity={0.35 * hang} filter="url(#arsGlow)" />}
@@ -270,7 +270,7 @@ export const AxisRescaleShockV2: React.FC = () => {
                 opacity={0.8 * (1 - ramp(frame, PIERCE, 10, EASE.out))} />
             )}
 
-            {/* 端点标记 */}
+            {/* Endpoint marker */}
             {markS > 0 && (
               <>
                 {ripple < 1 && <circle cx={hx} cy={hy} r={mix(16, 64, ripple)} fill="none" stroke={ACC} strokeWidth={3} opacity={0.6 * (1 - ripple)} />}
@@ -279,7 +279,7 @@ export const AxisRescaleShockV2: React.FC = () => {
             )}
           </svg>
 
-          {/* 真值标签 */}
+          {/* True value badge */}
           {valS > 0 && (
             <div style={{
               position: 'absolute', left: hx - 40 - 330, top: hy - 70, width: 330, height: 140,

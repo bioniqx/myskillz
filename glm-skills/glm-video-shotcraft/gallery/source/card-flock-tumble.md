@@ -1,63 +1,41 @@
 ---
 name: card-flock-tumble
-一句话: 三张 UI 页卡从侧棱薄边 3D 翻飞成阶梯站定（全程清晰、样条连续丝滑），站定后保持慢转不停，快速收束吸入中心，炸出单个湍流烟雾环扩散，巨字横贯收场
-适用: 能量高潮段（功能页群→品牌口号的爆点转场）；霓虹/极光暗场调性；"多页面能力"收束成一句话的段落
-时长: 翻飞 ~1.5s + 慢转展示 ~0.3s + 收束 0.3s + 烟环+巨字 ~2s；全段 4.5s
-能量: 极高（全片能量顶点用）
+summary: Three UI cards tumble in 3D from edge-on to a stepped formation, keep slowly rotating, then collapse inward and burst into a smoke ring under a giant word.
+use: Climax energy segments (explosive transition from feature UI cluster to brand slogan); neon/aurora dark-stage aesthetics; segments summarizing "multi-page capabilities" into a singular thesis.
+duration: Tumble ~1.5s + slow rotation showcase ~0.3s + inward collapse 0.3s + smoke ring + giant word ~2s; entire sequence 4.5s.
+energy: Extremely high (reserved for full-video energy peaks)
 ---
 
-## 意图
-三张页卡像被甩出的扑克在 3D 空间翻飞列队，站定亮相后被瞬间
-吸入中心，炸出一圈烟雾环，品牌巨字穿环而出——"能力展示→能量
-坍缩→口号爆发"一气呵成。命门有三：**丝滑**（侧棱→翻飞→站定
-一条 Catmull-Rom 样条导数连续，分段插值的顿挫会被读出来）、
-**不许停**（站定后保持低角速度慢转到收束，静止段被裁"不要停住，
-保持旋转"——高潮段没有静帧）、**全程清晰**（motion blur/景深糊
-全删，被裁"不要加模糊效果"）。
+## Intention
+Three UI cards tumble and align in 3D space like dealt playing cards, holding a brief hero pose before instantly collapsing into the center, bursting into an expanding smoke ring as a massive brand title punches through the ring—"capability showcase → energy collapse → slogan explosion" in one continuous, breathless breath. Three non-negotiables define execution: **silkiness** (edge-on → tumble → stepped formation driven by a single continuous Catmull-Rom spline, as piecewise linear interpolation produces jarring velocity steps), **no stopping** (maintaining low-angular-velocity slow rotation upon landing until inward collapse; static holds were explicitly rejected in review: "do not stop, keep rotating"—climax sequences allow no frozen frames), and **tack-sharp clarity throughout** (motion blur and depth-of-field blur completely removed; rejected in review: "do not add blur effects").
 
-## 动效核心
-- 翻飞：三卡各自 k0（近 90° 侧棱薄边）→k1（翻飞中段）→k2（阶梯
-  站定）Catmull-Rom 样条，Easing.out(cubic) 驱动，~44f
-- 站定慢转：idle 漂移 ry +0.34°/f、rx -0.1°/f、rz +0.05°/f（14f
-  平方缓入避免与样条衔接顿挫），到收束时刻不停
-- 收束：10f Easing.in(quad) 从慢转姿态直接加速吸入中心缩小，
-  透明度前 60% 满格（"吸入"运动要清晰可读）
-- 闪核：吸入到点同一帧（70f）中心一团白热核 + 全屏 12% 微曝，6f
-  指数衰减，环从闪核里长出——补上收束与巨字之间的能量断档；只用
-  径向光，不画几何描边环、不加粒子（两者都在判例里被裁过）
-- 烟雾环：**单个**（多圈被裁），feTurbulence 三组位移（絮边/亮斑/
-  暗斑）+ 顶部奶桃 → 粉 → 紫渐变（aurora 色带），screen 叠加——破碎絮边、
-  明暗斑块、减速外扩缓慢长大、衰减极慢驻留，中心无水面光；粒子零残留
-- 巨字：收束后 4f（74f）就"砸"进来——14f snappy 从 1.22 缩到 1、字距
-  由 +0.06em 收到 −0.025em，之后极缓长大不停；实心白热芯→淡紫竖向
-  渐变填充 + 粉紫双层泛光（落地瞬间更亮再回落），282px 斜体横贯约 80%
-  画宽；环心内上方眉题（demo：video-shotcraft 标志描出 + 小写字标）、
-  下方 44px 标语（品牌短句）错峰升起，尾帧是发布海报
-- 背景：两行 300px 单色淡紫描边字墙反向缓移 + 卡后一团极光主光托起
-  卡片群；收束时字墙随吸入向心收缩淡出。卡片群与收束点、环心、巨字
-  共用一个中心（画面中心下移 30px）
+## Motion Core
+- **Tumble**: Each of the three cards follows a Catmull-Rom spline through k0 (near 90° razor edge-on) → k1 (mid-flight tumble) → k2 (stepped formation landing), driven by `Easing.out(cubic)` across ~44f.
+- **Stepped Slow Rotation**: Idle drift with ry +0.34°/f, rx -0.1°/f, rz +0.05°/f (with a 14f quadratic ease-in to prevent velocity kinks at spline handoff), persisting without pause until the moment of collapse.
+- **Inward Collapse**: 10f `Easing.in(quad)` directly accelerates inward from the rotating posture, shrinking into the center while keeping opacity at 100% for the first 60% of travel (the "implosion" motion must remain clearly legible).
+- **Flash Core**: On the exact frame of collapse convergence (70f), a white-hot central core detonates with a 12% full-screen micro-exposure flash, decaying exponentially over 6f. The ring blooms directly out of the flash core—filling the potential energy vacuum between collapse and title slam; uses pure radial light only, without stroked geometric rings or particles (both explicitly struck down in review precedents).
+- **Smoke Ring**: A **single** ring (multiple concentric rings rejected), driven by three `feTurbulence` displacement maps (feathery edges / bright patches / dark clumps) + a top-to-bottom peach → pink → purple gradient (aurora spectrum) with screen blend mode—ragged wisps, organic light-dark mottling, decelerating radial expansion with prolonged persistence, zero surface water sheen at center, and zero particle debris.
+- **Giant Word Slam**: Slams in just 4f after collapse (74f)—a 14f snappy entry scaling down from 1.22 to 1 with letter-spacing contracting from +0.06em to −0.025em, followed by an ultra-slow, continuous gentle expansion; solid white-hot core → soft purple vertical gradient fill + dual-layer pink/purple glow (flashing brighter on touchdown before easing back); 282px italic bold spanning ~80% of screen width; inside the ring center, an eyebrow lockup above (demo: video-shotcraft stroked logo + lowercase wordmark) and a 44px slogan below (concise brand tagline) rise with staggered timing, concluding on a launch-poster lockup frame.
+- **Background**: Two rows of 300px monochromatic soft-purple outlined typographic walls slowly drifting in opposing directions + an aurora hero back-glow cradling the card cluster; during collapse, the text walls scale inward and fade out in unison with the implosion. The card cluster, collapse focal point, ring center, and giant word share a unified anchor (screen center offset downward by 30px).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 三卡间距/大小 | 大幅重叠成一叠阶梯、scale 1.6–1.74 | 两轮加码判例："再靠近一些，再大些"——阶梯要读作一组不是三张 |
-| 站定慢转 | ry ~0.34°/f 连续 | **不许静止**（判例）；>1°/f 读作还没站定 |
-| 收束时长 | 10f ease-in | 22f 版被裁"要快"；透明度早退=吸入不可读（返工判例） |
-| 烟雾环 | 单圈、湍流絮边、衰减极慢 | 多圈被裁；平滑霓虹圈/粒子版被裁——对照原片密帧做湍流质感 |
-| 模糊 | 全程零 blur | 翻飞/收束加 blur 均被裁 |
-| 样条 | 一条 Catmull-Rom 贯穿 | 分段 lerp 有速度台阶，"丝滑流畅"是裁决原话 |
-| 巨字入场 | 收束到点后 4f、14f snappy 1.22→1 + 字距收拢 | 原版等 14f 才出字，中间一段只有小环的黑场，高潮断气；慢放大（0.7→1 / 34f）读作淡入而不是砸 |
-| 闪核 | 径向白热核 + 全屏 12% 微曝，6f 衰减 | 去掉后环像凭空冒出；加描边亮环立刻廉价（判例同烟雾环） |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| 3-card spacing / size | Substantial overlap in a stepped cascade, scale 1.6–1.74 | Escalated across two review rounds: "closer together, even larger"—the cascade must read as a cohesive unit, not three loose cards |
+| Settle slow rotation | ry ~0.34°/f continuous | **Static holds forbidden** (review ruling); >1°/f reads as still settling |
+| Collapse duration | 10f ease-in | 22f version rejected as sluggish; early opacity fade makes implosion illegible (rework precedent) |
+| Smoke ring | Single ring, turbulent feathery wisps, ultra-slow decay | Multiple rings rejected; smooth neon hoops or particle versions rejected—calibrated frame-by-frame against dense reference footage for turbulent texture |
+| Blur | Zero blur throughout | Blur during tumble or collapse was rejected |
+| Spline | Single unified Catmull-Rom | Piecewise lerp introduces velocity discontinuities; "silky smooth" was the explicit review mandate |
+| Giant word entrance | 4f after collapse, 14f snappy 1.22 → 1 + letter-spacing pinch | Original waited 14f to spawn text, leaving an empty dark screen with just the small ring, draining climax momentum; slow zoom (0.7 → 1 / 34f) reads as a gentle fade rather than a heavy slam |
+| Flash core | Radial white-hot core + 12% full-screen micro-exposure, 6f decay | Without it, the ring seems to appear out of thin air; adding stroked neon borders immediately looks cheap (same precedent as smoke ring) |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 烟雾环质感判例：干净图形环（描边圆/同心波）三轮被裁，最终版
-  feTurbulence 湍流絮边对照原片密帧逐格校——"要一样"；残余差距
-  是噪声场静态（整体旋转+长大），无逐帧湍流滚动，极近看流动感弱
-- 烟雾环是能量坍缩的余波，不是庆祝打击点——禁加粒子礼花
+## Known Pitfalls
+- The demo was calibrated and passed on grayscale/placeholder assets—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- Smoke ring texture precedent: clean geometric rings (stroked circles / concentric shockwaves) failed three review rounds; the final feTurbulence turbulent wisp version was tuned frame-by-frame against source footage ("must look identical"); the remaining delta is that the noise field itself is static (rotating and scaling as a whole) rather than rolling with per-frame turbulence, yielding slightly less fluid churning upon close inspection.
+- The smoke ring is the shockwave residue of energy collapse, not a celebratory confetti pop—never add particle fireworks.
 
-## 参考实现
+## Reference Implementation
 demos/transition/card-flock-tumble/
-（CardFlockTumble.tsx）
-原片出处：clickup-30.mp4
+(CardFlockTumble.tsx)
+Original source: clickup-30.mp4

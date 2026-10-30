@@ -1,22 +1,22 @@
-// hit-counter 连招计数：三张功能卡接连砸入槽位，每次命中 = 全局顿帧 2f + 落点伤害数字上浮渐隐
-// + 右上角 ×N combo 跳字（脉冲 / 倾斜 / 字号逐次加码）。组合：hitstop + damage-number-pop + combo-counter。
+// hit-counter combo counter: three feature cards slam into slots sequentially; each hit = 2f hitstop + damage number float-fade
+// + top-right xN combo counter pulse/scale-up. Combo: hitstop + damage-number-pop + combo-counter.
 //
-// 第二轮重设计（钴蓝街机海报 · 构建工具更新日）：
-// - look = custom「cobalt arcade」：满版高饱和钴蓝色场（不是深海军蓝暗场）+ 白卡 + 街机黄。
-//   格斗游戏 combo UI 的语言直接拿来讲"功能连招"：伤害数字是黄色斜体 900 字重 + 硬投影（漫画式错位影），
-//   计数器是 150→210px 的斜体「×N」，底下三格热度条逐格点亮。
-// - 内容：video-shotcraft 的三项能力，每一击的"伤害"= 做一支宣传片省下的制作时间（−2 h / −1 day / −3 days，示意值），
-//   三击打完收尾一行「Up to a week back on every promo.」——游戏梗落到真实收益上。
-// - 顿帧是全局的：背景斜纹滚动、浮尘、卡片、特效全部由同一个 remap 时间 t 驱动，命中时整幅画面一起冻 2f；
-//   只有卡面闪白与槽位受光用真实帧（冻结期间也要发生）。
-// - 触地：卡按速度竖向拉伸 + 运动模糊 → 触地压扁回弹（指数回落）→ 白色冲击环外扩 + 黄色火花八向迸射 + 槽底受光。
+// Redesign (cobalt arcade poster: build tools release day):
+// - look = custom "cobalt arcade": saturated cobalt blue field + white cards + arcade yellow.
+//   Fighting game combo aesthetics applied to feature delivery: yellow italic 900 weight damage numbers + hard offset drop shadow,
+//   counter is 150->210px italic "xN" with 3-segment gauge lighting up.
+// - Content: video-shotcraft capabilities, damage numbers = time saved on promo production (-2 h / -1 day / -3 days),
+//   resolving with tagline "Up to a week back on every promo."
+// - Hitstop is global: background scroll, dust, cards, and VFX driven by remapped time t, freezing 2f on each hit;
+//   only card white flash and slot illumination use real frames (active during freeze).
+// - Impact: vertical velocity stretch + motion blur -> squash & rebound on contact -> white shockwave + yellow sparks + slot glow.
 //
-// 时间表（动画时间 t，30fps；真实帧 = t + 已冻结帧）：
-//   0–22    建立：钴蓝场、三个虚线槽位（01/02/03）、眉题、暗色 ×0 计数器
-//   20/48/76 → 30/58/86  三张卡各 10f ease-in(quad) 砸落（间隔 28f 的均匀连招节拍）
-//   每命中   全局顿帧 2f；伤害数字打在卡面上 scale 1.45→1 + 上浮 150px 出卡沿，4f 后 12f 渐隐；计数器 exp(−t/2.4) 回落
-//   100–124 收尾行逐词升起，"a week" 用街机黄
-//   124–176 hold：背景斜纹极缓滚动，干净海报
+// Timeline (animation time t, 30fps; real frame = t + frozen frames):
+//   0-22    Lead-in: cobalt field, three dashed slots (01/02/03), kicker, dark x0 counter
+//   20/48/76 -> 30/58/86 Three cards slam down over 10f ease-in(quad) each (uniform 28f combo cadence)
+//   On each hit: 2f global hitstop; damage number pops on card scale 1.45->1 + floats up 150px, fades after 4f; counter decays exp(-t/2.4)
+//   100-124 Payoff line rises word-by-word, "a week" in arcade yellow
+//   124-176 Hold: slow background stripe scroll, clean poster
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, SpeedBlur, Vignette, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -25,17 +25,17 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
 export const HIT_COUNTER_DURATION = 176;
 
-// 自定义 look「cobalt arcade」
+// Custom look "cobalt arcade"
 const C = {
   bg0: '#1b3fd6', bg1: '#1230b0', bg2: '#0a1d78',
   card: '#f7f8ff', ink: '#0b1240', ink2: '#4a5488', ink3: '#8a93bf',
-  hit: '#ffd23f', // 街机黄：只给伤害数字 / 计数器 / 火花 / 关键收益
-  deep: '#06104a', // 硬投影色
+  hit: '#ffd23f', // Arcade yellow: damage numbers / counter / sparks / key payoffs
+  deep: '#06104a', // Hard drop shadow color
 };
 
-const HITS_T = [30, 58, 86]; // 命中时刻（动画时间）
-const STOP = 2; // 每次顿帧帧数
-const HITS_REAL = HITS_T.map((h, i) => h + i * STOP); // 真实命中帧 = 动画命中帧 + 已冻结帧
+const HITS_T = [30, 58, 86]; // Hit timestamps (animation time)
+const STOP = 2; // Hitstop duration per impact (frames)
+const HITS_REAL = HITS_T.map((h, i) => h + i * STOP); // Real frame = animation frame + frozen frames
 
 const SLOT_W = 480;
 const SLOT_H = 330;
@@ -46,7 +46,7 @@ const DROP_FROM = -460;
 const inQuad = bezier(0.55, 0.085, 0.68, 0.53);
 
 const DMG = ['−2 h', '−1 day', '−3 days'];
-const DMG_SIZE = [88, 104, 124]; // 伤害数字逐击加大
+const DMG_SIZE = [88, 104, 124]; // Damage number scales up per hit
 const PULSE = [1.3, 1.45, 1.6];
 const TILT = [-2, -4, -6];
 const COUNTER_SIZE = [140, 166, 196];
@@ -61,16 +61,16 @@ const Icon: React.FC<{ name: string }> = ({ name }) => {
   const sw = { fill: 'none', stroke: C.bg1, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
     <svg width={34} height={34} viewBox="0 0 24 24">
-      {/* 镜头配方卡 */}
+      {/* Shot recipe card */} 
       {name === 'recipe' && (
         <>
           <rect x="4" y="3.5" width="16" height="17" rx="2.5" {...sw} />
           <path d="M8 8.5h8M8 12h8M8 15.5h5" {...sw} />
         </>
       )}
-      {/* 踩点：波形 */}
+      {/* Beat grid: waveform */} 
       {name === 'beat' && <path d="M3 12h1.5M7 8.5v7M11 4.5v15M15 8v8M19 10.5v3M21 12h0.5" {...sw} />}
-      {/* 2.5D：层叠景深 */}
+      {/* 2.5D: layered depth */} 
       {name === 'layers' && (
         <>
           <path d="M3 8.5L12 4l9 4.5-9 4.5-9-4.5z" {...sw} />
@@ -81,7 +81,7 @@ const Icon: React.FC<{ name: string }> = ({ name }) => {
   );
 };
 
-// saved = 伤害数字飘走后，收益「落」进卡片页脚的进度（0–1）
+// saved = progress of benefit settling into card footer after damage number floats away (0-1)
 const FeatureCard: React.FC<{ i: number; elev: number; saved: number }> = ({ i, elev, saved }) => {
   const f = FEATURES[i];
   return (
@@ -124,7 +124,7 @@ const hash = (n: number) => {
 export const HitCounter: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // —— 全局帧 remap：每个真实命中帧起冻结 2f ——
+  // --- Global frame remap: freezes 2f on each hit ---
   const remap = (fr: number) => {
     let t = fr;
     for (const h of HITS_REAL) t -= Math.min(Math.max(fr - h, 0), STOP);
@@ -133,7 +133,7 @@ export const HitCounter: React.FC = () => {
   const t = remap(frame);
   const count = HITS_T.filter((h) => t >= h).length;
 
-  // —— 计数器 ——
+  // --- Counter ---
   let cScale = 1;
   let cRot = 0;
   let cSize = 130;
@@ -146,12 +146,12 @@ export const HitCounter: React.FC = () => {
   }
   const stamp = count > 0 ? 1 - ramp(t, HITS_T[count - 1], 7, EASE.out) : 0;
 
-  // 背景斜纹滚动（t 驱动 → 顿帧时一起冻住）
+  // Background diagonal stripe scroll (freezes during hitstop)
   const stripeShift = t * 2.2;
 
   return (
     <AbsoluteFill style={{ overflow: 'hidden', fontFamily: FONT.sans, background: `linear-gradient(170deg, ${C.bg0} 0%, ${C.bg1} 55%, ${C.bg2} 100%)` }}>
-      {/* 背景：主光 + 斜纹（速度线的静态版）+ 网点 */}
+      {/* Background: key light + diagonal stripes + halftone dots */} 
       <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 60% 55% at 38% 30%, ${alpha('#6f8dff', 0.45)} 0%, ${alpha('#6f8dff', 0)} 70%)` }} />
       <div
         style={{
@@ -168,18 +168,18 @@ export const HitCounter: React.FC = () => {
         }}
       />
 
-      {/* 眉题 */}
+      {/* Kicker */} 
       <div style={{ position: 'absolute', left: 120, top: 104, display: 'flex', alignItems: 'center', gap: 18, opacity: ramp(frame, 0, 14, EASE.out) }}>
         <ShotcraftMark size={52} tone="dark" />
         <div style={{ ...type(34, 760), color: '#fff', letterSpacing: '-0.02em' }}>{BRAND.name}</div>
         <div style={{ ...type(24, 650, { caps: true }), color: alpha('#ffffff', 0.62), letterSpacing: '0.24em', marginLeft: 8 }}>What’s new</div>
       </div>
 
-      {/* 槽位：虚线 + 大号序号，建立期就立预期 */}
+      {/* Slots: dashed line + index numeral */} 
       {SLOT_XS.map((x, i) => {
         const near = ramp(t, HITS_T[i] - 10, 10, inQuad);
         const df = frame - HITS_REAL[i];
-        const glowA = df >= 0 ? Math.exp(-df / 6) : 0; // 槽底受光（真实帧）
+        const glowA = df >= 0 ? Math.exp(-df / 6) : 0; // Slot contact illumination
         return (
           <React.Fragment key={`slot-${i}`}>
             <div
@@ -212,7 +212,7 @@ export const HitCounter: React.FC = () => {
         );
       })}
 
-      {/* 三张功能卡 */}
+      {/* Three feature cards */} 
       {HITS_T.map((hit, i) => {
         if (t < hit - 10) return null;
         const y = dropY(t, hit);
@@ -235,7 +235,7 @@ export const HitCounter: React.FC = () => {
         );
       })}
 
-      {/* 触地冲击：白色冲击环 + 八向黄色火花（t 驱动，顿帧时冻住） */}
+      {/* Contact impact: white shock ring + 8-way yellow sparks (freezes during hitstop) */} 
       {HITS_T.map((hit, i) => {
         const s = t - hit;
         if (s < 0 || s > 16) return null;
@@ -245,7 +245,7 @@ export const HitCounter: React.FC = () => {
         const cx = x0 + SLOT_W / 2;
         const cy = SLOT_Y + SLOT_H / 2;
         const burst = ramp(t, hit, 12, EASE.snappy);
-        const n = 10 + i * 3; // 火花逐击加码
+        const n = 10 + i * 3; // Sparks scale up per hit
         return (
           <React.Fragment key={`fx-${i}`}>
             <div
@@ -276,7 +276,7 @@ export const HitCounter: React.FC = () => {
         );
       })}
 
-      {/* 伤害数字：黄色斜体 + 漫画式硬投影 */}
+      {/* Damage numbers: yellow italic + comic offset shadow */} 
       {HITS_T.map((hit, i) => {
         const s = t - hit;
         if (s < 0 || s > 17) return null;
@@ -287,7 +287,7 @@ export const HitCounter: React.FC = () => {
           <div
             key={`dmg-${i}`}
             style={{
-              // 落点在卡面中下部（打在目标身上），上浮出卡沿：不与右上角计数器抢位置
+              // Origin at card lower center, floats up beyond card top
               position: 'absolute', left: SLOT_XS[i] + SLOT_W / 2, top: SLOT_Y + SLOT_H * 0.62 - DMG_SIZE[i] + rise,
               transform: `translateX(-50%) scale(${scale.toFixed(3)}) skewX(-8deg)`, transformOrigin: 'center bottom', opacity,
               ...type(DMG_SIZE[i], 900), fontStyle: 'italic', letterSpacing: '-0.04em', lineHeight: 1, color: C.hit, whiteSpace: 'nowrap',
@@ -299,7 +299,7 @@ export const HitCounter: React.FC = () => {
         );
       })}
 
-      {/* 右上角 combo 计数器 */}
+      {/* Top-right combo counter */} 
       <div
         style={{
           position: 'absolute', right: 120, top: 64, width: 400, height: 280,
@@ -324,7 +324,7 @@ export const HitCounter: React.FC = () => {
         </div>
       </div>
 
-      {/* 收尾：真实收益 */}
+      {/* Closing payoff tagline */} 
       <div style={{ position: 'absolute', left: 0, right: 0, top: 866, textAlign: 'center' }}>
         <TextReveal
           text="Up to a week back on every promo."

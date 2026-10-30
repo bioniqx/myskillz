@@ -1,21 +1,21 @@
-// hashtag-to-pill-materialize（bear-app 18–21.5s 重做版，按原片密帧逐帧对照）
-// 原片实测节奏（25fps 逐帧）：
-//  1) 白底居中打字 "#music"：几何无衬线（Futura 气质）、中灰墨色、红色实心光标恒亮不闪、人手节奏
-//  2) 实体化 = 1 帧硬切：文字+光标 → 宽大浅灰无描边胶囊 + 灰色双八分音符图标 + "music"（字号不变，#被图标替换）
-//  3) 停约 0.6s → 整体平滑缩小（→~0.55x）并左移落到页面标签位（约 0.55s，easeInOut）
-//  4) 再 1 帧硬切揭示成品笔记页：奶油底、墨绿大标题 "My favorite shots"、胶囊换成鼠尾草绿、正文三行——
-//     原片没有"胶囊飞入下方滑入卡片"的段落（批次 8 的飞行段为杜撰，已砍）
-// 质感升级：两张底都换成带极淡纸感的渐变 + 颗粒（防大面积纯色死平）；胶囊是"实体"——受光上沿
-// 内高光 + 微体积渐变 + 离地软影（hero 时浮起 10px，缩移中随落位降到 0，归位即"嵌进"页面）；
-// 缩移段按速度给方向性运动模糊；成品页补一行页眉元信息（面包屑 + 编辑时间），版式完整。
-// 两次硬切、缩移曲线与全部时间点不变。
-// 品牌轮：话题词 "#music" → "#shots"（与原词等长，胶囊版式不变），音符图标换场记板，
-// 成品页讲 video-shotcraft 的镜头（标题 "My favorite shots"，正文点名 video-shotcraft）。
+// hashtag-to-pill-materialize (bear-app 18-21.5s remake, frame-by-frame calibrated)
+// Calibrated rhythm (25fps reference):
+//  1) White bg centered typing "#music": geometric sans-serif (Futura aesthetic), mid-gray ink, solid red non-blinking cursor, human typing cadence
+//  2) Materialization = 1-frame cut: text + cursor -> broad light gray borderless capsule + gray icon + "music" (same font size, # replaced by icon)
+//  3) Hold ~0.6s -> smoothly scales down (~0.55x) and moves left into page tag slot (~0.55s, easeInOut)
+//  4) Another 1-frame cut reveals final note page: cream base, forest green headline "My favorite shots", capsule switches to sage green, 3 lines of body —
+//     (pure direct cut to finished page without extra card fly-ins)
+// Polish pass: subtle paper texture gradient + grain on both backgrounds; capsule is tactile solid — top highlight
+// inner glow + subtle volumetric gradient + elevation shadow (floats 10px in hero state, drops to 0 on landing, embedding into page);
+// directional motion blur along movement vector; final page includes header metadata (breadcrumbs + edit timestamp).
+// Hard cuts, ease curves, and all timing checkpoints preserved.
+// Brand adaptation: topic tag "#music" -> "#shots" (same character count), musical note replaced with clapperboard,
+// final page showcases video-shotcraft shots (headline "My favorite shots").
 import React from 'react';
 import { AbsoluteFill, interpolate, useCurrentFrame, Easing } from 'remotion';
 import { Grain, SpeedBlur, velocity } from '../../_fixtures/Polish';
 
-// 揭示 83f 后真静止 37f（≈1.2s 呼吸，R1），全段 4s
+// Reveal at 83f followed by 37f hold (~1.2s breathing, R1), total 4s
 export const HASHTAG_TO_PILL_MATERIALIZE_DURATION = 120;
 const FONT = "Futura, 'Century Gothic', 'Avenir Next', 'Trebuchet MS', sans-serif";
 
@@ -35,7 +35,7 @@ const C = {
   body: '#4c4b43',
 };
 
-// ---- mulberry32（仅用于打字节奏的人手抖动，确定性）----
+// ---- mulberry32 (deterministic pseudo-random generator for typing jitter) ----
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -48,7 +48,7 @@ function mulberry32(seed: number) {
 }
 
 const TEXT = '#shots';
-// 打字起点 & 每字间隔（帧），4–8 帧带抖动，模拟原片真人节奏
+// Typing start & per-character cadence (frames), 4-8 frames with human cadence jitter
 const TYPE_START = 8;
 const rand = mulberry32(20260717);
 const TYPE_AT: number[] = (() => {
@@ -56,25 +56,25 @@ const TYPE_AT: number[] = (() => {
   let f = TYPE_START;
   for (let i = 0; i < TEXT.length; i++) {
     at.push(f);
-    f += 4 + Math.floor(rand() * 3); // 4–6 帧（原片 ~6字/秒）
+    f += 4 + Math.floor(rand() * 3); // 4-6 frames (~6 chars/sec)
   }
   return at;
 })();
 
-// ---- 时间轴（30fps，共 132 帧，节奏对齐原片 18–21.5s）----
-const MORPH = 48;       // 1 帧硬切实体化（打完 hold ~0.5s，原片 0.45s）
-const MOVE_START = 66;  // 胶囊开始缩小左移（morph 后 0.6s，原片同）
-const MOVE_END = 80;    // 落位（0.47s，原片 ~0.45s）
-const REVEAL = 83;      // 1 帧硬切揭示成品页，之后静置收尾
+// ---- Timeline (30fps, total 132 frames, aligned to reference 18-21.5s) ----
+const MORPH = 48;       // 1-frame cut materialization (hold ~0.5s after typing)
+const MOVE_START = 66;  // Capsule starts scale-down and move left (0.6s post morph)
+const MOVE_END = 80;    // Settles into slot (0.47s)
+const REVEAL = 83;      // 1-frame cut reveals final page, static hold to tail
 
-// ---- 几何（1920x1080，等比换算自原片 1280x720 实测像素）----
-const FS = 132;                       // 打字/胶囊文字字号（原片 glyph 等高换算）
-const HERO = { x: 960, y: 540 };      // 大胶囊中心
-const PILL_W = 740, PILL_H = 236;     // 原片实测 493x157 @720p ×1.5
-const END_SCALE = 0.554;              // 落位缩放（原片 273/493）
-const SLOT = { x: 361, y: 473 };      // 标签位中心（原片灰胶囊落点 (244.5,317.5)×1.5 与揭示位折中）
+// ---- Geometry (1920x1080 scaled from 1280x720 reference) ----
+const FS = 132;                       // Font size for typing and capsule text
+const HERO = { x: 960, y: 540 };      // Large capsule center
+const PILL_W = 740, PILL_H = 236;     // 493x157 @720p x 1.5
+const END_SCALE = 0.554;              // Target scale (273/493)
+const SLOT = { x: 361, y: 473 };      // Tag slot center position
 
-// 场记板图标（实心剪影，与原音符图标同一视觉重量）：板身 + 左铰链翘起的拍板，拍板斜纹用遮罩镂空
+// Clapperboard icon: clapper board body + angled clapper top with masked chevron stripes
 const ClapperIcon: React.FC<{ size: number; color: string }> = ({ size, color }) => {
   const id = React.useId().replace(/[^a-zA-Z0-9]/g, '');
   return (
@@ -95,12 +95,12 @@ const ClapperIcon: React.FC<{ size: number; color: string }> = ({ size, color })
   );
 };
 
-// 胶囊（大字号绘制，整体 transform 缩放，保证实体化前后文字原位等大）
-// lift = 离地高度（大字号坐标 px）：hero 时浮起，落位时归零贴进页面
+// Capsule (rendered at large font size, scaled via transform ensuring size match during materialization)
+// lift = elevation height (px): elevated in hero state, drops to 0 flush with page
 const Pill: React.FC<{ bg: string; iconColor: string; textColor: string; lift: number }> = ({ bg, iconColor, textColor, lift }) => (
   <div style={{
     width: PILL_W, height: PILL_H, borderRadius: PILL_H / 2,
-    // 无描边：实体感来自上亮下暗的微体积 + 顶沿内高光 + 离地软影（不是边框）
+    // Borderless: volume conveyed via top highlight + micro-gradient + elevation shadow
     background: `linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 46%, rgba(0,0,0,0.025) 100%), ${bg}`,
     boxShadow: `inset 0 3px 0 rgba(255,255,255,0.7), inset 0 -2px 0 rgba(40,40,30,0.03), ` +
       `0 ${(1 + lift * 0.12).toFixed(1)}px ${(2 + lift * 0.3).toFixed(1)}px rgba(40,40,30,${(0.04 + lift * 0.003).toFixed(3)}), ` +
@@ -115,11 +115,11 @@ const Pill: React.FC<{ bg: string; iconColor: string; textColor: string; lift: n
 export const HashtagToPillMaterialize: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ---- 打字 ----
+  // ---- Typing ----
   const typedCount = TYPE_AT.filter((t) => frame >= t).length;
   const typed = TEXT.slice(0, typedCount);
 
-  // ---- 缩小左移 ----
+  // ---- Scale down and move left ----
   const moveAt = (f: number) => interpolate(f, [MOVE_START, MOVE_END], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
     easing: Easing.bezier(0.5, 0, 0.25, 1),
@@ -130,12 +130,12 @@ export const HashtagToPillMaterialize: React.FC = () => {
   const px = pxAt(frame);
   const py = pyAt(frame);
   const ps = interpolate(moveT, [0, 1], [1, END_SCALE]);
-  // 缩移峰值 ~70px/帧：按速度沿运动方向给拖影，起止处速度→0 自动无模糊
+  // Peak speed ~70px/frame: motion blur along velocity vector, tapering naturally at endpoints
   const vx = velocity(pxAt, frame);
   const vy = velocity(pyAt, frame);
-  // 离地：hero hold 时浮 10px，缩移后半程降落，落位贴平（Q9：归位即嵌入页面）
+  // Elevation: 10px during hero hold, descends in second half of travel, flush on arrival
   const lift = 10 * (1 - interpolate(moveT, [0.35, 1], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
-  // 实体化瞬间极轻微落定（原片近乎硬切，仅 3 帧 1.03→1，避免死板）
+  // Subtle settle on materialization (3 frames 1.03->1)
   const settle = interpolate(frame, [MORPH, MORPH + 3], [1.03, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.quad),
   });
@@ -144,10 +144,10 @@ export const HashtagToPillMaterialize: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ background: revealed ? C.bgCream : C.bgWhite, fontFamily: FONT }}>
-      {/* 成品页（硬切揭示，之后全静） */}
+      {/* Final page (cut reveal, followed by static hold) */}
       {revealed && (
         <>
-          {/* 页眉元信息：面包屑 + 编辑时间，让"成品页"版式完整（辅助文字 32px，低对比不抢标题） */}
+          {/* Header metadata: breadcrumb + edit timestamp (32px, low contrast) */}
           <div style={{
             position: 'absolute', left: 164, right: 160, top: 86, display: 'flex', alignItems: 'center',
             fontSize: 32, fontWeight: 500, color: C.meta, letterSpacing: 0.6,
@@ -178,7 +178,7 @@ export const HashtagToPillMaterialize: React.FC = () => {
         </>
       )}
 
-      {/* 打字层：文字 + 恒亮红光标（原片光标不闪烁），实体化帧整体消失 */}
+      {/* Typing layer: text + solid red cursor (non-blinking), disappears at morph */}
       {frame < MORPH && (
         <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -193,13 +193,13 @@ export const HashtagToPillMaterialize: React.FC = () => {
         </AbsoluteFill>
       )}
 
-      {/* 胶囊层：实体化 1 帧硬切出现 → hold → 缩小左移落位 → 揭示帧换鼠尾草绿 */}
+      {/* Capsule layer: 1-frame cut appearance -> hold -> travel to slot -> switches to sage green on reveal */}
       {frame >= MORPH && (
         <SpeedBlur vx={vx} vy={vy} amount={0.1} max={7}>
         <div style={{
           position: 'absolute', left: 0, top: 0,
-          // origin 必须是 0 0：translate 先把原点送到目标中心，scale 绕该点缩放，
-          // 否则默认 50% 50% 会让落位时中心漂移 (1-s)*半宽
+          // origin must be 0 0: translate places origin at target center, scale pivots around it,
+          // avoiding default 50% 50% offset drift of (1-s) * halfWidth
           transformOrigin: '0 0',
           transform: `translate(${px}px, ${py}px) scale(${ps * settle})`,
         }}>
@@ -211,7 +211,7 @@ export const HashtagToPillMaterialize: React.FC = () => {
         </div>
         </SpeedBlur>
       )}
-      {/* 极弱纸面颗粒：防大面积浅底色带，揭示帧随底色一起硬切（同一层，不做过渡） */}
+      {/* Subtle paper grain: prevents banding on flat tints, cuts cleanly with background */}
       <Grain opacity={0.05} step={2} />
     </AbsoluteFill>
   );

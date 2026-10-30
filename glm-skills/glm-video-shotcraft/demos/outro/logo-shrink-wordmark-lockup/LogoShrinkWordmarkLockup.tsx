@@ -1,10 +1,10 @@
-// logo-shrink-wordmark-lockup — Shrink & Lockup 图标收束落位（motion-lab 定稿转原生 Remotion）
-// 霓虹切口大环 easeInOut 快速缩成中央实心小白 O，末尾过冲刹车的那一下换成 video-shotcraft「镜刻」标志，
-// 随后图标左移让位，字标 video-shotcraft 的字母从左到右逐个 opacity+8px 滑入完成 lockup，
-// 强调色标语延迟整行淡入收尾。设计坐标 480×270（DesignStage 等比放大，zoom 栅格化保字边锐利）。
-// 质感升级：背景换带色相的深场 + 随大环收束一起坍缩的紫色能量光晕；收束途中双弧边转边缩
-// （减速旋转 150°），高速段拖两层缩放残影当运动模糊；落位刹车瞬间放一圈细冲击波（只一次）；
-// 字母滑入带 2.5px→0 的对焦模糊；标语改成与霓虹同族的冷紫，不再是撞色的红。
+// logo-shrink-wordmark-lockup — Shrink & Lockup icon convergence (motion-lab final spec ported to native Remotion)
+// The large neon slit ring quickly shrinks into a solid white central "O" with easeInOut; at the final overshoot brake, it morphs into the video-shotcraft mark.
+// The icon then shifts left to make room, while the letters of the "video-shotcraft" wordmark slide in from left to right (opacity + 8px) to complete the lockup.
+// An accent-colored motto fades in across the entire line with a slight delay to finish. Design coordinates 480×270 (DesignStage scales proportionally; zoom rasterization keeps letter edges sharp).
+// Polish upgrades: deep-field background with hue tint + purple energy halo collapsing alongside the outer ring; dual arcs rotate while shrinking
+// (decelerating rotation of 150°), trailing two layers of scale ghosts as motion blur during high-speed segments; a single fine shockwave emits upon braking;
+// sliding letters feature 2.5px -> 0 focus blur; motto updated to a matching cool purple instead of contrasting red.
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
 import { DesignStage, E, lerp, seg, useT } from '../../_fixtures/Motion';
@@ -13,19 +13,19 @@ import { BRAND, PITCH, ShotcraftMark } from '../../_fixtures/Brand';
 
 export const LOGO_SHRINK_WORDMARK_LOCKUP_DURATION = 132; // 4400ms @30fps
 
-const ACCENT = '#9d94ff'; // 标语强调色：与霓虹晕同色相、提亮降饱和
-const WORDMARK = BRAND.name; // 字标全小写
-const ICON = 30; // 图标基准尺寸(px)
-const MARK = 32; // 标志尺寸：取景框实体 ≈ 0.81×MARK ≈ 26px，正好盖住愈合后的环
-const WORD_W = 172; // 字标行实测宽（22px / 700，15 字符；渲帧量得）
-const GAP = 9; // 图标与字标间距
-// 图标 lockup 左位偏移与字母行左缘耦合：整组（图标 + 间距 + 字标）在画面居中
+const ACCENT = '#9d94ff'; // Motto accent color: shares hue with neon halo, brightened with reduced saturation
+const WORDMARK = BRAND.name; // Lowercase wordmark
+const ICON = 30; // Base icon size (px)
+const MARK = 32; // Mark size: viewfinder body ≈ 0.81×MARK ≈ 26px, cleanly covering the healed ring
+const WORD_W = 172; // Measured width of wordmark row (22px / 700, 15 chars; measured from rendered frame)
+const GAP = 9; // Spacing between icon and wordmark
+// Icon lockup left offset coupled with letter row left edge: centers the entire group (icon + gap + wordmark)
 const SHIFT = -(ICON + GAP + WORD_W) / 2 + ICON / 2;
-const ROW_LEFT = SHIFT + ICON / 2 + GAP; // 字母行左缘相对画面中线
-const STAGGER = (0.7 - 0.46) / WORDMARK.length; // 字多：按 (0.7-0.46)/n 反算间隔，保证 0.7 前全部起跑
-const DT = 1 / 131; // 一帧对应的 t 增量（132f）
+const ROW_LEFT = SHIFT + ICON / 2 + GAP; // Left edge of letter row relative to screen centerline
+const STAGGER = (0.7 - 0.46) / WORDMARK.length; // Many letters: calculate interval via (0.7-0.46)/n so all start before 0.7
+const DT = 1 / 131; // Delta t per frame (132f)
 
-// 圆弧 path（角度制，顺时针 sweep）
+// Arc path (degrees, clockwise sweep)
 const arcPath = (cx: number, cy: number, r: number, a0: number, a1: number) => {
   const p = (a: number) => [cx + r * Math.cos((a * Math.PI) / 180), cy + r * Math.sin((a * Math.PI) / 180)];
   const [x0, y0] = p(a0);
@@ -34,7 +34,7 @@ const arcPath = (cx: number, cy: number, r: number, a0: number, a1: number) => {
   return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`;
 };
 
-// 双弧组：a0-a1 与其对角（+180°）两段圆弧 —— 带缺口的切口环
+// Dual-arc group: a0-a1 and its diagonal (+180°) arcs — slit ring with gaps
 const Arcs: React.FC<{ a0: number; a1: number; col: string; w: number; blur: number; opacity: number; stroke?: string }> = ({
   a0,
   a1,
@@ -62,35 +62,35 @@ const Arcs: React.FC<{ a0: number; a1: number; col: string; w: number; blur: num
   </g>
 );
 
-// 收束主曲线：scale 5.4→1（easeInOut），末尾轻微 1.06 过冲刹车
+// Main convergence curve: scale 5.4 -> 1 (easeInOut) with a slight 1.06 overshoot brake at the end
 const scaleAt = (t: number) => {
   const k = seg(t, 0.02, 0.28, E.inOutCubic);
   const brake = Math.sin(seg(t, 0.26, 0.37) * Math.PI) * 0.06;
   return lerp(k, 5.4, 1) * (1 + brake);
 };
-// 收束途中的自转：减速转 150°（缺口在缩小中"拧紧"），愈合后肉眼不可见
+// Rotation during convergence: decelerates through 150° ("tightening" gaps while shrinking), imperceptible once healed
 const spinAt = (t: number) => -150 * seg(t, 0.0, 0.3, E.outCubic);
 
 export const LogoShrinkWordmarkLockup: React.FC = () => {
   const t = useT();
   const s = scaleAt(t);
   const spin = spinAt(t);
-  // 左移让位：落位后 t 0.34-0.47
+  // Shift left to make room: t 0.34-0.47 after landing
   const shift = seg(t, 0.34, 0.47, E.inOutCubic) * SHIFT;
-  // 霓虹缺口态 → 实心白 O 交叉淡化（随收束进行）
+  // Neon slit state -> solid white O cross-fade (progresses with convergence)
   const heal = seg(t, 0.10, 0.28, E.inOutQuad);
-  // 白 O → video-shotcraft 标志：落位刹车那一下（与冲击波同拍）交叉换成标志，换标时已缩到最终尺寸
+  // White O -> video-shotcraft mark: cross-swapped to mark at the braking moment (in sync with shockwave), already shrunk to final size
   const markIn = seg(t, 0.24, 0.32, E.inOutQuad);
-  // 缩放残影：按每帧缩放量给强度，静止时为 0
+  // Scale ghost trails: intensity scaled by frame delta, 0 at rest
   const ds = Math.abs(scaleAt(t) - scaleAt(t - DT));
   const trail = Math.min(1, ds / 0.35);
-  // 冲击波：刹车回弹的那一下（t≈0.28）放一圈细环，扩散并消散
+  // Shockwave: emits a thin ring on brake rebound (t ≈ 0.28), expanding and dissipating
   const wave = seg(t, 0.28, 0.46, E.outCubic);
-  // 能量光晕：开场罩住大环，随收束一起坍缩变小、落位后回落成图标背后的微光
+  // Energy halo: covers the large ring initially, collapsing alongside convergence and settling into a faint glow behind the icon
   const haloR = lerp(seg(t, 0.02, 0.3, E.inOutCubic), 150, 34);
   const haloA = 0.5 - 0.32 * seg(t, 0.3, 0.5, E.outCubic);
 
-  // 外层只负责位移 + 缩放；环在内层旋转——标志本身始终不旋转（品牌规范：斜切角度不变）
+  // Outer layer handles translation + scale; ring rotates in inner layer — mark itself never rotates (brand guideline: maintain cut angle)
   const icon = (sc: number, rot: number, opacity: number, ghost = false) => (
     <div
       style={{
@@ -105,30 +105,30 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
       }}
     >
       <svg viewBox="0 0 30 30" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', transform: `rotate(${rot}deg)` }}>
-        {/* 霓虹晕（带缺口） */}
+        {/* Neon halo (with slit gaps) */}
         <Arcs a0={-32} a1={122} col="rgba(118,96,255,.62)" w={6.5} blur={2.5} opacity={1 - heal} />
-        {/* 霓虹芯：heal 过半后转纯白 */}
+        {/* Neon core: turns pure white past halfway healed */}
         {!ghost && (
           <Arcs a0={-32} a1={122} col="#dfe9ff" w={3.4} blur={0} opacity={(1 - heal * 0.75) * (1 - markIn)} stroke={heal > 0.5 ? '#fff' : '#dfe9ff'} />
         )}
-        {/* 愈合后的实心白 O（过渡态，刹车时让给标志） */}
+        {/* Healed solid white O (transition state, yields to mark upon braking) */}
         {!ghost && <circle cx={15} cy={15} r={10.5} fill="none" stroke="#fff" strokeWidth={5.5} opacity={heal * (1 - markIn)} />}
       </svg>
-      {/* 愈合后的标准态：video-shotcraft 标志（反白版，无发光） */}
+      {/* Healed standard state: video-shotcraft mark (inverted white, no glow) */}
       {!ghost && markIn > 0 && (
         <ShotcraftMark size={MARK} tone="dark" style={{ position: 'absolute', left: (ICON - MARK) / 2, top: (ICON - MARK) / 2, opacity: markIn }} />
       )}
     </div>
   );
 
-  // 底色标定：原样片 mp4（yuv420p，无色彩元数据）把 #05060a 解码回 rgb(3,5,9)；此处改用带色相的深场
+  // Background color calibration: original mp4 (yuv420p, no color metadata) decoded #05060a to rgb(3,5,9); uses hue-tinted deep field here
   return (
     <AbsoluteFill>
     <DesignStage bg="#06070c" raster="zoom">
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-        {/* 深场：顶部略亮的冷色纵向渐变 */}
+        {/* Deep field: vertical cool-tone gradient slightly brighter at top */}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #0d0f17 0%, #07080d 60%, #05060a 100%)' }} />
-        {/* 能量光晕（随大环坍缩） */}
+        {/* Energy halo (collapses with outer ring) */}
         <div
           style={{
             position: 'absolute',
@@ -141,7 +141,7 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
             background: 'radial-gradient(circle, rgba(110,92,255,0.42) 0%, rgba(110,92,255,0.12) 38%, rgba(110,92,255,0) 70%)',
           }}
         />
-        {/* 冲击波：细亮环 + 外圈柔光，扩散时变细变淡 */}
+        {/* Shockwave: bright thin ring + soft outer glow, thinning and fading as it expands */}
         {wave > 0 && wave < 1 && (
           <div
             style={{
@@ -157,12 +157,12 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
             }}
           />
         )}
-        {/* 缩放残影（只在高速段出现）：上 1f、上 2f 的尺度与角度 */}
+        {/* Scale ghost trails (high-speed segment only): scale and rotation from -1f and -2f */}
         {trail > 0.02 && icon(scaleAt(t - 2 * DT), spinAt(t - 2 * DT), 0.16 * trail, true)}
         {trail > 0.02 && icon(scaleAt(t - DT), spinAt(t - DT), 0.3 * trail, true)}
-        {/* 图标：SVG 双弧切口环（演出态）→ 收束时缺口愈合、交叉淡入 video-shotcraft 标志（标准态） */}
+        {/* Icon: SVG dual-arc slit ring (kinetic state) -> gaps heal on convergence, cross-fading into video-shotcraft mark (standard state) */}
         {icon(s, spin, 1)}
-        {/* 字母行（图标右侧）：从左到右 stagger，opacity 0→1 + translateX 8px→0 + 对焦模糊 */}
+        {/* Letter row (right of icon): left-to-right stagger, opacity 0 -> 1 + translateX 8px -> 0 + focus blur */}
         <div
           style={{
             position: 'absolute',
@@ -183,7 +183,7 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
                 style={{
                   color: '#f3f5fb',
                   font: `700 22px/1 ${BRAND.font}`,
-                  letterSpacing: 0.66, // 字标 +0.03em
+                  letterSpacing: 0.66, // Wordmark +0.03em
                   whiteSpace: 'pre',
                   opacity: lk,
                   transform: `translateX(${lerp(lk, 8, 0)}px)`,
@@ -196,7 +196,7 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
             );
           })}
         </div>
-        {/* 强调色标语（品牌短句 motto）：延迟整行淡入，同时上移 3px 落座 */}
+        {/* Accent motto: delayed full-line fade-in with 3px upward settle */}
         <div
           style={{
             position: 'absolute',
@@ -206,7 +206,7 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
             textAlign: 'center',
             color: ACCENT,
             font: `600 12.5px/1 ${FONT.sans}`,
-            letterSpacing: 2.6, // 29 字符：字距 4.6→2.6，宽度与 lockup 相称
+            letterSpacing: 2.6, // 29 chars: tracking 4.6 -> 2.6 to match lockup width
             opacity: seg(t, 0.72, 0.84, E.outQuad),
             transform: `translateY(${lerp(seg(t, 0.72, 0.86, E.outCubic), 3, 0)}px)`,
           }}
@@ -215,7 +215,7 @@ export const LogoShrinkWordmarkLockup: React.FC = () => {
         </div>
       </div>
     </DesignStage>
-    {/* 暗角与颗粒放在设计坐标外，按 1920 原生像素铺，颗粒不被 zoom 放大成色块 */}
+    {/* Vignette and grain placed outside design coordinates at native 1920px so grain is not magnified into blocks by zoom */}
     <Vignette strength={0.55} inner={0.4} color="#000000" />
     <Grain opacity={0.07} blend="soft-light" />
     </AbsoluteFill>

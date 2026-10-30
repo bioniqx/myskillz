@@ -1,18 +1,18 @@
-// 字形漂移合拢（letterform-drift-assembly）——Stranger Things 片头式入场。
-// 品牌名 "Shotcraft"（BRAND.short，video-shotcraft 的简称）拆 9 字符：各自从不同方向（h(i) seeded 随机向量，
-// 幅度 ±260–360px）带 blur 8px + opacity 0.35 缓慢漂入，错峰归位
-// （delay i×3f，45f 行程，Easing.out(cubic)）。每字锁定瞬间给一次
-// "加深脉冲"：字色 ink→#000→ink + 描边 0→3px→0（8f）——白底上
-// 不用发光用加深（库判例）。全部合体后整词 scale 1→1.04→1 收束呼吸
-// （判例：1.02 太弱，加码到 1.04）。
-// 关键帧：0–24 各字错峰启程 → i 字 [i*3, i*3+45] 漂入归位 →
-// 锁定帧 i*3+45 起 8f 加深脉冲（最后一字 69–77）→ 80–104 整词呼吸 →
-// 104–150 全静止（46f，无逐帧滤镜）。
+// letterform-drift-assembly — Stranger Things title style letterform drift convergence.
+// Brand name "Shotcraft" split into 9 chars: each drifting in from different directions (h(i) seeded vectors,
+// +/-260-360px) with 8px blur + 0.35 opacity, staggered convergence
+// (delay i*3f, 45f travel, Easing.out(cubic)). Each char receives a
+// "deepen pulse" on lock: ink -> #000 -> ink + stroke 0 -> 3px -> 0 (8f) — on light background
+// uses darkening pulse instead of glow. Unified word breathes scale 1 -> 1.04 -> 1 on assembly
+// (amplified to 1.04).
+// Keyframes: 0-24 staggered launch -> char i [i*3, i*3+45] drifts into place ->
+// lock frame i*3+45 triggers 8f deepen pulse (last char 69-77) -> 80-104 word breathing ->
+// 104-150 static hold (46f).
 //
-// 质感升级：去掉调试标题；柔光 Backdrop；系统 SF 栈 700、带色相的近黑墨色；
-// 漂入除位移/blur/opacity 外再绑同一条 p 的旋转（±24°→0）与纵深缩放（1.22→1），
-// 字是从镜头前的空间里飘回字面，而不是平面滑动；合体后字面下方浮出一层极淡的落地影。
-// 补导出时长 150f（原工作台按 56f 推断，渲染止于半空）。
+// Polish pass: soft lighting backdrop; system font stack 700, tinted near-black ink;
+// drift bound to rotation (+/-24 deg -> 0) and depth scale (1.22 -> 1) along shared progress p,
+// drifting in from camera space rather than 2D sliding; subtle ground shadow emerges below assembled word.
+// Total duration 150f.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -26,9 +26,9 @@ const h = (n: number) => {
   return s - Math.floor(s);
 };
 
-const WORD = BRAND.short; // 'Shotcraft'——片头式亮相落在品牌名上
-const TRAVEL = 45; // 每字漂入行程帧数
-const STAG = 3; // 错峰间隔
+const WORD = BRAND.short; // 'Shotcraft' — title-style intro on brand name
+const TRAVEL = 45; // Drift duration per character (frames)
+const STAG = 3; // Stagger interval
 const INK = [23, 24, 28]; // G.ink1 #17181c
 
 export const LetterformDriftAssembly: React.FC = () => {
@@ -36,7 +36,7 @@ export const LetterformDriftAssembly: React.FC = () => {
   const chars = WORD.split('');
   const lastLock = (chars.length - 1) * STAG + TRAVEL; // 69
 
-  // 整词收束呼吸：80–92 放大到 1.04，92–104 回落，之后恒 1 → 帧确定
+  // Unified word breathing: 80-92 scales to 1.04, 92-104 settles to 1
   const breath =
     frame < 92
       ? interpolate(frame, [80, 92], [1, 1.04], {
@@ -49,13 +49,13 @@ export const LetterformDriftAssembly: React.FC = () => {
           extrapolateRight: 'clamp',
           easing: Easing.inOut(Easing.cubic),
         });
-  // 合体后落地影
+  // Ground shadow after assembly
   const ground = ramp(frame, lastLock - 6, 30, EASE.out);
 
   return (
     <div style={{ width: 1920, height: 1080, position: 'relative', overflow: 'hidden' }}>
       <Backdrop tone="light" light={{ x: 0.5, y: 0.32 }} accent="#5b63d3" grain={0.05} vignette={0.14} />
-      {/* 落地影：合体后在字面下方出现的极淡椭圆影 */}
+      {/* Ground shadow: subtle elliptical shadow beneath assembled word */}
       <div
         style={{
           position: 'absolute',
@@ -82,13 +82,13 @@ export const LetterformDriftAssembly: React.FC = () => {
         {chars.map((c, i) => {
           const start = i * STAG;
           const lock = start + TRAVEL;
-          // 漂入进度（位移 / blur / opacity / 旋转 / 纵深 共用一条 p）
+          // Drift progress (translation / blur / opacity / rotation / depth scale share progress p)
           const p = interpolate(frame, [start, lock], [0, 1], {
             extrapolateLeft: 'clamp',
             extrapolateRight: 'clamp',
             easing: Easing.out(Easing.cubic),
           });
-          // seeded 起始向量：方向 h(i)，幅度 260–360px
+          // Seeded initial vector: angle h(i), magnitude 260-360px
           const ang = h(i + 1) * Math.PI * 2;
           const mag = 260 + h(i + 101) * 100;
           const dx = Math.cos(ang) * mag * (1 - p);
@@ -97,7 +97,7 @@ export const LetterformDriftAssembly: React.FC = () => {
           const depth = 1 + 0.22 * (1 - p);
           const blur = 8 * (1 - p);
           const op = interpolate(p, [0, 1], [0.35, 1]);
-          // 锁定加深脉冲：lock→lock+8，三角波 0→1→0
+          // Lock deepen pulse: lock -> lock+8, triangular pulse 0 -> 1 -> 0
           const pulse =
             frame <= lock || frame >= lock + 8
               ? 0

@@ -1,43 +1,34 @@
 ---
 name: transition-travel
-一句话: 穿越式转场——字腔穿越：巨型章节标题的字形就是一扇窗，镜头钻进字形笔画完成换景
-适用: 前后两镜存在"元素/容器"级空间关系的接缝（技法卡，与 shot-transitions 三式互补选用）
-时长: n/a（技法卡；demo 150f，主推动作段 52f，前后 hold 另计，帧数从相邻镜头预算里划）
-能量: n/a（技法卡，不占能量位）
-标签: camera
+summary: A passage transition that pushes through the counter of a giant letterform into the next scene.
+use: Seams between two shots sharing an "element/container" spatial relationship (technique card: selected complementarily with the three shot-transitions variants).
+duration: n/a (technique card; demo 150f, main push action segment 52f, preceding/trailing holds budgeted separately, frames deducted from adjacent shot budgets).
+energy: n/a (technique card, does not consume an energy slot).
+tags: camera
 ---
 
-## 意图
-shot-transitions 三式是"交棒"型——前镜收尾、后镜入场，接缝靠白闪/糊帧/
-窗口盖住换页瞬间。本卡是"穿越"型——后景在前景画面里
-以真实元素存在（字形洞），镜头一条连续空间运动钻进去，
-观众从头到尾跟着同一个物体，没有交棒瞬间。选型口径：后景能在前景里"预先
-在场"→穿越；两景只是先后关系、无空间嵌套→交棒。字腔穿越的语义是
-"标题即是门"（章节字卡与转场二合一）。
+## Intention
+The three shot-transitions recipes are "handoff" types—the outgoing shot wraps up, the incoming shot enters, and the seam relies on a white flash, motion blur, or an opening window to disguise the cut. This card is a **"travel"** type—the incoming background pre-exists as a genuine physical element within the foreground frame (a hole in a letterform), and the camera dives through via a single continuous spatial trajectory. The viewer follows the same physical entity from start to finish, with no handoff beat. Selection criteria: if the incoming scene can "pre-exist" inside the foreground → travel; if the two scenes simply share sequential order without spatial nesting → handoff. The semantic concept of letterform travel is **"the title is the doorway"** (unifying the chapter title card and the transition into a single action).
 
-## 选型表
+## Variant Selection Table
+| Variant | Method | Applicable Seams |
+|---|---|---|
+| A Letterform Zoom | A giant title letterform (cut via SVG mask) reveals the incoming page; camera pushes exponentially through the aperture, taking over the frame the instant the opening fills the screen while residual letter strokes whip off-camera | Chapter title → body content; a high-energy alternative replacing the paper-title-card chapter title card |
 
-| 式 | 做法 | 适用接缝 |
-|----|------|----------|
-| A 字腔穿越 letterform-zoom | 巨型标题字形（SVG mask 挖洞）透出新页，指数推进穿洞，洞撑满瞬间接管、残余笔画甩出画外 | 章节标题→正文；替代 paper-title-card 章节字卡的高能量款 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Aperture push | Cover SVG mask (white base + black text weight 900) hollows out an aperture; transform-origin aligns with the geometric center of the letter stroke (hole)—anchoring inside the letter stroke ensures the hole expands to fill the screen rather than the cover (demo: center of the vertical stem of "I" in 560px "EDITS" at (973, 515); vertical stem 107px × 30 > screen width; pick words so the "I" stem lands near the screen centerline, ensuring the aperture blooms from center); scale = 30^u, with u driven across 52f via bezier(0.6, 0, 0.85, 0.5) (slow start, steep acceleration); 26–34f prior to push performs a 2% pull-back anticipation | ZOOM_MAX scales to ensure "the hole fully consumes the frame"; thinner strokes require larger multipliers; the slow-start phase grants viewers time to see that "something lives inside the hole" |
+| A Content visible in aperture | Dark cover, bright hole: warm-black cover vs. molten-gold gradient video-shotcraft launch page; cards visible through the hole also feature bright surfaces (milky white frosted glass); letter edges carry a blurred orange stroke drawn exclusively on the cover layer (simulating light leaking from the hole) + a 1.5px warm-white cut bevel | Dark patches inside the hole make letters read as solid characters, destroying the suspense of traveling through an aperture |
+| A Light without text inside hole | During the title-card hold phase, text and card layers of the incoming page are completely hidden; only warm gradients + soft luminous silhouettes shine through (a soft white glow at card position, a dark red smudge at title position); mid-push across 64–90f, content layers fade in and snap into focus from 18px blur (EASE.out), becoming razor-sharp at takeover | If full page headlines are legible inside the hole, the two typographic layers clash, reading as visual clutter rather than a pristine aperture |
+| A Departure & Streak blur | At scale ∈ [14, 26], cover opacity ramps 1 → 0; starting at u > 0.35, expected blur ramps 0 → 20px (divided by scale before applying to blur) + 4 layers of ghosted cover silhouettes from 0.8–3.2 frames earlier blend into a radial zoom motion trail; at the takeover instant, page brightness flashes +12% before settling | Failing to divide blur by scale results in an over-magnified blurry wall; using only two ghost layers reads as stepped translucent slabs—four layers create a continuous optical streak |
+| A Background parallax | Incoming page pushes only 1 → 1.08 (driven by 0.7·u during main push, completed with quint-out post-takeover, maintaining velocity continuity across the boundary) + drifts 28px left across 0–100f; post-takeover, shot counter on the render card ticks 0 → 12, duration bar fills with stagger, and DONE badge pops up | A completely stationary background looks like a dead flat image inside the hole; zooming the background too fast matches cover velocity, collapsing spatial depth |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 穿腔主推 | 盖板 SVG mask（白底+黑字 900 字重）挖洞，transform-origin 对准字形笔画（洞）中心——锚在字腔里推到底撑满的是盖板不是洞（demo：「EDITS」560px 的 I 竖笔中心 973,515，竖笔 107px×30 > 画宽；选词时让 I 竖笔落在画面中线附近，洞才从正中撑开）；scale=30^u，u 52f bezier(0.6,0,0.85,0.5) 慢起陡收，推前 26–34f 后吸 2% 预备 | ZOOM_MAX 按"洞撑满画面"配，笔画越细倍数越大；慢起段留给观众看清"洞里有东西" |
-| A 洞里有东西 | 盖板暗、洞里亮：暖黑盖板 vs 熔金渐变 video-shotcraft 发布页，洞里的卡片也做成亮面（奶白磨砂）；字缘一圈模糊橙色描边只画在盖板区域（光从洞里漏出来）+ 1.5px 暖白切口边 | 洞里有深色块时那几个字母读作"实心字"，穿洞的悬念就没了 |
-| A 洞里只给光不给字 | 字卡 hold 期页面的文字/卡片层完全隐去，洞里只透出暖色渐变 + 柔光形（卡片位一团奶白光、标题位一抹暗赤）；主推中段 64–90f 内容层由 18px 失焦淡入合焦（EASE.out），接管时已清晰 | 洞里能读到页面标题时，两层可读文字互相抢，标题字读作"杂乱"而不是一个干净的镂空 |
-| A 撤场与拖影 | scale∈[14,26] 盖板 opacity 1→0；u>0.35 起期望模糊 0→20px（除以 scale 写进 blur）+ 四层更早 0.8–3.2 帧的半透明盖板残影叠成径向变焦拖尾；接管瞬间页面 brightness +12% 一闪回落 | blur 不除 scale 会被放大成糊墙；只用两层残影会读成硬边半透明色块，四层才连成拖尾 |
-| A 后景视差 | 页面只推 1→1.08（主推期 0.7·u，接管后 quint-out 补完，交接处速度连续）+ 0–100f 向左漂 28px；接管后渲染卡上的镜头计数 0→12、时长条错峰填满、DONE 标签弹出 | 后景不动则洞里是张死图；后景推太多会和盖板同速，纵深消失 |
+## Known Pitfalls
+- The push anchor point must be calibrated on actual rendered frames (the vertical stem coordinates in the demo were measured from a static frame); changing fonts, words, or layout engines alters tracking and shifts the anchor—inspect test renders: if the aperture does not expand from center, nudge the origin rather than blindly trusting calculated em values; if the anchor stroke is too far from screen center (e.g., the "I" in "FILM" at x ≈ 726), the hole expands lopsidedly, leaving the opposing cover lingering on screen; choose words that place the vertical stem centrally.
+- When the incoming page pushes to 1.08, ~4% of its perimeter is cropped: calculate safe layout margins based on the post-push state (demo preserves margins: left/right 200/230px, top 122px).
+- Never stack letterform travel with the three handoff variants on the same seam—one technique per seam; travel transitions already carry high kinetic energy, wrapping them with additional white flashes or screen shakes reads as an amateur visual error (consistent with shot-transitions rules).
 
-## 已知坑
-- 推进锚点要按渲染帧实测（demo 的竖笔坐标是从静帧量出来的），换字体/换词/渲染器字距
-  不同都会漂——渲后看推进方向，洞不居中就微调 origin，别信字宽 em 值手推的数；
-  锚点笔画离画面中线太远（如「FILM」的 I 在 x≈726）时，洞偏在一侧撑开、另一侧盖板久久不退，换词让竖笔居中
-- 后景页面推到 1.08 时四周会被裁掉 4%：版面安全边距要按"推完后"留（demo 左右 200/230、顶 122）
-- 字腔穿越与交棒三式同一接缝不叠加，一缝一式；穿越式已自带高能量，
-  再包白闪/震屏读作穿帮（规矩同 shot-transitions）
-
-## 参考实现
+## Reference Implementation
 demos/transition/transition-travel/
-（LetterformZoom.tsx）
+(LetterformZoom.tsx)

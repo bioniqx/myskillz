@@ -1,66 +1,46 @@
 ---
 name: carousel-3d
-一句话: 8 张卡排成圆环整环自转一圈（匀速底 + 每 45° 一次停靠的分步），每卡只绕 Y 公转、自身 billboard 朝外，正反两层同向贴图配 backface-visibility:hidden 保证任何时刻都正立不倒置，正前方卡被点亮、环下字幕随之换字，相机全程钉在浅俯角
-适用: 作品集/模板库/集成清单的循环展示；需要无缝 loop 的背景拍或落地页 hero
-时长: 约 5.6s（168f@30fps）
-能量: 中（可无限循环的稳态运动，每 45° 一次停靠给出节拍）
+summary: Eight cards sit on a circular ring laid out with sin and cos, spinning through exactly one full revolution while each card billboards outward with matched front and back faces so it never reads as mirrored or upside down.
+use: Looping showcase for portfolios, template libraries, or integration directories; background plates or landing page heroes requiring seamless looping.
+duration: ~5.6s (168f @ 30fps)
+energy: Medium (Steady-state infinitely loopable motion, with stops every 45° establishing cadence)
 ---
 
-## 意图
-展示"一组东西"最省事的办法是排成一排横滑，但横滑有起点和终点。环形没有——它天然
-循环，观众看多久都不会觉得"放完了"。这张卡真正要解决的是环形 carousel 最容易翻车
-的点：卡片背面。方案是双面同向贴图，所以从环内看和从环外看是同一张正立的卡，环转一圈
-不会有任何一帧出现镜像或倒置。
+## Intention
+The simplest way to showcase "a set of items" is a horizontal slider, but sliders have a distinct beginning and end. A ring has neither—it loops naturally, so viewers never feel it has "finished playing" regardless of how long they watch. The core issue this card solves is the most common failure point of 3D carousels: the back faces of cards. The solution is dual-sided matched texturing, ensuring that looking from inside or outside the ring displays the exact same upright card—no frame ever displays mirrored or inverted content across a full revolution.
 
-## 动效核心
-（demo 版本：酸柠石墨暗场 video-shotcraft 镜头配方画廊，卡 340×460、半径 700px，1920×1080 原生坐标）
-- 环上定位公式只有一行：`transform: rotateY(i*360/N) translateZ(RADIUS)`——先转到自己
-  的方位角再沿新的 Z 轴推出半径。这一步同时完成了排布与 billboard：卡的法向天然朝外；
-  转到正前方的卡沿法向多推出 44px（只平移不旋转），停靠时读作"被选中"
-- 整环自转靠父层：`ring.transform = rotateY(-spin)`，卡自身的 transform 只有定位分量。
-  **卡永不绕 X 或 Z 转**，这是"永远正立"的根本保证
-- 转角不是死匀速：`turn = 0.5·f/168 + 0.5·stepPart(f)`，`stepPart` 每 21f 一步（8f 停靠 + 13f smooth 换位）。
-  匀速底让整环永远在走（loop 稳态），分步层每 45° 给一次"推一把—停靠"；8 步 × 21f = 168f 正好一圈，
-  f=168 时 turn=1，首尾帧逐像素可接
-- 双面同向贴图：front 与 back 用**同一份卡面**，back 额外加 `rotateY(180deg)`，
-  两层都设 `backface-visibility:hidden`。于是环外看到 front、环内看到 back，两者内容
-  朝向一致——如果只用一层，转到环背面时会看到镜像文字
-- 正前方点亮：`hl = smooth(1 - |方位角|/26°)`，驱动荧光描边、图形色（石墨灰 → 荧光黄绿插值）与外推量；
-  环下方字幕（mono 编号 + 72px 名称）在裁切窗里随分步层上滚换字，停靠时定格
-- 相机固定，一帧都不动：`perspective: 2200px`，环容器 `translateZ(-RADIUS) rotateX(-9deg)`——
-  正前方卡落在 z=0（按原生尺寸栅格化，文字不糊），所有运动都来自环的自转，这是"画廊"而不是"过山车"
-- 地面：2.7 倍半径的反光盘 + 96 格刻度环（随环同转）`rotateX(90deg)` 躺平在卡脚下；再叠一份以地面为镜面
-  `scaleY(-1)` 的倒影环（叶子层 8% 透明度 + 渐隐 mask，透明度不能挂在 preserve-3d 容器上，否则整环被拍平）
-- 空气透视：按卡的方位角 `(1-cos θ)/2` 给卡面叠一层底色（最后方 70%），环的前后关系一眼可读
+## Motion Core
+(Demo version: Acid-lime graphite dark-theme video-shotcraft shot recipe gallery, 340×460 cards, radius 700px, native 1920×1080 coordinates)
+- Ring positioning formula takes a single line: `transform: rotateY(i*360/N) translateZ(RADIUS)`—rotate to azimuth angle first, then push outward along the new Z axis by radius. This simultaneously handles layout and billboarding: card normals naturally face outward. The card directly facing forward pushes outward an extra 44px along its normal (pure translation without rotation), reading as "selected" during stops.
+- Entire ring rotates via parent container: `ring.transform = rotateY(-spin)`, while individual card transforms hold only positioning components. **Cards never rotate around X or Z**, which is the fundamental guarantee of staying upright at all times.
+- Rotation is not uniform velocity: `turn = 0.5·f/168 + 0.5·stepPart(f)`, where `stepPart` takes one step every 21f (8f stop + 13f smooth shift). The uniform base keeps the ring continuously moving (steady-state loop), while the stepped layer delivers a "push—rest" pulse every 45°. 8 steps × 21f = 168f completes exactly one revolution; at f=168 turn=1, enabling seamless pixel-perfect looping.
+- Dual-sided matched texturing: front and back share the **exact same card surface**, with back receiving an extra `rotateY(180deg)` and both layers set to `backface-visibility:hidden`. Outside the ring sees front, inside sees back, both displaying identical orientation—single-layer approaches show mirrored text when cards rotate behind the ring.
+- Forward card lighting: `hl = smooth(1 - |azimuth|/26°)`, driving fluorescent rim glow, graphical tint interpolation (graphite gray → fluorescent yellow-green), and outward extrusion; bottom captions (mono index + 72px title) scroll vertically in a clipping window in sync with stepped shifts, freezing during stops.
+- Fixed camera without motion across all frames: `perspective: 2200px`, ring container `translateZ(-RADIUS) rotateX(-9deg)`—front card lands at z=0 (rasterized at native size without font blurring); all motion stems from ring rotation, creating a "gallery" rather than a "roller coaster".
+- Ground plane: 2.7x radius reflective disk + 96-tick dial ring (rotating in sync) `rotateX(90deg)` flat beneath cards; plus a mirror reflection ring with ground plane `scaleY(-1)` (leaf layer 8% opacity + fade mask; opacity cannot be attached to preserve-3d container or it flattens the 3D context).
+- Aerial perspective: overlays background tint onto card faces based on azimuth `(1-cos θ)/2` (rearmost card reaches 70%), making foreground-background depth instantly readable.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 卡数 | N=8（方位角间隔 45°） | 8 张在 700px 半径上前后互不遮挡；>12 张卡会互相压边，需要同步加大 RADIUS |
-| 半径 | RADIUS=700px（卡 340×460） | 半径/卡宽 ≈2 是疏密甜点；<1.5 倍时环背面的卡从正面卡的缝里挤出来，画面变乱 |
-| 转速构成 | 50% 匀速 + 50% 分步（21f/步，停靠 8f） | 分步比例 >70% 停靠时整环几乎停住，loop 读出"卡顿"；<30% 停靠感消失，又回到平的匀速 |
-| 圈数 | 全片 1 圈（8 步） | 圈数与步数都必须是整数才能 loop；非整数则末帧跳变 |
-| 透视 | `perspective: 2200px` | 相对 700 半径是较平的透视；调到 1200 以下近处卡会夸张放大，读作鱼眼 |
-| 相机俯角 | `rotateX(-9deg)` | 只是"略微俯视"，刚好露出地面盘与刻度环；>-20° 环会压扁成椭圆 |
-| 点亮窗 | 方位角 ±26° | 窗太宽相邻两张同时半亮，主角不明确；太窄换位途中整环全灰 |
-| 倒影 | 8% 透明度，62% 起渐隐 | >15% 倒影里的文字可读，会和下方字幕打架 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Card count | N=8 (azimuth spacing 45°) | 8 cards at 700px radius avoid mutual occlusion; >12 cards overlap edges, requiring larger RADIUS |
+| Radius | RADIUS=700px (cards 340×460) | Radius / card width ≈2 is the density sweet spot; <1.5x back cards peek through front card gaps, cluttering frame |
+| Spin composition | 50% constant + 50% stepped (21f/step, 8f rest) | Stepped ratio >70% causes ring to nearly stall during stops, feeling like stutter; <30% loses stop cadence, reverting to flat rotation |
+| Revolutions | 1 full turn across sequence (8 steps) | Revolutions and steps must both be integers for clean looping; non-integers cause last-frame jumps |
+| Perspective | `perspective: 2200px` | Relatively flat perspective for 700px radius; values below 1200px exaggerate foreground cards into fisheye distortion |
+| Camera pitch | `rotateX(-9deg)` | Mild downward tilt just enough to reveal ground disk and tick dial; steeper than -20° squashes ring into flat ellipse |
+| Highlight window | Azimuth ±26° | Too wide highlights adjacent cards simultaneously, blurring hero focus; too narrow leaves entire ring dark mid-shift |
+| Reflection | 8% opacity, fading from 62% | >15% makes reflection text legible, competing with bottom captions |
 
-## 已知坑
-- 稳态循环是这张卡的特性也是限制：**它没有开头也没有结尾**。分步停靠给了节拍，但当主镜用
-  仍偏平，适合当背景层、loop 素材或与前景文字/相机运动叠加使用
-- 每帧都重设了 8 张卡的 transform（`rotateY(i*45) translateZ(RADIUS + 44·hl)`）——旋转分量恒定，
-  只有沿法向的外推随点亮变化。这让"卡自身不参与旋转"在代码里显式可见；不要把外推挂到旋转上
-- `backface-visibility:hidden` 在部分 WebKit 下需要 `-webkit-` 前缀（代码里已双写）。
-  漏掉前缀会看到两层 face 同时可见，卡片内容叠成一团
-- 卡面是手搓的镜头配方卡占位（mono 编号 + 生成式图形 + 大数字 + 名称），落地要换成真实截图，
-  **且 front/back 必须换成同一份内容**，否则双面同向的前提被破坏
-- 环转到背面时卡是"背对观众的正面"（看的是 back 层），所以内容始终可读——但也意味着
-  没有"翻面揭示"的余地。要做翻面必须放弃 backface-hidden 方案，另起一套
-- 深色柔光背景 + 石墨卡面 + 空气透视压暗是一套；换白底后压暗层与倒影都要重配
-  （压暗改成向背景色混合，倒影透明度降到 5% 左右）
-- 字幕的"当前卡"取自分步层的步号，不取自真实方位角：匀速底在停靠期间会让环多走约 8.6°，
-  正前方卡略偏左是正常的；若改分步比例，要确认停靠时点亮窗（±26°）仍罩得住这段漂移
+## Known Pitfalls
+- Steady-state looping is both this card's strength and limitation: **it has no start or end**. Stepped stops provide cadence, but as a primary hero shot it remains relatively calm—best suited for background plates, loop assets, or layered under foreground typography / camera motion.
+- Every frame recalculates transforms for 8 cards (`rotateY(i*45) translateZ(RADIUS + 44·hl)`)—rotation components remain constant while only normal-axis extrusion tracks highlight. This keeps "cards do not self-rotate" explicit in code; avoid attaching extrusion to rotation.
+- `backface-visibility:hidden` requires `-webkit-` prefix under certain WebKit environments (code includes both). Omitting prefix displays both faces simultaneously, turning card content into overlapping mess.
+- Card faces are mock recipe cards (mono index + generative graphic + large digit + title); production requires real screenshots, and **front/back must use identical content**, otherwise dual-sided orientation assumptions break.
+- When cards swing behind the ring, viewers see the back layer facing forward, keeping content legible—this also means there is no opportunity for a "flip-to-reveal" action. Flip reveals require discarding backface-hidden and implementing a different approach.
+- Dark ambient backdrop + graphite card surfaces + aerial perspective darkening operate as a unified system; porting to white backgrounds requires recalibrating darkening layers and reflections (darkening mixes toward background color, reflection opacity drops to ~5%).
+- Caption "active card" derives from stepped layer step index rather than raw azimuth: uniform base rotation advances the ring by ~8.6° during rest periods, so front card sitting slightly left of center is normal; when tweaking stepped ratio, ensure highlight window (±26°) still covers this drift.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/carousel-3d/
-（Carousel3D.tsx）
+(Carousel3D.tsx)

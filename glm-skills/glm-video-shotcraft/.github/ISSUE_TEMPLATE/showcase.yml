@@ -1,76 +1,74 @@
-# Showcase 投稿表单。字段的 label 是发布流水线的解析锚点
-# （.github/scripts/showcase-publish.py 按 "### <label>" 切段），
-# 改 label 必须同步改脚本里的 FIELD_* 常量。
-name: "🎬 Showcase 作品投稿 / Submit your video"
-description: 提交你用 video-shotcraft 做的成片，审核通过后自动发布到 Gallery 的 Showcase 页 / Submit a video made with video-shotcraft for the gallery Showcase page.
-title: "[Showcase] 你的作品名 / Your video title"
+# Showcase submission form. Field labels serve as anchors for the publishing pipeline
+# (.github/scripts/showcase-publish.py splits sections by "### <label>").
+name: "🎬 Submit your video / Showcase"
+description: Submit a video made with video-shotcraft for the gallery Showcase page.
+title: "[Showcase] Your video title"
 labels: ["showcase"]
 body:
   - type: markdown
     attributes:
       value: |
-        感谢投稿！维护者审核通过后，作品会自动发布到
-        [Showcase 页](https://vincentwei1021.github.io/video-shotcraft/showcase.html)，
-        并展示你留下的社交账号，方便观众找到你。
+        Thank you for submitting! Once approved by maintainers, your video will be automatically published to the
+        [Showcase page](https://vincentwei1021.github.io/video-shotcraft/showcase.html) along with your social handles.
 
-        **视频提供方式二选一**：≤10MB 的 mp4 直接拖进「视频文件」输入框；
-        更大的文件填「视频外部链接」（需要可直接下载的 URL）。
+        **Provide your video using one of two methods**: drag and drop MP4 files (≤10MB) directly into "Video file";
+        for larger files, enter an "External video URL" (direct download link).
   - type: input
-    id: video-title
+    id: title
     attributes:
-      label: 作品名
-      description: 显示在 Showcase 卡片上的标题
-      placeholder: 例：Acme Dashboard 产品宣传片
+      label: Video Title
+      description: Title displayed on the Showcase card
+      placeholder: "e.g. Acme Dashboard Product Promo"
     validations:
       required: true
   - type: textarea
-    id: video-description
+    id: description
     attributes:
-      label: 一句话介绍
-      description: 这支视频是给什么产品/项目做的，想突出什么
+      label: One-line Description
+      description: What product/project this video is made for and what it highlights
     validations:
       required: true
   - type: input
-    id: shot-cards
+    id: cards
     attributes:
-      label: 用到的镜头卡（可选）
-      placeholder: 例：spotlight-hero-card, deck-deal-flyin
+      label: Shot Cards Used (optional)
+      placeholder: "e.g. spotlight-hero-card, deck-deal-flyin"
   - type: textarea
-    id: video-file
+    id: video_file
     attributes:
-      label: 视频文件（≤10MB 直接拖拽上传）
-      description: 把 mp4 拖进这里，GitHub 会自动生成附件链接；超过 10MB 请改填下面的外部链接
+      label: Video File (≤10MB drag-and-drop upload)
+      description: Drag and drop MP4 here. GitHub will generate an attachment link; for files >10MB, use the external URL field below.
   - type: input
-    id: video-url
+    id: video_url
     attributes:
-      label: 视频外部链接（大文件用）
-      description: 可直接下载的视频 URL（对象存储/网盘直链等，打开即开始下载或直接是视频流）
+      label: External Video URL (for larger files)
+      description: Direct downloadable video URL (object storage, cloud drive direct link, etc.)
   - type: input
-    id: social-x
+    id: social_x
     attributes:
-      label: X 账号（可选）
-      description: "@handle 或主页链接，会显示在你的作品卡片上"
-      placeholder: "@yourhandle 或 https://x.com/yourhandle"
+      label: X Handle (optional)
+      description: "@handle or profile link, displayed on your showcase card"
+      placeholder: "@yourhandle or https://x.com/yourhandle"
   - type: input
-    id: social-youtube
+    id: social_youtube
     attributes:
-      label: YouTube（可选）
-      description: "@handle 或频道主页链接，会显示在你的作品卡片上"
-      placeholder: "@yourhandle 或 https://www.youtube.com/@yourhandle"
+      label: YouTube (optional)
+      description: "@handle or channel link, displayed on your showcase card"
+      placeholder: "@yourhandle or https://www.youtube.com/@yourhandle"
   - type: input
-    id: social-xiaohongshu
+    id: social_xhs
     attributes:
-      label: 小红书（可选）
-      description: 主页链接或小红书号
+      label: Xiaohongshu (optional)
+      description: Profile link or Xiaohongshu ID
   - type: input
-    id: social-douyin
+    id: social_dy
     attributes:
-      label: 抖音（可选）
-      description: 主页链接或抖音号
+      label: Douyin (optional)
+      description: Profile link or Douyin ID
   - type: checkboxes
-    id: consent
+    id: permission
     attributes:
-      label: 授权确认
+      label: Authorization Confirmation
       options:
-        - label: 我拥有该视频的版权/发布权，同意在 video-shotcraft Showcase 页公开展示（可随时开 issue 要求下架）
+        - label: I own the copyright / publishing rights to this video and agree to showcase it publicly on video-shotcraft (delisting requests can be made anytime via issue)
           required: true

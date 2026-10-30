@@ -1,44 +1,38 @@
 ---
 name: timeline-travel
-一句话: 时间轴横移——镜头沿水平刻度轴加速掠过版本刻度，每过一格卡片弹立短停，末刻度急停推近
-适用: changelog/里程碑/发展史段落（"我们一直在发货"的另一种拍法）；与 scroll-brake-moves 分工：那卡是纵向列表急刹，本卡是横向时间旅行
-时长: 4–5s
-能量: 中高（加速→急刹的节奏型镜头）
-标签: camera
+summary: The camera accelerates along a horizontal version timeline, raises cards at each stop, then brakes sharply on the final milestone.
+use: Changelog, milestone, or product evolution sections (another way to shoot "we ship continuously"); complements scroll-brake-moves: that card is a vertical list brake, this card is a horizontal time journey
+duration: 4–5s
+energy: Medium-high (acceleration to sudden brake rhythm profile)
+tags: camera
 ---
 
-## 意图
-把产品的版本史拍成一次沿时间轴的旅行（《反恐王国》片头判例）：
-镜头缓起→冲刺→急刹三段变速横移，v1.0/v2.0/v3.0 刻度依次掠过，
-每过一格对应卡片从刻度线上 spring 弹立——历史在窗外闪过，
-急停在"今天"并推近。速度本身讲"发展快"，急停讲"现在最重要"。
+## Intention
+Shooting a product's release history as an expedition along a chronological axis (reference: The Kingdom opening title sequence): the camera executes a three-stage variable speed pan (gentle launch -> sprint -> abrupt brake) as v1.0 / v2.0 / v3.0 markers flash by, each raising a card via spring pop off the baseline—history rushes past outside the window, braking sharply on "today" with a punch-in. Speed itself communicates rapid development; the abrupt halt signals "now is what matters most."
 
-## 动作阶段
-| 阶段 | 帧段参考 | 内容 |
-|------|------|------|
-| 1 静置 | f0–12 | 空轴 + 首刻度定住 |
-| 2 加速掠过 | ~f12–100 | 世界层 translateX 分段缓动：缓起→冲刺→末 12% 急刹 |
-| 3 弹卡 | 掠过中 | 相机扫过刻度前 6f 卡片起弹（spring damping ~11 明显过冲），底边为轴 scaleY 立起 |
-| 4 急停推近 | 急停帧起 10f | scale 1→1.28 推近末刻度（out cubic），接静止 ≥30f |
+## Motion Stages
+| Stage | Frame Reference | Content |
+|---|---|---|
+| 1 Rest | f0–12 | Empty axis + first tick stationary |
+| 2 Accelerated transit | ~f12–100 | World layer translateX piecewise easing: gentle launch -> sprint -> final 12% abrupt deceleration |
+| 3 Card pop-up | Mid-transit | Cards begin popping 6f before camera reaches tick (spring damping ~11 with distinct overshoot), pivoting up via scaleY around bottom edge |
+| 4 Brake and punch-in | 10f from brake frame | scale 1 -> 1.28 pushes in on final milestone (out cubic), leading into >=30f static hold |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 变速曲线 | 输入断点 [0,0.15,0.88,1]→输出 [0,0.055,0.9,1] | 中段不够快就没有"旅行感"；全程匀速即廉价 PPT |
-| 弹立时机 | 相机到达刻度前 6f 起弹，由 camXAt 反查 | 到了才弹观众已经错过；早太多读作预告 |
-| 刻度密度 | 主刻度 3–5 个 + 次刻度小点若干 | 次刻度点是速度感的参照物，删掉就感觉不到快 |
-| 急停推近 | 1→1.28 / 10f | 不推近急停就只是"停了"，推近才是"到了" |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Speed ramp curve | Input breakpoints [0, 0.15, 0.88, 1] -> output [0, 0.055, 0.9, 1] | Middle segment must be fast enough to create travel sensation; uniform speed looks like a cheap slideshow |
+| Pop-up timing | Pops 6f before camera arrives at tick, reverse-queried via camXAt | Popping upon arrival means the audience has already missed it; popping too early feels like a teaser |
+| Tick density | 3–5 primary milestones + intermediate secondary tick dots | Secondary dots act as reference objects for speed; deleting them destroys the sensation of velocity |
+| Brake punch-in | 1 -> 1.28 / 10f | Braking without a push-in just feels like "stopping"; pushing in conveys "we have arrived" |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 中段冲刺快到卡片糊时可叠 CameraMotionBlur（只包快速段，轮 #8 判例）
-- 急停后静止预算前置：demo 首版静止只有 25f 不达标，急停帧前移才够
-  ——排时间线时先给末段留 ≥30f 再倒推行程
-- 每张弹立卡片是信息位：实战放真实版本亮点截图/一句话，
-  掠过速度要保证至少末两张能读（Q6 同源）
-- 声音：每次弹立一声轻打点，急停一声 impact（S2 同源）
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- If mid-stage sprint is fast enough to blur cards, layer CameraMotionBlur (covering only the high-speed segment, Round #8 precedent).
+- Front-load the post-brake static hold budget: the demo's initial 25f hold failed standards; shifting the brake frame earlier solved it—reserve >=30f for the tail segment before back-calculating travel timing.
+- Each popping card is an information container: in production, display authentic version highlight screenshots or concise copy; travel velocity must ensure at least the final two cards remain legible (Q6 kindred rule).
+- Audio: light rhythmic tick on each card pop, heavy impact on abrupt stop (S2 kindred rule).
 
-## 参考实现
+## Reference Implementation
 demos/data/timeline-travel/
-（TimelineTravel.tsx）
+(TimelineTravel.tsx)

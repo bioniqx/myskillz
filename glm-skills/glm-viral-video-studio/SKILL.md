@@ -1,5 +1,5 @@
 ---
-name: viral-video-studio
+name: glm-viral-video-studio
 description: Make viral TikTok, YouTube Shorts or long-form YouTube videos at the lowest cost. Use when the user wants competitor channel analysis, video topic ideas, a video script, a finished video, thumbnail or caption, or types $viral-video-studio. Covers competitor outlier analysis, topic scoring, scripts with hooks, production in 3 modes (Gemini Pro + Canva prompts; agent renders motion-graphics video locally for free; third-party APIs such as FPT.AI, ElevenLabs, Pexels, Gemini, fal.ai), thumbnails, captions and post-publish optimization.
 ---
 

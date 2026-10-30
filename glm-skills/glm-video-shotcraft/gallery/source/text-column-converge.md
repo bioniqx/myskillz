@@ -1,61 +1,42 @@
 ---
 name: text-column-converge
-一句话: 双词对峙合拢——左"NEW"右特性词钉死在等屏边距两侧硬切轮换、全程零收缩，换到最后一词才唯一一次 ease-in-out 滑到居中咬合成短语，下方小字近乎硬切浮现；收尾揭晓型文字卡
-适用: 特性清单收束到产品名/口号的段落（"NEW × 一串特性 → NEW <产品名>"式）；发布会式 recap、版本号揭晓
-时长: 轮换 7–16f/词 × 8–9 词 + 合拢 ~36f + 小字后静置；全段约 5–6s
-能量: 中低（机器节奏、小字规格清单气质，不是砸字）
-标签: outro
+summary: Two words pinned at opposite screen edges hard-swap through options, then slide together exactly once to lock into the final phrase.
+use: Sections where feature lists converge into product name / slogan ("NEW × sequence of features → NEW <product name>"); keynote-style recaps, version number reveals
+duration: Cycling 7–16f/word × 8–9 words + convergence ~36f + static hold after subtitle; full sequence ~5–6s
+energy: Medium-low (machine rhythm, small-type specification list aesthetic, not aggressive slamming type)
+tags: outro
 ---
 
-## 意图
-两词分踞左右像目录页对峙，观众以为只是轮换字幕；直到最后一词
-停稳才发现左右其实是同一句话的两半——唯一一次连续合拢把整段
-轮换追认为"悬念铺垫"。命门是**钉死**：轮换期两词位置一像素不动、
-左右屏边距完全相等（原片实测 412 vs 413@1280），任何渐进收缩都会
-提前剧透合拢、把揭晓稀释成进度条。合拢只许发生一次，且必须在
-最后一词之后——这是收尾揭晓，不是持续动效。
+## Intention
+Two words pinned at opposite screen edges confront each other like directory index headers, leading viewers to assume they are just cycling subtitles; only when the final word settles do they realize the left and right halves belong to the same sentence — a single continuous convergence reveals the entire cycle in retrospect as dramatic suspense. The critical requirement is to **pin positions dead**: during the cycling phase, word coordinates do not budge by a single pixel, and left/right screen margins are strictly identical (reference measured at 412 vs 413 @1280); any progressive contraction prematurely spoils the convergence, diluting a reveal into a progress bar. Convergence is permitted to happen exactly once, and must occur strictly after the final word settles — this is a concluding reveal, not continuous animation.
 
-## 动效核心
-- 左词左缘、右词右缘各自钉死在等屏边距处（原片实测 412/413px
-  @1280，×1.5 → 618/1302@1920）；右词换长换短一律右缘定位
-- 词轮换纯硬切，停留帧数不均（16/12/9/8/7/8/10/12f，机器节奏
-  带人味）；轮换全程间距零收缩（判例：渐进收缩版被用户驳回重做）
-- **唯一一次合拢**：末词停稳 ~10f 后，~1.2s（36f）ease-in-out
-  （cubic）连续滑动，两词滑到以屏幕中线居中定格
-- 合拢终点按等宽字体实际步进算（0.6em+letterSpacing × 字符数），
-  两词恰好一空格咬合，无重叠无缝隙；无 stamp 缩放、无二次补偿移动
-  （demo：video-shotcraft 八个特性词轮换，末词为全小写字标 video-shotcraft，终点按 `NEW ` + 字标字符数算；
-  小字为品牌短句后半 "CRAFT THE SHOT."）
-- 定格 ~18f 后斜体小字近乎硬切浮现（4f 快淡、零位移），与整行
-  同左缘、字号同正文
-- 质感：冷色深底 + 极淡顶光 + 暗角/颗粒；词换瞬间 1 帧提亮；NEW 轮换期为次级灰、
-  合拢中随进度提亮到主色；合拢滑动按速度加水平运动模糊（≤4px，静止为 0）；
-  demo 全长 180f（导出 `TEXT_COLUMN_CONVERGE_DURATION`）
+## Motion Core
+- Left edge of left word and right edge of right word are pinned dead at equal screen margins (reference measured at 412/413px @1280, scaled ×1.5 → 618/1302 @1920); the right word always anchors to its right edge regardless of text length changes.
+- Word swaps are pure hard cuts with irregular dwell durations (16/12/9/8/7/8/10/12f, humanizing machine rhythm); zero contraction of spacing occurs during cycling (precedent: progressive contraction version was rejected by users and reworked).
+- **The singular convergence**: ~10f after the final word settles, a ~1.2s (36f) ease-in-out (cubic) continuous slide carries both words inward to lock centered on the screen midline.
+- Final convergence point is calculated from monospace character advance (0.6em + letterSpacing × character count), interlocking the two words with exactly one space between them, with zero overlap, zero gap, zero stamp scaling, and zero secondary correction movements (demo: video-shotcraft cycles through 8 feature words, ending with lowercase wordmark video-shotcraft, target computed as `NEW ` + wordmark character count; small subtitle reads the second half of brand tagline: "CRAFT THE SHOT.").
+- ~18f after locking, an italic subtitle appears almost as a hard cut (4f fast fade, zero displacement), sharing the left margin and font size of the main line.
+- Texture: cool-toned dark field + ultra-faint top light + vignetting / grain; 1-frame brightness flash on each word swap; NEW remains secondary grey during cycling, brightening to primary color alongside convergence progress; horizontal motion blur added proportional to convergence slide velocity (≤4px, 0 at rest); demo duration 180f (exports `TEXT_COLUMN_CONVERGE_DURATION`).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 屏边距 | 618px@1920（**原片实测** 412/413@1280 ×1.5） | 左右差 >2px 读作没对齐；边距是本卡身份，别改成黄金分割 |
-| 词停留 | 7–16f 不均 | 均匀停留读作节拍器；<7f 读不完词 |
-| 合拢触发 | 末词停稳 +10f（原片 32.4→32.7s 实测） | 停稳期太短，观众没意识到"这词不换了"就开始滑 |
-| 合拢时长 | 36f ease-in-out cubic（**原片实测** ~1.2s 连续滑动） | <24f 读作弹跳归位；>50f 读作拖 |
-| 咬合步进 | 0.6em+letterSpacing/字符，等宽字体 | 非等宽字体步进不可预测，会重叠或漏缝 |
-| 字号 | 42@1080p（**原片实测**字高 ~20/720） | 这段是小字规格清单气质，放大到 60+ 就成了砸字（单词重锤去用 outline-word-fill） |
-| 小字浮现 | 定格 +18f，4f 快淡零位移（原片 34.4→34.6s 间直接出现） | 加滑入/长淡入就抢了合拢的戏 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Screen margin | 618px @1920 (**measured from reference**: 412/413 @1280 ×1.5) | Margin delta >2px reads as unaligned; equal screen margins form this card's identity — do not alter to golden ratio |
+| Word dwell | Irregular 7–16f | Uniform dwell reads like a rigid metronome; <7f is too fast to read words |
+| Convergence trigger | Final word settled +10f (measured from reference: 32.4→32.7s) | If settled pause is too short, convergence begins before viewers realize "this word is no longer changing" |
+| Convergence duration | 36f ease-in-out cubic (**measured from reference**: ~1.2s continuous slide) | <24f feels like an abrupt snap; >50f drags out |
+| Interlock advance | 0.6em + letterSpacing / character, monospace font | Proportional fonts make advances unpredictable, causing overlapping text or unwanted gaps |
+| Font size | 42 @1080p (**measured from reference**: cap height ~20/720) | This section conveys the precision of a spec sheet; enlarging past 60+ turns into heavy display type (use outline-word-fill for heavy type punches) |
+| Subtitle appearance | Locked +18f, 4f fast fade, zero displacement (appears directly in reference between 34.4→34.6s) | Adding slides or slow fades steals focus from the convergence |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 type-rhythm-sync（字属性节拍）/beat-cut-moves（硬切节拍）撞
-  领域：那两张是"轮换本身即内容"；本卡命门是**位置钉死 + 末次合拢**
-  的收尾揭晓，轮换只是铺垫。若段落没有"合拢揭晓"就别用本卡
-- 合拢只许一次——每切一词收一档的渐进收缩版已被原片对照证伪并
-  删除，别复活
-- 必须等宽字体（demo 用 SF Mono）；比例字体下咬合终点算不准
-- 原片词换瞬间带 1 帧亮度闪烁（打字机换行感），demo 已加回 1f 提亮；
-  闪烁 >1f 会读作故障
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- Overlaps in domain with type-rhythm-sync (typographic attribute cadence) / beat-cut-moves (hard-cut rhythm): those cards treat "cycling itself as the core content"; this card relies strictly on **pinned coordinates + final singular convergence** as a concluding reveal, where cycling serves merely as preparation. If a scene lacks an interlocking reveal, do not use this card.
+- Convergence is allowed only once — versions with progressive step-by-step contraction per word were disproven against the original reference and deleted; do not revive them.
+- Monospace font is mandatory (demo uses SF Mono); proportional fonts prevent accurate interlock calculation.
+- The reference video features a 1-frame brightness flash during word swaps (typewriter carriage-return sensation); the demo preserves this 1f brightening; flashing >1f reads as a glitch.
 
-## 参考实现
+## Reference Implementation
 demos/typography/text-column-converge/
-（TextColumnConverge.tsx）
-原片出处：raycast-teams.mp4 28–36s
+(TextColumnConverge.tsx)
+Original source: raycast-teams.mp4 28–36s

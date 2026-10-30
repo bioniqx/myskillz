@@ -1,52 +1,39 @@
 ---
 name: steep-tilt-glide
-一句话: 固定镜头下直立页面以 60° 强透视侧立（右近左远），页面自身沿其 3D 横面方向滑移掠过镜头（物动镜不动），滑移带速度重影、文字组件悬空贴落、由暗揭亮
-适用: 长页面/多区块 UI 的炫技巡览（内容依次滑过固定机位）；暗场霓虹调性；与贴面运镜卡互补的"侧掠"机位
-时长: 4s（120f）单镜；页面越宽越可拉长
-能量: 中高（透视炫技+持续运动，但节奏是匀的）
-标签: ui-entrance
+summary: A page stands at a steep 60-degree perspective and glides across a fixed camera with speed ghosting while text settles onto the surface mid-flight.
+use: Showpiece tour for long pages or multi-section UIs (content gliding across a locked camera position); dark stage neon aesthetic; complementary "lateral glancing" setup to graze-face-tour
+duration: 4s (120f) single shot; can extend for wider pages
+energy: Medium-high (steep perspective showcase + continuous motion, but steady pacing)
+tags: ui-entrance
 ---
 
-## 意图
-把页面立成一堵斜墙：镜头钉死不动，60° 强透视让右缘贴脸、左缘
-消失在灭点，页面自己沿自身平面横向滑移——内容像列车车厢一样
-依次掠过。命门是**物动镜不动**：perspective/origin/rotY 全程常数，
-唯一动的量是页面局部 translateX——镜头一动语义就变成运镜炫技，
-这里的戏是"页面在自我展示"。角度经三轮收敛为精确 60°
-（-45°"不对"→-53°"再大一点"→-60°选中）。
+## Intention
+Standing the page upright like an angled wall: the camera remains completely stationary, locked in a steep 60-degree perspective that puts the right edge right in the viewer's face while the left edge recedes into the vanishing point, while the page itself glides sideways across its own plane—content streaming past like subway cars. The core principle is **moving object, locked camera**: perspective, origin, and rotY remain constant throughout; the only variable in motion is the page's local translateX. If the camera moves, it turns into camera acrobatics; here, the focus is "the page presenting itself." The angle converged over three rounds to an exact 60 degrees (-45 deg "wrong" -> -53 deg "steeper" -> -60 deg selected).
 
-## 动效核心
-- 镜头常数：perspective 1100、origin 30% 58%、rotateY(-60°)+
-  rotateZ(-2°)，transformOrigin left top，全程一个数不变
-- 页面：超宽面板（6200×2400@内容坐标），沿局部 X 轴 +60→-4100
-  滑移，bezier(0.3,0.12,0.72,0.9)——起步柔和后近匀速，尾段斜率
-  不归零（不安定停死）
-- 速度重影：拖尾层=过去时刻（f-1.6/-3.2/-4.8 三层，权重递减）的局部位置重投影，
-  透明度 ∝ 滑移速度（快时重影浓）
-- 悬空贴落：页面元素 FloatWrap 悬浮 230–280px 带同形软影，随
-  滑移进程错峰贴落（巡礼语法）
-- 揭亮：起始面板压暗 0.7，~1.4s 揭到全亮；左缘额外渐变阴影同退
+## Motion Core
+- Camera constants: perspective 1100, origin 30% 58%, rotateY(-60 deg) + rotateZ(-2 deg), transformOrigin left top, constant values throughout the entire duration.
+- Page: ultra-wide panel (6200x2400 @ content coordinates) gliding along local X axis from +60 to -4100 using bezier(0.3, 0.12, 0.72, 0.9)—soft start leading into near-constant speed, with a non-zero tail slope (avoiding an abrupt dead freeze).
+- Speed ghosting: trailing streak layers reprojection from prior time offsets (f-1.6 / -3.2 / -4.8, 3 layers with descending weights); opacity proportional to gliding speed (denser ghosting during fast transit).
+- Floating element settle: page elements wrapped in FloatWrap hover 230–280px aloft with matching soft shadows, settling down in staggered sequence as the glide advances (tour syntax).
+- Brightness reveal: panel begins dimmed to 0.7 brightness, revealing to full brightness over ~1.4s; an extra gradient shadow on the left edge recedes in tandem.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 倾斜角 | rotateY **-60°**（用户精确定值） | -45° 被裁"角度不对"、-53°"再大一点"；>-70° 内容读不清 |
-| 运动模型 | 镜头全常数、页面自移 | **命门**——镜头横移版被裁"镜头是固定的，页面本身往其3d空间的横面方向移动" |
-| 滑移曲线 | 尾段斜率不归零的 bezier | 中途停死被抓（v4 返工）；全 linear 少了起步呼吸 |
-| 重影 | 透明度∝速度，三层 f-1.6/-3.2/-4.8 | 恒定重影读作重像故障 |
-| 页面宽度 | ≥3 屏内容 | 太窄滑两秒就完，撑不起一镜 |
-| 悬空贴落 | 错峰（巡礼语法）+ 影随高度 | 语义判例见 graze-face-tour/orbit-drop 三卡族 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Tilt angle | rotateY **-60 deg** (exact calibrated value) | -45 deg rejected as "wrong angle", -53 deg "make it steeper"; >-70 deg makes content unreadable |
+| Motion model | Locked camera, self-moving page | **Critical rule**—camera-panning version was rejected: "camera is locked; the page itself moves sideways along its own 3D plane" |
+| Glide curve | Bezier with non-zero tail slope | Mid-flight freeze caught in review (v4 rework); pure linear lacks breathing room at takeoff |
+| Ghosting | Opacity proportional to speed, 3 layers at f-1.6 / -3.2 / -4.8 | Constant ghosting reads like a double-exposure glitch |
+| Page width | >=3 screens of content | Too narrow finishes gliding in 2s and cannot carry a full shot |
+| Element landing | Staggered (tour syntax) + shadow scaling with height | Semantic precedent documented across graze-face-tour and orbit-drop card family |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 角度判例：透视角是本卡身份，实战微调范围建议 55–65°，出这个
-  区间等于换手法
-- 与 graze-face-tour 分工：那张镜头动（贴面游走）、页面静；本卡
-  镜头静、页面动。同段落二选一
-- 超宽页面手绘成本高；实战可用真实长截图代替（滑移逻辑不变）
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Perspective angle precedent: the steep angle is this shot's identity; production adjustments should stay within 55–65 deg, outside of which it becomes a different technique entirely.
+- Division of labor with graze-face-tour: that card moves the camera (skimming across) while the page is static; this card locks the camera while the page moves. Choose one per sequence.
+- Hand-drawing ultra-wide pages is labor-intensive; real long screenshots can be substituted in production (glide logic remains identical).
 
-## 参考实现
+## Reference Implementation
 demos/camera/steep-tilt-glide/
-（SteepTiltGlide.tsx）
-原片出处：clickup-30.mp4
+(SteepTiltGlide.tsx)
+Original source: clickup-30.mp4

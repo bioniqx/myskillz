@@ -1,4 +1,4 @@
-// origin: template/src/aifl/live/PageCam.tsx（模板片同源组件）
+// origin: template/src/aifl/live/PageCam.tsx (shared template component)
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 
 export type CamKey = {

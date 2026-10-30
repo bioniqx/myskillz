@@ -1,43 +1,36 @@
 ---
 name: tension-camera-moves
-一句话: 情绪运镜两式——bullet-time 冻结环绕、pull-back 拉远孤立，相机替观众"感受"而非"看"
-适用: 情绪节点（震撼/收束）的运镜语言；与 space-camera-moves 的"炫技大动作"互补——这两式动作小、情绪重
-时长: 单式 5–6s（150–170f）；全片合计 ≤2 式（各 ≤1 次）
-能量: A 高 / B 低收
+summary: Two emotional camera tools: a frozen orbit and an isolating pull-back.
+use: Camera language for emotional beats (awe / consolidation); complements the showy acrobatics of space-camera-moves—these two moves are minimal in physical displacement but heavy in emotional gravity
+duration: 5–6s per variant (150–170f); <=2 variants total per video (<=1 time each)
+energy: A High / B Low resolution
 ---
 
-## 意图
-space-camera-moves 三式是"把页面当 3D 实体拍"的高光炫技；这两式相反——
-动作本身克制，全部劲道在情绪语义上：A 说"这一刻值得停下时间看"
-（运动中的元素被冻住、相机绕行审视）；B 说"最后只剩这一件事"
-（后拉中周围逐层熄灭，孤悬一点收束全片）。两式各占一个情绪格，
-是分镜阶段"这一段观众该感到什么"的直接词汇。
+## Intention
+The space-camera-moves recipes are high-energy showcases that treat a page as a 3D physical object; these two variants take the opposite approach—physically restrained motion where all dynamic force is invested in emotional semantics: Variant A says "this moment is worth stopping time to inspect" (elements frozen in mid-motion while the camera orbits to observe); Variant B says "in the end, only this one thing remains" (surroundings extinguish layer by layer as the camera pulls back, isolating a solitary element to resolve the entire piece). Each variant occupies a distinct emotional niche, serving as direct vocabulary for the question: "what should the audience feel in this beat?"
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A bullet-time-freeze-orbit 冻结环绕 | 图表生长到一半连同柱顶喷出的火花一起冻住（火花悬在半空、拖尾保留），相机在真 3D 场景里绕面板 rotateY 扫 52° 再回，时间恢复接着长完 | 核心数据/图表的加冕时刻；"值得停表看"的一格 |
-| B pull-back-isolation 拉远孤立 | 从发光主卡特写后拉，8 张兄弟卡按距离错峰熄灭、背景沉黑，孤卡悬在暗场中央 | 结尾收束；"全片只为这一个数字"的谢幕 |
+## Variant Selection
+| Variant | Approach | Use Case |
+|---|---|---|
+| A bullet-time-freeze-orbit | Chart growth freezes mid-animation along with sparks erupting from bar tops (sparks suspended mid-air with trailing tails intact); camera orbits around the panel with rotateY sweeping 52 deg and returning in a true 3D scene, then time resumes to complete growth | Crowning moment for core metrics/charts; the "worth stopping the clock to behold" beat |
+| B pull-back-isolation | Camera pulls back from a hero card close-up as 8 sibling cards extinguish in distance-staggered order and background sinks to black, leaving the solitary card suspended in the center of darkness | Ending resolution; the curtain-call beat saying "the entire video exists for this single number" |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 双时钟 | 内容动画吃 `eff`（速度坡道积分：8f smooth 刹停 → 冻结 52f → 8f 恢复），相机吃真实 f | 命门：冻结期内容必须肉眼可见地完全静止，相机却在动——两个时钟各管各的；硬停硬起没有子弹时间的变速感 |
-| A 环绕 | perspective 1800 的 preserve-3d 场景（面板 / 带 z 深度的火花 / 网格地面 / 远处点阵墙）：rotateY 0→-52°（26f smooth）→ 顶点慢漂 12f → 回 0（22f swift），同步 rotateX 抬 6°、推近 160px | 50–55° 是"绕到侧面看"的下限；>70° 面板变纸片穿帮；没有深度参照物（单面板 + 纯色底）读不出是相机在绕 |
-| A 冻住的运动 | 火花拖尾长度、计数器滚动模糊都按内容时钟的速度算 | 冻结时它们保持"运动中"的形态——冻住的是瞬间，不是静物 |
-| B 后拉 | scale 2.2→0.62 / 110f Easing.out(cubic)，origin 锁主卡中心，按 2.2× CSS zoom 布局再缩小 | 前 20f 主卡仍占满画面，开场即特写不需要另加 hold；transform 放大的特写字会糊（Q2） |
-| B 熄灭 | 兄弟卡按 hypot 距离排序，帧 30 起每 8f 一张，16f 内 opacity→0（EASE.out）+ brightness→0.3 + 失焦 5px + 下沉 0.97；背景 60–110f 从亮柔光底交叉沉入带色相深场 | 由近到远熄灭 = "世界向外塌暗"；乱序熄灭读作故障 |
-| B 光晕 | 主卡两层冷白 box-shadow 60–100f 淡入，受光上沿同步浮现 | 光晕是"只剩它"的视觉证词，与沉黑同步才成立 |
-| 收尾 | 两式动作完毕 hold ≥30f（A 只留光的极缓呼吸；B 110–150f 真静止） | R1；B 式是全片句号，静止给足 40f+，可在屏幕空间加一句结语 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Dual clocks | Content animation consumes `eff` (speed ramp integral: 8f smooth braking -> freeze 52f -> 8f recovery); camera consumes true frame f | Critical requirement: content must be visibly completely motionless during freeze while camera continues moving—two independent clocks; abrupt hard stops lack the speed-ramp elasticity of bullet time |
+| A Orbit | preserve-3d scene with perspective 1800 (panel / sparks with z-depth / grid floor / distant dot-matrix wall): rotateY 0 -> -52 deg (26f smooth) -> slow drift at apex 12f -> return to 0 (22f swift), paired with rotateX lift 6 deg and 160px push-in | 50–55 deg is the lower threshold for "orbiting to side view"; >70 deg flattens the panel into paper, breaking realism; without depth references (single panel + solid color background), camera orbiting cannot be registered |
+| A Frozen motion | Spark streak length and counter roll blur are calculated from content clock speed | In freeze state they maintain an "in-motion" posture—what is frozen is an instant, not a still life |
+| B Pull-back | scale 2.2 -> 0.62 / 110f Easing.out(cubic), origin locked to hero card center, laid out at 2.2x CSS zoom before scaling down | Hero card fills frame for the first 20f, opening in close-up without needing an extra hold; scaling up via transform blurs close-up text (Q2) |
+| B Extinguish | Sibling cards sorted by hypot distance, one every 8f starting at frame 30, taking 16f to reach opacity -> 0 (EASE.out) + brightness -> 0.3 + defocus blur 5px + sink 0.97; background crossfades from bright soft-lit ground to hue-tinted dark ground across 60–110f | Extinguishing near-to-far = "world collapsing into darkness outward"; randomized extinguishing reads as a glitch |
+| B Glow | Two layers of cool white box-shadow fade in on hero card over 60–100f, illuminated top edge emerging synchronously | Glow is the visual testament of "only this remains," effective only when synchronized with background darkening |
+| Resolution | Hold >=30f after motion finishes for both variants (Variant A keeps subtle breathing light; Variant B stays purely motionless 110–150f) | R1; Variant B is the film's final period, give a generous 40f+ motionless hold; can add a concluding sign-off in screen space |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- A 式与 speed-ramp-freeze/impact-feedback 同为时间操纵，同一镜头别叠用
-  （帧 remap 互相打架）；A 的冻结是"停给你看"+相机动，speed-ramp-freeze 的
-  定格是"停下来标注"——选语义不选形似
-- B 式放结尾时后接 outro-group-photo-launch 会打架（一收一放），二选一
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- Variant A shares time-manipulation semantics with speed-ramp-freeze and impact-feedback; do not stack them in the same shot (frame remaps fight each other). Variant A freeze is "stop to show you" + camera moves; speed-ramp-freeze is "freeze to annotate"—choose by semantics, not visual resemblance.
+- In endings, Variant B followed immediately by outro-group-photo-launch will clash (contraction vs. expansion); choose one.
 
-## 参考实现
+## Reference Implementation
 demos/camera/tension-camera-moves/
-（BulletTimeFreezeOrbit.tsx / PullBackIsolation.tsx）
+(BulletTimeFreezeOrbit.tsx / PullBackIsolation.tsx)

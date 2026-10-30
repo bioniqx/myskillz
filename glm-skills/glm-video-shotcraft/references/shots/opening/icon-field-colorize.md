@@ -1,60 +1,43 @@
 ---
 name: icon-field-colorize
-一句话: 灰阶小图标点阵错峰浮现铺满全屏，停一拍后多道品牌色横带波纹极快向下扫翻全场——"功能全景先摆满，品牌一瞬间点亮"的开场/收束卡
-适用: 开场铺陈产品能力面（图标=功能宇宙）再一举打上品牌色；功能集合页、生态/集成规模展示、片头 logo 前垫场
-时长: 浮现 ~45f 错峰 + 静置 ~10f + 翻色 12–45f + 终态静置；全段 3–6s（demo 170f：翻色走 30f 档 + 标题落版 + 终态 hold 1s）
-能量: 中（浮现是铺垫，翻色瞬间是唯一爆点）
-标签: ui-entrance、outro
+summary: A grid of grayscale icons staggers in to fill the screen, holds a beat, then brand-color bands ripple down and light the whole field at once.
+use: Opening sequence laying out product capabilities (icons = functional universe) before flooding with brand color; feature showcase pages, ecosystem/integration scale overviews, lead-in before opening logo
+duration: Entrance ~45f stagger + hold ~10f + color flip 12–45f + terminal hold; total segment 3–6s (demo 170f: color flip 30f tier + title lockup + terminal hold 1s)
+energy: Medium (entrance is build-up; color flip instant is the sole burst)
+tags: ui-entrance, outro
 ---
 
-## 意图
-先用灰阶把"多"摆足——上百个小图标错峰浮进来铺满画面，灰阶保证
-读作背景纹理不抢戏；停一拍让观众意识到"摆满了"，然后品牌色以
-横带波纹形式极快扫过全场，灰世界一瞬间被点亮。命门在**翻色不是
-同帧硬翻**：原片实测是 ~0.5s 内多道色波依次向下快扫（蓝先覆盖全场，
-橙/绿/红依次覆盖更低行带），终态呈四色横带分层——波纹感让"点亮"
-有方向和速度，硬翻只读作换了张图。
+## Intention
+Establishing sheer abundance with grayscale first—hundreds of small icons stagger into the frame, with grayscale ensuring they read as ambient background texture without stealing focus; holding for a beat lets viewers register "the screen is packed," followed by brand color sweeping downward in rapid horizontal waves, illuminating the grey world in an instant. The linchpin is that **colorization is not a simultaneous hard cut across frames**: analysis of the original video proves multiple color waves sweep downward within ~0.5s (blue blankets the field first, followed by orange/green/red covering lower tiers), settling into a layered four-color horizon—the wave provides velocity and direction, whereas a raw cut merely reads like changing slides.
 
-## 动效核心
-- 图标场：150–200 个小图标网格排布（行间半格错位），灰阶 3–4 档
-  随机；mulberry32 定分组/灰度/形状；demo 把图标装进键帽式圆角方块——暗场里
-  灰阶 = "还没通电"的深色键帽（暖黑底、发丝边、顶沿受光、暗灰字形），
-  翻色 = 通电：整块变成发光色块 + 深色字形 + 同色泛光
-- 浮现批次按离画面中心距离（75%）+ 噪声分组，读作从中心向外铺开
-- 浮现：分 10 批错峰淡入（批间 4.4f + 批内 ≤3f 抖动），每个带
-  0.6→1.06→1 微弹（overshoot 一次过冲回落）+ 上浮 10px
-- 静置一拍（~18f）：让"铺满"被读到；最后 10f 整场压暗 12% 作蓄力（吸气），第一道波到达时回满
-- 翻色：多道色波按行推进，行差 ~1.4f + 列微倾 0.25f + 每图标 ≤1.5f
-  抖动（斜切波前沿，不是整行同帧）；每道波从自己的起始行向下覆盖，
-  后波覆盖更低行带 → 终态多色横带
-- 单枚翻色 4f：新色**自上而下 clip 灌满**键帽（与波方向一致，不做透明度混合）+ 1.22x 正弦 pop，
-  灌满后一记 5f 的 screen 白闪 + 泛光过冲，给波前沿"通电"的质感
-- 光溢出：每行亮起后身后舞台染上同色横向光带（强度 = 该行已亮比例），整片原野真的亮起来
-- 落版：光稳定后中心起一层径向暗幕（只压中心，四周光保留），video-shotcraft 字标（眉题位）+ 两行 132px 标题「Every shot, / one place.」逐词升起；第二行别超过暗幕宽度，否则字边压在亮键帽上
+## Motion Core
+- Icon field: 150–200 icons arranged in a grid (half-step alternating rows), randomized across 3–4 grayscale tiers; mulberry32 determines grouping, grayscale, and shape; demo packages icons into keycap-style rounded squares—in dark stage, grayscale = unpowered dark keycaps (warm black base, hairline border, top edge catching light, dark grey glyphs); color flip = powering on: entire keycap turns into glowing color block + dark glyph + matching glow.
+- Emergence batches grouped by distance from screen center (75%) + noise, expanding outward from center.
+- Emergence: 10 staggered fade-in batches (4.4f between batches + <=3f intra-batch jitter), each featuring 0.6->1.06->1 micro-spring (single overshoot and settle) + 10px upward float.
+- Still beat (~18f): lets "full coverage" register; last 10f dims field by 12% as anticipation (inhale), snapping back when first wave arrives.
+- Color flip: Multiple color waves advance by row, row offset ~1.4f + column tilt 0.25f + per-icon <=1.5f jitter (slanted wave front rather than rigid rows); each wave sweeps downward from its start row, trailing waves covering lower bands -> final multi-color gradient bands.
+- Single keycap color flip 4f: New color **fills keycap via clip-path from top to bottom** (matching wave direction, avoiding opacity cross-fade) + 1.22x sine pop, followed by a 5f screen white flash + glow overshoot upon fill, giving the wave front an electrified feel.
+- Light spill: As each row illuminates, the stage floor behind is washed in horizontal light bands of matching hue (intensity = percentage of row illuminated), making the field genuinely glow.
+- Resolution: Once light settles, a radial vignette dims center stage (preserving peripheral glow), while video-shotcraft wordmark (eyebrow) + two-line 132px title "Every shot, / one place." rises word-by-word; ensure second line stays within vignette bounds to prevent text edges clashing with bright keycaps.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 图标数 | 170（17×10 @1080p，格距 108×106，键帽 66px） | <100 读不出"原野"；>250 单个太小翻色 pop 看不见 |
-| 浮现总长 | ~48f（10 批 × 4.4f + 尾批淡入 7f） | 太快读作闪现；>60f 观众等不及爆点 |
-| 翻色总长 | 原片 ~12f 全场完成；demo ~30f | 越快越爆；教学/慢节奏场合才拉长 |
-| 波数与色 | 4 道，同色系日出渐变（金 → 琥珀 → 橙 → 珊瑚红） | 1 道=单色点亮也成立；四色跨色相（蓝/橙/绿/红）读作彩虹，同色系分段更像品牌 |
-| 行差 | 1.4f/行 + 列 0.25f 微倾 | 行差 >3f 波读作逐行扫描仪；0 = 硬翻 |
-| 翻色 pop | 1.22x 正弦 4f + clip 灌满 | 无 pop 波前沿读不出来；>1.4x 图标互相打架 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Icon count | 170 (17x10 @1080p, grid pitch 108x106, keycaps 66px) | <100 loses "open field" sensation; >250 makes individual keycaps too small to see color pop |
+| Total emergence | ~48f (10 batches x 4.4f + trailing fade-in 7f) | Too fast reads as sudden flash; >60f exhausts audience patience before payoff |
+| Color flip duration | Original ~12f full sweep; demo ~30f | Faster is punchier; extend only for slower, explanatory contexts |
+| Waves and colors | 4 waves, sunrise palette in single color family (gold -> amber -> orange -> coral red) | 1 wave = single color illuminate works; four disparate hues (blue/orange/green/red) look like a rainbow, while tonal gradients feel like a brand |
+| Row offset | 1.4f/row + col 0.25f tilt | Row offset >3f reads like a document scanner; 0 = instant hard cut |
+| Color pop | 1.22x sine 4f + clip fill | Without pop, wave front is imperceptible; >1.4x keycaps collide |
 
-## 已知坑
-- demo 在手绘简笔图标上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 翻色别用透明度交叉淡入：暖色半透明叠在暗底上会过一段橄榄/灰泥色（判例），用 clip 擦入；
-  白闪也要等新色盖满后再起，否则半透明叠层上的白闪发灰
-- **翻色不许同帧硬翻**——原片密帧核实为多道波纹快扫（bear-app
-  25fps 密帧：蓝→橙/绿/红约 0.5s 内完成），硬翻读作换图无"点亮"感
-- 图标需可辨认的实心简笔形（心/星/闪电/对勾…）；抽象色块读不出
-  "功能宇宙"语义
-- 与 theme-switch-moves 分工：那张是 UI 界面明暗主题切换；本卡
-  是装饰性图标场的品牌色点亮，不承载界面语义
+## Known Pitfalls
+- Demo calibrated on hand-drawn minimalist icons—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- Do not cross-fade colors with opacity: stacking translucent warm tones on dark backgrounds passes through muddy olive/sludge tones; use clip wiping instead; white flashes must trigger only after new color fills keycap, otherwise flashes over translucent layers turn dull grey.
+- **Colorization must not be an instantaneous single-frame cut**: verified frame-by-frame as rapid sweeping waves (Bear app 25fps analysis: blue->orange/green/red completes in ~0.5s); hard cut loses illumination feel.
+- Icons must use recognizable solid glyphs (heart, star, bolt, checkmark...); abstract color blocks fail to convey "functional universe."
+- Division of labor with theme-switch-moves: that card handles dark/light UI theme toggling; this card handles brand color illumination across decorative icon fields without carrying UI semantics.
 
-## 参考实现
+## Reference Implementation
 demos/opening/icon-field-colorize/
-（IconFieldColorize.tsx）
-原片出处：bear-app.mp4 ≈0.0–3.0s
+(IconFieldColorize.tsx)
+Source: bear-app.mp4 ~0.0–3.0s

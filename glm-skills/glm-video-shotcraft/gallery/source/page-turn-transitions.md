@@ -1,42 +1,34 @@
 ---
 name: page-turn-transitions
-一句话: 整页体块转场——barn-door-split 对开门裂幕（旧页裂两半滑出、新页迎上）
-适用: 章节级换页：新旧交替的两个大段落之间的"翻篇"仪式；与 shot-transitions 系（镜头交棒）分工——那是"航拍机移过去"，这是"页面自己是实体"
-时长: 单式 150f（前态建立 30–40f + 转场 24–40f + 跟随与收尾 ≥70f），约 5.0s
-能量: 中高
+summary: A full-page transition where the old page splits open like double doors to reveal the new one.
+use: Chapter-level page transitions: "turning the page" ritual between two major narrative movements; distinct division of labor from the shot-transitions family (camera handoffs)—where that family represents "the drone moving across," this represents "the page itself being a physical slab."
+duration: Single variant 150f (prior state establishment 30–40f + transition 24–40f + follow-through and settle ≥70f), approx. 5.0s.
+energy: Medium-high
 ---
 
-## 意图
-shot-transitions 三式和 transition-travel/hidden-cut 都把页面当"场景"
-——相机在场景间移动。本卡把页面当**实体**：它有厚度、有重量、会
-裂开。体块隐喻的仪式感更强，适合章节级大换页（功能 A 讲完→功能 B）
-而非镜头级小交棒。对开门是"旧的让位"——旧页从正中撕开滑走、新页
-从底下迎上来，暗示取代关系，专管新旧交替。
+## Intention
+The three shot-transitions variants and transition-travel/hidden-cut all treat the page as a "scene"—the camera moves between environments. This card treats the page as a **physical entity**: it possesses thickness, mass, and can split apart. The physical slab metaphor imparts a heavier ceremonial weight, tailored for chapter-level page transitions (concluding Feature A → introducing Feature B) rather than shot-level continuity handoffs. The double-door barn split represents "the old yielding to the new"—the outgoing page tears open down the center and slides apart, while the incoming page ascends from beneath, suggesting supersession and replacement.
 
-## 单式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A barn-door-split | 旧页两个 960px overflow 容器对位拼合，同时向外 ease-in 加速滑出画外（按速度挂横向运动模糊）；裂缝里透出新页的光——门内缘 10px 切面被照亮、门面近缝处被光染暖，新页带一次过曝光束 scale 1.08→1 迎上；demo 为同版式的 video-shotcraft 版本更替：「Shotcraft 3」冷灰旧页 → 「Shotcraft 4」余烬发布页（眉题挂镜刻标志），数据从旧值滚到新值（示意值） | 新旧交替：改版前后、方案 A→方案 B、版本发布 |
+## Variant Selection
+| Variant | Method | Application |
+|---|---|---|
+| A barn-door-split | The outgoing page is split across two 960px overflow containers aligned seamlessly, which accelerate outward simultaneously via ease-in (applying horizontal motion blur proportional to velocity); the tear reveals incoming light—the 10px inner bevel edge catches illumination, the door face adjacent to the seam is warmed by light bleed, and the incoming page rises from scale 1.08 → 1 with an overexposure flare; the demo illustrates video-shotcraft version iteration: "Shotcraft 3" cool-gray legacy page → "Shotcraft 4" Ember launch page (with engraved lens emblem in header), rolling metrics from old values to new values (indicative data) | Generational succession: before/after redesigns, Option A → Option B, major version releases |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 预告 | 裂前中缝一条发丝亮线（带泛光）自中点向上下描出（20–30f），30–40f 裂缝 ease-in 撑开 0→16px 成一道光缝 | 直接裂开观众没看到裂点在哪；硬开关闪线读作渲染故障 |
-| 滑出 | 各 translateX ∓1000px / 24f，bezier(0.42,0,0.8,0.25) 加速 | ease-out 滑出是"被推走"，ease-in 才是"让位"；quart-in 太猛会读作"停住→最后一帧消失" |
-| 新页迎上 | scale 1.08→1（snappy 36f，晚门 2f 起跳），过曝光束随门远去 ~30f 衰减；新旧两页同版式同槽位 | 新旧页版式不同就读不出"取代" |
-| 撕裂边 | 内边缘 10px 受光切面（亮→强调色→暗）+ 门面近缝 620px 光染（screen），门不向新页投影 | 无边线两半读作普通左右擦除；门往缝里投影会把光压灰 |
-| 收尾 | 新页落定后跟随动作（数据滚动 / 清单打勾）+ hold ≥30f，hold 段相机极缓推近 1.5–2% | R1 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Anticipation | A hairline highlight (with bloom) draws vertically from center (20–30f); at 30–40f, the seam eases open 0 → 16px into a light slit | Splitting without anticipation leaves the audience unaware of where the fault line lies; hard toggle flash lines look like render glitches |
+| Slide-out | Each translates X ∓1000px / 24f, bezier(0.42, 0, 0.8, 0.25) accelerating | Ease-out slide feels like being pushed away; ease-in conveys yielding/parting; quartic-in is too abrupt, reading as "freeze → vanish on final frame" |
+| Incoming rise | scale 1.08 → 1 (snappy 36f, launching 2f after doors), overexposure flare decays across ~30f as doors recede; outgoing and incoming pages share identical grid layout | Mismatched layouts fail to convey "replacement / supersession" |
+| Tear edge | 10px illuminated inner bevel (bright → accent → dark) + 620px light bleed on door face (screen mode); doors do not cast shadows onto incoming page | Omitting edge highlights reduces the split to a generic left/right wipe; casting shadows into the seam muddies the incoming light |
+| Settle | Secondary actions upon landing (metric count-up / checklist tick) + hold ≥30f; camera performs an ultra-slow 1.5–2% push-in during hold | R1 |
 
-## 已知坑
-- demo 在为镜头手搓的页面上调校——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 一缝一式规矩同 shot-transitions；体块转场比镜头交棒更重，
-  **全片 ≤2 次**，连续两缝都用体块读作 PPT 翻页
-- 两半必须**对位拼合无缝**（右半内层 translateX(−960px)）——
-  静止时看出接缝就穿帮；真实截图注意奇数宽度取整
-- 转场前后两页都要有 ≥30f 静止建立/收尾——两端都在动，体块感被
-  运动淹没
+## Known Pitfalls
+- The demo was calibrated on custom pages designed for the camera—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- The single-technique-per-seam rule applies just as in shot-transitions; physical slab transitions are significantly heavier than camera handoffs, **≤2 times per full video**; using slab transitions on consecutive seams feels like flipping through a clunky slide deck.
+- Both halves must be **seamlessly aligned** (right half inner layer translateX(-960px))—any visible seam during the static hold breaks the illusion; when using real screenshots, watch for odd-pixel width rounding.
+- Both outgoing and incoming pages require ≥30f static holds before and after the transition—if both ends are animated, the physical slab sensation is drowned in motion.
 
-## 参考实现
+## Reference Implementation
 demos/transition/page-turn-transitions/
-（BarnDoorSplit.tsx）
+(BarnDoorSplit.tsx)

@@ -1,25 +1,24 @@
-// 文字视频遮罩（text-as-mask）——超粗大标题字内部透出缓慢平移的产品画面，结尾字形放大溢出、
-// 内部画面接管全屏。字是门，产品在门里。
+// Text video mask (text-as-mask) — Massive headline typography reveals panning product UI inside glyphs; outro scales up to fill frame,
+// transitioning internal UI into full-screen takeover. The typography serves as a portal into the product.
 //
-// 第二轮重设计（瓷白舞台 · 暗色实时面板）：
-// - look = porcelain。冷白瓷舞台上切出一个 470px 的 Black 字重「SCALE」——字形是一扇窗：
-//   窗外的瓷白舞台有主光与暗角，窗下投一层带色相的软影（字像被"挖"进舞台）。
-// - 窗里是为镜头设计的暗色实时面板「video-shotcraft · Render throughput」（渲染农场看板）：钴蓝→青的流式面积图一直在向左流、
-//   渲染帧数在计数、渲染队列柱状图在呼吸——大块的饱和色与亮线让笔画里一眼看出"里面有个活的产品"，
-//   而不是原版那种白卡（白字里透白卡 = 普通白字）。
-// - 字的入场：遮罩从基线向上擦出（clip 从下往上收），字整体 1.04→1 落定；眉题字距收拢、副题升起。
-// - 接管：先吸一口气（字 1→0.965，副题与眉题退场，8f）→ 指数冲入（对数空间 t^1.8，24f 到 46×，
-//   每帧放大比例越来越大 = 越冲越快）；放大原点钉在 L 竖笔实心处；内容层 1/S 反向补偿不畸变；
-//   冲入后段无遮罩全屏层淡入补齐字缝；面板 1.32→1 用 expo-out 落到标准构图，晚冲入 6f 收敛（跟随）。
-// - 收尾：完整的暗色面板做最后一张海报，流式图仍在缓慢流动（不是死帧）。
+// Iteration 2 redesign (porcelain stage · dark live dashboard):
+// - look = porcelain. Cool porcelain stage with a 470px Black weight "SCALE" cutout acting as a window:
+//   exterior stage features key lighting and subtle vignette, casting soft tinted drop shadows beneath typography.
+// - Inside window: dark live dashboard "video-shotcraft · Render throughput" (render farm metrics): cobalt-to-cyan streaming area chart flows leftward,
+//   frame counters tick, and render queue bars pulse — rich saturated colors and bright vector lines ensure immediate recognition of live UI.
+// - Typography entrance: mask wipes up from baseline, settling 1.04->1; eyebrow tracking tightens, subtitle ascends.
+// - Takeover: anticipation breath (text 1->0.965, sub/eyebrow exit over 8f) -> exponential zoom-in (log space t^1.8, 24f to 46x zoom);
+//   zoom origin anchored on solid stroke of "L"; content compensates by 1/S inverse scale to eliminate distortion;
+//   unmasked full-screen UI crossfades in late rush to close glyph seams; dashboard settles 1.32->1 via expo-out 6f after zoom-in.
+// - Outro: complete dark dashboard serves as final poster, chart continuing to stream live.
 //
-// 时间表（30fps，共 165f）：
-//   0–18    瓷白舞台 + 字形自基线擦出、1.04→1 落定；6–26 眉题、14–32 副题
-//   18–96   字内面板漂移（translateX +150→-150，两端轻缓）；面板自身流式图/计数一直在动
-//   96–104  吸气：字 1→0.965，眉题/副题 exit 退场
-//   104–128 冲入：遮罩 0.965→46×（对数空间 t^1.8 加速），~121–126 接管层淡入
-//   104–132 面板 1.32→1、漂移归零（expo-out，落定比冲入晚 6f）
-//   132–165 hold：全屏面板，流式图缓慢流动
+// Timeline (30fps, 165f total):
+//   0–18    Porcelain stage + typography wipes up from baseline, settling 1.04->1; 6–26 eyebrow, 14–32 subtitle
+//   18–96   Internal UI drift (translateX +150 -> -150 with gentle easing); live charts/metrics animate continuously
+//   96–104  Anticipation: text shrinks 1->0.965, eyebrow and subtitle exit
+//   104–128 Zoom-in rush: mask 0.965->46x (log-space acceleration), takeover layer crossfades ~121–126
+//   104–132 Dashboard scales 1.32->1, drift zeroes (expo-out, settling 6f after zoom)
+//   132–165 Hold: full-screen dashboard with streaming live chart
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
 import { EASE, FONT, bezier, ramp } from '../../_fixtures/Polish';
@@ -30,23 +29,23 @@ export const TEXT_AS_MASK_DURATION = 165;
 
 const L = LOOKS.porcelain;
 
-// —— 字形遮罩 ——
+// —— Glyph Mask ——
 const WORD = 'SCALE';
 const FONT_STACK = 'system-ui, -apple-system, Helvetica Neue, Arial, sans-serif';
 const FS = 470;
-const BASE_Y = 712; // 基线
+const BASE_Y = 712; // Baseline
 const TEXT_ATTRS = `x="960" y="${BASE_Y}" font-family="${FONT_STACK}" font-size="${FS}" font-weight="900" letter-spacing="-22" text-anchor="middle"`;
 const MASK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><text ${TEXT_ATTRS} fill="white">${WORD}</text></svg>`;
 const MASK_URL = `url("data:image/svg+xml,${encodeURIComponent(MASK_SVG)}")`;
 const SHADOW_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><text ${TEXT_ATTRS} fill="#0c1a3a">${WORD}</text></svg>`;
 const SHADOW_URL = `data:image/svg+xml,${encodeURIComponent(SHADOW_SVG)}`;
-// 放大原点：L 竖笔实心处（换词/换字体必须重量：渲一帧看放大方向，洞不对中就微调）
-const ORIGIN_X = 1236; // L 竖笔 x∈[1195,1278] 的中线——钉在竖笔中线，S≈23× 时竖笔左右同时撑出画幅
-const ORIGIN_Y = 546; // 竖笔 y∈[383,709] 的中线
+// Zoom origin: solid stem of "L" (calibrated to anchor zoom through letter opening)
+const ORIGIN_X = 1236; // Centerline of "L" vertical stem (x in [1195,1278]) — stems clear screen symmetrically at S≈23x
+const ORIGIN_Y = 546; // Centerline of vertical stem (y in [383,709])
 const ORIGIN = `${ORIGIN_X}px ${ORIGIN_Y}px`;
 const MAX_S = 46;
 
-// —— 节拍 ——
+// —— Beats ——
 const IN_END = 18;
 const DRIFT0 = 18;
 const DRIFT1 = 96;
@@ -56,14 +55,14 @@ const RUSH1 = 128;
 const LAND1 = 132;
 const DASH_S0 = 1.32;
 
-// —— 窗里的产品：video-shotcraft 的暗色渲染看板（1920×1080 作画）——
+// —— Product in Window: video-shotcraft dark render dashboard (1920x1080) ——
 const D = { bg: '#0a0f1e', panel: '#0f1730', panel2: '#131d3b', line: 'rgba(150,180,255,0.12)', ink: '#eef3ff', ink2: '#9aa8c8', ink3: '#5d6a8a', blue: '#4d7cff', teal: '#19d3b4' };
 
-// 确定性流式曲线：u = 横向样本位置（随帧递增 = 数据向左流）
+// Deterministic stream curve: u = horizontal sample position (advancing with frame = data streams left)
 const wave = (u: number) => 0.52 + 0.17 * Math.sin(u * 0.11) + 0.09 * Math.sin(u * 0.31 + 1.3) + 0.05 * Math.sin(u * 0.73 + 0.4) + 0.12 * Math.max(0, Math.sin(u * 0.045 - 0.6));
 
 const Dashboard: React.FC<{ frame: number }> = ({ frame }) => {
-  const flow = frame * 0.55; // 流速（样本/帧）
+  const flow = frame * 0.55; // Flow rate (samples/frame)
   const CW = 1560, CH = 380, N = 96;
   const pts = Array.from({ length: N + 1 }, (_, i) => {
     const x = (i / N) * CW;
@@ -75,14 +74,14 @@ const Dashboard: React.FC<{ frame: number }> = ({ frame }) => {
   const last = pts[pts.length - 1];
   const reqs = 1.92 + 0.56 * ramp(frame, 10, 96, EASE.out);
   const bars = Array.from({ length: 24 }, (_, i) => 0.3 + 0.6 * Math.abs(Math.sin(i * 1.7 + frame * 0.05)) * (0.6 + 0.4 * Math.sin(i * 0.45)));
-  const regions: [string, number][] = [['opening', 0.92], ['camera', 0.74], ['transition', 0.58], ['outro', 0.41]]; // 各类镜头渲染进度
+  const regions: [string, number][] = [['opening', 0.92], ['camera', 0.74], ['transition', 0.58], ['outro', 0.41]]; // Shot category render progress
   const Card: React.FC<{ x: number; y: number; w: number; h: number; children: React.ReactNode }> = ({ x, y, w, h, children }) => (
     <div style={{ position: 'absolute', left: x, top: y, width: w, height: h, borderRadius: 22, background: `linear-gradient(180deg, ${D.panel2}, ${D.panel})`, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px ${D.line}`, boxSizing: 'border-box', padding: '26px 30px', overflow: 'hidden' }}>{children}</div>
   );
   const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: '0.14em', color: D.ink2, textTransform: 'uppercase' }}>{children}</div>;
   return (
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 70% 60% at 60% 30%, #12204a 0%, ${D.bg} 70%)`, fontFamily: FONT.sans, color: D.ink }}>
-      {/* 侧栏 */}
+      {/* Sidebar */}
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 230, borderRight: `1px solid ${D.line}`, padding: '36px 30px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <ShotcraftMark size={40} tone="dark" />
@@ -92,7 +91,7 @@ const Dashboard: React.FC<{ frame: number }> = ({ frame }) => {
           <div key={t} style={{ marginTop: i ? 14 : 54, fontSize: 24, fontWeight: i === 1 ? 650 : 500, color: i === 1 ? D.ink : D.ink3, padding: '10px 14px', borderRadius: 10, background: i === 1 ? 'rgba(77,124,255,0.16)' : 'transparent' }}>{t}</div>
         ))}
       </div>
-      {/* 页眉 */}
+      {/* Header */}
       <div style={{ position: 'absolute', left: 290, top: 44, display: 'flex', alignItems: 'center', gap: 20 }}>
         <div style={{ ...type(56, 720), color: D.ink }}>Render throughput</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderRadius: 999, background: 'rgba(25,211,180,0.14)', color: D.teal, fontSize: 24, fontWeight: 650 }}>
@@ -118,7 +117,7 @@ const Dashboard: React.FC<{ frame: number }> = ({ frame }) => {
           {bars.map((b, i) => <rect key={i} x={i * 18.5} y={100 - b * 100} width={12} height={b * 100} rx={3} fill={i > 17 ? D.teal : D.blue} opacity={0.5 + 0.5 * b} />)}
         </svg>
       </Card>
-      {/* 主图：流式面积图 */}
+      {/* Main chart: streaming area graph */}
       <Card x={290} y={376} w={1570} h={470}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Label>Frames / sec</Label>
@@ -142,7 +141,7 @@ const Dashboard: React.FC<{ frame: number }> = ({ frame }) => {
           <circle cx={last[0]} cy={last[1]} r={22} fill={D.teal} opacity={0.22} />
         </svg>
       </Card>
-      {/* 区域 */}
+      {/* Categories */}
       <Card x={290} y={870} w={1570} h={170}>
         <div style={{ display: 'flex', gap: 48, alignItems: 'center', height: '100%' }}>
           {regions.map(([name, v]) => (
@@ -166,33 +165,33 @@ export const TextAsMask: React.FC = () => {
   const f = useCurrentFrame();
   const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 
-  // 入场：遮罩从基线向上擦出 + 1.04→1 落定
+  // Entrance: mask wipes up from baseline + settles 1.04->1
   const intro = ramp(f, 0, IN_END, EASE.snappy);
   const wipe = ramp(f, 0, 16, EASE.out);
   const introS = 1.04 - 0.04 * intro;
 
-  // 吸气 → 冲入（对数空间 ease-in：每帧放大比例越来越大）
+  // Anticipation breath -> zoom rush (logarithmic ease-in: accelerating scale per frame)
   const breath = ramp(f, BREATH0, RUSH0 - BREATH0, EASE.swift);
-  const rush = Math.pow(ramp(f, RUSH0, RUSH1 - RUSH0, EASE.linear), 1.8); // 对数空间里 t^1.8：越冲越快
+  const rush = Math.pow(ramp(f, RUSH0, RUSH1 - RUSH0, EASE.linear), 1.8); // t^1.8 in log space: exponential acceleration
   const s0 = introS * (1 - 0.035 * breath);
   const maskS = s0 * Math.pow(MAX_S / s0, rush);
-  // 冲入时把 L 竖笔同步拉回画面中线（相机对准门洞）；内容层做同一变换的逆，产品画面不动
+  // Zoom centers "L" stem to viewport centerline; content layer applies inverse transform to remain static
   const cdx = (960 - ORIGIN_X) * rush;
   const cdy = (540 - ORIGIN_Y) * rush;
   const wrapT = `translate(${cdx.toFixed(2)}px, ${cdy.toFixed(2)}px) scale(${maskS})`;
   const innerT = `scale(${1 / maskS}) translate(${(-cdx).toFixed(2)}px, ${(-cdy).toFixed(2)}px)`;
 
-  // 面板：漂移（两端轻缓）→ 冲入时归位（expo-out，晚 6f 收敛 = 跟随）
+  // Dashboard: drift (soft endpoints) -> recenters during rush (expo-out, settling 6f after zoom)
   const drift = ramp(f, DRIFT0, DRIFT1 - DRIFT0, bezier(0.3, 0, 0.7, 1));
   const land = ramp(f, RUSH0, LAND1 - RUSH0, EASE.snappy);
   const dx = (150 - 300 * drift) * (1 - land);
-  const dy = -110 * (1 - land); // 漂移期面板上移，让流式图的亮线正好穿过字的腰线、面积渐变铺满字的下半截
+  const dy = -110 * (1 - land); // Panel shifts up during drift so stream chart aligns across letter waistline
   const dashS = DASH_S0 + (1 - DASH_S0) * land;
-  // 接管层：竖笔撑满大半画面后才淡入补齐字缝
-  const cover = interpolate(rush, [0.86, 0.95], [0, 1], clamp); // 竖笔已撑满全屏（S≈24×）之后才换层，零灰纱
-  // 投影：冲入前段退掉
+  // Takeover layer: crossfades after stem fills majority of frame to seal letter gaps
+  const cover = interpolate(rush, [0.86, 0.95], [0, 1], clamp); // Crossfades once stem fills screen (S≈24x), zero washed-out veil
+  // Shadow: retracts during early rush
   const rim = 1 - interpolate(rush, [0, 0.25], [0, 1], clamp);
-  // 眉题 / 副题
+  // Eyebrow / Subtitle
   const eyebrow = ramp(f, 6, 20, EASE.out);
   const sub = ramp(f, 14, 18, EASE.out);
   const out = 1 - ramp(f, BREATH0, 10, EASE.exit);
@@ -208,13 +207,13 @@ export const TextAsMask: React.FC = () => {
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.42, y: 0.12 }} fill={{ x: 0.85, y: 0.9 }} vignette={0.22} />
 
-      {/* 字形投影：窗被"挖"进舞台的一层带色相软影 */}
+      {/* Glyph drop shadow: soft tinted shadow as if window is recessed into stage */}
       <img src={SHADOW_URL} style={{
         position: 'absolute', left: 0, top: 26, width: 1920, height: 1080, opacity: 0.2 * rim * intro, filter: 'blur(22px)',
         transform: wrapT, transformOrigin: ORIGIN, clipPath: clipBottom,
       }} />
 
-      {/* 遮罩层：wrapper 负责 mask + 放大；inner 用 1/S 反向缩放抵消内容形变 */}
+      {/* Mask layer: wrapper handles mask + zoom; inner applies 1/S inverse scale to neutralize distortion */}
       <div style={{
         position: 'absolute', inset: 0, transform: wrapT, transformOrigin: ORIGIN, clipPath: clipBottom,
         WebkitMaskImage: MASK_URL, maskImage: MASK_URL, WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
@@ -223,12 +222,12 @@ export const TextAsMask: React.FC = () => {
         <div style={{ position: 'absolute', inset: 0, transform: innerT, transformOrigin: ORIGIN }}>{dash}</div>
       </div>
 
-      {/* 接管层：同一运动变换的全屏面板，冲入后段淡入 */}
+      {/* Takeover layer: unmasked full-screen dashboard matching motion, crossfading during late rush */}
       {cover > 0 && <div style={{ position: 'absolute', inset: 0, opacity: cover }}>{dash}</div>}
 
-      {/* 眉题 + 副题 */}
+      {/* Eyebrow + Subtitle */}
       <div style={{ position: 'absolute', top: 214, width: '100%', textAlign: 'center', opacity: eyebrow * out }}>
-        {/* 眉题 = video-shotcraft 字标（全小写；字距收拢的入场保留） */}
+        {/* Eyebrow: video-shotcraft logotype (lowercase with tracking collapse entrance) */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14, verticalAlign: 'middle' }}>
           <ShotcraftMark size={44} tone="light" />
           <span style={{ fontFamily: BRAND.font, fontSize: 30, fontWeight: 700, color: L.ink, letterSpacing: `${(0.03 + (1 - eyebrow) * 0.3).toFixed(3)}em` }}>{BRAND.name}</span>

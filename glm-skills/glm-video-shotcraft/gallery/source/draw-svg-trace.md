@@ -1,55 +1,40 @@
 ---
 name: draw-svg-trace
-一句话: 描边生长圈注——一条带笔头的墨线沿元素轮廓跑一圈把它"画"出来，闭合瞬间闪黑交棒、内容淡入；同套路可给标题画下划线
-适用: 单个卡片/图表/标题的被点名入场；元素级手法（整页级蓝图描线归 wall-reveal-moves B 式）
-时长: 132f（预告 10f + 描边 40f + 闪黑交棒 16f + 下划线 18f + hold 40f，约 4.4s）
-能量: 中
-标签: typography
+summary: An ink stroke traces an element outline, closes with a dark flash, and hands focus to the revealed content.
+use: Calling attention to a single card, chart, or title during entrance; element-level technique (full-page blueprint tracing belongs to wall-reveal-moves Variant B).
+duration: 132f (anticipation 10f + trace 40f + dark flash handoff 16f + underline 18f + hold 40f, ~4.4s)
+energy: Medium
+tags: typography
 ---
 
-## 意图
-"画出来"是纸墨审美里最顺手的入场隐喻：元素不是飞进来也不是淡进来，
-而是被一支看不见的笔当场描出来。库内 wall-reveal-moves B 式已有整页
-蓝图版（全屏线框逐段画+区域点亮），本卡是它的**元素级特写版**——
-一条线、一个主体、一次闭合，笔头可见、方向可读，适合"接下来讲它"
-的点名时刻。第二用法是标题下划线生长：同一套路 18f 短版，给重点词
-一笔手绘强调，与马克笔审美 token 天然同族。
+## Intention
+"Drawing into existence" is the most natural entrance metaphor in ink-and-paper aesthetics: elements do not fly or fade in, but are sketched on the spot by an invisible pen. While wall-reveal-moves Variant B provides a full-page blueprint version (drawing fullscreen wireframes in segments before lighting up regions), this card serves as its **element-level close-up variant**—a single stroke, a single subject, a single closure with visible pen tip and clear direction, tailor-made for callout moments highlighting "what we discuss next." Its secondary application is title underline growth: the same 18f shorthand technique delivering a hand-drawn stroke under key terms, sharing aesthetic DNA with marker pen tokens.
 
-## 动效核心
-- **免测周长**：SVG rect/path 设 `pathLength={1}`，strokeDasharray="1"，
-  dashoffset 1→0（40f Easing.inOut(cubic)）——不用 getTotalLength
-- **笔头**：同一路径再叠三段渐细短 dash（0.04/6.4px → 0.024/8px → 0.011/9.6px），dashoffset = 笔头长 − p，
-  天然跑在最前；再加一颗按圆角矩形弧长精确定位的实心笔尖（带落影）；
-  没有笔头就只是"边框在变长"，有笔头才是"有人在画"
-- 预告：开场 0–12f 四角先长出裁切标记（印刷对位线，错峰 2f），底下是一层中心清晰、四周隐去的绘图纸点阵——
-  第 1 帧就有画面，观众先知道"这里要画一个东西"；闭合时裁切标记外弹 22px 并淡出
-- 闭合闪：50–52f 描边冲纯黑 + 6→11px 加粗，52–58f out 回落
-  ——白底上加深加粗，不用发光（判例）
-- 交棒：56–66f 描边层淡出、元素自身发丝边淡入；50f 起卡底上墨、卡片从贴地升起（阴影长出来），
-  内容自上而下 3f 错峰由虚到实 + 上浮，柱图错峰 1.5f 从基线长出——闭合即"画完了"，内容跟着"上色"
-- 第二用法：74–92f 给重点词「100%」画一笔朱红马克笔下划线（略带弧度的手绘路径，笔头跟随），画完常驻
+## Motion Core
+- **No perimeter calculation needed**: SVG rect/path sets `pathLength={1}`, `strokeDasharray="1"`, `dashoffset 1→0` (40f Easing.inOut(cubic))—eliminating `getTotalLength`.
+- **Pen tip**: Same path overlays three tapering short dashes (0.04 / 6.4px → 0.024 / 8px → 0.011 / 9.6px) with `dashoffset = tipLength − p`, naturally leading the front edge; plus a solid nib with drop shadow positioned precisely along rounded-rect arc length. Without the tip it reads as an expanding border; with the tip it reads as being drawn by hand.
+- Anticipation: Opening 0–12f sprouts crop marks at four corners (print registration marks staggered by 2f), atop graph paper dot grid fading toward edges—providing visual structure on frame 1 so viewers anticipate an element being drawn; crop marks bounce outward 22px and fade on stroke closure.
+- Closure flash: 50–52f stroke hits solid black + thickens 6→11px, easing out 52–58f back to baseline—deepening and thickening on white backgrounds without glow effects.
+- Handoff: 56–66f trace layer fades as hairline border fades in; from 50f onward card paper fills, card lifts from surface (shadow emerges), and content drifts up staggered 3f top-to-bottom from blurred to sharp, while bar chart grows from baseline staggered 1.5f—closure signals drawing completion, followed by content color fill.
+- Secondary variant: 74–92f draws a vermilion marker underline beneath key term "100%" (curved hand-drawn path with following tip), holding permanently once drawn.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 描边速度 | 一整圈 40f（10→50f，inOut cubic 起收有呼吸） | <28f 读不出"在画"，>60f 读作加载中 |
-| 主线 / 笔头 | 主线 6px；笔头三段渐细最粗 9.6px、笔尖 r 7.5 | 笔头≤主线粗细就消失在主线里 |
-| 闭合闪 | 2f 冲黑 + 加粗到 11px，6f 回落 | 没有这一下，"画完"没有句号 |
-| 主体尺寸 | 1120×660、圆角 28（描边 rx 同值） | 主体占画宽 ~58%，描边一圈才有"画了一个大东西"的分量；描边 rx 必须等于卡片圆角 |
-| 下划线版 | 18f out cubic 单向生长，12px 朱红、路径带 ±5px 手绘弧度，画完常驻 | 用在单个重点词；一屏 ≥2 条读作装饰线 |
-| 收尾 | 交棒完成后 hold 40f（92→132f），只留 0.9% 极缓推近 | R1 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Stroke speed | Full perimeter 40f (10→50f, inOut cubic with breathing room) | <28f fails to read as "drawing", >60f feels like an idling loader |
+| Main stroke / Tip | Main line 6px; three-tier tapering tip up to 9.6px, nib radius 7.5 | Tip thickness ≤ main stroke vanishes into the line |
+| Closure flash | 2f punch black + thicken to 11px, 6f settle | Without this hit, completion lacks an ending punctuation mark |
+| Hero element size | 1120×660, border radius 28 (stroke rx identical) | Hero occupies ~58% screen width, giving stroke scale; stroke rx must strictly match card border-radius |
+| Underline variant | 18f out cubic directional growth, 12px vermilion, ±5px hand-drawn arc, holds permanently | Apply strictly to single key term; ≥2 instances on screen feels like decorative clutter |
+| Hold finish | 40f static hold after handoff (92→132f), with 0.9% subtle push | Follows holding rules |
 
-## 已知坑
-- demo 用手搓的 video-shotcraft 渲染报告卡（paper 纸墨 look，「Cuts on the beat / 100%」+ 逐镜头能量柱 + 标志字标署名）调校——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 wall-reveal-moves B 式（整页蓝图描线）同族互斥：同片二选一，
-  都上读作重复报幕
-- 描边路径必须与元素真实轮廓吻合（圆角 rx 一致）——线画的是 14px
-  圆角、元素是 8px，交棒瞬间错型穿帮
-- 真实素材上内容淡入别抢在闭合前：线还没画完内容先出来，"画"的
-  因果就断了
-- 一次点名画一个主体；同屏多元素排队各画一圈读作加载动画
+## Known Pitfalls
+- Demo calibrated using mock video-shotcraft render report card (paper ink look, "Cuts on the beat / 100%" + per-shot energy bars + logo wordmark signature)—parameters serve as calibration baseline, not final production specs; verify against real assets in production.
+- Mutually exclusive with wall-reveal-moves Variant B (full-page blueprint line drawing): pick one per film, combining both feels repetitive.
+- Stroke path must strictly match element contour (matching corner radius rx)—tracing with 14px radius against an 8px radius card causes visible shape mismatch during handoff.
+- Never fade in content before stroke closure on real assets: revealing content before line completes breaks drawing causality.
+- Highlight one subject per callout; queuing multiple elements to trace outlines simultaneously looks like a loading animation.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/draw-svg-trace/
-（DrawSvgTrace.tsx）
+(DrawSvgTrace.tsx)

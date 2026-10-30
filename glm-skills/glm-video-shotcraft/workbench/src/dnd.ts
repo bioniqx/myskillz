@@ -1,6 +1,6 @@
 import type React from "react";
 
-/** 素材库 → 时间轨 的拖拽负载协议 */
+/** Asset library → Timeline track drag-and-drop payload protocol */
 export const DRAG_MIME = "application/x-wb-item";
 
 export type DragPayload = {

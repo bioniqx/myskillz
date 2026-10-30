@@ -1,24 +1,24 @@
-// multiplane parallax（第二轮重设计）——真实页面拆 3 层深度横移：同一条 drive 位移乘各层系数
-// （远 0.35x / 中 0.7x / 近 1.4x），速度梯度把一次横移变成"在空间里滑过"。
+// multiplane parallax (Round 2 redesign) — Real page split into 3 depth layers for lateral travel: a single drive displacement multiplied by layer coefficients
+// (background 0.35x / midground 0.7x / foreground 1.4x); the velocity gradient turns a lateral slide into "gliding through space".
 //
-// 设计决定
-// - look：sand（米色 + 赤陶，温暖、纸感）。真实 projects 页本身是暖白纸色，和 sand 天然一体——
-//   这一镜像一组产品静物在暖光桌面上被滑轨相机掠过，而不是网页平移。
-// - 三层各给齐深度锚：
-//   远景：整页截图缩小一档、退焦 5px、降饱和、上浓下淡的暖色空气薄雾（退成环境）；
-//   中景：10 张真实项目卡（440px，主阅读层，绝对清晰，两层暖色软影落在"桌面"上）；
-//   近景：5 枚放大的赤陶 / 墨色标签胶囊（取自卡上的真实标签）掠过镜头，景深虚化 + 按速度横向拖影。
-// - 固定在画框上的字（0x 层）：左上眉题（video-shotcraft 标志 + 名字）+ 120px 标题「Your page, in depth.」+ 副句，是全片的静止参照——
-//   字不动、世界在动，视差反而更好读。
-// - 滑轨有终点：drive 落定时 card4 恰好停在画面中央，随后浮起（elevation 6→26、1.035x）+ 赤陶描边 +
-//   「In focus」角标，尾帧是一张完整海报。
+// Design decisions
+// - look: sand (beige + terracotta, warm, paper feel). The real projects page itself is warm white paper, naturally unified with sand —
+//   this shot feels like a camera on a slider skimming across a set of physical product still lifes on a warm-lit tabletop, rather than a 2D webpage panning.
+// - Three layers each provide clear depth cues:
+//   Background: full-page screenshot scaled down one stop, defocused by 5px, desaturated, with a warm atmospheric haze darker at the top (receding into the environment);
+//   Midground: 10 real project cards (440px, primary reading layer, pin-sharp, two tiers of soft warm shadows falling onto the "tabletop");
+//   Foreground: 5 enlarged terracotta / ink tag pills (sampled from real tags on cards) sweeping past the lens, with depth-of-field blur + velocity-based horizontal motion blur.
+// - Text pinned to the frame (0x layer): top-left kicker (video-shotcraft logo + name) + 120px headline "Your page, in depth." + subtitle, serving as the stationary reference for the whole shot —
+//   with text still and the world moving, parallax reads much more clearly.
+// - Slider has an end stop: when the drive settles, card4 lands right in the screen center, then lifts (elevation 6→26, 1.035x) + terracotta border +
+//   "In focus" badge; the final frame is a complete poster.
 //
-// 时间表（30fps，165f）
-//   0–6     起手：三层已在画面、标题开始逐词升起（第 1 帧不是空画面）
-//   6–136   滑轨 130f：不对称 in-out（起步柔、中段匀、落位很软），中景总位移 1020px
-//   4–40    标题：眉题字距收拢（4）→ 标题逐词升起（8）→ 副句（26）
-//   122–144 主角浮起：card4 抬升 + 描边 + 角标（out 曲线，晚于位置收敛 ~8f）
-//   144–164 hold 20f：远景极缓漂移 4px，画面活着
+// Timeline (30fps, 165f)
+//   0–6     Opening: all 3 layers already on screen; headline starts rising word-by-word (frame 1 is not blank)
+//   6–136   Slider 130f: asymmetric in-out (gentle start, uniform mid-section, very soft settle), midground total displacement 1020px
+//   4–40    Headline: kicker letter-spacing tightens (4) → headline rises word-by-word (8) → subtitle (26)
+//   122–144 Hero lift: card4 rises + border + badge (out curve, settling ~8f later than position)
+//   144–164 Hold 20f: background drifts ultra-slowly by 4px to keep the frame alive
 import React from 'react';
 import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion';
 import layout from '../../_textures/live-layout.json';
@@ -33,16 +33,16 @@ const CARDS = layout.projects.cards;
 const DRIVE_EASE = bezier(0.45, 0, 0.18, 1);
 const HERO = 3; // card4
 const MID_W = 440;
-const GAP = 500; // 中景卡步距
-const ROW_X = 260; // 第 0 张卡左缘（中景层坐标）
+const GAP = 500; // Midground card pitch
+const ROW_X = 260; // Card 0 left edge (midground layer coordinates)
 const ROW_Y = 410;
-// drive 总量：中景（0.7x）落定时 card4 中心恰在屏心
+// Total drive: midground (0.7x) brings card4 center exactly to screen center at settle
 const MID_END = 960 - (ROW_X + HERO * GAP + MID_W / 2);
 const DRIVE = -MID_END / 0.7;
 const driveAt = (f: number) => DRIVE * ramp(f, 6, 130, DRIVE_EASE) + 4 * ramp(f, 136, 29, EASE.smooth);
 
-// 近景胶囊：标签取自卡片上的真实 tag；x 为近景层坐标，y 为屏幕坐标。
-// 落定时（近景位移 −2040）只剩 EdgeAI / ASR 两枚压在画框下沿做前景框边，其余已滑出画外
+// Foreground pills: tags taken from real card tags; x is foreground layer coordinates, y is screen coordinates.
+// At settle (foreground displacement -2040), only EdgeAI / ASR remain near the bottom edge framing the shot; the rest have slid off-screen
 const PILLS = [
   { t: 'Calibration', x: 1200, y: 880, tone: 'accent' },
   { t: 'Routing', x: 1640, y: 296, tone: 'ink' },
@@ -54,7 +54,7 @@ const PILLS = [
 export const MultiplaneReal: React.FC = () => {
   const frame = useCurrentFrame();
   const drive = driveAt(frame);
-  const vFg = -1.4 * velocity(driveAt, frame); // 近景屏幕速度（px/帧）
+  const vFg = -1.4 * velocity(driveAt, frame); // Foreground screen velocity (px/frame)
   const lift = ramp(frame, 122, 22, EASE.out);
   const ring = ramp(frame, 128, 16, EASE.snappy);
   const kick = ramp(frame, 4, 20, EASE.snappy);
@@ -63,17 +63,17 @@ export const MultiplaneReal: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: L.bg[1], overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.3, y: 0.0 }} fill={{ x: 0.85, y: 1 }} grain={0.06}>
-        {/* 远景 0.35x：整页缩小一档、退焦、降饱和（页面空白与底色同色，横移不露边） */}
+        {/* Background 0.35x: full page scaled down one stop, defocused, desaturated (page background matches canvas, so lateral move shows no seams) */}
         <div style={{ position: 'absolute', left: 0, top: 0, transform: `translateX(${(-drive * 0.35).toFixed(2)}px)`, filter: 'blur(5px) saturate(0.7)', opacity: 0.75 }}>
           <Img src={staticFile('textures/live/projects-full.png')} style={{ position: 'absolute', left: -40, top: -170, width: 2100 }} />
         </div>
-        {/* 空气透视：远景之上一层暖色薄雾，上部更浓 */}
+        {/* Aerial perspective: warm thin haze over background, denser at the top */}
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${alpha(L.bg[0], 0.82)} 0%, ${alpha(L.bg[1], 0.62)} 50%, ${alpha(L.bg[2], 0.55)} 100%)` }} />
-        {/* 桌面：中景卡落影的承托面，一条极淡的地平线光 */}
+        {/* Tabletop: supporting surface for midground card shadows, with a faint horizon light */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: ROW_Y + 330, height: 340, background: `linear-gradient(180deg, ${alpha(L.shadow, 0)}, ${alpha(L.shadow, 0.06)} 40%, ${alpha(L.shadow, 0.02)})` }} />
       </Stage>
 
-      {/* 中景 0.7x：真实卡组横排（主阅读层，无 blur） */}
+      {/* Midground 0.7x: horizontal row of real cards (primary reading layer, no blur) */}
       <div style={{ position: 'absolute', left: 0, top: ROW_Y, transform: `translateX(${(-drive * 0.7).toFixed(2)}px)` }}>
         {CARDS.map((c, k) => {
           const hero = k === HERO;
@@ -89,7 +89,7 @@ export const MultiplaneReal: React.FC = () => {
             </div>
           );
         })}
-        {/* 主角角标：浮起后从卡上沿落下 */}
+        {/* Hero badge: drops from card top edge after lifting */}
         <div style={{
           position: 'absolute', left: ROW_X + HERO * GAP + 2, top: -64, height: 44, padding: '0 18px', borderRadius: 22, display: 'flex', alignItems: 'center', gap: 10,
           background: L.accent, color: L.onAccent, ...type(22, 700, { caps: true }), letterSpacing: '0.14em', whiteSpace: 'nowrap',
@@ -101,7 +101,7 @@ export const MultiplaneReal: React.FC = () => {
         </div>
       </div>
 
-      {/* 近景 1.4x：放大的标签胶囊掠过镜头（景深虚化、落影更深更远），只在快段带横向拖影 */}
+      {/* Foreground 1.4x: enlarged tag pills sweep past lens (defocused, deeper and further shadows), horizontal motion blur only during fast section */}
       <SpeedBlur vx={vFg} amount={0.2} max={10}>
         <div style={{ position: 'absolute', inset: 0, transform: `translateX(${(-drive * 1.4).toFixed(2)}px)` }}>
           {PILLS.map((p) => {
@@ -118,7 +118,7 @@ export const MultiplaneReal: React.FC = () => {
         </div>
       </SpeedBlur>
 
-      {/* 0x 层：固定在画框上的标题 */}
+      {/* 0x layer: headline pinned to frame */}
       <div style={{ position: 'absolute', left: 120, top: 96 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, ...type(22, 700, { caps: true }), letterSpacing: `${mix(0.5, 0.18, kick).toFixed(3)}em`, color: L.accent, opacity: kick }}>
           <ShotcraftMark size={34} tone="light" />

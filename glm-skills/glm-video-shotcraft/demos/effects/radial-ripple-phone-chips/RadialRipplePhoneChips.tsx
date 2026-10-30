@@ -1,24 +1,24 @@
-// radial-ripple-phone-chips — 同心波纹手机：四层同心圆错相呼吸如水波，中央手机屏内 feed 自动缓滚，
-// 两侧 chip 先后 spring pop 入场并悬浮。三层动作各自极慢，叠起来让产品定格镜头"活着"。
+// radial-ripple-phone-chips — Concentric ripple smartphone: Four concentric ripples breathe asynchronously like water waves, central phone screen feed scrolls gently,
+// flanking chips spring-pop into frame sequentially and hover. Three layers of slow motion combined keep the product showcase hero "alive".
 //
-// 第二轮重设计（暖沙 · 手机上的 video-shotcraft 镜头库）：
-// - look = sand。同心圆是四层由深到浅的暖沙色圆盘（2240/1760/1280/840px，铺满画面并出画），
-//   每层有受光上沿与发丝外缘，像沙地上被风吹出的一圈圈涟漪 / 声波；中心一团暖白柔光托住手机。
-// - 主体：按 1080p 原生尺寸搭的手机（430×900，占画高 83%），暖钛金属边框 + 黑边 + 灵动岛 + 侧键 +
-//   玻璃斜反光 + 两层落地投影。屏内是为镜头设计的镜头配方 feed：大标题「Shot library」、带几何插画缩略图的
-//   镜头卡（镜头名 / 分类 / 时长 / 预览进度）、底部常驻迷你预览条（成片配乐在走、波形在跳）。
-//   feed 匀速自动滚动（自动播放语义，不加缓动）。
-// - 两侧 chip：白色大胶囊（36px 字 + 赤陶色图标圆），从手机侧边弹出（spring 过冲一次），
-//   落位后才渐渐介入 ±8px 的悬浮；左「Shot recipe cards」先、右「Remotion render」后，错开 30f。
-// - 收尾海报：左下角镜刻标志 + 字标「video-shotcraft — Every shot, tuned in one place.」在两枚 chip 都落定后升起。
+// Second-round redesign (Warm sand · video-shotcraft shot library on mobile):
+// - look = sand. Concentric circles are four layers of warm sand disks graduating from deep to light (2240/1760/1280/840px, bleeding beyond frame),
+//   each layer featuring an illuminated top edge and hairline rim, resembling wind-blown dune ripples / acoustic sound waves; central warm white soft glow anchors the phone.
+// - Hero: Smartphone built to native 1080p proportions (430×900, 83% viewport height), warm titanium metallic frame + black bezel + Dynamic Island + side buttons +
+//   diagonal glass reflection + dual floor drop shadows. Screen features curated shot recipe feed: Headline "Shot library", shot cards with geometric thumbnail illustrations
+//   (shot title / category / duration / preview progress bar), persistent bottom mini preview player (soundtrack progressing, live jumping waveforms).
+//   Feed scrolls at constant speed (autoplay semantic, zero easing).
+// - Flanking chips: Large white capsules (36px text + terracotta icon circles) bursting from phone sides (single spring overshoot),
+//   settling into ±8px floating oscillation only after landing; left "Shot recipe cards" arrives first, right "Remotion render" follows 30f later.
+// - Outro poster: Bottom-left Mirror Cut emblem + wordmark "video-shotcraft — Every shot, tuned in one place." rises after both chips settle.
 //
-// 时间表（30fps，共 168f）：
-//   0–26    预备：同心圆第 1 帧就在呼吸；手机从下方 90px 升起落位（snappy，投影同步收紧）
-//   13–165  feed 匀速滚动 0→−560px（t 0.08→0.98）；迷你播放条进度匀速推进
-//   37–57   左 chip pop（spring damping 13，scale 0.8→1 + 从手机侧边外移 28px）
-//   67–87   右 chip pop
-//   90–112  品牌字标逐词升起
-//   112–168 hold：同心圆、feed、chip 悬浮持续极缓运动（无死帧，不加手持抖动）
+// Timeline (30fps, total 168f):
+//   0–26    Preparation: Concentric ripples breathing from frame 1; phone rises 90px from below and settles (snappy, shadows tighten synchronously)
+//   13–165  Feed constant scroll 0->−560px (t 0.08->0.98); mini player progress bar steadily advances
+//   37–57   Left chip pops (spring damping 13, scale 0.8->1 + shifts 28px outward from phone edge)
+//   67–87   Right chip pops
+//   90–112  Brand wordmark words rise sequentially
+//   112–168 Hold: Concentric ripples, feed, and chip floating continue imperceptibly (zero static frames, no handheld jitter)
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { EASE, FONT, ramp } from '../../_fixtures/Polish';
@@ -29,11 +29,11 @@ export const RADIAL_RIPPLE_PHONE_CHIPS_DURATION = 168; // 5600ms @30fps
 
 const L = LOOKS.sand;
 const DUR = RADIAL_RIPPLE_PHONE_CHIPS_DURATION;
-// 模板强调色：落地时按项目品牌色只换这一个变量（屏内封面 / 进度 / chip 图标都跟它走）
-const ACCENT = L.accent; // 赤陶 #c4552d
+// Template accent color: Swap this single variable to adapt brand color (screen thumbnails / progress / chip icons all follow)
+const ACCENT = L.accent; // Terracotta #c4552d
 const SANS = FONT.sans;
 
-// 同心圆（外深内浅，从大到小叠放），相邻层相位差 1.7 rad
+// Concentric rings (dark outer to light inner, stacked large to small), adjacent layers phased by 1.7 rad
 const RINGS = [
   { size: 2240, color: '#dccbb4' },
   { size: 1760, color: '#e4d6c3' },
@@ -41,16 +41,16 @@ const RINGS = [
   { size: 840, color: '#f2eadf' },
 ].map((r, i) => ({ ...r, phase: i * 1.7 }));
 
-// 手机几何（画布像素）
+// Phone geometry (canvas pixels)
 const PW = 430;
 const PH = 900;
-const FRAME = 12; // 金属边框
-const BLACK = 9; // 屏幕黑边
+const FRAME = 12; // Metal bezel thickness
+const BLACK = 9; // Screen black border
 const PX = (1920 - PW) / 2;
 const PY = (1080 - PH) / 2;
-const CHIP_GAP = 64; // chip 与手机外缘的间距
+const CHIP_GAP = 64; // Gap between chip and phone outer edge
 
-// 镜头库 feed（video-shotcraft 的镜头配方卡；prog = 预览进度）
+// Shot library feed (video-shotcraft shot recipe cards; prog = preview progress)
 type Ep = { title: string; show: string; len: string; prog: number; art: number };
 const EPS: Ep[] = [
   { title: 'Graze face tour', show: 'Camera', len: '4.0 s', prog: 0.62, art: 0 },
@@ -63,7 +63,7 @@ const EPS: Ep[] = [
   { title: 'Exploded view', show: 'Camera', len: '5.0 s', prog: 0, art: 2 },
 ];
 
-// 封面插画：四套几何（太阳 / 等高线 / 圆面包 / 轨道），配色限 sand 的赤陶 + 钴蓝 + 中性
+// Thumbnail illustration: 4 geometric sets (Sun / Contour / Roll / Orbit), palette constrained to sand terracotta + cobalt blue + neutrals
 const Art: React.FC<{ k: number; size: number }> = ({ k, size }) => {
   const s = size;
   const base: React.CSSProperties = { position: 'relative', width: s, height: s, borderRadius: s * 0.2, overflow: 'hidden', flex: 'none' };
@@ -107,7 +107,7 @@ const Feed: React.FC = () => (
   <div style={{ padding: '76px 16px 0', fontFamily: SANS, color: L.ink }}>
     <div style={{ fontSize: 17, fontWeight: 650, letterSpacing: '0.06em', color: L.ink3, textTransform: 'uppercase', marginLeft: 4 }}>Today · 3 new shots</div>
     <div style={{ fontSize: 44, fontWeight: 780, letterSpacing: '-0.035em', lineHeight: 1.05, marginLeft: 2, marginTop: 4 }}>Shot library</div>
-    {/* 精选大卡 */}
+    {/* Featured hero card */}
     <div style={{ position: 'relative', marginTop: 20, height: 210, borderRadius: 26, overflow: 'hidden', background: `linear-gradient(150deg, #3a2c22 0%, #6b4a33 100%)` }}>
       <div style={{ position: 'absolute', right: -40, top: -50, width: 230, height: 230, borderRadius: '50%', background: `radial-gradient(circle, ${alpha('#ffb27a', 0.9)} 0%, ${alpha(ACCENT, 0.6)} 45%, ${alpha(ACCENT, 0)} 70%)` }} />
       <div style={{ position: 'absolute', left: 22, top: 22, fontSize: 15, fontWeight: 700, letterSpacing: '0.1em', color: alpha('#fbe7d3', 0.7) }}>NEW RECIPE</div>
@@ -136,7 +136,7 @@ const Feed: React.FC = () => (
   </div>
 );
 
-// chip 图标
+// Chip icon
 const ChipIcon: React.FC<{ kind: 'download' | 'chapters' }> = ({ kind }) => (
   <div style={{ width: 60, height: 60, borderRadius: 30, flex: 'none', background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.3)}` }}>
     <svg width={30} height={30} viewBox="0 0 24 24" fill="none" stroke="#fff8f0" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
@@ -162,16 +162,16 @@ export const RadialRipplePhoneChips: React.FC = () => {
   const f = useCurrentFrame();
   const t = f / (DUR - 1);
 
-  // 手机入场：从下方 90px 升起，投影随落位收紧
+  // Phone entrance: Rises from 90px below, shadows tighten with settlement
   const rise = ramp(f, 0, 26, EASE.snappy);
   const phoneY = (1 - rise) * 90;
   const phoneOp = Math.min(1, rise * 2.2);
 
-  // feed 匀速自动滚动（t 0.08→0.98）
+  // Feed constant automatic scroll (t 0.08->0.98)
   const scrollP = Math.min(1, Math.max(0, (t - 0.08) / 0.9));
   const scrollY = -560 * scrollP;
 
-  // chip：spring pop + 从手机侧边外移，落位后才渐入悬浮
+  // Chips: spring pop + outward shift from phone side, transitioning into hover only after touchdown
   const chip = (t0: number, ph: number, side: -1 | 1): React.CSSProperties => {
     const s = springAt(f, t0, { damping: 13, stiffness: 190 });
     const slide = ramp(f, t0, 20, EASE.snappy);
@@ -190,13 +190,13 @@ export const RadialRipplePhoneChips: React.FC = () => {
     boxShadow: `inset 0 1px 0 #ffffff, 0 0 0 1px ${alpha(L.shadow, 0.06)}, 0 3px 6px ${alpha(L.shadow, 0.08)}, 0 26px 50px -16px ${alpha(L.shadow, 0.32)}`,
   };
 
-  const playP = 0.34 + 0.05 * t; // 迷你播放条进度
+  const playP = 0.34 + 0.05 * t; // Mini player progress
   const wordmark = 90;
 
   return (
     <div style={{ width: 1920, height: 1080, position: 'relative', overflow: 'hidden' }}>
       <Stage look={L} keyLight={{ x: 0.4, y: 0.0 }} fill={null} vignette={0.2} grain={0.05}>
-        {/* 同心圆：各层错相极缓呼吸；受光上沿 + 白色发丝外缘，像涟漪的反光 */}
+        {/* Concentric rings: Phased gentle breathing across layers; illuminated top edge + white hairline rim mimicking ripple specular */}
         {RINGS.map(({ size, color, phase }, i) => (
           <div key={i} style={{
             position: 'absolute', left: 960 - size / 2, top: 540 - size / 2, width: size, height: size, borderRadius: '50%',
@@ -205,38 +205,38 @@ export const RadialRipplePhoneChips: React.FC = () => {
             transform: `scale(${(1 + 0.06 * Math.sin(t * Math.PI * 2 * 1.5 + phase)).toFixed(5)})`,
           }} />
         ))}
-        {/* 中心暖白柔光：把视觉重心收到手机 */}
+        {/* Central warm white soft glow: Concentrates visual gravity on smartphone */}
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 26% 44% at 50% 50%, rgba(255,250,240,0.7) 0%, rgba(255,250,240,0) 100%)' }} />
       </Stage>
 
-      {/* 手机（含投影、侧键）整体上升 */}
+      {/* Phone assembly (including drop shadows, side buttons) ascends as a unit */}
       <div style={{ position: 'absolute', left: PX, top: PY, width: PW, height: PH, transform: `translateY(${phoneY.toFixed(2)}px)`, opacity: phoneOp }}>
-        {/* 落地投影：贴近实影 + 远处大柔影（随落位收紧） */}
+        {/* Ground drop shadow: Crisp contact shadow + wide ambient shadow (tightening with landing) */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 70,
           boxShadow: `0 4px 10px ${alpha(L.shadow, 0.2)}, 0 ${40 + (1 - rise) * 30}px ${80 + (1 - rise) * 40}px -20px ${alpha(L.shadow, 0.42)}, 0 90px 140px -40px ${alpha(L.shadow, 0.25)}`,
         }} />
-        {/* 侧键 */}
+        {/* Side buttons */}
         {[{ side: -1, y: 190, h: 64 }, { side: -1, y: 272, h: 64 }, { side: 1, y: 230, h: 104 }].map((b, i) => (
           <div key={i} style={{
             position: 'absolute', top: b.y, width: 5, height: b.h, borderRadius: 3,
             left: b.side < 0 ? -3.5 : PW - 1.5, background: 'linear-gradient(90deg, #8a7d6e, #c9bcaa, #8a7d6e)',
           }} />
         ))}
-        {/* 暖钛边框 */}
+        {/* Warm titanium bezel */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 70, padding: FRAME,
           background: 'linear-gradient(145deg, #d9cdbb 0%, #9d907f 30%, #c7baa7 55%, #7c705f 80%, #b5a894 100%)',
           boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.35), inset 0 0 0 3px rgba(60,48,36,0.25)',
         }}>
-          {/* 黑边 */}
+          {/* Black inner border */}
           <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 58, background: '#0d0b09', padding: BLACK, boxSizing: 'border-box' }}>
-            {/* 屏幕 */}
+            {/* Screen */}
             <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 50, background: '#f7f0e6', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', transform: `translateY(${scrollY.toFixed(2)}px)` }}>
                 <Feed />
               </div>
-              {/* 状态栏：固定在顶，底下一层渐隐让内容自然没入 */}
+              {/* Status bar: Fixed at top, bottom gradient mask allows content to submerge naturally */}
               <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 70, background: 'linear-gradient(180deg, rgba(247,240,230,1) 55%, rgba(247,240,230,0))' }} />
               <div style={{ position: 'absolute', left: 38, top: 20, font: `650 19px ${SANS}`, color: L.ink, letterSpacing: '-0.01em' }}>9:41</div>
               <div style={{ position: 'absolute', right: 32, top: 23, display: 'flex', gap: 3, alignItems: 'flex-end' }}>
@@ -245,11 +245,11 @@ export const RadialRipplePhoneChips: React.FC = () => {
                   <div style={{ width: '74%', height: '100%', borderRadius: 2, background: L.ink }} />
                 </div>
               </div>
-              {/* 灵动岛 */}
+              {/* Dynamic Island */}
               <div style={{ position: 'absolute', left: '50%', top: 14, width: 118, height: 34, marginLeft: -59, borderRadius: 17, background: '#0b0a09' }} />
-              {/* 底部托底：屏幕底色渐变，滚到播放条下面的内容自然没入 */}
+              {/* Bottom screen mask: Screen gradient feathering content beneath player bar */}
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 170, background: 'linear-gradient(180deg, rgba(247,240,230,0) 0%, rgba(247,240,230,0.92) 40%, #f7f0e6 70%)' }} />
-              {/* 迷你播放条：固定在底 */}
+              {/* Mini player bar: Pinned to bottom */}
               <div style={{
                 position: 'absolute', left: 14, right: 14, bottom: 34, height: 92, borderRadius: 26, overflow: 'hidden',
                 background: 'linear-gradient(180deg, #2c241e 0%, #221b16 100%)', boxShadow: `0 14px 30px -10px ${alpha(L.shadow, 0.5)}`,
@@ -258,7 +258,7 @@ export const RadialRipplePhoneChips: React.FC = () => {
                 <Art k={0} size={62} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 19, fontWeight: 680, color: '#fff6ec', letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>Launch film · preview</div>
-                  {/* 波形：随帧轻跳（确定性） */}
+                  {/* Waveforms: Subtle deterministic frame bouncing */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 3, height: 22, marginTop: 6 }}>
                     {Array.from({ length: 22 }, (_, k) => {
                       const amp = 0.35 + 0.65 * Math.abs(Math.sin(k * 1.37 + f * 0.21) * Math.cos(k * 0.53 - f * 0.09));
@@ -274,16 +274,16 @@ export const RadialRipplePhoneChips: React.FC = () => {
                 </div>
                 <div style={{ position: 'absolute', left: 0, bottom: 0, height: 3, width: `${(playP * 100).toFixed(2)}%`, background: ACCENT }} />
               </div>
-              {/* home 条 */}
+              {/* Home indicator bar */}
               <div style={{ position: 'absolute', left: '50%', bottom: 10, width: 140, height: 5, marginLeft: -70, borderRadius: 3, background: alpha(L.ink, 0.75) }} />
-              {/* 玻璃斜反光（静态） */}
+              {/* Diagonal glass reflection (static) */}
               <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(118deg, rgba(255,255,255,0) 32%, rgba(255,255,255,0.14) 44%, rgba(255,255,255,0) 56%)' }} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* 两侧 chip：左先右后，从手机侧边弹出 */}
+      {/* Flanking chips: Left then right, popping out from phone edges */}
       <div style={{ ...chipBase, top: 330, right: 1920 - PX + CHIP_GAP, ...chip(37, 0, -1) }}>
         <ChipIcon kind="chapters" />
         Shot recipe cards
@@ -293,7 +293,7 @@ export const RadialRipplePhoneChips: React.FC = () => {
         Remotion render
       </div>
 
-      {/* 品牌字标（收尾海报）：镜刻标志与字标同拍升起 */}
+      {/* Brand wordmark (outro poster): Mirror Cut emblem and wordmark rise synchronously */}
       <div style={{ position: 'absolute', left: 120, bottom: 104, color: L.ink }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
           <div style={{ opacity: ramp(f, wordmark, 10, EASE.out), transform: `translateY(${((1 - ramp(f, wordmark, 18, EASE.snappy)) * 30).toFixed(2)}px)` }}>

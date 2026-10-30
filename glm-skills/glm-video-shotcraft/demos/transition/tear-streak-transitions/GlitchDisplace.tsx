@@ -1,54 +1,54 @@
-// glitch-displace｜噪声置换撕裂——整页被切成 16 条不等高横条，各条在 ±70px 内高速左右错位抖动，
-// 抖动最猛时硬切到下一页，再抖几帧归位。条带系撕裂：每条内容完整，读作"信号跳变"而不是"页面碎了"。
+// glitch-displace: noise displacement tear — page sliced into 16 unequal horizontal strips, jittering +/-70px horizontally,
+// hard cutting to next scene at peak jitter then settling. Strip tear: content remains intact within strips, reading as signal jump.
 //
-// 第二轮重设计（暗场发布控制台 · "上线那一下"）：
-// - look = midnight（深蓝夜 · 电光蓝 · 青绿点缀），等宽技术感版式。A/B 是同一块发布控制台的两态：
-//   A「Rolling out Shotcraft」进度卡在 99%、18 个区域格亮了 17 个、日志在滚；
-//   B「Shotcraft is live.」18/18 全亮青绿、p95 延迟大数字、三项上线指标。两页网格完全一致，
-//   撕裂扫过时读作"系统状态瞬间跳变"——故障语义正好服务"上线切换"。顶栏是 video-shotcraft 的
-//   镜刻标志 + 字标（剪影重影里标志随页面一起单色化）；版本号 4.0.0 只是控制台示意值。
-// - 撕裂的专业讲究：条带不等高（最窄约最宽 1/3）；按条分"能量"（约两成不动、三成满幅、其余轻颤），
-//   位移值过一道指数推向两端；重影改成双色剪影（同一页内容的青绿 / 电光蓝单色副本，±12px 错开、screen 叠加），
-//   挂在条带里随条一起错位——比灰阶明暗重影更"信号"；错位条上沿 1px 亮线 = 撕口切边；
-//   撕裂期另有 2 根全宽扫描亮线逐帧跳位 + 信号颗粒；切点帧曝光抬升 + 整屏 1.6% 冲击放大掩护硬切。
-// - 预备：30–31f 两条细条先轻颤 ±12px（前兆），进度条同时卡在 99%——观众先"感到不对"。
-// - 页面底是每页自带的不透明渐变 + 点阵（条带必须不透明才不叠影）；暗角和颗粒只在最上层画一次。
+// Redesign (dark launch console: "the go-live moment"):
+// - look = midnight (deep blue night, electric blue, mint accent), monospace technical styling. A/B are two states of launch console:
+//   A "Rolling out Shotcraft": progress stuck at 99%, 17/18 region cells lit, rolling logs;
+//   B "Shotcraft is live.": 18/18 region cells mint, p95 latency hero metric, 3 operational metrics. Shared grid layout
+//   conveys instantaneous state transition during glitch sweep. Header includes
+//   ShotcraftMark + wordmark; v4.0.0 represents console build status.
+// - Glitch craft: variable strip heights (narrowest ~ 1/3 of widest); strip energy distribution (20% static, 30% full-amplitude, rest subtle),
+//   displacement values exponential towards extremes; dual-color ghost silhouettes (mint/blue offset +/-12px screen blend),
+//   tracking displaced strips; 1px bright tear edge on displaced strips;
+//   2 full-width scanlines per frame + grain; exposure boost and 1.6% zoom shockwave masking hard cut.
+// - Anticipation: 30-31f two thin strips glitch +/-12px while progress stalls at 99%.
+// - Opaque backgrounds with dot matrices prevent ghosting; vignette and grain drawn once on top.
 //
-// 时间表（30fps，共 135f）：
-//   0–40    A 态：进度 86%→99%（ease-out 越走越慢），区域格逐个点亮，日志三行错峰升起；整屏极缓推进
-//   30–31   前兆 2f
-//   44–60   撕裂 16f：44–47 out-cubic 冲起 → 平台 → 54 硬切 B（藏在满幅抖动里）→ 54–60 线性消散归位
-//   60      摘罩：条带 / 重影 / 扫描线全部条件卸载，直出裸 B
-//   58–100  余波：区域格一道青绿波从左到右扫过（stagger）、p95 从 58→41ms 计数、三项指标错峰升起
-//   100–135 hold 35f：整屏推进收尾，Live 信号点每 40f 一次脉冲
+// Timeline (30fps, total 135f):
+//   0-40    State A: progress 86%->99% (ease-out deceleration), region cells light up, logs rise; slow push-in
+//   30-31   Anticipation glitch 2f
+//   44-60   Tear 16f: 44-47 out-cubic burst -> plateau -> 54 hard cut to B -> 54-60 linear decay
+//   60      Unmask: strips/ghosts/scanlines cleanly unmount, revealing State B
+//   58-100  Aftermath: mint wave sweeps across cells (stagger), p95 counts 58->41ms, metrics rise
+//   100-135 Hold 35f: slow push finishes, Live beacon pulses every 40f
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, Vignette, ramp } from '../../_fixtures/Polish';
 import { LOOKS, alpha, glow, type } from '../../_fixtures/Look';
 import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
-export const GLITCH_DISPLACE_DURATION = 135; // A 44 + 撕裂 16 + 余波/静止 75
+export const GLITCH_DISPLACE_DURATION = 135; // A 44 + Tear 16 + Aftermath/Hold 75
 
 const M = LOOKS.midnight;
 const W = 1920;
 const H = 1080;
-const PAD = 120; // 安全边
+const PAD = 120; // Safe margin
 const STRIPS = 16;
-const AMP = 70; // 峰值条带错位（一眼可见的撕裂档）
-const GHOST = 12; // 双色剪影错位 px
-const PRE = [30, 31]; // 前兆帧
+const AMP = 70; // Peak strip displacement amplitude
+const GHOST = 12; // Ghost silhouette displacement px
+const PRE = [30, 31]; // Anticipation glitch frames
 const TEAR_IN = 44;
-const CUT = 54; // 硬切：满幅抖动中
-const TEAR_OUT = 60; // 摘罩
+const CUT = 54; // Hard cut frame (during peak jitter)
+const TEAR_OUT = 60; // Unmask frame
 const CELLS = 18;
 
-// 库内标准伪随机
+// Standard pseudo-random generator
 const h = (n: number) => {
   const s = Math.sin(n * 127.3) * 43758.5453;
   return s - Math.floor(s);
 };
 
-// 16 条不等高条带：权重 0.45–1.35 归一化到 1080，最后一条吃掉余数
+// 16 variable-height strips: weights 0.45-1.35 normalized to 1080px
 const BANDS = (() => {
   const w = Array.from({ length: STRIPS }, (_, i) => 0.45 + h(i * 13 + 5) * 0.9);
   const sum = w.reduce((a, b) => a + b, 0);
@@ -61,14 +61,14 @@ const BANDS = (() => {
   });
 })();
 
-// 每条的「能量」：约两成静止、三成满幅、其余轻颤（固定，不随帧变）
+// Strip energy allocation: ~20% static, ~30% full amplitude, rest intermediate
 const ENERGY = BANDS.map((_, i) => {
   const r = h(i * 7 + 101);
   return r < 0.2 ? 0 : r > 0.68 ? 1 : 0.18 + r * 0.35;
 });
 
-// ───────────── 页面（A / B 两态同网格） ─────────────
-// tint 给定时只画内容剪影（单色、透明底），用作撕裂重影
+// ------------- Pages (A/B share identical layout grid) -------------
+// Render monochrome silhouette when tint is provided for ghosting
 type Tone = { bg: boolean; ink: string; ink2: string; ink3: string; accent: string; teal: string; line: string; cell: string };
 const toneOf = (tint?: string): Tone =>
   tint
@@ -86,7 +86,7 @@ const STATS = [
   { v: '2m 14s', l: 'global propagation' },
 ];
 
-// 曲线数据（0–1，越大越高）
+// Curve data (0-1 range)
 const TRAFFIC = [0.02, 0.03, 0.05, 0.08, 0.14, 0.22, 0.33, 0.45, 0.58, 0.7, 0.8, 0.88, 0.93, 0.96, 0.98];
 const LATENCY = [0.92, 0.9, 0.86, 0.88, 0.8, 0.72, 0.66, 0.56, 0.5, 0.42, 0.36, 0.3, 0.27, 0.25, 0.24];
 const CH = { x: 820, y: 318, w: 560, h: 220 };
@@ -97,7 +97,7 @@ const Chart: React.FC<{ live: boolean; f: number; prog: number; T: Tone }> = ({ 
   const id = React.useId().replace(/[^a-zA-Z0-9]/g, '');
   const v = live ? LATENCY : TRAFFIC;
   const c = live ? T.teal : T.accent;
-  // A 画到进度处；B 切后 24f 从左画满
+  // State A draws to progress point; State B fills across 24f
   const drawn = live ? 0.35 + 0.65 * ramp(f, CUT + 2, 24, EASE.out) : 0.25 + 0.75 * ((prog - 0.86) / 0.13);
   const d = linePath(v);
   const n = v.length - 1;
@@ -131,10 +131,10 @@ const Chart: React.FC<{ live: boolean; f: number; prog: number; T: Tone }> = ({ 
 const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint }) => {
   const T = toneOf(tint);
   const live = s === 'B';
-  // A：进度 86 → 99（ease-out 越走越慢，卡在 99）
+  // State A: progress 86 -> 99 (ease-out deceleration, holds at 99)
   const prog = 0.86 + 0.13 * ramp(f, 0, 40, EASE.out);
   const lit = live ? CELLS : Math.min(CELLS - 1, Math.floor(prog * CELLS + 0.4));
-  // B：p95 58 → 41ms
+  // State B: p95 latency 58 -> 41ms
   const p95 = Math.round(58 - 17 * ramp(f, CUT + 4, 30, EASE.out));
   const ping = live ? ((f - CUT) % 40) / 40 : 0;
   const markC = live ? T.teal : T.accent;
@@ -144,13 +144,13 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
       {T.bg && (
         <>
           <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${M.bg[0]} 0%, ${M.bg[1]} 55%, ${M.bg[2]} 100%)` }} />
-          {/* 主光：A 冷灰蓝、B 电光蓝通电 */}
+          {/* Key light: State A cool gray-blue, State B energized electric blue */}
           <div style={{
             position: 'absolute', inset: 0,
             background: `radial-gradient(ellipse 62% 70% at 22% 18%, ${alpha(live ? M.light : '#3a4a72', live ? 0.42 : 0.3)} 0%, ${alpha(M.light, 0)} 70%), ` +
               `radial-gradient(ellipse 60% 34% at 70% 104%, ${alpha(live ? M.accent2 : '#2a3a60', live ? 0.2 : 0.14)} 0%, rgba(0,0,0,0) 72%)`,
           }} />
-          {/* 点阵：静止的背景纹理，条带错位时连背景也读得出撕裂 */}
+          {/* Dot grid background texture */}
           <div style={{
             position: 'absolute', inset: 0, opacity: 0.55,
             backgroundImage: `radial-gradient(circle, ${alpha(M.ink2, 0.16)} 1.4px, rgba(0,0,0,0) 1.8px)`,
@@ -159,9 +159,9 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
         </>
       )}
 
-      {/* 顶栏 */}
+      {/* Top header bar */}
       <div style={{ position: 'absolute', left: PAD, top: 76, display: 'flex', alignItems: 'center', gap: 20 }}>
-        {/* 品牌标志：正片用暗底反白版；剪影重影（tint）里随页面一起画成单色 */}
+        {/* Brand mark: inverted on dark base; rendered monochrome when tinted */}
         <ShotcraftMark size={48} tone="dark" frameColor={tint} cutColor={tint} />
         <span style={{ fontFamily: BRAND.font, fontSize: 38, fontWeight: 700, letterSpacing: '0.03em', color: T.ink }}>{BRAND.name}</span>
         <span style={{ ...type(34, 450), color: T.ink3 }}>/</span>
@@ -184,7 +184,7 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
         {live ? 'LIVE · prod' : 'DEPLOYING · prod'}
       </div>
 
-      {/* 眉题 + 主标题 */}
+      {/* Kicker + Headline */}
       <div style={{ position: 'absolute', left: PAD, top: 248, fontFamily: FONT.mono, fontSize: 30, fontWeight: 600, letterSpacing: '0.06em', color: markC }}>
         {live ? 'RELEASE 4.0.0 · 18 OF 18 REGIONS' : 'RELEASE 4.0.0 · BUILD 2047'}
       </div>
@@ -196,10 +196,10 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
         </span>
       </div>
 
-      {/* 中区曲线：A 流量切换爬升（随进度画出）/ B 延迟下探；填满标题与大数字之间的空当 */}
+      {/* Chart curve: A rollout ramp-up / B latency drop */}
       <Chart live={live} f={f} prog={prog} T={T} />
 
-      {/* 右侧大数字：A 进度 / B p95 延迟 */}
+      {/* Large metric: A progress percentage / B p95 latency */}
       <div style={{ position: 'absolute', right: PAD, top: 300, textAlign: 'right' }}>
         <div style={{ fontFamily: FONT.mono, fontSize: 196, fontWeight: 600, letterSpacing: '-0.05em', lineHeight: 1, color: T.ink, fontVariantNumeric: 'tabular-nums' }}>
           {live ? <>{p95}<span style={{ fontSize: 84, color: T.ink2, letterSpacing: '-0.02em' }}>ms</span></> : <>{Math.floor(prog * 100)}<span style={{ fontSize: 84, color: T.ink2 }}>%</span></>}
@@ -207,12 +207,12 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
         <div style={{ ...type(34, 500), color: T.ink2, marginTop: 14 }}>{live ? 'p95 latency, global' : 'traffic shifted'}</div>
       </div>
 
-      {/* 18 区域格 */}
+      {/* 18 region cells */}
       <div style={{ position: 'absolute', left: PAD, right: PAD, top: 628, display: 'flex', gap: 12 }}>
         {Array.from({ length: CELLS }, (_, i) => {
           const on = i < lit;
           const waiting = !live && i === lit;
-          // B：一道青绿波从左扫到右
+          // State B: mint pulse wave sweeps left to right
           const wave = live ? ramp(f, CUT + 6 + i * 1.3, 6, EASE.out) * (1 - ramp(f, CUT + 12 + i * 1.3, 16, EASE.out)) : 0;
           const c = live ? T.teal : T.accent;
           const blink = waiting ? 0.35 + 0.35 * Math.sin(f / 3.2) : 0;
@@ -228,7 +228,7 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
         })}
       </div>
 
-      {/* 下部：A 日志 / B 三项指标 */}
+      {/* Bottom section: A logs / B key metrics */}
       {!live ? (
         <div style={{ position: 'absolute', left: PAD, right: PAD, top: 772 }}>
           {LOGS.map((l, i) => {
@@ -260,7 +260,7 @@ const Page: React.FC<{ s: 'A' | 'B'; f: number; tint?: string }> = ({ s, f, tint
         </div>
       )}
 
-      {/* 页脚：纹理小字 */}
+      {/* Footer microcopy */}
       <div style={{
         position: 'absolute', left: PAD, right: PAD, bottom: 64, display: 'flex', justifyContent: 'space-between',
         fontFamily: FONT.mono, fontSize: 22, letterSpacing: '0.08em', color: T.ink3, opacity: 0.8,
@@ -278,12 +278,12 @@ export const GlitchDisplace: React.FC = () => {
   const precursor = PRE.includes(frame);
   const tearing = frame >= TEAR_IN && frame < TEAR_OUT;
 
-  // 整屏极缓推进 1 → 1.018（对称 in-out，起止无速度突变）+ 切点冲击放大 1.6%（5f 收回）
+  // Slow continuous push 1 -> 1.018 + 1.6% shockwave zoom at cut frame (recovers in 5f)
   const push = 1 + 0.018 * ramp(frame, 0, 135, EASE.smooth);
   const kick = frame >= CUT ? 0.016 * (1 - ramp(frame, CUT, 6, EASE.out)) : 0.006 * ramp(frame, TEAR_IN, CUT - TEAR_IN, EASE.exit);
   const zoom = push + kick;
 
-  // 幅度包络：44–47 out-cubic 冲起 → 平台 → 54–60 线性消散
+  // Amplitude envelope: 44-47 out-cubic burst -> plateau -> 54-60 linear decay
   const rise = ramp(frame, TEAR_IN, 3, (t) => 1 - Math.pow(1 - t, 3));
   const decay = 1 - ramp(frame, CUT, TEAR_OUT - CUT, EASE.linear);
   const env = tearing ? Math.min(rise, decay) : 0;
@@ -301,7 +301,7 @@ export const GlitchDisplace: React.FC = () => {
   });
   const active = precursor || tearing;
 
-  // 扫描亮线：撕裂期每帧 2 根随机高度的全宽细线
+  // Scanlines: 2 full-width scanlines per frame during tear
   const scans = tearing
     ? [0, 1].map((k) => ({ y: Math.floor(h(frame * 13 + k * 71) * H), a: (0.25 + 0.55 * h(frame * 5 + k)) * env, w: 1 + Math.floor(h(frame + k * 9) * 3) }))
     : [];
@@ -312,7 +312,7 @@ export const GlitchDisplace: React.FC = () => {
         position: 'absolute', inset: 0, transform: `scale(${zoom.toFixed(5)})`,
         filter: exposure > 1 ? `brightness(${exposure})` : undefined,
       }}>
-        {/* 底：完整页（静止条直接露出它；摘罩后只剩它） */}
+        {/* Base page (uncovered by static strips, sole survivor after unmask) */}
         <Page s={s} f={frame} />
 
         {active &&
@@ -332,7 +332,7 @@ export const GlitchDisplace: React.FC = () => {
                     </>
                   )}
                 </div>
-                {/* 撕口切边：上沿亮线、下沿暗线 */}
+                {/* Tear slice edges: bright top edge, dark bottom edge */}
                 <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 1.5, background: alpha('#dfe8ff', 0.5), opacity: Math.max(0, Math.min(1, (Math.abs(st.dx) - 25) / 30)) }} />
                 <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, background: 'linear-gradient(180deg, rgba(0,2,10,0) 0%, rgba(0,2,10,0.75) 100%)', opacity: Math.min(1, Math.abs(st.dx) / 30) }} />
               </div>

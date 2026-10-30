@@ -1,28 +1,28 @@
-// card-flock-tumble —— 三张 UI 页卡从侧棱薄边 3D 翻飞成阶梯站定（一条 Catmull-Rom 样条，全程清晰），
-// 站定后保持慢转不停，10f 加速吸入中心，炸出单个湍流烟雾环扩散，巨字横贯收场。
-// 用户历次裁决全部保留：三卡全程零模糊；烟雾环只有一个、湍流絮边、衰减极慢；站定后不许停；收束要快；不加粒子。
+// card-flock-tumble — Three UI cards tumble in 3D from knife-edge profile into a stepped lineup along a Catmull-Rom spline (tack-sharp throughout),
+// continue slow rotation without stopping, pull inward to center with 10f acceleration, burst into a single turbulent smoke ring, and finish with giant headline slam.
+// User directives preserved: zero blur on cards; exactly one smoke ring with turbulent frayed edges and very slow decay; never stop after landing; fast collapse; no particles.
 //
-// 第二轮重设计（设计决定）
-// - look = aurora（紫粉极光暗场）。整片收成一套色：卡片环境辉光、背景字墙、烟雾环、巨字全部落在
-//   紫 → 粉 → 奶桃这一条色带上，去掉原来黄 / 品红 / 紫 / 蓝四色彩虹，能量感靠亮度和运动，不靠色数。
-// - 背景：彩虹描边字墙换成两行 300px 单色描边「CRAFT THE SHOT」反向缓移（淡紫 0.16），卡后一团极光
-//   主光把卡片群托起来；收束时字墙随吸入向中心收缩并淡出（不糊卡片）。
-// - 构图：卡片群重心移回画面中心偏下（原版偏左上），收束点 = 环心 = 巨字中心，一条视线。
-// - 节奏：去掉原版 72–84f 的黑场空档——吸入到点（70f）同一帧中心一记白热闪核（6f 衰减），环从闪核里
-//   长出；巨字 74f 就"砸"进来（1.22 → 1，snappy 14f + 字距收拢），之后极缓长大不停；眉题 / 标语随后错峰。
-// - 巨字改成实心：白热芯 → 淡紫的竖向渐变填充 + 粉紫泛光（全片唯一的泛光主角，Q4），
-//   上方 video-shotcraft 标志 + 字标眉题、下方 44px 品牌短句，结尾是一张完整的发布海报。
-// - 卡片 UI = video-shotcraft 工作台（收件箱 / 镜头列表 / 首页），按 CARD_ZOOM 布局级放大栅格化（Q2）。
+// Design Decisions:
+// - look = aurora (violet-pink darkfield). Unified palette: card ambient glow, background text wall, smoke ring, and giant headline all stay
+//   within violet -> pink -> peach ribbon, replacing rainbow scheme; intensity driven by brightness and motion rather than color count.
+// - Background: Rainbow stroke wall replaced with two 300px monochrome stroked "CRAFT THE SHOT" lines drifting in opposing directions (light violet 0.16),
+//   with an aurora key light behind cards lifting the flock; on collapse, text wall shrinks toward center and fades out cleanly without muddying cards.
+// - Framing: Flock center of gravity shifted lower-center (previously upper-left); convergence point = ring center = headline center, unified along one eye line.
+// - Pacing: Eliminated 72-84f black gap — collapse arrives (70f) with an instant white-hot core flash (6f decay), ring sprouts directly from flash;
+//   headline slams in at 74f (1.22 -> 1, snappy 14f + kerning compression), then slowly expands without stopping; eyebrow / motto follow in staggered cadence.
+// - Giant headline is solid: white-hot core -> pale violet vertical gradient fill + pink-purple glow (the sole glow hero element),
+//   topped with video-shotcraft mark + wordmark eyebrow, bottomed with 44px motto, finishing as a release poster.
+// - Card UI = video-shotcraft workbench (Inbox / Shots / Home), rasterized at layout zoom via CARD_ZOOM.
 //
-// 时间表（30fps，135f）
-//   0–22    字墙亮起（6–22f），第一张卡侧棱薄边已在画面
-//   10–54   翻飞：侧棱 → 翻飞 → 阶梯站定（样条 + out cubic）
-//   46–62   站定慢转（ry +0.34°/f，不停）
-//   62–72   收束：10f ease-in 吸入中心缩小；字墙同步向心收缩淡出
-//   70–76   闪核：白热核 + 全屏微曝，6f 衰减
-//   70–135  烟雾环：减速外扩 → 全程缓慢长大，衰减极慢
-//   74–88   巨字砸入（snappy）→ 之后极缓长大；84f 眉题、92f 标语逐词升起
-//   106–135 hold：环继续长、字极缓推近，尾帧是海报
+// Timeline (30fps, 135f):
+//   0–22    Text wall illuminates (6–22f), first card edge-on already in frame
+//   10–54   Tumble: knife-edge -> tumble -> stepped lineup (spline + out cubic)
+//   46–62   Stationary idle rotation (ry +0.34°/f, never stopping)
+//   62–72   Collapse: 10f ease-in suction to center while scaling down; text wall shrinks and fades
+//   70–76   Flash core: white-hot core + full-screen micro-exposure, 6f decay
+//   70–135  Smoke ring: decelerated expansion -> continuous slow growth, very slow decay
+//   74–88   Headline slam (snappy) -> continuous slow push; 84f eyebrow, 92f motto rise word-by-word
+//   106–135 Hold: ring keeps growing, headline pushes in slowly, end frame forms poster
 import React, { useId } from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from 'remotion';
 import { EASE, Grain, Vignette, ramp, mix } from '../../_fixtures/Polish';
@@ -32,22 +32,22 @@ import { BRAND, PITCH, ShotcraftMark } from '../../_fixtures/Brand';
 const L = LOOKS.aurora;
 const DISPLAY = '"Avenir Next", "SF Pro Display", "Helvetica Neue", sans-serif';
 
-// ---------- 时间轴 ----------
+// ---------- Timeline ----------
 export const CARD_FLOCK_TUMBLE_DURATION = 135;
-const WALL_UP = [6, 22] as const; // 字墙亮起
-const FLIGHT = [10, 54] as const; // 侧棱→翻飞→站定：一条连续样条
-const CARD_OUT = [62, 72] as const; // 收束（快！10 帧向中心聚拢）
-const RING_T0 = 70; // 烟雾环自收束点扩散（= 闪核帧）
-const TEXT_T0 = 74; // 巨字砸入
-const CY_OFF = 30; // 卡片群 / 收束点相对画面中心的下移（构图重心）
+const WALL_UP = [6, 22] as const; // Text wall lights up
+const FLIGHT = [10, 54] as const; // Edge-on -> flight -> lineup: single continuous spline
+const CARD_OUT = [62, 72] as const; // Collapse (fast: 10 frames converging to center)
+const RING_T0 = 70; // Smoke ring spreads from convergence point (= flash frame)
+const TEXT_T0 = 74; // Headline slam
+const CY_OFF = 30; // Downward offset of card flock / convergence point relative to center
 
-// ---------- 背景：单色描边字墙 + 极光主光 ----------
+// ---------- Background: Monochrome stroked text wall + aurora key light ----------
 const Backdrop: React.FC<{ frame: number }> = ({ frame }) => {
   const up = interpolate(frame, [WALL_UP[0], WALL_UP[1]], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: EASE.out });
-  const k = ramp(frame, CARD_OUT[0], CARD_OUT[1] - CARD_OUT[0] + 4, EASE.exit); // 收束：向心收 + 淡出
+  const k = ramp(frame, CARD_OUT[0], CARD_OUT[1] - CARD_OUT[0] + 4, EASE.exit); // Collapse: centripetal pull + fade out
   const wallOp = up * (1 - k);
   const drift = frame * 2.4;
-  // 收束后极光主光换成环后的一团余辉
+  // After collapse, aurora key light switches to an afterglow behind the ring
   const bloomA = mix(0.5, 0.32, ramp(frame, CARD_OUT[0], 14, EASE.smooth));
   return (
     <AbsoluteFill style={{ background: `linear-gradient(180deg, ${L.bg[0]} 0%, ${L.bg[1]} 55%, ${L.bg[2]} 100%)`, overflow: 'hidden' }}>
@@ -68,7 +68,7 @@ const Backdrop: React.FC<{ frame: number }> = ({ frame }) => {
           ))}
         </AbsoluteFill>
       )}
-      {/* 地平线余光 */}
+      {/* Horizon glow */}
       <div style={{
         position: 'absolute', left: '-10%', right: '-10%', top: '74%', height: '30%',
         background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha(L.accent, 0.12)} 0%, ${alpha(L.accent, 0)} 70%)`,
@@ -77,9 +77,9 @@ const Backdrop: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// ---------- video-shotcraft UI 卡（出版级假内容：侧栏导航 + 三种页面——收件箱 / 镜头列表 / 首页） ----------
-// 卡片在 3D 里放大到 1.6–1.74 倍：按 CARD_ZOOM 布局级放大（CSS zoom，按目标尺寸栅格化），
-// 外层再 scale(s / CARD_ZOOM) 缩回——文字不是 560 宽位图被放大的糊字（Q2）。
+// ---------- video-shotcraft UI cards (Editorial mock content: sidebar nav + three pages: Inbox / Shots / Home) ----------
+// Cards scaled 1.6-1.74x in 3D: layout-level enlargement via CARD_ZOOM (CSS zoom, rasterized at target resolution),
+// then scaled down by outer scale(s / CARD_ZOOM) — keeps typography crisp without bitmap blur.
 const CARD_ZOOM = 1.75;
 const UI = {
   sans: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif',
@@ -191,7 +191,7 @@ const UiCard: React.FC<{ seed: number; title: string }> = ({ seed, title }) => (
     style={{
       width: 560, height: 400, borderRadius: 16, boxSizing: 'border-box', display: 'flex', overflow: 'hidden', fontFamily: UI.sans,
       background: 'linear-gradient(180deg, #ffffff 0%, #faf8ff 100%)',
-      // 极光场的紫色环境辉光 + 落地暗影 + 顶部受光内高光 + 1px 发丝外框
+      // Violet ambient glow for aurora look + drop shadow + top inner highlight + 1px hairline border
       boxShadow: `inset 0 1px 0 #ffffff, 0 0 0 1px ${alpha('#d6c4ff', 0.4)}, 0 0 70px ${alpha(L.light, 0.32)}, 0 26px 70px rgba(4,1,12,0.6)`,
     }}
   >
@@ -237,7 +237,7 @@ const UiCard: React.FC<{ seed: number; title: string }> = ({ seed, title }) => (
   </div>
 );
 
-// ---------- 闪核：吸入到点同一帧的白热核 + 一层全屏微曝（6f 衰减；不画几何描边环、不加粒子） ----------
+// ---------- Flash core: white-hot core on convergence frame + full-screen micro-exposure (6f decay; no geometric rings, no particles) ----------
 const CoreFlash: React.FC<{ frame: number }> = ({ frame }) => {
   const t = frame - RING_T0;
   if (t < -1 || t > 14) return null;
@@ -253,9 +253,9 @@ const CoreFlash: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// ---------- 单个湍流烟雾环 ----------
-// 形态（用户对照原片定稿）：只有一个环；边缘破碎起絮（湍流位移）、环身明暗斑块交错；
-// 紫粉为主、顶部奶桃色；出现后减速外扩且全程缓慢长大；衰减极慢（弥散变淡而非熄灭）；中心无水面光。
+// ---------- Single Turbulent Smoke Ring ----------
+// Form: single ring; frayed turbulent edges (displacement mapping), alternating bright/dark patches along ring body;
+// predominantly purple-pink with peach top; expands with deceleration and continues slow growth throughout; very slow diffusion decay; no water surface reflection in center.
 const SmokeRing: React.FC<{ frame: number }> = ({ frame }) => {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const t = frame - RING_T0;
@@ -283,7 +283,7 @@ const SmokeRing: React.FC<{ frame: number }> = ({ frame }) => {
             <feTurbulence type="fractalNoise" baseFrequency="0.019 0.023" numOctaves={3} seed={73} result="n" />
             <feDisplacementMap in="SourceGraphic" in2="n" scale={disp * 1.1} xChannelSelector="R" yChannelSelector="G" />
           </filter>
-          {/* 顶部奶桃 → 粉 → 紫的环身渐变（aurora 色带） */}
+          {/* Top peach -> pink -> purple gradient along ring body (aurora ribbon) */}
           <linearGradient id={`ringGrad-${uid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="hsla(24 80% 82% / 0.92)" />
             <stop offset="38%" stopColor="hsla(322 78% 72% / 0.9)" />
@@ -309,7 +309,7 @@ const SmokeRing: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// ---------- 卡片位姿：Catmull-Rom 样条连续插值（真 3D 丝滑转动） ----------
+// ---------- Card poses: Catmull-Rom spline continuous interpolation (true 3D smooth rotation) ----------
 type Pose = { x: number; y: number; rx: number; ry: number; rz: number; s: number };
 const POSE_KEYS: (keyof Pose)[] = ['x', 'y', 'rx', 'ry', 'rz', 's'];
 
@@ -328,7 +328,7 @@ const splinePose = (keys: Pose[], u: number): Pose => {
   return out;
 };
 
-// 三卡：k0 侧棱（近 90° 薄边）→ k1 翻飞中段 → k2 阶梯站定（大幅重叠成一叠，s 1.6–1.74）
+// Three cards: k0 knife-edge (near 90° profile) -> k1 mid-flight -> k2 stepped lineup (overlapping stack, s 1.6-1.74)
 const CARDS: { title: string; k: [Pose, Pose, Pose]; conv: Pose }[] = [
   {
     title: 'Inbox',
@@ -364,7 +364,7 @@ const lerpPose = (a: Pose, b: Pose, t: number): Pose => {
   return out;
 };
 
-// 站定后慢转（不许停，平方缓入避免与样条衔接顿挫），收束从漂移后姿态出发
+// Slow idle rotation after landing (never stopping, quadratic ease-in to prevent seam with spline), collapse starts from drifted pose
 const idleAt = (f: number) => {
   const t = Math.min(f, CARD_OUT[0]) - FLIGHT[1] * 0.86;
   if (t <= 0) return { ry: 0, rx: 0, rz: 0 };
@@ -375,19 +375,19 @@ const idleAt = (f: number) => {
 export const CardFlockTumble: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 巨字：14f snappy 从 1.22 砸到 1、字距同步收拢，之后极缓长大（不停在死帧上）
+  // Headline: 14f snappy slam from 1.22 to 1 with kerning compression, followed by subtle continuous expansion (no frozen frames)
   const st = frame - TEXT_T0;
   const slam = ramp(frame, TEXT_T0, 14, EASE.snappy);
   const textScale = mix(1.22, 1, slam) + Math.max(0, st - 14) * 0.0008;
   const textOp = ramp(frame, TEXT_T0, 5, EASE.out);
-  const glowK = 0.6 + 0.4 * Math.exp(-Math.max(0, st) / 10); // 落地一瞬泛光更亮，随后回落
+  const glowK = 0.6 + 0.4 * Math.exp(-Math.max(0, st) / 10); // Glow flares on impact, then settles
   const tracking = mix(0.06, -0.025, slam);
 
   return (
     <AbsoluteFill style={{ background: L.bg[2] }}>
       <Backdrop frame={frame} />
 
-      {/* 卡片群（全程清晰：无 blur） */}
+      {/* Card flock (crisp throughout: no blur) */}
       {frame < CARD_OUT[1] + 2 && (
         <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', perspective: 1400, transform: `translateY(${CY_OFF}px)` }}>
           {CARDS.map((c, i) => {
@@ -401,7 +401,7 @@ export const CardFlockTumble: React.FC = () => {
               pose = splinePose(c.k, Easing.out(Easing.cubic)(raw));
               pose = { ...pose, ry: pose.ry + drift.ry, rx: pose.rx + drift.rx, rz: pose.rz + drift.rz };
             } else {
-              // 收束：10 帧 ease-in 加速向中心聚拢缩小；透明度前 55% 满格，"吸入"清晰可读
+              // Collapse: 10f ease-in acceleration toward center while shrinking; opacity stays 100% for first 55%, keeping suction readable
               const r = Math.min(1, (frame - CARD_OUT[0]) / (CARD_OUT[1] - CARD_OUT[0]));
               const e = Easing.in(Easing.quad)(r);
               const from = { ...c.k[2], ry: c.k[2].ry + drift.ry, rx: c.k[2].rx + drift.rx, rz: c.k[2].rz + drift.rz };
@@ -415,7 +415,7 @@ export const CardFlockTumble: React.FC = () => {
               }}>
                 <div style={{ zoom: CARD_ZOOM, position: 'relative' }}>
                   <UiCard seed={i} title={c.title} />
-                  {/* 叠层景深：后排卡压暗一档 */}
+                  {/* Layer depth: rear cards dimmed slightly */}
                   {i < 2 && (
                     <div style={{ position: 'absolute', inset: 0, borderRadius: 16, background: '#140b26', opacity: i === 0 ? 0.2 : 0.1, pointerEvents: 'none' }} />
                   )}
@@ -429,10 +429,10 @@ export const CardFlockTumble: React.FC = () => {
       <SmokeRing frame={frame} />
       <CoreFlash frame={frame} />
 
-      {/* 巨字锁版：眉题 / 实心巨字 / 标语 */}
+      {/* Headline layout lockup: eyebrow / solid headline / motto */}
       {st >= 0 && (
         <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', transform: `translateY(${CY_OFF}px)` }}>
-          {/* 眉题：品牌标志 + 全小写字标（字标不做全大写） */}
+          {/* Eyebrow: brand mark + lowercase wordmark (wordmark is not uppercase) */}
           <div style={{ position: 'absolute', top: 540 - 262, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 18 }}>
             <ShotcraftMark size={50} tone="dark" frameProgress={ramp(frame, TEXT_T0 + 8, 12, EASE.out)} cutProgress={ramp(frame, TEXT_T0 + 14, 10, EASE.out)} />
             <div style={{ ...type(30, 700), fontFamily: BRAND.font, color: '#f1e9ff', letterSpacing: '0.12em' }}>

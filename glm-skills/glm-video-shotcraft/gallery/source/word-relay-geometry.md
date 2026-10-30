@@ -1,75 +1,47 @@
 ---
 name: word-relay-geometry
-一句话: 三个利益词各带一套专属几何接力——虚线大圆减速自转 + 彗星弧飞跑 → 三实线圆 trim 依次生长后收拢咬紧 → 镀铬金属 sheen 扫过后一拍收成纯白；旧词缩到 0.86 淡出，新词描边→填充揭示
-适用: 三点式利益陈述（更快/更好/更强）；品牌价值观段落；需要"一词一世界"的中段推进
-时长: 约 6.0s（180f@30fps：三段各 ≈60f，段间重叠 6f）
-能量: 中高（三拍推进 + 全程几何运动 + 背景粒子，无静止帧）
+summary: Three benefit words hand off in turn, each with its own geometry — a spinning dashed circle, three interlocking circles that trim into view, and a metallic sheen that resolves to pure white.
+use: Three-part value proposition statements (Faster / Tighter / Stronger); brand values segments; mid-section momentum requiring "a distinct world for each word"
+duration: ~6.0s (180f@30fps: three segments ≈60f each, overlapping by 6f)
+energy: Medium-high (3-beat progression + continuous geometric motion + background particles, zero static frames)
 ---
 
-## 意图
-三点式利益陈述最容易做成三张字卡硬切。接力的做法是给每个词配一套
-**只属于它的几何**：虚线圆是"在转"（快）、三圆相扣并收拢是"互相咬合"（紧 / 好）、
-金属扫光是"材质硬"（强）——几何本身就在替形容词做论证。第三个词
-留了升格待遇（sheen 扫光 + 收白），因为它是结论。背景微尘、共用舞台光与底部
-三段进度条把三拍缝成一个连续空间，不然还是三张卡。
+## Intention
+A three-part value proposition easily devolves into three hard-cut title cards. The relay approach pairs each word with **a bespoke geometric motif tailored to its meaning**: a spinning dashed circle represents rotary speed ("Faster"), three interlocking circles trimming and contracting represent precision grip ("Tighter"), and a metallic sheen sweep represents hardened substance ("Stronger") — the geometry itself argues on behalf of each adjective. The third word receives elevated hero treatment (chrome sheen sweep + snapping to solid white) because it delivers the conclusion. Floating ambient dust, unified stage lighting, and a bottom 3-segment progress bar stitch the three beats into a single continuous space, avoiding the disjointed feel of three isolated slides.
 
-## 动效核心
-（demo 版本：石墨暗场电影字卡，词表 Faster / Tighter / Stronger，1920×1080 原生坐标）
-- 三段按帧排：Faster 2→62、Tighter 56→122、Stronger 116→180；每段入场 14f（snappy，
-  `scale 1.06→1` + 10px 去虚）、出场 10f（exit 强 ease-in，`scale 1→0.86` + 12px 退焦），
-  交接重叠 6f 是交棒而非硬切；末段无出场，收白后 hold 22f
-- 每词三层文字（230px/800，静态字库 Helvetica Neue）：`outline` 层 `-webkit-text-stroke:2px`
-  + 透明填充，`fill` 层纯白——**描边先到位，填充后揭示**；三层共用 `padding: 0.08em 0.1em 0.28em`，
-  否则 mask / background-clip 只画在盒内，会裁掉 g 的下伸部与末字右沿、露出底下的描边层
-- 前两词的填充是 ±7% 柔边 `mask-image` 横向擦入（入场后 10f 起、18f，swift），描边层透明度
-  同步降到 0.2 留一点重影
-- Faster 的几何：虚线大圆（r=400、`dash 10 16`）+ 外圈 120 格刻度环（r=452，反向慢转），
-  入场 22f 从 0.4 snappy 长到 1，同时多转 160° 减速刹住（飞轮感），之后匀速慢转永不停；一道 16 段
-  渐隐的白色彗星弧沿 r=400 以 7.5°/帧飞跑——"快"由两层相对转速 + 彗星的速度差读出
-- Tighter 的几何：三实线圆（r=218）`pathLength=1` + dashoffset trim 生长，起笔绕各自圆心
-  `rotate(-90 cx 0)`，延迟 0/6/12f、各 22f（out），笔头一粒发光点长满即熄；92f 起三圆间距
-  340→300 收拢 14f（swift），落定时圆线提亮一次、四个相交点亮起菱形铆钉光点（overshoot 弹出）
-  ——"紧"是看得见的收拢动作
-- Stronger 无几何：120f 起描边 → 竖向镀铬渐变（亮顶—暗腰—亮底）；124→148f 一道带香槟暖色的
-  窄白带（`100deg`、`background-size:300%`）从左扫到右；146→158f 收成纯白 + 一次泛光脉冲，
-  脚下横向光带从 0.2 宽 snappy 展开，舞台主光同拍提亮——结论词独享的升格待遇
-- 词下 40px 副句给产品证据（rise 逐词升起，demo 是 video-shotcraft 的三句宣传），左上 mono 计数「01 / 03」、
-  右上镜刻标志 + video-shotcraft 小写字标、底部三段进度条（label 级纹理）；
-  相机全程 1→1.025 smooth 极缓推进（不抖）
+## Motion Core
+(Demo: graphite dark field cinematic title card, vocabulary Faster / Tighter / Stronger, native 1920×1080 coordinates)
+- Three segments scheduled by frame: Faster 2→62, Tighter 56→122, Stronger 116→180; each segment has a 14f entrance (snappy, `scale 1.06→1` + 10px unblur) and a 10f exit (strong ease-in exit, `scale 1→0.86` + 12px defocus); the 6f inter-segment overlap ensures a fluid baton handoff rather than a hard cut; the final segment has no exit, holding static for 22f after resolving to white.
+- Three layers per word (230px/800, static font Helvetica Neue): `outline` layer `-webkit-text-stroke:2px` + transparent fill, `fill` layer solid white — **outlines land first, fill reveals second**; all three layers share `padding: 0.08em 0.1em 0.28em`, preventing mask/background-clip from clipping descenders on 'g' or the right edge of final letters to leak underlying stroke layers.
+- Fill for the first two words wipes horizontally via a ±7% soft-edged `mask-image` (starting 10f after entrance, lasting 18f, swift), while outline opacity drops synchronously to 0.2 to retain subtle ghosting.
+- Geometry for Faster: Large dashed circle (r=400, `dash 10 16`) + outer 120-division tick ring (r=452, slow counter-rotation); enters across 22f expanding snappy from 0.4 to 1 while spinning an extra 160° to brake into position (flywheel physics), thereafter continuing a perpetual slow rotation; a 16-segment fading white comet streak races along r=400 at 7.5°/frame — "speed" is perceived through the differential velocity of the two rings and the comet.
+- Geometry for Tighter: Three solid circles (r=218) with `pathLength=1` + dashoffset trim growth, launching around their respective centers via `rotate(-90 cx 0)`, staggered at delays 0/6/12f, each taking 22f (out), with a glowing pen-tip dot extinguishing upon completing stroke; starting at 92f, the circle centers contract from spacing 340 to 300 over 14f (swift), brightening upon lock while four diamond rivet glints pop in with overshoot at intersection points — "tightness" is a visible physical clamping action.
+- Stronger features no auxiliary geometry: at 120f, outline transitions to a vertical chrome gradient (bright crown — dark waist — bright foot); across 124→148f, a narrow white band with warm champagne tint (`100deg`, `background-size:300%`) sweeps left to right; across 146→158f, it snaps to pure solid white accompanied by a bloom pulse, while a horizontal light streak below expands snappy from 0.2 width and stage key light brightens in sync — elevated hero treatment reserved solely for the concluding word.
+- Below the title, a 40px subtitle delivers product proof (words rise sequentially via rise; demo features three promotional claims for video-shotcraft), with upper-left monospace counter "01 / 03", upper-right engraved logo + lowercase video-shotcraft wordmark, and bottom 3-segment progress bar (label-grade texture); camera executes an ultra-slow push-in 1→1.025 smooth throughout (no camera jitter).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 三段时段 | 各 ≈60f，重叠 6f | 每词约 2s 是"读词 + 看几何"的下限；重叠 <3f 读作硬切，>12f 两词同屏打架 |
-| 入/出场窗 | 入 14f snappy / 出 10f exit | 出场比入场短是对的（退场要决绝）；出场用 out 曲线会读作"舍不得走" |
-| outline→fill | 18f swift，±7% 柔边，outline 留 0.2 | 留一点描边做重影是质感来源，降到 0 字变扁；窗 >30f 擦入慢得像加载条 |
-| 虚线圆 | r=400、`dash 10 16`、scale 0.4→1、入场多转 160° 刹住 | 刹车是"快"的第一证据；scale 起点 >0.7 就没有"长出来" |
-| 彗星弧 | 7.5°/帧、16 段渐隐 | 比环快 8 倍以上才读得出"速度差"；段数 <8 尾巴断成虚线 |
-| trim 生长 | 延迟 6f/圆、各 22f | 相位差是"依次相扣"的关键，同时生长读作三个独立圆 |
-| 收拢 | 间距 340→300（14f swift）+ 交点铆钉 | 收拢量 <20px 看不出动作；>60px 三圆挤成一坨 |
-| sheen 扫光 | `100deg`、`background-size:300%`、24f smooth | 300% 保证白带只占字宽一小段（=金属高光）；镀铬底层不能省，否则扫光前是一块灰字 |
-| 收白 | 12f + 泛光脉冲 + 脚下光带 | 这一下是全片唯一的"结论"待遇；删了三个词就是平级，第三点没有落点 |
-| 字号配色 | 词 230px/800、副句 40px、几何 `rgba(236,238,244,.42)`、graphite 暗场 | 几何比字暗一档是层级，几何比字亮就抢主角 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Segment timing | Each ≈60f, overlapping by 6f | ~2s per word is the lower limit to "read text + perceive geometry"; overlap <3f feels like a hard cut; >12f causes words to fight on screen |
+| In/out windows | In 14f snappy / Out 10f exit | Exits shorter than entrances ensure decisive departures; using ease-out curves on exits feels reluctant and sluggish |
+| Outline → fill | 18f swift, ±7% soft edge, outline retains 0.2 | Retaining subtle outline ghosting creates tactile depth; dropping to 0 flattens type; window >30f feels like a slow loading bar |
+| Dashed circle | r=400, `dash 10 16`, scale 0.4→1, spins extra 160° to brake | Braking provides the primary proof of velocity; scale start >0.7 loses the sense of organic growth |
+| Comet streak | 7.5°/frame, 16-segment fade | Must travel >8x faster than the ring to communicate speed differential; <8 segments breaks tail into dashes |
+| Trim growth | Staggered 6f per circle, 22f each | Phase difference is critical for interlocking feel; simultaneous growth reads as three unrelated circles |
+| Contraction | Spacing 340→300 (14f swift) + intersection rivets | Displacement <20px is imperceptible; >60px squashes circles into an unreadable clump |
+| Sheen sweep | `100deg`, `background-size:300%`, 24f smooth | 300% ensures the highlight band spans only a fraction of letter width (= metallic specular); base chrome gradient is mandatory to avoid sweeping across flat grey |
+| Snap to white | 12f + bloom pulse + baseline light band | The sole concluding elevation in the sequence; removing it makes all three words equal, depriving the sequence of a resolution |
+| Typography & color | Word 230px/800, subtitle 40px, geometry `rgba(236,238,244,.42)`, graphite dark field | Geometry must be dimmer than text to preserve hierarchy; brighter geometry steals the spotlight |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- **三个词必须是同一句法的三点（demo 都是比较级单词，6–8 字母）**：
-  时段是等长的，词长差大时几何（圆半径、间距）都是写死的坐标，
-  长词会顶出虚线圆或压到相扣圆上——换词表要同步调 r 与收拢间距
-- `-webkit-text-stroke` 是前缀属性：Chromium/WebKit 才有，Firefox 下描边层
-  直接是透明（词消失）。Remotion 渲染走 Chromium 无碍，但预览环境要注意
-- SVG trim 用的 `pathLength=1` 归一化在部分老版本浏览器上对 `<circle>`
-  支持不全，退化表现是圆一次性全画出（丢生长感）——移植时先在目标
-  渲染器上验一帧
-- 出场 trim 是"入场 trim 减出场 seg"直接相减：两段窗若靠得太近
-  （段长 <40f）会出现还没长完就开始收，圆只画出一小段
-- sheen 层与 fill 层是叠着的两个 DOM：切换靠透明度交叉，若把 `white` 窗
-  与 `sh` 窗调成重叠不足，会有 1–2 帧两层都半透（字发灰）
-- 第三个词的升格待遇只能给一次：全片三个词都上 sheen 就没有结论感
-  （P4 手法去重精神）；声音上三次入场是三个节奏点，第三个词的收白值得
-  单独一记重音，配法纪律见 sound-design.md
+## Known Pitfalls
+- The demo was tuned on placeholder copy — parameters serve as a tuning baseline, not a final production lock; verify with real assets during initial production.
+- **The three words must share identical syntactic structure (demo uses comparative adjectives, 6–8 letters each)**: Segment durations are equal; geometry coordinates (circle radii, center spacing) are hardcoded, so longer words breach the dashed circle or collide with interlocking rings — adjust `r` and contraction spacing if modifying vocabulary.
+- `-webkit-text-stroke` is a vendor-prefixed property supported in Chromium/WebKit; in Firefox, the stroke layer renders transparent (words vanish). Remotion renders via Chromium with zero issues, but verify in development previews.
+- SVG trim normalized via `pathLength=1` has incomplete support on some older browser engines for `<circle>`, rendering circles instantly complete without growth — verify a test frame in target engines.
+- Exit trim subtracts exit segment progress directly from entrance trim progress: placing windows too close (segment length <40f) triggers retraction before expansion finishes, drawing only partial circle arcs.
+- The sheen layer and fill layer are stacked DOM nodes: switching relies on opacity crossfading; insufficient overlap between `white` and `sh` windows causes 1–2 frames where both layers are semitransparent, resulting in dull grey text.
+- Elevated hero treatment can only be awarded to the third word: applying chrome sheen to all three words destroys the climactic resolution (aligning with P4 anti-repetition principles). Audio: three entrances act as three rhythm points; the third word snapping to white warrants a heavy impact sound; see sound-design.md.
 
-## 参考实现
+## Reference Implementation
 demos/typography/word-relay-geometry/
-（WordRelayGeometry.tsx）
+(WordRelayGeometry.tsx)

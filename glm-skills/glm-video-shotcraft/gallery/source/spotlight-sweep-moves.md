@@ -1,52 +1,36 @@
 ---
 name: spotlight-sweep-moves
-一句话: 暗场聚光显影三式——A 醒睡扫过（光到即亮光走即暗）、B 贴边泛光横摇（紫光贴 UI 边缘渗入+聚光匀速右移）、C 角落匀速显影（径向聚光从角落匀速扩张点亮全屏）；黑场里"光即叙事"的 UI 展示
-适用: 暗色调品牌片里逐个介绍 UI 面板/功能区；黑场开场把界面"点亮"登场；段落间光转场
-时长: 单式 3.5–4.5s；A/B 可串联成巡礼段
-能量: 中低（克制、神秘感，爆点在"亮起"瞬间）
-标签: ui-entrance、transition
+summary: Three dark-scene spotlight moves: a wake-sleep sweep, an edge-glow pan with purple bleed, and a radial reveal expanding from a corner.
+use: Introducing UI panels and feature areas sequentially in dark brand videos; bringing an interface on-screen by "lighting it up" from a black void; lighting transitions between chapters
+duration: 3.5–4.5s per variant; A and B can link into a continuous tour sequence
+energy: Medium-low (restrained, mysterious; peak impact at the instant of illumination)
+tags: ui-entrance, transition
 ---
 
-## 意图
-黑场里观众只能看见光给看的东西——聚光既是照明也是运镜和剪辑：
-光到哪里哪里登场，光走即谢幕。三式共用"贴边紫色辉光光线"这个
-身份元素（光线贴着 UI 边框/logo/顶边走，辉光要亮要糊，是光在
-"抚摸"界面而不是描边动画）。命门是**匀速**：聚光的移动/扩张
-严格 linear——缓动会让光有"意图"，匀速才读作探照灯的机械扫掠
-（C 式判例：linear 但半径终值过大＝前 1/4 就饱和，观感照样不匀速）。
+## Intention
+In a black void, viewers only see what light reveals—spotlights serve simultaneously as illumination, camera movement, and editing cut: wherever the beam travels, that section debuts; when the beam departs, it takes its bow. All three variants share the signature motif of a "rim-hugging purple glow ray" (a light ray hugging UI borders, logos, and top edges; the glow must be bright and soft, acting as light "caressing" the interface rather than a mechanical stroke animation). The vital rule is **constant velocity**: beam translation and expansion must be strictly linear—easing gives light perceived "intent," whereas constant velocity conveys the mechanical sweep of a searchlight (Variant C precedent: linear velocity with an excessive final radius saturates in the first 1/4, failing to read as constant).
 
-## 动效核心
-**A 醒睡扫过**（glow-wake-sleep-panel）：radial 显影罩跟随光头从左
-向右匀速移动，范围外全黑；贴顶边紫色光线三层辉光（blur26 宽糊+
-blur9 中层+亮芯+粉色偏移层）随扫光同步走，经过 logo 时 boxShadow
-描光、到右缘点亮竖直残光；尾段光走面板沉回黑暗——有醒有睡。
-**B 贴边泛光横摇**（slide-spotlight-pan）：光线锚定面板边缘（先绕
-左上角竖缘、转角后沿顶边横走），紫光晕染渗入 UI 顶部内侧（光从
-边缘渗进界面）；聚光头匀速右移显影、面板同时匀速左滑＝相机右摇感。
-**C 角落匀速显影**（corner-spotlight-reveal）：左上角径向聚光半径
-严格 linear 扩张，照到显影照不到沉黑，最终全亮（光即转场）。
+## Motion Core
+- **A Wake-Sleep Sweep** (glow-wake-sleep-panel): A radial reveal mask tracks the spotlight head from left to right at constant velocity, outside of which all is pitch black. A top-edge purple ray with 3-tier glow (blur26 wide soft + blur9 mid + bright core + pink offset) travels synchronously with the sweep, casting a box-shadow glow when crossing the logo and leaving a vertical residual gleam on the right edge. In the tail phase, the light leaves and the panel sinks back into darkness—waking, then sleeping.
+- **B Edge-Glow Pan** (slide-spotlight-pan): Light ray anchors to panel edges (tracing the vertical left corner edge, turning, and gliding along the top edge), bleeding violet glow into the inner top UI. The spotlight head pans right at constant speed while the panel glides left at constant speed, creating the sensation of a camera panning right.
+- **C Corner Reveal** (corner-spotlight-reveal): A radial spotlight in the top-left corner expands with strictly linear radius growth, illuminating covered regions while unreached areas remain in deep black, eventually achieving full illumination (light as transition).
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 聚光移动/扩张 | 全程 linear、零缓动 | **匀速是命门**——全程零缓动；加 ease 读作光有主观意图 |
-| C 式半径终值 | 恰好在片尾覆盖全屏（1300@1080p/100f） | 终值过大＝提前饱和假匀速：亮度采样须全程平滑爬升（实测 8/46/101/…/238） |
-| 贴边光线辉光 | 3–4 层（blur26+blur9+亮芯+粉偏移） | 层少读作细线描边；辉光要够亮够糊才是"光" |
-| 光线锚定 | 严格贴 UI 边缘/顶边/logo | 光线脱离边缘漂浮＝失去"抚摸界面"语义（A 式返工判例：定位丢失紫光跑到底边） |
-| 显影罩 | radial 渐变硬边略糊（feather ~15%） | 边太硬像圆形遮罩；太糊没有"照到/照不到"的界线 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Spotlight move / expand | Strictly linear throughout, zero easing | **Constant velocity is mandatory**—zero easing across the entire shot; adding easing makes light feel consciously driven |
+| Variant C final radius | Covers full frame exactly at shot end (1300 @ 1080p / 100f) | Excessive final radius = early saturation and false linearity; luminance samples must climb smoothly throughout (measured: 8/46/101/…/238) |
+| Rim ray glow | 3–4 layers (blur26 + blur9 + bright core + pink offset) | Too few layers read as thin line strokes; glow must be sufficiently bright and diffused to read as "light" |
+| Ray anchoring | Strictly hugs UI borders, top edge, and logo | Detaching rays from edges destroys the "caressing the interface" semantics (Variant A rework precedent: lost positioning caused purple ray to drift to bottom edge) |
+| Reveal mask | Radial gradient with slightly softened edge (feather ~15%) | Excessively hard edges look like circular cookie cutters; overly soft edges blur the boundary between lit and unlit |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 light-play-moves 分工：那张是元素/文字上的
-  光泽戏（sheen/辉光呼吸）；本卡光是**运镜和剪辑**（显影/谢幕/转场），
-  光决定观众看什么
-- 三式重做判例：聚光扫过必须带贴边光线同行（v1 只有显影罩被裁
-  "改改再看"——裸聚光没有身份，贴边紫光才是这个手法的签名）
-- 原片（clickup-30）光线转角有一瞬彩虹色散，demo 未做；实战可
-  在转角帧加 1–2f 色散层提质感
+## Known Pitfalls
+- Parameters calibrated on placeholder assets; verify against production footage during initial run.
+- Division of labor with `light-play-moves`: that card handles sheen and highlight play on elements and text (sheen sweeps and breathing glows); this card treats light as **camera movement and editing** (reveals, curtain calls, transitions), where light dictates viewer focus.
+- Three-variant rework precedent: spotlight sweeps must travel with edge-hugging rays (v1 had only a reveal mask and was rejected—a bare spotlight lacks identity, whereas the edge-hugging purple ray is the signature of this technique).
+- In the original reference (clickup-30), light rays display an instant of rainbow chromatic dispersion at corners, omitted in the demo; in production, consider adding a 1–2f dispersion layer at corners to enhance tactile fidelity.
 
-## 参考实现
+## Reference Implementation
 demos/effects/spotlight-sweep-moves/
-（CornerSpotlightReveal.tsx / GlowWakeSleepPanel.tsx / SlideSpotlightPan.tsx）
-原片出处：clickup-30.mp4
+(CornerSpotlightReveal.tsx / GlowWakeSleepPanel.tsx / SlideSpotlightPan.tsx)
+Original source: clickup-30.mp4

@@ -1,42 +1,35 @@
 ---
 name: wipe-transitions
-一句话: 几何擦除转场——blinds-slice 百叶窗切条（12 根 3D 叶片错峰翻面成波，波扫过后整页由 A 换成 B）
-适用: 新旧页都不动、一条几何边界扫过完成交接的通用转场；不依赖构图里有合适元素，哪儿都能用
-时长: 前态 ≥20f + 擦除 ~56f + 收尾 ≥40f，约 4.4s（132f）
-能量: 中
+summary: A geometric wipe: twelve staggered vertical blinds flipping in a wave.
+use: Universal transitions where both outgoing and incoming pages remain stationary while a geometric boundary sweeps across to execute the handoff; independent of composition elements, usable anywhere.
+duration: Prior state ≥20f + wipe ~56f + settle ≥40f, approx. 4.4s (132f).
+energy: Medium
 ---
 
-## 意图
-转场库已有三族：穿越系（钻进去）、藏切系（遮住切）、体块系（页面是
-实体）。本卡是第四族**几何擦除系**——新旧页都不动，一条几何边界扫过
-完成交接，擦除的形状即语义：条扫是"百叶窗逐叶翻面换页"。与
-shot-transitions C 式穿窗（元素遮罩擦除）的区别：C 用页面内真实元素当遮罩
-（依赖构图），本卡是纯几何形——通用性即定位。适合横向推进、翻页语义。
+## Intention
+The transition library already features three distinct families: travel moves (diving through), hidden cuts (occluding the cut), and physical slabs (the page as a solid entity). This card introduces the fourth family: **geometric wipes**—both outgoing and incoming pages remain stationary while a geometric boundary sweeps across the frame to execute the handoff. The geometry of the wipe defines its semantic character: vertical strip sweeps embody "venetian blinds flipping vane by vane to turn the page." Contrast with shot-transitions Variant C (portal mask wipe): Variant C relies on real in-page UI elements as masks (dependent on composition), whereas this card is purely geometric—its positioning lies in its universal versatility. Perfectly suited for lateral momentum and page-turning semantics.
 
-## 做法
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A blinds-slice | 12 根 160px 真 3D 叶片（preserve-3d 双面板：正面 A 切片、背面预转 180° 的 B 切片，backface hidden），共享 1900px 透视绕自身竖轴 rotateY 0→180°，错峰成波；侧立时露出叶后暗槽 | 翻页/推进语义；横向阅读动线页面 |
+## Variant Selection
+| Variant | Method | Application |
+|---|---|---|
+| A blinds-slice | 12 true 3D vanes, each 160px wide (preserve-3d dual panels: front face displays Scene A slice, back face displays Scene B slice pre-rotated 180°, backface-visibility: hidden), sharing a 1900px perspective and rotating around their vertical axes rotateY(0 → 180°) in a staggered wave; edge-on rotation reveals deep shadow channels behind each vane | Page-turning / forward-progression semantics; pages with horizontal reading vectors |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 波 | 24f 起，叶 i 起跳 = 24 + 28·(i/11)^0.78（间隔 3.4f→2.1f，越翻越快）；每叶物理弹簧 damping 13 / stiffness 75（~13f 到 180°、≈5° 过冲回落） | 同时 4–5 叶在转才读作"波"；EASE.out 错峰首间隔 9f，第一叶之后空等，波显得拖 |
-| 叶面受光 | 转离主光的面按 0.5·sin θ 变暗（沿叶宽渐变），转向主光的面 ~35° 掠过一道 screen 高光，叶缘 2px 受光细线 ∝ sin θ；侧立时露出的暗槽 #1d1712→#120d0a 就是边界线 | 真 3D 的暗槽 + 受光本身就是擦除边界的"亮线"，不必再叠 SVG 缝线 |
-| 摘罩 | 最后一叶弹簧收敛（|θ−180°|<0.3° 连续 4 帧，demo ≈80f）后卸载全部 3D 叶片，B 页直出 | opacity 0 不算摘，残留 clip-path / 3D 层毁真静止，3D 层里的字也不如平面锐利 |
-| 收尾 | 摘罩后 ≈50f 落定（≥40f；刊头细线重画一遍、相机 1.02 落回 1） | R1 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Wave stagger | Starts at 24f; vane i launch frame = 24 + 28·(i/11)^0.78 (stagger interval tightens from 3.4f → 2.1f, accelerating through the wave); each vane driven by physical spring damping: 13 / stiffness: 75 (~13f to reach 180°, with ≈5° overshoot settling back) | 4–5 vanes must be rotating simultaneously to read as a cohesive "wave"; EASE.out stagger creates an initial 9f gap, leaving the eye waiting after the first vane and making the wave feel sluggish |
+| Vane surface lighting | Faces turning away from key light darken by 0.5·sin θ (gradient across vane width); faces turning toward key light catch a screen specular glint at ~35°; vane perimeter carries a 2px highlight proportional to sin θ; the dark channel (#1d1712 → #120d0a) revealed edge-on serves as the boundary line | True 3D dark channels + surface specular highlights naturally form the "bright leading edge" of the wipe, eliminating the need for an artificial SVG seam line |
+| Unmasking | Once the final vane's spring settles (|θ − 180°| < 0.3° for 4 consecutive frames, demo ≈80f), unmount all 3D vane layers and display Page B directly | Setting opacity to 0 does not equal unmounting; lingering clip-path or 3D layers destroy true static hold, and text inside 3D transforms lacks 2D vector sharpness |
+| Settle | ≈50f settle after unmasking (≥40f; masthead hairline redraws once, camera settles from 1.02 back to 1) | R1 |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 擦除边界必须带亮线/高光——无亮线的 wipe 读作 PPT 转场，命门；
-  本式靠叶片侧立露出的暗槽 + 叶缘受光细线当边界
-- 几何擦除全片 ≤2 次，别同片连用（两次"边界扫过"读作模板感）
-- 摘罩必须等最后一叶弹簧收敛（≈80f）再做，早一帧卸载就是叶片跳位穿帮
-- 两页反差要大（demo：暖白纸 vs 整版朱红；两页是 video-shotcraft 刊物的连续两页，刊头为 video-shotcraft 字标，
-  巨字「Frame.」→「Craft.」），且版面网格最好与叶宽同构（12 栏 × 160px）——同色系两页翻起来只看得到暗槽
-- 暗角 / 颗粒只在最外层画一次，别画进每页（每叶切片会各带一段暗角，叶缝处露馅）
+## Known Pitfalls
+- Demo was calibrated and passed on grayscale/placeholder assets—parameters are the starting point for tuning, not final production lock; must verify against real production assets on first use.
+- Wipe boundaries must carry a highlight edge—a wipe without an illuminated leading boundary looks like a generic PowerPoint slide transition; this technique relies on dark channels revealed edge-on + 2px rim highlights along vane borders to serve as the boundary.
+- Geometric wipes should appear ≤2 times per full video; avoid using consecutively (repeating "a boundary sweeping past" feels like a template).
+- Unmasking must strictly wait until the final vane's spring settles (≈80f); unmounting even a single frame early causes a jarring visual snap.
+- Contrast between the two pages must be stark (demo: warm-white paper vs. full-bleed vermilion; the two pages represent consecutive spreads of a video-shotcraft publication, masthead bearing the video-shotcraft wordmark, switching giant type "Frame." → "Craft."); the layout grid should ideally align with vane width (12 columns × 160px)—flipping between pages of the same color palette reveals only the dark channels without a satisfying wipe impression.
+- Vignettes and grain should only be rendered once on the outermost master layer, never inside individual page slices (otherwise each vane slice carries an isolated gradient slice, creating ugly banding at seams).
 
-## 参考实现
+## Reference Implementation
 demos/transition/wipe-transitions/
-（BlindsSlice.tsx）
+(BlindsSlice.tsx)

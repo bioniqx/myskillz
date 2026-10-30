@@ -22,16 +22,14 @@ const loadSaved = (): ProjectData | null => {
       if (p && Array.isArray(p.tracks)) return p;
     }
   } catch {
-    /* 损坏的存档直接回退 */
+    /* Corrupted save falls back */
   }
   return null;
 };
 
-/** 初始工程：
- *  - URL 带 `?import=project`（scripts/open.mjs 交付后打开时加）且已链接成片：
- *    存档不是这一版成片（清单内容哈希不同，见 manifestKey）就按清单重新导入，
- *    旧存档压进撤销栈（⌘Z 可找回改动）；是这一版的保留用户改动
- *  - 否则读存档；没有存档时用演示工程 */
+/** Initial project:
+ *  - URL contains ?import=project and film is linked: re-imports from manifest if version differs;
+ *  - Otherwise loads save or demo project fallback */
 const loadInitial = (): { project: ProjectData; past: ProjectData[]; imported: boolean } => {
   const raw = loadSaved();
   const saved = raw ? upgradeLegacyTheme(raw, MANIFEST, CARDS) : null;
@@ -58,7 +56,7 @@ export const findClip = (
   return null;
 };
 
-/** 素材库点击预览：卡片走 Player 实时预览，文件走原生 video/img/audio */
+/** Asset library click preview: cards use Player live preview, files use native video/img/audio */
 export type PreviewItem =
   | { kind: "card"; cardId: string }
   | { kind: "video" | "image" | "audio"; file: string; label: string }
@@ -74,7 +72,7 @@ interface WorkbenchState {
   past: ProjectData[];
   future: ProjectData[];
 
-  /** 一次编辑手势开始前调用：压入撤销快照 */
+  /** Call before an editing gesture: pushes undo snapshot */
   commit: () => void;
   undo: () => void;
   redo: () => void;
@@ -91,7 +89,7 @@ interface WorkbenchState {
   addTrack: () => void;
   removeTrack: (trackId: string) => void;
   toggleTrackHidden: (trackId: string) => void;
-  /** 拖拽排序：把轨道移到插入位 toIndex（按原数组下标：0 = 最上层，tracks.length = 最下层） */
+  /** Drag reorder: moves track to toIndex (0 = topmost layer) */
   moveTrack: (trackId: string, toIndex: number) => void;
 
   addClip: (
@@ -200,7 +198,7 @@ export const useStore = create<WorkbenchState>((set, get) => ({
     const tracks = get().project.tracks;
     const from = tracks.findIndex((t) => t.id === trackId);
     const to = Math.max(0, Math.min(tracks.length, Math.round(toIndex)));
-    // 插到自己前面或紧跟自己后面 = 原位，不记撤销
+    // Dropping before or directly after self = in place, skip undo snapshot
     if (from < 0 || to === from || to === from + 1) return;
     get().commit();
     set((s) => ({
@@ -221,9 +219,9 @@ export const useStore = create<WorkbenchState>((set, get) => ({
         const track =
           d.tracks.find((t) => t.id === trackId) ?? d.tracks[d.tracks.length - 1];
         if (!track) return;
-        // 卡片按自己的 sourceFps 编排（卡片库 30、成片单元 = 清单 fps）；工程 fps 不同时换算时长 +
-        // 反向变速，播放速度不变；媒体卡（realtime）只换算时长、不变速。
-        // 拖拽负载里的 duration（素材库给视频 / 音频的默认长度）与 durationInFrames 同口径，一并换算
+        // Cards timed by sourceFps; adjust duration and playback speed if project fps differs;
+        // Realtime media cards adjust duration only without speed change.
+        // Drag-and-drop duration scaled consistently with durationInFrames
         const { duration, speed } = clipDefaultsFor(card, d.fps, extra?.duration);
         track.clips.push({
           id: newId,
@@ -330,14 +328,14 @@ export const useStore = create<WorkbenchState>((set, get) => ({
     })),
 }));
 
-// —— 自动保存：每次改动 800ms 防抖落 localStorage；关页/切后台时立即落盘 ——
+// —— Auto-save: 800ms debounced save to localStorage on changes; flushes on unload/hidden ——
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 const flushSave = () => {
   clearTimeout(saveTimer);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(useStore.getState().project));
   } catch {
-    /* 存储满/隐私模式：忽略 */
+    /* Storage full or private mode: ignore */
   }
 };
 useStore.subscribe((s, prev) => {
@@ -349,14 +347,14 @@ window.addEventListener("beforeunload", flushSave);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") flushSave();
 });
-// 按清单重新导入的工程立即落盘：否则不改任何东西就刷新会退回旧存档
+// Flush manifest re-imported project immediately to avoid reverting on refresh
 if (initial.imported) flushSave();
 
 export const resetProject = () => {
   useStore.getState().setProject(demoProject());
 };
 
-/** 按已链接成片工程的清单重新导入（一步撤销） */
+/** Re-imports from linked film project manifest (one-step undo) */
 export const importProject = () => {
   if (!MANIFEST) return;
   useStore.getState().setProject(buildProjectFromManifest(MANIFEST));

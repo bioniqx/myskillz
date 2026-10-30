@@ -1,26 +1,26 @@
-// 组合：命令面板 × 深浅涟漪（palette-theme-ripple）——第二轮重设计：video-shotcraft 样片画廊 · 关灯
+// Combo: Command Palette x Theme Ripple (palette-theme-ripple) — redesign: video-shotcraft demo gallery - Lights Out
 //
-// 设计决定：
-// - 主体：满屏的 video-shotcraft 样片画廊（品牌轮由虚构音乐库 Overtone 换来，版式逐像素不变）——
-//   112px「Gallery」大标题、5 张 259px 程序化镜头缩略图（同一批缩略图在深浅两版里完全不变，只换 UI 外壳——
-//   真实产品的深色模式就是这样）、底部正在预览的样片播放条。侧栏标志 = 「镜刻」ShotcraftMark（随主题换反白版）。
-// - look = custom：浅版冷瓷灰白 + 珊瑚红强调；深版近黑石墨 + 同色相更亮的珊瑚。强调色只给选中态 / 播放进度 / 涟漪。
-// - 因果链（组合命门）：⌘K 面板落下 → 人手节奏打 "dark"（不等间隔）→ 回车 → 面板像老电视关机一样
-//   先纵向压成一条亮线、再横向收成一个亮点 → 亮点在原地钉 5f → 深色涟漪**从这个点**荡开换肤。
-//   收缩点 = 面板中心 = 涟漪圆心 ORIGIN；收缩完成帧 = 亮点帧，亮点结束帧 = 涟漪起始帧 RIPPLE。
-// - 涟漪：3px 白热环 + 珊瑚外辉 + 内侧白辉，外加一道晚 4f 的淡回声环；深版从圆心 1.035→1 收拢"坐实"。
-//   深版落定后专辑封面在暗场里各自投下一圈同色辉光（只有深色模式才看得见的光）。
-// - 相机：打字时极缓推向面板（1→1.03），涟漪荡开时顺势呼一口气退回 1，hold 段再 1→1.012 极缓推。
+// Design decisions:
+// - Subject: full-screen video-shotcraft gallery —
+//   112px "Gallery" headline, five 259px procedural shot thumbnails (shared unchanged across themes; only UI shell switches),
+//   bottom preview player bar. Sidebar logo = ShotcraftMark (switches to inverted version with theme).
+// - look = custom: light mode cold porcelain off-white + coral red accent; dark mode near-black graphite + brighter coral. Accent reserved for active state / progress / ripple.
+// - Causal chain: Cmd+K palette drops down -> types "dark" with human cadence -> Enter -> palette collapses like CRT TV power-off:
+//   squashes vertically into bright line, collapses horizontally into point -> point holds for 5f -> dark ripple propagates from this point.
+//   Collapse point = palette center = ripple origin ORIGIN; collapse frame = point frame, point end = ripple start RIPPLE.
+// - Ripple: 3px white-hot ring + coral outer glow + inner white glow, plus subtle echo ring delayed by 4f; dark theme settles 1.035->1.
+//   After dark mode settles, thumbnails cast matching ambient glow into dark field.
+// - Camera: subtle push toward palette during typing (1->1.03), eases back to 1 on ripple expansion, slow drift 1->1.012 during hold.
 //
-// 时间表（30fps，共 156f）：
-//   0–10    静置：浅色样片画廊（播放进度在走，画面不死）
-//   10–18   压暗 + 虚化背景（8f EASE.out）；12 面板弹簧落下（damping 17，一次轻过冲）
-//   24–37   打字 d·a·r·k（24/28/31/37，人手不等间隔）；匹配字母逐个加粗，37 首行进入选中态
-//   46      回车：首行闪一下、↵ 键帽按下
-//   48–56   CRT 关机式收缩：48–52 纵向压成亮线（ease-in），52–56 横向收成亮点；背景同步去虚化
-//   56–61   亮点钉在 ORIGIN（因果钉扎）
-//   61–95   深色涟漪荡开（34f，强 ease-out：起步猛、边缘越走越缓）+ 回声环；相机 1.03→1
-//   95–156  hold：深色定格，封面辉光亮起（95–112），进度条继续走，相机 1→1.012
+// Timeline (30fps, total 156f):
+//   0-10    Resting state: light gallery (scrubber active)
+//   10-18   Darken + blur background (8f EASE.out); 12 palette spring drop (damping 17, slight overshoot)
+//   24-37   Typing d-a-r-k (24/28/31/37, human intervals); matched letters bold, 37 top item selected
+//   46      Enter: top item flashes, return keycap presses
+//   48-56   CRT power-off collapse: 48-52 squashes into bright line (ease-in), 52-56 shrinks to point; background unblurs in sync
+//   56-61   Point holds at ORIGIN
+//   61-95   Dark ripple expands (34f, strong ease-out) + echo ring; camera 1.03->1
+//   95-156  Hold: dark mode settles, thumbnail glow ignites (95-112), scrubber continues, camera 1->1.012
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, Vignette, bezier, mix, ramp } from '../../_fixtures/Polish';
@@ -29,22 +29,22 @@ import { BRAND, ShotcraftMark } from '../../_fixtures/Brand';
 
 export const PALETTE_THEME_RIPPLE_DURATION = 156;
 
-// ───────────── 时间轴 ─────────────
+// ------------- Timeline -------------
 const DIM0 = 10;
 const PANEL_IN = 12;
-const TYPE_FRAMES = [24, 28, 31, 37]; // d a r k —— 人手节奏：起手快、r→k 犹豫一下
+const TYPE_FRAMES = [24, 28, 31, 37]; // d a r k — human cadence: brisk start, hesitation before k
 const ENTER = 46;
-const SQUASH = 48; // 纵向压线开始
-const LINE = 52; // 压成线 → 开始横向收点
-const DOT = 56; // 收成点（= 亮点帧）
-const RIPPLE = 61; // 亮点钉 5f 后涟漪起跳（组合命门：圆心 = 收缩点）
+const SQUASH = 48; // Vertical squash start
+const LINE = 52; // Flattened to line -> horizontal collapse begins
+const DOT = 56; // Collapsed to point (= bright point frame)
+const RIPPLE = 61; // Ripple launches after 5f point hold (origin = collapse point)
 const RIPPLE_END = 95;
-const ORIGIN = { x: 960, y: 452 }; // 面板中心 = 收缩点 = 涟漪圆心
-const MAX_R = 1260; // 圆心到最远角 ≈1150px，留出相机推进余量
+const ORIGIN = { x: 960, y: 452 }; // Palette center = collapse point = ripple origin
+const MAX_R = 1260; // Origin to furthest corner ~1150px with camera margin
 
 const QUERY = 'dark';
 
-// ───────────── 两套外壳（同布局，逐键映射）─────────────
+// ------------- Dual Shell Palettes (shared layout, mapped tokens) -------------
 type Theme = {
   dark: boolean; bg: string; side: string; surface: string; chip: string; line: string;
   ink: string; ink2: string; ink3: string; accent: string; bar: string;
@@ -58,7 +58,7 @@ const DARK: Theme = {
   ink: '#f3f4f6', ink2: '#939aa7', ink3: '#59606c', accent: '#ff5f48', bar: 'rgba(16,18,22,0.94)',
 };
 
-// ───────────── 程序化镜头缩略图（深浅两版共用，不随主题变）─────────────
+// ------------- Procedural Thumbnails (shared across themes) -------------
 type Album = { t: string; a: string; glow: string; Art: React.FC };
 const ArtLowTide: React.FC = () => (
   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #0f2747 0%, #1d5f74 58%, #e7a874 100%)' }}>
@@ -119,7 +119,7 @@ const ROW2: { Art: React.FC; hue: number }[] = [
   { Art: ArtNightSwim, hue: 140 }, { Art: ArtStaticBloom, hue: -60 }, { Art: ArtLowTide, hue: 40 }, { Art: ArtNeonOrchard, hue: 160 }, { Art: ArtPaperMoons, hue: 180 },
 ];
 
-// ───────────── 布局 ─────────────
+// ------------- Layout -------------
 const SIDE_W = 350;
 const MAIN_X = 430;
 const MAIN_W = 1920 - MAIN_X - 112;
@@ -129,7 +129,7 @@ const ROW1_Y = 300;
 const ROW2_Y = ROW1_Y + TILE + 130;
 const BAR_H = 124;
 
-// 16 网格线性图标
+// 16px grid line icons
 const Ic: React.FC<{ d: string[]; color: string; size?: number; w?: number }> = ({ d, color, size = 28, w = 1.6 }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flex: 'none' }}>
     {d.map((p, i) => <path key={i} d={p} stroke={color} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" />)}
@@ -150,15 +150,15 @@ const I = {
   next: ['M12 3.5v9', 'M3.5 3.5v9l6.5-4.5z'],
 };
 
-// ───────────── 整个 App（两版主题共用这一份布局）─────────────
+// ------------- Entire App (shared layout across themes) -------------
 const App: React.FC<{ th: Theme; frame: number; artGlow: number }> = ({ th, frame, artGlow }) => {
-  const prog = 0.34 + frame * 0.0009; // 播放进度一直在走
+  const prog = 0.34 + frame * 0.0009; // Playhead advances continuously
   return (
     <div style={{ position: 'absolute', inset: 0, background: th.bg, fontFamily: FONT.sans, color: th.ink, overflow: 'hidden' }}>
-      {/* 侧栏 */}
+      {/* Sidebar */}
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: SIDE_W, background: th.side, borderRight: `1px solid ${th.line}`, padding: '64px 0 0 104px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 64 }}>
-          {/* 「镜刻」标志：亮版墨框 / 深版反白框，琥珀斜切不变（标志本身不加底块与渐变） */}
+          {/* Brand mark: dark stroke for light mode / inverted white for dark mode, amber notch unchanged */}
           <ShotcraftMark size={44} tone={th.dark ? 'dark' : 'light'} />
           <span style={{ fontFamily: BRAND.font, fontSize: 34, fontWeight: 700, letterSpacing: '0.01em' }}>{BRAND.short}</span>
         </div>
@@ -180,7 +180,7 @@ const App: React.FC<{ th: Theme; frame: number; artGlow: number }> = ({ th, fram
         ))}
       </div>
 
-      {/* 标题区 */}
+      {/* Title area */}
       <div style={{ position: 'absolute', left: MAIN_X, top: 70, fontSize: 112, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1 }}>Gallery</div>
       <div style={{ position: 'absolute', left: MAIN_X, top: 208, display: 'flex', gap: 12 }}>
         {['All shots', 'Camera', 'Outro', 'Made for you'].map((c, i) => (
@@ -192,7 +192,7 @@ const App: React.FC<{ th: Theme; frame: number; artGlow: number }> = ({ th, fram
       </div>
       <div style={{ position: 'absolute', right: 112, top: 222, fontSize: 26, color: th.ink3, fontWeight: 500 }}>1080p · 30fps · sorted by recent</div>
 
-      {/* 第一排封面 */}
+      {/* Row 1 thumbnails */}
       {ALBUMS.map((al, i) => {
         const x = MAIN_X + i * (TILE + TILE_GAP);
         return (
@@ -214,7 +214,7 @@ const App: React.FC<{ th: Theme; frame: number; artGlow: number }> = ({ th, fram
           </React.Fragment>
         );
       })}
-      {/* 第二排封面（被播放条截断，只做纵深） */}
+      {/* Row 2 thumbnails (cropped by player bar for depth) */}
       {ROW2.map((r, i) => (
         <div key={i} style={{
           position: 'absolute', left: MAIN_X + i * (TILE + TILE_GAP), top: ROW2_Y, width: TILE, height: TILE, borderRadius: 18, overflow: 'hidden',
@@ -224,7 +224,7 @@ const App: React.FC<{ th: Theme; frame: number; artGlow: number }> = ({ th, fram
         </div>
       ))}
 
-      {/* 正在播放条 */}
+      {/* Active player bar */}
       <div style={{
         position: 'absolute', left: 0, right: 0, bottom: 0, height: BAR_H, background: th.bar, borderTop: `1px solid ${th.line}`,
         display: 'flex', alignItems: 'center', padding: '0 104px 0 104px', boxSizing: 'border-box',
@@ -264,36 +264,36 @@ const Kbd: React.FC<{ children: React.ReactNode; on?: number; press?: number }> 
   }}>{children}</span>
 );
 
-const RIPPLE_EASE = bezier(0.2, 0.55, 0.3, 1); // 强 ease-out：起步猛，边缘越走越缓（但圆形全程读得出）
+const RIPPLE_EASE = bezier(0.2, 0.55, 0.3, 1); // Strong ease-out: brisk start, decelerates toward edges
 
 export const PaletteThemeRipple: React.FC = () => {
   const f = useCurrentFrame();
 
-  // ── 背景压暗 / 虚化：面板在时生效，收缩时同步退去 ──
+  // --- Background dim / blur: active when palette visible, clears on collapse ---
   const dim = ramp(f, DIM0, 8, EASE.out) * (1 - ramp(f, SQUASH, DOT - SQUASH, EASE.swift));
 
-  // ── 面板：弹簧落下 → CRT 关机式收缩（先 Y 后 X）──
+  // --- Palette: spring drop -> CRT power-off collapse (Y then X) ---
   const drop = f < PANEL_IN ? 0 : springAt(f, PANEL_IN, { damping: 17, stiffness: 190 });
   const sy = f < SQUASH ? 1 : mix(1, 0.012, ramp(f, SQUASH, LINE - SQUASH, EASE.exit));
   const sx = f < LINE ? 1 : mix(1, 0.008, ramp(f, LINE, DOT - LINE, EASE.exit));
   const collapsing = f >= SQUASH;
-  const contentO = 1 - ramp(f, SQUASH, 3, EASE.linear); // 内容在压扁时先熄
-  const glare = ramp(f, SQUASH, LINE - SQUASH, EASE.linear); // 压扁过程面板越来越白热
+  const contentO = 1 - ramp(f, SQUASH, 3, EASE.linear); // Content fades early during squash
+  const glare = ramp(f, SQUASH, LINE - SQUASH, EASE.linear); // Panel glows white-hot during squash
   const panelMounted = f >= PANEL_IN && f < DOT;
 
-  // ── 输入 ──
+  // --- Input ---
   const typed = TYPE_FRAMES.filter((t) => f >= t).length;
   const charIn = (i: number) => ramp(f, TYPE_FRAMES[i], 4, EASE.snappy);
   const selT = ramp(f, TYPE_FRAMES[3], 5, EASE.out);
   const enterPress = ramp(f, ENTER, 2, EASE.linear) * (1 - ramp(f, ENTER + 2, 4, EASE.out));
   const caretOn = f < TYPE_FRAMES[3] + 2 ? true : Math.floor((f - TYPE_FRAMES[3]) / 8) % 2 === 1 ? false : true;
 
-  // ── 亮点（钉在收缩点）──
+  // --- Bright point (pinned to collapse point) ---
   const dotOn = f >= LINE + 2 && f < RIPPLE + 4;
   const dotA = f < DOT ? ramp(f, LINE + 2, DOT - LINE - 2, EASE.linear) : 1 - ramp(f, RIPPLE, 4, EASE.linear);
   const dotPulse = 1 + 0.18 * Math.sin(Math.max(0, f - DOT) * 0.9) * (f >= DOT && f < RIPPLE ? 1 : 0);
 
-  // ── 涟漪 ──
+  // --- Ripple ---
   const rAt = (fr: number, start: number) => mix(6, MAX_R, ramp(fr, start, RIPPLE_END - RIPPLE, RIPPLE_EASE));
   const r = rAt(f, RIPPLE);
   const r2 = rAt(f, RIPPLE + 4) * 0.96;
@@ -304,7 +304,7 @@ export const PaletteThemeRipple: React.FC = () => {
   const darkScale = mix(1.035, 1, ramp(f, RIPPLE, 26, EASE.snappy));
   const artGlow = ramp(f, RIPPLE_END, 17, EASE.out);
 
-  // ── 相机：打字时推向面板，涟漪时呼气退回，hold 极缓推 ──
+  // --- Camera: push in on typing, pull back on ripple, slow drift during hold ---
   const push = ramp(f, PANEL_IN, ENTER - PANEL_IN, EASE.swift);
   const exhale = ramp(f, RIPPLE, 30, EASE.smooth);
   const holdPush = ramp(f, RIPPLE_END, PALETTE_THEME_RIPPLE_DURATION - RIPPLE_END, EASE.swift);
@@ -336,7 +336,7 @@ export const PaletteThemeRipple: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: DARK.bg, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, transformOrigin: `${ORIGIN.x}px ${ORIGIN.y}px`, transform: `scale(${z.toFixed(4)})` }}>
-        {/* 浅色层：涟漪荡完卸载 */}
+        {/* Light layer: unmounted after ripple completes */}
         {!done && (
           <div style={{ position: 'absolute', inset: 0, filter: dim > 0.01 ? `blur(${(dim * 7).toFixed(2)}px) saturate(${(1 - 0.25 * dim).toFixed(3)})` : undefined }}>
             <App th={LIGHT} frame={f} artGlow={0} />
@@ -344,7 +344,7 @@ export const PaletteThemeRipple: React.FC = () => {
           </div>
         )}
 
-        {/* 深色层：从收缩点被圆形 clip 揭开 */}
+        {/* Dark layer: revealed via circular clip path from origin */}
         {darkOn && (
           <div style={{ position: 'absolute', inset: 0, clipPath: done ? undefined : `circle(${r.toFixed(1)}px at ${ORIGIN.x}px ${ORIGIN.y}px)` }}>
             <div style={{ position: 'absolute', inset: 0, transformOrigin: `${ORIGIN.x}px ${ORIGIN.y}px`, transform: darkScale !== 1 ? `scale(${darkScale.toFixed(4)})` : undefined }}>
@@ -353,7 +353,7 @@ export const PaletteThemeRipple: React.FC = () => {
           </div>
         )}
 
-        {/* 涟漪环：白热 3px + 珊瑚外辉 + 内侧白辉；晚 4f 的回声环 */}
+        {/* Ripple ring: 3px white-hot + coral outer glow + inner white glow; echo ring delayed by 4f */}
         {rippling && (
           <>
             <div style={{
@@ -368,10 +368,10 @@ export const PaletteThemeRipple: React.FC = () => {
           </>
         )}
 
-        {/* 亮点 */}
+        {/* Bright point */}
         {dotOn && (
           <>
-            {/* 横向变形光斑：CRT 收线留下的余辉，随亮点一起衰减 */}
+            {/* Horizontal anamorphic flare: CRT phosphor trail fading with point */}
             <div style={{
               position: 'absolute', left: ORIGIN.x - 420, top: ORIGIN.y - 3, width: 840, height: 6, borderRadius: 3, opacity: dotA * 0.8,
               background: `linear-gradient(90deg, rgba(255,255,255,0) 0%, ${alpha(DARK.accent, 0.5)} 30%, rgba(255,250,245,0.95) 50%, ${alpha(DARK.accent, 0.5)} 70%, rgba(255,255,255,0) 100%)`,
@@ -385,7 +385,7 @@ export const PaletteThemeRipple: React.FC = () => {
           </>
         )}
 
-        {/* ⌘K 命令面板 */}
+        {/* Cmd+K Command Palette */}
         {panelMounted && (
           <div style={{
             position: 'absolute', left: ORIGIN.x - PW / 2, top: ORIGIN.y - PH / 2 + (collapsing ? 0 : panelY), width: PW, height: PH,
@@ -399,7 +399,7 @@ export const PaletteThemeRipple: React.FC = () => {
             fontFamily: FONT.sans, color: '#0f1217',
           }}>
             <div style={{ opacity: contentO }}>
-              {/* 输入行 */}
+              {/* Input row */}
               <div style={{ height: 104, display: 'flex', alignItems: 'center', gap: 22, padding: '0 34px', borderBottom: '1px solid rgba(15,20,30,0.07)' }}>
                 <Ic d={I.search} color="#9aa1ad" size={34} w={1.7} />
                 <div style={{ display: 'flex', alignItems: 'center', fontSize: 46, fontWeight: 550, letterSpacing: '-0.025em' }}>
@@ -414,7 +414,7 @@ export const PaletteThemeRipple: React.FC = () => {
                 </div>
                 <span style={{ marginLeft: 'auto' }}><Kbd>esc</Kbd></span>
               </div>
-              {/* 结果 */}
+              {/* Results */}
               <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {rows.map((row, i) => {
                   const on = i === 0 ? selT : 0;
@@ -442,7 +442,7 @@ export const PaletteThemeRipple: React.FC = () => {
                   );
                 })}
               </div>
-              {/* 页脚提示 */}
+              {/* Footer hints */}
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 52, borderTop: '1px solid rgba(15,20,30,0.06)', background: '#f7f8f9', display: 'flex', alignItems: 'center', padding: '0 34px', gap: 26, fontSize: 21, color: '#9aa1ad' }}>
                 <span>↑↓ Navigate</span><span>↵ Run</span><span style={{ marginLeft: 'auto' }}>Shotcraft Commands</span>
               </div>

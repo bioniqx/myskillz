@@ -1,12 +1,12 @@
-"""AiflPromo（template/ Ink Press 模板 demo 片，1085f @30fps）→ 剪映草稿。
+"""AiflPromo (template/ Ink Press demo film, 1085f @ 30fps) -> JianYing draft.
 
-时间线三张表逐条抄自 template/src/aifl/Main.tsx（AIFL_SHOTS / CAPTIONS /
-SFX）。底片是 plate 渲染（无字幕无 SFX）：
+Timeline tables mirrored from template/src/aifl/Main.tsx (AIFL_SHOTS / CAPTIONS / SFX).
+Plate video is rendered without captions or SFX:
   npx remotion render src/index.ts AiflPromo out/aifl-plate.mp4 --props='{"plate":true}'
 
-用法：
-  .venv/bin/python aifl_promo.py           # 只建到 staging/
-  .venv/bin/python aifl_promo.py install   # 建 + macify + 装进剪映草稿库
+Usage:
+  .venv/bin/python aifl_promo.py           # build to staging/ only
+  .venv/bin/python aifl_promo.py install   # build + macify + install into draft library
 """
 import os
 import sys
@@ -19,12 +19,9 @@ import mac_draft
 
 FPS = 30
 TOTAL_F = 1085
-# 渲出成片的音轨整体比视频晚 ~1.28 帧，根因是输出编码链路的 AAC encoder
-# priming（48kHz 典型 2048 samples；本片实测：对 aifl-ref.mp4 交叉相关
-# click 2032 / impact 2066 samples，elst 未声明裁剪垫头；见
-# references/sound-design.md §4.6），不是 <Audio>/Sequence.from 的行为。
-# Main.tsx 的 SFX 表未做补偿、成片按此验收，剪映摆位 = from + 1 帧最接近
-# 已验收成片的音画关系。换 Remotion 版本/codec/采样率/容器须重测。
+# Rendered audio track is delayed by ~1.28 frames due to AAC encoder priming
+# (see references/sound-design.md §4.6). Setting draft placement to from + 1 frame
+# closest matches the verified master audio-video sync.
 AUDIO_LAG_F = 1
 
 NAME = "InkPress-Demo"
@@ -38,7 +35,7 @@ def f2us(f: int) -> int:
     return round(f * 1_000_000 / FPS)
 
 
-# ── Main.tsx AIFL_SHOTS：(名称, from帧, to帧) ────────────────────────────
+# ── Main.tsx AIFL_SHOTS: (name, from_frame, to_frame) ────────────────────────────
 SHOTS = [
     ("morning", 0, 220),
     ("card1", 220, 275),
@@ -52,7 +49,7 @@ SHOTS = [
     ("outro", 940, 1085),
 ]
 
-# ── Main.tsx CAPTIONS：(文案, from帧, to帧) ──────────────────────────────
+# ── Main.tsx CAPTIONS: (text, from_frame, to_frame) ──────────────────────────────
 CAPTIONS = [
     ("TEN LIVE PROJECTS · FOUR RESEARCHERS", 90, 130),
     ("NEW WORK LANDS ALL WEEK", 318, 362),
@@ -62,7 +59,7 @@ CAPTIONS = [
     ("FOUR VOICES, ONE WEEKLY BRIEF", 789, 867),
 ]
 
-# ── Main.tsx SFX：(from帧, 文件, 音量)；截断帧数按 Sequence duration ─────
+# ── Main.tsx SFX: (from_frame, file, volume) ──────────────────────────────────────
 SFX = [
     (12, "transition-soft.mp3", 0.4),
     (78, "whoosh-fast.mp3", 0.45),
@@ -100,15 +97,15 @@ SFX = [
 
 
 def sfx_cap_frames(from_f: int, src: str) -> int:
-    # Main.tsx: keyboard 24f（搜索框打字）/ 44f（周报书写），其余 90f 内播完
+    # Main.tsx: keyboard durations
     if src == "keyboard.mp3":
         return 44 if from_f > 700 else 24
     return 90
 
 
-# ── 字幕样式（Caption.tsx → 剪映近似换算，Mac 11.2 标定系数） ────────────
-# CSS 22px ÷ 10.8 ≈ size 2.0；颜色 oklch(45% 0.006 82) ≈ #575552；
-# 垂直位置 bottom:72 → 文字中心 y≈995 → transform_y = 1 − 995/540 ≈ −0.84
+# ── Caption style conversion ───────────────────────────────────────────────────────
+# CSS size and color conversion
+# Vertical position calculation
 CAPTION_STYLE = dict(
     style=draft.TextStyle(size=2.0, color=(0.341, 0.333, 0.322),
                           align=1, letter_spacing=14),
@@ -117,24 +114,24 @@ CAPTION_STYLE = dict(
 
 
 def build() -> str:
-    assert os.path.exists(PLATE), f"底片不存在：{PLATE}（先渲 plate）"
+    assert os.path.exists(PLATE), f"Plate video does not exist: {PLATE} (render plate first)"
     folder = draft.DraftFolder(STAGING)
     script = folder.create_draft(NAME, 1920, 1080, fps=FPS, allow_replace=True)
-    script.append_track(draft.TrackSpec(draft.TrackType.video, name="底片"))
-    script.append_track(draft.TrackSpec(draft.TrackType.text, name="字幕"))
+    script.append_track(draft.TrackSpec(draft.TrackType.video, name="Plate"))
+    script.append_track(draft.TrackSpec(draft.TrackType.text, name="Captions"))
 
-    # 底片按镜头切段：source=target 同区间，每段可在剪映单独变速/重排
+    # Plate cut per shot for individual retiming
     plate = draft.VideoMaterial(PLATE)
     for _name, f0, f1 in SHOTS:
         rng = draft.Timerange(f2us(f0), f2us(f1) - f2us(f0))
         script.add_segment(draft.VideoSegment(plate, rng, source_timerange=rng),
-                           "底片")
+                           "Plate")
 
     for text, f0, f1 in CAPTIONS:
         rng = draft.Timerange(f2us(f0), f2us(f1) - f2us(f0))
-        script.add_segment(draft.TextSegment(text, rng, **CAPTION_STYLE), "字幕")
+        script.add_segment(draft.TextSegment(text, rng, **CAPTION_STYLE), "Captions")
 
-    # SFX：剪映同轨段不可重叠 → 贪心分道
+    # SFX greedy lane assignment
     sfx_segs = []
     for from_f, src, volume in SFX:
         mat = draft.AudioMaterial(os.path.join(AUDIO_DIR, src))
@@ -158,9 +155,9 @@ def build() -> str:
 
     script.save()
     n_segs = len(SHOTS) + len(CAPTIONS) + len(placed)
-    print(f"staging 草稿已建：{os.path.join(STAGING, NAME)}")
-    print(f"  轨道：底片1 + 字幕1 + SFX{len(lanes)}；段：{n_segs}"
-          f"（镜头{len(SHOTS)} 字幕{len(CAPTIONS)} SFX{len(placed)}）")
+    print(f"Staging draft created: {os.path.join(STAGING, NAME)}")
+    print(f"  Tracks: Plate 1 + Captions 1 + SFX {len(lanes)}; Segments: {n_segs}"
+          f" (Shots: {len(SHOTS)}, Captions: {len(CAPTIONS)}, SFX: {len(placed)})")
     return os.path.join(STAGING, NAME)
 
 
@@ -169,4 +166,4 @@ if __name__ == "__main__":
     if "install" in sys.argv[1:]:
         info = mac_draft.macify(draft_dir, NAME)
         bak = mac_draft.install(draft_dir, NAME, info)
-        print(f"已装进剪映草稿库：{NAME}（注册表备份：{bak}）")
+        print(f"Installed into draft library: {NAME} (registry backup: {bak})")

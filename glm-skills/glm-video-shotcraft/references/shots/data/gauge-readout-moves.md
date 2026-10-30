@@ -1,45 +1,37 @@
 ---
 name: gauge-readout-moves
-一句话: 仪表读数两式——needle-sweep-selftest 满弧扫针（点火自检指针甩满全弧再回落真值）与 tape-scroll-fixed-pointer 滚带定针（针不动刻度带滚过+冲刺刹车）
-适用: dashboard 开场仪式/性能指标揭晓；A 多表盘开机感，B 单指标大跳变
-时长: A 140f（4.7s）/ B 150f（5s）
-能量: 中高（机械仪式型）
+summary: Two instrument reads: a full-range needle self-test and a moving scale that races beneath a fixed pointer.
+use: Dashboard opening ceremonies or performance metric reveals; Variant A for multi-dial startup feeling, Variant B for large single-metric leaps
+duration: A 140f (4.7s) / B 150f (5s)
+energy: Medium-high (mechanical ceremony)
 ---
 
-## 意图
-把"报数值"做成仪表的身体动作：A 是汽车点火自检——卡片里三个并排表盘
-指针先"唰"地甩满全弧（270°）、扫过的刻度依次点亮，再弹簧回落定格真实值，
-多表错峰成波浪，落定同帧盘下数值弹出，先亮量程再报数，开场宣誓感；
-B 是飞机空速带语法——读数窗 + 指针钉死画面中线，贯穿全画高的刻度带整体从窗后滚过，先顶着旧上限慢爬、升级后冲刺
-（峰值 ~100px/f）、末尾 spring 刹车带回摆过冲，"世界动、针不动"，
-数值大小变成看得见的位移距离。
+## Intention
+Turning "reporting a number" into the physical behavior of an instrument: Variant A is an automotive ignition self-test—three side-by-side dials on a card sweep their needles across the full 270 deg arc in a swift whoosh, lighting swept tick marks in sequence, then spring back to settle on authentic values in a staggered wave; values beneath each dial pop on the settle frame, presenting the full range before reporting the metric to create an opening statement of power.
+Variant B uses aircraft airspeed tape syntax—the readout window and indicator needle remain pinned to the screen centerline, while a full-height scale tape scrolls from behind the window, first creeping against an old upper limit, breaking through to sprint (peaking at ~100px/f), and concluding with a spring-braked rebound: "the world moves, the needle stays," converting numeric magnitude into tangible displacement distance.
 
-## 两式选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A needle-sweep-selftest | 表面与外环点亮 → 指针去程 12f ease-out 甩满弧（扫过的刻度依次点亮、24f 内回落）→ 弹簧回程 ~8° 过冲回摆落真值；三表错峰 4f；落定同帧盘下数值 overshoot 弹出、指标名淡入，全部落定后自检胶囊 Running self-test… → Ready to render | dashboard 开场/系统就绪仪式 |
-| B tape-scroll-fixed-pointer | 全画高刻度带 translate：慢爬顶住旧上限线→上限线断开→预备回拉 5→冲刺 22f（峰值 ~100px/f，纵向运动模糊）→spring 刹车过冲回摆停位，新上限 bug 停进指针；窗内读数同步刷新 | 单指标大跳变（性能翻倍/配额提升） |
+## Variant Selection
+| Variant | Approach | Use Case |
+|---|---|---|
+| A needle-sweep-selftest | Dial face and outer ring illuminate -> needle sweeps full arc over 12f ease-out (ticks light in sequence, falling back within 24f) -> spring rebound with ~8 deg oscillation settles on authentic value; three dials staggered by 4f; values pop with overshoot beneath dials on the settle frame as metric titles fade in; status pill switches from "Running self-test..." to "Ready to render" | Dashboard opening / system readiness ceremony |
+| B tape-scroll-fixed-pointer | Full-height tape translates: slow creep against old limit line -> limit line snaps -> 5f anticipation recoil -> 22f sprint (peaking at ~100px/f, vertical motion blur) -> spring brake with overshoot oscillation settles on target, with new limit indicator docking at needle; window readout updates in sync | Massive single-metric leap (performance doubling / quota expansion) |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 甩弧幅度 | 满量程 270°，到顶即回程 | 只甩到真值=没有自检仪式感；满弧再回落才是"先亮量程"；去程扫过的刻度（含红区）依次点亮 |
-| A 过冲 | 回落带 ~8° 回摆（按行程反算弹簧阻尼） | 无过冲读作电子表；过冲=机械指针的质量 |
-| A 错峰 | 4f/表（左→中→右） | 齐甩读作复制粘贴；错峰成波浪 |
-| B 冲刺速度 | 5px/单位、峰值 ~100px/f（大跳变段） | 慢了读作匀速爬升，"世界动"不成立；带子越长越大，越要配纵向运动模糊 |
-| B 刹车 | spring 过冲（冲过头再弹回停位） | 词汇原案的回摆是"哐"的来源，直停可惜 |
-| 真静止 | 停位后 ≥30f 全锁死（A 末表落定 ~66f、B 110f 锁常数） | 指针类最忌尾漂 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| A Sweep amplitude | Full 270 deg scale, reversing immediately at top | Sweeping only to true value lacks self-test ceremony; full sweep before return establishes "range first"; ticks swept on outbound path (including redline) illuminate in sequence |
+| A Overshoot | ~8 deg oscillation on rebound (spring damping reverse-calculated from travel) | Without overshoot it reads as a digital readout; overshoot provides mechanical needle mass |
+| A Stagger | 4f per dial (left -> center -> right) | Simultaneous sweep looks like copy-paste; staggered sweep forms an organic wave |
+| B Sprint velocity | 5px/unit, peaking at ~100px/f (large leap segment) | Too slow reads as a uniform crawl, breaking the "world moves" effect; longer tape lengths require vertical motion blur |
+| B Braking | Spring overshoot (surges past mark before rebounding to stop) | The rebound in the original spec is the physical source of the heavy thud; stopping abruptly wastes the mechanical momentum |
+| Pure static hold | Fully locked for >=30f after stopping (A settles final dial at ~66f, B locks constant at 110f) | Needle instruments suffer most from lingering tail drift |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 同批 ring-close-overfill（合环过盈）改改再看无附言——环形进度类
-  待重做，别急着当第三式并入
-- A 的表盘是自绘 SVG（弧刻度+指针），实战贴真 dashboard 时优先找
-  页面里现成的 gauge 组件特写，没有再造
-- 声音：A 甩针一声"唰"+落定"嗒"（多表错峰各一声）；B 冲刺段
-  低频滚动声、刹车一声闷"哐"
+## Known Pitfalls
+- The demo was calibrated on grayscale/placeholder assets; parameters are starting points, not production finals, and must be re-verified with real assets.
+- ring-close-overfill in the same batch remains pending rework without commentary—circular progress recipes await redesign; do not rush to incorporate as a third variant.
+- Variant A dials are custom-drawn SVG (arc ticks + needle); when embedding in real dashboards, prioritize close-ups of genuine in-product gauge components rather than fabricating from scratch.
+- Audio: Variant A gets a whoosh on sweep + crisp tick on settle (staggered for each dial); Variant B gets low-frequency rolling rumble during sprint and a solid mechanical thud on brake.
 
-## 参考实现
+## Reference Implementation
 demos/data/gauge-readout-moves/
-（NeedleSweepSelftest.tsx / TapeScrollFixedPointer.tsx）
+(NeedleSweepSelftest.tsx / TapeScrollFixedPointer.tsx)

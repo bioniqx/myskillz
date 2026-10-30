@@ -25,7 +25,7 @@
   --skeleton-a: #e4e1da;
   --skeleton-b: #ece9e2;
   --control-shadow: rgba(61, 53, 38, 0.08);
-  /* 顶栏/侧栏控件的三态：静止 --surface，hover 变暖一档，按下再深一档 */
+  /* Topbar/sidebar control states: resting --surface, hover slightly warmer, active one shade deeper */
   --control-hover: #f1ece3;
   --control-active: #e7e0d3;
   --radius: 14px;
@@ -158,7 +158,7 @@ a { color: inherit; }
   gap: 0.5rem;
 }
 
-/* 主题与语言是同级操作：静止时同色同边框同阴影，只有 hover/按下才分化 */
+/* Theme and language are sibling controls: shared background, border, shadow at rest; differentiate only on hover/active */
 .topbar-toggle {
   display: inline-flex;
   align-items: center;
@@ -178,7 +178,7 @@ a { color: inherit; }
   transition: background 140ms ease, border-color 140ms ease;
 }
 .topbar-toggle:hover { background: var(--control-hover); border-color: var(--faint); }
-/* 按下再深一档；focus 环由全局 :focus-visible 给，不改变布局 */
+/* Active state one step deeper; focus ring provided globally via :focus-visible without altering layout */
 .topbar-toggle:active { background: var(--control-active); }
 
 .topbar-toggle-icon {
@@ -194,7 +194,7 @@ a { color: inherit; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-/* 图标跟随生效主题切换，无需 JS */
+/* Icon toggles with active theme, no JS required */
 .topbar-toggle .icon-sun { display: none; }
 :root[data-theme="dark"] .topbar-toggle .icon-moon { display: none; }
 :root[data-theme="dark"] .topbar-toggle .icon-sun { display: inline-flex; }
@@ -279,7 +279,7 @@ main {
   opacity: 0.55;
 }
 
-/* NEW 徽标：卡片标题与分类导航共用；入库 60 天内由 app.js 判定挂载 */
+/* NEW badge: shared by card titles and category navigation; mounted by app.js for cards within 60 days of addition */
 .new-badge {
   display: inline-block;
   padding: 0.08em 0.34em;
@@ -327,7 +327,7 @@ main {
   margin-inline: auto;
 }
 
-/* 图标统一左对齐成一列：徽章整体居中时标签长短不一，图标会错位 */
+/* Icons aligned left in a column to prevent misalignment from varying label lengths */
 .sidebar-social > .social-badge {
   width: min(100%, 196px);
   margin-inline: auto;
@@ -360,7 +360,7 @@ main {
   stroke-linejoin: round;
 }
 
-/* 展开态触发器反色实心：面板是白卡，触发器必须压得住它 */
+/* Expanded trigger inverted solid: panel is a white card, trigger must contrast solidly */
 .follow-menu:hover .follow-trigger,
 .follow-menu.is-open .follow-trigger {
   background: var(--text);
@@ -392,7 +392,7 @@ main {
   transition: opacity 150ms ease, visibility 150ms ease, transform 150ms ease;
 }
 
-/* 指向触发器的小尖角 */
+/* Arrow tip pointing to trigger */
 .follow-platforms::before {
   position: absolute;
   bottom: -6px;
@@ -408,7 +408,7 @@ main {
   content: '';
 }
 
-/* 指针从触发器移到面板的空隙桥，不然中途 hover 断开面板会收起 */
+/* Hover bridge between trigger and panel to prevent premature closing */
 .follow-platforms::after {
   position: absolute;
   top: 100%;
@@ -436,7 +436,7 @@ main {
   text-transform: uppercase;
 }
 
-/* 面板内是分隔线列表，不是一堆小胶囊 */
+/* Panel contains divider list rather than pills */
 .follow-row {
   display: flex;
   align-items: center;
@@ -500,7 +500,7 @@ main {
   white-space: nowrap;
 }
 
-/* 外链角标：跳站外/换页的动作给个指向，留在本页的（Star 是外链但语义是收藏）不给 */
+/* External link icon: indicator for outbound / page navigation */
 .link-arrow {
   margin-left: auto;
   display: inline-flex;
@@ -1099,7 +1099,7 @@ kbd { padding: 0.2rem 0.34rem; border: 1px solid var(--line); border-radius: 5px
 
 /* ---------- showcase page ---------- */
 
-/* 与顶栏两个 toggle 同一套壳，只是文本色更弱、hover 走强调色 */
+/* Shares shell styling with topbar toggles, with muted text color and accent hover */
 .topbar-link {
   display: inline-flex;
   align-items: center;
@@ -1183,7 +1183,7 @@ kbd { padding: 0.2rem 0.34rem; border: 1px solid var(--line); border-radius: 5px
   font-size: 0.64rem;
 }
 
-/* 作者社交账号：可点的是链接，纯 handle（小红书号/抖音号）渲染为文本徽章；YouTube handle 可直达频道 */
+/* Author social accounts: clickable items are links, pure handles render as text badges; YouTube handles link to channel */
 .showcase-author {
   display: flex;
   flex-wrap: wrap;

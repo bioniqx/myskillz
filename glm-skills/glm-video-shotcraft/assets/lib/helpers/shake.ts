@@ -1,4 +1,4 @@
-// origin: 模板片源仓库 helpers
+// origin: template source helpers
 /**
  * Deterministic hand-held camera noise. Layered sines at incommensurate
  * frequencies read as organic drift; amplitude in world units.

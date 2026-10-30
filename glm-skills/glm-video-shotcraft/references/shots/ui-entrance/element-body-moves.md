@@ -1,37 +1,33 @@
 ---
 name: element-body-moves
-一句话: 元素身体感——contact-shadow-lift 接触阴影离面抬升：卡抬起时桌上的阴影同步放大变淡，纸片离桌被阴影证明
-适用: 给"位置在变"之外补"身体在变"：卡片点名给悬浮证据；配 2.5D 运镜与逐张点名
-时长: A 150f 5s
-能量: A 低中
+summary: A contact shadow that separates during lift, giving interface elements physical weight.
+use: Providing physical presence beyond mere positional changes; establishing tangible proof of card hovering during 2.5D camera moves and card callouts.
+duration: Variant A 150f (~5s)
+energy: Variant A Low-Medium
 ---
 
-## 意图
-库内运动卡全在管"位置在变"——飞入、滑动、弹跳，元素本身始终是刚体。
-这一式管**身体在变**：给悬浮一个可信的证据——卡抬起时正下方阴影同步放大变淡，
-纸片离桌，staging 法则给 2.5D 运镜垫的物理台词。与 CameraMotionBlur 的区别：
-快门拖影是相机的事，离面抬升是身体的事。
+## Intention
+Motion cards in the library typically govern "changing positions"—fly-in, slide, bounce, while the elements themselves remain rigid bodies. This card governs **changing physical presence**: providing credible proof of hovering—as a card lifts, its contact shadow directly underneath simultaneously enlarges and diffuses, lifting paper off the surface to support 2.5D camera moves with physical staging. Unlike CameraMotionBlur (which handles shutter streaks), surface lift represents bodily depth.
 
-## 选型
-| 式 | 做法 | 适用 |
-|----|------|------|
-| A contact-shadow-lift | 斜俯拍桌面（rotateX 24°→20°）上卡沿法线 translateZ 96px + scale 1.05；阴影是躺在桌面 z=0 的两层独立实体（接触核 + 环境影），随抬升变大、变虚、变淡、向背光侧偏移；点名卡落回 8f in-cubic + 2f 微压卡壳，末张选定卡弹簧抬起后停在空中 | 逐张点名强调；2.5D 段落的离面铺垫 |
+## Variant Selection
+| Variant | Method | Application |
+|---------|--------|-------------|
+| A contact-shadow-lift | On oblique overhead desk view (rotateX 24°→20°), card lifts translateZ 96px along surface normal + scale 1.05; shadow consists of two independent surface entities at z=0 (contact core + ambient shadow) expanding, blurring, fading, and shifting away from light source during lift; callout card lands 8f in-cubic + 2f micro-press, while final selected card springs up and hovers in mid-air | Card callout emphasis; depth staging for 2.5D sequences |
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| A 抬升幅度 | 2D：−28px + scale 1.08；2.5D 斜俯拍：translateZ 96px + scale 1.05（屏幕可见位移 40–50px） | 判例锁死：屏幕可见位移 <12px 禁用（见已知坑） |
-| A 阴影 | 独立 div（2D 用椭圆径向渐变；2.5D 用与卡同形的圆角矩形 + blur）：接触核 α 0.32→0.14、blur 3→25px；环境影 α 0.09→0.22、blur 14→54px、向右下偏移；卡本体不带外阴影 | box-shadow 跟卡走，给不出"影子留在桌上" |
-| A 落地 | scale 0.99 卡壳 2f 再 5f 回弹到 1 | 无微压读作飘落，没有重量 |
-| 收尾 | 末张选定后悬停 ~50f | 若要循环，把末张改成同样落回 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Variant A lift travel | 2D: −28px + scale 1.08; 2.5D oblique angle: translateZ 96px + scale 1.05 (screen visible displacement 40–50px) | Strict constraint: screen visible displacement <12px is prohibited |
+| Variant A shadow | Independent div (2D uses elliptical radial gradient; 2.5D uses matching rounded rect + blur): contact core alpha 0.32→0.14, blur 3→25px; ambient shadow alpha 0.09→0.22, blur 14→54px, shifted bottom-right; card itself has no outer box-shadow | box-shadow follows the card, failing to convey "shadow remaining on the surface" |
+| Variant A landing | scale 0.99 micro-press for 2f, then 5f rebound to 1 | Landing without compression reads as a weightless float |
+| Hold finish | Final selected card hovers ~50f | To loop, set final card to settle back identically |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- A 微幅加码判例：原案 8px 抬升不可感，加码到 28px 才过——实战禁回调到 12px 以下，宁可不用不可用弱
-- A 一次只抬一张——两张同时离桌，观众找不到被点名的是谁（P4）
-- 声音：抬起轻吸/落回轻放（sound-design §4.5）
+## Known Pitfalls
+- Demo calibrated on grayscale placeholder assets—parameters serve as calibration baseline, not final production specs; verify against real assets in production.
+- Micro-travel amplification rule: original 8px lift was imperceptible, requiring 28px to pass review—never reduce below 12px in production; omission is preferable to weak execution.
+- Lift only one card at a time in Variant A—lifting two cards simultaneously deprives viewers of a clear focal subject.
+- Audio: subtle intake on lift / gentle tap on landing.
 
-## 参考实现
+## Reference Implementation
 demos/ui-entrance/element-body-moves/
-（ContactShadowLift.tsx：porcelain 斜俯拍桌面上三张 video-shotcraft 镜头配方卡「Pick your shot.」，扫—扫—选，选定卡是带标志的 Logo sting）
+(ContactShadowLift.tsx: porcelain oblique angle tabletop with three video-shotcraft shot recipe cards "Pick your shot.", sweep—sweep—select, selected hero is Logo sting with emblem)

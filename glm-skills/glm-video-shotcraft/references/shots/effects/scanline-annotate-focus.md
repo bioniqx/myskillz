@@ -1,53 +1,41 @@
 ---
 name: scanline-annotate-focus
-一句话: 一条扫描线自上而下匀速掠过已存在的页面，越过哪块区块的下缘，哪块就被四角取景框从外扩处弹簧收拢对准（一次过冲），随后贴出一枚逐字打出的机器标签，顶部状态行同步计数 00/06→06/06
-适用: "AI 正在读你的页面/品牌"的分析镜头；设计系统/品牌规范的拆解介绍；产品能力的自我说明段
-时长: 约5s（150f@30fps）
-能量: 中（机械冷静，节奏由扫描线匀速推动，标注是节拍点）
+summary: A bright scanline travels down the page and, as it clears each block, camera framing brackets snap inward onto that region and a monospace caption types out beside it.
+use: Analytical shots showing "AI reading your page or brand"; breakdowns of design systems and brand guidelines; product self-explanation sequences
+duration: ~5s (150f @ 30fps)
+energy: Medium (mechanically calm, paced by constant scanline movement, annotations serving as cadence beats)
 ---
 
-## 意图
-把"分析"这件抽象事做成可见的因果链：扫描线走到哪，那块就被框住、被
-命名。观众读的是"机器的视线"，所以扫描线必须匀速、标注必须严格滞后于
-扫描线过境——**先扫到再弹框**，顺序一旦错乱就变成了预先编排的动画。
+## Intention
+Turn the abstract concept of "analysis" into a visible chain of cause and effect: wherever the scanline travels, that section is framed and named. Viewers follow the "machine's gaze," which demands a constant scanline speed and annotations strictly lagging behind the scanline's passage—**scan first, frame second**. Disrupting this order turns an analytical process into a staged animation.
 
-## 动效核心
-- 两套颜色严格分工：**品牌色**（demo 为赤陶 `#C4552D`）只在页面内容里，**机器色**（钴蓝 `#2B4FD8`）
-  只给扫描线 / 角标 / 标签 / 状态行——观众一眼分得清"页面本身"和"机器的视线"
-- 页面（demo 为 video-shotcraft 官网：镜刻标志 + 字标、H1、样片封面、CTA、色板）装在 1560×840 浏览器窗里（两层软阴影），状态行在窗外上方；全程 1.000→1.035 极缓推镜
-- 扫描线 6→80f **严格匀速**走窗内 y −20→860：3px 光芯 + 身后 140px 渐隐淡蓝洗色与 18px 点阵余晖；
-  窗框两侧各一枚随线滑动的三角游标，左侧读出当前 `Y 0412`
-- 触发帧由 bbox 反算：`ft = frameAtY(y + h)`（扫描线越过 bbox **下缘**那一帧），按下缘排序后钳制
-  最小间隔 4f；demo 实测 LOGO 19f · NAV 23f · H1 48f · CTA 68f · HERO 72f · PALETTE 77f
-- 取景框：四个 L 角（3.5px 圆头）从外扩 76px 处按 `spring(damping 15, stiffness 210)` 收拢到 bbox
-  （一次可见过冲，略收进 bbox 再回）；臂长 40→26px 晚 3f 收一档（跟随）；`ft+3→+6` 框内钴蓝对焦闪
-  （填充 0.075 + 2px 内描边）`+6→+18` 落
-- 标签 `ft+5` 出现：设计工具式钴蓝底白字小签（高 50、32px 等宽、类目 750 亮 / 细项 500 · 78% 白），
-  文字 ~2.2 字/帧逐字打出、签条宽度随字长出（右缘略领先）+ 白色块光标，8px→0 上浮
-- 状态行实时数已触发数 `SIGNALS 0n / 06` + 扫描进度条；最后一块触发后 8f 切 `BRAND READ`（转机器色），
-  之后 ~60f hold 是完整海报
+## Motion Core
+- Strict division of color responsibilities: **Brand Color** (demo uses terracotta `#C4552D`) lives strictly within page content, while **Machine Color** (cobalt blue `#2B4FD8`) belongs solely to scanline / brackets / labels / status bar—enabling viewers to instantly distinguish "page content" from "machine vision."
+- The page (demo displays video-shotcraft homepage: engraved mark + wordmark, H1, showreel card, CTA, color palette) is housed in a 1560x840 browser window (two soft drop shadows), with status bar above the window; camera pushes in very slowly from 1.000 to 1.035 throughout.
+- Scanline sweeps window y: −20->860 from 6->80f at **strictly constant velocity**: 3px light core + 140px fading cyan wash + 18px dot-matrix afterglow; triangular cursors slide along window sides tracking the line, left side reading real-time `Y 0412`.
+- Trigger frames derived from bounding boxes: `ft = frameAtY(y + h)` (the exact frame the scanline clears the **bottom edge** of a bbox), sorted by bottom edge and clamped to minimum 4f spacing; demo values: LOGO 19f, NAV 23f, H1 48f, CTA 68f, HERO 72f, PALETTE 77f.
+- Reticle brackets: four L-corners (3.5px round stroke) converge onto the bbox from an outer 76px offset via `spring(damping: 15, stiffness: 210)` (single visible overshoot, slightly compressing past bbox before settling); arm length 40->26px shortens 3f later; cobalt blue focus flash (`ft+3->+6`, fill 0.075 + 2px inner stroke) settles across `+6->+18`.
+- Label appears at `ft+5`: design-tool style cobalt pill with white text (height 50px, 32px monospace, category 750 weight / sub-item 500 weight · 78% white), text typed at ~2.2 chars/frame, pill width expanding with typing (right edge slightly leading) + white block cursor, floating up 8px->0.
+- Status bar counts active detections in real-time `SIGNALS 0n / 06` + scan progress bar; 8f after final block triggers, switches to `BRAND READ` (switching to machine color), resting on full poster for ~60f hold.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 扫描线 | 74f 匀速，窗内 y −20→860 | **零缓动**：加 ease 就读作"有人在拖进度条"；60f 以下标签来不及打完就扎堆 |
-| 触发换算 | ft = SCAN0 + (y+h−Y0)/(Y1−Y0)·(SCAN1−SCAN0) | 改扫描窗口只改 SCAN0/SCAN1/Y0/Y1 四个常量，触发自动跟随 |
-| 最小间隔 | prev + 4f | 同一行的 LOGO / NAV 会同帧弹；钳制后才逐个读得清 |
-| 取景框收拢 | 外扩 76px → 0，spring damping 15 | 按像素外扩而非按比例缩放：大小目标收拢量一致；外扩 <40px 看不出"对准"动作 |
-| 角标 | 臂长 40→26px、描边 3.5px | 臂长超过目标短边 1/3 就变成完整边框，丢掉"取景"语义 |
-| 对焦闪 | 填充峰值 0.075 | 超过 0.12 在亮底上成一块灰盒，读作"选中高亮"而非对焦确认 |
-| 标签 | ft+5 起、~2.2 字/帧、32px 等宽 | 滞后 5f 是"框稳了才命名"的因果；签条一次性画满宽再打字会露出空蓝条 |
-| 计数行 | 按 fired 实时统计，30px 等宽 | 写死时间轴的计数一改 bbox 就对不上；必须实时数 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|-----------|---------------|-------------|
+| Scanline | 74f constant velocity, window y −20->860 | **Zero easing**: adding easing feels like "someone dragging a progress scrubber"; under 60f labels finish too quickly and bunch up |
+| Trigger conversion | ft = SCAN0 + (y + h − Y0) / (Y1 − Y0) * (SCAN1 − SCAN0) | Changing scan window requires updating only four constants (SCAN0/SCAN1/Y0/Y1), triggers track automatically |
+| Minimum spacing | prev + 4f | Same-row items like LOGO / NAV trigger on same frame; clamping ensures each pops distinctly |
+| Reticle convergence | Outer offset 76px -> 0, spring damping 15 | Offset by fixed pixels rather than proportional scale ensures identical convergence across different sized targets; offsets <40px lose the "targeting" gesture |
+| Bracket corners | Arm length 40->26px, stroke 3.5px | Arm length exceeding 1/3 of target's short edge creates a full box, destroying the "reticle" metaphor |
+| Focus flash | Fill peak 0.075 | Exceeding 0.12 creates a gray box on light backgrounds, reading as "selection highlight" rather than focus confirmation |
+| Labels | Starts ft+5, ~2.2 chars/frame, 32px monospace | 5f lag establishes the causal chain that "framing locks before labeling"; drawing full pill width before typing exposes empty blue bars |
+| Counter bar | Real-time tally based on fired count, 30px mono | Hardcoded counters drift out of sync when bboxes change; must tally dynamically |
 
-## 已知坑
-- **扫描线触发时刻与目标 bbox 强绑定**：换页面内容后 targets 的 `x/y/w/h` 要重测，
-  bbox 是手动量的（不是自动量元素），留边约 12–16px
-- 标签放置四选一（`right / above / below / belowRight`），宽度按等宽字数估算 `CHAR_W = 0.6em`；
-  词变长先查会不会压到相邻模块或顶出窗外——H1 这类宽目标标签放上方，右上角目标的标签右对齐放下方
-- 亮场页面上扫描线和角标要用深而饱和的机器色；浅色辉光线在亮底上几乎不可见
-- 与 `scanline-assemble-flyin` 分工：那张是"扫到即装配"（页面从空到有），
-  本卡是"扫到即标注"（页面已存在，只做分析）
+## Known Pitfalls
+- **Scanline trigger timing is tightly coupled to target bboxes**: measure `x/y/w/h` targets when changing content; bboxes are measured manually (not auto-measured elements), padding margins by ~12–16px.
+- Four label placement options (`right / above / below / belowRight`), with width estimated using monospace char width `CHAR_W = 0.6em`; check whether expanding labels clip adjacent modules or window edges—place labels above wide elements like H1, and right-align labels below top-right targets.
+- Use deep, saturated machine colors for scanlines and brackets on light canvases; pale glow lines are virtually invisible on light backgrounds.
+- Division of labor with `scanline-assemble-flyin`: that card represents "scan to assemble" (page created from scratch), while this card represents "scan to annotate" (page already exists, performing analysis only).
 
-## 参考实现
+## Reference Implementation
 demos/effects/scanline-annotate-focus/
-（ScanlineAnnotateFocus.tsx）
+(ScanlineAnnotateFocus.tsx)

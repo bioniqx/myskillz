@@ -74,7 +74,7 @@ PREVIEWS = lib['stats']['previewCount']
 COUNT_PATTERNS = [
     (r'\b\d+ shot recipe cards\b', f'{CARDS} shot recipe cards'),
     (r'\b\d+ cinematic shot recipes\b', f'{CARDS} cinematic shot recipes'),
-    (r'\b\d+ 张镜头配方卡', f'{CARDS} 张镜头配方卡'),
+    (r'\b\d+ production shot recipes\b', f'{CARDS} production shot recipes'),
     (r'\b\d+ styles\b', f'{STYLES} styles'),
     (r'\b\d+ motion previews\b', f'{PREVIEWS} motion previews'),
 ]

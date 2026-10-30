@@ -1,57 +1,40 @@
 ---
 name: letterspace-materialize
-一句话: 大字距字标全字符并行连续描画结晶——所有字母同帧起笔、笔画像手写一样连续生长、同帧齐收成词；氛围底景上的品牌字标显影
-适用: 片尾/片头品牌字标登场（大字距细骨架字标；demo 为 video-shotcraft 全小写）；章节题字；needs 静谧/高级感的收束帧
-时长: 静置 ~15f + 描画 ~50f + 终态静置 ≥30f；全段 3–4s
-能量: 低（静谧仪式感，一次呼吸完成）
-标签: typography、outro
+summary: Every letter of a widely tracked wordmark draws itself in parallel, growing like handwriting and finishing together on the same frame.
+use: Opening or closing brand wordmark reveals (wide tracking, thin skeleton wordmarks; demo uses video-shotcraft lowercase); chapter title cards; closing frames requiring serenity and premium restraint
+duration: Still ~15f + draw ~50f + terminal hold >=30f; total 3–4s
+energy: Low (serene ritual, completes in a single breath)
+tags: typography, outro
 ---
 
-## 意图
-字标不是淡入也不是打字机，而是"结晶"：全部字母的笔画同时
-开始连续生长，像一只看不见的手同时写所有字母，同一瞬间齐收
-成词。两个命门：**连续**（笔画必须是连续画出的过程，不许遮罩
-分段——先半截再另半截会被读穿；任何中间帧都该像"写到一半"）；
-**同步**（所有字母同帧起笔、同帧完成——逐字错峰是打字机语义，
-这里是整词一体的仪式感）。
+## Intention
+The wordmark neither fades in nor types out; rather, it "crystallizes": the strokes of all letters begin growing simultaneously, as if an invisible hand were writing every letter at once, finishing together in the exact same frame. Two critical requirements: **continuity** (strokes must be drawn continuously without segmented masking—drawing half then another half reveals the trick; every intermediate frame must look like "halfway written"); **synchronicity** (all letters begin and end in the same frame—letter-by-letter stagger carries typewriter semantics, whereas here it conveys holistic brand ritual).
 
-## 动效核心
-- 每个字符用骨架笔画 SVG path（单线条字形），pathLength 归一 +
-  strokeDashoffset 从 1→0 连续描画
-- 全字符共享同一进度 p：同帧起笔、pathLength 归一保证不同笔画
-  长度的字母同帧齐收（不做 per-char delay/jitter）
-- 字形比例：方正略宽（字面宽高比 ≈1.07，实测判例：竖长字形被
-  裁"太竖长"）；细笔画+大字距（letterSpacing ≈0.6em）。demo 字标是
-  video-shotcraft（品牌规范要求全小写）：几何小写单线体，字碗为正圆，
-  64 高视框里基线 59 / x 高 22 / 升部 5，整体 ×1.3 放大、笔画反向缩放保持 5.5px
-- 描画曲线：整体 ease-in-out，中段略快首尾略缓（起笔收笔的手感）
-- 底景：氛围渐变/实拍空镜（暮色山景类），字标是画面唯一动作
+## Motion Core
+- Each character uses a single-line skeleton SVG path, normalized with `pathLength={1}` and drawn continuously via `strokeDashoffset` from 1->0.
+- All characters share identical progress p: starting in the same frame, with normalized pathLength ensuring letters of varying stroke lengths finish in unison (no per-character delay or jitter).
+- Glyph proportions: square and slightly wide (glyph aspect ratio ~1.07; vertical glyphs previously rejected for being "too tall"); thin strokes + wide tracking (letterSpacing ~0.6em). Demo wordmark is video-shotcraft (brand rules mandate all lowercase): geometric monoline lowercase with circular bowls, baseline 59 / x-height 22 / ascender 5 in 64h viewport, scaled 1.3x with stroke inversely scaled to maintain 5.5px.
+- Drawing curve: overall ease-in-out, slightly accelerated in middle and gentle at terminals (mimicking handwriting cadence).
+- Background: atmospheric gradient or live-action empty shot (e.g. twilight mountain landscape); wordmark is the sole motion in frame.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 描画时长 | ~50f（f16 起 f68 收 @30fps） | <30f 读不出"画"的过程；>80f 拖 |
-| 同步性 | 全字符同帧起收、零错峰 | 判例：逐字错峰版被裁"所有字母是在同一个时间完成书写" |
-| 连续性 | pathLength 连续生长、无分段跳变 | 判例：遮罩分段版被裁"应该是连续的笔画画出来" |
-| 字形 | 骨架单线、字面宽高比 ~1.07、笔画细 | 竖长（比 <0.8）被裁；粗笔画丢结晶感 |
-| 字距 | ~0.6em | 大字距是本卡身份；<0.3em 改用普通描画卡 |
-| 终态静置 | ≥30f | 结晶完成后必须让观众读一次整词 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Drawing duration | ~50f (starts f16, resolves f68 @30fps) | <30f cannot parse drawing process; >80f drags |
+| Synchronicity | All characters start and finish in same frame, zero stagger | Staggered versions previously rejected: "all letters should finish writing at the exact same time" |
+| Continuity | Continuous growth via pathLength, no segmented jumps | Segmented mask versions previously rejected: "should be drawn with continuous strokes" |
+| Glyph geometry | Monoline skeleton, aspect ratio ~1.07, delicate stroke | Tall glyphs (ratio <0.8) rejected; heavy strokes lose crystalline quality |
+| Tracking | ~0.6em | Wide tracking defines this card's identity; <0.3em should use standard draw cards |
+| Terminal hold | >=30f | Viewers must have time to read complete wordmark post-crystallization |
 
-## 已知坑
-- demo 在灰阶/占位素材上调校通过——参数是调校起点非实战定稿，
-  首次实战须以真实素材回验
-- 与 draw-svg-trace 分工：那张是通用描画（图标/插画/单元素）；
-  本卡命门是**全字符同步**的整词结晶仪式，且限品牌字标语境
-- 与 type-assembly-moves 分工：那张是字块组装（位移拼合）；
-  本卡笔画从无到有生长，字符不位移
-- 骨架字形需手绘 path（现成字体轮廓是双线勾边，描画观感不同）；
-  demo 的 13 个小写字形（v i d e o - s h t c r a f）每个带自己的宽度 w，
-  实战优先复用 demo 里的字形库；多子笔画字母（i 的点、t/f 的横）按
-  描画顺序排在路径末尾，pathLength 归一后仍同帧齐收
-- 原片（superhuman-promo）底景是实拍暮色山景+水面倒影；demo 为
-  渐变近似，实战建议用实拍/AI 生成空镜
+## Known Pitfalls
+- Demo calibrated on grayscale/placeholder assets—parameters are a tuning starting point, not final production lock; re-verify against real assets in initial production.
+- Division of labor with draw-svg-trace: that card handles general illustration drawing (icons/illustrations/individual elements); this card focuses on **fully synchronized** crystallization ritual for brand wordmarks.
+- Division of labor with type-assembly-moves: that card handles block assembly (spatial translation); this card grows strokes from nothing with zero letter displacement.
+- Skeleton glyphs require hand-crafted single-stroke paths (standard font outlines use dual-line closed contours, producing an outline-draw look); the 13 lowercase glyphs in demo (`v i d e o - s h t c r a f`) each carry custom width `w`; prioritize reusing demo glyph library in production; multi-stroke letters (dot on i, crossbars on t/f) are ordered sequentially at path end, finishing simultaneously after pathLength normalization.
+- Original video (superhuman-promo) uses live-action twilight mountains with water reflections; demo uses gradient approximation; production strongly recommends live-action or AI-generated cinematic footage.
 
-## 参考实现
+## Reference Implementation
 demos/opening/letterspace-materialize/
-（LetterspaceMaterialize.tsx）
-原片出处：superhuman-promo.mp4 ≈4.5–6.5s
+(LetterspaceMaterialize.tsx)
+Source: superhuman-promo.mp4 ~4.5–6.5s

@@ -1,8 +1,8 @@
-// line-unfold-panel —— 一线展面（Jarvis/FUI 母题）
-// 暗底。入场两拍：3px 细线从中点向两侧极快抽出（5f）→ 定宽后纵向
-// 撑开成 Card 面板（9f，out 缓动）→ 内容延迟淡入。
-// 静置展示后反向退场：压扁成线（7f）→ 线缩成点 → 熄灭，像老 CRT 关机。
-// f0–12 空场静置；入场 f12–34；持面板至 f78；退场 f78–98；末静止 ≥42f（140f）。
+// line-unfold-panel — Line-to-panel reveal (Jarvis / FUI motif)
+// Dark background. Two-beat entrance: 3px hairline expands rapidly outward from center (5f) ->
+// unfolds vertically to full Card panel height (9f, out easing) -> content delayed fade-in.
+// Static hold then reverse exit: collapses into line (7f) -> shrinks to dot -> turns off like an old CRT.
+// f0–12 empty hold; entrance f12–34; hold panel to f78; exit f78–98; final static hold >= 42f (140f total).
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G, Card } from '../../_fixtures/Fixtures';
@@ -12,40 +12,40 @@ const PANEL_H = 460;
 const CX = 960;
 const CY = 540;
 
-// —— 入场时间表 ——
-const T0 = 12; // 点亮起点
-const LINE_END = T0 + 5; // 线抽出完成 f17
-const UNFOLD_END = LINE_END + 9; // 面板撑开完成 f26
-const CONTENT_END = UNFOLD_END + 8; // 内容淡入完成 f34
+// —— Entrance schedule ——
+const T0 = 12; // Ignition start
+const LINE_END = T0 + 5; // Line expansion complete f17
+const UNFOLD_END = LINE_END + 9; // Panel vertical unfold complete f26
+const CONTENT_END = UNFOLD_END + 8; // Content fade-in complete f34
 
-// —— 退场时间表 ——
-const OUT0 = 78; // 开始压扁
-const COLLAPSE_END = OUT0 + 7; // 压成线 f85
-const SHRINK_END = COLLAPSE_END + 6; // 线缩成点 f91
-const OFF = SHRINK_END + 4; // 点熄灭 f95
+// —— Exit schedule ——
+const OUT0 = 78; // Collapse start
+const COLLAPSE_END = OUT0 + 7; // Collapsed into line f85
+const SHRINK_END = COLLAPSE_END + 6; // Line shrunk into dot f91
+const OFF = SHRINK_END + 4; // Dot extinguished f95
 
 const clamp = { extrapolateLeft: 'clamp' as const, extrapolateRight: 'clamp' as const };
 
 export const LineUnfoldPanel: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // 入场：scaleX（线抽出）快进快停，入场后保持 1
+  // Entrance: scaleX (line expansion) fast attack and stop, stays 1 after entrance
   const inSX = interpolate(frame, [T0, LINE_END], [0.004, 1], {
     easing: Easing.out(Easing.poly(4)),
     ...clamp,
   });
-  // 入场：scaleY（纵向撑开），线阶段压在 3px
+  // Entrance: scaleY (vertical unfold), clamped at 3px during line phase
   const inSY = interpolate(frame, [LINE_END, UNFOLD_END], [3 / PANEL_H, 1], {
     easing: Easing.out(Easing.cubic),
     ...clamp,
   });
-  // 内容淡入（面板撑开过半才开始）
+  // Content fade-in (begins after panel unfolds past halfway)
   const contentOp = interpolate(frame, [UNFOLD_END - 3, CONTENT_END], [0, 1], {
     easing: Easing.out(Easing.quad),
     ...clamp,
   });
 
-  // 退场：先压 Y 回线，再缩 X 回点
+  // Exit: collapse Y back to line, then shrink X back to dot
   const outSY = interpolate(frame, [OUT0, COLLAPSE_END], [1, 3 / PANEL_H], {
     easing: Easing.in(Easing.cubic),
     ...clamp,
@@ -54,20 +54,20 @@ export const LineUnfoldPanel: React.FC = () => {
     easing: Easing.in(Easing.poly(4)),
     ...clamp,
   });
-  // 内容在压扁前先撤
+  // Content retreats before collapse
   const contentOutOp = interpolate(frame, [OUT0 - 4, OUT0 + 2], [1, 0], clamp);
 
   const sx = frame < OUT0 ? inSX : outSX;
   const sy = frame < OUT0 ? inSY : outSY;
 
-  // 末点熄灭：opacity 快落。f >= OFF 后整个元素条件卸载 → 真静止
+  // Final dot extinguish: opacity drops quickly. Conditional unmount when f >= OFF -> true static hold
   const dotOp = interpolate(frame, [SHRINK_END, OFF], [1, 0], {
     easing: Easing.in(Easing.quad),
     ...clamp,
   });
 
   const alive = frame >= T0 && frame < OFF;
-  // 面板阶段（sy 足够大）显示卡片内容；线/点阶段显示发光条
+  // Panel phase (sy large enough) shows card content; line/dot phase shows glowing beam
   const isPanel = sy > 0.15;
 
   return (
@@ -103,7 +103,7 @@ export const LineUnfoldPanel: React.FC = () => {
           {isPanel ? (
             <>
               <Card w={PANEL_W} h={PANEL_H} seed={3} style={{ border: `2px solid ${G.mid}`, boxShadow: '0 0 40px rgba(255,255,255,0.18)' }} />
-              {/* 内容层单独控 opacity：盖一层暗板模拟"内容未亮" */}
+              {/* Content layer individual opacity: dark overlay simulates "unlit content" */}
               <div
                 style={{
                   position: 'absolute',
@@ -115,7 +115,7 @@ export const LineUnfoldPanel: React.FC = () => {
               />
             </>
           ) : (
-            // 线/点阶段：白色发光条填满整个盒（被 scale 压成线）
+            // Line/dot phase: white glowing bar fills container (compressed to line by scale)
             <div style={{ width: '100%', height: '100%', background: '#ffffff', boxShadow: '0 0 60px rgba(255,255,255,0.9)', borderRadius: 2 }} />
           )}
         </div>

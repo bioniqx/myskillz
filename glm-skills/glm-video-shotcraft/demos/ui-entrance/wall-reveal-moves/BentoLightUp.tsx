@@ -4,24 +4,25 @@ import { Card } from '../../_fixtures/Fixtures';
 import { BRAND, PITCH, ShotcraftMark } from '../../_fixtures/Brand';
 import { Backdrop, FONT, Grain } from '../../_fixtures/Polish';
 
-// bento-light-up：暗场里 3×2 bento 墙压暗待命，随节拍逐格点亮——
-// 边框流光先描一圈（琥珀），格内内容随后提亮上浮弹出；六格全亮后整体微推收住。
-// 节拍：0–20 建立(hold) → 每格间隔 12f 依次激活(描边 8f + 内容弹出 8f)
-//       → ~96f 全亮 → 96–121 scale 1→1.04 缓推 → 121–150 静止收尾。
-// 质感改版：
-// - 真 bento：两行宽窄互补（600/420/420 ↔ 420/420/600），不再是六张等大格子；
-// - 卡面用暗色出版级 Card（tone=dark），暗场品牌段里不再"白卡亮瞎"，点亮读作通电而非换色；
-// - 流光描边改为"彗星"：亮头 + 渐隐尾的描边段跑一圈后收成常亮细边，辉光只在描边上（不外溢成方框）；
-// - 标题改为眉标 + 主标题的字阶；暗场柔光底（暖色余光）+ 暗角 + 颗粒。
-// 品牌：眉标 = video-shotcraft 标志 + 小写字标（琥珀），主标题 = PITCH 口号「Every shot, tuned in one place.」。
+// bento-light-up: In a dark field, a 3×2 bento wall stands dimmed and ready, lighting up cell-by-cell on beat:
+// border light traces a perimeter loop first (amber), then inner cell content brightens, floats up, and pops in;
+// once all six cells are lit, the entire layout gently pushes forward and settles.
+// Timing: 0–20 establish (hold) → cells activate sequentially with 12f interval (8f border trace + 8f content pop)
+//       → ~96f fully lit → 96–121 gentle scale push 1→1.04 → 121–150 static hold outro.
+// Aesthetic revisions:
+// - Authentic bento: complementary wide/narrow pairs across two rows (600/420/420 ↔ 420/420/600), no longer equal-sized grids;
+// - Card surface uses dark editorial Card (tone="dark"); avoids glare in dark-field brand sections; lighting reads as power-on rather than a color switch;
+// - Border tracer redesigned as a "comet": bright head + fading tail traces one lap then settles into a steady hairline border; glow stays strictly on stroke;
+// - Typography upgraded to eyebrow header + main title hierarchy; soft dark-field base (warm ambient glow) + vignette + grain.
+// Brand: Eyebrow = video-shotcraft logo + lowercase wordmark (amber); Main title = PITCH tagline "Every shot, tuned in one place.".
 export const BENTO_LIGHT_UP_DURATION = 150;
 
 const AMBER = '#e8b45e';
-const FIRST = 20; // 首格激活帧
-const GAP = 12; // 格间节拍
+const FIRST = 20; // First cell activation frame
+const GAP = 12; // Inter-cell beat interval
 const CELL_H = 330;
 const GUT = 44;
-const U = 480; // 宽窄格基准：宽 1.25U=600，窄 0.875U=420，每行 1440 + 2 道沟（宽窄差再大，卡内字阶会明显不一）
+const U = 480; // Base unit for wide/narrow cells: wide 1.25U=600, narrow 0.875U=420; row = 1440 + 2 gutters (wider variance causes noticeable font scale discrepancies)
 const ROW_W = U * 3 + GUT * 2;
 const LEFT = (1920 - ROW_W) / 2;
 const TOP = (1080 - (CELL_H * 2 + GUT)) / 2 + 44;
@@ -45,35 +46,35 @@ const Cell: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const start = FIRST + i * GAP;
   const { x, y, w } = CELLS[i];
 
-  // ① 边框流光：彗星段（长 22% 周长）沿 pathLength=100 跑一圈，8f；随后整圈细边常亮
+  // 1. Border tracer: comet segment (length: 22% perimeter) travels one loop along pathLength=100 in 8f; followed by a continuous fine border
   const draw = interpolate(frame, [start, start + 8], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
-  // 描完后流光退火：琥珀亮边 → 弱化成常亮细边
+  // Trace annealing after completion: amber bright edge → softens into a steady fine border
   const strokeFade = interpolate(frame, [start + 12, start + 26], [1, 0.4], { ...clamp, easing: Easing.out(Easing.quad) });
   const ring = interpolate(frame, [start + 2, start + 10], [0, 1], { ...clamp, easing: Easing.out(Easing.quad) });
 
-  // ② 内容提亮 + 上浮弹出：描边过半后接力，8f 弹出（back-out 带一点过冲）
+  // 2. Content brightness + float pop: handed over halfway through tracing, 8f pop-in (back-out with slight overshoot)
   const lit = interpolate(frame, [start + 6, start + 14], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
   const rise = interpolate(frame, [start + 6, start + 14], [0, 1], { ...clamp, easing: Easing.bezier(0.3, 1.4, 0.5, 1) });
   const opacity = 0.18 + 0.82 * lit;
   const ty = 20 * (1 - rise);
-  // seed 正弦哈希做每格微差（点亮瞬间的辉光强度略有随机感）
+  // Seed sine-hash for per-cell subtle variance (adds organic randomness to ignite flash glow)
   const jitter = Math.abs((Math.sin(i * 127.3) * 43758.5453) % 1);
-  const pulse = lit * (1 - lit) * 4; // 点亮中段最亮的辉光脉冲
-  const head = 100 * draw; // 彗星头位置（周长百分比）
+  const pulse = lit * (1 - lit) * 4; // Peak glow pulse at midpoint of illumination
+  const head = 100 * draw; // Comet head position (perimeter percentage)
   const TAIL = 22;
 
   return (
     <div style={{ position: 'absolute', left: x, top: y, width: w, height: CELL_H }}>
-      {/* 暗态卡 + 点亮后的内容（同一张卡，靠 opacity/translateY 提亮浮出） */}
+      {/* Dim card + lit content (same card, brightens and floats up via opacity/translateY) */}
       <div style={{ opacity, transform: `translateY(${ty.toFixed(2)}px)`, borderRadius: 14 }}>
         <Card w={w} h={CELL_H} seed={i + 1} tone="dark" />
-        {/* 点亮瞬间卡内一层暖光（裁在圆角内，脉冲后归零） */}
+        {/* Warm flash within card on ignition (clipped to border radius, decays to zero after pulse) */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none',
           background: `radial-gradient(90% 70% at 50% 0%, rgba(232,180,94,${(0.16 * pulse * (0.8 + jitter * 0.4)).toFixed(3)}), rgba(232,180,94,0) 70%)`,
         }} />
       </div>
-      {/* 边框流光：SVG rect 描边 */}
+      {/* Border tracer: SVG rect stroke */}
       {draw > 0 && (
         <svg width={w} height={CELL_H} viewBox={`0 0 ${w} ${CELL_H}`} style={{ position: 'absolute', left: 0, top: ty, overflow: 'visible' }}>
           <defs>
@@ -81,13 +82,13 @@ const Cell: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
               <feGaussianBlur stdDeviation={4 + jitter * 2} />
             </filter>
           </defs>
-          {/* 常亮细边：随彗星走过逐段出现，退火后保持 */}
+          {/* Steady fine border: reveals segmentally as comet passes, persists after annealing */}
           <rect
             x={0.75} y={0.75} width={w - 1.5} height={CELL_H - 1.5} rx={14} fill="none"
             stroke={AMBER} strokeWidth={1.5} pathLength={100} strokeDasharray={100} strokeDashoffset={100 * (1 - draw)}
             opacity={ring * strokeFade}
           />
-          {/* 彗星：辉光层 + 亮芯层，跑完一圈后随退火淡去 */}
+          {/* Comet: glow layer + bright core layer, fades after completing loop and annealing */}
           {[0, 1].map((k) => (
             <rect
               key={k}
@@ -111,12 +112,12 @@ const Cell: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
 export const BentoLightUp: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // ③ 六格全亮(~96f)后整体缓推 scale 1→1.04，25f 收住，之后真静止
+  // 3. Once all six cells are lit (~96f), gentle scale push 1→1.04 across 25f, settling into complete rest
   const push = interpolate(frame, [96, 121], [1, 1.04], { ...clamp, easing: Easing.bezier(0.33, 0, 0.2, 1) });
 
-  // 标题随首格点亮微微提亮，交代场景
+  // Title gently brightens as first cell lights up to establish scene context
   const titleLit = interpolate(frame, [FIRST, FIRST + 20], [0.25, 1], { ...clamp, easing: Easing.out(Easing.quad) });
-  // 全亮后地面暖光稍起
+  // Ambient floor glow rises slightly once all cells are lit
   const allLit = interpolate(frame, [FIRST + 5 * GAP + 6, FIRST + 5 * GAP + 30], [0, 1], { ...clamp, easing: Easing.out(Easing.quad) });
 
   return (

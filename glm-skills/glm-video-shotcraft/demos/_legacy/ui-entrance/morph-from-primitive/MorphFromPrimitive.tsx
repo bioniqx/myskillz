@@ -1,6 +1,6 @@
-// morph-from-primitive｜原型变形
-// 正圆呼吸一拍(anticipation) → path d 逐数值插值变形成 520×300 圆角矩形卡片轮廓
-// → 卡片内部灰阶内容条淡入。全部帧驱动、确定性。
+// morph-from-primitive — Morph from primitive
+// Perfect circle breathes for one beat (anticipation) -> path d value-by-value interpolated into a 520x300 rounded rect card contour
+// -> grayscale content bars inside card fade in. Entirely frame-driven and deterministic.
 import React from 'react';
 import { useCurrentFrame, interpolate, Easing } from 'remotion';
 import { G } from '../../_fixtures/Fixtures';
@@ -12,10 +12,10 @@ const RECT_W = 520;
 const RECT_H = 300;
 const RECT_R = 20;
 
-// ---- 同构 path：M + 8 段 cubic（4 直边段 + 4 圆角段），圆与圆角矩形共用锚点拓扑 ----
-// 圆角矩形锚点（中心坐标系，顺时针，从右边上端点起）：
-// A0(hw,-ihh) 右边上 → A1(hw,ihh) 右边下 → A2(iw,hh) 底边右 → A3(-iw,hh) 底边左
-// → A4(-hw,ihh) 左边下 → A5(-hw,-ihh) 左边上 → A6(-iw,-hh) 顶边左 → A7(iw,-hh) 顶边右 → A0
+// ---- Isomorphic path: M + 8 cubic segments (4 straight edges + 4 rounded corners), circle and rounded rect share anchor topology ----
+// Rounded rect anchors (center-relative coordinates, clockwise, starting from top of right edge):
+// A0(hw,-ihh) right edge top -> A1(hw,ihh) right edge bottom -> A2(iw,hh) bottom edge right -> A3(-iw,hh) bottom edge left
+// -> A4(-hw,ihh) left edge bottom -> A5(-hw,-ihh) left edge top -> A6(-iw,-hh) top edge left -> A7(iw,-hh) top edge right -> A0
 const hw = RECT_W / 2; // 260
 const hh = RECT_H / 2; // 150
 const iw = hw - RECT_R; // 240
@@ -33,7 +33,7 @@ const line = (from: [number, number], to: [number, number]): Seg => [
   to[0],
   to[1],
 ];
-// 90° 圆角弧 from → to（弧心 c）：c1 = from + k·(to−c)，c2 = to + k·(from−c)
+// 90° corner arc from -> to (arc center c): c1 = from + k*(to-c), c2 = to + k*(from-c)
 const corner = (
   from: [number, number],
   to: [number, number],
@@ -58,10 +58,10 @@ const rectAnchors: [number, number][] = [
   [iw, -hh],
 ];
 const cornerCenters: [number, number][] = [
-  [iw, ihh], // A1→A2 右下
-  [-iw, ihh], // A3→A4 左下
-  [-iw, -ihh], // A5→A6 左上
-  [iw, -ihh], // A7→A0 右上
+  [iw, ihh], // A1->A2 bottom-right
+  [-iw, ihh], // A3->A4 bottom-left
+  [-iw, -ihh], // A5->A6 top-left
+  [iw, -ihh], // A7->A0 top-right
 ];
 
 const rectShape: Shape = {
@@ -78,7 +78,7 @@ const rectShape: Shape = {
   ],
 };
 
-// 圆：锚点取矩形锚点的同方位角，段间用精确弧公式 k = 4/3·tan(Δθ/4)
+// Circle: anchors take same azimuth angles as rect anchors, segments use exact arc formula k = (4/3)*tan(dTheta/4)
 const angles = rectAnchors.map(([x, y]) => Math.atan2(y, x));
 const circAnchors: [number, number][] = angles.map((a) => [
   R * Math.cos(a),
@@ -123,9 +123,9 @@ const morphPath = (t: number): string => {
   return d + ' Z';
 };
 
-// ---- 时间轴（30fps，总 140f）----
-// 0–10 静置圆 | 10–30 呼吸一拍 scale 1→1.06→1 | 30–54 变形 24f
-// | 56–68 内容条淡入 12f | 68–140 真静止 72f
+// ---- Timeline (30fps, 140f total) ----
+// 0–10 static circle | 10–30 breathing beat scale 1 -> 1.06 -> 1 | 30–54 morphing 24f
+// | 56–68 content bars fade in 12f | 68–140 true hold 72f
 export const MorphFromPrimitive: React.FC = () => {
   const frame = useCurrentFrame();
 
@@ -161,7 +161,7 @@ export const MorphFromPrimitive: React.FC = () => {
           <path d={d} fill="none" stroke={G.ink} strokeWidth={3} />
         </g>
       </svg>
-      {/* 卡片内容条（参考 line-boil 描边卡内容），变形完成后淡入 */}
+      {/* Card content bars (modeled after line-boil outlined card), fade in after morph completes */}
       <div
         style={{
           position: 'absolute',

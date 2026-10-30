@@ -1,53 +1,44 @@
 ---
 name: glass-pill-dictation-typing
-一句话: 一条定宽玻璃胶囊以约 1.25 倍略大弹出后缓落到位，内部自左淡到右浓铺一层强调色暖光；光标先行、随后匀速打出听写句，光（连同胶囊背后的环境光）随打字进度渐渐退去，收尾成一条中性的磨砂玻璃条
-适用: 语音/AI 输入框的登场；"跟它说话"的交互提示镜头；高能段之间的一个安静过渡拍
-时长: 约3.3s（100f@30fps）
-能量: 低（全片最安静的一拍，只有光在退）
+summary: A fixed-width glass pill pops in slightly oversized and settles, glowing with an accent gradient inside that fades out as a placeholder sentence types across it.
+use: Entrance for voice/AI input pills; interactive cue shots for "speak to it"; a quiet transitional beat between high-energy sequences
+duration: ~3.3s (100f@30fps)
+energy: Low (the quietest beat in the video; only light receding)
 ---
 
-## 意图
-用"光随输入熄灭"讲一件很小的事：待命时它在发光（等你说话），你一开口
-它就把光让给文字。3.3s 里只做三件事——弹出、打字、光退。任何额外动作
-（弹跳、色变、图标动画）都会让这一拍不再是休止符。
+## Intention
+Telling a subtle story through "light receding as input occurs": on standby it glows (waiting for you to speak), and the moment you speak it yields that light to text. Across 3.3s it performs only three actions: pop in, type, and light recedes. Any superfluous action (bouncing, color morphing, icon animations) destroys its function as a musical rest.
 
-## 动效核心
-- 胶囊 1240×132、圆角 66、`padding: 0 20px 0 58px`，**定宽**（不随打字伸缩）；
-  听写字 56px、右端 92px 圆形声波按钮
-- 出场 `scale 1.25→1`，snappy（强 ease-out）20f；opacity 前 2f 就满——先"在了"再落位；
-  落位前 14f 带 6px→0 的景深虚化（放大段读作"离镜头更近"）
-- 材质：`backdrop-filter: blur(26px) saturate(1.3)` 真磨砂（背后的暖色光斑被它晕开），
-  上亮下暗白色体积渐变 + 1.5px 白描边 + 顶沿两端渐隐高光线 + 底缘内暗边 + 暖色两层落地影
-- 内嵌强调色光：`linear-gradient(90deg, α0 → α.18 @38% → α.62 @78% → 杏色 α.95 @100%)` 左淡右浓，
-  外加右下角一团 screen 叠加的高光——光在胶囊**内部**
-- 打字：光标 f2 先行，字符 f8 起匀速 2f/字铺完 28 字；光标 f66–74 撤掉
-- 光熄灭 `g = 1 − smooth(f10→f72)`，与打字同窗口；`g` 同时驱动四处：胶囊内渐层、胶囊背后那轮暖色"太阳"、
-  胶囊下方地面反光、声波按钮（实心暖色 → 描边中性），外泛光 `60g px`
-- 声波 5 根竖条基准高 `[30,16,24,13,20]`（左高右低），叠 `±2.4·sin(f·0.5 + i·1.7)` 极轻呼吸
+## Motion Core
+- Pill 1240x132, corner radius 66, `padding: 0 20px 0 58px`, **fixed width** (does not stretch with typing); dictation text 56px, 92px circular waveform button on right end.
+- Entrance `scale 1.25->1`, snappy (strong ease-out) over 20f; opacity reaches 1 within first 2f—establishing presence before settling; first 14f carries 6px->0 depth-of-field blur (oversized phase reads as "closer to lens").
+- Material: `backdrop-filter: blur(26px) saturate(1.3)` authentic frosted glass (diffusing warm flares behind it), top-light bottom-dark white volumetric gradient + 1.5px white border + top-edge fading specular line + bottom-edge inner shadow + dual-layer warm drop shadows.
+- Embedded accent light: `linear-gradient(90deg, alpha 0 -> alpha .18 @38% -> alpha .62 @78% -> apricot alpha .95 @100%)` light on left and dense on right, plus a screen-blended highlight in bottom-right corner—light resides **inside** the pill.
+- Typing: cursor leads at f2, characters type at constant 2f/char from f8 completing 28 characters; cursor dismissed across f66–74.
+- Light dimming `g = 1 - smooth(f10->f72)`, sharing exact window with typing; `g` synchronously drives four elements: inner pill gradient, warm background "sun" flare, floor reflection beneath pill, and waveform button (solid warm -> outlined neutral), outer glow `60g px`.
+- Waveform 5 vertical bars base heights `[30,16,24,13,20]` (high left, low right), layered with subtle breath `+-2.4*sin(f*0.5 + i*1.7)`.
 
-## 参数表
-| 参数 | 典型值 | 调节手感 |
-|------|--------|----------|
-| 胶囊定宽 | 1240px（≈整句宽度 1.8 倍） | **定宽是关键**：随字伸缩会读作 chip 而不是输入条 |
-| 出场缩放 | scale 1.25→1，snappy 20f | 1.25 倍是"从观众面前落回去"的量；1.5 倍就成了 pop 弹窗 |
-| opacity 时序 | 前 2f 跳满（早于缩放落位） | 同步淡入会让它像"渐渐出现"，失掉那一下轻微的实感 |
-| 内嵌光 | 90deg、0 → .18@38% → .62@78% → .95@100% | 光必须在胶囊内部；改成外 glow 就成了"待通知"而不是"待输入" |
-| 打字 | 28 字符，f8 起 2f/字匀速 | 加 ease 就读作"有人在犹豫"；听写是匀速的 |
-| 光熄灭 | 1 → 0，f10→f72 smooth | 与打字同窗口是全片唯一的因果：光让位给文字 |
-| 环境光跟随 | 背后暖光 0.15+0.6g、地面反光 0.22g | 只熄胶囊、环境不变，亮场里"光退"会读不出来 |
-| 声波竖条 | 5 根、±2.4px | 幅度到 6px 就成了"正在录音"的活跃态，与"待命"矛盾 |
-| 光标 | f2 先行、f66–74 撤 | 光标先于文字出现，是"输入框已就绪"的信号 |
+## Parameter Table
+| Parameter | Typical Value | Tuning Feel |
+|---|---|---|
+| Pill fixed width | 1240px (~1.8x total sentence width) | **Fixed width is critical**: stretching with text reads as a chip rather than an input bar |
+| Entrance scale | scale 1.25->1, snappy 20f | 1.25x represents "settling back from viewer perspective"; 1.5x becomes an intrusive popup |
+| Opacity timing | Reaches full in first 2f (ahead of scale settle) | Fading in synchronously feels like "gradually appearing," losing tactile presence |
+| Embedded glow | 90deg, 0 -> .18@38% -> .62@78% -> .95@100% | Glow must reside inside pill; turning into outer glow reads as "pending notification" rather than "ready for input" |
+| Typing | 28 characters, steady 2f/char from f8 | Adding easing reads like "hesitating"; dictation streams at constant rate |
+| Light dimming | 1 -> 0, f10->f72 smooth | Sharing exact window with typing provides the sole causality: light yielding to text |
+| Ambient light tracking | Background warm flare 0.15+0.6g, floor reflection 0.22g | Dimming only the pill while environment remains unchanged fails to register "light receding" on light backgrounds |
+| Waveform bars | 5 bars, +-2.4px | Amplitude up to 6px reads as active "recording" state, conflicting with "standby" |
+| Cursor | Leads at f2, departs f66–74 | Cursor appearing before text signals "input field ready" |
 
-## 已知坑
-- backdrop-filter 只晕它**背后**的层：暖色光斑必须放在胶囊之下（同一层叠上下文里先画），
-  光斑离胶囊太远时磨砂看起来就是一块平白板
-- 亮场里光的明暗对比远小于暗场：内嵌光要给到杏色 .95 的饱和度，并让背后环境光一起退，否则"光退"不成立；
-  要做暗场版，把舞台换回近黑、光色降饱和即可，曲线不用动
-- 声波竖条是持续呼吸（不受 g 控制），首尾帧高度不同——用作 loop 素材时把频率调成 2π/时长 的整数倍
-- 打字进度 `floor(p·len + 1e-6)`，那个 epsilon 是防止末字符在整点因浮点误差不出现，别删
-- WARM / APRICOT 两个变量是内嵌光、外泛光、环境光、按钮共用的品牌色，换项目只改这两个
-- 句子长度变了要同步调胶囊定宽（保持 ≈ 句宽 1.8–2 倍）与打字窗口
+## Known Pitfalls
+- backdrop-filter only blurs layers **behind** it: warm light flares must sit beneath the pill (rendered earlier in same stacking context); when flares sit too far from pill, frosted glass looks like a flat white board.
+- Luminance contrast in light scenes is much lower than in dark scenes: embedded light needs apricot .95 saturation with ambient background light receding together, otherwise "light receding" fails; for dark scenes, switch background to near-black and desaturate glow color without changing curves.
+- Waveform bars breathe continuously (uncontrolled by g), with differing start and end heights—when used as looping assets, tune frequency to an integer multiple of 2pi/duration.
+- Typing progress `floor(p*len + 1e-6)`; that epsilon prevents the final character from dropping due to floating-point errors at integer frames—do not remove.
+- WARM and APRICOT variables are shared brand colors for embedded glow, outer glow, ambient flare, and button; update only these two when rebranding.
+- When sentence length changes, adjust pill fixed width (maintaining ~1.8–2x sentence width) and typing window accordingly.
 
-## 参考实现
+## Reference Implementation
 demos/interaction/glass-pill-dictation-typing/
-（GlassPillDictationTyping.tsx）
+(GlassPillDictationTyping.tsx)

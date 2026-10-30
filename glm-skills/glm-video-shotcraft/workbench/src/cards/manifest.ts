@@ -1,41 +1,40 @@
 import type React from "react";
 import type { PropField } from "./types";
 
-/** 成片工程接入清单——工程在 `src/workbench.ts` 里 `export const WORKBENCH: WorkbenchManifest`，
- *  工作台据此把成片拆成多轨 clip（镜头 / 转场 / 字幕 / 叠加层 / 音效 / 音乐）。
- *  结构是纯数据 + 组件引用，工程文件不需要 import 本文件（结构兼容即可）。
- *  时间量一律用**绝对帧**，与 Main.tsx 里 <Sequence from durationInFrames> 一一对应。 */
+/** Film project manifest — exported in `src/workbench.ts` as `export const WORKBENCH: WorkbenchManifest`.
+ *  Decomposes film into multitrack clips (shots / transitions / captions / overlays / SFX / music).
+ *  All timing in absolute frames matching Main.tsx <Sequence from durationInFrames>. */
 
 export type ManifestUnit = {
   /** Key into a theme's unitDefaults; omitted for components without theme support. */
   themeKey?: string;
-  /** 唯一 id（镜头 id / 转场序号…），导入后作为 clip 标签的一部分 */
+  /** Unique id, becomes part of clip label on import */
   id: string;
-  /** 时间轨上显示名（缺省 id） */
+  /** Display name on timeline (default id) */
   label?: string;
-  /** 绝对起帧 */
+  /** Absolute start frame */
   from: number;
-  /** 帧数 */
+  /** Duration in frames */
   duration: number;
   component: React.ComponentType<Record<string, unknown>>;
-  /** 成片里实际传入的 props（= 该 clip 的属性初值） */
+  /** Actual props passed in film (= initial clip properties) */
   props?: Record<string, unknown>;
-  /** 可编辑属性；缺省为空 = 该单元只能动时间/变速/图层 */
+  /** Tunable properties; empty defaults to timing/speed/layer edits only */
   schema?: PropField[];
-  /** 注入 clip 源时长的 prop 名（如 "duration" / "dur"），见 CardDef.durationProp */
+  /** Prop name to inject source duration into (e.g. "duration" / "dur") */
   durationProp?: string;
-  /** 共用同一张卡的单元写同一个 cardId（如四张字卡都是 PaperTitleCard）；缺省按 component 引用分组 */
+  /** Shared cardId for units using same card definition; defaults to component reference */
   cardId?: string;
-  /** 卡名（素材库展示，同 cardId 的单元取第一个非空值） */
+  /** Card name in asset library */
   cardName?: string;
   accent?: string;
 };
 
 export type ManifestAudio = {
   from: number;
-  /** 帧数；缺省 90（与 Main.tsx 里 SFX Sequence 默认长度对齐） */
+  /** Duration in frames (default 90) */
   duration?: number;
-  /** public/ 下的路径，如 "audio/whoosh-big.mp3" */
+  /** Relative path under public/, e.g. "audio/whoosh-big.mp3" */
   src: string;
   volume: number;
   label?: string;
@@ -52,32 +51,32 @@ export type WorkbenchManifest = {
   fps: number;
   width: number;
   height: number;
-  /** 成片总帧数 */
+  /** Total film duration in frames */
   total: number;
-  /** 舞台底色（Main 最外层 AbsoluteFill 的 background） */
+  /** Stage background color */
   background?: string;
-  /** 版本号（可选）。给了就作为「这是不是同一版成片」的判据；不给则按清单内容哈希
-   *  （时间表 / label / props / 单元→卡的分组拓扑 / 组件 displayName / 音效表），任一处变了都算新版本 */
+  /** Optional version string; defaults to manifest content hash
+   *  (schedule / label / props / grouping / audio cues) */
   revision?: string;
   shots: ManifestUnit[];
-  /** 转场层（闪白 / 光条…） */
+  /** Transition layers (flashes, light leaks...) */
   transitions?: ManifestUnit[];
-  /** 字幕 / 解说条 */
+  /** Captions / dialogue strips */
   captions?: ManifestUnit[];
-  /** 全片常驻叠加层（网格 / 暗角 / 水印…） */
+  /** Constant film overlays (grid, vignette, watermark...) */
   overlays?: ManifestUnit[];
   sfx?: ManifestAudio[];
   bgm?: ManifestAudio[];
-  /** 叠加各层的 z 序（从上到下）；缺省 transitions > captions > overlays，与 Ink Press 模板一致 */
+  /** Layer z-order (top to bottom); default: transitions > captions > overlays */
   order?: ("transitions" | "captions" | "overlays")[];
-  /** 原成片合成（整条 Main）——Studio 里注册为 ProjOriginal，供逐帧对照导入结果 */
+  /** Original film composition (full Main) — registered as ProjOriginal in Studio */
   original?: React.ComponentType<Record<string, unknown>>;
 };
 
 export type ManifestTheme = {
   palette?: Record<string, string>;
   id: string;
-  /** 建议写成「中文 · English」：工作台按界面语言取对应半段；单段名走 i18n 词典，查不到原样显示 */
+  /** Recommended format: "Title · English" */
   label: string;
   background?: string;
   unitDefaults?: Record<string, Record<string, unknown>>;
@@ -89,10 +88,7 @@ export type UnitKind = (typeof UNIT_KINDS)[number];
 export const unitsOf = (m: WorkbenchManifest, kind: UnitKind): ManifestUnit[] =>
   kind === "shot" ? m.shots : (m[`${kind}s`] ?? []);
 
-/** 单元 → 卡 id 的分组：显式 cardId 优先；否则同一组件**引用**共用一张卡，卡 id 取该组首个单元的 id
- *  （`proj:<kind>:<cardId|首个 unit id>`）。projectCards 建卡与下面的内容哈希共用这一份，
- *  所以「某单元换了组件」这类只体现在引用关系上的变化（多数组件没有 displayName）也会改变哈希，
- *  旧存档里指向老卡的 clip 不会被继续沿用去渲错组件 */
+/** Unit -> cardId grouping: explicit cardId takes precedence; otherwise groups by component reference */
 export const groupUnits = (m: WorkbenchManifest): Map<ManifestUnit, string> => {
   const out = new Map<ManifestUnit, string>();
   for (const kind of UNIT_KINDS) {
@@ -103,15 +99,15 @@ export const groupUnits = (m: WorkbenchManifest): Map<ManifestUnit, string> => {
       if (g) g.push(u);
       else groups.set(k, [u]);
     }
-    // 一组一个 id。显式 cardId 与另一组「首个单元 id」撞名、或单元 id 重复时，后出现的组按顺序加
-    // `~2`/`~3` 后缀（命名仍是清单的确定函数，哈希稳定），并在控制台提醒作者改 id
+    // Suffix with ~2/~3 if cardId collisions occur
+    // and warn in console to update id
     const used = new Set<string>();
     for (const units of groups.values()) {
       const base = `proj:${kind}:${units[0].cardId ?? units[0].id}`;
       let id = base;
       for (let n = 2; used.has(id); n++) id = `${base}~${n}`;
       if (id !== base)
-        console.warn(`[workbench] 清单卡 id 撞名：${base} 已被另一组单元占用，本组改用 ${id}——建议给单元换 id 或写显式 cardId`);
+        console.warn(`[workbench] Manifest card id collision: ${base} already used; using ${id} instead — consider giving units distinct ids or setting explicit cardId`);
       used.add(id);
       for (const u of units) out.set(u, id);
     }
@@ -119,7 +115,7 @@ export const groupUnits = (m: WorkbenchManifest): Map<ManifestUnit, string> => {
   return out;
 };
 
-/** FNV-1a 32 位，输出 8 位 hex——够用来判"内容变没变"，不做安全用途 */
+/** FNV-1a 32-bit hash outputting 8-char hex string */
 const fnv1a = (s: string) => {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -129,10 +125,7 @@ const fnv1a = (s: string) => {
   return h.toString(16).padStart(8, "0");
 };
 
-/** 清单可序列化部分的规范化串——凡是会被复制进 ClipData 或决定 clip 指向哪张卡的信息都在内：
- *  时间 / label / props / durationProp / 分组后的卡 id（见 groupUnits）/ 音频表。
- *  组件本身只取显式 displayName（.name 会被 HMR / 压缩改写，纳入会让同一版成片在 dev / build 间
- *  被误判为新版本、白白丢掉用户改动）；组件引用的变化靠卡 id 拓扑体现 */
+/** Normalized string of manifest serializable fields for version hashing */
 const canonical = (m: WorkbenchManifest): string => {
   const cardOf = groupUnits(m);
   const unit = (u: ManifestUnit) =>
@@ -151,6 +144,6 @@ const canonical = (m: WorkbenchManifest): string => {
   ].join("\n");
 };
 
-/** 「哪一版成片」的稳定标识：存进 ProjectData.source，`?import=project` 用它判断存档是否过期 */
+/** Stable manifest version identifier saved to ProjectData.source */
 export const manifestKey = (m: WorkbenchManifest) =>
   `${m.name}@${m.total}f#${m.revision ?? fnv1a(canonical(m))}`;

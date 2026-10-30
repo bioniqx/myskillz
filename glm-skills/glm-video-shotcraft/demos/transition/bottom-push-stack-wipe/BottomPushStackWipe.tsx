@@ -1,25 +1,29 @@
 // bottom-push-stack-wipe —— slack-promo 22–27s
-// 换章手法不变：新章连底色整屏从底边向上推入，把旧章刚性顶出画外（两层同速同缓动），连推三章，
-// 每章一种饱和底色，内容钉死在各自色底坐标系里随底色走；上缘接缝阴影是"顶出"的物理接触证据。
+// Chapter transition mechanics unchanged: each new chapter pushes up from the bottom with its full background,
+// rigidly pushing the previous chapter out of frame (both layers share speed and easing). Three consecutive pushes,
+// each chapter with a saturated background, content pinned inside its own coordinate system;
+// the seam shadow along the top edge acts as physical contact evidence of the push-out.
 //
-// 第二轮重设计（设计决定）
-// - look = custom「瑞士海报」：第 0 章近黑开场，三章是三块拉满的饱和色板——钴蓝 / 朱橙 / 酸柠，
-//   色相彼此拉开 120° 级，换章一眼读作"换了个世界"。产品是 video-shotcraft，一章一个卖点（一句话出片 / 踩点剪辑 / 自动交付）。
-// - 版式：左栏 120px 安全边距起排，眉题（章号 + 名称）→ 116px 超粗两行标题 → 40px 说明；
-//   右栏一张为镜头设计的大字 UI 卡（和 agent 对话 / 踩点时间线 / 交付流水线），字号 ≥ 30px；色板本身左上受光、右下压暗，
-//   卡片投带色相的两层软阴影（同一光向），平面海报里也有前后景。
-// - 推入：26f 重 ease-out（快进慢停的"哐"），整摞按速度做纵向方向性模糊；新章上缘 2px 受光边 +
-//   压在旧章上的 56px 接触影。推入窗口内章内元素全部静止（钉死），标题在落定前 ~8f 才从线下升起，
-//   UI 卡的小动作（打字中 → 消息出现 / 说话声波 / 自动化逐步打勾）都放在 hold 里，避开推入。
+// Round 2 Redesign (Design decisions)
+// - look = custom "Swiss Poster": Chapter 0 opens near-black, followed by three high-saturation color boards:
+//   cobalt blue / vermilion orange / acid lime, with hues separated by ~120° so each transition instantly feels like
+//   entering a new world. Product: video-shotcraft, one key feature per chapter (one-prompt video / beat-synced editing / automated delivery).
+// - Layout: Left column starts at 120px safe margin: kicker (chapter number + name) -> 116px heavy two-line title -> 40px description;
+//   Right column features a large-type UI card designed for camera framing (agent chat / beat timeline / delivery pipeline), font size >= 30px;
+//   Color board lit top-left and darkened bottom-right; cards cast two tinted soft shadows (same light source), adding depth to flat posters.
+// - Push transition: 26f heavy ease-out (fast entry, slow stop "thud"), stack applies directional vertical blur based on speed;
+//   New chapter has a 2px top-edge highlight + 56px contact shadow cast onto previous chapter.
+//   Chapter elements remain pinned/static during the push window; title rises from below ~8f before settling;
+//   Micro-interactions on UI cards (typing indicator -> message pop / voice waveform / step-by-step checklist ticks) are held for after push.
 //
-// 时间表（30fps，170f）
-//   0–22    第 0 章：近黑底「Meet video-shotcraft.」已在画面，标题 0f 起逐行升起，2–20f 落定
-//   22–48   推入 01 钴蓝（26f 重 ease-out，~34f 已到 95%）→ 34f 标题升起 → 36–48f 第三条消息"打字中"→ 48f 弹入
-//   48–66   hold（读）
-//   66–92   推入 02 朱橙 → 78f 标题 → 声波与计时全程在跳，82f 起第二个镜头亮环
+// Timeline (30fps, 170f)
+//   0–22    Chapter 0: Near-black background "Meet video-shotcraft." already on screen; title rises line-by-line starting frame 0, settles 2–20f
+//   22–48   Push in 01 Cobalt Blue (26f heavy ease-out, reaches 95% by ~34f) -> 34f title rises -> 36–48f 3rd message "typing" -> 48f pops in
+//   48–66   hold (reading)
+//   66–92   Push in 02 Vermilion Orange -> 78f title -> waveform and timer bounce continuously; second shot ring glows from 82f
 //   92–110  hold
-//   110–136 推入 03 酸柠（深色字）→ 122f 标题 → 126/134/142f 三个步骤依次打勾（弹簧）
-//   142–170 hold 28f：极缓推近 1.5%，尾帧是完整的章节海报
+//   110–136 Push in 03 Acid Lime (dark text) -> 122f title -> 126/134/142f three steps checked sequentially (spring)
+//   142–170 hold 28f: very slow push-in by 1.5%, final frame shows complete chapter poster
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { EASE, FONT, Grain, SpeedBlur, bezier, mix, ramp, softShadow, velocity } from '../../_fixtures/Polish';
@@ -32,7 +36,7 @@ export const BOTTOM_PUSH_STACK_WIPE_DURATION = 170;
 
 const PUSH_STARTS = [22, 66, 110];
 const PUSH_DUR = 26;
-const heavyEaseOut = bezier(0.12, 0.9, 0.2, 1); // 快进慢停（md 钉死的推入曲线）
+const heavyEaseOut = bezier(0.12, 0.9, 0.2, 1); // Fast entry, slow stop (specified push easing curve)
 
 type Chapter = {
   num: string; name: string; title: string; sub: string;
@@ -59,12 +63,12 @@ const CHAPTERS: Chapter[] = [
 
 const pushP = (f: number, i: number) => ramp(f, PUSH_STARTS[i], PUSH_DUR, heavyEaseOut);
 const stackY = (f: number) => PUSH_STARTS.reduce((s, _, i) => s + pushP(f, i), 0) * H;
-// 每章"落定"帧（标题起升的参照）；第 0 章 = 0
+// Settle frame for each chapter (reference frame for title rise); Chapter 0 = 0
 const landAt = (i: number) => (i === 0 ? -10 : PUSH_STARTS[i - 1] + 12);
 
 const SANS = FONT.sans;
 
-// ───────────── UI 卡（为镜头设计：少元素、大字、强对比） ─────────────
+// ───────────── UI Cards (designed for camera: minimal elements, large type, high contrast) ─────────────
 const Avatar: React.FC<{ c: string; t: string; size?: number; ring?: number; ringColor?: string; mark?: boolean }> = ({ c, t, size = 64, ring = 0, ringColor = '#fff', mark = false }) => (
   <div style={{
     width: size, height: size, borderRadius: size / 2, flex: 'none', background: c, color: '#fff',
@@ -75,7 +79,7 @@ const Avatar: React.FC<{ c: string; t: string; size?: number; ring?: number; rin
 );
 
 const ChannelCard: React.FC<{ frame: number }> = ({ frame }) => {
-  const t0 = PUSH_STARTS[0] + 14; // 打字中提示（推入已到 95%）
+  const t0 = PUSH_STARTS[0] + 14; // Typing indicator (push reaches 95%)
   const typing = frame >= t0 && frame < t0 + 12;
   const msg = springAt(frame, t0 + 12, { damping: 18, stiffness: 200 });
   const msgs = [
@@ -100,7 +104,7 @@ const ChannelCard: React.FC<{ frame: number }> = ({ frame }) => {
           </div>
         </div>
       ))}
-      {/* 第三条：打字中 → 消息弹入 */}
+      {/* 3rd item: typing -> message pops in */}
       <div style={{ position: 'relative', height: 132, marginTop: 32 }}>
         {typing && (
           <div style={{ position: 'absolute', left: 86, top: 20, display: 'flex', gap: 10, alignItems: 'center', padding: '18px 24px', borderRadius: 24, background: '#eef0fb' }}>
@@ -136,7 +140,7 @@ const HuddleCard: React.FC<{ frame: number }> = ({ frame }) => {
     { c: '#ff9f1c', t: '03', name: 'Whip' },
     { c: '#3a86ff', t: '04', name: 'Sting' },
   ];
-  // 当前镜头：前段 01 Hook，82f 起交给 02 Zoom（环 6f 交叉，踩在拍点上换镜）
+  // Current shot: starts with 01 Hook, hands off to 02 Zoom at 82f (6f ring cross-fade, switching on beat)
   const handoff = ramp(frame, PUSH_STARTS[1] + 16, 8, EASE.smooth);
   const speak = [1 - handoff, handoff, 0, 0];
   const secs = 12 + Math.floor(Math.max(0, t) / 30);
@@ -157,7 +161,7 @@ const HuddleCard: React.FC<{ frame: number }> = ({ frame }) => {
           </div>
         ))}
       </div>
-      {/* 声波：确定性正弦叠加 */}
+      {/* Waveform: deterministic sine wave superposition */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 96, marginTop: 44 }}>
         {Array.from({ length: 44 }, (_, j) => {
           const a = 0.5 + 0.5 * Math.sin(frame * 0.42 + j * 0.62) * Math.sin(frame * 0.17 + j * 0.23);
@@ -181,7 +185,7 @@ const WorkflowCard: React.FC<{ frame: number }> = ({ frame }) => {
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '0.12em', color: '#7b8064', textTransform: 'uppercase' }}>Trigger</div>
       <div style={{ ...type(44, 800), marginTop: 12 }}>When the cut locks</div>
       <div style={{ position: 'relative', marginTop: 36 }}>
-        {/* 竖向连接线：随打勾向下"灌注" */}
+        {/* Vertical connector: fills downwards as items are checked */}
         <div style={{ position: 'absolute', left: 31, top: 56, height: 224, width: 3, background: 'rgba(18,20,7,0.1)' }} />
         <div style={{
           position: 'absolute', left: 31, top: 56, width: 3, background: '#121407',
@@ -216,7 +220,7 @@ const WorkflowCard: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// ───────────── 章节 ─────────────
+// ───────────── Chapter ─────────────
 const ChapterScene: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const c = CHAPTERS[i];
   const land = landAt(i);
@@ -224,12 +228,12 @@ const ChapterScene: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
   const cardBg = i === 2 ? 'linear-gradient(180deg, #1d1411 0%, #140d0b 100%)' : 'linear-gradient(180deg, #ffffff 0%, #fafaf7 100%)';
   return (
     <AbsoluteFill style={{ background: `linear-gradient(176deg, ${c.hi} 0%, ${c.base} 44%, ${c.lo} 100%)`, overflow: 'hidden', fontFamily: SANS }}>
-      {/* 受光：左上柔光斑 + 右下压暗（同一光向，和卡片阴影一致） */}
+      {/* Lighting: soft top-left highlight + bottom-right shade (same light source, matches card shadow) */}
       <AbsoluteFill style={{
         background: `radial-gradient(ellipse 62% 70% at 18% 6%, rgba(255,255,255,${dark ? 0.06 : 0.2}) 0%, rgba(255,255,255,0) 70%), ` +
           `radial-gradient(ellipse 70% 70% at 100% 100%, ${alpha(c.shade, dark ? 0.5 : 0.3)} 0%, ${alpha(c.shade, 0)} 70%)`,
       }} />
-      {/* 左栏：眉题 / 标题 / 说明 */}
+      {/* Left column: kicker / title / description */}
       <div style={{ position: 'absolute', left: 120, top: 150, display: 'flex', alignItems: 'center', gap: 20 }}>
         <div style={{
           height: 48, padding: '0 18px', borderRadius: 24, display: 'flex', alignItems: 'center',
@@ -244,7 +248,7 @@ const ChapterScene: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
         position: 'absolute', left: 120, top: i === 0 ? 640 : 560, width: 620, ...type(40, 500), lineHeight: 1.28, color: c.ink2,
         opacity: ramp(frame, land + 8, 14, EASE.out), transform: `translateY(${((1 - ramp(frame, land + 8, 16, EASE.snappy)) * 18).toFixed(2)}px)`,
       }}>{c.sub}</div>
-      {/* 页脚：品牌 + 章节刻度（章内绝对坐标） */}
+      {/* Footer: brand + chapter indicator (chapter-local absolute coordinates) */}
       <div style={{ position: 'absolute', left: 120, bottom: 96, display: 'flex', alignItems: 'center', gap: 14 }}>
         <ShotcraftWordmark size={28} markScale={1.4} gap={14} tone={i === 3 ? 'light' : 'dark'} color={c.ink} />
         <div style={{ display: 'flex', gap: 10, marginLeft: 30 }}>
@@ -254,7 +258,7 @@ const ChapterScene: React.FC<{ i: number; frame: number }> = ({ i, frame }) => {
         </div>
       </div>
 
-      {/* 右栏 UI 卡（钉在章内坐标） */}
+      {/* Right column UI card (pinned in chapter coordinates) */}
       {i > 0 && (
         <div style={{
           position: 'absolute', right: 120, top: '50%', transform: 'translateY(-50%)', borderRadius: 36, overflow: 'hidden',
@@ -274,7 +278,7 @@ export const BottomPushStackWipe: React.FC = () => {
   const frame = useCurrentFrame();
   const progress = PUSH_STARTS.map((_, i) => pushP(frame, i));
   const vy = -velocity(stackY, frame);
-  const settle = 1 + 0.015 * ramp(frame, 142, 28, EASE.smooth); // 尾段极缓推近
+  const settle = 1 + 0.015 * ramp(frame, 142, 28, EASE.smooth); // Very slow push-in at the end
   return (
     <AbsoluteFill style={{ overflow: 'hidden', background: CHAPTERS[0].base }}>
       <AbsoluteFill style={{ transform: `scale(${settle.toFixed(4)})` }}>
@@ -290,12 +294,12 @@ export const BottomPushStackWipe: React.FC = () => {
                 <ChapterScene i={i} frame={frame} />
                 {i > 0 && moving && (
                   <>
-                    {/* 接缝：压在旧章上的接触影（近实远虚） */}
+                    {/* Seam: contact shadow cast on previous chapter (sharp near, soft far) */}
                     <div style={{
                       position: 'absolute', top: -56, left: 0, right: 0, height: 56,
                       background: `linear-gradient(to top, ${alpha(CHAPTERS[i].shade, 0.42)}, ${alpha(CHAPTERS[i].shade, 0.12)} 40%, ${alpha(CHAPTERS[i].shade, 0)})`,
                     }} />
-                    {/* 新章上缘 2px 受光边：色板是一块有厚度的整料 */}
+                    {/* New chapter top-edge 2px highlight: slab rendered as a solid material with thickness */}
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'rgba(255,255,255,0.45)' }} />
                   </>
                 )}
