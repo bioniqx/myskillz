@@ -41,7 +41,7 @@ cat > plan.md <<'EOF'
  "review_batch":2,"checkpoint_every":2,
  "slices":[
   {"id":"S1","title":"sub","deps":[],"files":["src/sub.js","tests/sub.test.js"],"risk":"low","criteria":["sub works"],"isolation":true},
-  {"id":"S2","title":"mul","deps":[],"files":["src/mul.js","tests/mul.test.js"],"risk":"high","criteria":["mul works"]},
+  {"id":"S2","title":"mul","deps":[],"files":["src/mul.js","tests/mul.test.js"],"risk":"high","criteria":["mul works"],"context":["src/mul.js"]},
   {"id":"S3","title":"combo","deps":["S1","S2"],"files":["src/combo.js","tests/combo.test.js"],"risk":"low","criteria":["combo"]},
   {"id":"S4","title":"also sub","deps":[],"files":["src/sub.js","tests/sub2.test.js"],"risk":"low","criteria":["x"]}]}
 ```
@@ -57,6 +57,7 @@ echo "== dispatch S1 S2 S4 (S4 must be skipped: overlaps S1)"
 OUT=$(D dispatch S1 S2 S4 2>&1)
 check "S1,S2 dispatched, S4 skipped" '[[ "$OUT" == *"DISPATCH S1"* && "$OUT" == *"DISPATCH S2"* && ("$OUT" == *"S4 (footprint overlaps"* || "$OUT" == *"S4 (not ready"*) ]]'
 check "quoted script path in prompt" '[[ "$OUT" == *"claim S1"* && "$OUT" == *"'"'"'"*"dev team"*"'"'"'"* ]]'
+check "the launch prompt names context paths" '[[ "$OUT" == *"claim S2 CONTEXT: src/mul.js"* ]]'
 
 run_prog() { # id wt testfile srcfile [red|green]
   local id=$1 wt=$2 t=$3 f=$4 mode=${5:-slice}
@@ -70,16 +71,16 @@ run_prog S1 w1 tests/sub.test.js src/sub.js
 check "claim printed isolation prefix" 'grep -q "PORT=4001 DB_SUFFIX=_s1 TMPDIR=.slice/tmp" "$R/claim-S1.out"'
 check "node_modules symlinked and not stray" '[ -L "$R/.claude/worktrees/w1/node_modules" ] && [ -z "$(cd "$R/.claude/worktrees/w1" && git status --porcelain | grep node_modules)" ]'
 check "stop hook allows a finished slice" '(cd "$R/.claude/worktrees/w1" && printf "{\"cwd\":\"%s\",\"last_assistant_message\":\"## Status: Complete -- ## Criteria: sub works -> test sub -- met -- ## Gate: node --test tests/sub.test.js -> ok\"}" "$PWD" | python3 "$G" stop) >/dev/null 2>&1'
-echo "== S2 RED then GREEN"
+echo "== S2 one lane: RED then GREEN in the same worktree"
 run_prog S2 w2 tests/mul.test.js src/mul.js red
 check "balanced keeps the RED verification run for a HIGH-RISK slice" 'grep -q "confirm right-reason failures" "$R/claim-S2.out"' 
 OUT=$(D integrate S1 S2 2>&1); echo "$OUT" | head -2
 check "S1 merged (signing+hooks off)" '[[ "$OUT" == *"S1: MERGED"* ]]'
-check "S2 RED accepted" '[[ "$OUT" == *"S2: RED accepted"* ]]'
+check "S2 waits for the implementation commit" '[[ "$OUT" == *"S2: REJECTED — no implementation commit"* ]]'
 check "review + checkpoint due after 1 merge? no" '[[ "$OUT" == *"CHECKPOINT: not due (1/2"* ]]'
-D dispatch S2 S4 >/dev/null 2>&1
-run_prog S2 w3 tests/mul.test.js src/mul.js green
-check "green worktree starts at RED tip" '(cd "$R/.claude/worktrees/w3" && git log --format=%s -n 2 | sed -n 2p | grep -q "test(S2)")'
+( cd "$R/.claude/worktrees/w2" && echo "impl S2" >> src/mul.js && D commit-green S2 >/dev/null 2>&1 )
+check "the green commit sits on the RED commit" '(cd "$R/.claude/worktrees/w2" && git log --format=%s -n 2 | sed -n 2p | grep -q "test(S2)")'
+D dispatch S4 >/dev/null 2>&1
 echo "== S4 with a frozen-test modification via raw git (rejected, stays inflight, warm fix, re-integrate)"
 run_prog S4 w4 tests/sub2.test.js src/sub.js
 ( cd "$R/.claude/worktrees/w4" && echo "weakened" >> tests/sub2.test.js && git -c commit.gpgsign=false commit -qam "sneaky" )
@@ -153,7 +154,7 @@ OUT=$(D start plan.md --spike 2>&1)
 check "start ran doctor+init+dispatch in one call" '[[ "$OUT" == *"DOCTOR"* && "$OUT" == *"INIT ok: 2 slices"* && "$OUT" == *"DISPATCH S2"* && "$OUT" == *"DISPATCH S1"* ]]'
 check "spike banner names the trade" '[[ "$OUT" == *"PROFILE spike"* && "$OUT" == *"NO TESTS"* ]]' 
 check "low-risk slice dispatched as MODE: FAST" '[[ "$OUT" == *"DISPATCH S1 [CODE/FAST]"* ]]'
-check "high-risk slice keeps RED->GREEN even in spike mode" '[[ "$OUT" == *"DISPATCH S2 [CODE/RED]"* ]]'
+check "high-risk slice still writes tests, in one lane, even in spike mode" '[[ "$OUT" == *"DISPATCH S2 [CODE/SLICE]"* ]]'
 check "no incremental review / checkpoint in the spike profile" 'D ready | grep -q "REVIEW: profile spike" && D ready | grep -q "CHECKPOINT: profile spike"' 
 
 echo "-- spike slice: claim, no tests, commit-fast, stop gate, integrate"
@@ -177,13 +178,9 @@ OUT=$(D next S1 2>&1)
 check "next merged the untested slice and labelled it SPIKE" '[[ "$OUT" == *"S1: MERGED"* && "$OUT" == *"SPIKE — no tests"* ]]'
 check "next reports S2 still in flight" '[[ "$OUT" == *"1 in flight"* ]]'
 ( cd "$R2/.claude/worktrees" && git -C "$R2" worktree add -q "$R2/.claude/worktrees/f2" -b wt-f2 HEAD )
-( cd "$R2/.claude/worktrees/f2" && D claim S2 >/dev/null 2>&1 && mktest tests/two.test.js two && D commit-red "high risk" >/dev/null 2>&1 )
+( cd "$R2/.claude/worktrees/f2" && D claim S2 >/dev/null 2>&1 && mktest tests/two.test.js two && D commit-red "high risk" >/dev/null 2>&1 && echo impl > src/two.js && D commit-green "high risk" >/dev/null 2>&1 )
 OUT=$(D next S2 2>&1)
-check "next accepted RED and immediately dispatched the GREEN phase" '[[ "$OUT" == *"S2: RED accepted"* && "$OUT" == *"DISPATCH S2 [CODE/GREEN]"* ]]'
-git -C "$R2" worktree add -q "$R2/.claude/worktrees/f3" -b wt-f3 HEAD
-( cd "$R2/.claude/worktrees/f3" && D claim S2 >/dev/null 2>&1 && echo impl > src/two.js && D commit-green "high risk" >/dev/null 2>&1 )
-OUT=$(D next S2 2>&1)
-check "next ran the endgame when the DAG emptied" '[[ "$OUT" == *"S2: MERGED"* && "$OUT" == *"DAG EXHAUSTED"* ]]'
+check "next merged the high-risk slice from its one lane and ran the endgame" '[[ "$OUT" == *"S2: MERGED"* && "$OUT" == *"DAG EXHAUSTED"* ]]'
 check "endgame auto-started the final review on the spot reviewer" '[[ "$OUT" == *"=== REVIEW r1"* && "$OUT" == *"subagent_type: glm-spot-reviewer"* ]]' 
 check "endgame auto-started the full-gate checkpoint" '[[ "$OUT" == *"FULL GATE (test && lint && typecheck && build)"* ]]'
 check "checkpoint command chains every deferred gate" '[[ "$OUT" == *"node --test tests/ && echo lint && echo tsc && echo build"* ]]' 
@@ -1057,7 +1054,7 @@ git worktree add -q .claude/worktrees/x1 -b wx1 HEAD; XW="$RPR/.claude/worktrees
 ( cd "$XW" && D claim X1 >/dev/null 2>&1 && mktest tests/x1.test.js x1 && mkdir -p src && echo stub > src/x.js && D commit-red x1 >/dev/null 2>&1 )
 check "commit-red discards a non-test stub: the RED commit holds test files only" '[ -z "$(git -C "$XW" show --name-only --format= HEAD | grep -v "^tests/")" ]'
 OUT=$(D integrate X1 2>&1)
-check "the RED commit is accepted at integration" '[[ "$OUT" == *"X1: RED accepted"* ]]'
+check "a RED-only high-risk slice stays in flight until the implementation commit" '[[ "$OUT" == *"X1: REJECTED — no implementation commit"* ]]'
 OUT=$(D dispatch X2 2>&1)
 check "a slice with an accepted RED still holds its footprint: the overlapping slice is not dispatched" '[[ "$OUT" != *"DISPATCH X2"* ]]'
 

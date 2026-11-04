@@ -69,8 +69,8 @@ Input: the user's request (+ optional explorer maps). Output: `.claude/dev-team/
      Anything expressible as a **pinned contract** is not a dependency.
    - `files`: the exact source **and test** paths; keep footprints pairwise disjoint
      (a shared file serializes the two slices; a shared test file too).
-   - `risk: high` only for security surface, concurrency, or subtle logic — it costs a
-     second dispatch (separate test author and implementer) plus verification.
+   - `risk: high` only for security surface, concurrency, or subtle logic — it runs on
+     GLM-5.3 at max, in one lane, and the engine still runs RED proof plus verification.
    - `isolation: true` when the slice's tests touch a port, database or filesystem
      outside the footprint (the engine pins PORT/DB_SUFFIX/TMPDIR per slice).
    - Width is the product you are designing: the engine's concurrency window (`devteam.py status` prints the

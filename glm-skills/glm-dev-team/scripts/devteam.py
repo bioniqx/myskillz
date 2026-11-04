@@ -61,8 +61,9 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
   turbo     gate=deferred  red_run=never     review=final  checkpoint=final  review_depth=spot
             All lint/type-check/build deferred to ONE final full gate; one final sharded review on
             the fast model (glm-spot-reviewer), correctness/security only. Tests are still written first.
-  spike     turbo + low-risk slices ship with NO tests (single commit). High-risk slices keep the
-            full split RED -> GREEN. Breaks the test-first rule on purpose: prototypes only.
+  spike     turbo + low-risk slices ship with NO tests (single commit). High-risk slices still
+            write tests, in the same one lane as every other code slice. Breaks the test-first
+            rule on low-risk slices on purpose: prototypes only.
 
 Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
@@ -1503,7 +1504,7 @@ def cmd_init(a):
     out(f"PROFILE {prof} — {gate_txt}; {red_txt}; "
         f"review {policy['review']}/{policy['review_depth']}; checkpoint {policy['checkpoint']}.")
     if prof == "spike":
-        out("  SPIKE: low-risk slices ship with NO TESTS (single commit); high-risk slices keep RED→GREEN."
+        out("  SPIKE: low-risk slices ship with NO TESTS (single commit); high-risk slices still write tests, in one lane."
             " Say this to the user in one line — it breaks the test-first rule on purpose.")
     if policy["review"] == "final":
         out("  Blocking questions: take the recommended default, record it under Assumptions, never wait.")
@@ -1520,7 +1521,7 @@ def cmd_init(a):
         out(gov_line(st))
     high = [sid for sid, s in slices.items() if s["risk"] == "high"]
     if high:
-        out("HIGH-RISK (split RED→GREEN dispatches): " + " ".join(high))
+        out("HIGH-RISK (one lane, RED proof on): " + " ".join(high))
     iso = [sid for sid, s in slices.items() if s["isolation"]]
     if iso:
         out("ISOLATED RESOURCES pinned for: " + " ".join(iso))
@@ -1818,13 +1819,11 @@ def do_dispatch(root, st, ids, force=False):
         kind = slice_kind(s)
         if kind != "code":
             mode = KIND_MODE[kind]                        # test/refactor/chore/docs/perf -> work; research -> research
-        elif s["risk"] == "high":
-            mode = "green" if s["red_sha"] else "red"     # high risk keeps RED→GREEN in every profile
-        elif fast >= 4 and not s.get("from_review"):
-            mode = "fast"                                 # spike: one commit, no tests
-                                                          # (a slice a reviewer asked for always gets tests)
+        elif fast >= 4 and not s.get("from_review") and s.get("risk") != "high":
+            mode = "fast"                                 # spike: low-risk only, one commit, no tests
+                                                          # (a slice a reviewer asked for, and every high-risk slice, still gets tests)
         else:
-            mode = "slice"
+            mode = "slice"                                # including risk high: RED then GREEN in this one lane
         base = s["red_sha"] if mode == "green" else git(["rev-parse", "HEAD"], root)
         s.update({"status": "inflight", "mode": mode, "attempt": s["attempt"] + 1, "base_sha": base,
                   "worktree": None, "branch": None, "dispatched": now(), "rejected": None, "reject_n": 0,
@@ -1899,11 +1898,32 @@ def launch_hint() -> str:
             "On each wake-up (completion notification, background result, user answer): `next` — no ids needed.")
 
 
+def context_paths(s):
+    """File paths the lane should Read in the same turn as claim. Symbol suffixes and retry notes are not paths."""
+    paths = []
+    for raw in s.get("context") or []:
+        text = str(raw).strip()
+        if not text or text.startswith("RETRY NOTE:"):
+            continue
+        path = text.split("#", 1)[0].strip()
+        if path and path not in paths:
+            paths.append(path)
+    return paths
+
+
+def claim_prompt(st, s, sid):
+    """The launch prompt: claim, plus the context paths so the first turn can Read them in parallel."""
+    prompt = f"python3 {q(st['script'])} claim {sid}"
+    paths = context_paths(s)
+    if paths:
+        prompt += " CONTEXT: " + " ".join(paths)
+    return prompt
+
+
 def print_dispatch(st, blocks, skipped):
     """One Agent call per line-block, as short as the agent files allow: the Conductor's OUTPUT
     tokens for every launch sit on the critical path, and the briefing file already holds everything.
-    The glm-programmer/glm-investigator system prompts say 'your prompt is the command — run it first'."""
-    sp = q(st["script"])
+    The glm-programmer system prompt says the first message runs claim and Reads the CONTEXT paths."""
     root = Path(st["root"])
     for sid, s, mode in blocks:
         kind = slice_kind(s)
@@ -1915,7 +1935,7 @@ def print_dispatch(st, blocks, skipped):
             continue
         route = dispatch_route(st, s, mode)
         out(f"=== DISPATCH {sid} [{kind.upper()}/{mode.upper()}] — {s['title'][:50]}",
-            route[:-1] + f", prompt: \"python3 {sp} claim {sid}\")",
+            route[:-1] + ", prompt: \"" + claim_prompt(st, s, sid) + "\")",
             "")
     if skipped:
         out("SKIPPED: " + "; ".join(skipped))
@@ -2653,24 +2673,13 @@ def batch_files(st, take):
 
 def shard_count(files, requested, st=None):
     """Auto: ~FILES_PER_SHARD files per reviewer, so the final review never serializes behind one agent.
-    Bounded by the live concurrency window as well — reviewers are agents too, and a batch that
-    asked for 8 shards on a 6-agent window would simply queue (or starve the programmers)."""
+    Bounded by the live window. The caller also caps shards by slots the programmers did not take."""
     n = int(requested) if requested and int(requested) >= 1 else 1 + (max(1, len(files)) - 1) // FILES_PER_SHARD
     budget = max(1, effective_cap(st) - reserve_min(st))
     return max(1, min(n, max_shards(st), max(1, len(files)), budget))
 
 
-def plan_review(st, force, requested):
-    """What `do_review_batch` WOULD dispatch — so the caller can reserve those slots first."""
-    batch = st.get("review_batch", DEFAULT_REVIEW_BATCH)
-    pending = st["merges"][st.get("reviewed_upto", 0):]
-    if not pending or (len(pending) < batch and not force):
-        return [], 0
-    take = pending if force else pending[:batch]
-    return take, shard_count(batch_files(st, take), requested, st)
-
-
-def do_review_batch(root, st, force=False, shards=1):
+def do_review_batch(root, st, force=False, shards=1, slot_budget=None):
     batch = st.get("review_batch", DEFAULT_REVIEW_BATCH)
     start = st.get("reviewed_upto", 0)
     pending = st["merges"][start:]
@@ -2683,15 +2692,20 @@ def do_review_batch(root, st, force=False, shards=1):
             + " (use --force for the final delta)")
         return
     take = pending if force else pending[:batch]
+    files = batch_files(st, take)
+    shards = shard_count(files, shards, st)
+    if slot_budget is not None:
+        if int(slot_budget) < 1:
+            out("REVIEW: programmers fill the window; this batch waits for a free slot")
+            return
+        shards = max(1, min(shards, int(slot_budget)))
     st["reviewed_upto"] = start + len(take)
     rid = f"r{len(st['reviews']) + 1}"
     first = st["slices"][take[0]]
     last = st["slices"][take[-1]]
     diff_from = git(["rev-parse", f"{first['merged_sha']}^1"], root)  # first parent before the first merge
     diff_to = last["merged_sha"]
-    files = batch_files(st, take)
     spot = pol(st, "review_depth") == "spot"
-    shards = shard_count(files, shards, st)
     per = (len(files) + shards - 1) // shards
     scopes = [files[k * per:(k + 1) * per] for k in range(shards)]
     scopes = [sc for sc in scopes if sc]      # ceil() can leave trailing shards empty (5 files / 4)
@@ -3001,15 +3015,14 @@ def cmd_next(a):
     if not exhausted and st.pop("endgame_shown", None):
         save_state(root, st)         # the DAG is live again: the next exhaustion prints its steps afresh
     stuck = [sid for sid, s in st["slices"].items() if s["status"] in ("failed", "conflict")]
-    # Decide the review batch BEFORE filling glm-programmer slots: its shards occupy real slots,
-    # and a `next` that launched 62 programmers + 8 reviewers would blow past the runtime cap.
+    # Programmers fill the window first. Review uses only the slots they leave, so a full wave
+    # is never preempted. A narrow wave still reviews in this same wake-up.
     pending = len(st["merges"]) - st.get("reviewed_upto", 0)
     batch = st.get("review_batch", DEFAULT_REVIEW_BATCH)
     force_review = exhausted and not stuck
     do_review = bool(pending) and not a.no_review and (pending >= batch or force_review)
-    planned_shards = plan_review(st, force_review, a.shards)[1] if do_review else 0
     ready, inflight = ready_slices(st)
-    cap, free = slots(st, inflight, extra=planned_shards)
+    cap, free = slots(st, inflight)
     todo = ready[:free]
     if todo:
         blocks, skipped = do_dispatch(root, st, todo)
@@ -3025,8 +3038,10 @@ def cmd_next(a):
     if gov_line(st):
         out(gov_line(st))
     if do_review:
+        _, inflight_now = ready_slices(st)
+        _, free_now = slots(st, inflight_now)
         out("")
-        do_review_batch(root, st, force=force_review, shards=a.shards)
+        do_review_batch(root, st, force=force_review, shards=a.shards, slot_budget=free_now)
     else:
         out(review_line(st))
     every = st.get("checkpoint_every", DEFAULT_CHECKPOINT_EVERY)

@@ -26,12 +26,13 @@ exactly right.
 ## Start — your prompt IS the first command
 
 Your dispatch prompt **is** the claim command: `python3 <skill>/scripts/devteam.py claim <ID>`
-(the Conductor pastes it verbatim — it never runs `claim` itself). Run it as your first Bash
-command, here in your worktree. It binds this worktree to the slice (resets to the
-right base, links dependencies) and prints your **complete briefing**: request, project
-commands, pinned contracts, acceptance criteria, edge cases, context files, your
-**footprint**, isolation values, **your gate**, the exact procedure for your kind and mode,
-and the report format. The briefing is the contract; this file only states what never changes.
+(the Conductor pastes it verbatim — it never runs `claim` itself). When the prompt also
+lists `CONTEXT:` paths, Read every one of them in that **same first message** as the claim.
+`claim` binds this worktree to the slice (resets to the right base, links dependencies)
+and prints your **complete briefing**: request, project commands, pinned contracts,
+acceptance criteria, edge cases, context files, your **footprint**, isolation values,
+**your gate**, the exact procedure for your kind and mode, and the report format. The
+briefing is the contract; this file only states what never changes.
 
 **Work in few, decisive turns** (every turn is a full model call, and thinking is always on): batch independent reads, greps and globs into ONE message as parallel tool calls; never re-read a file you already have; run only the pinned commands; no narration between tool calls.
 
@@ -98,8 +99,8 @@ vars in front of a command (except the pinned isolation prefix below), or use `p
 
 ## Tool mechanics
 
-1. Before every `Edit`, re-`Read` the target region and copy `old_string` exactly from that read. Never edit from memory.
-2. After any failed `Edit`, re-`Read` the file before retrying. Never retry from memory.
+1. The first message runs `claim` and Reads every `CONTEXT:` path, as parallel tool calls.
+2. One turn Reads every region you will change. The next turn applies every `Edit`, copying `old_string` from a Read result that is still in this conversation. Re-Read only a region whose `Edit` failed, then edit that region again.
 3. When two `Edit` attempts on the same spot fail, rewrite the whole function with `Write` only if the file is inside your footprint. Otherwise report `## Status: Blocked`.
 4. The same command failing twice with the same error means stop: think about the cause and change something. A third identical failure is `## Status: Blocked` quoting the error.
 5. Batch independent reads in one message, and state the count to yourself first ("I will read these 4 files in one message").
