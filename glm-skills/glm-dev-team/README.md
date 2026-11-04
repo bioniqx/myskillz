@@ -9,23 +9,23 @@ mô hình theo frontmatter agent của ZCode, cộng thêm bộ **governor** t�
 
 | Giả định của v3.2 | Thực tế khi chạy qua Z.ai | Hệ quả |
 |---|---|---|
-| Lane chạy `sonnet` = model rẻ/nhanh | Z.ai map `opus` **và** `sonnet` → `glm-5.3`, chỉ `haiku` → `glm-5.3-flash` | Mọi lane chạy GLM-5.3: chậm hơn, tốn ~3× quota |
+| Lane chạy `glm-5.3-flash` = model rẻ/nhanh | Z.ai map `glm-5.3` **và** `glm-5.3-flash` → `glm-5.3`, chỉ `glm-5.3-flash` → `glm-5.3-flash` | Mọi lane chạy GLM-5.3: chậm hơn, tốn ~3× quota |
 | `effort: medium/high` trong frontmatter | GLM luôn bật thinking, mặc định `max`; harness cũ chỉ gửi effort cho model bên thứ ba nếu `*_SUPPORTED_CAPABILITIES` có `effort` | Mọi lời gọi chạy ở mức `max`, chậm nhất |
 | Mở 64 luồng cùng lúc | Provider chỉ cho 8 lời gọi API đồng thời; giới hạn theo gói còn có thể thấp hơn và thay đổi động, thấp hơn giờ cao điểm | Dính 429/1302 hàng loạt, lane bị retry/backoff, bị treo |
 | `subagentPromptCacheTtl: 1h`, `cacheTtl: 1h` | Z.ai tự cache ngầm, TTL 1h của Anthropic không áp dụng | Cấu hình vô ích |
-| Mẹo `/fast` | Chỉ có với Opus của Anthropic | Không dùng được |
+| Mẹo `/fast` | Chỉ có với glm-5.3 của Anthropic | Không dùng được |
 | Spawn bị runtime từ chối ("Concurrent subagent limit reached") | Slice vẫn đánh dấu đang chạy | Treo vĩnh viễn |
 
 ## v4 thay đổi gì
 
 | Hạng mục | v4 |
 |---|---|
-| **Định tuyến model (chỉ ZCode)** | Mọi lane mặc định chạy **`glm-programmer-lite`** (GLM-5.3-Flash, thoughtLevel high). `risk: high`, `size: large` và **mọi slice phải retry** → **`glm-programmer-strong`** (GLM-5.3, thoughtLevel max). Tool `Agent` của ZCode không nhận `model` theo từng lần gọi — model id và `thoughtLevel` ghim sẵn trong frontmatter từng file agent (thiếu `model` thì ZCode bỏ qua `thoughtLevel`): glm-code-reviewer GLM-5.3 high, glm-spot-reviewer/glm-investigator Flash high, leader GLM-5.3 max. `injectAgentsMd: false` để rule của lane không bị chôn dưới AGENTS.md của repo |
+| **Định tuyến model (chỉ ZCode)** | Mọi lane mặc định chạy **`glm-programmer-lite`** (GLM-5.3-Flash, thoughtLevel max). `risk: high`, `size: large` và **mọi slice phải retry** → **`glm-programmer-strong`** (GLM-5.3, thoughtLevel max). Tool `Agent` của ZCode không nhận `model` theo từng lần gọi — model id và `thoughtLevel` ghim sẵn trong frontmatter từng file agent (thiếu `model` thì ZCode bỏ qua `thoughtLevel`): cả sáu agent đều `thoughtLevel: max`; model id không đổi (reviewer GLM-5.3, spot-reviewer và investigator Flash, leader GLM-5.3). `injectAgentsMd: false` để rule của lane không bị chôn dưới AGENTS.md của repo |
 | **doctor --harness zcode --fix** | Copy nguyên văn **6 agent** vào `~/.zcode/agents/` và merge hook guard (PreToolUse + Stop) vào `~/.zcode/cli/config.json` (`hooks.enabled: true`, giữ nguyên mọi key user, chạy lại là no-op, không tạo `.bak`); không ghi gì dưới thư mục repo |
 | **Governor (AIMD)** | Cửa sổ song song: mặc định tier `api` mở đủ 8 lời gọi đồng thời ngay từ đợt đầu (provider chỉ cho 8; leader/reviewer cũng nằm trong 8 đó); `DEVTEAM_GLM_TIER`/`--tier lite|pro|max` hạ xuống 3/6/7 khi muốn nhẹ rate limit. Tăng dần khi lane hoàn thành (chỉ khi cửa sổ đang được dùng hết), **giảm một nửa** khi transcript có 429/1302/1305/overload (tối đa một lần mỗi 90 giây); trần giờ cao điểm Z.ai (T2–T6, 14–18h UTC+8, tức 13–17h giờ Việt Nam) chỉ giảm khi bật `DEVTEAM_PEAK=on` |
 | **Tự phục hồi** | Spawn bị từ chối/lỗi → đưa slice về hàng đợi (không re-queue nếu Conductor đã tự launch lại thành công); lỗi "agent type not found" lặp lại → báo cần mở phiên ZCode mới; lane chết vì lỗi API → in `LANE DOWN` kèm cách sửa warm (`SendMessage "continue"`) |
 | **`devteam stats`** | Số liệu **đo được** từ transcript (định dạng Claude Code) theo role/model: số request (khử trùng lặp theo requestId), output token, tỉ lệ cache hit, effort thực gửi, lỗi API, thời gian chạy; cảnh báo nếu effort không được gửi |
-| **Agent prompts** | Bỏ nhắc sonnet/opus/64; thêm quy tắc "ít turn, gộp đọc file thành tool call song song" (mỗi turn là một lần gọi model có thinking) |
+| **Agent prompts** | Bỏ nhắc glm-5.3-flash/glm-5.3/64; thêm quy tắc "ít turn, gộp đọc file thành tool call song song" (mỗi turn là một lần gọi model có thinking) |
 | Anthropic | Provider vẫn nhận diện được (`DEVTEAM_PROVIDER=anthropic` hoặc tự nhận từ base URL) — chỉ còn ảnh hưởng nhãn stats; định tuyến strong/lite như nhau và trần vẫn là 8 |
 
 ## v4.1 - giảm sai sót cho GLM
@@ -53,7 +53,7 @@ v4.1 đã có proof run và static check. v4.2 vá lỗ mà prompt không chặn
 
 | Điểm yếu GLM | Cơ chế |
 |---|---|
-| Frontmatter mất `model` / `thoughtLevel` (lane chạy model của session, effort không có tác dụng) | Sáu agent ghim lại `account:zai-individual-coding-plan/GLM-5.3` hoặc `GLM-5.3-Flash`. Lane code mặc định là Flash ở **high** (coding cần effort; `low` là chỗ Flash bịa API). Strong / leader vẫn `max` |
+| Frontmatter mất `model` / `thoughtLevel` (lane chạy model của session, effort không có tác dụng) | Sáu agent ghim lại `account:zai-individual-coding-plan/GLM-5.3` hoặc `GLM-5.3-Flash`. Mọi lane ở **max**. Không hạ effort và không đổi model id để đổi lấy tốc độ |
 | AGENTS.md của repo chèn vào giữa prompt, rule của slice bị rơi | `injectAgentsMd: false`. Leader đọc AGENTS.md / CLAUDE.md một lần và chép convention vào `notes`; lane chỉ thấy briefing |
 | Bịa import / tên stdlib không tồn tại | `commit-red` / `commit-green` / `commit-work` từ chối import thêm mà không nằm trong repo, stdlib (đúng attribute), `requirements`/`pyproject`, `package.json` hoặc `go.mod`. `--force` là lối thoát |
 | Viết đủ số test nhưng không dùng đúng giá trị của tiêu chí | Tiêu chí có số (≥2 chữ số) hoặc chuỗi trong ngoặc mà test không chứa literal đó thì `commit-red` từ chối. Comment một mình không tính |
@@ -79,7 +79,7 @@ Yêu cầu: ZCode, git ≥ 2.31, python3.
 
 Trên ZCode, engine tự nhận harness qua `is_zcode()`: `DEVTEAM_HARNESS=zcode` thắng trước, nếu không có thì detector theo đường dẫn quyết định (skill nằm trong `~/.zcode/skills`). Provider mặc định là `glm` (trần 8 lời gọi đồng thời). Agent được cài cấp user: `python3 devteam.py doctor --harness zcode --fix` copy nguyên văn sáu file `agents/` (frontmatter ZCode cuối — model id và `thoughtLevel` cố định sẵn trong file, không còn cờ `--flash/--main`) vào `~/.zcode/agents/` và merge hook guard vào `~/.zcode/cli/config.json` (`hooks.enabled: true`, không giữ bản sao lưu, chạy lại là no-op; `start` tự chạy doctor). Mỗi lane chạy qua tool `Agent` của harness:
 
-1. **Dispatch:** tool `Agent` (alias của Task) nhận `subagent_type`, `description`, `prompt`, `run_in_background` — không có tham số `model` theo từng lần gọi. Mọi dòng `Agent →` in ra đều không có `model:`: slice mạnh (`risk: high` / `size: large` / bị retry) chạy `glm-programmer-strong`, còn lại chạy `glm-programmer-lite`; frontmatter của agent tự chọn model thật (`glm-5.3` / `glm-5.3-flash`, không có alias haiku/sonnet/opus). Launch mọi dòng trong MỘT message với `run_in_background: true`, prompt giữ nguyên, rồi kết thúc lượt.
+1. **Dispatch:** tool `Agent` (alias của Task) nhận `subagent_type`, `description`, `prompt`, `run_in_background` — không có tham số `model` theo từng lần gọi. Mọi dòng `Agent →` in ra đều không có `model:`: slice mạnh (`risk: high` / `size: large` / bị retry) chạy `glm-programmer-strong`, còn lại chạy `glm-programmer-lite`; frontmatter của agent tự chọn model thật (`glm-5.3` / `glm-5.3-flash`, không có alias glm-5.3-flash/glm-5.3-flash/glm-5.3). Launch mọi dòng trong MỘT message với `run_in_background: true`, prompt giữ nguyên, rồi kết thúc lượt.
 2. **Đánh thức:** thông báo hoàn tất của lane chính là tín hiệu đánh thức. Dù ZCode không có event SubagentStop, stop gate vẫn có: `doctor --harness zcode --fix` cài Stop hook vào `~/.zcode/cli/config.json`, route Stop của programmer qua `guard.py`, và guard.py ghi marker `.done`/`.blocked` — chạy `devteam next [<id>]` với id của slice vừa xong, engine tự kiểm tra claim, worktree, RED/GREEN và footprint.
 3. **Nhắn tin:** `SendMessage` và `TaskStop` tồn tại. Trả lời câu hỏi `BLOCKED`, hay gửi cách sửa cho `REJECTED` / `NOT READY` / `MERGE ERROR`, bằng `SendMessage` đến agent đó. `TaskStop` lane bị treo trước, rồi retry lạnh bằng `devteam retry <id>`.
 4. **Cài đặt cần phiên mới:** agent và hook config mới chỉ được nạp trong một phiên ZCode MỚI (không phải khởi động lại app). Sau khi `doctor --fix` cài hoặc thay đổi gì, hãy bảo người dùng mở phiên mới một lần.
@@ -91,10 +91,10 @@ Hook là cấp user: cầu `guard.py zcode` routing theo `agent_type` của payl
 | Biến | Tác dụng |
 |---|---|
 | `DEVTEAM_GLM_TIER` | `lite` / `pro` / `max` / `api` (mặc định) — cửa sổ khởi đầu của governor |
-| `DEVTEAM_MAX_PARALLEL=N` | Ghim cứng số agent chạy song song (tắt thích nghi); tối đa 8, giá trị lớn hơn bị kẹp về 8 |
+| `DEVTEAM_MAX_PARALLEL=N` | Ghim cứng số agent chạy song song (tắt thích nghi); tối đa 15, giá trị lớn hơn bị kẹp về 15 |
 | `DEVTEAM_GOVERNOR=off` | Tắt governor (vẫn giữ re-queue spawn lỗi và LANE DOWN) |
 | `DEVTEAM_PROVIDER` | `glm` / `anthropic` — ép provider (chỉ ảnh hưởng nhãn stats và peak) |
-| `DEVTEAM_PEAK=on/off` | `on`: bật giảm trần một nửa trong giờ cao điểm Z.ai (T2–T6, 14–18h UTC+8) để tiết kiệm credit; mặc định tắt — chạy đủ 8 cả ngày |
+| `DEVTEAM_PEAK=on/off` | `on`: bật giảm trần một nửa trong giờ cao điểm Z.ai (T2–T6, 14–18h UTC+8) để tiết kiệm credit; mặc định tắt — chạy đủ 15 cả ngày |
 | `DEVTEAM_PROOF=off/on` | Ghi đè profile cho proof run: engine tự chạy lại test/verify/lint trong worktree trước khi merge. Mặc định bật ở `strict`/`balanced`, tắt ở `turbo`/`spike` |
 | `DEVTEAM_PROOF_TIMEOUT` | Số giây tối đa cho mỗi lệnh của proof run (mặc định 600) |
 | `DEVTEAM_UNCLAIMED_S` | Số giây một slice inflight không có claim thì `next` in lại Agent line (mặc định 120; `0` tắt) |
@@ -132,6 +132,7 @@ low/high/max chưa có tài liệu chính thức chi tiết → dùng `devteam s
 
 ## Lịch sử ngắn
 
+- **v4.3 (2026-11-04)** — trần song song `PROVIDER_CAP` 8 → 15. Tier `api` mở đủ 15 ngay từ đợt đầu; `lite`/`pro`/`max` vẫn khởi đầu 3/6/7 và trần cùng 15. `thoughtLevel` của cả sáu agent giữ `max`; model id không đổi. Client HTTP dùng chung của các skill khác vẫn 8.
 - **v4.2 (2026-10-26)** — ghim lại `model` + `thoughtLevel` (lite là Flash/high; thiếu model thì ZCode bỏ qua effort), tắt `injectAgentsMd`, static check import và literal của tiêu chí, `UNCLAIMED` khi launch bị rơi.
 - **v4.1 (2026-10-26)** — giảm sai sót cho GLM: engine tự proof run trước khi merge, red proof, static check lúc commit (skip/tautology/TODO/nuốt lỗi), stop gate bắt `## Gate:` có lệnh thật và `## Criteria:`, review fail-closed (APPROVED không có `## Evidence` bị coi là UNKNOWN), validate plan chặt hơn, dòng `LAUNCH N: <ids>` và leo thang `retry <id>` sau 2 lần bị từ chối; biến môi trường `DEVTEAM_PROOF`, `DEVTEAM_PROOF_TIMEOUT`. Prompt: SKILL.md thêm "Conductor discipline" và "Final check" (bảng hành vi đổi thành quy tắc đánh số), programmer thêm "What gets a slice rejected", "Tool mechanics" và checklist cuối, reviewer bắt buộc có `## Evidence` và trích dòng nguyên văn, investigator có loop guard, leader có "Plan self-check".
 - **Protocol alignment (2026-10-11)** — theo GLM coding protocol của user: programmer thêm "Verified symbols only" (chỉ gọi API/ký hiệu đã thấy trong repo, contract hoặc source/types của dependency — không bịa API, không tự thêm dependency) và "Fail loudly" (không nuốt lỗi, validate ở biên, không ghi secret); reviewer/spot-reviewer phát hiện API bịa, test bị nới lỏng/skip/mock để pass, lỗi bị nuốt, secret trong log, thiếu authz theo từng resource, flag money/auth/privacy cần human review; leader chạy baseline trước khi lập plan (failure có sẵn ghi vào `notes`), liệt kê stop-and-ask trigger thật, verification report kèm mục Evidence; investigator ghi rõ version đã verify cho claim dependency/API.

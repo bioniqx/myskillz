@@ -67,14 +67,14 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
 Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
 Provider + governor (v4):
-  routing   ZCode-only: every lane rides glm-programmer-lite (GLM-5.3-Flash, thoughtLevel high); high-risk,
+  routing   ZCode-only: every lane rides glm-programmer-lite (GLM-5.3-Flash, thoughtLevel max); high-risk,
             large and RETRIED slices escalate to glm-programmer-strong (GLM-5.3, thoughtLevel max). Model
-            and effort are pinned in the agents' own frontmatter — the Agent tool takes no per-dispatch
-            model, and `doctor --fix` installs the agents verbatim. thoughtLevel is ignored unless that
-            model id is present.
-  governor  AIMD window over the fan-out: default tier api opens the full 8-call window at once (the provider
-            allows 8 concurrent API calls, so no tier goes above 8); DEVTEAM_GLM_TIER=lite|pro|max trades
-            width for gentler rate limits (starts 3/6/7, ceiling 8); +1 per finished lane; halve on a
+            ids stay as pinned; effort is max on every agent. Both are pinned in the agents' own
+            frontmatter — the Agent tool takes no per-dispatch model, and `doctor --fix` installs the
+            agents verbatim. thoughtLevel is ignored unless that model id is present.
+  governor  AIMD window over the fan-out: default tier api opens the full 15-call window at once
+            (PROVIDER_CAP is 15, so no tier goes above 15); DEVTEAM_GLM_TIER=lite|pro|max trades
+            width for gentler rate limits (starts 3/6/7, ceiling 15); +1 per finished lane; halve on a
             429/1302/1305/overload signal found in the transcripts; DEVTEAM_PEAK=on opts into halving the
             ceiling during the Z.ai peak (Mon–Fri 14–18 UTC+8). A spawn the runtime refused is re-queued; a
             lane that died on an API error is reported with the warm fix. DEVTEAM_MAX_PARALLEL=N pins;
@@ -121,7 +121,7 @@ NO_SIGN = ["-c", "commit.gpgsign=false"]  # signing prompts would stall every ba
 LOCKED_CMDS = {"init", "start", "ready", "dispatch", "integrate", "next", "fail", "retry", "bind",
                "add-fix", "add-fixes", "review-batch", "review-done", "verify-brief", "checkpoint",
                "status", "finish", "review-pr"}
-PROVIDER_CAP = 8           # the provider allows only 8 concurrent API calls; keep in sync: _shared/zai_client.py MAX_PARALLEL
+PROVIDER_CAP = 15          # dev-team lane window. Not the shared HTTP client cap (zai_client.MAX_PARALLEL stays 8).
 RESERVED_MIN = 2            # always free for the leader / an ad-hoc reviewer
 DEFAULT_REVIEW_BATCH = 8
 DEFAULT_CHECKPOINT_EVERY = 8
@@ -159,7 +159,7 @@ SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
 
 # --- providers: which API serves the run. Model routing itself is ZCode-only — the Agent tool takes no
 # per-dispatch model, so each agents/<name>.md file pins its own model id + thoughtLevel
-# (glm-programmer-strong = GLM-5.3/max, glm-programmer-lite = GLM-5.3-Flash/low, reviewer/leader likewise).
+# (glm-programmer-strong = GLM-5.3/max, glm-programmer-lite = GLM-5.3-Flash/max, reviewer/leader likewise).
 # The provider name only drives detection, stats labels and the glm-only peak-hour governor.
 PROVIDERS = {
     "glm": {"label": "Z.ai GLM"},
@@ -167,16 +167,15 @@ PROVIDERS = {
 }
 GLM_HOSTS = ("z.ai", "bigmodel.cn")
 
-# --- concurrency governor (AIMD). This repo assumes the Z.ai provider allows 8 concurrent API calls
-# (PROVIDER_CAP); Z.ai says rate (concurrency) limits are tied to the plan tier and adjusted dynamically,
-# so the governor still adapts the live window below that cap (and off-peak raises it back).
-# The provider cap is 8 on every provider now.
+# --- concurrency governor (AIMD). The dev-team lane window is PROVIDER_CAP (15). Z.ai rate limits are
+# tied to the plan tier and move, so the governor still adapts the live window below that cap
+# (and off-peak raises it back). The shared HTTP fan-out in other skills stays at 8.
 # many lanes against that wall = 429/1302 storms, client retries with backoff, stalled lanes. So the engine
 # measures instead of guessing: slow start from a tier-based window, +1 per productive wake-up, halve on a
 # throttle signal read from Claude Code's own transcripts. The numbers below are ENGINEERING STARTING
 # POINTS, not Z.ai figures — the governor corrects them within a few wake-ups.
-TIERS = {"lite": (3, 8), "pro": (6, 8), "max": (7, 8), "api": (8, 8)}   # (start, ceiling); ceiling <= PROVIDER_CAP
-DEFAULT_TIER = "api"        # full 8-call width from wave one; lower tiers opt-in via --tier / DEVTEAM_GLM_TIER
+TIERS = {"lite": (3, 15), "pro": (6, 15), "max": (7, 15), "api": (15, 15)}   # (start, ceiling); ceiling <= PROVIDER_CAP
+DEFAULT_TIER = "api"        # full 15-call width from wave one; lower tiers opt-in via --tier / DEVTEAM_GLM_TIER
 PEAK_FACTOR = 0.5            # Z.ai peak: Mon–Fri 14:00–18:00 UTC+8 (full credit rate, lower concurrency)
 GOV_COOLDOWN_S = 90          # one cut per burst: signals inside the window after a cut are the same burst
 GOV_MIN = 1
@@ -433,7 +432,7 @@ def footprints_overlap(a, b):
 
 
 def hard_cap(st=None):
-    """Concurrent model calls the skill may ever have: the provider allows 8 (PROVIDER_CAP)."""
+    """Concurrent lanes the skill may ever have: PROVIDER_CAP (15)."""
     return PROVIDER_CAP
 
 
@@ -453,7 +452,7 @@ def base_url_of(root=None):
 
 def detect_provider(root=None, st=None):
     """DEVTEAM_PROVIDER wins, then the run state, then the base URL (Z.ai / BigModel → glm);
-    zcode has no base URL, so the default is glm there (the glm route caps lanes at 8)."""
+    zcode has no base URL, so the default is glm there (the glm route caps lanes at PROVIDER_CAP)."""
     forced = (os.environ.get("DEVTEAM_PROVIDER") or "").strip().lower()
     if forced in PROVIDERS:
         return forced
@@ -499,7 +498,7 @@ def zai_peak():
 
 
 def new_gov(provider, tier):
-    start, ceiling = (min(v, PROVIDER_CAP) for v in TIERS[tier])   # tier window, never above 8
+    start, ceiling = (min(v, PROVIDER_CAP) for v in TIERS[tier])   # tier window, never above PROVIDER_CAP
     return {"cap": start, "ceiling": ceiling, "tier": tier if provider != "anthropic" else "-", "cut_at": 0,
             "cuts": 0, "grown": 0, "throttles": 0, "tx": {}, "seen_down": []}
 
@@ -860,7 +859,7 @@ def launch_summary():
 PLAN_TEMPLATE = {
     "request": "One paragraph: the real goal and success conditions.",
     "profile": "balanced | strict | turbo | spike   (default balanced)",
-    "glm": {"tier": "lite | pro | max | api   (optional; default api = full 8-call width; env DEVTEAM_GLM_TIER wins)"},
+    "glm": {"tier": "lite | pro | max | api   (optional; default api = full 15-call width; env DEVTEAM_GLM_TIER wins)"},
     "integration_branch": "(optional) defaults to the current branch",
     "commands": {
         "build": "npm run build | none",
@@ -1849,7 +1848,7 @@ def do_dispatch(root, st, ids, force=False):
 def dispatch_route(st, s, mode):
     """The Agent line for one glm-programmer dispatch (ZCode-only: the Agent tool takes no per-dispatch
     model). Cheap first, strong where it pays: every lane starts on glm-programmer-lite
-    (GLM-5.3-Flash, thoughtLevel high); high-risk, large and RETRIED slices escalate to
+    (GLM-5.3-Flash, thoughtLevel max); high-risk, large and RETRIED slices escalate to
     glm-programmer-strong (GLM-5.3, thoughtLevel max) — a second attempt means the fast model already
     missed once. The agent's own frontmatter pins the model and effort."""
     strong = (s.get("risk") == "high" or s.get("size") == "large"
@@ -1964,13 +1963,13 @@ def precheck_one(c, sl) -> dict:
 
 
 def precheck_all(c, slices) -> list:
-    """Run the read-only per-slice pre-checks concurrently, capped at 8 threads.
+    """Run the read-only per-slice pre-checks concurrently, capped at PROVIDER_CAP threads.
 
     Returns the results in slice order. Nothing here mutates state.
     """
     if not slices:
         return []
-    workers = min(8, len(slices))
+    workers = min(PROVIDER_CAP, len(slices))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(lambda sl: precheck_one(c, sl), slices))
 
@@ -3098,7 +3097,7 @@ def cmd_start(a):
     print_dispatch(st, blocks, skipped)
     out(progress_line(st), launch_hint())
     if provider_of(st) == "glm":
-        out("TIP (GLM): the fan-out opens at the full 8-call width (tier api); DEVTEAM_GLM_TIER=lite|pro|max "
+        out("TIP (GLM): the fan-out opens at the full 15-call width (tier api); DEVTEAM_GLM_TIER=lite|pro|max "
             "trades width for gentler rate limits; DEVTEAM_PEAK=on opts into Z.ai's peak-hour halving "
             "(Mon–Fri 14–18 UTC+8) to spare credits; `stats` shows measured tokens/effort/errors per role.")
 

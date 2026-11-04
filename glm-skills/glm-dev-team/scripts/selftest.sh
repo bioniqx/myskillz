@@ -239,7 +239,7 @@ git worktree add -q .claude/worktrees/h1 -b h1 HEAD
 ( cd "$R8/.claude/worktrees/h1" && D claim S1 >/dev/null 2>&1 && mkdir -p src && mktest tests/f1.test.js f1 && D commit-red s1 >/dev/null 2>&1 && echo i > src/f1.js && D commit-green s1 >/dev/null 2>&1 )
 OUT=$(D next S1 --shards 8 2>&1)
 NAG=$(( $(printf '%s' "$OUT" | grep -c "=== DISPATCH") + $(printf '%s' "$OUT" | grep -c "=== REVIEW") ))
-check "next stays inside the concurrency limit (dispatch+review <= 8)" '[ "$NAG" -le 8 ] && [ "$NAG" -gt 1 ]'
+check "next stays inside the concurrency limit (dispatch+review <= 15)" '[ "$NAG" -le 15 ] && [ "$NAG" -gt 1 ]'
 slotcap() { D ready | sed -n 's/.*free of \([0-9]*\) .*slots.*/\1/p' | head -1; }
 CAP_OPEN=$(slotcap)
 for f in "$R8"/.claude/dev-team/reviews/r1*.md; do case "$f" in *.report.md) ;; *) printf "x" > "${f%.md}.report.md";; esac; done
@@ -469,15 +469,15 @@ check "probe proposes the FILE-SCOPED lint and test commands that make the balan
 OUT=$(D review-pr HEAD~1..HEAD --shards 2 2>&1)
 check "review-pr fans reviewers over a diff with no plan" '[[ "$OUT" == *"=== REVIEW pr"* && "$OUT" == *"subagent_type: glm-code-reviewer"* ]]'
 check "review-pr --spot uses the cheaper reviewer" '[[ "$(D review-pr HEAD~1..HEAD --spot 2>&1)" == *"subagent_type: glm-spot-reviewer"* ]]'
-check "caps: every tier <= 8 and monotone, default tier api, peak halving opt-in, shards <= 4" 'python3 - "$S" <<PY
+check "caps: every tier <= 15 and monotone, default tier api, peak halving opt-in, shards <= 4" 'python3 - "$S" <<PY
 import sys; sys.path.insert(0, sys.argv[1]); import devteam as d
 t = [d.TIERS[k] for k in ("lite", "pro", "max", "api")]
-assert all(a <= c <= 8 for a, c in t) and t == sorted(t), t
-assert d.hard_cap() == 8 and d.max_shards() == 4
+assert all(a <= c <= 15 for a, c in t) and t == sorted(t), t
+assert d.hard_cap() == 15 and d.max_shards() == 4
 assert d.shard_count([str(i) for i in range(500)], 12) <= 4
-g = d.new_gov("glm", "pro"); assert (g["cap"], g["ceiling"]) == (6, 8), g
-assert d.new_gov("glm", "api")["ceiling"] == 8 and d.reserve_min({"gov": {"cap": 8}, "provider": "glm"}) == 2
-assert d.DEFAULT_TIER == "api" and d.new_gov("glm", d.DEFAULT_TIER)["cap"] == 8
+g = d.new_gov("glm", "pro"); assert (g["cap"], g["ceiling"]) == (6, 15), g
+assert d.new_gov("glm", "api")["ceiling"] == 15 and d.reserve_min({"gov": {"cap": 15}, "provider": "glm"}) == 2
+assert d.DEFAULT_TIER == "api" and d.new_gov("glm", d.DEFAULT_TIER)["cap"] == 15
 import os
 os.environ.pop("DEVTEAM_PEAK", None)
 assert d.zai_peak() is False
@@ -758,7 +758,7 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch T1 D1 D2 N1 2>&1)
-check "a trivial slice rides the lite lane (GLM-5.3-Flash, thoughtLevel high)" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
+check "a trivial slice rides the lite lane (GLM-5.3-Flash, thoughtLevel max)" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
 check "a small docs slice rides the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.readme." <<<"$OUT"'
 check "a LARGE docs slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big docs." <<<"$OUT"'
 check "a normal code slice rides the lite lane with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
@@ -809,7 +809,7 @@ cat > plan.md <<'EOF'
 EOF
 OUT=$(D start plan.md 2>&1)
 check "start on a directory that is not a git repo initialises one and dispatches" '[[ "$OUT" == *"GIT: initialised"* && "$OUT" == *"INIT ok: 1 slices"* && "$OUT" == *"DISPATCH G1"* ]] && git -C "$GF" rev-parse --verify HEAD >/dev/null 2>&1'
-check "start prints the GLM tip (tier, peak opt-in, stats) instead of the Opus /fast tip" '[[ "$OUT" == *"TIP (GLM)"* && "$OUT" != *"/fast"* ]]'
+check "start prints the GLM tip (tier, peak opt-in, stats) instead of the glm-5.3 /fast tip" '[[ "$OUT" == *"TIP (GLM)"* && "$OUT" != *"/fast"* ]]'
 cd "$RM"
 check "finish --force writes a PR-ready summary.md" 'D finish --force >/dev/null 2>&1; [ -f .claude/dev-team/summary.md ] && grep -q "M1" .claude/dev-team/summary.md && grep -q "## Diff stat" .claude/dev-team/summary.md'
 
@@ -828,7 +828,7 @@ D next V1 >/dev/null 2>&1
 printf '## Review verdict: CHANGES_REQUIRED\n```json\n{"fixes":[{"id":"F?","title":"x","files":["src/x.js","tests/x.test.js"],"criteria":["c"]}]}\n```\n' > .claude/dev-team/reviews/r1.report.md
 OUT=$(D next 2>&1)
 check "the review was harvested as CHANGES_REQUIRED with a fix queued" '[[ "$OUT" == *"REVIEW r1: CHANGES_REQUIRED"* && "$OUT" == *"queued F1"* ]]'
-check "its shard stays reserved until it is APPROVED (8 - 2 reserved - 1 pending re-review = 5 slots)" '[[ "$OUT" == *"free of 5 slots"* ]]'
+check "its shard stays reserved until it is APPROVED (15 - 2 reserved - 1 pending re-review = 12 slots)" '[[ "$OUT" == *"free of 12"* ]]'
 
 echo "== v3.2 adversarial round: every hole the reviewer found, with the attack that found it"
 RA="$(newrepo ra32)"; cd "$RA"
@@ -886,7 +886,7 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch N1 T1 H1 L1 X1 2>&1)
-check "a normal slice rides the lite lane (GLM-5.3-Flash, thoughtLevel high) with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
+check "a normal slice rides the lite lane (GLM-5.3-Flash, thoughtLevel max) with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
 check "a trivial slice takes the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
 check "a high-risk slice escalates to the strong lane (GLM-5.3)" 'grep -q "subagent_type=glm-programmer-strong, description=.auth." <<<"$OUT"'
 check "a large slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big." <<<"$OUT"'
@@ -910,12 +910,12 @@ PY
 TX="$RGV/tx"; mkdir -p "$TX/sess/subagents"
 G4() { DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" D "$@"; }
 OUT=$(DEVTEAM_GLM_TIER=pro G4 init plan.md 2>&1)
-check "tier pro starts at a 6-agent window (not 8) with 1 slot reserved on a small window" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6, ceiling 8, tier pro, slow start)"* && "$OUT" == *"5 free of 5 glm-programmer slots"* ]]'
+check "tier pro starts at a 6-agent window (not 15) with 1 slot reserved on a small window" '[[ "$OUT" == *"GOVERNOR: 6 agents (window 6, ceiling 15, tier pro, slow start)"* && "$OUT" == *"5 free of 5 glm-programmer slots"* ]]'
 OUTA=$(DEVTEAM_GOVERNOR=on DEVTEAM_TRANSCRIPTS_DIR="$TX" D init plan.md --force 2>&1)
-check "the default tier is api: the full 8-agent window opens at once, 2 slots reserved for leader/reviewer" '[[ "$OUTA" == *"GOVERNOR: 8 agents (window 8, ceiling 8, tier api, slow start)"* && "$OUTA" == *"6 free of 6 glm-programmer slots"* ]]'
+check "the default tier is api: the full 15-agent window opens at once, 2 slots reserved for leader/reviewer" '[[ "$OUTA" == *"GOVERNOR: 15 agents (window 15, ceiling 15, tier api, slow start)"* && "$OUTA" == *"13 free of 13 glm-programmer slots"* ]]'
 check "tier lite starts at 3 with no reserve eating the width" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force 2>&1)" == *"3 free of 3 glm-programmer slots"* ]]'
 check "--tier on the command line wins" '[[ "$(DEVTEAM_GLM_TIER=lite G4 init plan.md --force --tier max 2>&1)" == *"tier max"* ]]'
-check "the Z.ai peak window halves the ceiling (lite 8 → 4)" 'DEVTEAM_GLM_TIER=lite G4 init plan.md --force >/dev/null 2>&1; [[ "$(DEVTEAM_PEAK=on G4 status 2>&1)" == *"ceiling 4"*"Z.ai PEAK"* && "$(DEVTEAM_PEAK=off G4 status 2>&1)" == *"ceiling 8"*"off-peak"* ]]'
+check "the Z.ai peak window halves the ceiling (lite 15 → 7)" 'DEVTEAM_GLM_TIER=lite G4 init plan.md --force >/dev/null 2>&1; [[ "$(DEVTEAM_PEAK=on G4 status 2>&1)" == *"ceiling 7"*"Z.ai PEAK"* && "$(DEVTEAM_PEAK=off G4 status 2>&1)" == *"ceiling 15"*"off-peak"* ]]'
 check "DEVTEAM_MAX_PARALLEL pins the window" '[[ "$(DEVTEAM_MAX_PARALLEL=2 G4 status 2>&1)" == *"GOVERNOR: 2 agents"*"pinned"* ]]'
 DEVTEAM_GLM_TIER=pro G4 init plan.md --force >/dev/null 2>&1
 OUT=$(G4 dispatch Q1 Q2 Q3 Q4 Q5 Q6 Q7 2>&1)
@@ -1000,7 +1000,7 @@ import json,sys; p=sys.argv[1]; s=json.load(open(p)); s["gov"]["cap"]=20; json.d
 PY2
 G4 dispatch Q1 >/dev/null 2>&1
 printf '{"type":"system","subtype":"api_error","error":{"status":429},"timestamp":"%s"}\n' "$(nowz)" > "$TX/sess/subagents/agent-p.jsonl"
-check "a cut during the peak halves the window really in force (ceiling 4 → 2), not the stale 20" '[[ "$(DEVTEAM_PEAK=on G4 next 2>&1)" == *"window 4 → 2"* ]]'
+check "a cut during the peak halves the window really in force (ceiling 7 → 3), not the stale 20" '[[ "$(DEVTEAM_PEAK=on G4 next 2>&1)" == *"window 7 → 3"* ]]'
 
 govrepo rgh3
 DEVTEAM_GLM_TIER=pro G4 init plan.md >/dev/null 2>&1; G4 dispatch Q1 >/dev/null 2>&1

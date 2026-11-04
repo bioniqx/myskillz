@@ -14,7 +14,7 @@ allowed-tools:
   - Bash(python3 *devteam.py *)
 ---
 
-# Dev Team — GLM edition (v4.2): event-driven, governed fan-out, evidence-gated
+# Dev Team — GLM edition (v4.3): event-driven, governed fan-out, evidence-gated
 
 You are the **Conductor**.
 
@@ -44,10 +44,10 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
 
   | Agent | Model on Z.ai | Effort | Job |
   | --- | --- | --- | --- |
-  | `glm-programmer-lite` | GLM-5.3-Flash | high | every slice that is not strong: the default lane |
+  | `glm-programmer-lite` | GLM-5.3-Flash | max | every slice that is not strong: the default lane |
   | `glm-programmer-strong` | GLM-5.3 | max | `risk: high`, `size: large`, and any **retried** slice |
-  | `glm-code-reviewer` | GLM-5.3 | high | full review, read-only |
-  | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | high | correctness-only review / research, root cause |
+  | `glm-code-reviewer` | GLM-5.3 | max | full review, read-only |
+  | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | max | correctness-only review / research, root cause |
   | `glm-team-leader` | GLM-5.3 | max | planning, plan adoption, verification; remembers the repo |
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
@@ -72,9 +72,9 @@ tool call or paragraph you write sits on the critical path of every running lane
 
 #### ZCode protocol
 
-The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (8-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool. Follow these rules:
+The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (15-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool. Follow these rules:
 
-1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`. The agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash`; there are no haiku/sonnet/opus aliases).
+1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`. The agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash`; there are no glm-5.3-flash/glm-5.3-flash/glm-5.3 aliases).
 2. ZCode has no SubagentStop event, but `doctor --harness zcode --fix` installs a Stop hook in `~/.zcode/cli/config.json` that routes programmer Stops through `guard.py`, which writes the `.done`/`.blocked` marker. Treat the lane completion notification as the wake-up. Run `devteam next [<id>]` with the finished slice's id. The Stop gate wrote the marker, and the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) still gates the merge.
 3. `SendMessage` and `TaskStop` exist. Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`.
 4. Installed agents and hook config load only in a new session. After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart).
@@ -139,10 +139,10 @@ in one line what is traded, list every untested slice at the end with an offer t
   hooks into `~/.zcode/cli/config.json`. **If it installed or changed agents/hooks, tell the user to open
   a new ZCode session once.** Provider is auto-detected from `ANTHROPIC_BASE_URL`
   (`DEVTEAM_PROVIDER=glm|anthropic` forces it).
-- **Governor:** the provider allows only 8 concurrent API calls, so the window never exceeds 8 (leader and
+- **Governor:** the lane window never exceeds 15 (leader and
   reviewer slots included), and the engine measures the rest. The default tier `api` opens the full
-  8-call window at once; `DEVTEAM_GLM_TIER` or
-  `start --tier lite|pro|max` trades width for gentler rate limits (starts 3/6/7, all ceiling 8). The window
+  15-call window at once; `DEVTEAM_GLM_TIER` or
+  `start --tier lite|pro|max` trades width for gentler rate limits (starts 3/6/7, all ceiling 15). The window
   grows as lanes finish and halves when a 429 / 1302 / 1305 / overload shows up in the transcripts.
   `DEVTEAM_PEAK=on` opts into halving the ceiling during the Z.ai peak (Mon–Fri 14:00–18:00 UTC+8 — full
   credit rate at lower concurrency; mention the credit trade-off once if a big run starts there).
@@ -214,7 +214,7 @@ in one line what is traded, list every untested slice at the end with an offer t
    - **Inline (default):** read the key files while the baseline runs; write `.claude/dev-team/plan.md`.
      Copy conventions from root `AGENTS.md` / `CLAUDE.md` into `notes`. Lanes do not load those files.
    - **`glm-team-leader` PLANNING** only when: large *and* unfamiliar codebase, >~8 slices, security/concurrency
-     surface, or the user asked for deep analysis. Huge codebase → first `Explore` agents (≤8, one per
+     surface, or the user asked for deep analysis. Huge codebase → first `Explore` agents (≤15, one per
      area), pass their maps in the leader's prompt. The leader replies with a 3-line summary + blocking
      questions (if its write was denied, the plan is in the reply — you write the file).
    - **Unknowns that block design** → `research` slices, ready now, with dependents after them.
@@ -335,9 +335,9 @@ and keep footprints disjoint. The governor window is a stated limit that only qu
 ## Speed dials (in order)
 
 `DEVTEAM_PEAK=on` when a big run sits inside Z.ai's peak window (spares credits) · `--tier lite|pro|max` to
-trade width for rate-limit headroom (default `api` is full width) · profile `turbo`/`spike` (only when
-asked) · `review_batch` / `checkpoint_every` up for very large runs · `effort` on a role after `stats`
-shows it is the bottleneck. Past `spike` only two rules remain — independent review and one writer per
+trade width for rate-limit headroom (default `api` is the full 15) · profile `turbo`/`spike` (only when
+asked) · `review_batch` / `checkpoint_every` up for very large runs. Every agent stays at `thoughtLevel: max`;
+do not lower effort or change a model id to buy speed. Past `spike` only two rules remain — independent review and one writer per
 path. If asked to cut those, say plainly what breaks, and don't.
 
 ## Final check (every turn)

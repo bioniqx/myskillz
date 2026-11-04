@@ -48,7 +48,7 @@ class TestPrecheckOneContract(unittest.TestCase):
 
 
 class TestPrecheckConcurrency(unittest.TestCase):
-    def test_precheck_all_runs_slices_concurrently_capped_at_eight(self):
+    def test_precheck_all_runs_slices_concurrently_capped_at_provider_cap(self):
         live = [0]
         peak = [0]
         lock = threading.Lock()
@@ -64,7 +64,7 @@ class TestPrecheckConcurrency(unittest.TestCase):
 
         with mock.patch.object(devteam, "precheck_one", fake_precheck):
             devteam.precheck_all({}, list(range(40)))
-        self.assertLessEqual(peak[0], 8)
+        self.assertLessEqual(peak[0], devteam.PROVIDER_CAP)
         self.assertGreater(peak[0], 1)
 
     def test_precheck_all_preserves_slice_order(self):

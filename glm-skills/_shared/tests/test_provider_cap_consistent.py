@@ -1,4 +1,8 @@
-"""The provider's 8-concurrent-call cap is vendored per skill (no cross-imports); every copy must equal zai_client.MAX_PARALLEL."""
+"""The shared HTTP fan-out cap is 8 and is vendored per skill (no cross-imports).
+
+glm-dev-team's lane window (PROVIDER_CAP) is 15 on purpose: those are subagent
+slots, not extra threads inside zai_client. Do not fold it back into MAX_PARALLEL.
+"""
 import os
 import re
 import sys
@@ -13,7 +17,6 @@ PY_CONSTANTS = (
     ("glm-requirements-code-audit/scripts/audit.py", "MAX_PARALLEL"),
     ("glm-writing-plans/scripts/plan_tool.py", "MAX_WORKERS"),
     ("glm-systematic-debugging/scripts/debug_tool.py", "MAX_API"),
-    ("glm-dev-team/scripts/devteam.py", "PROVIDER_CAP"),
 )
 
 
@@ -31,6 +34,14 @@ class ProviderCapConsistent(unittest.TestCase):
             m = re.search(r"^%s\s*=\s*(\d+)\b" % name, read(rel), re.M)
             self.assertIsNotNone(m, "%s: %s not found" % (rel, name))
             self.assertEqual(int(m.group(1)), zai_client.MAX_PARALLEL, "%s: %s" % (rel, name))
+
+    def test_devteam_lane_window_is_15(self):
+        rel = "glm-dev-team/scripts/devteam.py"
+        m = re.search(r"^PROVIDER_CAP\s*=\s*(\d+)\b", read(rel), re.M)
+        self.assertIsNotNone(m, "PROVIDER_CAP not found")
+        self.assertEqual(int(m.group(1)), 15)
+        tiers = re.search(r'^TIERS = \{"lite": \(3, 15\), "pro": \(6, 15\), "max": \(7, 15\), "api": \(15, 15\)\}', read(rel), re.M)
+        self.assertIsNotNone(tiers, "TIERS no longer match the 15-wide window")
 
     def test_context_sh_c8_clamps_to_cap(self):
         rel = "glm-brainstorming/scripts/context.sh"
