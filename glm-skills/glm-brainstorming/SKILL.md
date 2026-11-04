@@ -1,6 +1,6 @@
 ---
 name: glm-brainstorming
-description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3-Flash and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
 allowed-tools:
   - Bash(sh *context.sh*)
@@ -133,14 +133,14 @@ researcher have none).
    Spec pre-draft is the one writable lane (`general-purpose`), and only
    when a file write will not raise a prompt.
 2. Work whose conclusion decides WHICH approach wins stays on the main
-   thread (GLM-5.3).
+   thread (GLM-5.3-Flash).
 3. The main thread does classification, merge, design, final message —
    nothing a lane can do.
 4. Never spawn a lane for what one direct call answers.
 
 ## R3 — Effort ladder (reasoning is always on; you pick depth)
 
-GLM-5.3 cannot disable thinking. `reasoning_effort` is `low | high |
+GLM-5.3-Flash cannot disable thinking. `reasoning_effort` is `low | high |
 max`, default `max`, and thinking tokens are emitted before any tool call
 — so `max` on a mechanical round is pure latency.
 
@@ -412,7 +412,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   drop it. Never retry a denial.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
-- "A GLM-5.3 lane will be smarter" → same model as the main thread at ~9×
+- "A GLM-5.3-Flash lane will be smarter" → same model as the main thread at ~9×
   Flash's cost; judgment stays on the main thread (R2). And never a lane
   for one search.
 - "Spawn 6 because I can" → width must buy a saved human turn or a

@@ -45,7 +45,7 @@ VERSION = "9.0"
 FLASH = "glm-5.3-flash"
 PRO = "glm-5.3"
 
-# reasoning_effort on GLM-5.3 / -Flash is low | high | max (default max).
+# reasoning_effort on GLM-5.3-Flash / -Flash is low | high | max (default max).
 # There is no "medium": thinking cannot be disabled on either model.
 TIERS = {
     "light": {
@@ -680,7 +680,7 @@ def derive_keywords(text, extra="", limit=8):
 class Retriever(object):
     """Deterministic, multi-strategy evidence retrieval.
 
-    Why this exists: GLM-5.3 emits very few parallel tool calls per turn and every
+    Why this exists: GLM-5.3-Flash emits very few parallel tool calls per turn and every
     dispatch is a model turn, so an agentic search loop is the slow, weak
     part of an audit. Doing retrieval here makes it parallel, repeatable,
     auditable (every query is recorded) and structurally unable to read prose
@@ -988,7 +988,7 @@ class Retriever(object):
         }
 
 # --------------------------------------------------------------------------- prompts
-# Shaped for GLM-5.3 / -Flash: numbered rules, no XML ceremony, no behaviour
+# Shaped for GLM-5.3-Flash / -Flash: numbered rules, no XML ceremony, no behaviour
 # tables, JSON-only output, hard output cap. Everything constant lives in the
 # system block so the wave shares ONE byte-identical cache prefix.
 

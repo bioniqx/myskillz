@@ -8,7 +8,7 @@ uses the same table.
 
 # 10.1 (from 10.0) — gates the model was dropping, checked by script
 
-GLM-5.3 drops rules that sit in the middle of a long prompt, treats a
+GLM-5.3-Flash drops rules that sit in the middle of a long prompt, treats a
 private restatement as optional, and fabricates lines to satisfy a minimum
 count. The checks that used to be prose now fail closed in `check.py`:
 
@@ -129,7 +129,7 @@ ZCode Agent tool with the installed `glm-explorer`/`glm-researcher` agents.
 - visual-companion.md: platform notes gain a ZCode entry.
 - glm-tuning.md: ZCode runtime section.
 
-# 9.0 (from 8.0) — tuned for GLM-5.3 and GLM-5.3-Flash
+# 9.0 (from 8.0) — tuned for GLM-5.3-Flash and GLM-5.3-Flash
 
 The uploaded folder was named `glm-brainstorming-6.3` but its SKILL.md and
 CHANGELOG were the 8.0 content, so this build is numbered 9.0. Drop-in
@@ -140,12 +140,12 @@ replacement: same skill `name: glm-brainstorming`, same hand-off to
 
 **Lane economics rewritten — the single biggest speed win.** On the GLM
 coding plan `haiku` → GLM-5.3-Flash while `sonnet` AND `opus` both →
-GLM-5.3. The old `sonnet`-for-judgment tier was therefore paying main-model
+GLM-5.3-Flash. The old `sonnet`-for-judgment tier was therefore paying main-model
 price and main-model latency for every "cheap" lane. R2 now defaults every
 lane to Flash (~1.8× output speed, ~9× cheaper, 3× coding-plan quota) and
-caps GLM-5.3 lanes at 2 — the ones whose conclusion picks the approach.
+caps GLM-5.3-Flash lanes at 2 — the ones whose conclusion picks the approach.
 
-**Effort ladder (R3), new.** GLM-5.3 cannot disable thinking;
+**Effort ladder (R3), new.** GLM-5.3-Flash cannot disable thinking;
 `reasoning_effort` is low/high/max, default max, and thinking tokens are
 emitted before any tool call at ~63 tok/s. Max on a dispatch or merge round
 is pure latency. The ladder puts `low` on mechanical rounds, `high` on the
@@ -200,7 +200,7 @@ GLM degrades).
 
 **Visual companion:** screens written at effort `low`; long mockup sets can
 go to a Flash lane; note that Flash is natively multimodal and can read a
-screenshot back, while GLM-5.3 is text-only.
+screenshot back, while GLM-5.3-Flash is text-only.
 
 **context.sh** also gained a single-line-`package.json` fallback for
 `npm_deps`. Still read-only, still bounded, still always exits 0.

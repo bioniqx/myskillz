@@ -99,7 +99,7 @@ and Flash lanes need it stated explicitly, not implied.
 | Comparison of 2-4 options | 4-8 searches + 2-6 fetches, two parallel batches | 0-2 Flash lanes at ≤5 calls each, only for multi-hop angles |
 | Broad landscape or new domain | 4-8 | 4-8 Flash lanes (waves of `lanes=`, default 8, hard max 8) at ≤5 calls each |
 
-Promote one lane to GLM-5.3 only when the comparison is contested and its
+Promote one lane to GLM-5.3-Flash only when the comparison is contested and its
 outcome picks the approach.
 
 Stop a lane when two consecutive searches add no new facts, when the

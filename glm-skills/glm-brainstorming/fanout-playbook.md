@@ -46,7 +46,7 @@ known failure is spawning dozens of agents for a simple query. Do not.
 
 Wide fan-outs multiply token use and hit quota sooner. Flash's 3× quota
 and ~9× lower price is what makes 12-20 lanes (in waves of `lanes=`) affordable — the same
-fan-out on GLM-5.3 lanes is not. Width must still buy a saved human turn
+fan-out on GLM-5.3-Flash lanes is not. Width must still buy a saved human turn
 or a better decision.
 
 ## 2. Partition — one axis per lane, no overlap

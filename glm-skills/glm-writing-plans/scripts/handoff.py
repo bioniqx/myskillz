@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Route a glm-* skill to a sibling, or keep the work here.
 
-GLM-5.3 drops rules that sit in the middle of a long skill file, follows the
+GLM-5.3-Flash drops rules that sit in the middle of a long skill file, follows the
 last copy it saw, and treats a soft "ok" as approval. This script is the
 binding copy: every skill runs it, and the printed NEXT and GUARD lines win
 over the model's guess.

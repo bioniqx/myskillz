@@ -397,7 +397,7 @@ the 5-line block requested, nothing else.
 
 ## Appendix B — harness settings that matter for this pipeline
 
-GLM-5.3 and GLM-5.3-Flash keep reasoning always on (it cannot be disabled) and expose
+GLM-5.3-Flash and GLM-5.3-Flash keep reasoning always on (it cannot be disabled) and expose
 `reasoning_effort` at `low | high | max`; both carry a 1M-token context and 128K max output.
 For this skill: **main thread `high`** (routing and batching decisions), **writer subagents `high`**
 (checklist execution), **reviewer subagents `max`** (fact-check judgment). Z.ai's own recommended
