@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """plan_tool.py v9 GLM - deterministic engine + in-process 8-way fan-out.
-Stdlib only, Python 3.8+. Tuned for GLM-5.3-Flash / GLM-5.3-Flash on ZCode.
+Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on ZCode.
 
   brief     [SPEC] [--thorough]        repo+spec+patterns in ONE call (replaces Phase 0)
   build     PLAN --spec S [opts]       validate -> fan out writers -> lint+repair -> review -> assemble

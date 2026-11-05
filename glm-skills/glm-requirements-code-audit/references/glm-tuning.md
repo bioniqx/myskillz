@@ -1,4 +1,4 @@
-# GLM-5.3-Flash tuning — what was verified, what it changed
+# GLM-5.3 tuning — what was verified, what it changed
 
 Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 
@@ -65,7 +65,7 @@ Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 
 ## Not verified
 
-- GLM-5.3-Flash's real per-turn parallel-tool-call ceiling. It does not matter here: the api lane never asks the model
+- GLM-5.3's real per-turn parallel-tool-call ceiling. It does not matter here: the api lane never asks the model
   to make more than one call.
 - Whether the z.ai gateway honours Anthropic-style `cache_control` breakpoints or applies its own automatic
   caching. Either way the prefix is byte-identical, which is what caching needs; `run` prints the cached-token

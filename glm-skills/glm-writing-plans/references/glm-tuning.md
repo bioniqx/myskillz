@@ -1,4 +1,4 @@
-# Running this skill on GLM-5.3-Flash / GLM-5.3-Flash
+# Running this skill on GLM-5.3 / GLM-5.3-Flash
 
 Read this only when the skill misbehaves or you are tuning it. The skill itself
 does not need it.
@@ -9,7 +9,7 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 
 ## Model facts the design is built on
 
-| | GLM-5.3-Flash | GLM-5.3-Flash |
+| | GLM-5.3 | GLM-5.3-Flash |
 |---|---|---|
 | Context / max output | 1M / 128K | 1M / 128K |
 | Throughput, TTFT | ~63 tok/s, ~3.4 s | ~114 tok/s, ~2.3 s |
@@ -50,7 +50,7 @@ deep writer and reviewer pin `max`. The `low` effort applies to the api lane
 only.
 
 The z.ai Anthropic-compatible route maps the `haiku` alias to Flash and both
-`sonnet` and `opus` to GLM-5.3-Flash, so never ask for `opus`: it costs the same as
+`sonnet` and `opus` to GLM-5.3, so never ask for `opus`: it costs the same as
 `sonnet`. The provider cap on parallel requests is a stated limit of this
 route, not a design goal. Width stays the product you are designing.
 

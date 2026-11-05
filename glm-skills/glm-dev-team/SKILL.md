@@ -45,10 +45,10 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
   | Agent | Model on Z.ai | Effort | Job |
   | --- | --- | --- | --- |
   | `glm-programmer-lite` | GLM-5.3-Flash | max | every slice that is not strong: the default lane |
-  | `glm-programmer-strong` | GLM-5.3-Flash | max | `risk: high`, `size: large`, and any **retried** slice |
-  | `glm-code-reviewer` | GLM-5.3-Flash | max | full review, read-only |
+  | `glm-programmer-strong` | GLM-5.3 | max | `risk: high`, `size: large`, and any **retried** slice |
+  | `glm-code-reviewer` | GLM-5.3 | max | full review, read-only |
   | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | max | correctness-only review / research, root cause |
-  | `glm-team-leader` | GLM-5.3-Flash | max | planning, plan adoption, verification; remembers the repo |
+  | `glm-team-leader` | GLM-5.3 | max | planning, plan adoption, verification; remembers the repo |
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
   read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
@@ -150,7 +150,7 @@ Act on each block, in the same turn:
   its worktree); only the user can answer → ask **now**, keep everything else running.
 - `REJECTED` / `NOT READY` / `MERGE ERROR` → the slice stays in flight: `SendMessage` that agent the exact
   fix printed, `next` when it reports. `devteam retry <id>` (cold, fresh worktree, `--files …` to widen;
-  the retry runs on GLM-5.3-Flash) only when it can't be resumed — `TaskStop` a stuck one first.
+  the retry runs on GLM-5.3) only when it can't be resumed — `TaskStop` a stuck one first.
 - `UNCLAIMED` → those Agent calls never started (a dropped parallel launch). Launch each reprinted line once. Do not start a second copy of a slice that is already running.
 - `<id>: REJECTED - PROOF FAILED ...` / `RED PROOF FAILED` → `SendMessage` that agent the printed command and
   output tail verbatim, plus: fix the cause, rerun the command, commit, report. Do not edit anything

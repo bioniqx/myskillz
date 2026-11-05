@@ -10,7 +10,7 @@ the original from here.
 
 ## What this directory is
 
-GLM-5.3-Flash / GLM-5.3-Flash ports of the Claude-tuned originals in `../claude-skills/`
+GLM-5.3 / GLM-5.3-Flash ports of the Claude-tuned originals in `../claude-skills/`
 (`claude-brainstorming-6.3`, `claude-dev-team-v3.2`, `claude-doc-generator`,
 `claude-requirements-code-audit`, `claude-systematic-debugging-6.3`, `claude-writing-plans-6.2`). Each
 `glm-*/` folder is a self-contained skill meant to be installed into **ZCode** — these ports are
@@ -76,7 +76,7 @@ Every port applies the same set of model facts; each skill with a tuning surface
 `glm-tuning.md` (glm-idea-to-spec has none):
 
 - **Aliases collapse on Z.ai.** `haiku` maps to `glm-5.3-flash`. Both `sonnet` and `opus` map to `glm-5.3`,
-  so a "sonnet" lane is not cheaper. Worker lanes default to Flash and judgment lanes use GLM-5.3-Flash. Never
+  so a "sonnet" lane is not cheaper. Worker lanes default to Flash and judgment lanes use GLM-5.3. Never
   pick `opus` over `sonnet` for cost reasons.
 - **Thinking is always on.** `reasoning_effort` accepts only `low | high | max` (no `medium`) and defaults
   to `max`. Effort is the real latency dial, so every tier maps to one explicit effort. On ZCode, effort

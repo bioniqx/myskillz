@@ -67,7 +67,7 @@ class TestDevteamZcodeCore(unittest.TestCase):
 
 
 class TestGlmMistakeGates(unittest.TestCase):
-    """Machine checks for the failures GLM-5.3-Flash leaves in a slice: a criterion's concrete
+    """Machine checks for the failures GLM-5.3 leaves in a slice: a criterion's concrete
     value never reaches the test, and an added import names a module that does not exist."""
 
     def test_criterion_literal_must_appear_in_test_text(self):

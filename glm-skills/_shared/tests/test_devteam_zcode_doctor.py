@@ -96,11 +96,11 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         A missing pin silently runs every lane on the session model."""
         pins = {
             "glm-programmer-lite": ("GLM-5.3-Flash", "max"),
-            "glm-programmer-strong": ("GLM-5.3-Flash", "max"),
-            "glm-code-reviewer": ("GLM-5.3-Flash", "max"),
+            "glm-programmer-strong": ("GLM-5.3", "max"),
+            "glm-code-reviewer": ("GLM-5.3", "max"),
             "glm-spot-reviewer": ("GLM-5.3-Flash", "max"),
             "glm-investigator": ("GLM-5.3-Flash", "max"),
-            "glm-team-leader": ("GLM-5.3-Flash", "max"),
+            "glm-team-leader": ("GLM-5.3", "max"),
         }
         for name, (model, level) in pins.items():
             fm = frontmatter(os.path.join(AGENTS_SRC, name + ".md"))

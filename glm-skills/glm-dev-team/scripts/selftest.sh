@@ -885,7 +885,7 @@ EOF
 OUT=$(D init plan.md 2>&1 && D dispatch N1 T1 H1 L1 X1 2>&1)
 check "a normal slice rides the lite lane (GLM-5.3-Flash, thoughtLevel max) with no model override" 'grep -q "subagent_type=glm-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
 check "a trivial slice takes the lite lane too" 'grep -q "subagent_type=glm-programmer-lite, description=.tiny." <<<"$OUT"'
-check "a high-risk slice escalates to the strong lane (GLM-5.3-Flash)" 'grep -q "subagent_type=glm-programmer-strong, description=.auth." <<<"$OUT"'
+check "a high-risk slice escalates to the strong lane (GLM-5.3)" 'grep -q "subagent_type=glm-programmer-strong, description=.auth." <<<"$OUT"'
 check "a large slice escalates to the strong lane" 'grep -q "subagent_type=glm-programmer-strong, description=.big." <<<"$OUT"'
 check "a large research slice still goes to the glm-investigator" '[[ "$OUT" == *"subagent_type: glm-investigator, description: \"X1\""* ]]'
 D fail N1 --why "stuck" >/dev/null 2>&1; D fail T1 --why "stuck" >/dev/null 2>&1; D retry N1 >/dev/null 2>&1; D retry T1 >/dev/null 2>&1

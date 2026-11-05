@@ -22,7 +22,7 @@
 
 **Protocol alignment (2026-10-11):** contracts gain an Out-of-scope line and a Rollback line next to Goal; contract rule 3 forbids third-party symbols recalled from memory; body-rules adds edges-are-concrete-tests (rule 16), no-weakened-tests (rule 17) and verified-third-party-symbols (rule 15 extension); the reviewer agent and the reviewer prompt check edge coverage, weakened tests and unverified third-party calls.
 
-Target: GLM-5.3-Flash and GLM-5.3-Flash, running in ZCode.
+Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn
 

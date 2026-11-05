@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """glm-dev-team engine v4.0 — deterministic scheduler, integrator, worktree helper and concurrency governor,
-tuned for ZCode on Z.ai GLM-5.3-Flash (strong) + GLM-5.3-Flash (fast). The provider is auto-detected from
+tuned for ZCode on Z.ai GLM-5.3 (strong) + GLM-5.3-Flash (fast). The provider is auto-detected from
 ANTHROPIC_BASE_URL (`DEVTEAM_PROVIDER=glm|anthropic` forces it); model routing itself is ZCode-only
 (glm-programmer-strong / glm-programmer-lite, pinned in the agents' own frontmatter).
 
@@ -69,7 +69,7 @@ Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
 Provider + governor (v4):
   routing   ZCode-only: every lane rides glm-programmer-lite (GLM-5.3-Flash, thoughtLevel max); high-risk,
-            large and RETRIED slices escalate to glm-programmer-strong (GLM-5.3-Flash, thoughtLevel max). Model
+            large and RETRIED slices escalate to glm-programmer-strong (GLM-5.3, thoughtLevel max). Model
             ids stay as pinned; effort is max on every agent. Both are pinned in the agents' own
             frontmatter — the Agent tool takes no per-dispatch model, and `doctor --fix` installs the
             agents verbatim. thoughtLevel is ignored unless that model id is present.
@@ -160,7 +160,7 @@ SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
 
 # --- providers: which API serves the run. Model routing itself is ZCode-only — the Agent tool takes no
 # per-dispatch model, so each agents/<name>.md file pins its own model id + thoughtLevel
-# (glm-programmer-strong = GLM-5.3-Flash/max, glm-programmer-lite = GLM-5.3-Flash/max, reviewer/leader likewise).
+# (glm-programmer-strong = GLM-5.3/max, glm-programmer-lite = GLM-5.3-Flash/max, reviewer/leader likewise).
 # The provider name only drives detection, stats labels and the glm-only peak-hour governor.
 PROVIDERS = {
     "glm": {"label": "Z.ai GLM"},
@@ -1516,7 +1516,7 @@ def cmd_init(a):
     out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; glm-programmer slots {cap} "
         f"(hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
     out(f"PROVIDER {PROVIDERS[provider]['label']}: lanes on glm-programmer-lite (GLM-5.3-Flash); high-risk, large "
-        "and retried slices on glm-programmer-strong (GLM-5.3-Flash); model + effort pinned in the agents' frontmatter")
+        "and retried slices on glm-programmer-strong (GLM-5.3); model + effort pinned in the agents' frontmatter")
     if gov_line(st):
         out(gov_line(st))
     high = [sid for sid, s in slices.items() if s["risk"] == "high"]
@@ -1848,7 +1848,7 @@ def dispatch_route(st, s, mode):
     """The Agent line for one glm-programmer dispatch (ZCode-only: the Agent tool takes no per-dispatch
     model). Cheap first, strong where it pays: every lane starts on glm-programmer-lite
     (GLM-5.3-Flash, thoughtLevel max); high-risk, large and RETRIED slices escalate to
-    glm-programmer-strong (GLM-5.3-Flash, thoughtLevel max) — a second attempt means the fast model already
+    glm-programmer-strong (GLM-5.3, thoughtLevel max) — a second attempt means the fast model already
     missed once. The agent's own frontmatter pins the model and effort."""
     strong = (s.get("risk") == "high" or s.get("size") == "large"
               or int(s.get("attempt") or 1) >= 2)

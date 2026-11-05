@@ -2,7 +2,7 @@
 name: "glm-team-leader"
 description: "Senior technical lead for the glm-dev-team workflow. PLANNING: deep analysis of a request against the real codebase → an executable, maximally parallel vertical-slice plan (pinned contracts, disjoint footprints, testable acceptance criteria, risk, isolation) written as .claude/dev-team/plan.md with a machine-readable JSON block. PLAN ADOPTION: maps an existing plan onto slices without re-deriving it. Plans any kind of software work — features, bug fixes, refactors, migrations, test backfill, performance, infrastructure/CI, documentation and read-only research — as one DAG of typed slices. VERIFICATION: judges whether delivered code fulfills the user's intent. Reasoning-heavy, read-only; remembers each repository's map across sessions."
 color: green
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+model: "account:zai-individual-coding-plan/GLM-5.3"
 thoughtLevel: max
 maxTurns: 120
 injectAgentsMd: false
@@ -62,7 +62,7 @@ Input: the user's request (+ optional explorer maps). Output: `.claude/dev-team/
    exact command whose output proves the slice works. Set `size` (`trivial`/`small`/`large`):
    it orders the scheduler's critical path and sets the lane: every slice that is neither `large`
    nor `risk: high` runs on the lite lane (GLM-5.3-Flash, high effort); `large`, `risk: high`
-   and anything the engine retries run on the strong lane (GLM-5.3-Flash, max effort).
+   and anything the engine retries run on the strong lane (GLM-5.3, max effort).
 7. **Slice vertically; design for width.** S1 = the thinnest walking skeleton; each
    later slice adds one increment. Never horizontal layers. Width is the product:
    - `deps`: only true runtime prerequisites (skeleton wired, migration applied).
@@ -70,7 +70,7 @@ Input: the user's request (+ optional explorer maps). Output: `.claude/dev-team/
    - `files`: the exact source **and test** paths; keep footprints pairwise disjoint
      (a shared file serializes the two slices; a shared test file too).
    - `risk: high` only for security surface, concurrency, or subtle logic — it runs on
-     GLM-5.3-Flash at max, in one lane, and the engine still runs RED proof plus verification.
+     GLM-5.3 at max, in one lane, and the engine still runs RED proof plus verification.
    - `isolation: true` when the slice's tests touch a port, database or filesystem
      outside the footprint (the engine pins PORT/DB_SUFFIX/TMPDIR per slice).
    - Width is the product you are designing: the engine's concurrency window (`devteam.py status` prints the

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail a spec that states a money figure with no source.
 
-GLM-5.3-Flash invents market sizes, prices, and growth rates. A money token on a
+GLM-5.3 invents market sizes, prices, and growth rates. A money token on a
 line with no URL and no ASSUMPTION, ESTIMATE, or UNVERIFIED label is a FAIL.
 The file must also contain a BUILD verdict. Exit 0 when clean, 1 on FAIL,
 2 on usage. Stdlib only. Read-only.

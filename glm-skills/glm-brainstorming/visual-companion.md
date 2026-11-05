@@ -71,7 +71,7 @@ stdout, read `$STATE_DIR/server-info`. Remind the user to gitignore
 
 Reading screenshots back: GLM-5.3-Flash is natively multimodal, so a
 Flash lane can look at a screenshot of the rendered page if you need a
-visual check. GLM-5.3-Flash is text-only — do not send it images.
+visual check. GLM-5.3 is text-only — do not send it images.
 
 Platform notes: ZCode — no ZCode-specific server behavior is documented:
 run as above (the script backgrounds itself), and if the harness reaps

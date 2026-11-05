@@ -1,4 +1,4 @@
-# GLM-5.3-Flash / GLM-5.3-Flash tuning — why this skill is shaped the way it is
+# GLM-5.3 / GLM-5.3-Flash tuning — why this skill is shaped the way it is
 
 Read this when something is slow, when `scan` falls back to the agent lane, or when you are porting the skill to another harness.
 
