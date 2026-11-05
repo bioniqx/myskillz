@@ -1,7 +1,7 @@
 ---
 name: "glm-explorer"
 description: "Read-only exploration lane for glm-brainstorming: files, greps, symbol hunts across one slice of the repo."
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+model: "account:zai-individual-coding-plan/GLM-5.3"
 thoughtLevel: max
 color: blue
 maxTurns: 6
