@@ -3,9 +3,9 @@ name: "glm-plan-task-writer"
 description: "Writes implementation-plan task bodies from a glm-writing-plans brief file. Use only when given a glm-writing-plans brief path."
 color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
-thoughtLevel: max
+thoughtLevel: high
 maxTurns: 16
-injectAgentsMd: true
+injectAgentsMd: false
 ---
 
 You write implementation-plan task bodies. Read the brief file named in your

@@ -120,7 +120,8 @@ Contract rules - all plan quality is decided here, nowhere later:
 5. `Read` (optional) adds existing files that writer needs inlined.
 6. `Tier` (optional) is `light` for trivial config or docs, `deep` for
    algorithmic, security, concurrency or migration work. Default is standard.
-   Tier picks the model and the reasoning effort, so it is the main speed dial.
+   Tier is a hint: `build` may raise it, and it never selects a model other
+   than Flash.
 7. Right-size each task: the smallest unit with its own test cycle that a
    reviewer could reject on its own.
 8. `References` is optional and is inlined into every writer's shared prefix -
@@ -145,9 +146,8 @@ to review every task instead of only the risky ones.
    plan file and re-run the same command.
 2. Named failing task IDs after the fan-out: re-run with `--resume` added. It
    retries only those.
-3. `OK assembled ...` is done. Go to R5.
-   Treat a "WARN spec uncovered" line as a missing task unless that spec
-   section is non-functional: add a contract and re-run.
+3. `OK assembled ...` is done. Go to R5. An uncovered spec heading is an
+   `ERR`: fix it with a contract or an `Out of scope` line and re-run.
 4. `LANE agent` in the output means no API key was found, so the script fell
    back to printing a DISPATCH table: dispatch one subagent per row, ALL in a
    single message (ZCode runs subagents launched together in parallel), each

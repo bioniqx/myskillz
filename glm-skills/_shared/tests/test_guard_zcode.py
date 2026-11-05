@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -157,3 +158,18 @@ class TestGuardZcode(unittest.TestCase):
                 out = self.run_zcode(inp)
             stop.assert_called_once_with(inp)
             self.assertIn("lane not finished", out)
+
+    def test_claim_prompt_hash(self):
+        root = tempfile.mkdtemp()
+        prompt_dir = os.path.join(root, ".claude", "dev-team", "prompts")
+        os.makedirs(prompt_dir)
+        expected = "python3 devteam.py claim S1"
+        with open(os.path.join(prompt_dir, "S1.txt"), "w", encoding="utf-8") as fh:
+            fh.write(expected)
+        match = self.payload(tool_name="Agent", cwd=root, tool_input={"prompt": expected})
+        self.assertEqual(self.run_zcode(match), "")
+        extra = self.payload(tool_name="Agent", cwd=root,
+                             tool_input={"prompt": expected + " please"})
+        self.assertIn("prompt hash mismatch for S1", self.run_zcode(extra))
+        other = self.payload(tool_name="Agent", cwd=root, tool_input={"prompt": "look around"})
+        self.assertEqual(self.run_zcode(other), "")

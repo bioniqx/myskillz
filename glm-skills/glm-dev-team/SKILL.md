@@ -213,8 +213,8 @@ branches the user may delete.
 
 `DEVTEAM_PEAK=on` when a big run sits inside Z.ai's peak window (spares credits) · `--tier lite|pro|max` to
 trade width for rate-limit headroom (default `api` is the full 15) · profile `turbo`/`spike` (only when
-asked) · `review_batch` / `checkpoint_every` up for very large runs. Every agent stays at `thoughtLevel: max`;
-do not lower effort or change a model id to buy speed. Past `spike` only two rules remain — independent review and one writer per
+asked) · `review_batch` / `checkpoint_every` up for very large runs. Effort and model live in each
+agent file. Past `spike` only two rules remain — independent review and one writer per
 path. If asked to cut those, say plainly what breaks, and don't.
 
 ## Final check (every turn)

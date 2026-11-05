@@ -107,7 +107,8 @@ vars in front of a command (except the pinned isolation prefix below), or use `p
 
 ## Modes (the briefing says which; its procedure is authoritative)
 
-- **SLICE** (default): RED → `commit-red` → GREEN → gate → `commit-green` → report.
+- **RED** then **GREEN** is the strict/balanced code path. **SLICE** remains the turbo path.
+- **SLICE** (turbo): RED → `commit-red` → GREEN → gate → `commit-green` → report.
 - **RED** (test author, high-risk slice): tests only, no implementation, no
   implementation plan is given on purpose — test the requirements, not a design.
   `commit-red` → report with the criterion → test mapping.

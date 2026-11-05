@@ -18,11 +18,17 @@ Read-only, stdlib only. Exit 0 = nothing wrong, 1 = a BAD / DROP / FAIL / no, 2 
 """
 import argparse
 import datetime
+import os
 import re
 import sys
 import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import decide
 
 STALE_DAYS = 548            # 18 months
 MAX_QUOTE_WORDS = 25
@@ -440,6 +446,11 @@ def check_send(a):
                     fails.append(
                         f"FAIL fence - {count}-line {lang} block is implementation; "
                         "remove it until approve prints yes")
+        if design and not a.ledger:
+            fails.append("FAIL ledger - a design message needs --ledger")
+        elif a.ledger:
+            fails.extend(decide.bind_text("\n".join(visible), decide.load_ledger(a.ledger),
+                                          pick=a.pick))
     for item in fails:
         print(item)
     print(f"RESULT send fail={len(fails)}")
@@ -484,11 +495,23 @@ def main(argv=None):
     pe = sp.add_parser("send")
     pe.add_argument("--root", default=".")
     pe.add_argument("--approved", action="store_true")
+    pe.add_argument("--ledger")
+    pe.add_argument("--pick")
     pe.set_defaults(fn=check_send)
+    pv = sp.add_parser("prove")
+    pv.add_argument("--ledger", required=True)
+    pv.add_argument("--offline", action="store_true")
+    pv.set_defaults(fn=lambda a: decide.main(
+        ["prove", "--ledger", a.ledger] + (["--offline"] if a.offline else [])))
+    pb = sp.add_parser("bind")
+    pb.add_argument("--ledger", required=True)
+    pb.add_argument("--pick")
+    pb.set_defaults(fn=lambda a: decide.main(
+        ["bind", "--ledger", a.ledger] + (["--pick", a.pick] if a.pick else [])))
     pa = sp.add_parser("approve")
     pa.add_argument("--asked", required=True, choices=("design", "other"))
     pa.set_defaults(fn=check_approve)
-    for q in (pc, pw, ps, pr, pe, pa):
+    for q in (pc, pw, ps, pr, pe, pv, pb, pa):
         q.add_argument("--today", help=argparse.SUPPRESS)
     a = p.parse_args(argv)
     try:

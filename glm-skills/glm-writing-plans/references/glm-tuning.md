@@ -37,24 +37,18 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 
 ## Tier routing
 
-| Tier | API model | Effort (api lane) | Agent-lane model | Agent-lane effort |
-|---|---|---|---|---|
-| `light` | glm-5.3-flash | low | glm-5.3-flash | high |
-| (default) | glm-5.3-flash | high | glm-5.3-flash | high |
-| `deep` | glm-5.3 | max | glm-5.3 | max |
-
-On the api lane the tier's effort column applies. On the agent lane every tier
-runs the installed agents' pinned efforts: `glm-plan-task-writer` pins
-`thoughtLevel: max`, so `light` and `std` groups both run at high, and the
-deep writer and reviewer pin `max`. The `low` effort applies to the api lane
-only.
+Every tier is GLM-5.3-Flash. Api-lane model and effort live only in the `GLM`
+dict; agent-lane model and effort live only in the agent frontmatter. `deep`
+is max effort on Flash, not a bigger model; `build` raises a tier when the
+spec range names auth, payment or concurrency work.
 
 The z.ai Anthropic-compatible route maps the `haiku` alias to Flash and both
 `sonnet` and `opus` to GLM-5.3, so never ask for `opus`: it costs the same as
 `sonnet`. The provider cap on parallel requests is a stated limit of this
 route, not a design goal. Width stays the product you are designing.
 
-Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP`.
+Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP` (a `deep` id other than
+`glm-5.3-flash` prints `OUT OF BAR` — that run sits outside this skill's bar).
 
 ## Lanes
 

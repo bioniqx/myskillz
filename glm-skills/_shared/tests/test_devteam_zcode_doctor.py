@@ -95,12 +95,12 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         """ZCode ignores thoughtLevel unless a real model id is in the same frontmatter.
         A missing pin silently runs every lane on the session model."""
         pins = {
-            "glm-programmer-lite": ("GLM-5.3-Flash", "max"),
-            "glm-programmer-strong": ("GLM-5.3", "max"),
-            "glm-code-reviewer": ("GLM-5.3", "max"),
+            "glm-programmer-lite": ("GLM-5.3-Flash", "high"),
+            "glm-programmer-strong": ("GLM-5.3-Flash", "max"),
+            "glm-code-reviewer": ("GLM-5.3-Flash", "high"),
             "glm-spot-reviewer": ("GLM-5.3-Flash", "max"),
-            "glm-investigator": ("GLM-5.3-Flash", "max"),
-            "glm-team-leader": ("GLM-5.3", "max"),
+            "glm-investigator": ("GLM-5.3-Flash", "high"),
+            "glm-team-leader": ("GLM-5.3-Flash", "max"),
         }
         for name, (model, level) in pins.items():
             fm = frontmatter(os.path.join(AGENTS_SRC, name + ".md"))

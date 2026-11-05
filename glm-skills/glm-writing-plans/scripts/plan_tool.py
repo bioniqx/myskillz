@@ -22,6 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
+import decide
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
 MAX_WORKERS = 8           # provider limit: concurrent model calls (threads, writers, reviewers)
@@ -32,10 +33,15 @@ DEFAULT_LANE_WIDTH = 8    # writer groups one dispatch message starts (up to MAX
 # ---- GLM routing -------------------------------------------------------
 # tier -> (api model id, reasoning effort, agent-lane model id; real ids only, no alias jargon)
 GLM = {
-    "light": ("glm-5.3-flash", "low",  "glm-5.3-flash"),
+    "light": ("glm-5.3-flash", "high", "glm-5.3-flash"),
     "std":   ("glm-5.3-flash", "high", "glm-5.3-flash"),
-    "deep":  ("glm-5.3",       "max",  "glm-5.3"),
+    "deep":  ("glm-5.3-flash", "max",  "glm-5.3-flash"),
 }
+DEEP_WORDS = ("auth", "password", "token", "secret", "migration", "concurrent",
+              "thread", "lock", "race", "payment", "billing")
+_IGNORE_HEAD = ("non-goal", "out of scope", "background", "revision history",
+                "references", "glossary", "table of contents")
+ASSERT_RE = re.compile(r"\b(assert|assertEqual|assertTrue|assertFalse|pytest\.raises)\b|expect\(")
 TIER_RANK = {"light": 0, "std": 1, "deep": 2}
 DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
 KEY_ENV = ("PLAN_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY", "GLM_API_KEY", "ZHIPUAI_API_KEY",
@@ -495,8 +501,198 @@ def analyze(cs, spec_path=None, repo=None):
                 if not os.path.isfile(os.path.join(repo, r)):
                     warns.append("%s: Read path `%s` not found" % (c["id"], r))
     if spec_path:
-        warns += spec_coverage(cs, spec_path)
+        for item in spec_coverage(cs, spec_path):
+            if item.startswith("spec uncovered") and any(tok in item.lower() for tok in _IGNORE_HEAD):
+                continue
+            errs.append(item)
+    errs += external_symbol_errs(cs, repo)
     return errs, warns
+
+
+def external_symbol_errs(cs, repo):
+    errs = []
+    ident = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+    for c in cs:
+        for sig in c.get("external") or []:
+            m = ident.search(sig)
+            if not m:
+                continue
+            name = m.group(0)
+            reads = c.get("reads") or []
+            if not reads:
+                errs.append("%s: existing symbol %s is not in a Read file" % (c["id"], name))
+                continue
+            found = False
+            for rel in reads:
+                if not repo:
+                    break
+                p = os.path.join(repo, rel)
+                if not os.path.isfile(p) or os.path.getsize(p) > 1_000_000:
+                    continue
+                try:
+                    blob = open(p, encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                if name in blob:
+                    found = True
+                    break
+            if not found:
+                errs.append("%s: existing symbol %s is not in a Read file" % (c["id"], name))
+    return errs
+
+
+def raise_tiers(cs, spec_path):
+    notes = []
+    if not spec_path or not os.path.isfile(spec_path):
+        return notes
+    lines = load(spec_path).splitlines()
+    word = re.compile(r"\b(" + "|".join(DEEP_WORDS) + r")\b", re.I)
+    for c in cs:
+        if c.get("tier") == "deep":
+            continue
+        blob = []
+        for a, b in c.get("spec") or []:
+            blob.extend(lines[max(0, a - 1):b])
+        m = word.search("\n".join(blob))
+        if m:
+            old = c.get("tier") or "std"
+            c["tier"] = "deep"
+            notes.append("TIER %s %s -> deep (%s)" % (c["id"], old, m.group(1).lower()))
+    return notes
+
+
+def atom_errs(cs, spec_path, plan):
+    if not spec_path or not os.path.isfile(spec_path):
+        return []
+    atoms = decide.extract_atoms(load(spec_path))
+    if not atoms:
+        return []
+    lines = load(spec_path).splitlines()
+    homes = {"out-of-scope": ""}
+    m = re.search(r"(?im)^\*\*Out of scope:\*\*\s*(.+)$", plan or "")
+    if m:
+        homes["out-of-scope"] = m.group(1)
+    for c in cs:
+        blob = []
+        for a, b in c.get("spec") or []:
+            blob.extend(lines[max(0, a - 1):b])
+        homes[c["id"]] = "\n".join(blob)
+    return decide.coverage(atoms, homes)
+
+
+def assert_count(body):
+    return len(ASSERT_RE.findall(body or ""))
+
+
+def rewrite_ok(body, new):
+    """A reviewer rewrite is kept only when it keeps every assertion and every atom the body had."""
+    if assert_count(new) < assert_count(body):
+        return False
+    for atom in decide.extract_atoms(body):
+        if atom in body and atom not in new:
+            return False
+    return True
+
+
+def _strip_fences(text):
+    return "\n".join(l for l in text.splitlines() if not re.match(r"^\s*(`{3,}|~{3,})", l))
+
+
+def _remap_depends(text, mapping):
+    def sub(m):
+        ids = TICK.findall(m.group(0))
+        return "- Depends: " + ", ".join("`%s`" % mapping.get(x, x) for x in ids)
+    return re.sub(r"(?m)^- Depends:.*$", sub, text)
+
+
+def renumber_contracts(lst, extra_map=None):
+    """Rebuild sequential ids over lst in order, rewriting each header and Depends line.
+    extra_map covers ids that left the list (a dep on a split contract maps to its last part)."""
+    width = 3 if len(lst) > 99 else 2
+    new_ids = ["T%0*d" % (width, j) for j in range(1, len(lst) + 1)]
+    mapping = {c["id"]: nid for c, nid in zip(lst, new_ids)}
+    mapping.update(extra_map or {})
+    for c, nid in zip(lst, new_ids):
+        first, _, rest = c["text"].partition("\n")
+        m = CONTRACT_HEAD.match(first)
+        c["text"] = _remap_depends("#### %s: %s\n%s" % (nid, m.group(2) if m else c["id"], rest), mapping)
+        c["id"] = nid
+        c["deps"] = [mapping.get(d, d) for d in c.get("deps") or []]
+    return lst
+
+
+def rewrite_contracts_section(plan, lst):
+    """Rebuild the plan's '## Contracts' section from the contract texts, in order."""
+    lines = plan.splitlines()
+    start = next((i for i, l in enumerate(lines) if re.match(r"^##\s+Contracts\b", l)), None)
+    if start is None:
+        return plan
+    end = start + 1
+    while end < len(lines) and not (re.match(r"^##\s", lines[end])
+                                    or lines[end].strip() in (TASKS_MARK, WAVES_OPEN)
+                                    or TASK_HEAD.match(lines[end])):
+        end += 1
+    section = lines[start] + "\n\n" + "\n\n".join(c["text"] for c in lst) + "\n"
+    rest = lines[end:]
+    return "\n".join([section] + rest) if rest else section
+
+
+def split_wide(cfg, plan, cs, spec, repo, budget=None):
+    """One Flash split proposal per over-wide contract, inside `build` (at most three extra
+    calls, never a fourth orchestrator turn). A split replaces the contract only when the
+    linter, atom coverage and the file partition all still hold; otherwise the original stays."""
+    notes = []
+    if not spec or not os.path.isfile(spec):
+        return cs, plan, notes
+    spec_lines = load(spec).splitlines()
+    budget = budget or Budget()
+    wide_ids = [c["id"] for c in cs
+                if sum(max(0, b - a + 1) for a, b in c.get("spec") or []) > 80
+                or len(c.get("files") or []) > 4][:3]
+    for oid in wide_ids:
+        c = next((x for x in cs if x["id"] == oid), None)
+        if c is None:
+            continue
+        i = cs.index(c)
+        blob = "\n".join("\n".join(spec_lines[max(0, a - 1):b]) for a, b in c.get("spec") or [])
+        user = (c["text"] + "\n\nSpec lines it names:\n\n" + blob + "\n\n"
+                "Split this contract. Reply with ONLY two or three `#### Tnn: Name` contract blocks that "
+                "partition the Files list (every file exactly once, no overlap) and cover the same Spec "
+                "line ranges. Copy the Produces/Consumes/Read/Tier fields; order the blocks so the "
+                "first can be built first.")
+        new = []
+        text, err = call_model(cfg, ["You split implementation-plan contracts. Reply with the requested "
+                                     "blocks only."], user, "std", budget)
+        if not err:
+            parsed, perrs = parse_contracts("## Contracts\n" + _strip_fences(text))
+            if not perrs and parsed and 2 <= len(parsed) <= 3:
+                new = parsed
+                for x in new:
+                    x["text"] = _strip_fences(x["text"]).strip("\n")
+        sets = [set(x.get("files") or []) for x in new]
+        old_files = set(c.get("files") or [])
+        partitioned = (bool(new) and bool(old_files)
+                       and not any(a & b for j, b in enumerate(sets) for a in sets[:j])
+                       and set().union(*sets) == old_files)
+        if not partitioned:
+            notes.append("SPLIT %s rejected" % oid)
+            continue
+        k = len(new)
+        trial = cs[:i] + new + cs[i + 1:]
+        renumber_contracts(trial, {oid: trial_ids_for(len(trial))[i + k - 1]})
+        errs, _ = analyze(trial, spec, repo)
+        errs += atom_errs(trial, spec, plan)
+        if errs:
+            notes.append("SPLIT %s rejected" % oid)
+            continue
+        notes.append("SPLIT %s -> %s" % (oid, " ".join(x["id"] for x in trial[i:i + k])))
+        cs, plan = trial, rewrite_contracts_section(plan, trial)
+    return cs, plan, notes
+
+
+def trial_ids_for(n):
+    width = 3 if n > 99 else 2
+    return ["T%0*d" % (width, j) for j in range(1, n + 1)]
 
 
 def spec_coverage(cs, spec_path):
@@ -1063,7 +1259,9 @@ def prepare(plan_path, spec, allow):
         return plan, None, None, errs, []
     repo = repo_root(plan_path)
     e2, warns = analyze(cs, spec, repo)
-    errs += e2 + scan(plan.split(TASKS_MARK, 1)[0], allow, os.path.basename(plan_path), skip_contracts=True)
+    errs += e2 + atom_errs(cs, spec, plan)
+    errs += scan(plan.split(TASKS_MARK, 1)[0], allow, os.path.basename(plan_path), skip_contracts=True)
+    warns += raise_tiers(cs, spec)
     return plan, cs, repo, errs, warns
 
 
@@ -1124,8 +1322,22 @@ def cmd_build(a):
 
     cfg = {"key": key, "base": base, "protocol": proto}
     workers = workers_cap(a.workers)
-    prefix = shared_prefix(plan, repo)
     budget = Budget(limit=max(4, workers // 4))
+    if not a.no_split:
+        override = os.environ.get("PLAN_MODEL_DEEP", "")
+        if override and override != GLM["deep"][0]:
+            print("OUT OF BAR PLAN_MODEL_DEEP=%s (the bar is %s at max); the split pass is skipped"
+                  % (override, GLM["deep"][0]))
+        else:
+            cs, plan, split_notes = split_wide(cfg, plan, cs, spec, repo, budget)
+            for line in split_notes:
+                print(line)
+            if any(" -> " in n for n in split_notes):
+                save(plan_path, plan)
+                info = json.loads(load(os.path.join(work, "work.json")))
+                info["tasks"] = [c["id"] for c in cs]
+                save(os.path.join(work, "work.json"), json.dumps(info, indent=1))
+    prefix = shared_prefix(plan, repo)
     allow = list(a.allow)
     todo = resume_todo(cs, work, a.resume)
     print("LANE api | %s | %s | key %s | %d writers | %d/%d tasks"
@@ -1174,6 +1386,7 @@ def cmd_build(a):
         save(task_path(work, tid), body)
         if not e:
             touch(task_path(work, tid) + ".ok")
+            save(task_path(work, tid) + ".asserts", str(assert_count(body)))
             if w:
                 save(task_path(work, tid) + ".warn", "\n".join(w))
             why = _picked(c, body, bool(w))
@@ -1193,6 +1406,8 @@ def cmd_build(a):
             return 0
         new = extract_body(text, tid)
         if len(new.strip()) < 80:
+            return 0
+        if not rewrite_ok(body, new):
             return 0
         e_new, _ = lint_one(cs, c, new, allow, repo)
         e_old, _ = lint_one(cs, c, body, allow, repo)
@@ -1291,7 +1506,16 @@ def lint_file(plan_path, task_path, allow_extra=()):
     allow = list(work.get("allow", [])) + list(allow_extra)
     repo = work.get("repo") or repo_root(plan_path)
     earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
-    e, w = lint_body(c, strip_generated(load(task_path)), allow, c["id"], repo, earlier)
+    body = strip_generated(load(task_path))
+    e, w = lint_body(c, body, allow, c["id"], repo, earlier)
+    mark = task_path + ".asserts"
+    if os.path.isfile(mark):
+        try:
+            prev = int(open(mark, encoding="utf-8").read().strip() or "0")
+        except ValueError:
+            prev = 0
+        if assert_count(body) < prev:
+            e.append("%s: assertion count dropped from %d" % (c["id"], prev))
     return e, w, c
 
 
@@ -1902,6 +2126,7 @@ def main(argv=None):
     p.add_argument("--repairs", type=int, default=2)
     p.add_argument("--max-tokens", type=int, default=16000)
     p.add_argument("--thorough", action="store_true", help="review every task, not only risky ones")
+    p.add_argument("--no-split", action="store_true", help="do not propose splits for wide contracts")
     p.add_argument("--no-review", action="store_true")
     p.add_argument("--resume", action="store_true", help="skip tasks that already lint OK")
     p.add_argument("--keep-work", action="store_true")

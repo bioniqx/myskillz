@@ -242,6 +242,19 @@ class ZcodeAgentAndDispatchTests(unittest.TestCase):
             for key in ("model: ", "thoughtLevel:", "maxTurns:"):
                 self.assertIn(key, fm, (name, key))
 
+    def test_the_three_plan_agents_pin_flash(self):
+        """Spec 2026-11-05: every plan lane is Flash; only the effort differs; the brief is the only instruction."""
+        import os
+        effort = {"glm-plan-task-writer": "high",
+                  "glm-plan-task-writer-deep": "max",
+                  "glm-plan-reviewer": "max"}
+        for name, level in effort.items():
+            with open(os.path.join(AGENTS_DIR, name + ".md"), encoding="utf-8") as fh:
+                fm = fh.read().split("\n---\n")[0]
+            self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"', fm, name)
+            self.assertIn("thoughtLevel: %s\n" % level, fm, name)
+            self.assertIn("injectAgentsMd: false", fm, name)
+
     def test_dispatch_headers_carry_no_jargon(self):
         text = self.plan_tool_text()
         self.assertNotIn("sonnet", text, "plan_tool.py still names the sonnet alias")

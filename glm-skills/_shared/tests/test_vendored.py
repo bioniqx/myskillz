@@ -17,6 +17,9 @@ class TestVendored(unittest.TestCase):
                 'glm-idea-to-spec', 'glm-requirements-code-audit', 'glm-systematic-debugging',
                 'glm-writing-plans',
             ],
+            'decide.py': [
+                'glm-brainstorming', 'glm-writing-plans', 'glm-dev-team',
+            ],
         }
 
         sync_script = os.path.join(shared_dir, 'sync.sh')

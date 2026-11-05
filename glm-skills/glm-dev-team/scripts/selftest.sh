@@ -12,7 +12,7 @@ D() { python3 "$S/devteam.py" "$@"; }
 # Deterministic environment: GLM provider (what v4 is tuned for), the governor OFF for the legacy
 # scheduling checks (they assert exact slot arithmetic; the governor has its own section), no real
 # transcripts, no peak-hour dependence, and a throwaway HOME so the machine's ~/.claude never leaks in.
-export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_PROOF=off DEVTEAM_TRANSCRIPTS_DIR="$TMP/no-transcripts"
+export DEVTEAM_PROVIDER=glm DEVTEAM_GOVERNOR=off DEVTEAM_PEAK=off DEVTEAM_PROOF=off DEVTEAM_SPLIT=off DEVTEAM_TRANSCRIPTS_DIR="$TMP/no-transcripts"
 unset DEVTEAM_GLM_TIER DEVTEAM_MAX_PARALLEL ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR
 # Pin the harness: DEVTEAM_HARNESS wins over every ambient marker, so a stray
 # ZCODE* variable in the session cannot flip the engine's detection.
@@ -1207,6 +1207,90 @@ OUT=$(DEVTEAM_UNCLAIMED_S=10 D next 2>&1)
 check "a dispatched slice that never claimed is reprinted" '[[ "$OUT" == *"UNCLAIMED"* && "$OUT" == *"claim U1"* ]]'
 OUT2=$(DEVTEAM_UNCLAIMED_S=10 D next 2>&1)
 check "the same dropped launch is not reprinted on the very next wake-up" '[[ "$OUT2" != *"UNCLAIMED"* ]]'
+
+# =============================================================================================
+# v5 — RED/GREEN two-lane code slices + the attack gate (spec 2026-11-05)
+# =============================================================================================
+echo "== v5 a balanced code slice runs RED then GREEN; a reproduced attack BLOCKS the merge until fixed"
+RAT="$(newrepo rat5)"; cd "$RAT"
+DX() { DEVTEAM_SPLIT=on python3 "$S/devteam.py" "$@"; }   # the wrapper pins the legacy one-lane mode; this section unpins it
+printf 'def sub(a, b):\n    return a + b\n' > src/sub.py
+cat > tests/test_sub.py <<'EOF'
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from src.sub import sub
+
+def test_parent_adds():
+    assert sub(2, 3) == 5
+
+test_parent_adds()
+EOF
+check "the parent test passes on the parent commit" 'python3 tests/test_sub.py >/dev/null 2>&1'
+git add -A && git commit -qm "parent: sub adds"
+cat > plan.md <<'EOF'
+```json
+{"request":"sub must raise on a negative addend","commands":{"test":"python3 -m unittest discover -s tests","test_file":"python3 {files}","lint":"none","typecheck":"none","build":"none"},
+ "slices":[{"id":"S1","title":"sub neg guard","deps":[],"files":["src/sub.py","tests/test_sub.py"],"risk":"low","criteria":["sub returns 5 for 2 and 3","sub raises ValueError for -1"]}]}
+```
+EOF
+OUT=$(DX init plan.md 2>&1)
+check "the default profile is still balanced with the split on" '[[ "$OUT" == *"PROFILE balanced"* ]]'
+OUT=$(DX dispatch S1 2>&1)
+check "a balanced code slice dispatches as RED (strong lane)" '[[ "$OUT" == *"DISPATCH S1 [CODE/RED]"* && "$OUT" == *"glm-programmer-strong"* ]]'
+git worktree add -q .claude/worktrees/r1 -b wt-r1 HEAD
+( cd .claude/worktrees/r1 && DX claim S1 >/dev/null 2>&1 && cat > tests/test_sub.py <<'EOF'
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from src.sub import sub
+
+def test_adds():
+    assert sub(2, 3) == 5
+
+def test_rejects_negative():
+    try:
+        sub(2, -1)
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+
+test_adds()
+test_rejects_negative()
+EOF
+DX commit-red "sub neg guard" >/dev/null 2>&1 )
+OUT=$(DX next S1 2>&1)
+check "next accepts RED and launches GREEN in the same call (no second dispatch)" '[[ "$OUT" == *"S1: RED accepted"* && "$OUT" == *"GREEN launched below"* && "$OUT" == *"DISPATCH S1 [CODE/GREEN]"* ]]'
+git worktree add -q .claude/worktrees/g1 -b wt-g1 HEAD
+( cd .claude/worktrees/g1 && DX claim S1 >/dev/null 2>&1 \
+  && printf 'def sub(a, b):\n    return a - b\n' > src/sub.py \
+  && DX commit-green "guard" >/dev/null 2>&1 )
+check "claim reset the GREEN worktree onto the RED commit" '( cd .claude/worktrees/g1 && git log --format=%s -n 2 | sed -n 2p | grep -q "test(S1)" )'
+OUT=$(DX next S1 2>&1)
+check "a GREEN slice holds for the attack gate instead of merging" '[[ "$OUT" == *"ATTACK S1"* && "$OUT" != *"S1: MERGED"* ]]'
+check "the attack launch goes to the spot reviewer in MODE: ATTACK" '[[ "$OUT" == *"=== ATTACK S1"* && "$OUT" == *"glm-spot-reviewer"* && "$OUT" == *"MODE: ATTACK"* ]]'
+mkdir -p .claude/dev-team/reviews
+cat > .claude/dev-team/reviews/attack-S1.md <<'EOF'
+ATTACK-FILE
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from src.sub import sub
+
+def test_parent_adds():
+    assert sub(2, 3) == 5
+
+test_parent_adds()
+ATTACK-CMD
+python3 tests/test_attack_S1.py
+ATOM
+sub returns 5 for 2 and 3
+EOF
+OUT=$(DX next S1 2>&1)
+check "an attack that fails on the slice and passes on the parent is a BLOCKER" '[[ "$OUT" == *"ATTACK BLOCKER S1"* && "$OUT" != *"S1: MERGED"* ]]'
+check "the blocked slice still holds (green-proved, not merged, not failed)" 'D status | grep -q "S1     green-proved"'
+( cd .claude/worktrees/g1 \
+  && printf 'def sub(a, b):\n    if b < 0:\n        raise ValueError("negative addend")\n    return a + b\n' > src/sub.py \
+  && DX commit-green "fix the parent behavior" >/dev/null 2>&1 )
+OUT=$(DX next S1 2>&1)
+check "a fix commit that survives the attack merges (no APPROVED anywhere in the loop)" '[[ "$OUT" == *"S1: MERGED"* ]]'
 
 echo
 echo "passed=$pass failed=$fail"

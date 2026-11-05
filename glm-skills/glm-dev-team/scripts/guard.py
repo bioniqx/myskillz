@@ -1528,6 +1528,35 @@ ZCODE_READ_ONLY_ROLES = (
 )
 
 
+def guard_agent_prompt(inp):
+    """Deny a dev-team launch whose prompt is not the file print_dispatch wrote.
+    A prompt with no claim id, or no prompts file, is left to the normal flow."""
+    tool_in = inp.get("tool_input") or inp.get("toolInput") or {}
+    if not isinstance(tool_in, dict):
+        return
+    prompt = tool_in.get("prompt") or ""
+    found = re.search(r"\bclaim\s+([A-Za-z0-9_-]+)\b", prompt)
+    if not found:
+        return
+    sid = found.group(1)
+    cur = inp.get("cwd") or os.getcwd()
+    path = None
+    for _ in range(8):
+        candidate = os.path.join(cur, ".claude", "dev-team", "prompts", sid + ".txt")
+        if os.path.isfile(candidate):
+            path = candidate
+            break
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    if path is None:
+        return
+    expected = open(path, encoding="utf-8").read()
+    if prompt != expected:
+        deny("prompt hash mismatch for " + sid)
+
+
 def guard_zcode(inp):
     """zcode hook mode: route on agent_type over the shared checks.
 
@@ -1548,6 +1577,8 @@ def guard_zcode(inp):
     tool = inp.get("tool_name") or inp.get("toolName") or ""
     programmer = isinstance(agent, str) and agent.startswith("glm-programmer")
     read_only = isinstance(agent, str) and agent in ZCODE_READ_ONLY_ROLES
+    if tool in ("Agent", "Task"):
+        guard_agent_prompt(inp)
     if not programmer and not read_only:
         return allow()
     if event == "Stop":

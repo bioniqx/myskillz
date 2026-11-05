@@ -24,3 +24,13 @@ for skill in $handoff_skills; do
     cp "$handoff_src" "$dest"
     echo "synced $dest"
 done
+
+decide_src="$script_dir/decide.py"
+decide_skills="glm-brainstorming glm-writing-plans glm-dev-team"
+
+for skill in $decide_skills; do
+    dest="$dest_root/$skill/scripts/decide.py"
+    mkdir -p "$(dirname "$dest")"
+    cp "$decide_src" "$dest"
+    echo "synced $dest"
+done

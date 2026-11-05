@@ -54,7 +54,8 @@ BREAKS: what this would break | nothing
 RELIES_ON: the evidence lines this depends on
 ```
 
-Pick and sharpen. Do not draft from scratch.
+Render the option the DECISION line named. Do not draft another approach
+and do not change the pick.
 
 **Design of the recommended approach.** Labeled sections, each scaled to
 its complexity — a few sentences, up to ~250 words when genuinely

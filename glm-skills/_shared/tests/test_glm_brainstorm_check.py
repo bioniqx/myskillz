@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -189,8 +190,16 @@ class SendTests(unittest.TestCase):
         with open(os.path.join(self.root, "src", "app.py"), "w", encoding="utf-8") as fh:
             fh.write("import os\n\ndef connect(url):\n    return pool.get(url)\n")
 
-    def send(self, text, extra=None):
+    def ledger(self, facts=None):
+        path = os.path.join(self.root, "ledger.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"facts": facts or []}, fh)
+        return path
+
+    def send(self, text, extra=None, ledger=False):
         args = ["send", "--root", self.root] + (extra or [])
+        if ledger:
+            args += ["--ledger", self.ledger() if ledger is True else ledger]
         return run(args, text)
 
     def test_bounded_design_passes(self):
@@ -202,7 +211,7 @@ class SendTests(unittest.TestCase):
             "Approve this design?\n"
             "- Keep CSV as the default?\n"
         )
-        rc, out = self.send(text)
+        rc, out = self.send(text, ledger=True)
         self.assertEqual(rc, 0, out)
         self.assertIn("fail=0", out)
 
@@ -235,7 +244,7 @@ class SendTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("FAIL approaches", out)
         thick = thin.replace("APPROACH 1:", "APPROACH 1: extend invoices\nAPPROACH 2: separate ledger")
-        rc, out = self.send(thick)
+        rc, out = self.send(thick, ledger=True)
         self.assertEqual(rc, 0, out)
 
     def test_bad_citation_fails_and_unverified_passes(self):
@@ -249,7 +258,7 @@ class SendTests(unittest.TestCase):
         rc, out = self.send(bad)
         self.assertEqual(rc, 1)
         self.assertIn("FAIL cite", out)
-        rc, out = self.send(bad.replace("missing -", "missing unverified -"))
+        rc, out = self.send(bad.replace("missing -", "missing unverified -"), ledger=True)
         self.assertEqual(rc, 0, out)
 
     def test_real_citation_passes(self):
@@ -257,10 +266,12 @@ class SendTests(unittest.TestCase):
             "Path: Bounded - name the helper.\n"
             "Out of scope: no rewrite.\n"
             "Assumptions: one caller.\n"
-            "src/app.py:4 - returns the pool - \"return pool.get(url)\"\n"
+            "src/app.py:4 - returns the pool - \"return pool.get(url)\" F-1\n"
             "Approve this design?\n"
         )
-        rc, out = self.send(text)
+        path = self.ledger([{"id": "F-1", "status": "OK", "kind": "file",
+                             "loc": "src/app.py:4", "text": "return pool.get(url)"}])
+        rc, out = self.send(text, ledger=path)
         self.assertEqual(rc, 0, out)
 
     def test_undated_url_fails(self):
@@ -300,13 +311,55 @@ class SendTests(unittest.TestCase):
         rc, out = self.send(text)
         self.assertEqual(rc, 1)
         self.assertIn("FAIL class", out)
-        rc, out = self.send(text.replace("adds a new subsystem", "is not a new subsystem"))
+        rc, out = self.send(text.replace("adds a new subsystem", "is not a new subsystem"), ledger=True)
         self.assertEqual(rc, 0, out)
 
     def test_handoff_line_passes(self):
         rc, out = self.send(
             "Not a design task - handing to glm-systematic-debugging because the tests fail.\n")
         self.assertEqual(rc, 0, out)
+
+    def test_design_without_a_ledger_fails(self):
+        text = (
+            "Path: Bounded - add a flag.\n"
+            "Out of scope: none.\n"
+            "Assumptions: one caller.\n"
+            "Approve this design?\n"
+        )
+        rc, out = self.send(text)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL ledger", out)
+
+    def test_dated_url_without_a_fact_fails_bind(self):
+        text = (
+            "Path: Bounded - which client.\n"
+            "Out of scope: none.\n"
+            "Assumptions: one caller.\n"
+            "The client added retries (https://docs.example.org/client) (2026-08-01).\n"
+            "Approve this design?\n"
+        )
+        rc, out = self.send(text, ledger=True)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("FAIL fact", out)
+        path = self.ledger([{"id": "F-1", "status": "OK", "kind": "web",
+                             "loc": "https://docs.example.org/client", "text": "retries"}])
+        fixed = text.replace("(2026-08-01).", "(2026-08-01) F-1.")
+        rc, out = self.send(fixed, ledger=path)
+        self.assertEqual(rc, 0, out)
+
+    def test_pick_mismatch_fails(self):
+        text = (
+            "Path: Architectural - new billing subsystem.\n"
+            "APPROACH 1: extend invoices A1\n"
+            "APPROACH 2: separate ledger\n"
+            "Out of scope: no tax filing.\n"
+            "Assumptions: one currency.\n"
+            "Approve this design?\n"
+        )
+        path = self.ledger()
+        rc, out = self.send(text, extra=["--pick", "A2"], ledger=path)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("FAIL pick", out)
 
 
 class ApproveTests(unittest.TestCase):

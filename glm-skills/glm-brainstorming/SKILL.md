@@ -7,6 +7,7 @@ allowed-tools:
   - Bash(sh *start-server.sh*)
   - Bash(sh *stop-server.sh*)
   - Bash(python3 *check.py*)
+  - Bash(python3 *decide.py*)
   - Bash(python3 *handoff.py*)
   - Bash(kill -0:*)
   - Agent
@@ -42,8 +43,9 @@ present once → get approval. Lower rule number wins a conflict.
    it enters the draft (R14).
 6. Ask at most 4 forking questions; everything else is a vetoable
    assumption.
-7. Judgment stays on the main thread. Lane rules live only in the
-   agent file; the dispatch prompt is the R11 slice and nothing else.
+7. The main thread renders the DECISION line and does not choose an
+   approach. Lane rules live only in the agent file; the dispatch prompt
+   is the R11 slice and nothing else.
 8. Hidden complexity upgrades the path; nothing downgrades.
 
 ## Live context (first round-1 call)
@@ -120,42 +122,28 @@ Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 
 ## R2 — Lane economics (biggest speed lever on GLM)
 
-`glm-explorer`, `glm-researcher` and `glm-drafter` are Flash at low
-effort, pinned in their frontmatter; never add a `model` parameter.
-Flash runs ~1.8× faster than the main thread at ~9×
-less cost with 3× coding-plan quota. Sibling agents join only per the
-R11 sibling-lane table, when a lane needs a shell (explorer and
-researcher have none).
+`glm-explorer`, `glm-researcher`, `glm-drafter` and `glm-design-breaker`
+are Flash. Model and effort live only in each agent file; never add a
+`model` parameter. Sibling agents join only per the R11 sibling-lane
+table, when a lane needs a shell (explorer and researcher have none).
 
 1. Code slices dispatch `glm-explorer`. Web slices dispatch
    `glm-researcher`. Approach drafts, the claim verifier and the
-   runner-up dispatch `glm-drafter`. All three pin Flash at low effort.
+   runner-up dispatch `glm-drafter`. Attacks dispatch `glm-design-breaker`.
    Spec pre-draft is the one writable lane (`general-purpose`), and only
    when a file write will not raise a prompt.
-2. Work whose conclusion decides WHICH approach wins stays on the main
-   thread (GLM-5.3).
-3. The main thread does classification, merge, design, final message —
+2. The main thread renders the `DECISION` line from `decide.py score`.
+   It does not choose an approach.
+3. The main thread does classification, merge, and the final message —
    nothing a lane can do.
 4. Never spawn a lane for what one direct call answers.
 
-## R3 — Effort ladder (reasoning is always on; you pick depth)
+## R3 — Decision, not a second effort ladder
 
-GLM-5.3 cannot disable thinking. `reasoning_effort` is `low | high |
-max`, default `max`, and thinking tokens are emitted before any tool call
-— so `max` on a mechanical round is pure latency.
-
-- `low` — dispatch rounds, merging lane output, writing/formatting the
-  spec, re-presenting one changed section.
-- `high` — drafting a design whose approach is already settled,
-  resolving conflicting evidence.
-- `max` — any turn that picks between approaches, including the merged
-  architectural message that picks AND presents in one turn, plus the
-  implementation work that follows approval.
-
-Set it where the runtime exposes it: per installed agent via
-`thoughtLevel` in its agent file, or `reasoning_effort` on the API
-(clients that expose an `off` setting map it to `low`). No control
-available → shorten the round, never ask the model to "think less".
+Effort is pinned in the agent file. Do not set it from this file.
+`decide.py score` prints `DECISION`. Render that option. On `ask`, ask
+that one fork inside the cap of 4. On `stop` or `unattacked`, do not
+invent a fact. Run the missing breaker once, then score again.
 
 ## R4 — Force the batch, plan the rounds
 
@@ -259,8 +247,9 @@ latest way. Skip for repo-internal logic, or when the user says offline.
 ## R11 — Dispatch the slice; the agent file owns the rules
 
 The lane rules, word caps and output labels live in one place: the body
-of `agents/glm-explorer.md`, `agents/glm-researcher.md` and
-`agents/glm-drafter.md`. Do not restate them in the prompt. A second
+of `agents/glm-explorer.md`, `agents/glm-researcher.md`,
+`agents/glm-drafter.md` and `agents/glm-design-breaker.md`. Do not restate
+them in the prompt. A second
 copy drifts, and GLM follows whichever copy it sees last. Prefix caching
 is the agent file, identical for every sibling; the slice lines below
 are the whole user message, with the question last.
@@ -289,6 +278,10 @@ Question: [ONE precise question]
 **Draft lane** — `subagent_type: "glm-drafter"`. The user message is the
 prompt already written in `architectural.md` (approach lens, claim
 verifier, or runner-up). Do not add rules on top of it.
+
+**Attack lane** — `subagent_type: "glm-design-breaker"`. The user message
+is the option text, the fact ids, and the atoms, question last. Do not
+paste the drafter's tradeoff lines into it.
 
 **Sibling lanes** — agents installed by other glm skills. They count
 toward `lanes=` and run long (dozens of turns, not 4-5), so each needs
@@ -368,8 +361,9 @@ result: do not retry the same input.
 2. `web` — CLAIMS `claim — tier — URL — date — "quote"`. Same round.
 3. `spec <path>` — after the spec is written, before the five-lens review.
 4. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
-5. `send --root <repo>` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes.
+5. `send --root <repo> --ledger .brainstorm/drafts/ledger.json` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes. `--pick` is the id `DECISION` printed.
 6. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
+7. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user asked for a live fetch. Then `bind` on the draft. A FAIL is repaired, not shown.
 
 ```
 python3 <skill_dir>/scripts/check.py send --root <repo> <<'EOF'
@@ -412,9 +406,8 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   drop it. Never retry a denial.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
-- "A GLM-5.3 lane will be smarter" → same model as the main thread at ~9×
-  Flash's cost; judgment stays on the main thread (R2). And never a lane
-  for one search.
+- "A GLM-5.3 lane will be smarter" → every lane is Flash. `decide.py`
+  picks. Never a lane for one search.
 - "Spawn 6 because I can" → width must buy a saved human turn or a
   better decision. One lane per question you will cite or act on; the
   known failure is dozens of lanes for a simple query.
@@ -444,8 +437,9 @@ Missing capability → substitute, never stall.
 
 **ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use
 `subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"`, approach drafts,
-the claim verifier and the runner-up `"glm-drafter"`. Those files pin the model
-and effort (Flash, low), so never add a `model` parameter. The prompt is the
+the claim verifier and the runner-up `"glm-drafter"`, attacks
+`"glm-design-breaker"`. Those files pin the model and effort, so never add
+a `model` parameter. The prompt is the
 R11 slice. Agents not installed → the built-ins `Explore` (Code) and
 `general-purpose` (Web, drafts, verifier), and the prompt gains the agent-file
 body in front of that slice. Launch every

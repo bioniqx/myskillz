@@ -2,7 +2,7 @@
 name: "glm-rca-verifier"
 description: "Adversarial verifier for glm-requirements-code-audit: tries to overturn each preliminary finding, writes one JSONL verdict file."
 color: yellow
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
+model: "account:zai-individual-coding-plan/GLM-5.3"
 thoughtLevel: max
 maxTurns: 25
 injectAgentsMd: false

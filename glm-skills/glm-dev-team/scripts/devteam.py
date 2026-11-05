@@ -102,10 +102,16 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import decide
 
 try:
     import fcntl  # POSIX only; Windows runs without the advisory lock
@@ -1205,8 +1211,8 @@ def finished_lanes(root, st):
     returned separately so the Conductor sees the exact question in the same turn."""
     done, blocked = [], []
     for sid, s in st["slices"].items():
-        if s["status"] != "inflight":
-            continue
+        if s["status"] not in ("inflight", "green-proved"):
+            continue   # green-proved: the lane fixed a BLOCKER and stopped again; next re-runs the attack
         if s.get("mode") == "research":
             rp = state_dir(root) / "research" / f"{sid}.md"
             if rp.exists() and report_finished(rp):
@@ -1424,6 +1430,45 @@ def resolve_fast(a):          # kept for callers that only need the legacy level
     return POLICY[resolve_profile(a)]["fast"]
 
 
+def plan_atoms(st, root=None):
+    """Mechanical atoms plus any frozen model spans still in the request (a repair loop's
+    `atoms --check` list must survive the re-init `start` runs)."""
+    atoms = decide.extract_atoms(st["request"])
+    root = Path(root or st.get("root") or ".")
+    path = state_dir(root) / "atoms.json"
+    if path.is_file():
+        try:
+            old = json.loads(path.read_text(encoding="utf-8")).get("atoms") or []
+        except (json.JSONDecodeError, OSError):
+            old = []
+        for span in old:
+            if span in st["request"] and span not in atoms:
+                atoms.append(span)
+    return atoms
+
+
+def lint_plan_state(st, root):
+    """Atom coverage and undeclared new files. Empty when the plan may start."""
+    fails = []
+    path = state_dir(Path(root)) / "atoms.json"
+    if not path.is_file():
+        return ["FAIL atoms - atoms.json is missing"]
+    atoms = json.loads(path.read_text(encoding="utf-8")).get("atoms") or []
+    homes = {"out-of-scope": st.get("out_of_scope") or ""}
+    for sid, s in st["slices"].items():
+        homes[sid] = "\n".join([s.get("goal") or ""] + list(s.get("criteria") or []) + list(s.get("edge_cases") or []))
+        if slice_kind(s) == "code" and not s.get("criteria"):
+            fails.append("FAIL criteria - %s has no acceptance criteria" % sid)
+        for rel in s.get("files") or []:
+            if os.path.isabs(rel) or ".." in Path(rel).parts:
+                fails.append("FAIL path - %s %s" % (sid, rel))
+                continue
+            if not (Path(root) / rel).exists() and rel not in (s.get("new_files") or []):
+                fails.append("FAIL new-file - %s %s" % (sid, rel))
+    fails.extend(decide.coverage(atoms, homes))
+    return fails
+
+
 def cmd_init(a):
     root = toplevel()
     if in_linked_worktree() and not a.allow_worktree:
@@ -1462,6 +1507,7 @@ def cmd_init(a):
                           if s.get("isolation") else None),
             "status": "pending", "mode": None, "attempt": 0, "base_sha": None, "red_sha": None,
             "worktree": None, "branch": None, "merged_sha": None, "history": [],
+            "new_files": list(s.get("new_files") or []),
         }
     prof = resolve_profile(a, plan)
     policy = POLICY[prof]
@@ -1484,7 +1530,20 @@ def cmd_init(a):
         "slices": slices, "merges": [], "merges_since_checkpoint": 0, "checkpoint_pending": False,
         "checkpoints": [], "reviews": {}, "reviewed_upto": 0, "fix_counter": 0,
         "provider": provider, "gov": new_gov(provider, tier), "engine": ENGINE_VERSION,
+        "out_of_scope": "",
     }
+    try:
+        raw_plan = Path(a.plan).read_text(encoding="utf-8")
+    except OSError:
+        raw_plan = ""
+    found = re.search(r"(?im)^.*out of scope:\s*(.+)$", raw_plan)
+    if found:
+        st["out_of_scope"] = found.group(1).strip()
+    for sl in slices.values():
+        missing = [f for f in sl["files"] if not (Path(root) / f).exists()]
+        sl["new_files"] = list(dict.fromkeys(list(sl.get("new_files") or []) + missing))
+    (sd / "atoms.json").write_text(json.dumps({"atoms": plan_atoms(st)}, indent=1) + "\n",
+                                   encoding="utf-8")
     baseline_transcripts(root, st)
     save_state(root, st)
     write_atomic(sd / "plan.json", json.dumps(plan, indent=1))
@@ -1816,18 +1875,12 @@ def do_dispatch(root, st, ids, force=False):
             continue
         if slice_kind(s) != "research":
             busy.append(s["files"])
-        kind = slice_kind(s)
-        if kind != "code":
-            mode = KIND_MODE[kind]                        # test/refactor/chore/docs/perf -> work; research -> research
-        elif fast >= 4 and not s.get("from_review") and s.get("risk") != "high":
-            mode = "fast"                                 # spike: low-risk only, one commit, no tests
-                                                          # (a slice a reviewer asked for, and every high-risk slice, still gets tests)
-        else:
-            mode = "slice"                                # including risk high: RED then GREEN in this one lane
+        mode = code_mode(st, s, fast)
         base = s["red_sha"] if mode == "green" else git(["rev-parse", "HEAD"], root)
         s.update({"status": "inflight", "mode": mode, "attempt": s["attempt"] + 1, "base_sha": base,
                   "worktree": None, "branch": None, "dispatched": now(), "rejected": None, "reject_n": 0,
-                  "no_tests": mode in ("fast", "research") or kind in ("chore", "docs", "refactor", "perf")})
+                  "no_tests": mode in ("fast", "research")
+                  or slice_kind(s) in ("chore", "docs", "refactor", "perf")})
         cf = claim_file(root, sid)
         if cf.exists():
             cf.unlink()
@@ -1844,13 +1897,30 @@ def do_dispatch(root, st, ids, force=False):
     return blocks, skipped
 
 
+def code_mode(st, s, fast=None):
+    """balanced/strict code slices are RED then GREEN. turbo stays one lane. spike low-risk is fast.
+    DEVTEAM_SPLIT=off keeps the historical one-lane slice so older selftests can opt out."""
+    if fast is None:
+        fast = fast_level(st)
+    kind = slice_kind(s)
+    if kind != "code":
+        return KIND_MODE[kind]
+    if fast >= 4 and not s.get("from_review") and s.get("risk") != "high":
+        return "fast"
+    if os.environ.get("DEVTEAM_SPLIT") == "off":
+        return "slice"
+    if s.get("status") == "red-done":
+        return "green"
+    if fast < 2:
+        return "red"
+    return "slice"
+
+
 def dispatch_route(st, s, mode):
     """The Agent line for one glm-programmer dispatch (ZCode-only: the Agent tool takes no per-dispatch
-    model). Cheap first, strong where it pays: every lane starts on glm-programmer-lite
-    (GLM-5.3-Flash, thoughtLevel max); high-risk, large and RETRIED slices escalate to
-    glm-programmer-strong (GLM-5.3-Flash, thoughtLevel max) — a second attempt means the fast model already
-    missed once. The agent's own frontmatter pins the model and effort."""
-    strong = (s.get("risk") == "high" or s.get("size") == "large"
+    model). RED runs on glm-programmer-strong. A first GREEN of a small low-risk slice stays on
+    glm-programmer-lite. High-risk, large, and retried slices use glm-programmer-strong."""
+    strong = (mode == "red" or s.get("risk") == "high" or s.get("size") == "large"
               or int(s.get("attempt") or 1) >= 2)
     agent = "glm-programmer-strong" if strong else "glm-programmer-lite"
     description = s.get("title") or s.get("id") or "slice"
@@ -1927,6 +1997,12 @@ def print_dispatch(st, blocks, skipped):
     root = Path(st["root"])
     for sid, s, mode in blocks:
         kind = slice_kind(s)
+        prompt = claim_prompt(st, s, sid) if mode != "research" else f"Read {state_dir(root) / 'briefs' / (sid + '.md')} and follow it exactly."
+        digest = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        prompt_dir = state_dir(root) / "prompts"
+        prompt_dir.mkdir(parents=True, exist_ok=True)
+        (prompt_dir / f"{sid}.txt").write_text(prompt, encoding="utf-8")
+        out(f"PROMPT {sid} {digest}")
         if mode == "research":
             brief = state_dir(root) / "briefs" / f"{sid}.md"
             out(f"=== DISPATCH {sid} [RESEARCH] — {s['title'][:50]}",
@@ -1939,6 +2015,19 @@ def print_dispatch(st, blocks, skipped):
             "")
     if skipped:
         out("SKIPPED: " + "; ".join(skipped))
+    print_pending_attacks(st)
+
+
+def print_pending_attacks(st):
+    root = Path(st["root"])
+    for sid, s in st["slices"].items():
+        if s.get("status") != "green-proved" or s.get("attack_closed"):
+            continue
+        if attack_report_path(root, sid).exists():
+            continue
+        out(f"=== ATTACK {sid}",
+            "Agent → subagent_type: glm-spot-reviewer, description: \"attack %s\"" % sid
+            + ", prompt: \"MODE: ATTACK %s. Write .claude/dev-team/reviews/attack-%s.md\"" % (sid, sid))
 
 
 def cmd_dispatch(a):
@@ -2068,8 +2157,9 @@ def proof_plan(st, s, touched, wt):
 _WT_LOCK = threading.Lock()   # concurrent `git worktree add/remove` in one repo race on its own admin files
 
 
-def run_at_commit(root, st, sid, sha, cmd, timeout):
-    """Run `cmd` on a clean detached checkout of `sha` (used to watch RED fail without the lane's GREEN code)."""
+def run_at_commit(root, st, sid, sha, cmd, timeout, overlay=None):
+    """Run `cmd` on a clean detached checkout of `sha` (used to watch RED fail without the lane's GREEN code).
+    overlay is optional (relpath, text) pairs written after deps are linked and before the command."""
     tmp = state_dir(root) / "proof" / f"{sid}-red"
     with _WT_LOCK:
         remove_worktree(root, tmp)
@@ -2078,10 +2168,87 @@ def run_at_commit(root, st, sid, sha, cmd, timeout):
     try:
         link_deps(root, tmp, st.get("dep_dirs"))
         (tmp / ".slice" / "tmp").mkdir(parents=True, exist_ok=True)
+        for rel, data in overlay or []:
+            dest = tmp / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(data)
         return run_proof(tmp, cmd, timeout)
     finally:
         with _WT_LOCK:
             remove_worktree(root, tmp)
+
+
+def classify_attack(parent_rc, slice_rc, quotes_atom, ran, body_empty=True):
+    """The attack table. rc non-zero is a failure. ran False means the command never returned a code."""
+    if not ran:
+        return "BLOCKER" if not body_empty else "DISCARD"
+    parent_fail = bool(parent_rc)
+    slice_fail = bool(slice_rc)
+    if parent_fail and not slice_fail:
+        return "PIN"
+    if not parent_fail and slice_fail:
+        return "BLOCKER"
+    if parent_fail and slice_fail:
+        return "BLOCKER" if quotes_atom else "DISCARD"
+    return "DISCARD"
+
+
+def attack_report_path(root, sid):
+    return state_dir(root) / "reviews" / f"attack-{sid}.md"
+
+
+def _attack_body(text):
+    m = re.search(r"(?ms)^ATTACK-FILE\s*\n(.*?)(?:\nATTACK-CMD|\nATOM|\Z)", text or "")
+    return m.group(1) if m else ""
+
+
+def _attack_quotes_atom(text):
+    m = re.search(r"(?m)^ATOM\s*\n\s*(.+?)\s*$", text or "")
+    if not m:
+        return False
+    span = m.group(1).strip()
+    return bool(span) and span.lower() != "none"
+
+
+def hold_for_attack(root, st, s, sid, tip):
+    """None means merge. A string is the line to print instead of MERGED."""
+    path = attack_report_path(root, sid)
+    if not path.exists():
+        s.update({"status": "green-proved", "tip_sha": tip, "attack_n": int(s.get("attack_n") or 0)})
+        return f"ATTACK {sid}"
+    text = path.read_text(encoding="utf-8")
+    body = _attack_body(text)
+    if not body.strip():
+        return None
+    with tempfile.TemporaryDirectory() as td:
+        probe = Path(td) / "attack_body"
+        probe.write_text(body, encoding="utf-8")
+        if vacuous_test_check(probe, ["attack_body"], []):
+            return None   # a body commit-red would refuse proves nothing: DISCARD, not a blocker
+    rel = "tests/test_attack_%s.py" % sid
+    for f in s.get("files") or []:
+        if is_test_path(f, st.get("test_globs") or []):
+            parent = str(Path(f).parent)
+            suffix = Path(f).suffix or ".py"
+            rel = str(Path(parent) / ("test_attack_%s%s" % (sid, suffix)))
+            break
+    cmd = cmd_value(st.get("commands") or {}, "test_file") or cmd_value(st.get("commands") or {}, "test") or "true"
+    cmd = fill_files(cmd, [rel])
+    parent_sha = s.get("base_sha") or tip
+    parent_rc, _ = run_at_commit(root, st, sid + "-parent", parent_sha, cmd, proof_timeout(), [(rel, body)])
+    slice_rc, _ = run_at_commit(root, st, sid + "-slice", tip, cmd, proof_timeout(), [(rel, body)])
+    ran = parent_rc is not None and slice_rc is not None
+    kind = classify_attack(parent_rc or 0, slice_rc or 0, _attack_quotes_atom(text), ran, body_empty=False)
+    if kind in ("PIN", "DISCARD"):
+        return None
+    n = int(s.get("attack_n") or 0) + 1
+    s["attack_n"] = n
+    s["status"] = "green-proved"
+    s["tip_sha"] = tip
+    if n >= 2:
+        s["attack_closed"] = True
+        return f"ATTACK BLOCKER {sid} — leftover after 2"
+    return f"ATTACK BLOCKER {sid}"
 
 
 def proof_one(root, st, sid, pc):
@@ -2231,7 +2398,9 @@ def reject(s, event, msg, **extra):
 def integrate_one(root, st, sid, remove=True, proof=None, pc=None):
     s = slice_state(st, sid)
     if s["status"] != "inflight":
-        return f"{sid}: skipped — status is {s['status']}"
+        if s["status"] != "green-proved" or s.get("mode") != "green":
+            return f"{sid}: skipped — status is {s['status']}"
+        s["status"] = "inflight"   # a fix landed on the same branch: the attack gate re-runs on the new tip
     if s["mode"] == "research":
         rp = state_dir(root) / "research" / f"{sid}.md"
         if not rp.exists():
@@ -2369,7 +2538,7 @@ def integrate_one(root, st, sid, remove=True, proof=None, pc=None):
         s["history"].append({"t": now(), "event": "red-done", "sha": tip})
         if remove:
             remove_worktree(root, wt)
-        return f"{sid}: RED accepted ({tip[:9]}, {len(frozen)} test files frozen) → GREEN phase is now ready: `dispatch {sid}`"
+        return f"{sid}: RED accepted ({tip[:9]}, {len(frozen)} test files frozen) → GREEN launched below"
     if tip == red:
         return reject(s, "no-green-commit",
                       f"{sid}: REJECTED — no implementation commit after RED. SendMessage the agent to implement and "
@@ -2377,6 +2546,10 @@ def integrate_one(root, st, sid, remove=True, proof=None, pc=None):
     bad = proof_reject(s, sid, wt, proof)
     if bad:
         return bad
+    if mode == "green" and fast_level(st) < 2 and os.environ.get("DEVTEAM_SPLIT") != "off":
+        held = hold_for_attack(root, st, s, sid, tip)
+        if held is not None:
+            return held
     return merge_slice(root, st, s, sid, wt, branch, tip, base, red=red, frozen=frozen, touched=touched, remove=remove)
 
 
@@ -3030,6 +3203,7 @@ def cmd_next(a):
     else:
         mark_utilization(st, len(inflight), cap)
         save_state(root, st)
+        print_pending_attacks(st)   # a held GREEN slice must still see its attack launch
     st = load_state(root)
     print_unclaimed(root, st)
     print_ready(st)
@@ -3102,6 +3276,23 @@ def cmd_start(a):
                                 fast=getattr(a, "fast", None), spike=getattr(a, "spike", False),
                                 doctor_fixed=doctor_fixed))
     st = load_state(root)
+    fails = lint_plan_state(st, root)
+    if fails:
+        out(*fails)
+        count_path = state_dir(root) / "plan-lint.count"
+        n = 0
+        try:
+            n = int(count_path.read_text(encoding="utf-8").strip() or 0)
+        except (OSError, ValueError):
+            n = 0
+        n += 1
+        count_path.write_text(str(n), encoding="utf-8")
+        if n >= 3:
+            out("ASK the user")
+        else:
+            out("Edit plan.md (or run `atoms <plan> --check`), then `start` again — attempt %d of 3" % n)
+        return
+    (state_dir(root) / "plan-lint.count").unlink(missing_ok=True)
     ready, inflight = ready_slices(st)
     cap, free = slots(st, inflight)
     if not ready[:free]:
@@ -3192,14 +3383,49 @@ def probe_commands(root):
 def cmd_probe(a):
     root = toplevel()
     found, notes = probe_commands(root)
-    out("PROBE — detected project markers: " + (", ".join(notes) or "none"))
-    out("Paste this into the plan's `commands` (fix anything wrong — you own the plan):")
-    out(json.dumps({"commands": found}, indent=1))
+    lines = ["PROBE — detected project markers: " + (", ".join(notes) or "none"),
+             "Paste this into the plan's `commands` (fix anything wrong — you own the plan):",
+             json.dumps({"commands": found}, indent=1)]
     ci = [str(p.relative_to(root)) for p in list(root.glob(".github/workflows/*.y*ml"))[:5]]
     if ci:
-        out("CI workflows worth copying the real commands from: " + ", ".join(ci))
-    out("`lint_file` / `typecheck_file` matter: in the balanced profile they ARE the per-slice gate, "
-        "and a file-scoped run costs a second where a repo-wide one costs minutes × every lane in flight.")
+        lines.append("CI workflows worth copying the real commands from: " + ", ".join(ci))
+    lines.append("`lint_file` / `typecheck_file` matter: in the balanced profile they ARE the per-slice gate, "
+                 "and a file-scoped run costs a second where a repo-wide one costs minutes × every lane in flight.")
+    out(*lines)
+    sd = state_dir(root)
+    sd.mkdir(parents=True, exist_ok=True)
+    write_atomic(sd / "probe.txt", "\n".join(lines) + "\n")
+
+
+def cmd_atoms(a):
+    """Mechanical requirement atoms from the plan's request (stdin when there is no plan yet).
+    --check freezes the one Flash atom call's stdout into atoms.json."""
+    root = find_root()
+    text = ""
+    if a.plan and os.path.isfile(a.plan):
+        try:
+            text = extract_plan(a.plan).get("request", "")
+        except DevteamError:
+            text = ""
+    if not text:
+        text = sys.stdin.read()
+    if a.check:
+        frozen, dropped = decide.check_model_atoms(text, sys.stdin.read())
+        sd = state_dir(root)
+        sd.mkdir(parents=True, exist_ok=True)
+        write_atomic(sd / "atoms.json", json.dumps({"atoms": frozen}, indent=1) + "\n")
+        for atom in frozen:
+            out("ATOM: %s" % atom)
+        for line in dropped:
+            out("DROP: %s" % line)
+        out("FROZEN n=%d" % len(frozen))
+        return 0
+    for atom in decide.extract_atoms(text):
+        out("ATOM: %s" % atom)
+    out("NEXT: one Flash call, no other context, prompt = the request text plus "
+        "'Emit only ATOM: lines, each span copied verbatim'; paste its stdout to `atoms %s --check`."
+        % (a.plan or "<plan>"))
+    return 0
 
 
 def cmd_review_pr(a):
@@ -3458,6 +3684,10 @@ def finish_gate_problems(st):
                 problems.append(f"{since} merge(s) landed after the last checkpoint snapshot")
     if st.get("verification_verdict") in ("CHANGES_REQUIRED", "UNKNOWN"):
         problems.append(f"the verification verdict is {st['verification_verdict']} (no clear PASS with an `## Evidence` section)")
+    open_attack = [sid for sid, s in (st.get("slices") or {}).items()
+                   if s.get("status") == "green-proved" or s.get("attack_closed")]
+    if open_attack:
+        problems.append("attack gate still open: " + " ".join(open_attack))
     return problems
 
 
@@ -4374,6 +4604,17 @@ def main(argv=None):
     pr = sp.add_parser("commit-fast"); pr.add_argument("title"); pr.set_defaults(fn=cmd_commit_fast)
     pr = sp.add_parser("commit-work"); pr.add_argument("title"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_commit_work)
     sp.add_parser("probe").set_defaults(fn=cmd_probe)
+    pr = sp.add_parser("atoms"); pr.add_argument("plan", nargs="?"); pr.add_argument("--check", action="store_true"); pr.set_defaults(fn=cmd_atoms)
+
+    def cmd_plan_lint(a):
+        root = find_root()
+        fails = lint_plan_state(load_state(root), root)
+        if fails:
+            out(*fails)
+            raise DevteamError("PLAN-LINT failed — fix the lines above; `atoms <plan> --check` refreshes atoms.json")
+        out("PLAN-LINT ok")
+
+    sp.add_parser("plan-lint").set_defaults(fn=cmd_plan_lint)
     pr = sp.add_parser("review-pr"); pr.add_argument("range", nargs="?"); pr.add_argument("--shards", type=int, default=0)
     pr.add_argument("--request"); pr.add_argument("--test"); pr.add_argument("--spot", action="store_true"); pr.set_defaults(fn=cmd_review_pr)
     pr = sp.add_parser("brief-debug"); pr.add_argument("symptom"); pr.add_argument("-n", type=int, default=4)

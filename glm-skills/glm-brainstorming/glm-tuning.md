@@ -28,36 +28,27 @@ GLM-5.3 are one model family, so a lane shares the main thread's blind
 spots, and Flash is less likely to catch a subtle contradiction. Treat a
 Flash verifier or reviewer as a cheap second look, not an independent
 audit: check only the claims that decide the design, force different
-lenses on drafts, and promote at most one lane to GLM-5.3 when its
-verdict picks the approach.
+lenses on drafts. `decide.py score` picks the approach. Do not promote
+a lane to GLM-5.3 to make that pick.
 
 ## 2. Runtime setup
 
-`glm-explorer`, `glm-researcher` and `glm-drafter` pin
-`model: "account:zai-individual-coding-plan/GLM-5.3-Flash"` and
-`thoughtLevel: max`. ZCode honors `thoughtLevel` only together with a
-model id; without both, a lane inherits the session model and effort
-`max` (the failure behind slow, over-thought lanes). Recent ZCode
-sessions on this machine use the individual plan, so that prefix is the
-pin. The team-plan account is a second login, not the lane default.
+Model and effort live only in the agent frontmatter. ZCode honors
+`thoughtLevel` only together with a model id. Recent ZCode sessions on
+this machine use the individual plan, so that prefix is the pin. The
+team-plan account is a second login, not the lane default.
 
-Calling the GLM API directly: `temperature: 1`, `top_p: 0.95`, `reasoning_effort`
-per R3, `thinking.clear_thinking: false` for agent use, and `stream: true`
-with `tool_stream: true`. A long request timeout covers always-on
-thinking at effort `max`. R7's 8-lane hard max is the provider's
-concurrent-call limit, not a client default.
+Calling the GLM API directly: `temperature: 1`, `top_p: 0.95`,
+`thinking.clear_thinking: false` for agent use, and `stream: true` with
+`tool_stream: true`. R7's 8-lane hard max is the provider's concurrent-call
+limit, not a client default.
 
 ## 3. Reasoning effort
 
-`thinking.type` accepts only `"enabled"`; disabling reasoning is no
-longer supported. `reasoning_effort` is `low | high | max`, default
-`max`. Clients that expose an `off` setting map it to `low`.
-
-The cost is real: thinking tokens are generated before any tool call at
-the model's output rate, so `max` on a dispatch round adds seconds of
-pure latency and buys nothing. Follow R3's ladder. Keep `max` for the
-implementation work that follows approval — z.ai recommends it for
-coding tasks.
+`thinking.type` accepts only `"enabled"`. `reasoning_effort` is
+`low | high | max`, default `max`. The agent file is the only pin.
+`max` before a tool call is latency. Explorer and researcher are `high`.
+Drafter and design-breaker are `max`.
 
 ## 4. Known failure modes
 
