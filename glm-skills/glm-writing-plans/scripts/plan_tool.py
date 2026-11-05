@@ -871,7 +871,8 @@ def heading_outside_fences(body):
     return False
 
 
-def lint_body(c, body, allow, label, repo=None, earlier_files=()):
+def lint_body(c, body, allow, label, repo=None, earlier_files=(), prev_asserts=None):
+    """prev_asserts: the count stored in <task>.md.asserts; a lower new count is an ERR."""
     errs, warns = [], []
     if heading_outside_fences(body):
         errs.append("%s: '#', '##' or '###' heading inside a task body breaks plan structure (use '####' or bold)" % label)
@@ -929,6 +930,8 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=()):
                 break
         if not ok and not re.search(r"Expected:", l):
             errs.append("%s: 'Run:' at body L%d has no 'Expected:' before the next Run/Step" % (label, i + 1))
+    if prev_asserts is not None and assert_count(body) < prev_asserts:
+        errs.append("%s: assertion count dropped from %d" % (label, prev_asserts))
     for info, src, line in blocks:
         for args in git_add_args(src):
             try:
@@ -1340,6 +1343,8 @@ def cmd_build(a):
     prefix = shared_prefix(plan, repo)
     allow = list(a.allow)
     todo = resume_todo(cs, work, a.resume)
+    for line in warns:  # TIER notes and other informational warnings reach this lane too
+        print(line)
     print("LANE api | %s | %s | key %s | %d writers | %d/%d tasks"
           % (proto, base, src, min(workers, len(todo) or 1), len(todo), len(cs)))
     sys.stdout.flush()
@@ -1507,15 +1512,14 @@ def lint_file(plan_path, task_path, allow_extra=()):
     repo = work.get("repo") or repo_root(plan_path)
     earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
     body = strip_generated(load(task_path))
-    e, w = lint_body(c, body, allow, c["id"], repo, earlier)
     mark = task_path + ".asserts"
+    prev = None
     if os.path.isfile(mark):
         try:
             prev = int(open(mark, encoding="utf-8").read().strip() or "0")
         except ValueError:
             prev = 0
-        if assert_count(body) < prev:
-            e.append("%s: assertion count dropped from %d" % (c["id"], prev))
+    e, w = lint_body(c, body, allow, c["id"], repo, earlier, prev)
     return e, w, c
 
 
@@ -2232,7 +2236,8 @@ def allow_hit(hit, allow):
 
 def apply_marks(task_path, mark, errs, warns):
     """Shared by lint-task and hook-lint: .fail on error, .warn on a clean-but-warned
-    lint, and a stale .warn/.fail is removed as soon as it no longer applies."""
+    lint, .asserts armed the first time a body lints clean (like write_one), and a
+    stale .warn/.fail is removed as soon as it no longer applies."""
     fail_path, warn_path = task_path + ".fail", task_path + ".warn"
     if errs:
         with open(fail_path, "w") as f:
@@ -2241,6 +2246,9 @@ def apply_marks(task_path, mark, errs, warns):
     if os.path.exists(fail_path):
         os.remove(fail_path)
     touch(task_path + "." + mark)
+    asserts_path = task_path + ".asserts"
+    if not os.path.exists(asserts_path):
+        save(asserts_path, str(assert_count(strip_generated(load(task_path)))))
     if warns:
         with open(warn_path, "w") as f:
             f.write("\n".join(warns))

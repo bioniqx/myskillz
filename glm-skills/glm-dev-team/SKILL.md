@@ -42,13 +42,13 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
 - **Workers** (background subagents; `doctor --fix` installs them user-level — model and effort are pinned
   in each agent's own frontmatter, the Agent tool takes no per-dispatch model):
 
-  | Agent | Model on Z.ai | Effort | Job |
-  | --- | --- | --- | --- |
-  | `glm-programmer-lite` | GLM-5.3-Flash | max | every slice that is not strong: the default lane |
-  | `glm-programmer-strong` | GLM-5.3-Flash | max | `risk: high`, `size: large`, and any **retried** slice |
-  | `glm-code-reviewer` | GLM-5.3-Flash | max | full review, read-only |
-  | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | max | correctness-only review / research, root cause |
-  | `glm-team-leader` | GLM-5.3-Flash | max | planning, plan adoption, verification; remembers the repo |
+  | Agent | Model on Z.ai | Job |
+  | --- | --- | --- |
+  | `glm-programmer-lite` | GLM-5.3-Flash | every slice that is not strong: the default lane |
+  | `glm-programmer-strong` | GLM-5.3-Flash | `risk: high`, `size: large`, and any **retried** slice |
+  | `glm-code-reviewer` | GLM-5.3-Flash | full review, read-only |
+  | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | correctness-only review / research, root cause |
+  | `glm-team-leader` | GLM-5.3-Flash | planning, plan adoption, verification; remembers the repo |
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
   read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
@@ -57,7 +57,7 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
 ## Conductor discipline (read before every turn)
 
 1. One engine call per wake-up. Then launch EXACTLY the number of `Agent` calls the `LAUNCH N: <ids>` line states (plus any printed background commands), all in ONE message. Never fewer, never two lanes in one call.
-2. Paste each printed prompt verbatim. Never paraphrase it, never shorten it, never add a `model` parameter.
+2. Paste each printed prompt verbatim. Never paraphrase it, never shorten it, never add a `model` parameter; a hash mismatch is denied and reprinted — paste the reprint.
 3. A slice is done only when `next` printed `MERGED` for it. A lane's own report, your own belief or a green-looking message never counts.
 4. On a `devteam: ...` error (stderr), quote the message to yourself and do exactly what it says. Never rerun the same failing command more than once. Never edit `state.json`, briefs, markers or worktrees.
 5. On `PROOF FAILED` or `RED PROOF FAILED`, `SendMessage` the lane the printed command and output tail verbatim and tell it to fix the cause, rerun, commit and report. On the second rejection run `retry <id>` (the engine prints it).
@@ -98,9 +98,9 @@ Unsure → one level up. A Small task that grows a second slice → promote.
 
 Read `references/plan.md` once. It holds slice kinds, profiles, the plan JSON, and the gates. Do not read it on a wake-up.
 
-Default profile is `balanced`. `turbo` and `spike` only when the user asks for fast mode, a prototype, or no tests. `spike`: say in one line what is traded. Every code slice, including `risk: high`, is one lane: RED then GREEN in that same agent. The engine still runs RED proof where the profile says so.
+Default profile is `balanced`. `turbo` and `spike` only when the user asks for fast mode, a prototype, or no tests. `spike`: say in one line what is traded. Every strict/balanced code slice runs RED then GREEN as two dispatches: RED on the strong lane, a first GREEN on the default lane. Turbo/spike stay the single-lane SLICE path. The engine still runs RED proof where the profile says so.
 
-`devteam start` installs agents and hooks. If it changed them, tell the user to open a new ZCode session once. The lane window never exceeds 15. Programmers fill it first; a review uses only leftover slots, same reviewer, same checklist. `DEVTEAM_MAX_PARALLEL` pins the window. Do not lower `thoughtLevel` and do not change a model id.
+`devteam start` installs agents and hooks. If it changed them, tell the user to open a new ZCode session once. The lane window never exceeds 15. Programmers fill it first; a review uses only leftover slots, same reviewer, same checklist. `DEVTEAM_MAX_PARALLEL` pins the window.
 
 ## Pipeline
 
@@ -191,7 +191,9 @@ branches the user may delete.
 
 - **Programmer / glm-investigator / reviewer** — exactly the printed line. Add nothing: identical prompts cache best.
 - **Leader** — `subagent_type: glm-team-leader`, prompt `MODE: PLANNING|PLAN ADOPTION|VERIFICATION.` + the
-  request verbatim (+ plan source / explorer maps / briefing path).
+  request verbatim (+ plan source / explorer maps / briefing path). A fresh PLANNING prompt is the request
+  plus `.claude/dev-team/atoms.json` and `.claude/dev-team/probe.txt` (`devteam leader-prompt "<request>"`
+  prints the line).
 - **Explore** — built-in type, one per area; prompt = the area + what a planner needs.
 - **SendMessage** — `to: <agent id from the notification>`, message = the answer or the exact fix.
 

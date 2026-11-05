@@ -75,6 +75,25 @@ def _spec_and_cs(tmp, plan_text=PLAN, spec_text=SPEC):
     return spec_path, plan_path, cs
 
 
+FENCE = "`" * 3
+AGENT_FILES = ["src/a.py", "src/b.py", "src/c.py", "src/d.py", "src/e.py", "tests/test_a.py"]
+
+
+def agent_body(asserts):
+    """A task body that lints clean against PLAN's T01, with N asserts."""
+    code = ["value = %d" % asserts] + ["assert value >= %d" % i for i in range(asserts)]
+    rows = (["**Files:**"] + ["- Create: `%s`" % f for f in AGENT_FILES]
+            + ["", "- [ ] **Step 1: Write the code**", "", FENCE + "python"]
+            + code + [FENCE, "",
+                      "**Run:** python3 -m unittest tests.test_a", "",
+                      "**Expected:** `load_settings()` returns the dict", "",
+                      "- [ ] **Step 2: Commit**", "",
+                      FENCE + "bash",
+                      "git add " + " ".join(AGENT_FILES),
+                      'git commit -m "feat: settings"', FENCE, ""])
+    return "\n".join(rows)
+
+
 class HeadingErrTests(unittest.TestCase):
     def test_uncovered_behavior_is_err_and_background_is_ignored(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -147,6 +166,41 @@ class RewriteKeptTests(unittest.TestCase):
         self.assertFalse(plan_tool.rewrite_ok(self.BODY, "assert parse('other') == 1\nassert ready()"))
         self.assertTrue(plan_tool.rewrite_ok(self.BODY,
                                              'assert parse("must ship") == 1\nassert ready()\nassert more()'))
+
+
+class AgentLaneAssertsTests(unittest.TestCase):
+    """Spec step 6 (agent lane): the first clean lint arms tasks/<id>.md.asserts,
+    and a later lower count is an ERR from lint_body, like a missing Expected."""
+
+    def test_the_agent_lane_guards_an_assertion_drop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, plan_path, _ = _spec_and_cs(tmp)
+            task = os.path.join(tmp, "T01.md")
+            with open(task, "w", encoding="utf-8") as fh:
+                fh.write(agent_body(3))
+            e, w, _ = plan_tool.lint_file(plan_path, task)
+            self.assertEqual(e, [], e)
+            plan_tool.apply_marks(task, "ok", e, w)
+            with open(task + ".asserts", encoding="utf-8") as fh:
+                self.assertEqual(fh.read().strip(), "3")
+            with open(task, "w", encoding="utf-8") as fh:
+                fh.write(agent_body(1))
+            e2, _, _ = plan_tool.lint_file(plan_path, task)
+            self.assertTrue(any("assertion count dropped from 3" in x for x in e2), e2)
+
+    def test_an_equal_or_higher_count_is_not_an_err(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, plan_path, _ = _spec_and_cs(tmp)
+            task = os.path.join(tmp, "T01.md")
+            for n in (3, 3, 5):
+                with open(task, "w", encoding="utf-8") as fh:
+                    fh.write(agent_body(n))
+                if not os.path.exists(task + ".asserts"):
+                    e, w, _ = plan_tool.lint_file(plan_path, task)
+                    self.assertEqual(e, [], e)
+                    plan_tool.apply_marks(task, "ok", e, w)
+                e, _, _ = plan_tool.lint_file(plan_path, task)
+                self.assertFalse([x for x in e if "dropped" in x], (n, e))
 
 
 class SplitWideTests(unittest.TestCase):

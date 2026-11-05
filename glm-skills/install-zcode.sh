@@ -384,5 +384,10 @@ esac
 
 cat <<MSG
 
-Done.
+Done. Open a NEW ZCode session: installed skills, agents and commands load
+only in a new session, not on a restart.
+$slash_line
+Skill descriptions are truncated when loaded into per-turn trigger metadata
+(about the first 250 chars); a description over 1024 chars makes ZCode drop
+the skill.$devteam_block$plans_block
 MSG

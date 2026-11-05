@@ -3,7 +3,10 @@
 
 The model may propose. This script picks, rejects, or asks. Stdlib only.
 Imported by check.py, plan_tool.py, and devteam.py. It does not import them
-at load time.
+at load time. The lazy, optional `import check` inside cite_status exists
+only to call eval_cite for file-fact validation. In vendored copies without
+a sibling check.py the import misses by design, and file facts degrade
+accordingly.
 """
 import argparse
 import hashlib

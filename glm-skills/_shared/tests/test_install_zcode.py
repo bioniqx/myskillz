@@ -212,7 +212,6 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertRegex(out, r"%d agent files -> " % len(AGENTS))
         self.assertRegex(out, r"%d command files -> " % len(discover_commands(GLM_ROOT, SKILLS)))
         self.assertIn("glm-viral-video-studio/", out)
-        self.assertIn("no SKILL.md at root", out)
 
     def test_closing_message_claims(self):
         r = self.install()
@@ -295,7 +294,9 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertFalse(os.path.exists(self.skill("glm-not-a-skill")))
         self.assertIn("glm-not-a-skill/", r.stdout)
         self.assertIn("no SKILL.md at root", r.stdout)
-        self.assertFalse(os.path.exists(self.skill("glm-viral-video-studio")))
+        # glm-viral-video-studio is a real skill now: test_skills_install and the
+        # inventory test above both require it to install.
+        self.assertTrue(os.path.exists(self.skill("glm-viral-video-studio")))
 
     def test_missing_home_is_rejected(self):
         env = dict(os.environ)

@@ -132,18 +132,14 @@ table, when a lane needs a shell (explorer and researcher have none).
    runner-up dispatch `glm-drafter`. Attacks dispatch `glm-design-breaker`.
    Spec pre-draft is the one writable lane (`general-purpose`), and only
    when a file write will not raise a prompt.
-2. The main thread renders the `DECISION` line from `decide.py score`.
-   It does not choose an approach.
-3. The main thread does classification, merge, and the final message —
-   nothing a lane can do.
-4. Never spawn a lane for what one direct call answers.
+2. The main thread does classification, merge, the final message, and
+   the `DECISION` render — nothing a lane can do.
+3. Never spawn a lane for what one direct call answers.
 
 ## R3 — Decision, not a second effort ladder
 
 Effort is pinned in the agent file. Do not set it from this file.
-`decide.py score` prints `DECISION`. Render that option. On `ask`, ask
-that one fork inside the cap of 4. On `stop` or `unattacked`, do not
-invent a fact. Run the missing breaker once, then score again.
+`decide.py score` prints `DECISION`. Render that option (R14 procedure).
 
 ## R4 — Force the batch, plan the rounds
 
@@ -166,8 +162,7 @@ Spike/Bounded ≤3 rounds, Architectural ≤4; lane completions not counted.
   round 2.
 - **Round 2 = follow-ups round 1 revealed**: the web searches and
   TaskCreate that round 1 had to load tools for, fetches of the best
-  primary URLs, reads of newly discovered files. The `check.py cites` and
-  `check.py web` calls join this round (R14), in the same batch.
+  primary URLs, reads of newly discovered files.
 - **Round 3 = conflicts only**, then write the message.
 - Never serialize independent calls. Never re-run a denied or failed call
   unchanged — switch source or drop it.
@@ -359,11 +354,11 @@ result: do not retry the same input.
 
 1. `cites --root <repo>` — FINDINGS `path:line — fact — "snippet"`. Round 2, before a lane line enters the draft.
 2. `web` — CLAIMS `claim — tier — URL — date — "quote"`. Same round.
-3. `spec <path>` — after the spec is written, before the five-lens review.
-4. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
-5. `send --root <repo> --ledger .brainstorm/drafts/ledger.json` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes. `--pick` is the id `DECISION` printed.
-6. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
-7. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user asked for a live fetch. Then `bind` on the draft. A FAIL is repaired, not shown.
+3. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user said live, then `bind --ledger <path>` on the draft (`send` already binds). Repair every FAIL, never show one.
+4. `spec <path>` — after the spec is written, before the five-lens review.
+5. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
+6. `send --root <repo> --ledger .brainstorm/drafts/ledger.json` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes.
+7. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 
 ```
 python3 <skill_dir>/scripts/check.py send --root <repo> <<'EOF'
@@ -373,11 +368,16 @@ EOF
 
 BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
 unverified stay labelled unverified. A spec FAIL is fixed in place.
-`approve no` means you do not write.
+`approve no` means you do not write. The conductor procedure, in order:
+
+1. Round 1 unchanged: `context.sh`, `handoff.py route`, lanes that emit fact blocks; then `check.py cites` and `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
+2. `decide.py atoms` on the request, the one Flash atom call, then `atoms --check`.
+3. Architectural: three `glm-drafter` lanes, the existing lenses, in one message. Bounded with one existing flow: one drafter. Spike: the answer is the only option and still needs a breaker.
+4. Next message: one `glm-design-breaker` per option, in one message. Paste their stdout to `decide.py break`, then run `decide.py score`.
+5. `pick`: render that card. `ask`: ask that one fork inside the cap of 4. `stop`: ask, do not render a design. `unattacked`: run the missing breaker once. Never invent a fact.
+6. `check.py send --ledger` before the design is shown. The APPROACH line that is the pick is the id `DECISION` printed; a mismatch is a FAIL.
 
 ## Checklist (∥ = one concurrent message)
-
-`check.py route` joins round 1. `check.py send` runs on every draft below before it is shown.
 
 - **Spike:** ∥ reads + searches (+ ∥ fetches + `check.py` on lane
   output) → Path line + answer-so-far

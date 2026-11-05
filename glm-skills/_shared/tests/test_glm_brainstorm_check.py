@@ -9,6 +9,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CHECK = os.path.join(HERE, "..", "..", "glm-brainstorming", "scripts", "check.py")
 TODAY = "2026-10-26"
 
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "..", "_shared"))
+import decide  # noqa: E402  (path set above, like test_decide.py)
+
 
 def run(mode_args, stdin="", cwd=None):
     r = subprocess.run([sys.executable, "-I", CHECK] + mode_args + ["--today", TODAY], input=stdin,
@@ -360,6 +363,18 @@ class SendTests(unittest.TestCase):
         rc, out = self.send(text, extra=["--pick", "A2"], ledger=path)
         self.assertEqual(rc, 1, out)
         self.assertIn("FAIL pick", out)
+
+    def test_unproven_web_fact_withholds_the_two_point_bonus(self):
+        option = {"id": "A1", "atoms_hit": ["must ship"], "out_of_scope": "",
+                  "fact_ids": ["F-1"], "new_deps": [], "assumptions": []}
+        facts = {f["id"]: f for f in decide.load_ledger(self.ledger([
+            {"id": "F-1", "status": "UNPROVEN", "kind": "web",
+             "loc": "https://docs.example.org/client", "text": "retries"}]))["facts"]}
+        self.assertEqual(decide.score_option(option, ["must ship"], facts, [], []), 3)
+        ok = {f["id"]: f for f in decide.load_ledger(self.ledger([
+            {"id": "F-1", "status": "OK", "kind": "web",
+             "loc": "https://docs.example.org/client", "text": "retries"}]))["facts"]}
+        self.assertEqual(decide.score_option(option, ["must ship"], ok, [], []), 5)
 
 
 class ApproveTests(unittest.TestCase):

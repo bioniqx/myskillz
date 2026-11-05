@@ -171,7 +171,6 @@ class ZcodeAgentFileTests(unittest.TestCase):
                           "zcode %s frontmatter lacks the real GLM flash model id" % role)
         self.assertIn("thoughtLevel: max\n", writer, "zcode writer frontmatter lacks thoughtLevel: max")
         self.assertIn("thoughtLevel: max\n", reviewer, "zcode reviewer frontmatter lacks thoughtLevel: max")
-        self.assertNotIn("thoughtLevel: max", reviewer, "zcode reviewer still sits at thoughtLevel: max")
 
 
 class ZcodeFactTests(unittest.TestCase):

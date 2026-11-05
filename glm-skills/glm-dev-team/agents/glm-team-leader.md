@@ -31,7 +31,8 @@ The Conductor tells you the mode.
 
 ## MODE: PLANNING
 
-Input: the user's request (+ optional explorer maps). Output: `.claude/dev-team/plan.md`.
+Input: the user's request, `.claude/dev-team/atoms.json` and `.claude/dev-team/probe.txt`
+(+ optional explorer maps). Output: `.claude/dev-team/plan.md`.
 
 1. **Understand** the real goal and success conditions, not the literal words.
 2. **Ground it in the code.** Read the modules involved, conventions, data models,

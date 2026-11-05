@@ -2018,16 +2018,70 @@ def print_dispatch(st, blocks, skipped):
     print_pending_attacks(st)
 
 
+def attack_brief_path(root, sid):
+    return state_dir(root) / "reviews" / f"attack-{sid}.brief.md"
+
+
 def print_pending_attacks(st):
+    """MODE: ATTACK launch for a green-proved slice: the spot-reviewer brief pattern (a briefing
+    file the agent Reads) plus exactly three added lines — the slice's contract atoms, the parent
+    sha, the tip sha. No verdict is requested. Like every review it uses only a slot the
+    programmers left free; the next wake-up launches it when one frees."""
     root = Path(st["root"])
-    for sid, s in st["slices"].items():
-        if s.get("status") != "green-proved" or s.get("attack_closed"):
-            continue
-        if attack_report_path(root, sid).exists():
-            continue
+    waiting = [(sid, s) for sid, s in st["slices"].items()
+               if s.get("status") == "green-proved" and not s.get("attack_closed")
+               and not attack_report_path(root, sid).exists()]
+    if not waiting:
+        return
+    _, inflight = ready_slices(st)
+    _, free = slots(st, inflight)
+    if free < 1:
+        out("ATTACK: programmers fill the window; " + ", ".join(sid for sid, _ in waiting)
+            + " waits for a free review slot")
+        return
+    for sid, s in waiting[:free]:
+        parent, tip = s.get("base_sha") or "", s.get("tip_sha") or ""
+        slice_text = "\n".join([s.get("goal") or ""] + list(s.get("criteria") or [])
+                               + list(s.get("edge_cases") or []))
+        atoms = [a for a in plan_atoms(st, root) if a in slice_text]
+        lines = [f"# Attack briefing {sid}   [MODE: ATTACK]", "",
+                 "## Original request", st["request"], "",
+                 "One slice is green-proved and held: write ONE attack test that catches the slice",
+                 "promising a criterion it does not keep. You are read-only; the engine runs your test.",
+                 "No verdict is requested.",
+                 "",
+                 "## Slice under attack",
+                 f"- {sid} — {s['title']}"]
+        lines += [f"  - criterion: {c}" for c in s["criteria"]]
+        lines += [f"- files (review only these): {' '.join(s['files'])}",
+                  "",
+                  f"Contract atoms: {'; '.join(atoms) or '(none)'}",
+                  f"parent sha {parent}",
+                  f"tip sha {tip}",
+                  "",
+                  "## Commands",
+                  f"- Diff under attack: `git diff {parent[:12]} {tip[:12]} -- {' '.join(s['files'])}`",
+                  f"- Tests: `{cmd_value(st['commands'], 'test') or '(none configured)'}` "
+                  "(run only when a finding needs evidence; read-only otherwise)",
+                  "", "## Contracts", *[f"- {c}" for c in st["contracts"]], "",
+                  "## Output",
+                  f"Write your report to: {attack_report_path(root, sid)} — one fenced block, nothing else:",
+                  "",
+                  "```",
+                  "ATTACK-FILE",
+                  "<the test body>",
+                  "ATTACK-CMD",
+                  "<the plan test_file command, or a single argv the plan already allows>",
+                  "ATOM",
+                  "<an atom substring, or none>",
+                  "```",
+                  "Then reply with only the report path."]
+        write_atomic(attack_brief_path(root, sid), "\n".join(lines) + "\n")
         out(f"=== ATTACK {sid}",
-            "Agent → subagent_type: glm-spot-reviewer, description: \"attack %s\"" % sid
-            + ", prompt: \"MODE: ATTACK %s. Write .claude/dev-team/reviews/attack-%s.md\"" % (sid, sid))
+            emit_agent("glm-spot-reviewer",
+                       f"MODE: ATTACK. Read {attack_brief_path(root, sid)} and follow it exactly.",
+                       f"attack {sid}"),
+            "")
 
 
 def cmd_dispatch(a):
@@ -2210,6 +2264,24 @@ def _attack_quotes_atom(text):
     return bool(span) and span.lower() != "none"
 
 
+def _attack_cmd(text):
+    m = re.search(r"(?m)^ATTACK-CMD\s*\n\s*(.+?)\s*$", text or "")
+    return m.group(1).strip() if m else ""
+
+
+def _attack_cmd_allowed(acmd, cmds, rel):
+    """The engine runs the reviewer's ATTACK-CMD only when the plan already pins it: the filled
+    `test_file` form, or any pinned command verbatim — one argv, no shell chaining or
+    substitutions. Anything else falls back to the plan test command."""
+    if not acmd or re.search(r"[;&|<>`$]", acmd):
+        return False
+    for key in ("test_file", "test", "lint_file", "typecheck_file", "lint", "typecheck", "build"):
+        v = cmd_value(cmds, key)
+        if v and acmd in (v, fill_files(v, [rel])):
+            return True
+    return False
+
+
 def hold_for_attack(root, st, s, sid, tip):
     """None means merge. A string is the line to print instead of MERGED."""
     path = attack_report_path(root, sid)
@@ -2234,6 +2306,9 @@ def hold_for_attack(root, st, s, sid, tip):
             break
     cmd = cmd_value(st.get("commands") or {}, "test_file") or cmd_value(st.get("commands") or {}, "test") or "true"
     cmd = fill_files(cmd, [rel])
+    acmd = _attack_cmd(text)
+    if _attack_cmd_allowed(acmd, st.get("commands") or {}, rel):
+        cmd = acmd
     parent_sha = s.get("base_sha") or tip
     parent_rc, _ = run_at_commit(root, st, sid + "-parent", parent_sha, cmd, proof_timeout(), [(rel, body)])
     slice_rc, _ = run_at_commit(root, st, sid + "-slice", tip, cmd, proof_timeout(), [(rel, body)])
@@ -3428,6 +3503,19 @@ def cmd_atoms(a):
     return 0
 
 
+def cmd_leader_prompt(a):
+    """The fresh MODE: PLANNING dispatch line: the request verbatim plus the atoms and probe
+    files as CONTEXT paths (the claim-prompt pattern). Only the fresh planning call — PLAN
+    ADOPTION and VERIFICATION prompts are composed as before."""
+    root = find_root()
+    sd = state_dir(root)
+    prompt = "MODE: PLANNING. " + (a.request or "").strip()
+    paths = [f"{STATE_DIRNAME}/{n}" for n in ("atoms.json", "probe.txt") if (sd / n).is_file()]
+    if paths:
+        prompt += " CONTEXT: " + " ".join(paths)
+    out(emit_agent("glm-team-leader", prompt, "plan the request"))
+
+
 def cmd_review_pr(a):
     """Review-only route: fan reviewers over an arbitrary diff with no plan and no programmers."""
     root = toplevel()
@@ -4615,6 +4703,7 @@ def main(argv=None):
         out("PLAN-LINT ok")
 
     sp.add_parser("plan-lint").set_defaults(fn=cmd_plan_lint)
+    pr = sp.add_parser("leader-prompt"); pr.add_argument("request", nargs="?"); pr.set_defaults(fn=cmd_leader_prompt)
     pr = sp.add_parser("review-pr"); pr.add_argument("range", nargs="?"); pr.add_argument("--shards", type=int, default=0)
     pr.add_argument("--request"); pr.add_argument("--test"); pr.add_argument("--spot", action="store_true"); pr.set_defaults(fn=cmd_review_pr)
     pr = sp.add_parser("brief-debug"); pr.add_argument("symptom"); pr.add_argument("-n", type=int, default=4)

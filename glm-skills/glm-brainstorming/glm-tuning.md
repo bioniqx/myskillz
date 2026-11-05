@@ -47,8 +47,7 @@ limit, not a client default.
 
 `thinking.type` accepts only `"enabled"`. `reasoning_effort` is
 `low | high | max`, default `max`. The agent file is the only pin.
-`max` before a tool call is latency. Explorer and researcher are `high`.
-Drafter and design-breaker are `max`.
+`max` before a tool call is latency.
 
 ## 4. Known failure modes
 
@@ -103,7 +102,7 @@ instruction; R4 is written to hold either way.
 Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/`, the bundled agents verbatim to
 `~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
-(/glm-brainstorm runs context.sh from the installed skill; ZCode rejects a dynamic-shell preload). The three
+(/glm-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). The three
 brainstorming lane files pin Flash and `thoughtLevel: max` (section 2). When a model
 must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills, agents and
 commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$glm-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
