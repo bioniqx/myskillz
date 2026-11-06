@@ -373,7 +373,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
 1. Round 1 unchanged: `context.sh`, `handoff.py route`, lanes that emit fact blocks; then `check.py cites` and `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
 2. `decide.py atoms` on the request, the one Flash atom call, then `atoms --check`.
 3. Architectural: three `glm-drafter` lanes, the existing lenses, in one message. Bounded with one existing flow: one drafter. Spike: the answer is the only option and still needs a breaker.
-4. Next message: one `glm-design-breaker` per option, in one message. Paste their stdout to `decide.py break`, then run `decide.py score`.
+4. Next message: one `glm-design-breaker` per option, in one message. Write the options JSON to `.brainstorm/drafts/options.json`. Paste breaker stdout to `decide.py break --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json`, then run `decide.py score`. A cite break needs that file or it cannot reproduce.
 5. `pick`: render that card. `ask`: ask that one fork inside the cap of 4. `stop`: ask, do not render a design. `unattacked`: run the missing breaker once. Never invent a fact.
 6. `check.py send --ledger` before the design is shown. The APPROACH line that is the pick is the id `DECISION` printed; a mismatch is a FAIL.
 

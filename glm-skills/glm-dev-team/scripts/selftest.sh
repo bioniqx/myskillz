@@ -1283,13 +1283,13 @@ python3 tests/test_attack_S1.py
 ATOM
 sub returns 5 for 2 and 3
 EOF
-OUT=$(DX next S1 2>&1)
+OUT=$(DX next 2>&1)
 check "an attack that fails on the slice and passes on the parent is a BLOCKER" '[[ "$OUT" == *"ATTACK BLOCKER S1"* && "$OUT" != *"S1: MERGED"* ]]'
 check "the blocked slice still holds (green-proved, not merged, not failed)" 'D status | grep -q "S1     green-proved"'
 ( cd .claude/worktrees/g1 \
   && printf 'def sub(a, b):\n    if b < 0:\n        raise ValueError("negative addend")\n    return a + b\n' > src/sub.py \
   && DX commit-green "fix the parent behavior" >/dev/null 2>&1 )
-OUT=$(DX next S1 2>&1)
+OUT=$(DX next 2>&1)
 check "a fix commit that survives the attack merges (no APPROVED anywhere in the loop)" '[[ "$OUT" == *"S1: MERGED"* ]]'
 
 echo

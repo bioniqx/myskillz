@@ -48,6 +48,31 @@ class ModeTests(unittest.TestCase):
         red["title"] = "easy"
         self.assertIn("glm-programmer-strong", devteam.dispatch_route({}, red, "red"))
 
+    def test_attack_is_due_once_per_report_and_tip(self):
+        s = {"status": "green-proved", "attack_report_sha": "abc", "attack_at": "tip1"}
+        self.assertFalse(devteam.attack_judgment_due(s, "abc", "tip1"))
+        self.assertTrue(devteam.attack_judgment_due(s, "abc", "tip2"))
+        self.assertTrue(devteam.attack_judgment_due(s, "def", "tip1"))
+        s["attack_closed"] = True
+        self.assertFalse(devteam.attack_judgment_due(s, "def", "tip2"))
+
+    def test_prose_attack_report_blocks_instead_of_merging(self):
+        import tempfile
+        from pathlib import Path
+        root = Path(tempfile.mkdtemp())
+        reviews = root / ".claude" / "dev-team" / "reviews"
+        reviews.mkdir(parents=True)
+        (reviews / "attack-S1.md").write_text("APPROVED\nThe slice looks done.\n", encoding="utf-8")
+        s = {"status": "inflight", "attack_n": 0}
+        st = {"slices": {"S1": s}}
+        line = devteam.hold_for_attack(root, st, s, "S1", "tip1")
+        self.assertIn("ATTACK BLOCKER S1", line)
+        self.assertNotIn("MERGED", line)
+        self.assertEqual(s["status"], "green-proved")
+        self.assertEqual(s["attack_at"], "tip1")
+        self.assertFalse(devteam.attack_judgment_due(
+            s, s["attack_report_sha"], "tip1"))
+
     def test_split_off_keeps_one_lane(self):
         os.environ["DEVTEAM_SPLIT"] = "off"
         try:

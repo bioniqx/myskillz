@@ -108,7 +108,7 @@ vars in front of a command (except the pinned isolation prefix below), or use `p
 ## Modes (the briefing says which; its procedure is authoritative)
 
 - **RED** then **GREEN** is the strict/balanced code path. **SLICE** remains the turbo path.
-- **SLICE** (turbo): one lane, then the gate, `commit-green`, report.
+- **SLICE** (turbo): one lane writes the tests (`commit-red`) and then the code (`commit-green`).
 - **RED** (test author): tests only, no implementation, no
   implementation plan is given on purpose — test the requirements, not a design.
   `commit-red` → report with the criterion → test mapping.

@@ -1205,6 +1205,41 @@ def report_finished(path):
     return bool(re.search(r"^##\s*(Verdict|Findings|Status)\b", text, re.M))
 
 
+def attack_judgment_due(s, report_sha, tip):
+    """A held GREEN slice is judged when its attack report is new or the branch tip moved.
+    The same report at the same tip is not judged again, so a BLOCKER cannot burn the cap of 2
+    on the next id-less wake-up."""
+    if s.get("status") != "green-proved" or s.get("attack_closed"):
+        return False
+    if not report_sha:
+        return False
+    return not (s.get("attack_report_sha") == report_sha and s.get("attack_at") == tip)
+
+
+def slices_due_attack(root, st):
+    """Green-proved slices whose attack report `next` must judge even when no .done marker exists.
+    The spot reviewer is not a programmer, so its report never writes one."""
+    due = []
+    for sid, s in st["slices"].items():
+        path = attack_report_path(root, sid)
+        if not path.is_file():
+            continue
+        try:
+            report_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        tip = s.get("tip_sha") or ""
+        claim = read_claim(root, sid)
+        if claim and claim.get("branch"):
+            try:
+                tip = git(["rev-parse", claim["branch"]], root)
+            except DevteamError:
+                pass
+        if attack_judgment_due(s, report_sha, tip):
+            due.append(sid)
+    return due
+
+
 def finished_lanes(root, st):
     """Slices whose glm-programmer's Stop gate wrote a `.done` marker, plus research slices whose report
     exists: the set `next` integrates when the Conductor passes no ids. `.blocked` markers are
@@ -2287,16 +2322,39 @@ def _attack_cmd_allowed(acmd, cmds, rel):
     return False
 
 
+def _note_attack(s, tip, raw):
+    s["attack_at"] = tip
+    s["attack_report_sha"] = hashlib.sha256(raw).hexdigest()
+    s["tip_sha"] = tip
+
+
+def _attack_block(s, sid, tip, raw):
+    """A reproduced or unreadable attack holds the slice. The same bytes are not judged twice."""
+    _note_attack(s, tip, raw)
+    n = int(s.get("attack_n") or 0) + 1
+    s["attack_n"] = n
+    s["status"] = "green-proved"
+    if n >= 2:
+        s["attack_closed"] = True
+        return f"ATTACK BLOCKER {sid} — leftover after 2"
+    return (f"ATTACK BLOCKER {sid} — worktree kept; SendMessage the programmer, "
+            f"commit-green, then next")
+
+
 def hold_for_attack(root, st, s, sid, tip):
     """None means merge. A string is the line to print instead of MERGED."""
     path = attack_report_path(root, sid)
     if not path.exists():
         s.update({"status": "green-proved", "tip_sha": tip, "attack_n": int(s.get("attack_n") or 0)})
         return f"ATTACK {sid}"
-    text = path.read_text(encoding="utf-8")
+    raw = path.read_bytes()
+    text = raw.decode("utf-8", "replace")
     body = _attack_body(text)
-    if not body.strip():
+    if not text.strip():
         return None
+    if not body.strip():
+        # A prose verdict, including APPROVED, is not an empty attack. It does not merge.
+        return _attack_block(s, sid, tip, raw)
     with tempfile.TemporaryDirectory() as td:
         probe = Path(td) / "attack_body"
         probe.write_text(body, encoding="utf-8")
@@ -2321,14 +2379,7 @@ def hold_for_attack(root, st, s, sid, tip):
     kind = classify_attack(parent_rc or 0, slice_rc or 0, _attack_quotes_atom(text), ran, body_empty=False)
     if kind in ("PIN", "DISCARD"):
         return None
-    n = int(s.get("attack_n") or 0) + 1
-    s["attack_n"] = n
-    s["status"] = "green-proved"
-    s["tip_sha"] = tip
-    if n >= 2:
-        s["attack_closed"] = True
-        return f"ATTACK BLOCKER {sid} — leftover after 2"
-    return f"ATTACK BLOCKER {sid}"
+    return _attack_block(s, sid, tip, raw)
 
 
 def proof_one(root, st, sid, pc):
@@ -3237,7 +3288,7 @@ def cmd_next(a):
     harvested = harvest_reviews(root, st) + harvest_checkpoint(root, st)
     save_state(root, st)
     auto_done, blocked = finished_lanes(root, st)
-    ids = list(dict.fromkeys(list(a.ids or []) + auto_done))
+    ids = list(dict.fromkeys(list(a.ids or []) + auto_done + slices_due_attack(root, st)))
     successes = 0
     if ids:
         results = do_integrate(root, st, ids, remove=not a.no_remove)

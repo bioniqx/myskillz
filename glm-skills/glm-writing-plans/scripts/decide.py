@@ -514,9 +514,11 @@ def main(argv=None):
                                           (" reason=%s" % fact["reason"]) if fact.get("reason") else ""))
         return 0
     if ns.cmd == "break":
-        options = []
-        if ns.options:
-            options = json.loads(Path(ns.options).read_text(encoding="utf-8"))
+        opt_path = Path(ns.options) if ns.options else Path(ns.ledger).parent / "options.json"
+        if ns.options and not opt_path.is_file():
+            print("FAIL options - %s" % opt_path)
+            return 1
+        options = json.loads(opt_path.read_text(encoding="utf-8")) if opt_path.is_file() else []
         reports = apply_breaks(parse_breaks(sys.stdin.read()), options, ns.root)
         path = Path(ns.ledger).parent / "breaks.json"
         path.write_text(json.dumps({"breaks": reports}, indent=1) + "\n", encoding="utf-8")
