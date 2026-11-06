@@ -37,8 +37,8 @@ For large or contested problems, draft approaches with 2-3 parallel
 `glm-drafter` lanes (built-in general-purpose if that agent is not installed), each forced onto a different lens so they
 do not converge: (a) maximum reuse of existing repo patterns, (b)
 current best practice per the web evidence, (c) smallest change that
-ships the goal. A contested lens is settled on the main thread, never
-promoted to a lane.
+ships the goal. A contested lens is not picked here. `decide.py score`
+prints `DECISION`; render that option.
 
 ```
 Draft one design approach. Lens: [LENS]. Task: [TASK].

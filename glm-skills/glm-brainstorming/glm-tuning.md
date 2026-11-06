@@ -10,12 +10,12 @@ Two models serve the whole skill:
 
 | Model | Out speed | $/M in | $/M out | Use |
 | --- | --- | --- | --- | --- |
-| GLM-5.3-Flash | 113.7 tok/s | 0.15 | 0.50 | every worker lane |
-| GLM-5.3 | 63.4 tok/s | 1.40 | 4.40 | main thread |
+| GLM-5.3-Flash | 113.7 tok/s | 0.15 | 0.50 | every lane and the main thread |
+| GLM-5.3 | 63.4 tok/s | 1.40 | 4.40 | not used |
 
-A GLM-5.3 lane is not smarter than the main thread — it is the main
-model billed again. That is why R2 defaults every lane to Flash: 1.8×
-the output speed, ~9× cheaper, and 3× the coding-plan quota per point.
+A GLM-5.3 call is the same family at about 9× the price. It does not
+close a decision. `decide.py score` does. Flash is 1.8× the output
+speed and 3× the coding-plan quota per point.
 
 Time to first token: GLM-5.3 3.43 s, Flash 2.34 s. Both carry a 1M
 context window and 128K max output, so "read everything plausible in
@@ -31,32 +31,19 @@ audit: check only the claims that decide the design, force different
 lenses on drafts. `decide.py score` picks the approach. Do not promote
 a lane to GLM-5.3 to make that pick.
 
-## 2. Runtime setup
+## 2. Model and effort
 
-Model and effort live only in the agent frontmatter. ZCode honors
-`thoughtLevel` only together with a model id. Recent ZCode sessions on
-this machine use the individual plan, so that prefix is the pin. The
-team-plan account is a second login, not the lane default.
+Model and effort live only in the agent frontmatter. This file is the
+economics and the failure table.
 
-Calling the GLM API directly: `temperature: 1`, `top_p: 0.95`,
-`thinking.clear_thinking: false` for agent use, and `stream: true` with
-`tool_stream: true`. R7's 8-lane hard max is the provider's concurrent-call
-limit, not a client default.
-
-## 3. Reasoning effort
-
-`thinking.type` accepts only `"enabled"`. `reasoning_effort` is
-`low | high | max`, default `max`. The agent file is the only pin.
-`max` before a tool call is latency.
-
-## 4. Known failure modes
+## 3. Known failure modes
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Only 1-2 of the round's calls were made | GLM emits fewer parallel calls per turn than Claude unless given a count | R4: state the count, re-issue the remainder as one batch, or push the work into Flash lanes |
 | Lane ignores half the prompt | Rigid XML-tag ceremony and delegation tables are mishandled | Numbered imperative rules; tables only for reference data, never for behaviour |
 | Lane returns 400 words of prose | Flash is verbose by default (≈1.3× the median output on public index runs) | Word cap plus exact output labels in the prompt; take what is usable rather than re-running for formatting |
-| Every lane feels slow | Lanes running on GLM-5.3 instead of Flash | Lanes dispatch the installed Flash agent files (R2); judgment stays on the main thread |
+| Every lane feels slow | Lanes running on GLM-5.3 instead of Flash | Lanes dispatch the installed Flash agent files (R2). The main thread renders `DECISION` |
 | Accuracy drifts late in a long task | Long-horizon chains compound errors | R5: wide-and-shallow lanes, ≤4 tool calls per lane, restate state before each gate |
 | Cache hit rate collapses across siblings | Prefix-based caching; one changed character upstream invalidates the rest | Byte-identical shared block, slice lines last |
 | Tool-call parse errors on a self-hosted server | Known GLM tool-parser bugs on some vLLM/SGLang builds | Update the serving stack; do not work around it in the prompt |
@@ -69,9 +56,9 @@ limit, not a client default.
 | A bug report got a design | Misroute | `check.py route` in round 1; `ROUTE` other than `none` is binding |
 | A lane invented findings to hit a minimum count | "3-6 lines" forces fabrication | The agent file says up to 6, and zero is valid |
 | The path was forgotten by message 3 | Long-horizon drift; private restatement does not hold | Every message line 1 is Path or Path unchanged; `send` enforces it |
-| Lanes ran on the session model at effort max | Agent frontmatter had no model id, so thoughtLevel was ignored | The three lane files pin Flash and `thoughtLevel: max` |
+| Lanes ran on the session model at effort max | Agent frontmatter had no model id, so thoughtLevel was ignored | Model and effort live only in the agent frontmatter |
 
-## 5. Evidence
+## 4. Evidence
 
 - GLM-5.3: 1M context, 128K max output, always-on reasoning,
   `reasoning_effort` low/high/max default max, `max` recommended for
@@ -97,22 +84,21 @@ UNVERIFIED: the exact ceiling on parallel tool calls per GLM-5.3 turn.
 Public reports observe as few as two in one turn without an explicit
 instruction; R4 is written to hold either way.
 
-## 6. ZCode runtime
+## 5. ZCode runtime
 
 Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/`, the bundled agents verbatim to
 `~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
-(/glm-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). The three
-brainstorming lane files pin Flash and `thoughtLevel: max` (section 2). When a model
+(/glm-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). Model and effort live only in the agent frontmatter (section 2). When a model
 must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills, agents and
 commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$glm-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
 characters, and a description over 1024 characters makes ZCode drop the skill — which is why the
 WHEN clause sits at the front of this skill's description. Agents launched together run in parallel
 and cannot spawn nested subagents, so keep the fan-out flat: width cap 8, default 8 (Live context
 prints `harness: zcode` with the lane cap in force). Lane economics (R2) are unchanged: every lane
-Flash, judgment on the main thread.
+Flash. `decide.py score` prints the pick.
 
-## 7. Mechanical verification
+## 6. Mechanical verification
 
 `scripts/check.py` is a stdlib-only, read-only checker. The main thread
 pastes lane output into it on stdin through a heredoc, so a check costs
@@ -132,5 +118,6 @@ one Bash call and no file write. It has three modes (SKILL.md R14):
 - `check.py approve --asked design` accepts only an approval token.
   Exit 1 on no.
 
-It cannot judge whether a source supports its claim; that stays on the
-main thread. It never writes files and never touches the network.
+It does not decide whether a source supports a design. `decide.py` closes
+that from the ledger. `cites`, `web`, and `send` never open a socket.
+`prove` delegates the fetch to `decide.py`.

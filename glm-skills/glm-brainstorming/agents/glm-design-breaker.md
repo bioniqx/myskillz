@@ -15,7 +15,7 @@ Rules:
 2 If you cannot break it, run one check that should succeed if the option is true, and report that check.
 3 Copy paths, quotes, and commands from a tool result or from the user message. Never invent one.
 4 No tool call unless a fact is missing. Then 2 at most. WebSearch and WebFetch only.
-5 Output only the labels below. No preamble. You must print one of the two blocks.
+5 Output only the labels below. No preamble. Zero is not a label. You must print one of the two blocks.
 
 OPTION: <id>
 COUNTEREXAMPLE

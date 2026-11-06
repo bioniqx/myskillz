@@ -33,6 +33,21 @@ class ModeTests(unittest.TestCase):
         os.environ.pop("DEVTEAM_SPLIT", None)
         self.assertEqual(devteam.code_mode({"fast": 2}, self._slice()), "slice")
 
+    def test_first_green_stays_lite_and_a_retry_goes_strong(self):
+        # Mirrors do_dispatch: RED leaves attempt at 1, the GREEN dispatch
+        # increments, then routes. A retry increments once more.
+        s = self._slice("red-done")
+        s["title"] = "easy"
+        s["attempt"] = s["attempt"] + 1
+        mode = devteam.code_mode({"fast": 0}, s)
+        self.assertEqual(mode, "green")
+        self.assertIn("glm-programmer-lite", devteam.dispatch_route({}, s, mode))
+        s["attempt"] += 1
+        self.assertIn("glm-programmer-strong", devteam.dispatch_route({}, s, mode))
+        red = self._slice("pending")
+        red["title"] = "easy"
+        self.assertIn("glm-programmer-strong", devteam.dispatch_route({}, red, "red"))
+
     def test_split_off_keeps_one_lane(self):
         os.environ["DEVTEAM_SPLIT"] = "off"
         try:

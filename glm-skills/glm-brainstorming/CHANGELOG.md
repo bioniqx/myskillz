@@ -1,3 +1,11 @@
+# 10.3 (from 10.2) — Flash proposes, the engine closes
+
+The session model is GLM-5.3-Flash. `decide.py score` prints `DECISION`;
+the main thread renders it and does not pick an approach. Explorer and
+researcher are `high`; drafter and `glm-design-breaker` are `max`.
+Nothing promotes a lane to GLM-5.3. Model and effort live only in the
+agent frontmatter.
+
 # 10.2 (from 10.1) — one router for every sibling
 
 `scripts/handoff.py` (vendored from `_shared/handoff.py`) is the binding

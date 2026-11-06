@@ -1,6 +1,6 @@
 # Flash lanes, Opus decisions
 
-Date: 2026-11-05. Status: chosen solution, build procedure written, not implemented. Scope:
+Date: 2026-11-05. Status: implemented on main, 2026-11-06. The six ship steps are green (selftest 346 pass, shared suite 557 pass). The blinded fixture bar below has not been run, so this is not yet a claim of Opus parity. Scope:
 `glm-brainstorming`, `glm-writing-plans`, and `glm-dev-team`. Nothing in `../claude-skills/`
 is touched. When this is implemented, work happens on `main` (repo rule). The session model
 for all three skills is GLM-5.3-Flash. No judgment call is promoted to GLM-5.3 or to Claude.

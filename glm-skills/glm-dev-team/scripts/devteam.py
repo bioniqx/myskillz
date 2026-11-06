@@ -1920,8 +1920,13 @@ def dispatch_route(st, s, mode):
     """The Agent line for one glm-programmer dispatch (ZCode-only: the Agent tool takes no per-dispatch
     model). RED runs on glm-programmer-strong. A first GREEN of a small low-risk slice stays on
     glm-programmer-lite. High-risk, large, and retried slices use glm-programmer-strong."""
+    attempt = int(s.get("attempt") or 1)
+    # do_dispatch increments attempt before this call. RED consumes one, so the
+    # first GREEN arrives at 2 and a GREEN retry at 3 or more. Any other mode
+    # keeps the historical retry threshold of 2 (callers that pass "zcode" too).
+    retry_at = 3 if mode == "green" else 2
     strong = (mode == "red" or s.get("risk") == "high" or s.get("size") == "large"
-              or int(s.get("attempt") or 1) >= 2)
+              or attempt >= retry_at)
     agent = "glm-programmer-strong" if strong else "glm-programmer-lite"
     description = s.get("title") or s.get("id") or "slice"
     return "Agent(subagent_type=" + agent + ", description=" + repr(description) + ")"
