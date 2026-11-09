@@ -178,6 +178,11 @@ via its Execution Protocol. Options:
 
 Which approach?"
 
+If `.brainstorm/drafts/chain.json` contains `"continue": true`, do not ask.
+Run `handoff.py next --self glm-writing-plans --event plan-ready` and follow
+`NEXT:`. That file is the brainstorming chain: spec, then this plan, then
+glm-dev-team.
+
 - Subagent-Driven -> dispatch each wave's `[P]` tasks yourself as subagents
   here, reviewing between waves.
 - Inline -> execute the plan yourself here, sequentially, with checkpoints.

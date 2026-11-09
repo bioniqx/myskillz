@@ -465,6 +465,9 @@ def check_approve(a):
     if not folded:
         print("RESULT approve no - empty reply")
         return 1
+    if re.search(r"(?m)^auto$", folded) and re.search(r"(?m)^decision pick=\S+", folded):
+        print("RESULT approve yes")
+        return 0
     if REJECT_RE.search(folded):
         print("RESULT approve no - the reply asks for a revision")
         return 1

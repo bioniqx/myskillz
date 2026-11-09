@@ -9,6 +9,7 @@ allowed-tools:
   - Bash(python3 *check.py*)
   - Bash(python3 *decide.py*)
   - Bash(python3 *handoff.py*)
+  - Bash(python3 *ask.py*)
   - Bash(kill -0:*)
   - Agent
   - Read
@@ -26,8 +27,8 @@ present once → get approval. Lower rule number wins a conflict.
 ## Hard rules (the rest of this file is detail)
 
 1. No code, scaffold or file write outside `.brainstorm/drafts/` until
-   `check.py approve --asked design` prints `RESULT approve yes` on the
-   human reply to the design message. Any other reply is not approval (R14).
+   `check.py approve --asked design` prints `RESULT approve yes`. The
+   stdin is the human reply, or the `AUTO` block from `ask.py wait` (R6).
 2. Line 1 of every message you show is `Path: <Spike|Bounded|Architectural> — reason`,
    `Path unchanged: <path>`, or the hand-off line. Run `check.py send` on
    the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
@@ -187,6 +188,13 @@ decided by `check.py approve`, not by how agreeable it sounds.
 With AskUserQuestion make item 1 "Approve this design?" (Approve /
 Approve with my answers below / Revise) so one reply both answers and
 approves; otherwise ask in plain text.
+Name the recommended option id in that message. In the same message
+start `python3 <skill_dir>/scripts/ask.py wait --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json --timeout 900`
+with `run_in_background: true`, then end the turn. A chat reply before
+it finishes: first call `ask.py cancel`, then `approve` on that reply.
+The wait's `AUTO` block is the reply when 15 minutes pass with none:
+pass that block to `approve`, render its pick, write the spec, and take
+the R13 exit. `DECISION stop` or `ask=unattacked` is not a pick.
 
 ## R7 — Width
 
@@ -333,8 +341,10 @@ from memory.
 
 The approved deliverable picks the next owner; announce it in one line.
 
-- **Architectural** → `glm-writing-plans` with the spec path
-  (`architectural.md` §5). Nothing else.
+- **Architectural** → write the spec, then `glm-writing-plans` with that
+  path (`architectural.md` §5). On a human `approve yes`, run
+  `ask.py chain --pick <id>` first. An automatic pick already wrote
+  `.brainstorm/drafts/chain.json`. Nothing else.
 - **Bounded**, ≤3 files, one flow → implement here (TDD applies); then
   the `glm-spot-reviewer` lane if R11 says so, fix its BLOCKER/MAJOR
   findings, report done with the test line.
@@ -374,7 +384,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
 2. `decide.py atoms` on the request, the one Flash atom call, then `atoms --check`.
 3. Architectural: three `glm-drafter` lanes, the existing lenses, in one message. Bounded with one existing flow: one drafter. Spike: the answer is the only option and still needs a breaker.
 4. Next message: one `glm-design-breaker` per option, in one message. Write the options JSON to `.brainstorm/drafts/options.json`. Paste breaker stdout to `decide.py break --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json`, then run `decide.py score`. A cite break needs that file or it cannot reproduce.
-5. `pick`: render that card. `ask`: ask that one fork inside the cap of 4. `stop`: ask, do not render a design. `unattacked`: run the missing breaker once. Never invent a fact.
+5. `pick`: render that card. `ask`: ask that one fork inside the cap of 4 and arm `ask.py wait` (R6). `stop`: do not render a design. `unattacked`: run the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
 6. `check.py send --ledger` before the design is shown. The APPROACH line that is the pick is the id `DECISION` printed; a mismatch is a FAIL.
 
 ## Checklist (∥ = one concurrent message)

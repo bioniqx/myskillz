@@ -24,7 +24,9 @@ run `scripts/handoff.py route --self glm-dev-team` (that file sits next to
 first stdin line. `HANDOFF` or `STOP` is binding: follow `NEXT:` and do not
 bootstrap. `STAY` means continue. `GUARD` lines bind the whole task. Run
 `next --event` only when the user wants that exit: `root-cause`, `needs-plan`,
-`needs-design`, `audit`, `docs`, `commit-message`.
+`needs-design`, `audit`, `docs`, `commit-message`. If
+`.brainstorm/drafts/chain.json` contains `"continue": true` and the handoff
+brought a plan, `devteam start` that plan. Do not ask whether to begin.
 
 **Bootstrap — put this in front of your FIRST command, once.** If the harness shows a "Base directory for this skill" line, replace `<base dir>` with that path. Otherwise leave it as is.
 
