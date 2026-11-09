@@ -176,8 +176,8 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         self.assertFalse(baks, baks)
 
     def test_two_guard_paths_on_one_matcher_collapse_to_the_installed_skill(self):
-        installed = "python3 " + os.path.join(self.home, ".zcode", "skills", "glm-dev-team", "scripts", "guard.py") + " zcode"
-        repo = "python3 " + os.path.join(self.repo, "guard.py") + " zcode"
+        installed = "python3 " + os.path.expanduser("~/.zcode/skills/glm-dev-team/scripts/guard.py") + " zcode"
+        repo = "python3 " + os.path.join(SCRIPTS, "guard.py") + " zcode"
         cfg = {"hooks": {"enabled": True, "events": {
             "PreToolUse": [
                 {"matcher": "Write|Edit", "hooks": [{"type": "process", "command": installed}]},
@@ -197,6 +197,16 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
             {"matcher": "Bash", "hooks": [{"type": "process", "command": installed}]},
         ])
         self.assertEqual(events["Stop"], [
+            {"hooks": [{"type": "process", "command": installed}]},
+        ])
+        reversed_cfg = {"hooks": {"enabled": True, "events": {
+            "Stop": [
+                {"hooks": [{"type": "process", "command": repo}]},
+                {"hooks": [{"type": "process", "command": installed}]},
+            ],
+        }}}
+        dt._zcode_add_hooks(reversed_cfg, repo)
+        self.assertEqual(reversed_cfg["hooks"]["events"]["Stop"], [
             {"hooks": [{"type": "process", "command": installed}]},
         ])
 

@@ -4986,34 +4986,32 @@ def _zcode_add_hooks(cfg, hook_cmd):
             entries = []
             events[event] = entries
         matcher = entry.get("matcher")
-        want = entry["hooks"][0]["command"]
-        seen = False
+        chosen = entry["hooks"][0]["command"]
+        others_at = None
         kept = []
         for cur in list(entries):
             if not isinstance(cur, dict) or cur.get("matcher") != matcher:
                 kept.append(cur)
                 continue
-            others, found = [], None
+            others = []
             for h in cur.get("hooks") or []:
                 if isinstance(h, dict) and h.get("type") == "process" and _is_guard_cmd(h.get("command")):
-                    found = h.get("command") if found is None else _choose_guard(found, h.get("command"))
+                    chosen = _choose_guard(h.get("command"), chosen)
                     continue
                 others.append(h)
-            if found is None:
+            if others and others_at is None:
+                others_at = len(kept)
+                cur = dict(cur)
+                cur["hooks"] = others
                 kept.append(cur)
-                continue
-            if seen:
-                if others:
-                    cur = dict(cur)
-                    cur["hooks"] = others
-                    kept.append(cur)
-                continue
-            seen = True
-            cur = dict(cur)
-            cur["hooks"] = others + [{"type": "process", "command": _choose_guard(found, want)}]
-            kept.append(cur)
-        if not seen:
-            kept.append(entry)
+        guard = {"type": "process", "command": chosen}
+        if others_at is None:
+            fresh = {"hooks": [guard]}
+            if matcher is not None:
+                fresh["matcher"] = matcher
+            kept.append(fresh)
+        else:
+            kept[others_at]["hooks"] = list(kept[others_at]["hooks"]) + [guard]
         events[event] = kept
 
     def process_entry(matcher=None):
