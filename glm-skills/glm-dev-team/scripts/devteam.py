@@ -4930,6 +4930,36 @@ def _zcode_write(path, text):
         fh.write(text)
 
 
+def _is_guard_cmd(cmd):
+    """True for `python3 <path>/guard.py zcode`, whatever directory the path uses."""
+    if not isinstance(cmd, str):
+        return False
+    parts = cmd.split()
+    return (len(parts) == 3 and parts[0] == "python3" and parts[2] == "zcode"
+            and parts[1].replace("\\", "/").endswith("/guard.py"))
+
+
+def _installed_guard(cmd):
+    """True when the command runs the copy under ~/.zcode/skills."""
+    if not _is_guard_cmd(cmd):
+        return False
+    skills = os.path.realpath(os.path.expanduser("~/.zcode/skills"))
+    path = os.path.realpath(cmd.split()[1])
+    try:
+        return os.path.commonpath([path, skills]) == skills
+    except ValueError:
+        return False
+
+
+def _choose_guard(current, hook_cmd):
+    """One command per matcher. The installed skill wins over a repo checkout."""
+    if _installed_guard(hook_cmd):
+        return hook_cmd
+    if current and _installed_guard(current):
+        return current
+    return hook_cmd
+
+
 def _zcode_add_hooks(cfg, hook_cmd):
     """Add the dev-team hook entries to a parsed user config dict (in place).
 
@@ -4937,6 +4967,8 @@ def _zcode_add_hooks(cfg, hook_cmd):
     parses (its config schema nests the event lists inside an ``events``
     object, and its reader walks ``hooks.events?.<Event>``). Legacy unwrapped
     ``hooks.<Event>`` keys from older renders are migrated in and removed.
+    Two `guard.py zcode` commands on the same matcher collapse to one. The
+    copy under ~/.zcode/skills is kept when either side points there.
     """
     hooks = cfg.get("hooks")
     if not isinstance(hooks, dict):
@@ -4953,14 +4985,36 @@ def _zcode_add_hooks(cfg, hook_cmd):
         if not isinstance(entries, list):
             entries = []
             events[event] = entries
-        for cur in entries:
-            if not isinstance(cur, dict) or cur.get("matcher") != entry.get("matcher"):
+        matcher = entry.get("matcher")
+        want = entry["hooks"][0]["command"]
+        seen = False
+        kept = []
+        for cur in list(entries):
+            if not isinstance(cur, dict) or cur.get("matcher") != matcher:
+                kept.append(cur)
                 continue
+            others, found = [], None
             for h in cur.get("hooks") or []:
-                if isinstance(h, dict) and h.get("type") == "process" \
-                        and h.get("command") == hook_cmd:
-                    return
-        entries.append(entry)
+                if isinstance(h, dict) and h.get("type") == "process" and _is_guard_cmd(h.get("command")):
+                    found = h.get("command") if found is None else _choose_guard(found, h.get("command"))
+                    continue
+                others.append(h)
+            if found is None:
+                kept.append(cur)
+                continue
+            if seen:
+                if others:
+                    cur = dict(cur)
+                    cur["hooks"] = others
+                    kept.append(cur)
+                continue
+            seen = True
+            cur = dict(cur)
+            cur["hooks"] = others + [{"type": "process", "command": _choose_guard(found, want)}]
+            kept.append(cur)
+        if not seen:
+            kept.append(entry)
+        events[event] = kept
 
     def process_entry(matcher=None):
         entry = {"hooks": [{"type": "process", "command": hook_cmd}]}
@@ -4984,8 +5038,10 @@ def _zcode_has_entry(entries, matcher, hook_cmd):
         if not isinstance(cur, dict) or cur.get("matcher") != matcher:
             continue
         for h in cur.get("hooks") or []:
-            if isinstance(h, dict) and h.get("type") == "process" \
-                    and h.get("command") == hook_cmd:
+            if not isinstance(h, dict) or h.get("type") != "process":
+                continue
+            cmd = h.get("command")
+            if cmd == hook_cmd or (_is_guard_cmd(cmd) and _is_guard_cmd(hook_cmd)):
                 return True
     return False
 

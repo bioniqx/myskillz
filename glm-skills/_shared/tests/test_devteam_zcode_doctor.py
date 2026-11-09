@@ -175,6 +175,31 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
                       [f for f in os.listdir(os.path.dirname(cfg_path)) if f.endswith(".bak")])
         self.assertFalse(baks, baks)
 
+    def test_two_guard_paths_on_one_matcher_collapse_to_the_installed_skill(self):
+        installed = "python3 " + os.path.join(self.home, ".zcode", "skills", "glm-dev-team", "scripts", "guard.py") + " zcode"
+        repo = "python3 " + os.path.join(self.repo, "guard.py") + " zcode"
+        cfg = {"hooks": {"enabled": True, "events": {
+            "PreToolUse": [
+                {"matcher": "Write|Edit", "hooks": [{"type": "process", "command": installed}]},
+                {"matcher": "Bash", "hooks": [{"type": "process", "command": installed}]},
+                {"matcher": "Write|Edit", "hooks": [{"type": "process", "command": repo}]},
+                {"matcher": "Bash", "hooks": [{"type": "process", "command": repo}]},
+            ],
+            "Stop": [
+                {"hooks": [{"type": "process", "command": installed}]},
+                {"hooks": [{"type": "process", "command": repo}]},
+            ],
+        }}}
+        dt._zcode_add_hooks(cfg, repo)
+        events = cfg["hooks"]["events"]
+        self.assertEqual(events["PreToolUse"], [
+            {"matcher": "Write|Edit", "hooks": [{"type": "process", "command": installed}]},
+            {"matcher": "Bash", "hooks": [{"type": "process", "command": installed}]},
+        ])
+        self.assertEqual(events["Stop"], [
+            {"hooks": [{"type": "process", "command": installed}]},
+        ])
+
     def test_rerun_is_a_noop(self):
         agents_dir = os.path.join(self.home, ".zcode", "agents")
         cli_dir = os.path.join(self.home, ".zcode", "cli")
