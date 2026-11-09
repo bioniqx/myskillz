@@ -11,7 +11,7 @@ Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 | `reasoning_effort` is `low` \| `high` \| `max`, default `max` | **there is no `medium`** — the old agent files pinned `effort: medium`, which is not a GLM value. Tiers use low/high/max only |
 | z.ai recommends `thinking.clear_thinking: false` | sent on every request |
 | Context caching is supported | one byte-identical prefix per wave; the `cache_read_input_tokens` figure is printed by `run` |
-| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. The api lane names models outright; the agent lane dispatches the installed `glm-rca-*` agents, whose frontmatter pins real model ids and `thoughtLevel` |
+| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. Every judge, verifier, and parse pass is `glm-5.3-flash`. Tier changes effort only (`TIERS` in `audit.py`). The agent files pin the same Flash id. A status word is not a close: `check` requires a reproduced NO-BREAK quote, or a `--set` adjudication |
 | GLM emits few parallel tool calls per turn | an agentic search loop is the wrong place for this work → retrieval moved into Python |
 | Flash is more verbose than median | `max_tokens` is capped per tier and every prompt demands JSON only |
 | GLM is trained toward brevity; long prompts fight the training | SKILL.md and every system block are numbered rules, no XML ceremony, no behaviour tables |

@@ -24,7 +24,7 @@ Read this when something is slow, when `scan` falls back to the agent lane, or w
 
 `scan` finds a key from `ZAI_API_KEY`, `GLM_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or from a named key field in `~/.claude/settings.json`, `~/.zcode/v2/credentials.json` (its `api-key` field) and `~/.zcode/*.json`. Override the endpoint with `--base` or `ZAI_BASE_URL`. It retries once on 429/5xx, and retries once without `reasoning_effort` if the gateway rejects that field.
 
-Tiers: `--tier light` → `glm-5.3-flash` / `low`; `--tier std` (default) → `glm-5.3-flash` / `high`; `--tier deep` → `glm-5.3` / `max`.
+Tiers live only in `debug_tool.py` `TIERS`: every tier is `glm-5.3-flash`; `light` and `std` use effort `high`; `deep` uses effort `max`. A root cause is whatever `debug_tool.py close` prints from `.debug/experiments.json`.
 
 On Anthropic-style routing, `haiku` maps to Flash while **both** `sonnet` and `opus` map to `glm-5.3` — so asking for `opus` over `sonnet` buys nothing and the skill never does.
 

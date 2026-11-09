@@ -263,7 +263,7 @@ class VerifyTargetsTest(unittest.TestCase):
         findings["REQ-002"] = {"id": "REQ-002", "status": "MATCHED", "confidence": "high",
                                "passes": 2}
         vset, kept = audit.verify_targets(self.ORDER, by_id, findings, {}, {})
-        self.assertEqual(vset, ["REQ-001", "REQ-003", "REQ-004"])
+        self.assertEqual(vset, ["REQ-001", "REQ-002", "REQ-003", "REQ-004"])
         self.assertEqual(kept, {})
 
 

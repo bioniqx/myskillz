@@ -116,9 +116,12 @@ class MergeSemanticsTests(AuditCase):
 
     def test_evidence_follows_the_deciding_pass(self):
         self.checklist([item("REQ-001")])
-        self.jsonl("findings.jsonl", [finding("REQ-001", evidence=evidence("1-5"))])
-        self.jsonl("verdicts.jsonl", [verdict("REQ-001", status="PARTIAL", agree=False,
-                                              evidence=evidence("10-12"))])
+        self.jsonl("findings.jsonl", [finding("REQ-001", status="PARTIAL",
+                                              evidence=evidence("1-5"))])
+        self.jsonl("verdicts.jsonl", [verdict(
+            "REQ-001", status="PARTIAL", agree=True, evidence=evidence("10-12"),
+            attack={"kind": "NO-BREAK", "path": "src/a.py", "lines": "10-12",
+                    "quote": "line 10"})])
         m = self.merged()
         self.assertEqual(m.final("REQ-001")[0], "PARTIAL")
         self.assertEqual(m.evidence("REQ-001")[0]["lines"], "10-12")
@@ -164,7 +167,7 @@ class QueueAndAdjudicateTests(AuditCase):
             verdict("REQ-006", status="MATCHED", confidence="low"),
         ])
         rows = dict((r[0], r) for r in audit.queue_rows(self.merged()))
-        self.assertEqual(set(rows), {"REQ-002", "REQ-004", "REQ-006"})
+        self.assertEqual(set(rows), {"REQ-002", "REQ-003", "REQ-004", "REQ-006"})
 
     def test_spot_sample_is_deterministic_and_skips_verified(self):
         ids = ["REQ-%03d" % n for n in range(1, 41)]
@@ -196,6 +199,9 @@ class QueueAndAdjudicateTests(AuditCase):
     def test_accept_queue_records_the_queue_and_skips_unsearched(self):
         self.checklist([item("REQ-001"), item("REQ-002")])
         self.jsonl("findings.jsonl", [finding("REQ-001", status="CONFLICT")])
+        self.jsonl("verdicts.jsonl", [verdict(
+            "REQ-001", status="CONFLICT",
+            attack={"kind": "NO-BREAK", "path": "src/a.py", "lines": "1-5", "quote": "line 1"})])
         r = self.run_cli("adjudicate", "--accept-queue")
         self.assertEqual(r.returncode, 0, r.stderr)
         rows = [json.loads(line) for line in
@@ -244,21 +250,21 @@ class CheckGateTests(AuditCase):
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertIn("without any `searched`", r.stdout)
 
-    def test_matched_low_confidence_unverified_only_warns(self):
+    def test_matched_without_a_reproduced_attack_is_an_error(self):
         self.checklist([item("REQ-001")])
         self.jsonl("findings.jsonl", [finding("REQ-001", confidence="medium")])
         r = self.run_cli("check")
-        self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("WARN", r.stdout)
-        self.assertIn("never verified", r.stdout)
-        self.assertIn("GATE: PASS", r.stdout)
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("no reproduced attack", r.stdout)
+        self.assertIn("GATE: FAIL", r.stdout)
 
     def test_effort_and_priority_warnings(self):
         self.checklist([item("REQ-001", stakes="high"), item("REQ-002", strength="MAY")])
         self.jsonl("findings.jsonl", [finding("REQ-001", status="PARTIAL"),
                                       finding("REQ-002", status="PARTIAL")])
-        self.jsonl("verdicts.jsonl", [verdict("REQ-001", status="PARTIAL"),
-                                      verdict("REQ-002", status="PARTIAL")])
+        attack = {"kind": "NO-BREAK", "path": "src/a.py", "lines": "1-5", "quote": "line 1"}
+        self.jsonl("verdicts.jsonl", [verdict("REQ-001", status="PARTIAL", attack=attack),
+                                      verdict("REQ-002", status="PARTIAL", attack=attack)])
         self.plan([self.entry(["REQ-001"], priority="P1", effort="XL"),
                    self.entry(["REQ-002"], priority="P0")])
         r = self.run_cli("check")
@@ -283,7 +289,9 @@ class CheckGateTests(AuditCase):
             "evidence": ["src/a.py:3-4 - does x"], "searched": "alpha"}])
         self.jsonl("verify/batch-V01.jsonl", [{
             "id": "REQ-001", "verified_status": "PARTIAL", "agree": True,
-            "confidence": "high", "evidence": ["src/a.py:3-4"], "reason": "r"}])
+            "confidence": "high", "evidence": ["src/a.py:3-4"], "reason": "r",
+            "attack": {"kind": "NO-BREAK", "path": "src/a.py", "lines": "3-4",
+                       "quote": "line 3"}}])
         self.plan([{"ids": "REQ-001", "title": "t", "priority": "P1", "effort": "S",
                     "target": "x"}])
         r = self.run_cli("check")

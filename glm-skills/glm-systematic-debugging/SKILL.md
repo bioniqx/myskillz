@@ -4,7 +4,7 @@ description: Root-cause-first debugging for any bug, test failure, flaky test, b
 license: MIT
 metadata:
   version: "9.0"
-  models: "glm-5.3, glm-5.3-flash"
+  models: "glm-5.3-flash"
   harness: "zcode"
 ---
 
@@ -55,7 +55,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 ## R3. FAST lane — 2 rounds
 
 1. `probe` (already done). The frame window and grep hits it printed are your evidence.
-2. Write the `ROOT CAUSE` line quoting a printed line → make the minimal fix → `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>` in the same call. A fix that only reveals the *next* compile error is progress, not a failed fix.
+2. One `experiment` for the suspected change. `python3 $S/debug_tool.py close --report <file> --experiments <repo>/.debug/experiments.json` prints the only legal `ROOT CAUSE`. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
 
 ## R4. STANDARD lane — 3 rounds
 
@@ -90,17 +90,9 @@ Read `references/parallel-playbook.md` in the same call as the first command bel
 
 Count every candidate fix that failed, in the main tree or in a worktree. Diagnostic toggles (changing a variable to learn, not to fix) do not count. **3 failed fixes → STOP.** Architecture signals: each fix exposes new coupling, fixes need large refactors, symptoms move. Stop earlier the moment you are about to weaken a test or silence a warning to get past it — that is a stuck sign, not a fix. The stop report is five lines: `STOPPING: <why>` · `CURRENT: <command + verbatim error>` · `TRIED: 1) … → …; 2) …; 3) …` · `RULED OUT: <eliminated causes>` · `NEEDED: <decision or fact only the user can give>` — then talk to the user before attempt #4.
 
-## R7. Effort and model ladder
+## R7. Effort
 
-Thinking is always on; only the effort level is yours to choose. Spending `max` on a mechanical round is pure latency.
-
-| Work | Effort | Tier flag for `scan` |
-| --- | --- | --- |
-| Reading `probe` output, running commands, writing the report | low | `--tier light` |
-| Drafting hypotheses, comparing against a working analogue | high | `--tier std` (default) |
-| Choosing between confirmed causes, designing the fix, architecture calls | max | `--tier deep` |
-
-`scan` sets this per worker for you. For your own turns, say the level you are using in one word and keep it there for the round. Why this ladder: `references/glm-tuning.md` - model and harness facts, failure modes; read it only when retuning effort/model routing or porting to another harness.
+Model and effort live only in `debug_tool.py` `TIERS` and in `agents/glm-debug-worker.md`. Every tier is GLM-5.3-Flash. `light` and `std` are effort high. `deep` is effort max. Do not name a model, and do not lower effort to low. Why: `references/glm-tuning.md`, read only when retuning.
 
 ## R8. State carry — restate before each lane change and before the fix
 
@@ -125,4 +117,4 @@ Only after ruling causes out with evidence (environment, external service, true 
 
 ## R11. Final report — always, at most 6 lines
 
-`ROOT CAUSE` · `EVIDENCE` · `FIX` (file:line) · `VERIFIED BY` (commands + result) · `RISK / FOLLOW-UP`
+Run `debug_tool.py close` on the report and `.debug/experiments.json`. Show the report only when it prints `DECISION pick`. Otherwise ask, or run the missing experiment. The lines, when it picks: `ROOT CAUSE` (the experiment id) · `EVIDENCE` · `FIX` (file:line, only after a CONFIRMED `role: fix`) · `VERIFIED BY` (commands + result) · `RISK / FOLLOW-UP`. `NO CAUSE` is legal only when every experiment is REFUTED or INCONCLUSIVE.

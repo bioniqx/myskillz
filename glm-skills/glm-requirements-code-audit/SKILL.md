@@ -12,7 +12,7 @@ description: >-
   yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
 metadata:
   version: 9.0
-  models: glm-5.3-flash, glm-5.3
+  models: glm-5.3-flash
   parallelism: 8 threads inside scripts/audit.py
 ---
 
@@ -53,8 +53,7 @@ running inside the script.
    the report.
 3. **One shared prompt prefix per wave.** The rules and repo map are byte-identical across a wave, so request 2
    onward hits the prompt cache.
-4. **Fast tier judges, strong tier verifies.** `glm-5.3-flash` for the first pass, `glm-5.3` for the adversarial
-   pass. The second pass is what makes the fast first pass safe — never skip it.
+4. **Both passes are GLM-5.3-Flash.** The verifier proposes an attack. `check` closes a status only when that attack's quote is in the file, or the user records `--set`. Never skip the second pass.
 5. **Nothing is retyped.** Findings, verdicts, the report and the CSV are files written by the script. Never
    copy model output into chat or into a file yourself.
 
@@ -116,7 +115,7 @@ listed. Parsing is parallelised; faithfulness is not.
 
 `A run [--tier light|std|deep] [--threads N] [--resume]`
 
-It validates the checklist, retrieves evidence for every requirement, judges all of them in parallel, re-asks
+It freezes spec atoms and refuses a checklist that drops one, then validates the checklist, retrieves evidence for every requirement, judges all of them in parallel, re-asks
 any answer the deterministic checker rejects (invented path, line range past end of file, status without
 evidence), runs a second retrieval pass on independent strategies wherever the first answer was MISSING or
 unsure, then dispatches the adversarial verifier over every non-MATCHED, low-confidence and high-stakes item,
@@ -139,7 +138,7 @@ those `Read` calls in ONE turn, decide, then record:
 `A adjudicate --accept-queue` (accepts every queued item; an UNSEARCHED item is skipped and listed, it needs
 `A run --resume` first)
 
-Your judgment is authoritative. Keep MISSING only when both passes found nothing and the recorded searches were
+A status stands when `check` passes. `--set` is the human close. `--accept` only accepts an item whose attack quote reproduced. Keep MISSING only when both passes found nothing and the recorded searches were
 adequate. Then write `.audit/plan.jsonl` (schema printed by `queue`): priority anchors to strength — **P0** any
 CONFLICT or unmet MUST on a core/high-stakes flow, **P1** other unmet/partial MUSTs and SHOULD gaps with
 user-visible impact, **P2** the rest. Order P0 first, then by dependency.
@@ -166,14 +165,13 @@ A discrepancy is anything not ✅; ❓ items are listed separately by tag.
 
 ## R8 — Tiers
 
-| Tier | First pass | Second pass | Use for |
+| Tier | Judge effort | Verifier effort | Use for |
 | --- | --- | --- | --- |
-| `light` | flash, effort low | flash, effort high | large checklists, a first sweep, tight quota |
-| `std` (default) | flash, effort high | glm-5.3, effort max | almost everything |
-| `deep` | glm-5.3, effort high | glm-5.3, effort max | security/payment specs, or a report someone signs |
+| `light` | high | max | large checklists, a first sweep, tight quota |
+| `std` (default) | high | max | almost everything |
+| `deep` | max | max | security/payment specs, or a report someone signs |
 
-Higher tiers also widen retrieval (more files, more context per file). Never ask for `opus`: on the z.ai route
-it maps to the same model as `sonnet`, at no gain.
+Every pass is GLM-5.3-Flash. Tier never selects another model. Higher tiers widen retrieval (more files, more context per file). `run` freezes spec atoms before it judges and refuses a checklist that drops one.
 
 ## R9 — Fallback lane
 

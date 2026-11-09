@@ -34,6 +34,7 @@ import threading
 import time
 import zipfile
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+import decide  # vendored by _shared/sync.sh; closes atoms, the model does not
 import zai_client  # vendored by skills/glm/_shared/sync.sh
 
 VERSION = "9.0"
@@ -47,17 +48,19 @@ PRO = "glm-5.3"
 
 # reasoning_effort on GLM-5.3 / -Flash is low | high | max (default max).
 # There is no "medium": thinking cannot be disabled on either model.
+# Every pass is Flash. Effort is the only dial. PRO stays for doctor --ping;
+# a tier never selects it. light is high, not low: low effort fabricates APIs.
 TIERS = {
     "light": {
-        "judge": (FLASH, "low"), "verify": (FLASH, "high"), "parse": (FLASH, "high"),
+        "judge": (FLASH, "high"), "verify": (FLASH, "max"), "parse": (FLASH, "high"),
         "files": 4, "ctx": 12, "chars": 12000, "max_tokens": 900,
     },
     "std": {
-        "judge": (FLASH, "high"), "verify": (PRO, "max"), "parse": (FLASH, "high"),
+        "judge": (FLASH, "high"), "verify": (FLASH, "max"), "parse": (FLASH, "high"),
         "files": 6, "ctx": 18, "chars": 22000, "max_tokens": 1200,
     },
     "deep": {
-        "judge": (PRO, "high"), "verify": (PRO, "max"), "parse": (PRO, "high"),
+        "judge": (FLASH, "max"), "verify": (FLASH, "max"), "parse": (FLASH, "max"),
         "files": 8, "ctx": 25, "chars": 36000, "max_tokens": 1600,
     },
 }
@@ -1023,7 +1026,9 @@ VERIFY_SCHEMA = (
     '{"id":"<the id>","verified_status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE",'
     '"agree":true,"confidence":"high|medium|low",'
     '"evidence":[{"path":"…","lines":"10-20","note":"…"}],'
-    '"reason":"<=200 chars, what you checked and what changed your mind or confirmed it"}'
+    '"reason":"<=200 chars, what you checked and what changed your mind or confirmed it",'
+    '"attack":{"kind":"COUNTEREXAMPLE|NO-BREAK","path":"<excerpt path>","lines":"10-12",'
+    '"quote":"<verbatim substring of those lines>"}}'
 )
 
 VERIFY_RULES = u"""You are an adversarial verifier. A fast first pass produced a preliminary finding for ONE requirement; your job is to try to OVERTURN it, so the final report has no false "missing" and no unearned "matched". Reply with ONE JSON object and nothing else.
@@ -1039,6 +1044,7 @@ VERIFY_RULES = u"""You are an adversarial verifier. A fast first pass produced a
 5. Cite only paths from the excerpts, lines from the "N| " prefixes. Never invent either.
 6. Functionality the requirement does not mention is not a discrepancy.
 7. reason: at most 200 characters, English, terse.
+8. Your status word does not close the item. attack is required. COUNTEREXAMPLE quotes the line that contradicts the preliminary status. NO-BREAK quotes one line that would be false if that status were wrong. Copy quote from the excerpt. An invented quote is ignored and the item stays open.
 
 Reply exactly in this shape:
 """ + VERIFY_SCHEMA
@@ -1254,6 +1260,51 @@ def parse_lines(v):
     a = int(m.group(1))
     b = int(m.group(2) or m.group(1))
     return (a, b) if a <= b else (b, a)
+
+
+def span_text(root, rel, start, end):
+    """Lines start..end inclusive, or None when the file cannot be read."""
+    p = os.path.join(root, rel)
+    if not os.path.isfile(p):
+        return None
+    kept = []
+    try:
+        with io.open(p, encoding="utf-8", errors="replace") as fh:
+            for i, line in enumerate(fh, 1):
+                if i > end:
+                    break
+                if i >= start:
+                    kept.append(line)
+    except Exception:
+        return None
+    return "".join(kept)
+
+
+def attack_result(root, row):
+    """ok | counter | absent | missing. The model does not set this.
+
+    ok: a NO-BREAK quote is a substring of the named lines.
+    counter: a COUNTEREXAMPLE quote is a substring of those lines.
+    absent: the quote is not in the file. Ignored, not a pass.
+    missing: no attack block.
+    """
+    attack = (row or {}).get("attack") if isinstance(row, dict) else None
+    if not isinstance(attack, dict):
+        return "missing"
+    kind = str(attack.get("kind") or "").strip().upper()
+    if kind not in ("COUNTEREXAMPLE", "NO-BREAK"):
+        return "missing"
+    quote = str(attack.get("quote") or "")
+    path, outside = norm_cite_path(attack.get("path"), root)
+    if not quote.strip() or not path or outside:
+        return "absent"
+    start, end = parse_lines(attack.get("lines"))
+    if start is None:
+        return "absent"
+    body = span_text(root, path, start, end if end else start)
+    if body is None or quote not in body:
+        return "absent"
+    return "counter" if kind == "COUNTEREXAMPLE" else "ok"
 
 
 def file_lines(root, rel):
@@ -1610,17 +1661,13 @@ def verify_one(c, cl, retr, prefix, it, prelim, tier, mt):
 
 
 def needs_verify(it, f):
-    st = f.get("status")
-    if st != "MATCHED":
-        return True
-    if f.get("confidence") != "high":
-        return True
-    if str(it.get("stakes", "normal")).lower() == "high":
-        return True
-    if str(it.get("strength", "MUST")).upper() == "MUST" and f.get("passes", 1) < 2 \
-            and f.get("confidence") != "high":
-        return True
-    return False
+    """Every untagged item is attacked, including a high-confidence MATCHED.
+
+    A skipped second pass is how a confident Flash finding rubber-stamps.
+    """
+    if _tagged_unverifiable(it):
+        return False
+    return True
 
 
 def should_verify_item(no_verify, it, row):
@@ -1751,8 +1798,14 @@ class Merged(object):
         if _tagged_unverifiable(it):
             return "UNVERIFIABLE", "tag"
         v = self.ver.get(rid)
-        if v and str(v.get("verified_status") or "").upper() in FINAL_STATUSES:
-            return str(v["verified_status"]).upper(), "verifier"
+        f = self.find.get(rid)
+        # A status word closes nothing. A reproduced NO-BREAK quote may keep
+        # the finding's status. A different status is a disagreement, not a flip.
+        vs = str((v or {}).get("verified_status") or "").upper()
+        fs_find = str((f or {}).get("status") or "").upper()
+        if (v and vs == fs_find and vs in FINAL_STATUSES
+                and attack_result(self.c.repo, v) == "ok"):
+            return vs, "verifier"
         f = self.find.get(rid)
         if f and str(f.get("status") or "").upper() in FINAL_STATUSES:
             return str(f["status"]).upper(), "glm-rca-investigator"
@@ -2075,6 +2128,11 @@ def cmd_parse(a):
         if errs:
             print("\n".join("ERR  " + e for e in errs[:20]))
             die("fix the draft (or write checklist.jsonl yourself), then re-accept")
+        atom_errs = gate_atoms(c, rows)
+        if atom_errs:
+            print("\n".join(atom_errs[:25]))
+            die("draft drops a spec atom. Copy it into exactly one item, or into "
+                ".audit/out-of-scope.txt, then re-accept")
         write_jsonl(c.p("checklist.jsonl"), rows)
         print("accepted %d requirements -> checklist.jsonl" % len(rows))
         print("NEXT: audit.py run")
@@ -2132,6 +2190,87 @@ def cmd_parse(a):
     print("      splits, thin search_hints are yours to fix. Then: audit.py parse --accept")
 
 # --------------------------------------------------------------------------- checklist gate
+
+
+ATOM_SYSTEM = (
+    "Emit only ATOM: lines. Each span is copied verbatim from the user message. "
+    "No other text."
+)
+
+
+def spec_text_of(c):
+    """Spec bytes the checklist must cover. Empty when this run has no spec file."""
+    paths = [p for p in (c.cfg.get("spec_files") or []) if p and os.path.isfile(p)]
+    if paths:
+        text, _warns = load_spec(paths)
+        return text or ""
+    bundled = c.p("spec", "spec.txt")
+    if os.path.isfile(bundled):
+        return read_text(bundled) or ""
+    return ""
+
+
+def merge_atom_passes(spec_text, first_out, second_out):
+    """Mechanical atoms plus model spans that are substrings. Drops are not repaired."""
+    frozen, dropped = decide.check_model_atoms(spec_text, first_out or "")
+    more, dropped2 = decide.check_model_atoms(spec_text, second_out or "")
+    for span in more:
+        if span not in frozen:
+            frozen.append(span)
+    return frozen, dropped + dropped2
+
+
+def atom_home_fails(atoms, items, oos=""):
+    """Non-integer atoms need exactly one home. Integers need at least one.
+
+    A repeated threshold can legally sit in two requirements. A quoted literal
+    or a must/shall line cannot.
+    """
+    homes = {}
+    for it in items or []:
+        rid = str((it or {}).get("id") or "")
+        if rid:
+            homes[rid] = (it or {}).get("text") or ""
+    homes["out-of-scope"] = oos or ""
+    exact = [a for a in atoms if not str(a).isdigit()]
+    fails = decide.coverage(exact, homes)
+    for atom in atoms:
+        if not str(atom).isdigit():
+            continue
+        owners = [name for name, text in homes.items()
+                  if name != "out-of-scope" and atom in text]
+        if not owners and atom not in (oos or ""):
+            fails.append("FAIL atom - no home: %s" % atom)
+    return fails
+
+
+def freeze_with_client(cl, spec_text):
+    """Two Flash calls, no other context. The model cannot invent a span."""
+    first = cl.call(FLASH, "high", ATOM_SYSTEM, spec_text, 2000, temperature=0.0)
+    frozen, _dropped = decide.check_model_atoms(spec_text, first or "")
+    follow_user = (spec_text + "\n\nAlready emitted:\n" + "\n".join(frozen)
+                   + "\nEmit only ATOM: lines for spans not yet emitted.")
+    second = cl.call(FLASH, "high", ATOM_SYSTEM, follow_user, 2000, temperature=0.0)
+    return merge_atom_passes(spec_text, first, second)
+
+
+def gate_atoms(c, items, cl=None):
+    """Fail lines when the checklist drops a spec atom. No spec text means no gate."""
+    text = spec_text_of(c)
+    if not text.strip():
+        return []
+    if cl is None:
+        atoms = decide.extract_atoms(text)
+    else:
+        atoms, dropped = freeze_with_client(cl, text)
+        if dropped:
+            print("ATOM DROP %d" % len(dropped))
+        print("ATOM FROZEN n=%d" % len(atoms))
+    oos = ""
+    oos_path = c.p("out-of-scope.txt")
+    if os.path.isfile(oos_path):
+        oos = read_text(oos_path) or ""
+    return atom_home_fails(atoms, items, oos)
 
 
 def validate_checklist(rows):
@@ -2253,6 +2392,11 @@ def cmd_run(a):
         print("resume: %d already settled, %d to do" % (len(done), len(live)))
 
     cl = _client(c)
+    atom_errs = gate_atoms(c, items, cl)
+    if atom_errs:
+        print("\n".join(atom_errs[:25]))
+        die("checklist does not cover the spec. Copy each atom into exactly one "
+            "item text, or into .audit/out-of-scope.txt, then run again.")
     retr = Retriever(c)
     repo_map = read_text(c.p("repo-map.txt")) or ""
     jp = judge_prefix(repo_map, c.repo)
@@ -2390,6 +2534,12 @@ def queue_rows(m):
             why.append("worker says UNVERIFIABLE (not tagged by lead)")
         if f.get("lint_error") or rid in m.ver_rejected:
             why.append("checker rejected the model's answer")
+        if st in ("MATCHED", "PARTIAL", "CONFLICT"):
+            result = attack_result(m.c.repo, v)
+            if result == "counter":
+                why.append("reproduced counterexample")
+            elif result != "ok":
+                why.append("no reproduced attack")
         if why:
             out.append((rid, st, "; ".join(why)))
     return out
@@ -2466,6 +2616,17 @@ def cmd_adjudicate(a):
     def entry(rid, st, note):
         return {"id": rid, "final_status": st, "note": note, "by": "lead", "at": ts_iso()}
 
+    def accept_block(rid):
+        st, _src = m.final(rid)
+        if st not in ("MATCHED", "PARTIAL", "CONFLICT"):
+            return None
+        result = attack_result(c.repo, m.ver.get(rid))
+        if result == "ok":
+            return None
+        if result == "counter":
+            return "reproduced counterexample"
+        return "no reproduced attack"
+
     for rid, st in (a.set or []):
         st = str(st).upper()
         if rid not in m.by_id:
@@ -2480,6 +2641,9 @@ def cmd_adjudicate(a):
         if st == "UNSEARCHED":
             die("%s: cannot accept UNSEARCHED (no finding yet) -- investigate it first, "
                 "or use --set %s STATUS" % (rid, rid))
+        why = accept_block(rid)
+        if why:
+            die("%s: cannot accept (%s) -- use --set %s STATUS" % (rid, why, rid))
         rows.append(entry(rid, st, a.note or "accepted as-is"))
     skipped = []
     if a.accept_queue:
@@ -2492,6 +2656,10 @@ def cmd_adjudicate(a):
             st, _s = m.final(rid)
             if st == "UNSEARCHED":
                 skipped.append(rid)
+                continue
+            why = accept_block(rid)
+            if why:
+                print("skipped (%s, use --set %s STATUS): %s" % (why, rid, rid))
                 continue
             rows.append(entry(rid, st, a.note or "accepted as-is"))
     if not rows and not skipped:
@@ -2732,6 +2900,15 @@ def cmd_check(a):
         if rid in dis and not adj:
             errs.append("%s: glm-rca-investigator (%s) and verifier (%s) disagree -- adjudicate"
                         % (rid, dis[rid][1], dis[rid][2]))
+        if fs in ("MATCHED", "PARTIAL", "CONFLICT") and not adj:
+            result = attack_result(c.repo, v)
+            if result == "counter":
+                errs.append("%s: reproduced counterexample -- adjudicate; the status "
+                            "word is not a close" % rid)
+            elif result != "ok":
+                errs.append("%s: %s has no reproduced attack -- adjudicate with --set, "
+                            "or rerun the verifier with a quote from the file"
+                            % (rid, fs))
         if fs == "MISSING":
             if not v and not adj:
                 errs.append("%s is MISSING but never got a second pass -- a single-pass "
@@ -3025,6 +3202,11 @@ def cmd_plan(a):
     if errs and not a.force:
         print("\n".join("ERR  " + e for e in errs[:20]))
         die("fix the checklist or pass --force")
+    atom_errs = gate_atoms(c, items)
+    if atom_errs:
+        print("\n".join(atom_errs[:25]))
+        die("checklist does not cover the spec. Copy each atom into exactly one "
+            "item text, or into .audit/out-of-scope.txt.")
     live = [it for it in items if not _tagged_unverifiable(it)]
     kept, first = {}, 1
     if getattr(a, "resume", False):

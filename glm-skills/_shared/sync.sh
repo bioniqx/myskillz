@@ -26,7 +26,7 @@ for skill in $handoff_skills; do
 done
 
 decide_src="$script_dir/decide.py"
-decide_skills="glm-brainstorming glm-writing-plans glm-dev-team"
+decide_skills="glm-brainstorming glm-writing-plans glm-dev-team glm-requirements-code-audit glm-systematic-debugging"
 
 for skill in $decide_skills; do
     dest="$dest_root/$skill/scripts/decide.py"

@@ -712,6 +712,16 @@ def cmd_experiment(a):
         r["evidence"] = tail(t["out"] if t["fails"] else c["out"], 18)
         res.append(r)
 
+    by_h = dict((h["id"], h) for h in spec)
+    records = [{"id": r["id"], "verdict": r.get("verdict"),
+                "role": (by_h.get(r["id"]) or {}).get("role") or "diagnose"}
+               for r in res]
+    dest_dir = os.path.join(root, ".debug")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, "experiments.json")
+    Path(dest).write_text(json.dumps(records))
+    print("EXPERIMENTS %s" % dest)
+
     confirmed = [r for r in res if r["verdict"] == "CONFIRMED"]
     print("\n== EXPERIMENTS ==")
     for r in res:
@@ -748,10 +758,12 @@ def cmd_experiment(a):
 
 # -------------------------------------------------------------------- scan
 
+# Effort is the only dial. Deep is Flash at max, not a bigger model.
+# light is high: low effort fabricates APIs.
 TIERS = {
-    "light": ("glm-5.3-flash", "low"),
+    "light": ("glm-5.3-flash", "high"),
     "std": ("glm-5.3-flash", "high"),
-    "deep": ("glm-5.3", "max"),
+    "deep": ("glm-5.3-flash", "max"),
 }
 
 SYS_PROMPT = (
@@ -760,9 +772,10 @@ SYS_PROMPT = (
     "in exactly this shape:\n"
     "VERDICT: CONFIRMED | REFUTED | INCONCLUSIVE\n"
     "EVIDENCE: <file:line or exact output lines>\n"
-    "ROOT CAUSE: <X causes Y because Z> (only if CONFIRMED)\n"
+    "ROOT CAUSE: <lead only; a scan line is not a cause>\n"
     "FIX: <at most 10 lines of diff, or n/a>\n"
-    "NEW LEADS: <at most 2, or n/a>"
+    "NEW LEADS: <at most 2, or n/a>\n"
+    "A CONFIRMED line is a lead. debug_tool.py close is the only closer."
 )
 
 def find_key():
@@ -932,12 +945,71 @@ def cmd_scan(a):
         print(head(r["text"], 14))
         if r["text"].upper().startswith("VERDICT: CONFIRMED"):
             conf += 1
-    print("\nSUMMARY: %d/%d CONFIRMED. Confirm any claimed root cause with one experiment "
-          "(debug_tool.py experiment) before writing a fix." % (conf, len(res)))
+    print("\nSUMMARY: %d/%d workers said CONFIRMED. That is a lead, not a cause. "
+          "debug_tool.py close accepts a ROOT CAUSE only from .debug/experiments.json."
+          % (conf, len(res)))
     return 0
 
 
 # ------------------------------------------------------------ doctor/setup
+
+def classify_cause(records, report):
+    """The engine names the cause. A scan sentence and a confident paragraph do not.
+
+    Returns (fail lines, one DECISION line). role=fix is a fix proof, not a cause.
+    """
+    fails = []
+    rows = list(records or [])
+    confirmed = [r for r in rows if r.get("verdict") == "CONFIRMED" and r.get("role") != "fix"]
+    fixes = [r for r in rows if r.get("verdict") == "CONFIRMED" and r.get("role") == "fix"]
+    text = report or ""
+    cause_lines = [ln for ln in text.splitlines() if ln.strip().upper().startswith("ROOT CAUSE:")]
+    has_cause = bool(cause_lines)
+    has_fix = False
+    for ln in text.splitlines():
+        if not ln.strip().upper().startswith("FIX:"):
+            continue
+        rest = ln.split(":", 1)[1].strip().lower()
+        if rest not in ("", "n/a", "na", "none"):
+            has_fix = True
+    no_cause = any(ln.strip().upper().startswith("NO CAUSE") for ln in text.splitlines())
+    if not rows:
+        fails.append("FAIL cause - no experiment record")
+        return fails, "DECISION stop"
+    if not confirmed:
+        if no_cause and not has_cause:
+            return fails, "DECISION pick=none"
+        fails.append("FAIL cause - no CONFIRMED experiment")
+        return fails, "DECISION stop"
+    if len(confirmed) > 1:
+        ids = ",".join(str(r.get("id")) for r in confirmed)
+        fails.append("FAIL cause - %d CONFIRMED (%s); do not pick" % (len(confirmed), ids))
+        return fails, "DECISION ask=%s" % confirmed[0].get("id")
+    only = str(confirmed[0].get("id"))
+    if not has_cause or not re.search(r"\b%s\b" % re.escape(only), text):
+        fails.append("FAIL cause - report must name %s" % only)
+        return fails, "DECISION stop"
+    if has_fix and not fixes:
+        fails.append("FAIL fix - no CONFIRMED role=fix experiment")
+        return fails, "DECISION stop"
+    return fails, "DECISION pick=%s" % only
+
+
+def cmd_close(a):
+    report = Path(a.report).read_text(encoding="utf-8") if a.report else sys.stdin.read()
+    records = []
+    if a.experiments and os.path.isfile(a.experiments):
+        records = json.loads(Path(a.experiments).read_text(encoding="utf-8"))
+    fails, decision = classify_cause(records, report)
+    for line in fails:
+        print(line)
+    print(decision)
+    if decision.startswith("DECISION pick="):
+        print("NEXT: the cause is the id in that line. Do not name another.")
+        return 0
+    print("NEXT: do not write a root cause. Run the experiment the line names, or ask the user.")
+    return 2
+
 
 def detect_harness():
     if (Path.home() / ".zcode").exists() or os.environ.get("ZCODE"):
@@ -1058,6 +1130,11 @@ def main(argv=None):
     q.add_argument("-j", "--jobs", default=0)
     q.add_argument("--dir", default=".")
     q.set_defaults(fn=cmd_scan)
+
+    q = sp.add_parser("close", help="accept a root cause only from experiment records")
+    q.add_argument("--report", help="report file (default: stdin)")
+    q.add_argument("--experiments", help="experiments.json written by experiment")
+    q.set_defaults(fn=cmd_close)
 
     q = sp.add_parser("doctor", help="environment check")
     q.add_argument("--ping", action="store_true")
