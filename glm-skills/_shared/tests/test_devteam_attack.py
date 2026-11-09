@@ -18,6 +18,19 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(devteam.classify_attack(None, None, False, False, body_empty=False), "BLOCKER")
 
 
+class ParentProbeTests(unittest.TestCase):
+    def test_a_failing_parent_run_skips_the_reviewer(self):
+        self.assertTrue(devteam.parent_sees_change(1))
+
+    def test_a_passing_parent_run_still_needs_the_reviewer(self):
+        self.assertFalse(devteam.parent_sees_change(0))
+        self.assertFalse(devteam.parent_sees_change(None))
+
+    def test_criterion_literals_keep_quotes_and_numbers(self):
+        self.assertEqual(devteam.criterion_literals(['keep "retry-limit" 30']),
+                         ["retry-limit", "30"])
+
+
 class ModeTests(unittest.TestCase):
     def _slice(self, status="pending", risk="low", size="small"):
         return {"id": "S1", "kind": "code", "status": status, "risk": risk, "size": size,

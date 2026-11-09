@@ -986,6 +986,9 @@ def classify_cause(records, report):
         fails.append("FAIL cause - %d CONFIRMED (%s); do not pick" % (len(confirmed), ids))
         return fails, "DECISION ask=%s" % confirmed[0].get("id")
     only = str(confirmed[0].get("id"))
+    # No report yet: the engine names the only confirmed id. The model does not draft it first.
+    if not has_cause and not has_fix:
+        return fails, "DECISION pick=%s" % only
     if not has_cause or not re.search(r"\b%s\b" % re.escape(only), text):
         fails.append("FAIL cause - report must name %s" % only)
         return fails, "DECISION stop"
@@ -996,13 +999,23 @@ def classify_cause(records, report):
 
 
 def cmd_close(a):
-    report = Path(a.report).read_text(encoding="utf-8") if a.report else sys.stdin.read()
+    if a.report:
+        report = Path(a.report).read_text(encoding="utf-8")
+    elif not sys.stdin.isatty():
+        report = sys.stdin.read()
+    else:
+        report = ""
     records = []
     if a.experiments and os.path.isfile(a.experiments):
         records = json.loads(Path(a.experiments).read_text(encoding="utf-8"))
     fails, decision = classify_cause(records, report)
     for line in fails:
         print(line)
+    if decision.startswith("DECISION pick=") and not decision.endswith("pick=none"):
+        ident = decision.split("=", 1)[1].strip()
+        named = re.search(r"(?im)^ROOT CAUSE:.*\b%s\b" % re.escape(ident), report or "")
+        if not named:
+            print("ROOT CAUSE: %s" % ident)
     print(decision)
     if decision.startswith("DECISION pick="):
         print("NEXT: the cause is the id in that line. Do not name another.")

@@ -2429,9 +2429,76 @@ def proof_one(root, st, sid, pc):
     return res
 
 
+def parent_sees_change(parent_rc):
+    """True when the parent run failed. The new tests see the slice, so no reviewer turn.
+
+    None (the probe did not run) and 0 (the tests pass on the parent) do not.
+    Those stay on the spot-reviewer path.
+    """
+    return parent_rc not in (None,) and parent_rc != 0
+
+
+def _parent_probe_wanted(st, s):
+    return (s.get("mode") == "green" and fast_level(st) < 2
+            and os.environ.get("DEVTEAM_SPLIT") != "off")
+
+
+def criterion_literals(criteria):
+    """Quoted strings and 2+ digit numbers named by the criteria, in order."""
+    found = []
+    for c in criteria or []:
+        for m in _CRIT_LIT.finditer(c or ""):
+            lit = (m.group(1) or m.group(2) or "").strip()
+            if len(lit) >= 2 and lit.lower() not in _CRIT_LIT_SKIP and lit not in found:
+                found.append(lit)
+    return found
+
+
+def parent_literal_rc(root, st, sid, pc):
+    """Run the frozen tests on the parent commit. None when that probe cannot speak.
+
+    The overlay is the RED test files, so the parent tree is the code before this slice.
+    A criterion that names a literal must appear in those tests; otherwise the probe
+    does not count and the reviewer still runs.
+    """
+    s = st["slices"][sid]
+    red = (pc or {}).get("red") or s.get("red_sha")
+    base = s.get("base_sha")
+    if not red or not base:
+        return None
+    frozen = frozen_files_of(red, root, st.get("test_globs") or [])
+    if not frozen:
+        return None
+    lits = criterion_literals(s.get("criteria") or [])
+    overlay, blob = [], []
+    for rel in frozen:
+        try:
+            text = git(["show", "%s:%s" % (red, rel)], root)
+        except DevteamError:
+            return None
+        overlay.append((rel, text))
+        blob.append(text)
+    if lits and not any(lit.lower() in "\n".join(blob).lower() for lit in lits):
+        return None
+    commands = st.get("commands") or {}
+    t_file, t_all = cmd_value(commands, "test_file"), cmd_value(commands, "test")
+    rcmd = fill_files(t_file, frozen) if (t_file and frozen) else t_all
+    if not rcmd:
+        return None
+    try:
+        rc, _tail = run_at_commit(root, st, sid + "-parent", base, rcmd, proof_timeout(), overlay)
+    except DevteamError:
+        return None
+    return rc
+
+
 def proof_all(root, st, ids, prechecks):
     """Run every finished lane's proof concurrently (capped at 4: these are real test suites) so a wave of
-    lanes finishing together costs one test run of wall time, not N."""
+    lanes finishing together costs one test run of wall time, not N.
+
+    A strict or balanced green slice also runs its frozen tests on the parent commit in the same
+    pool, so that probe does not add a round after the proof.
+    """
     if not proof_enabled(st):
         return {}
     todo = [(sid, pc) for sid, pc in zip(ids, prechecks)
@@ -2439,15 +2506,44 @@ def proof_all(root, st, ids, prechecks):
     if not todo:
         return {}
 
-    def one(item):
+    def proof_job(item):
         sid, pc = item
         try:
-            return sid, proof_one(root, st, sid, pc)
+            return ("proof", sid, proof_one(root, st, sid, pc))
         except Exception as e:     # an engine-side problem is never a reason to reject a lane's work
-            return sid, {"ran": [], "skipped": [f"proof error {type(e).__name__}: {str(e)[:120]}"], "fail": None}
+            return ("proof", sid, {"ran": [], "skipped": [f"proof error {type(e).__name__}: {str(e)[:120]}"], "fail": None})
 
-    with ThreadPoolExecutor(max_workers=min(4, len(todo))) as pool:
-        return dict(pool.map(one, todo))
+    def parent_job(item):
+        sid, pc = item
+        try:
+            return ("parent", sid, parent_literal_rc(root, st, sid, pc))
+        except Exception:
+            return ("parent", sid, None)
+
+    parent_ids = [sid for sid, _pc in todo if _parent_probe_wanted(st, st["slices"][sid])]
+    work = [("proof", item) for item in todo] + [("parent", item) for item in todo if item[0] in parent_ids]
+
+    def run(kind_item):
+        kind, item = kind_item
+        if kind == "proof":
+            return proof_job(item)
+        return parent_job(item)
+
+    with ThreadPoolExecutor(max_workers=min(4, len(work))) as pool:
+        rows = list(pool.map(run, work))
+    proofs, parents = {}, {}
+    for kind, sid, val in rows:
+        if kind == "proof":
+            proofs[sid] = val
+        else:
+            parents[sid] = val
+    for sid, rc in parents.items():
+        got = proofs.get(sid)
+        if got is None:
+            got = {"ran": [], "skipped": [], "fail": None}
+            proofs[sid] = got
+        got["parent_rc"] = rc
+    return proofs
 
 
 def proof_reject(s, sid, wt, proof):
@@ -2677,11 +2773,23 @@ def integrate_one(root, st, sid, remove=True, proof=None, pc=None):
     bad = proof_reject(s, sid, wt, proof)
     if bad:
         return bad
+    pinned = False
     if mode == "green" and fast_level(st) < 2 and os.environ.get("DEVTEAM_SPLIT") != "off":
-        held = hold_for_attack(root, st, s, sid, tip)
-        if held is not None:
-            return held
-    return merge_slice(root, st, s, sid, wt, branch, tip, base, red=red, frozen=frozen, touched=touched, remove=remove)
+        parent_rc = (proof or {}).get("parent_rc")
+        if parent_sees_change(parent_rc):
+            # The tests fail on the parent and passed here. That is the attack.
+            # The spot reviewer runs only when this probe does not see the change.
+            pinned = True
+            s["attack_closed"] = True
+            s["history"].append({"t": now(), "event": "attack-pin", "parent_rc": parent_rc})
+        else:
+            held = hold_for_attack(root, st, s, sid, tip)
+            if held is not None:
+                return held
+    line = merge_slice(root, st, s, sid, wt, branch, tip, base, red=red, frozen=frozen, touched=touched, remove=remove)
+    if pinned:
+        line += " ATTACK PIN"
+    return line
 
 
 def merge_slice(root, st, s, sid, wt, branch, tip, base, red, frozen, touched, remove, label=None):

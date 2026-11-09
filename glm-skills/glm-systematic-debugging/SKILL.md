@@ -55,7 +55,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 ## R3. FAST lane — 2 rounds
 
 1. `probe` (already done). The frame window and grep hits it printed are your evidence.
-2. One `experiment` for the suspected change. `python3 $S/debug_tool.py close --report <file> --experiments <repo>/.debug/experiments.json` prints the only legal `ROOT CAUSE`. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
+2. One `experiment` for the suspected change. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
 
 ## R4. STANDARD lane — 3 rounds
 
@@ -117,4 +117,4 @@ Only after ruling causes out with evidence (environment, external service, true 
 
 ## R11. Final report — always, at most 6 lines
 
-Run `debug_tool.py close` on the report and `.debug/experiments.json`. Show the report only when it prints `DECISION pick`. Otherwise ask, or run the missing experiment. The lines, when it picks: `ROOT CAUSE` (the experiment id) · `EVIDENCE` · `FIX` (file:line, only after a CONFIRMED `role: fix`) · `VERIFIED BY` (commands + result) · `RISK / FOLLOW-UP`. `NO CAUSE` is legal only when every experiment is REFUTED or INCONCLUSIVE.
+Run `debug_tool.py close --experiments <repo>/.debug/experiments.json`. It prints `ROOT CAUSE` when exactly one experiment is CONFIRMED. Do not write that line first. Show the rest of the report only after `DECISION pick`. Otherwise ask, or run the missing experiment. The lines, when it picks: `ROOT CAUSE` (the experiment id) · `EVIDENCE` · `FIX` (file:line, only after a CONFIRMED `role: fix`) · `VERIFIED BY` (commands + result) · `RISK / FOLLOW-UP`. `NO CAUSE` is legal only when every experiment is REFUTED or INCONCLUSIVE.

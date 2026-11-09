@@ -1564,12 +1564,29 @@ def _tagged_unverifiable(it):
     return "static-limit" in tags or "ambiguous" in tags
 
 
-def judge_one(c, cl, retr, prefix, it, tier, mt):
+def prefetch_gathers(retr, items, tier, workers):
+    """First-pass retrieval for every item. Safe beside the atom call: gather only reads."""
+    if not items:
+        return {}
+    out = {}
+
+    def one(it):
+        return it.get("id"), retr.gather(it, tier)
+
+    n = max(1, min(MAX_PARALLEL, int(workers or 1), len(items)))
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        for rid, got in ex.map(one, items):
+            if rid:
+                out[rid] = got
+    return out
+
+
+def judge_one(c, cl, retr, prefix, it, tier, mt, prefetched=None):
     """retrieve -> judge -> lint -> up to 2 repairs -> second independent pass
     when the first says MISSING or is unsure. All inside one thread."""
     tcfg = TIERS.get(tier, TIERS[DEFAULT_TIER])
     model, effort = tcfg["judge"]
-    r1 = retr.gather(it, tier)
+    r1 = prefetched if prefetched is not None else retr.gather(it, tier)
     paths = set(s["path"] for s in r1["snippets"])
     txt = cl.call(model, effort, prefix, judge_task(it, r1), mt, temperature=0.0)
     row = extract_json(txt) or {}
@@ -2244,14 +2261,27 @@ def atom_home_fails(atoms, items, oos=""):
     return fails
 
 
+def _reply_truncated(cl):
+    return str(getattr(getattr(cl, "_tl", None), "finish", "") or "") in LENGTH_STOPS
+
+
 def freeze_with_client(cl, spec_text):
-    """Two Flash calls, no other context. The model cannot invent a span."""
+    """One Flash call. A second call runs only when that reply was cut off.
+
+    The model cannot invent a span. A finished reply that simply omits a prose
+    span is not retried: the mechanical atoms still bind the checklist.
+    Returns (atoms, dropped, calls).
+    """
     first = cl.call(FLASH, "high", ATOM_SYSTEM, spec_text, 2000, temperature=0.0)
+    if not _reply_truncated(cl):
+        atoms, dropped = merge_atom_passes(spec_text, first, "")
+        return atoms, dropped, 1
     frozen, _dropped = decide.check_model_atoms(spec_text, first or "")
     follow_user = (spec_text + "\n\nAlready emitted:\n" + "\n".join(frozen)
                    + "\nEmit only ATOM: lines for spans not yet emitted.")
     second = cl.call(FLASH, "high", ATOM_SYSTEM, follow_user, 2000, temperature=0.0)
-    return merge_atom_passes(spec_text, first, second)
+    atoms, dropped = merge_atom_passes(spec_text, first, second)
+    return atoms, dropped, 2
 
 
 def gate_atoms(c, items, cl=None):
@@ -2262,10 +2292,10 @@ def gate_atoms(c, items, cl=None):
     if cl is None:
         atoms = decide.extract_atoms(text)
     else:
-        atoms, dropped = freeze_with_client(cl, text)
+        atoms, dropped, ncalls = freeze_with_client(cl, text)
         if dropped:
             print("ATOM DROP %d" % len(dropped))
-        print("ATOM FROZEN n=%d" % len(atoms))
+        print("ATOM FROZEN n=%d calls=%d" % (len(atoms), ncalls))
     oos = ""
     oos_path = c.p("out-of-scope.txt")
     if os.path.isfile(oos_path):
@@ -2392,12 +2422,30 @@ def cmd_run(a):
         print("resume: %d already settled, %d to do" % (len(done), len(live)))
 
     cl = _client(c)
-    atom_errs = gate_atoms(c, items, cl)
+    # The atom call is one model round trip. Retrieval is local, so it runs
+    # beside that call. Judge still waits until the atom gate has passed.
+    box = {}
+
+    def atom_job():
+        try:
+            box["errs"] = gate_atoms(c, items, cl)
+        except BaseException as exc:
+            box["exc"] = exc
+
+    atom_thread = threading.Thread(target=atom_job)
+    atom_thread.start()
+    try:
+        retr = Retriever(c)
+        prefetched = prefetch_gathers(retr, live, c.tier, c.threads)
+    finally:
+        atom_thread.join()
+    if box.get("exc") is not None:
+        raise box["exc"]
+    atom_errs = box.get("errs") or []
     if atom_errs:
         print("\n".join(atom_errs[:25]))
         die("checklist does not cover the spec. Copy each atom into exactly one "
             "item text, or into .audit/out-of-scope.txt, then run again.")
-    retr = Retriever(c)
     repo_map = read_text(c.p("repo-map.txt")) or ""
     jp = judge_prefix(repo_map, c.repo)
     vp = verify_prefix(repo_map, c.repo)
@@ -2418,7 +2466,8 @@ def cmd_run(a):
 
     def judge_fn(it):
         try:
-            return judge_one(c, cl, retr, jp, it, c.tier, mt), None
+            return judge_one(c, cl, retr, jp, it, c.tier, mt,
+                              prefetched=prefetched.get(it.get("id"))), None
         except Exception as e:
             return None, e
 

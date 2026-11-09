@@ -115,7 +115,7 @@ listed. Parsing is parallelised; faithfulness is not.
 
 `A run [--tier light|std|deep] [--threads N] [--resume]`
 
-It freezes spec atoms and refuses a checklist that drops one, then validates the checklist, retrieves evidence for every requirement, judges all of them in parallel, re-asks
+It freezes spec atoms and refuses a checklist that drops one. Retrieval runs beside that freeze, and a second atom call happens only when the first reply is cut off. Judge starts after the freeze passes. Then it judges every requirement in parallel, re-asks
 any answer the deterministic checker rejects (invented path, line range past end of file, status without
 evidence), runs a second retrieval pass on independent strategies wherever the first answer was MISSING or
 unsure, then dispatches the adversarial verifier over every non-MATCHED, low-confidence and high-stakes item,
