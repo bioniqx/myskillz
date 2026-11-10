@@ -9,9 +9,13 @@ standard in ``docs/SKILL-FORMAT.md``:
   trailing hyphen, and equal to the containing folder name;
 * ``description`` present, non-empty, <=1024 chars;
 * the file is shorter than 500 lines;
-* every internal ``references/`` link in the body resolves to a real file.
+* every internal ``references/`` link in the body resolves to a real file;
+* no forbidden agent-specific frontmatter key is present (docs/SKILL-FORMAT.md
+  §2.2) — any of them fails the run;
+* ``allowed-tools`` is absent — its presence is reported as a warning.
 
-Exits 0 when everything passes, 1 when any skill fails. No third-party deps.
+Exits 0 when everything passes, 1 when any skill fails. Warnings never change
+the exit code. No third-party deps.
 
 Usage:
     python scripts/validate-skills.py
@@ -27,6 +31,25 @@ NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MAX_NAME = 64
 MAX_DESCRIPTION = 1024
 MAX_LINES = 500
+
+# docs/SKILL-FORMAT.md §2.2: agent-specific keys that must never appear in a
+# committed SKILL.md (hard reject), and keys the open standard allows but this
+# repo deliberately omits (warning only).
+FORBIDDEN_FRONTMATTER_KEYS = (
+    "when_to_use",
+    "argument-hint",
+    "disable-model-invocation",
+    "user-invocable",
+    "model",
+    "paths",
+    "hooks",
+    "shell",
+    "context",
+    "globs",
+    "alwaysApply",
+    "trigger",
+)
+WARNED_FRONTMATTER_KEYS = ("allowed-tools",)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -105,8 +128,9 @@ def split_frontmatter(text: str) -> tuple[dict, int] | tuple[None, int]:
     return fm, end + 1
 
 
-def validate_file(path: Path) -> list[str]:
+def validate_file(path: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
+    warnings: list[str] = []
     rel = path.relative_to(REPO_ROOT).as_posix()
     text = path.read_text(encoding="utf-8")
 
@@ -118,7 +142,7 @@ def validate_file(path: Path) -> list[str]:
     fm, _ = split_frontmatter(text)
     if fm is None:
         errors.append("missing or malformed YAML frontmatter (need opening and closing '---')")
-        return [f"{rel}: {e}" for e in errors]
+        return [f"{rel}: {e}" for e in errors], []
 
     # name
     name = fm.get("name", "")
@@ -143,6 +167,15 @@ def validate_file(path: Path) -> list[str]:
     elif len(desc) > MAX_DESCRIPTION:
         errors.append(f"'description' is {len(desc)} chars (max {MAX_DESCRIPTION})")
 
+    # forbidden / discouraged frontmatter keys (docs/SKILL-FORMAT.md §2.2)
+    for key in fm:
+        if key in FORBIDDEN_FRONTMATTER_KEYS:
+            errors.append(f"forbidden frontmatter key {key!r} (docs/SKILL-FORMAT.md §2.2)")
+        elif key in WARNED_FRONTMATTER_KEYS:
+            warnings.append(
+                f"frontmatter key {key!r} is present (the open standard allows it but this repo omits it)"
+            )
+
     # internal references/ links resolve
     targets = set(MD_LINK_RE.findall(text)) | set(CODE_PATH_RE.findall(text))
     for target in targets:
@@ -159,7 +192,7 @@ def validate_file(path: Path) -> list[str]:
         if not resolved.exists():
             errors.append(f"reference link does not resolve: {target!r}")
 
-    return [f"{rel}: {e}" for e in errors]
+    return [f"{rel}: {e}" for e in errors], [f"{rel}: {w}" for w in warnings]
 
 
 def main() -> int:
@@ -169,10 +202,17 @@ def main() -> int:
         return 0
 
     all_errors: list[str] = []
+    all_warnings: list[str] = []
     for path in files:
-        all_errors.extend(validate_file(path))
+        errors, warnings = validate_file(path)
+        all_errors.extend(errors)
+        all_warnings.extend(warnings)
 
     print(f"Validated {len(files)} skill file(s).")
+    if all_warnings:
+        print(f"\nWarnings — {len(all_warnings)}:")
+        for w in all_warnings:
+            print(f"  - {w}")
     if all_errors:
         print(f"\nFAILED — {len(all_errors)} problem(s):")
         for e in all_errors:
