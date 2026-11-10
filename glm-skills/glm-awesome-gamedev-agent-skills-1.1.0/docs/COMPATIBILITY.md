@@ -59,6 +59,7 @@ own skills documentation.
 | **Gemini CLI** | `.agents/skills/` or `.gemini/skills/` | activation + consent · `/skills` | [docs](https://geminicli.com/docs/cli/skills/) |
 | **GitHub Copilot** | `.agents/skills/` | auto by description | [docs](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
 | **Kiro** | `.kiro/skills/` (+ `~/.kiro/skills/`) | auto by description · `/skill-name` | [docs](https://kiro.dev/docs/cli/skills/) |
+| **ZCode** | `.zcode/skills/` (+ `~/.zcode/skills/`) | auto by description · `$<name>` invocation | [client list](https://agentskills.io/clients) |
 | **Others** (VS Code, Roo Code, Junie, Trae, Factory, Tabnine, OpenCode, Goose, …) | see each tool | varies | [client list](https://agentskills.io/clients) |
 
 `.agents/skills/` is the shared, cross-agent convention that many tools read, which is why one copy
@@ -71,6 +72,12 @@ automatically, so you rarely need to track these by hand.
 
 > **Cline note.** Skills are an experimental feature — enable them under
 > **Settings → Features → Enable Skills** before they appear.
+
+> **ZCode note.** ZCode surfaces only the first ~250 characters of a description each turn, so
+> triggering there relies on the WHEN-front-loaded `description` fields. This package stays
+> portable-core for every agent — it never adds agent-specific frontmatter such as `when_to_use`
+> (the validator rejects it); the same WHEN-first descriptions drive both ZCode's auto-trigger
+> by description and its `$<name>` invocation.
 
 ## The only real "compatibility" wrinkle: optional fields
 
