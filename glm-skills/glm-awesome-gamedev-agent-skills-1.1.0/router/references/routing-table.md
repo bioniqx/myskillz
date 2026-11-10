@@ -1,13 +1,13 @@
 # Full routing table — every authored skill
 
-The exhaustive `task → category → skill` lookup the router body summarizes. Every name here is
-a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) and file signals
+The exhaustive `task → category → skill` lookup the router body summarizes. Every name here is a
+bare skill name, unique repo-wide (no folder paths). Trigger words (`says:`) and file signals
 (`files:`) are the cues that should select each skill. `*` in a binding is filled with the
 **detected** engine (router body §1); where an engine lacks the exact skill, see "Binding gaps".
 
 ## Engine skills
 
-### Godot (`skills/godot/`, target Godot 4.x) — read after `project.godot` is detected
+### Godot (target Godot 4.x) — read after `project.godot` is detected
 
 | Skill | Pick it when the request says / file signal |
 |-------|---------------------------------------------|
@@ -27,7 +27,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `godot-export` | "export Godot", "build for web/windows", `export_presets.cfg` |
 | `godot-csharp` | "Godot C#", "GodotSharp", "C# signals in Godot"; `*.cs` + `*.csproj` in a Godot project |
 
-### Unity (`skills/unity/`, target Unity 6 / 6000.0 LTS)
+### Unity (target Unity 6 / 6000.0 LTS)
 
 | Skill | Pick it when |
 |-------|--------------|
@@ -40,7 +40,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `unity-navmesh` | `NavMesh`, `NavMeshAgent`, "pathfinding in Unity" |
 | `unity-build-pipeline` | "build Unity", "player settings", "IL2CPP", "Addressables" |
 
-### Unreal (`skills/unreal/`, target UE 5.4+)
+### Unreal (target UE 5.4+)
 
 | Skill | Pick it when |
 |-------|--------------|
@@ -51,7 +51,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `unreal-niagara` | "Niagara", "VFX", "particle system"; `NS_`/`NE_` |
 | `unreal-packaging` | "package Unreal", "cook content", "shipping build" |
 
-### Web engines (`skills/web-engines/`) — detected from `package.json` + imports
+### Web engines — detected from `package.json` + imports
 
 | Skill | Pick it when |
 |-------|--------------|
@@ -62,7 +62,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `threejs-gltf-loading` | "load gltf", `GLTFLoader`, `AnimationMixer`; `*.gltf`/`*.glb` |
 | `threejs-materials-lighting` | `MeshStandardMaterial`, "lighting", "shadows", env maps |
 
-### Other engines (`skills/other-engines/`)
+### Other engines
 
 | Skill | Pick it when |
 |-------|--------------|
@@ -72,7 +72,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `roblox-luau` | "Roblox", "Luau", `RemoteEvent`, services; `*.luau` + `*.rbxl(x)` / Rojo |
 | `roblox-datastores` | "DataStore", "save player data", `GetDataStore`; `DataStoreService` |
 
-## Disciplines (`skills/disciplines/`) — cross-engine concepts, load **with** the engine skill
+## Disciplines — cross-engine concepts, load **with** the engine skill
 
 | Concept skill | `says:` triggers | Pairs with (engine API skill) |
 |---------------|------------------|-------------------------------|
@@ -90,7 +90,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `game-ui-ux` | HUD, health bar, main/pause/settings menu, UI layout, anchors, UI scaling, aspect ratio, safe area, controller/keyboard menu nav | `godot-ui-control` / Unity UI (UGUI/UI Toolkit) |
 | `performance-optimization` | performance, optimize, low/dropping FPS, frame drops, stutter, lag, frame budget, draw calls, batching, GC spikes, object pooling, profiler | engine profiler (Godot Monitors / Unity Profiler / Unreal `stat unit`) + `physics-tuning` |
 
-## Genres (`skills/genres/`) — whole-game templates, **compose** engine + disciplines
+## Genres — whole-game templates, **compose** engine + disciplines
 
 | Genre skill | `says:` triggers | composes (bind `*` to the detected engine) |
 |-------------|------------------|---------------------------------------------|
@@ -104,7 +104,7 @@ a real folder at `skills/<category>/<name>/SKILL.md`. Trigger words (`says:`) an
 | `survival-crafting` | survival game, crafting system, inventory, resource gathering | `save-systems` + `godot-resources`/`unity-scriptableobjects` + `procedural-gen` + `game-ui-ux` |
 | `puzzle` | puzzle game, match-3, grid logic, tile-matching | `godot-tilemap`/`unity-tilemap-2d` + `level-design` + `game-feel` |
 
-## Workflows (`skills/workflows/`) — process & shipping, engine-independent
+## Workflows — process & shipping, engine-independent
 
 | Workflow skill | `says:` / `files:` triggers |
 |----------------|------------------------------|
