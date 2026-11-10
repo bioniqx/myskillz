@@ -10,7 +10,7 @@ description: >
   shipping (game jam, Steam, itch). Start here
   when unsure which gamedev skill to use.
 license: Apache-2.0
-compatibility: Engine-agnostic dispatcher over the skills/ collection (66 skills, 8 categories)
+compatibility: Engine-agnostic dispatcher over the skill collection (66 skills, 8 categories)
 metadata:
   engine: none
   category: router
@@ -50,18 +50,21 @@ new engine or concern (router step 6).
 
 Scan for the highest-confidence signal; **choose exactly one** engine. Stop at the first match.
 
-| # | Engine | Primary signal | Skill set root |
-|:-:|--------|----------------|----------------|
-| 1 | Godot | `project.godot` | `skills/godot/` |
-| 2 | Unreal | `*.uproject` | `skills/unreal/` |
-| 3 | Unity | `Assets/` **and** `ProjectSettings/ProjectVersion.txt` | `skills/unity/` |
-| 4 | Bevy | `Cargo.toml` with a `bevy` dependency | `skills/other-engines/bevy-ecs/` |
-| 5 | Phaser | `package.json` dep `phaser` | `skills/web-engines/phaser-*` |
-| 6 | PixiJS | `package.json` dep `pixi.js` | `skills/web-engines/pixijs-rendering/` |
-| 7 | three.js | `package.json` dep `three` | `skills/web-engines/threejs-*` |
-| 8 | LÖVE | `conf.lua` / `main.lua` calling `love.*` | `skills/other-engines/love2d-core/` |
-| 9 | pygame | `*.py` with `import pygame` | `skills/other-engines/pygame-core/` |
-| 10 | Roblox | `*.rbxl(x)` / `*.project.json` (Rojo) | `skills/other-engines/roblox-*` |
+| # | Engine | Primary signal | Skill set (bare names) |
+|:-:|--------|----------------|------------------------|
+| 1 | Godot | `project.godot` | `godot-*` |
+| 2 | Unreal | `*.uproject` | `unreal-*` |
+| 3 | Unity | `Assets/` **and** `ProjectSettings/ProjectVersion.txt` | `unity-*` |
+| 4 | Bevy | `Cargo.toml` with a `bevy` dependency | `bevy-ecs` |
+| 5 | Phaser | `package.json` dep `phaser` | `phaser-core`, `phaser-arcade-physics` |
+| 6 | PixiJS | `package.json` dep `pixi.js` | `pixijs-rendering` |
+| 7 | three.js | `package.json` dep `three` | `threejs-scene-setup`, `threejs-gltf-loading`, `threejs-materials-lighting` |
+| 8 | LÖVE | `conf.lua` / `main.lua` calling `love.*` | `love2d-core` |
+| 9 | pygame | `*.py` with `import pygame` | `pygame-core` |
+| 10 | Roblox | `*.rbxl(x)` / `*.project.json` (Rojo) | `roblox-luau`, `roblox-datastores` |
+
+Skill sets are named by **bare skill names**, unique repo-wide (no folder paths); `*` expands to
+every skill whose name has that prefix (§3a lists them all).
 
 For secondary signals, the Godot-C#/Unity/Bevy and multi-web disambiguation rules, monorepos,
 and plain-text engine mentions, read `references/engine-detection.md`.
@@ -88,20 +91,20 @@ File signals sharpen this: `*.yarn`/`*.ink` → `dialogue-systems`/`visual-novel
 
 ### 3a. Engine skills — read the one matching the detected engine + sub-task
 
-- **Godot** (`skills/godot/`): language `godot-gdscript` / `godot-csharp`; structure
+- **Godot**: language `godot-gdscript` / `godot-csharp`; structure
   `godot-nodes-scenes`, `godot-signals-groups`; 2D `godot-2d-movement`, `godot-tilemap`; 3D
   `godot-3d-essentials`; physics `godot-physics`; UI `godot-ui-control`; animation
   `godot-animation`; shaders `godot-shaders`; data `godot-resources`; audio `godot-audio`;
   netcode `godot-multiplayer`; ship `godot-export`.
-- **Unity** (`skills/unity/`): scripting `unity-csharp-scripting`; input `unity-input-system`;
+- **Unity**: scripting `unity-csharp-scripting`; input `unity-input-system`;
   physics `unity-physics`; animation `unity-animation`; data `unity-scriptableobjects`; 2D
   `unity-tilemap-2d`; AI nav `unity-navmesh`; ship `unity-build-pipeline`.
-- **Unreal** (`skills/unreal/`): visual scripting `unreal-blueprints`; C++ gameplay
+- **Unreal**: visual scripting `unreal-blueprints`; C++ gameplay
   `unreal-cpp-gameplay`; input `unreal-enhanced-input`; AI `unreal-behavior-trees`; VFX
   `unreal-niagara`; ship `unreal-packaging`.
-- **Web** (`skills/web-engines/`): `phaser-core`, `phaser-arcade-physics`; `pixijs-rendering`;
+- **Web**: `phaser-core`, `phaser-arcade-physics`; `pixijs-rendering`;
   `threejs-scene-setup`, `threejs-gltf-loading`, `threejs-materials-lighting`.
-- **Other** (`skills/other-engines/`): `bevy-ecs`, `pygame-core`, `love2d-core`, `roblox-luau`,
+- **Other**: `bevy-ecs`, `pygame-core`, `love2d-core`, `roblox-luau`,
   `roblox-datastores`.
 
 ### 3b. Disciplines — load **with** the engine skill (concept ↔ engine API)
@@ -149,12 +152,12 @@ For the exhaustive per-skill trigger list and every engine binding, read
 
 1. **Preloaded:** only each skill's `name` + `description` are in context. Decide from those plus
    the fingerprint — do **not** pre-read bodies.
-2. **On selection:** read the body of **each chosen** `skills/<category>/<name>/SKILL.md` — and
-   only those. Never bulk-load a whole category.
+2. **On selection:** read the body of **each chosen** skill's `SKILL.md` — **at most 3 to start**
+   (the engine skill + the 1-2 most relevant), and only those. Never bulk-load a whole category.
 3. **On demand:** read a skill's bundled `references/` files only when the subtask needs that
    depth (the skill body says when).
-4. **Re-route on pivot:** if the task changes (movement → saving), select and read the newly
-   relevant skill instead of keeping everything loaded.
+4. **Re-route on pivot:** if the task changes (movement → saving) or a remaining routed skill
+   becomes relevant, select and read it then instead of keeping everything loaded.
 
 Announce what you load and why, e.g.: *"Detected Godot (`project.godot`). Loading
 `godot-2d-movement` for the controller and `platformer` for jump feel; will open the platformer
@@ -163,7 +166,9 @@ skill's `feel-tuning.md` reference if you want coyote-time/buffering."*
 ## 5. Composition rules
 
 - **One engine set, additive concepts.** Exactly one engine skill set; add the disciplines the
-  task needs and usually **at most one** genre. Workflows attach independently.
+  task needs and usually **at most one** genre. Workflows attach independently. **Cap the initial
+  load at 3 skills** — the engine skill + the 1-2 most relevant; a genre's full `composes` list
+  (§3c) stays the exhaustive reference, and the remainder is loaded on demand (§4.4).
 - **Order:** engine fundamentals → discipline concept → genre orchestration → workflow.
 - **Ownership on overlap:** the **engine** skill owns API/syntax; the **discipline** skill owns
   the portable concept/algorithm and defers to the engine skill for code; the **genre** skill owns
