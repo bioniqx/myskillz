@@ -1,10 +1,9 @@
 ---
 name: input-systems
 description: >
-  Architect game input — action mapping (abstracting keys into named actions),
-  rebinding with conflict detection and persistence, multi-device support
-  (keyboard, gamepad, touch), analog deadzones, and feel features like input
-  buffering and coyote time, plus accessibility. Engine-neutral. Use when the
+  Architect game input — action mapping, rebinding with conflict detection and
+  persistence, multi-device support (keyboard, gamepad, touch), analog deadzones,
+  input buffering, coyote time, and accessibility. Engine-neutral. Use when the
   user mentions input mapping, rebind controls, gamepad support, deadzone, input
   buffering, coyote time, or accessible controls.
 license: Apache-2.0

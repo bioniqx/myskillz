@@ -1,12 +1,12 @@
 ---
 name: performance-optimization
 description: >
-  Find and fix game performance problems methodically — measure with the engine profiler first,
-  reason about the frame-time budget, locate the CPU-vs-GPU bottleneck, then apply the right fix:
-  object pooling, draw-call batching, fewer allocations/GC spikes, and asset budgets. Engine-
-  neutral method that pairs with each engine's profiler. Use when the user mentions performance,
-  optimize, low/dropping FPS, frame drops, stutter, lag, profiler, frame budget, draw calls,
-  batching, garbage collection/GC spikes, object pooling, or "the game runs slow".
+  Find and fix game performance problems: profile first, reason about the frame-time budget,
+  locate the CPU-vs-GPU bottleneck, then apply the right fix — object pooling, draw-call
+  batching, fewer allocations/GC spikes, and asset budgets. Use when the user mentions
+  performance, optimize, low/dropping FPS, frame drops, stutter, lag, profiler, frame budget,
+  draw calls, batching, garbage collection/GC spikes, object pooling, or "the game runs slow".
+  Engine-neutral method that pairs with each engine's profiler.
 license: Apache-2.0
 compatibility: Engine-agnostic methodology; profiler/tooling notes for Godot 4.x, Unity 6, and Unreal 5. Pairs with physics-tuning and the engine skills.
 metadata:

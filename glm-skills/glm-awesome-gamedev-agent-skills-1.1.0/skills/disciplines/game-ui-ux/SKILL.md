@@ -1,12 +1,12 @@
 ---
 name: game-ui-ux
 description: >
-  Design and build game UI/UX — HUDs, menus, and overlays — that survive every screen: anchor-
-  based responsive layout, resolution/aspect scaling and safe areas, keyboard/gamepad focus
-  navigation, a screen/menu state stack, and event-driven (not polled) HUD updates. Engine-
-  neutral patterns that pair with the detected engine's UI skill. Use when the user mentions
-  HUD, health bar, main menu, pause menu, settings screen, UI layout, anchors, UI scaling,
-  aspect ratio, safe area, controller/keyboard menu navigation, or wiring UI to game state.
+  Design and build game UI/UX — HUDs, menus, overlays — that survive every screen: anchor-based
+  responsive layout, scaling and safe areas, keyboard/gamepad focus navigation, a screen/menu
+  state stack, and event-driven HUD updates. Use when the user mentions HUD, health bar, main
+  menu, pause menu, settings screen, UI layout, anchors, UI scaling, aspect ratio, safe area,
+  controller/keyboard menu navigation, or wiring UI to game state. Engine-neutral patterns that
+  pair with the engine's UI skill.
 license: Apache-2.0
 compatibility: Engine-agnostic UI/UX patterns; snippets in GDScript (Godot 4.x Control) and C# (Unity 6 uGUI/UI Toolkit). Pairs with godot-ui-control, Unity UI, and game-feel.
 metadata:
