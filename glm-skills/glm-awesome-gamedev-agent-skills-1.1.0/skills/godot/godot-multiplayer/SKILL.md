@@ -1,12 +1,11 @@
 ---
 name: godot-multiplayer
 description: >
-  Build networked games with Godot 4.x high-level multiplayer: set up an
-  ENetMultiplayerPeer server/client, define RPCs with the @rpc annotation
-  (call via rpc()/rpc_id()), set per-node multiplayer authority, and replicate
-  state with MultiplayerSpawner and MultiplayerSynchronizer. Use when adding
-  multiplayer/networking to a Godot project, writing @rpc functions, or syncing
-  player/world state across peers.
+  Build networked Godot 4.x games with high-level multiplayer: ENetMultiplayerPeer
+  server/client, @rpc annotations called via rpc()/rpc_id(), per-node multiplayer
+  authority, and MultiplayerSpawner/MultiplayerSynchronizer state replication.
+  Use when adding multiplayer/networking to a Godot project, writing @rpc
+  functions, or syncing player/world state across peers.
 license: Apache-2.0
 compatibility: Godot 4.3+ (high-level multiplayer, ENet)
 metadata:

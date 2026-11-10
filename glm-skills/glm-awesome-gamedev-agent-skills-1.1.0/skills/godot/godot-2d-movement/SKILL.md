@@ -5,7 +5,8 @@ description: >
   move_and_slide(): platformer run/jump with gravity, top-down 8-direction motion,
   slope handling, and reading collisions. Use when coding a 2D player or enemy
   controller, a platformer or top-down character, or fixing move_and_slide()/
-  is_on_floor() behavior in a .tscn with a CharacterBody2D.
+  is_on_floor() behavior in a .tscn with a CharacterBody2D. For 3D scenes,
+  cameras, lighting, and environment use godot-3d-essentials.
 license: Apache-2.0
 compatibility: Godot 4.3+
 metadata:

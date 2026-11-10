@@ -5,7 +5,8 @@ description: >
   (DirectionalLight3D/OmniLight3D), WorldEnvironment for sky/ambient/tonemap/post,
   MeshInstance3D materials, and GridMap for tile-based 3D levels. Use when building
   a 3D scene in a Godot project, placing cameras/lights, configuring environment and
-  post-processing, or working with Node3D/.tscn 3D content and GridMap.
+  post-processing, or working with Node3D/.tscn 3D content and GridMap. For 2D
+  character movement use godot-2d-movement.
 license: Apache-2.0
 compatibility: Godot 4.3+
 metadata:

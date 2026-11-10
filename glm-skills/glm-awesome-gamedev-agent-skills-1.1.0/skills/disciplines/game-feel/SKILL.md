@@ -1,12 +1,12 @@
 ---
 name: game-feel
 description: >
-  Add "juice" and game feel that makes actions satisfying — screen shake, hit-stop/freeze
+  Add "juice" and game feel that makes actions satisfying: screen shake, hit-stop/freeze
   frames, tweened/eased motion, squash & stretch, knockback, and layered audio-visual
-  feedback — as engine-neutral techniques that pair with the detected engine's tween,
-  particle, and camera APIs. Use when the user mentions game feel, juice, "make it feel
-  good/punchy", screen shake, hit stop, screen freeze, easing, squash and stretch, impact
-  frames, or feedback/polish on hits, jumps, pickups, and deaths.
+  feedback. Use when the user mentions game feel, juice, "make it feel good/punchy", screen
+  shake, hit stop, screen freeze, easing, squash and stretch, impact frames, or feedback/polish
+  on hits, jumps, pickups, and deaths. Engine-neutral techniques that pair with the engine's
+  tween, particle, and camera APIs.
 license: Apache-2.0
 compatibility: Engine-agnostic techniques; snippets in GDScript (Godot 4.x) and C# (Unity 6) with pseudocode. Pairs with godot-animation/godot-audio, unity-animation, camera-systems, and audio-design.
 metadata:

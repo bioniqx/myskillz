@@ -1,9 +1,9 @@
 ---
 name: godot-export
 description: >
-  Export and build a Godot 4.x project for distribution: install export templates,
+  Export and build a Godot 4.x project: install export templates,
   define export presets (Windows/macOS/Linux/Web/Android), run headless command-line
-  exports for CI, and handle web (HTML5) COOP/COEP and dedicated-server/headless
+  exports for CI, and handle web (HTML5) COOP/COEP and dedicated-server
   builds. Use when exporting a Godot game, configuring export_presets.cfg, building
   for web/desktop/mobile, or automating builds from the command line.
 license: Apache-2.0
