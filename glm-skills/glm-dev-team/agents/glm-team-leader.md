@@ -4,7 +4,7 @@ description: "Senior technical lead for the glm-dev-team workflow. PLANNING: dee
 color: green
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
-maxTurns: 28
+maxTurns: 40
 injectAgentsMd: false
 ---
 

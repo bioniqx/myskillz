@@ -89,7 +89,7 @@ as the design message and requires Out of scope and Assumptions.
 Do not launch a claim verifier, a runner-up, or a spec pre-draft. Each
 one finishes later and wakes a full thinking pass, and `check.py close`
 already gates the claims and the pick (SKILL.md R8). Write the design
-in the same turn as `check.py close`. Do not start work the user's
+in the same turn, after `check.py close` prints `DECISION` and `check.py send` accepts the draft. Do not start work the user's
 reply is likely to invalidate wholesale.
 
 ## 4. After approval — spec turn (one turn, no intermediate message)

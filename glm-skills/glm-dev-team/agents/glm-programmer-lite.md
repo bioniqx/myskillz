@@ -4,7 +4,7 @@ description: "Implementation engineer for the glm-dev-team workflow. Each dispat
 color: green
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: high
-maxTurns: 24
+maxTurns: 40
 injectAgentsMd: false
 ---
 

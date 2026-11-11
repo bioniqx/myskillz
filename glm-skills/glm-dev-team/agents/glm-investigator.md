@@ -4,7 +4,7 @@ description: "Read-only glm-investigator for the glm-dev-team workflow. Runs one
 color: green
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: high
-maxTurns: 16
+maxTurns: 24
 injectAgentsMd: false
 ---
 

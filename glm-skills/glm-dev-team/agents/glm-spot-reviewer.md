@@ -4,7 +4,7 @@ description: "Fast correctness-and-security-only reviewer for the glm-dev-team w
 color: green
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
-maxTurns: 12
+maxTurns: 16
 injectAgentsMd: false
 ---
 

@@ -4,12 +4,15 @@ Model ids and thoughtLevel stay. Wall clock was the number of main
 turns and the lanes that woke the main thread when they finished.
 
 - `check.py intake` runs cites and web in one call. `check.py close`
-  runs break, score, and send in one call.
+  runs break and score. It reads the options file, so the pick is not
+  `DECISION stop` from an empty stdin. `send` follows in the same wake,
+  once the pick id is known.
 - The conductor is four messages on the architectural path and three on
   spike and bounded. A claim verifier, a runner-up, and a spec
   pre-draft are not dispatched.
-- Lane ceilings: explorer 4, researcher 5, drafter 4, breaker 4. The
-  cap is a stuck-run ceiling, not a budget.
+- Lane ceilings: explorer 5, researcher 6, drafter 4, breaker 4. The
+  cap leaves one turn for the report after the tool calls the agent
+  file allows. It is a stuck-run ceiling, not a budget.
 
 # 10.3 (from 10.2) — Flash proposes, the engine closes
 

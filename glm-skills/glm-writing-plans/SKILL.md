@@ -169,9 +169,11 @@ dev-team engine schedules in parallel, and it is what turns a plan into
 an all-day session.
 
 If `.brainstorm/drafts/chain.json` contains `"continue": true`, or the
-user already asked to implement, run `handoff.py next --self
-glm-writing-plans --event plan-ready` and follow `NEXT:`. Otherwise
-stop. Do not ask which approach. The plan file stays portable (R8).
+user's latest message tells you to implement this plan, run
+`handoff.py next --self glm-writing-plans --event plan-ready` and follow
+`NEXT:`. A request that only asked for the plan does not match, including
+one that says "implementation plan". Otherwise stop. Do not ask which
+approach. The plan file stays portable (R8).
 
 # R6 - Speed rules that decide the wall clock
 

@@ -71,8 +71,9 @@ The output starts with `D=<absolute path>`. Shell variables do not survive betwe
 **Each turn = read what arrived → ONE engine call → launch everything it printed, as parallel tool
 calls in ONE message → end the turn.** GLM always thinks before answering, so every extra turn,
 tool call or paragraph you write sits on the critical path of every running lane. No narration.
-A wake-up does not re-read this file. Lane turn caps are stuck-run ceilings (programmer 24 or 32,
-reviewer 16, spot reviewer 12, investigator 16, leader 28), not budgets to spend.
+A wake-up does not re-read this file. Lane turn caps are stuck-run ceilings (programmer 40 or 48,
+reviewer 24, spot reviewer 16, investigator 24, leader 40), not budgets to spend. A cap below
+one read-fix-commit cycle makes the engine retry the slice, which is slower.
 
 #### ZCode protocol
 

@@ -4,7 +4,7 @@ description: "Independent senior code reviewer for the glm-dev-team workflow. Re
 color: green
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: high
-maxTurns: 16
+maxTurns: 24
 injectAgentsMd: false
 ---
 

@@ -8,7 +8,7 @@ can check, in one Bash call.
   check.py cites [--root DIR]          stdin: FINDINGS lines
   check.py web                         stdin: CLAIMS lines
   check.py intake [--root DIR]        stdin: findings and claims, one call
-  check.py close --root DIR --ledger  stdin: ## BREAKERS and/or ## DRAFT
+  check.py close --root DIR --ledger  stdin: ## BREAKERS, optional ## DRAFT
   check.py spec PATH                   lint a written spec
   check.py route                       stdin: the user request. Always exit 0.
   check.py send [--root DIR] [--approved]
@@ -19,6 +19,7 @@ can check, in one Bash call.
 Read-only, stdlib only. Exit 0 = nothing wrong, 1 = a BAD / DROP / FAIL / no, 2 = usage error.
 """
 import argparse
+import contextlib
 import datetime
 import io
 import os
@@ -282,10 +283,12 @@ def check_intake(a):
     else:
         cites_lines, web_lines = [], []
         for ln in raw.splitlines():
-            if URL_RE.search(ln) and not CITE_RE.search(ln):
-                web_lines.append(ln)
-            else:
+            is_cite = CITE_RE.search(ln) is not None
+            is_web = URL_RE.search(ln) is not None
+            if is_cite or not is_web:
                 cites_lines.append(ln)
+            if is_web:
+                web_lines.append(ln)
         cites, web = "\n".join(cites_lines), "\n".join(web_lines)
     rc = 0
     if cites.strip():
@@ -296,14 +299,41 @@ def check_intake(a):
     return rc
 
 
+def _options_text(a):
+    """score reads the option list from stdin. An empty stdin is `[]` and prints DECISION stop."""
+    path = None
+    if a.options:
+        path = Path(a.options)
+    elif a.ledger:
+        path = Path(a.ledger).parent / "options.json"
+    if path is None or not path.is_file():
+        return "[]"
+    return path.read_text(encoding="utf-8") or "[]"
+
+
+def _capture_decide(argv, stdin_text):
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = _call_decide(argv, stdin_text)
+    text = buf.getvalue()
+    sys.stdout.write(text)
+    return rc, text
+
+
 def check_close(a):
-    """break, score, and send in one process. Stdin sections: ## BREAKERS, ## DRAFT."""
+    """Break and score in one process. Optional ## DRAFT is sent after the pick is known.
+
+    score's option list comes from --options (or options.json beside the ledger), never from
+    an empty stdin. A draft written before DECISION exists cannot name the pick, so the
+    first close is ## BREAKERS only; ## DRAFT is for a repair once the id is known.
+    """
     sections = marked_sections(sys.stdin.read())
     if "BREAKERS" not in sections and "DRAFT" not in sections:
         print("FAIL close - stdin needs a ## BREAKERS section, a ## DRAFT section, or both")
         print("RESULT close fail=1")
         return 2
     rc = 0
+    decision = ""
     if "BREAKERS" in sections:
         if not a.ledger:
             print("FAIL close - --ledger is required with ## BREAKERS")
@@ -312,13 +342,23 @@ def check_close(a):
         argv = ["break", "--root", a.root, "--ledger", a.ledger]
         if a.options:
             argv += ["--options", a.options]
-        if _call_decide(argv, sections.get("BREAKERS", "")):
+        try:
+            br, _ = _capture_decide(argv, sections.get("BREAKERS", ""))
+            sr, decision = _capture_decide(["score", "--ledger", a.ledger], _options_text(a))
+        except (ValueError, OSError) as ex:
+            print("FAIL close - %s" % ex)
+            print("RESULT close fail=1")
+            return 1
+        if br or sr:
             rc = 1
-        if _call_decide(["score", "--ledger", a.ledger], ""):
-            rc = 1
+    pick = a.pick
+    if not pick:
+        found = re.search(r"DECISION pick=(\S+)", decision)
+        if found:
+            pick = found.group(1)
     if "DRAFT" in sections:
         ns = argparse.Namespace(root=a.root, approved=False, ledger=a.ledger,
-                                pick=a.pick, today=getattr(a, "today", None))
+                                pick=pick, today=getattr(a, "today", None))
         old = sys.stdin
         sys.stdin = io.StringIO(sections.get("DRAFT", ""))
         try:

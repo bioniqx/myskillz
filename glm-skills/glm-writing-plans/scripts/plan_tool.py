@@ -2127,7 +2127,7 @@ def main(argv=None):
     p.add_argument("plan"); p.add_argument("--spec")
     p.add_argument("--lane", choices=["auto", "api", "agent"], default="auto")
     p.add_argument("--workers", type=int)
-    p.add_argument("--repairs", type=int, default=1)
+    p.add_argument("--repairs", type=int, default=2)
     p.add_argument("--max-tokens", type=int, default=16000)
     p.add_argument("--thorough", action="store_true", help="review every task, not only risky ones")
     p.add_argument("--no-split", action="store_true", help="do not propose splits for wide contracts")

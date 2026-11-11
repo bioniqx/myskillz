@@ -41,8 +41,8 @@ present once → get approval. Lower rule number wins a conflict.
    in a tool result in this session. `check.py send` re-checks the draft;
    a line you cannot prove is labelled unverified or deleted.
 5. Run `check.py intake` on lane output before any of it enters the
-   draft. `check.py close` is the one call that breaks, scores, and
-   sends (R14).
+   draft. `check.py close` breaks and scores. `check.py send` is the
+   next tool in that same wake, after `DECISION` is known (R14).
 6. Ask at most 4 forking questions; everything else is a vetoable
    assumption.
 7. The main thread renders the DECISION line and does not choose an
@@ -286,7 +286,7 @@ is the option text, the fact ids, and the atoms, question last. Do not
 paste the drafter's tradeoff lines into it.
 
 **Sibling lanes** — agents installed by other glm skills. They count
-toward `lanes=` and run long (dozens of turns, not 4-5), so each needs
+toward `lanes=` and run longer than a code or web lane, so each needs
 a reason a Code/Web lane cannot meet. Briefings go to `.brainstorm/drafts/`; the
 dev-team guard lets those roles write reports only under
 `.claude/dev-team/research/` or `reviews/`, so name report paths there.
@@ -362,11 +362,11 @@ read it. The script's own line is the repair. A non-zero exit is a
 result: do not retry the same input.
 
 1. `intake --root <repo>` — findings and claims together, when lanes return, before a lane line enters the draft. `cites` and `web` remain for one kind of line.
-2. `close --root <repo> --ledger <path> --options <path>` — `## BREAKERS` then `## DRAFT`. It runs break, score, and send. Do not call those three yourself.
-3. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user said live. Repair every FAIL, never show one. `close` already binds the draft.
+2. `close --root <repo> --ledger <path> --options <path>` — stdin is `## BREAKERS` only. It loads the options file itself and prints `DECISION`. Do not pass `## DRAFT` here: the pick is not known yet.
+3. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user said live. Repair every FAIL, never show one.
 4. `spec <path>` — after the spec is written, before the five-lens review.
 5. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
-6. `send --ledger` only to re-check a repaired draft. The first send is inside `close`. `--approved` only after approve printed yes.
+6. `send --ledger --pick <id>` — the draft, after `close` printed `DECISION pick=<id>`, and again after each repair. The pick id has to appear in the draft. Do not show a FAIL. `--approved` only after approve printed yes.
 7. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 
 ```
@@ -382,7 +382,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
 1. Round 1: `context.sh`, `handoff.py route`, `decide.py atoms` on the request, and the fact lanes. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `glm-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `glm-design-breaker` per option. End the turn.
-4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json`. Stdin is `## BREAKERS` (their stdout) then `## DRAFT` (the design). It runs break, score, and send. Show the design only when it prints `RESULT send fail=0` and `RESULT close fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. The APPROACH line that is the pick is the id `DECISION` printed. On `approve yes`, run `ask.py chain --pick <id>`.
+4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
 
 ## Checklist (∥ = one concurrent message)
 

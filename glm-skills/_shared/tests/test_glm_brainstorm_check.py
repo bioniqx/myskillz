@@ -481,16 +481,31 @@ class IntakeAndCloseTests(unittest.TestCase):
         self.assertIn("RESULT web ok=1", out)
         self.assertIn("RESULT intake done", out)
 
-    def test_close_scores_breakers_and_sends_the_draft(self):
+    def _ledger_and_options(self):
         ledger = os.path.join(self.root, "ledger.json")
         options = os.path.join(self.root, "options.json")
         with open(ledger, "w", encoding="utf-8") as fh:
             fh.write('{"facts": [], "atoms": []}\n')
         with open(options, "w", encoding="utf-8") as fh:
-            json.dump([{"id": "A", "text": "reuse the pool"}], fh)
+            json.dump([{"id": "reuse-pool", "text": "reuse the pool"}], fh)
+        return ledger, options
+
+    def test_close_scores_from_the_options_file_not_an_empty_stdin(self):
+        ledger, options = self._ledger_and_options()
+        stdin = "## BREAKERS\nOPTION: reuse-pool\nNO-BREAK\ncheck: true\n"
+        rc, out = run(
+            ["close", "--root", self.root, "--ledger", ledger, "--options", options],
+            stdin, cwd=self.root)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("DECISION pick=reuse-pool", out)
+        self.assertNotIn("DECISION stop", out)
+        self.assertNotIn("RESULT send", out)
+
+    def test_close_send_fails_when_the_draft_omits_the_pick(self):
+        ledger, options = self._ledger_and_options()
         stdin = (
             "## BREAKERS\n"
-            "OPTION: A\n"
+            "OPTION: reuse-pool\n"
             "NO-BREAK\n"
             "check: true\n"
             "\n"
@@ -503,10 +518,10 @@ class IntakeAndCloseTests(unittest.TestCase):
         rc, out = run(
             ["close", "--root", self.root, "--ledger", ledger, "--options", options],
             stdin, cwd=self.root)
-        self.assertEqual(rc, 0, out)
-        self.assertIn("DECISION", out)
-        self.assertIn("RESULT send fail=0", out)
-        self.assertIn("RESULT close fail=0", out)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("DECISION pick=reuse-pool", out)
+        self.assertIn("FAIL pick", out)
+        self.assertIn("RESULT close fail=1", out)
 
 
 if __name__ == "__main__":
