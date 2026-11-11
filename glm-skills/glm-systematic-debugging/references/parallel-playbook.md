@@ -80,8 +80,8 @@ Whatever `scan` returns is a lead. Confirm it with `experiment`.
 
 **Flaky / intermittent**
 ```bash
-bash $S/stress.sh -n 200 -t 120 -- npx vitest run src/queue.test.ts            # baseline
-bash $S/stress.sh -n 200 -t 120 -b 14/200 -- npx vitest run src/queue.test.ts  # after fix, same -n/-j
+bash $S/stress.sh -n 40 -t 120 -- npx vitest run src/queue.test.ts             # first measure
+bash $S/stress.sh -n 200 -t 120 -b 14/200 -- npx vitest run src/queue.test.ts  # widen, or the fix proof, same -j
 ```
 - Prints failure rate, 95% Wilson interval, failing log paths, exit-code histogram. `-k` keeps passing logs so you can diff pass against fail.
 - Runs share the working tree, ports, DBs and caches (only `TMPDIR` differs). If failures only appear at `-j > 1`, rerun at `-j 1` or namespace resources with `STRESS_RUN` before treating the rate as evidence. Raising `-j` above the CPU count adds load and surfaces races — use the same `-j` on both sides of a comparison.

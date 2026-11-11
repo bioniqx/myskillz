@@ -84,7 +84,7 @@ Vague boundaries are the main cause of duplicated work between lanes.
   that type. The user message is only the R11 slice, question last.
   Do not paste the lane rules again.
 - Model per lane: none. Code lanes dispatch glm-explorer, web lanes
-  glm-researcher, drafts and the claim verifier glm-drafter, attacks
+  glm-researcher, approach drafts glm-drafter, attacks
   glm-design-breaker. Model and effort live only in the agent file.
   `decide.py score` prints the pick; the main thread renders it.
 - **Lanes over the cap → waves.** Dispatch the highest-value lanes first
@@ -128,5 +128,5 @@ Vague boundaries are the main cause of duplicated work between lanes.
 | Message you send | Leave running |
 | --- | --- |
 | Questions first (split) | all code + web lanes; unasked questions become assumptions |
-| Design message | claim verifier; spec pre-draft; runner-up approach |
+| Design message | nothing. Extra lanes wake a full thinking pass (SKILL.md R8) |
 | Spec review gate | nothing — the user's edits change the input |

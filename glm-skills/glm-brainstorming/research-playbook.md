@@ -88,8 +88,8 @@ and Flash lanes need it stated explicitly, not implied.
 - Conflicts: prefer A over B, newer over older, our version over others.
   If still unresolved, present both readings as a trade-off, not a
   confident answer.
-- On architectural designs the claim-verifier lane runs while the user
-  reads the design (`architectural.md` §3), so verification adds no wait.
+- Do not launch a claim-verifier lane. `check.py intake` checks the
+  claims in the intake message (`architectural.md` §3, SKILL.md R8).
 
 ## 6. Budgets and stopping
 

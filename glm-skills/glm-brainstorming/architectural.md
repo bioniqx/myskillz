@@ -84,56 +84,22 @@ improvements only where an existing problem affects this work.
 so one reply both answers and approves. `check.py send` treats that line
 as the design message and requires Out of scope and Assumptions.
 
-## 3. Leave lanes running while the user reads (same turn as §2)
+## 3. No extra lanes on the design turn
 
-Launch these, then write the design message immediately in the same turn.
-Never wait for them. Their results are consumed in the spec turn (§4).
-Claim verifier and runner-up dispatch `glm-drafter` (Flash, low).
-Spec pre-draft stays `general-purpose` because it writes.
-
-- **Claim verifier** — one lane, only if the design rests on web-sourced
-  claims. Cited links often work while the page does not support the
-  claim, so check the few claims that decide the design.
-
-```
-Verify claims against their sources. Today: [DATE].
-Rules:
-1 WebSearch/WebFetch only. Max 6 tool calls.
-2 Open the cited URL; if it does not settle the claim, look for one newer primary source.
-3 A failed or denied fetch is switched, never retried.
-4 Output one line per claim, nothing else. No preamble. 200 words max.
-Format: `claim — SUPPORTED | CONTRADICTED | UNCLEAR — verbatim quote of 25 words or less — better source if any`
----
-Claims:
-[PASTE THE EVIDENCE LINES]
-```
-
-- **Spec pre-draft** — one lane, only when file writes will not raise a
-  permission prompt (acceptEdits, auto, or bypass mode): a writable
-  `general-purpose` lane with the design pasted. It writes to
-  `.brainstorm/drafts/<topic>-design.md` (never the specs path), does not
-  commit, and returns only the path. A rejected design is overwritten later.
-  `glm-explorer`, `glm-researcher` and `glm-drafter` are read-only,
-  so they cannot take this lane.
-- **Runner-up approach** — one lane, only when the top two approaches are
-  close. It fleshes out the runner-up's sections so "use B instead" costs
-  one re-present, not a new exploration.
-
-Do not start work the user's reply is likely to invalidate wholesale.
+Do not launch a claim verifier, a runner-up, or a spec pre-draft. Each
+one finishes later and wakes a full thinking pass, and `check.py close`
+already gates the claims and the pick (SKILL.md R8). Write the design
+in the same turn as `check.py close`. Do not start work the user's
+reply is likely to invalidate wholesale.
 
 ## 4. After approval — spec turn (one turn, no intermediate message)
 
-Drop to `reasoning_effort: low` here; this turn is formatting and
-targeted edits, not judgment.
+Stay on the effort pinned in the agent file. This turn is formatting
+and targeted edits, in one message.
 
-1. If a pre-draft lane is still running, stop it. On ZCode `TaskStop`
-   exists: stop the lane, then write the
-   spec yourself. No stop tool → skip straight to the move below.
-   Otherwise move the draft to
-   `docs/specs/YYYY-MM-DD-<topic>-design.md` (user preferences
-   override the path) and apply the user's corrections and the verifier's
-   results with targeted edits. No draft → write the spec from the
-   approved design. Content = the approved design, including Evidence,
+1. Write the spec to `docs/specs/YYYY-MM-DD-<topic>-design.md` (user
+   preferences override the path) from the approved design, applying the
+   user's corrections with targeted edits. Content = the approved design, including Evidence,
    Assumptions and Out of scope. Use `elements-of-style:writing-clearly-and-concisely` if
    available.
 2. Lint the spec: run `python3 <skill_dir>/scripts/check.py spec <spec path>`.

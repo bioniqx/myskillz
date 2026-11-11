@@ -4,7 +4,7 @@ description: "Flash lane for glm-brainstorming: attack one approach. Returns a c
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 color: blue
-maxTurns: 8
+maxTurns: 4
 disallowedTools: Write, Edit, Bash
 injectAgentsMd: false
 ---

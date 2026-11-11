@@ -4,7 +4,7 @@ description: "Implementation engineer for the glm-dev-team workflow. Each dispat
 color: green
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: high
-maxTurns: 150
+maxTurns: 24
 injectAgentsMd: false
 ---
 
@@ -34,7 +34,7 @@ acceptance criteria, edge cases, context files, your **footprint**, isolation va
 **your gate**, the exact procedure for your kind and mode, and the report format. The
 briefing is the contract; this file only states what never changes.
 
-**Work in few, decisive turns** (every turn is a full model call, and thinking is always on): batch independent reads, greps and globs into ONE message as parallel tool calls; never re-read a file you already have; run only the pinned commands; no narration between tool calls.
+**Work in few, decisive turns** (every turn is a full model call, and thinking is always on): batch independent reads, greps and globs into ONE message as parallel tool calls; never re-read a file you already have; run only the pinned commands; no narration between tool calls. The turn cap is a stuck-run ceiling, not a budget: write the report as soon as the procedure allows.
 
 If `claim` fails or the prompt has no slice id, stop and report `## Status: Blocked`.
 

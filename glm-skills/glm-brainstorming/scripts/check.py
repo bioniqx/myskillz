@@ -7,6 +7,8 @@ can check, in one Bash call.
 
   check.py cites [--root DIR]          stdin: FINDINGS lines
   check.py web                         stdin: CLAIMS lines
+  check.py intake [--root DIR]        stdin: findings and claims, one call
+  check.py close --root DIR --ledger  stdin: ## BREAKERS and/or ## DRAFT
   check.py spec PATH                   lint a written spec
   check.py route                       stdin: the user request. Always exit 0.
   check.py send [--root DIR] [--approved]
@@ -18,6 +20,7 @@ Read-only, stdlib only. Exit 0 = nothing wrong, 1 = a BAD / DROP / FAIL / no, 2 
 """
 import argparse
 import datetime
+import io
 import os
 import re
 import sys
@@ -155,10 +158,9 @@ def walk_cites(text, root):
             yield raw, status, msg
 
 
-def check_cites(a):
-    root = Path(a.root).resolve()
+def report_cites(text, root):
     ok = bad = unchecked = 0
-    for _raw, status, msg in walk_cites(sys.stdin.read(), root):
+    for _raw, status, msg in walk_cites(text, Path(root).resolve()):
         if msg:
             print(msg)
         if status == "ok":
@@ -169,6 +171,10 @@ def check_cites(a):
             bad += 1
     print(f"RESULT cites ok={ok} bad={bad} unchecked={unchecked}")
     return 1 if bad else 0
+
+
+def check_cites(a):
+    return report_cites(sys.stdin.read(), a.root)
 
 
 # ----------------------------------------------------------------------------- web
@@ -215,10 +221,9 @@ def judge_claim(line, today):
     return "OK", ""
 
 
-def check_web(a):
-    today = today_of(a)
+def report_web(text, today):
     counts = {"OK": 0, "WEAK": 0, "DROP": 0}
-    for raw in sys.stdin.read().splitlines():
+    for raw in text.splitlines():
         line = raw.strip().lstrip("-*0123456789.) ").strip()
         if line.upper().startswith("CLAIMS:"):
             line = line[7:].strip()
@@ -233,6 +238,96 @@ def check_web(a):
         print(f"{verdict} {head}" + (f" - {why}" if why else ""))
     print(f"RESULT web ok={counts['OK']} weak={counts['WEAK']} drop={counts['DROP']}")
     return 1 if counts["DROP"] else 0
+
+
+def check_web(a):
+    return report_web(sys.stdin.read(), today_of(a))
+
+
+def marked_sections(text):
+    """Split on lines that are exactly `## NAME`. A body with no marker is keyed ''."""
+    sections, current, buf = {}, None, []
+    for line in text.splitlines(keepends=True):
+        m = re.match(r"^##\s+([A-Z][A-Z0-9-]*)\s*$", line.strip())
+        if m:
+            if current is not None:
+                sections[current] = "".join(buf)
+            current = m.group(1)
+            buf = []
+            continue
+        if current is None:
+            current = ""
+        buf.append(line)
+    if current is not None:
+        sections[current] = "".join(buf)
+    return sections
+
+
+def _call_decide(argv, stdin_text):
+    old = sys.stdin
+    sys.stdin = io.StringIO(stdin_text)
+    try:
+        return decide.main(argv)
+    finally:
+        sys.stdin = old
+
+
+def check_intake(a):
+    """cites and web in one process, so the orchestrator does not spend a turn on each."""
+    raw = sys.stdin.read()
+    sections = marked_sections(raw)
+    if "CITES" in sections or "WEB" in sections:
+        cites = sections.get("CITES", "")
+        web = sections.get("WEB", "")
+    else:
+        cites_lines, web_lines = [], []
+        for ln in raw.splitlines():
+            if URL_RE.search(ln) and not CITE_RE.search(ln):
+                web_lines.append(ln)
+            else:
+                cites_lines.append(ln)
+        cites, web = "\n".join(cites_lines), "\n".join(web_lines)
+    rc = 0
+    if cites.strip():
+        rc = report_cites(cites, a.root) or rc
+    if web.strip():
+        rc = report_web(web, today_of(a)) or rc
+    print("RESULT intake done")
+    return rc
+
+
+def check_close(a):
+    """break, score, and send in one process. Stdin sections: ## BREAKERS, ## DRAFT."""
+    sections = marked_sections(sys.stdin.read())
+    if "BREAKERS" not in sections and "DRAFT" not in sections:
+        print("FAIL close - stdin needs a ## BREAKERS section, a ## DRAFT section, or both")
+        print("RESULT close fail=1")
+        return 2
+    rc = 0
+    if "BREAKERS" in sections:
+        if not a.ledger:
+            print("FAIL close - --ledger is required with ## BREAKERS")
+            print("RESULT close fail=1")
+            return 2
+        argv = ["break", "--root", a.root, "--ledger", a.ledger]
+        if a.options:
+            argv += ["--options", a.options]
+        if _call_decide(argv, sections.get("BREAKERS", "")):
+            rc = 1
+        if _call_decide(["score", "--ledger", a.ledger], ""):
+            rc = 1
+    if "DRAFT" in sections:
+        ns = argparse.Namespace(root=a.root, approved=False, ledger=a.ledger,
+                                pick=a.pick, today=getattr(a, "today", None))
+        old = sys.stdin
+        sys.stdin = io.StringIO(sections.get("DRAFT", ""))
+        try:
+            if check_send(ns):
+                rc = 1
+        finally:
+            sys.stdin = old
+    print("RESULT close fail=%d" % (1 if rc else 0))
+    return 1 if rc else 0
 
 
 # ----------------------------------------------------------------------------- spec
@@ -490,6 +585,15 @@ def main(argv=None):
     pc.set_defaults(fn=check_cites)
     pw = sp.add_parser("web")
     pw.set_defaults(fn=check_web)
+    pi = sp.add_parser("intake")
+    pi.add_argument("--root", default=".")
+    pi.set_defaults(fn=check_intake)
+    pz = sp.add_parser("close")
+    pz.add_argument("--root", default=".")
+    pz.add_argument("--ledger")
+    pz.add_argument("--options")
+    pz.add_argument("--pick")
+    pz.set_defaults(fn=check_close)
     ps = sp.add_parser("spec")
     ps.add_argument("path")
     ps.set_defaults(fn=check_spec)
@@ -514,7 +618,7 @@ def main(argv=None):
     pa = sp.add_parser("approve")
     pa.add_argument("--asked", required=True, choices=("design", "other"))
     pa.set_defaults(fn=check_approve)
-    for q in (pc, pw, ps, pr, pe, pv, pb, pa):
+    for q in (pc, pw, pi, pz, ps, pr, pe, pv, pb, pa):
         q.add_argument("--today", help=argparse.SUPPRESS)
     a = p.parse_args(argv)
     try:

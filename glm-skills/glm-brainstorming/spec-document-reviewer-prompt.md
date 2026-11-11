@@ -6,8 +6,8 @@ The upstream skill dropped its spec/plan reviewer subagent loop: its
 regression testing across 5 versions with 5 trials each showed identical
 quality scores regardless of whether the review loop ran; the loop cost
 ~25 minutes, while self-review catches 3-5 real bugs per run in ~30s.
-Review inline. Factual risk is handled in parallel by the claim
-verifier dispatched with the design message (`architectural.md` §3).
+Review inline. `check.py close` already gated the claims. Do not dispatch
+a claim verifier.
 
 On GLM this matters more, not less: a reviewer loop is a deep chain, and
 deep chains are where GLM's accuracy drops. One pass with five lenses,
@@ -15,9 +15,9 @@ held in one context, beats five handoffs.
 
 ## Inline self-review — 5 lenses, one pass, about a minute, fix in place
 
-Run at `reasoning_effort: low`. Flag only issues that would cause real
-problems during implementation planning. Wording, style, and uneven
-detail are not issues.
+Stay on the effort pinned for this session. Flag only issues that would
+cause real problems during implementation planning. Wording, style, and
+uneven detail are not issues.
 
 1. **Completeness** — TODO, TBD, placeholders, empty sections,
    requirements stated but never specified.
@@ -30,8 +30,7 @@ detail are not issues.
    Unrequested features or over-engineering get cut. Independent
    subsystems get decomposed.
 5. **Evidence** — every load-bearing external claim has a dated source,
-   verifier results are applied, unverified items are labeled as
-   assumptions.
+   unverified items are labeled as assumptions.
 
 Mechanical part: lens 1 (completeness) and the format half of lens 5
 (evidence: https URL and date on every line) are checked by
@@ -43,8 +42,8 @@ on what the evidence means: whether each source supports its claim.
 
 The spec touches security or auth, data migration or deletion, money, or
 a public API or contract others depend on — or the user asks for a
-review. Then dispatch lenses 1-4 as four general-purpose lanes (Flash
-tier) in ONE message; lens 5 stays with the claim verifier. Each reads
+review. Then dispatch lenses 1-4 as four lanes in ONE message; lens 5
+stays in the inline pass. Each reads
 the spec itself — do not paste it. Wait for all four before the review
 gate.
 

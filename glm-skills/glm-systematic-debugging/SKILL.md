@@ -40,6 +40,7 @@ Rules:
 2. Never run two shell calls in a row when `run` can do both in one.
 3. Anything over ~60 s that you are not blocked on: `nohup <cmd> > /tmp/<name>.log 2>&1 &`, keep working, read the log later. Never edit, stash or check out a tree while a background command runs in it, and never `git stash` while a worktree or background job is live — the stash is shared by the whole repo.
 4. Run the single failing test, not the suite, while investigating. The tools already keep exit codes and tail the output for you.
+5. Do not spend a turn re-reading frames `probe` already printed. The analogue read, the experiment spec, and the `experiment` call belong in one message. A turn whose only work is Read or Grep is a spare thinking pass. Open `references/root-cause-tracing.md` only when the crashing line is not where the bad value is created, and open it in that same message.
 
 ## R2. Triage — `probe` prints `LANE:` for you
 
@@ -59,7 +60,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
 ## R4. STANDARD lane — 3 rounds
 
-1. **Evidence** — `probe` output. Read errors completely: message, code, file:line, every in-repo frame, every `Caused by`, adjacent warnings. A bad value deep in the stack → trace it back to where it is *created*, not where it is used: `references/root-cause-tracing.md`. Multi-component (CI→build→deploy, API→service→DB) → instrument every boundary in ONE run (what entered, what exited, config per layer), then investigate only the boundary that broke. Fails only in CI → first reproduce CI conditions locally (same image, same env vars, `CI=true`, load via `stress.sh -j`); if that is impossible, add boundary logging to the CI job and read its output.
+1. **Evidence** — `probe` output. Read the error it printed: message, code, file:line, every in-repo frame, every `Caused by`. Do not re-open those files. A bad value created upstream of the crash line → `references/root-cause-tracing.md`, in the same call as the experiment. Multi-component (CI→build→deploy, API→service→DB) → instrument every boundary in ONE `run`, then investigate only the boundary that broke. Fails only in CI → first reproduce CI conditions locally (same image, same env vars, `CI=true`, load via `stress.sh -j`); if that is impossible, add boundary logging to the CI job and read its output.
 2. **Compare and hypothesize, in one message.** Find a working analogue (a sibling test that passes, the last good commit, the reference implementation), read the reference completely, then list every difference — do not pre-filter "can't matter" — including the implicit ones: config, env vars, versions, ordering, shared state. Then write 2–4 hypotheses in the spec file, each one as `H: <cause> because <evidence>. Experiment E: <one-variable change>. If H is true: <result A>. If false: <result B>.` — A ≠ B, or E is not worth running:
 
    ```bash
@@ -80,7 +81,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
 Read `references/parallel-playbook.md` in the same call as the first command below.
 
-1. Intermittent → `bash $S/stress.sh -n 200 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball.
+1. Intermittent → `bash $S/stress.sh -n 40 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball. Re-run at `-n 200` only when that interval is too wide to decide.
 2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
 4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to at most 8 workers at once itself (`-j` above 8 is clamped), with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `glm-debug-worker` agent instead — dispatch them in waves of 8 per message (the provider's full concurrent-call budget); ZCode runs subagents launched together in parallel. Beyond ~6 agent workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.

@@ -159,34 +159,19 @@ to review every task instead of only the risky ones.
    per message; send the next wave after the previous one replied).
    Tell the user once that `<TOOL> doctor` shows how to enable the fast lane.
 
-# R5 - Handoff
+# R5 - Stop when the plan is assembled
 
-Report, with the numbers from the build output:
+`OK assembled` means this skill is done. Report the path, the task count,
+the wave count, and the max wave width from the build output. Do not
+implement the plan here. Executing it in this session, one subagent per
+task with a review between waves, is a serial run of the same work the
+dev-team engine schedules in parallel, and it is what turns a plan into
+an all-day session.
 
-"Plan saved to `docs/plans/<file>.md` - N tasks, W waves, up to K
-tasks in parallel. It is self-contained: any agent or engineer can execute it
-via its Execution Protocol. Options:
-
-1. Subagent-Driven here (recommended) - fresh subagent per task, review between
-   tasks; each wave's `[P]` tasks dispatched together in one message (within
-   the subagent cap).
-2. Inline Execution here - sequential, with checkpoints.
-3. Hand off - run `handoff.py next --self glm-writing-plans --event plan-ready`
-   and follow `NEXT:`. The plan file stays portable (R8). Giving the file to a
-   human with 'Execute this plan following its Execution Protocol.' is the
-   same exit when no sibling skill is installed.
-
-Which approach?"
-
-If `.brainstorm/drafts/chain.json` contains `"continue": true`, do not ask.
-Run `handoff.py next --self glm-writing-plans --event plan-ready` and follow
-`NEXT:`. That file is the brainstorming chain: spec, then this plan, then
-glm-dev-team.
-
-- Subagent-Driven -> dispatch each wave's `[P]` tasks yourself as subagents
-  here, reviewing between waves.
-- Inline -> execute the plan yourself here, sequentially, with checkpoints.
-- Hand off -> follow the `NEXT:` line from `handoff.py next`. Do not implement the plan here.
+If `.brainstorm/drafts/chain.json` contains `"continue": true`, or the
+user already asked to implement, run `handoff.py next --self
+glm-writing-plans --event plan-ready` and follow `NEXT:`. Otherwise
+stop. Do not ask which approach. The plan file stays portable (R8).
 
 # R6 - Speed rules that decide the wall clock
 

@@ -1,3 +1,16 @@
+# 10.4 (from 10.3) — fewer thinking passes
+
+Model ids and thoughtLevel stay. Wall clock was the number of main
+turns and the lanes that woke the main thread when they finished.
+
+- `check.py intake` runs cites and web in one call. `check.py close`
+  runs break, score, and send in one call.
+- The conductor is four messages on the architectural path and three on
+  spike and bounded. A claim verifier, a runner-up, and a spec
+  pre-draft are not dispatched.
+- Lane ceilings: explorer 4, researcher 5, drafter 4, breaker 4. The
+  cap is a stuck-run ceiling, not a budget.
+
 # 10.3 (from 10.2) — Flash proposes, the engine closes
 
 The session model is GLM-5.3-Flash. `decide.py score` prints `DECISION`;

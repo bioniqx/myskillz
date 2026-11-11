@@ -463,5 +463,51 @@ class RouteTests(unittest.TestCase):
         self.assertIn("ROUTE glm-writing-plans", out)
 
 
+class IntakeAndCloseTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="bs_gate_")
+        os.makedirs(os.path.join(self.root, "src"))
+        with open(os.path.join(self.root, "src", "app.py"), "w", encoding="utf-8") as fh:
+            fh.write("import os\n\ndef connect(url):\n    return pool.get(url)\n\nclass Pool:\n    pass\n")
+
+    def test_intake_checks_cites_and_web_in_one_call(self):
+        text = (
+            'src/app.py:4 - connect uses the pool - "return pool.get(url)"\n'
+            'the registry serves json — A — https://pypi.org/pypi/x/json — 2026-10-01 — "return pool.get(url)"\n'
+        )
+        rc, out = run(["intake", "--root", self.root], text)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT cites ok=1", out)
+        self.assertIn("RESULT web ok=1", out)
+        self.assertIn("RESULT intake done", out)
+
+    def test_close_scores_breakers_and_sends_the_draft(self):
+        ledger = os.path.join(self.root, "ledger.json")
+        options = os.path.join(self.root, "options.json")
+        with open(ledger, "w", encoding="utf-8") as fh:
+            fh.write('{"facts": [], "atoms": []}\n')
+        with open(options, "w", encoding="utf-8") as fh:
+            json.dump([{"id": "A", "text": "reuse the pool"}], fh)
+        stdin = (
+            "## BREAKERS\n"
+            "OPTION: A\n"
+            "NO-BREAK\n"
+            "check: true\n"
+            "\n"
+            "## DRAFT\n"
+            "Path: Bounded - existing pool flow\n"
+            "Approve this design?\n"
+            "Assuming the existing pool stays.\n"
+            "Out of scope: a new service.\n"
+        )
+        rc, out = run(
+            ["close", "--root", self.root, "--ledger", ledger, "--options", options],
+            stdin, cwd=self.root)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("DECISION", out)
+        self.assertIn("RESULT send fail=0", out)
+        self.assertIn("RESULT close fail=0", out)
+
+
 if __name__ == "__main__":
     unittest.main()

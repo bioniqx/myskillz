@@ -4,7 +4,7 @@ description: "Web research lane for glm-brainstorming: tiered, dated, cited evid
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: high
 color: blue
-maxTurns: 7
+maxTurns: 5
 disallowedTools: Write, Edit, Bash
 injectAgentsMd: false
 ---

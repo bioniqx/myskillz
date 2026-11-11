@@ -40,8 +40,9 @@ present once → get approval. Lower rule number wins a conflict.
 4. Never cite a path:line, URL, date, version or quote you did not see
    in a tool result in this session. `check.py send` re-checks the draft;
    a line you cannot prove is labelled unverified or deleted.
-5. Run `check.py cites` and `check.py web` on lane output before any of
-   it enters the draft (R14).
+5. Run `check.py intake` on lane output before any of it enters the
+   draft. `check.py close` is the one call that breaks, scores, and
+   sends (R14).
 6. Ask at most 4 forking questions; everything else is a vetoable
    assumption.
 7. The main thread renders the DECISION line and does not choose an
@@ -129,10 +130,9 @@ are Flash. Model and effort live only in each agent file; never add a
 table, when a lane needs a shell (explorer and researcher have none).
 
 1. Code slices dispatch `glm-explorer`. Web slices dispatch
-   `glm-researcher`. Approach drafts, the claim verifier and the
-   runner-up dispatch `glm-drafter`. Attacks dispatch `glm-design-breaker`.
-   Spec pre-draft is the one writable lane (`general-purpose`), and only
-   when a file write will not raise a prompt.
+   `glm-researcher`. Approach drafts dispatch `glm-drafter`. Attacks
+   dispatch `glm-design-breaker`. Do not dispatch a claim verifier, a
+   runner-up, or a spec pre-draft (R8).
 2. The main thread does classification, merge, the final message, and
    the `DECISION` render — nothing a lane can do.
 3. Never spawn a lane for what one direct call answers.
@@ -150,21 +150,18 @@ all N. If only 1-2 land, do NOT continue serially: re-issue the remainder
 as one batch, or move that work into Flash lanes (each batches
 internally).
 
-Plan rounds, never discover them — each is a full turn (~3.4 s to first
-token, then always-on thinking at ~63 tok/s before any call). Targets:
-Spike/Bounded ≤3 rounds, Architectural ≤4; lane completions not counted.
+Plan rounds, never discover them. Each main turn is a full thinking
+pass at the pinned effort, so a spare round is the wall clock. Budgets
+before the design is shown: Spike/Bounded 3 rounds, Architectural 4.
+Lane completions are not extra rounds. A round past the budget is a
+defect: fold the work into the open round or drop it.
 
 - **Round 1 = everything nameable now**, in ONE message: every file
   plausibly involved (small repo with a `files:` list → all of them), the
-  key symbol greps, ToolSearch to load every deferred tool you will need
-  (WebSearch, WebFetch, AskUserQuestion, TaskCreate) first, and all
-  lanes. Web searches (2-4 variants per question) and TaskCreate join
-  round 1 only if those tools are already loaded; otherwise call them in
-  round 2.
-- **Round 2 = follow-ups round 1 revealed**: the web searches and
-  TaskCreate that round 1 had to load tools for, fetches of the best
-  primary URLs, reads of newly discovered files.
-- **Round 3 = conflicts only**, then write the message.
+  key symbol greps, and all fact lanes. Tools that are not loaded yet
+  wait for the intake message, not a round of their own.
+- Follow-ups round 1 revealed, and one direct check of a conflict, go in
+  the intake message (conductor step 2). They are not a new round.
 - Never serialize independent calls. Never re-run a denied or failed call
   unchanged — switch source or drop it.
 
@@ -205,11 +202,14 @@ max 8). Over `lanes=` → dispatch the lanes that
 can change the approach set first, then refill in batches as completions arrive. Details: `fanout-playbook.md`
 (read when planning more lanes than `lanes=` or after a fan-out failure).
 
-## R8 — Overlap machine work with human wait
+## R8 — Do not start a lane you will not cite
 
-Every message you send leaves useful lanes running: unasked questions →
-assumptions, claim verification, spec pre-draft. Late results: fold them
-in silently; message the user only if one invalidates something shown.
+A lane that finishes later wakes this thread for a full thinking pass.
+Do not launch a claim verifier, a runner-up, or a spec pre-draft.
+`check.py intake` and `check.py close` already gate claims and the pick.
+Unasked questions become assumptions (R6). Late results from the lanes
+you did launch: fold them in silently; message the user only if one
+invalidates something shown.
 
 ## R9 — Load only what the path needs
 
@@ -279,8 +279,7 @@ Question: [ONE precise question]
 ```
 
 **Draft lane** — `subagent_type: "glm-drafter"`. The user message is the
-prompt already written in `architectural.md` (approach lens, claim
-verifier, or runner-up). Do not add rules on top of it.
+approach-lens prompt in `architectural.md`. Do not add rules on top of it.
 
 **Attack lane** — `subagent_type: "glm-design-breaker"`. The user message
 is the option text, the fact ids, and the atoms, question last. Do not
@@ -362,12 +361,12 @@ stdlib-only and read-only; paste stdin through a heredoc. Run it, never
 read it. The script's own line is the repair. A non-zero exit is a
 result: do not retry the same input.
 
-1. `cites --root <repo>` — FINDINGS `path:line — fact — "snippet"`. Round 2, before a lane line enters the draft.
-2. `web` — CLAIMS `claim — tier — URL — date — "quote"`. Same round.
-3. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user said live, then `bind --ledger <path>` on the draft (`send` already binds). Repair every FAIL, never show one.
+1. `intake --root <repo>` — findings and claims together, when lanes return, before a lane line enters the draft. `cites` and `web` remain for one kind of line.
+2. `close --root <repo> --ledger <path> --options <path>` — `## BREAKERS` then `## DRAFT`. It runs break, score, and send. Do not call those three yourself.
+3. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user said live. Repair every FAIL, never show one. `close` already binds the draft.
 4. `spec <path>` — after the spec is written, before the five-lens review.
 5. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
-6. `send --root <repo> --ledger .brainstorm/drafts/ledger.json` — the draft, before you show it, and again after each repair. Do not show a FAIL. `--approved` only after approve printed yes.
+6. `send --ledger` only to re-check a repaired draft. The first send is inside `close`. `--approved` only after approve printed yes.
 7. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 
 ```
@@ -378,28 +377,18 @@ EOF
 
 BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
 unverified stay labelled unverified. A spec FAIL is fixed in place.
-`approve no` means you do not write. The conductor procedure, in order:
+`approve no` means you do not write. The conductor procedure, in order. Each number is one message.
 
-1. Round 1 unchanged: `context.sh`, `handoff.py route`, lanes that emit fact blocks; then `check.py cites` and `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
-2. `decide.py atoms` on the request, the one Flash atom call, then `atoms --check`.
-3. Architectural: three `glm-drafter` lanes, the existing lenses, in one message. Bounded with one existing flow: one drafter. Spike: the answer is the only option and still needs a breaker.
-4. Next message: one `glm-design-breaker` per option, in one message. Write the options JSON to `.brainstorm/drafts/options.json`. Paste breaker stdout to `decide.py break --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json`, then run `decide.py score`. A cite break needs that file or it cannot reproduce.
-5. `pick`: render that card. `ask`: ask that one fork inside the cap of 4 and arm `ask.py wait` (R6). `stop`: do not render a design. `unattacked`: run the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
-6. `check.py send --ledger` before the design is shown. The APPROACH line that is the pick is the id `DECISION` printed; a mismatch is a FAIL.
+1. Round 1: `context.sh`, `handoff.py route`, `decide.py atoms` on the request, and the fact lanes. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
+2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `glm-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
+3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `glm-design-breaker` per option. End the turn.
+4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json`. Stdin is `## BREAKERS` (their stdout) then `## DRAFT` (the design). It runs break, score, and send. Show the design only when it prints `RESULT send fail=0` and `RESULT close fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. The APPROACH line that is the pick is the id `DECISION` printed. On `approve yes`, run `ask.py chain --pick <id>`.
 
 ## Checklist (∥ = one concurrent message)
 
-- **Spike:** ∥ reads + searches (+ ∥ fetches + `check.py` on lane
-  output) → Path line + answer-so-far
-  - probe plan → nod → probe → recommendation.
-- **Bounded:** ∥ reads + greps (+ searches) → ∥ follow-ups (+ `check.py`
-  on lane output) → Path line + design (with its out-of-scope line) +
-  Evidence + assumptions + questions → explicit yes → implement.
-- **Architectural:** ∥ reads + searches + multi-hop lanes + read
-  `architectural.md` → ∥ fetches + `check.py cites`/`web` → design message per `architectural.md`
-  (claim-verifier and spec pre-draft lanes launched that same turn, not
-  awaited) → approval → spec + `check.py spec` + inline self-review + commit if allowed, one turn →
-  review gate → glm-writing-plans.
+- **Spike:** round 1 lanes → `check.py intake` → one breaker → `check.py close` → answer.
+- **Bounded:** round 1 lanes → `check.py intake` + one drafter → one breaker → `check.py close` → yes → implement or the R13 exit.
+- **Architectural:** round 1 lanes + `architectural.md` → `check.py intake` + three drafters → one breaker each → `check.py close` → approval → spec + `check.py spec` + inline self-review, one turn → glm-writing-plans.
 
 ## Red flags
 
@@ -430,7 +419,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   line; designing the wrong task costs the session.
 - "glm-programmer can just build the bounded change" → sibling agents
   outside the R11 table need their owner's engine; hand off instead.
-- "An investigator is deeper, use it everywhere" → a 60-turn agent per
+- "An investigator is deeper, use it everywhere" → a long agent per
   lane; only when a shell or >4 hops is required, max 2.
 
 ## Harness fallbacks
@@ -446,9 +435,8 @@ Missing capability → substitute, never stall.
 4. TaskCreate missing → use TodoWrite for the checklist write.
 
 **ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use
-`subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"`, approach drafts,
-the claim verifier and the runner-up `"glm-drafter"`, attacks
-`"glm-design-breaker"`. Those files pin the model and effort, so never add
+`subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"`, approach drafts
+`"glm-drafter"`, attacks `"glm-design-breaker"`. Those files pin the model and effort, so never add
 a `model` parameter. The prompt is the
 R11 slice. Agents not installed → the built-ins `Explore` (Code) and
 `general-purpose` (Web, drafts, verifier), and the prompt gains the agent-file

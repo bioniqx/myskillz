@@ -428,20 +428,21 @@ def cmd_probe(a):
 
     o.append("== NEXT ==")
     if lane == "FAST":
-        o.append("1. Write ROOT CAUSE: <X> causes <Y> because <Z>, citing a line printed above.")
-        o.append("2. Apply the minimal fix at that line.")
-        o.append("3. One call: python3 %s/debug_tool.py run -- %s"
-                 % (SCRIPTS, shlex.quote(a.cmd) if a.cmd else "<build/test cmd>"))
+        o.append("1. Do not draft ROOT CAUSE and do not edit yet. close prints ROOT CAUSE.")
+        o.append("2. One call: fill experiment --template and run it, then close:")
+        o.append("   python3 %s/debug_tool.py experiment --template > /tmp/exp.json" % SCRIPTS)
+        o.append("   python3 %s/debug_tool.py experiment --spec /tmp/exp.json -j 8" % SCRIPTS)
+        o.append("   python3 %s/debug_tool.py close --experiments <repo>/.debug/experiments.json" % SCRIPTS)
     elif lane == "STANDARD":
-        o.append("1. If a bad value crashed downstream, trace it to where it is CREATED (references/root-cause-tracing.md).")
+        o.append("1. Open references/root-cause-tracing.md only when the crashing line is not where the bad value is created.")
         o.append("2. Write 2-4 hypotheses, each with a control command and a one-variable treatment.")
         o.append("3. One call proves them all:")
         o.append("   python3 %s/debug_tool.py experiment --template > /tmp/exp.json   # fill it in" % SCRIPTS)
         o.append("   python3 %s/debug_tool.py experiment --spec /tmp/exp.json -j 8" % SCRIPTS)
     else:
         o.append("1. Read references/parallel-playbook.md in the SAME call as the first command below.")
-        o.append("2. Measure, do not eyeball:")
-        o.append("   bash %s/stress.sh -n 200 -- %s" % (SCRIPTS, a.cmd or "<single failing test>"))
+        o.append("2. Measure, do not eyeball. Start at -n 40. Re-run at -n 200 only if the interval is too wide to decide:")
+        o.append("   bash %s/stress.sh -n 40 -- %s" % (SCRIPTS, a.cmd or "<single failing test>"))
         o.append("   (regression, culprit unknown) bash %s/bisect-parallel.sh -j 15 <good> HEAD -- <repro>" % SCRIPTS)
         o.append("3. Then one experiment call for all hypotheses (see experiment --template).")
     print("\n".join(o))

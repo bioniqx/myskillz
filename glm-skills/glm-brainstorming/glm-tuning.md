@@ -21,15 +21,13 @@ Time to first token: GLM-5.3 3.43 s, Flash 2.34 s. Both carry a 1M
 context window and 128K max output, so "read everything plausible in
 round 1" is cheap in context and expensive only in rounds.
 
-Judgment lanes on Flash. The claim verifier, the approach drafts, the
-spec pre-draft and any escalated spec reviewers also run on Flash (R2):
-a cost-justified choice we keep, with weaker independence. Flash and
-GLM-5.3 are one model family, so a lane shares the main thread's blind
-spots, and Flash is less likely to catch a subtle contradiction. Treat a
-Flash verifier or reviewer as a cheap second look, not an independent
-audit: check only the claims that decide the design, force different
-lenses on drafts. `decide.py score` picks the approach. Do not promote
-a lane to GLM-5.3 to make that pick.
+Judgment lanes on Flash. Approach drafts and escalated spec reviewers
+run on Flash (R2). A claim verifier and a spec pre-draft are not
+dispatched (SKILL.md R8): each completion wakes a full thinking pass.
+Flash and GLM-5.3 are one model family, so a lane shares the main
+thread's blind spots. Force different lenses on drafts. `decide.py
+score` picks the approach. Do not promote a lane to GLM-5.3 to make
+that pick.
 
 ## 2. Model and effort
 

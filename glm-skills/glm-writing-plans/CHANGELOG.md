@@ -1,5 +1,9 @@
 # glm-writing-plans v9 (GLM edition) - what changed from v8
 
+**Stop at the plan (2026-11-11):** `OK assembled` ends the skill. It reports the path and stops. It does not execute the plan in this session, and it does not ask which of three execution styles. A `chain.json` continue flag, or a user who already asked to implement, is the one handoff to glm-dev-team. `build --repairs` defaults to 1. A lint that survives that repair is a `--resume`, not a second repair inside the same worker. Model ids and thoughtLevel are unchanged.
+
+
+
 **Flash closers (2026-11-06):** every plan lane is GLM-5.3-Flash. `deep` is max effort on Flash, not a bigger model. `injectAgentsMd` is false so the brief is the only instruction. An uncovered heading, an atom with zero or two homes, an `(existing)` symbol missing from a `Read` file, and a review rewrite that drops an assertion are engine `ERR`s. One wide-task split runs inside `build`.
 
 **Sibling router (2026-10-27):** `scripts/handoff.py` is vendored from `_shared/handoff.py`. Call 1 runs `route --self glm-writing-plans` first. A `plan-ready` exit runs `next` and follows `NEXT:` into `glm-dev-team`. The plan file stays free of skill names (R8).
