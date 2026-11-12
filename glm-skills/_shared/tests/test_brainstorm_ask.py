@@ -104,6 +104,91 @@ class _In(object):
         return self.text
 
 
+class ModeTests(unittest.TestCase):
+    def test_a_fast_phrase_is_fast_and_a_plain_request_asks(self):
+        self.assertEqual(ask.classify_request("dung che do FAST"), "fast")
+        self.assertEqual(ask.classify_request("use FAST mode for this feature"), "fast")
+        self.assertEqual(ask.classify_request("D\u00f9ng ch\u1ebf \u0111\u1ed9 fast"), "fast")
+        self.assertEqual(ask.classify_request("FAST"), "fast")
+        self.assertEqual(ask.classify_request("make the search fast"), "ask")
+        self.assertEqual(ask.classify_request("build an interactive dashboard"), "ask")
+
+    def test_a_refusal_beats_a_fast_phrase(self):
+        self.assertEqual(ask.classify_request("khong dung fast"), "normal")
+        self.assertEqual(ask.classify_request("do not use FAST mode"), "normal")
+
+    def test_the_startup_reply_is_only_the_two_choices(self):
+        self.assertEqual(ask.classify_reply("1"), "fast")
+        self.assertEqual(ask.classify_reply("c\u00f3"), "fast")
+        self.assertEqual(ask.classify_reply("2"), "normal")
+        self.assertEqual(ask.classify_reply("th\u01b0\u1eddng"), "normal")
+        self.assertEqual(ask.classify_reply("ok"), "ask")
+        self.assertEqual(ask.classify_reply(""), "ask")
+
+
+class FastPickTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="fast-")
+        self.ledger = os.path.join(self.dir, "ledger.json")
+        self.options = os.path.join(self.dir, "options.json")
+        self.chain = os.path.join(self.dir, "chain.json")
+        self.mode = os.path.join(self.dir, "mode.json")
+        json.dump({"facts": [{"id": "F-1", "status": "OK", "text": "pool"}],
+                   "atoms": ["must ship"]}, open(self.ledger, "w"))
+
+    def _run(self, options, breaks):
+        json.dump(options, open(self.options, "w"))
+        json.dump({"breaks": breaks}, open(os.path.join(self.dir, "breaks.json"), "w"))
+        ns = type("N", (), {"ledger": self.ledger, "options": self.options,
+                            "chain": self.chain, "mode": self.mode})()
+        return ask.cmd_fast(ns)
+
+    def test_a_narrow_margin_writes_fast_chain(self):
+        rc = self._run([
+            {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
+            {"id": "B", "atoms_hit": ["must ship"], "fact_ids": [], "assumptions": []},
+        ], [attacked("A"), attacked("B")])
+        self.assertEqual(rc, 0)
+        chain = json.load(open(self.chain))
+        self.assertEqual(chain["mode"], "fast")
+        self.assertEqual(chain["source"], "fast")
+        self.assertEqual(chain["pick"], "A")
+        self.assertTrue(chain["continue"])
+        self.assertEqual(json.load(open(self.mode))["mode"], "fast")
+
+    def test_an_unattacked_leader_is_still_picked(self):
+        rc = self._run([
+            {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
+        ], [])
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.load(open(self.chain))["pick"], "A")
+
+    def test_an_all_broken_set_picks_the_least_bad(self):
+        broken = {"kind": "COUNTEREXAMPLE", "reproduced": True}
+        rc = self._run([
+            {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
+            {"id": "B", "atoms_hit": [], "fact_ids": [], "assumptions": []},
+        ], [dict(broken, option="A"), dict(broken, option="B")])
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.load(open(self.chain))["pick"], "A")
+
+    def test_no_option_does_not_write_a_chain(self):
+        rc = self._run([], [])
+        self.assertEqual(rc, 2)
+        self.assertFalse(os.path.exists(self.chain))
+
+    def test_the_silence_path_still_refuses_an_unattacked_leader(self):
+        json.dump([
+            {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
+        ], open(self.options, "w"))
+        kind, text = ask.resolve_once(
+            self.ledger, self.options, os.path.join(self.dir, "reply.txt"),
+            os.path.join(self.dir, "cancel"), self.chain, now=2, deadline=1)
+        self.assertEqual(kind, "AUTO")
+        self.assertIn("unattacked", text)
+        self.assertFalse(os.path.exists(self.chain))
+
+
 class ChainCommandTests(unittest.TestCase):
     def test_user_approval_writes_the_same_chain(self):
         dest = os.path.join(tempfile.mkdtemp(prefix="chain-"), "chain.json")

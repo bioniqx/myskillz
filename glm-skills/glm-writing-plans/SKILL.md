@@ -171,7 +171,9 @@ an all-day session.
 If `.brainstorm/drafts/chain.json` contains `"continue": true`, or the
 user's latest message tells you to implement this plan, run
 `handoff.py next --self glm-writing-plans --event plan-ready` and follow
-`NEXT:`. A request that only asked for the plan does not match, including
+`NEXT:`. When that file also contains `"mode": "fast"`, ask nothing: repair
+every `ERR`, re-run the same build, and hand off in the turn `OK assembled`
+prints. A request that only asked for the plan does not match, including
 one that says "implementation plan". Otherwise stop. Do not ask which
 approach. The plan file stays portable (R8).
 

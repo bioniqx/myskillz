@@ -2,7 +2,8 @@
 
 Read in round 1, alongside the fan-out. Covers everything from the first
 lane results to `glm-writing-plans`. SKILL.md's R0-R12 still apply; this file
-adds the shape of the messages.
+adds the shape of the messages. If `ask.py mode` printed `MODE fast`,
+`fast.md` replaces the question in §2 and the review gate in §4. Do not ask.
 
 ## 1. Merge or split the first message
 

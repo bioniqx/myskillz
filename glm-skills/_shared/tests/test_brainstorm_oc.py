@@ -42,6 +42,7 @@ class TestBrainstormOcSkillMd(unittest.TestCase):
             "  - Bash(python3 *check.py*)\n"
             "  - Bash(python3 *decide.py*)\n"
             "  - Bash(python3 *handoff.py*)\n"
+            "  - Bash(python3 *ask.py*)\n"
             "  - Bash(kill -0:*)\n"
             "  - Agent\n"
             "  - Read\n"

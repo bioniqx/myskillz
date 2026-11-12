@@ -1,3 +1,14 @@
+# 10.5 (from 10.4) — FAST mode
+
+Startup runs `ask.py mode` before any lane. The request names FAST, or the
+user picks it at the one question `Dùng chế độ FAST không?`. FAST reads
+`fast.md`: the script picks the scored option, including a narrow margin,
+an unattacked leader, or an all-broken set, writes the spec, and hands off
+with `chain.json` `"mode": "fast"`. glm-writing-plans and glm-dev-team then
+run without another design question. The 15-minute silence path is unchanged
+and still refuses an unattacked or all-broken set. Model ids and
+thoughtLevel are unchanged.
+
 # 10.4 (from 10.3) — fewer thinking passes
 
 Model ids and thoughtLevel stay. Wall clock was the number of main

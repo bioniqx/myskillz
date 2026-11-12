@@ -1,7 +1,7 @@
 ---
 name: glm-brainstorming
-description: "Use this before ANY creative work - creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design in the fewest human turns: preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before any implementation. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
-when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, and 'can we / is it possible' feasibility spikes. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
+description: "Use this before ANY creative work, or when the user says FAST or che do FAST. Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a glm-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST is on. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, 'can we / is it possible' feasibility spikes, and FAST / che do FAST / design and build straight through. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
 allowed-tools:
   - Bash(sh *context.sh*)
   - Bash(sh *start-server.sh*)
@@ -23,12 +23,25 @@ allowed-tools:
 
 Classify → fan out wide in one round → decide on evidence → ask once →
 present once → get approval. Lower rule number wins a conflict.
+`MODE fast` does not ask: `fast.md` replaces that gate.
+
+## Mode — before round 1
+
+The first calls are `context.sh` and `python3 <skill_dir>/scripts/ask.py mode`
+with the user request on stdin. Do not launch a lane in that message.
+
+- `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.
+- `MODE normal` → the rest of this file. Do not ask which mode.
+- `MODE ask` → the first line the user sees is `Dùng chế độ FAST không?`, then the script's `ASK:` block. End the turn. On the reply, run `ask.py mode --reply` with that reply on stdin and take the branch above.
+
+A later message that names FAST or refuses it is a new `ask.py mode` on that
+message. The script stores the choice in `.brainstorm/drafts/mode.json`.
 
 ## Hard rules (the rest of this file is detail)
 
 1. No code, scaffold or file write outside `.brainstorm/drafts/` until
    `check.py approve --asked design` prints `RESULT approve yes`. The
-   stdin is the human reply, or the `AUTO` block from `ask.py wait` (R6).
+   stdin is the human reply, or the `AUTO` block `ask.py` prints (R6, or `fast.md`).
 2. Line 1 of every message you show is `Path: <Spike|Bounded|Architectural> — reason`,
    `Path unchanged: <path>`, or the hand-off line. Run `check.py send` on
    the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
@@ -216,7 +229,8 @@ invalidates something shown.
 Spike/Bounded: this file only. Architectural: `architectural.md` in round 1.
 `research-playbook.md` for >3 web lanes or conflicting evidence.
 `glm-tuning.md` only when configuring the runtime or hitting a
-GLM-specific failure. `spec-document-reviewer-prompt.md` on the
+GLM-specific failure. `fast.md` only after `ask.py mode` printed `MODE fast`.
+`spec-document-reviewer-prompt.md` on the
 Architectural path — load it for the inline self-review of every spec
 (architectural.md §4) and when launching escalated spec review lanes.
 `visual-companion.md` only if accepted. `scripts/check.py` is run
@@ -382,7 +396,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
 1. Round 1: `context.sh`, `handoff.py route`, `decide.py atoms` on the request, and the fact lanes. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `glm-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `glm-design-breaker` per option. End the turn.
-4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
+4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `MODE fast` does not take that branch (`fast.md`). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
 
 ## Checklist (∥ = one concurrent message)
 

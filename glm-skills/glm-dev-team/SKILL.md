@@ -27,6 +27,14 @@ bootstrap. `STAY` means continue. `GUARD` lines bind the whole task. Run
 `needs-design`, `audit`, `docs`, `commit-message`. If
 `.brainstorm/drafts/chain.json` contains `"continue": true` and the handoff
 brought a plan, `devteam start` that plan. Do not ask whether to begin.
+When that file also contains `"mode": "fast"`, do not ask a design, scope,
+or go/no-go question. Answer a `BLOCKED` lane from the plan and SendMessage
+it. If init refuses a dirty integration checkout, `git stash push -m glm-fast`
+once and retry init once; if it still refuses, report that line and stop.
+Do not weaken a test, a gate, a footprint, or a review. Do not force-push,
+deploy, rewrite history, or migrate production. Loop `devteam next` until
+`devteam finish`. If start says the agents were installed this session, tell
+the user once to open a new session; the harness cannot load them sooner.
 
 **Bootstrap — put this in front of your FIRST command, once.** If the harness shows a "Base directory for this skill" line, replace `<base dir>` with that path. Otherwise leave it as is.
 

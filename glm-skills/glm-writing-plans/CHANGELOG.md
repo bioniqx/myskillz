@@ -1,5 +1,9 @@
 # glm-writing-plans v9 (GLM edition) - what changed from v8
 
+**FAST chain (2026-11-12):** when `.brainstorm/drafts/chain.json` contains `"mode": "fast"`, R5 asks nothing. Repair every `ERR`, re-run build, and hand off to glm-dev-team in the turn `OK assembled` prints. A request that only asked for a plan still stops here.
+
+
+
 **Stop at the plan (2026-11-11):** `OK assembled` ends the skill. It reports the path and stops. It does not execute the plan in this session, and it does not ask which of three execution styles. The handoff to glm-dev-team runs only when `.brainstorm/drafts/chain.json` says `"continue": true`, or the user's latest message tells this skill to implement the plan it just wrote. A request that only asked for the plan stays here. `build --repairs` stays 2, inside the build process. Model ids and thoughtLevel are unchanged.
 
 
