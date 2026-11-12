@@ -22,7 +22,7 @@ You are the **Conductor**.
 run `scripts/handoff.py route --self glm-dev-team` (that file sits next to
 `devteam.py`) with the user request on stdin. A previous `FROM-LINE` stays the
 first stdin line. `HANDOFF` or `STOP` is binding: follow `NEXT:` and do not
-bootstrap. `STAY` means continue. `GUARD` lines bind the whole task. Run
+bootstrap. `STAY` means continue. `GUARD` lines bind the whole task. Before bootstrap, or after `finish`, a step this skill does not do is `handoff.py call --self glm-dev-team --to <skill>`; follow `NEXT:`. A read-only lane the six dev-team agents do not cover is `handoff.py agents`, then `handoff.py borrow --self glm-dev-team --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Never instead of a printed `LAUNCH` line. Subagents do not load skills and do not borrow. Run
 `next --event` only when the user wants that exit: `root-cause`, `needs-plan`,
 `needs-design`, `audit`, `docs`, `commit-message`. If
 `.brainstorm/drafts/chain.json` contains `"continue": true` and the handoff

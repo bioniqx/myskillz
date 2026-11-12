@@ -19,7 +19,14 @@ Run `scripts/handoff.py route --self glm-writing-plans` (same directory as
 starts with the previous `FROM-LINE`. `HANDOFF` or `STOP` is binding: follow
 `NEXT:` and do not plan. `STAY` means the three calls below. `GUARD` lines bind
 the whole task. Run `next --self glm-writing-plans --event <event>` only when
-the user wants that exit. Do not choose the sibling from memory.
+the user wants that exit. Do not choose the sibling from memory. When a later
+step is a job this skill does not do, run `handoff.py call --self
+glm-writing-plans --to <skill>` and follow `NEXT:`. When a lane needs another
+skill's agent, run `handoff.py agents`, then `handoff.py borrow --self
+glm-writing-plans --agent <name>`. `AGENT` is one Agent call with that
+`subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF`
+means follow `NEXT:` and do not dispatch that agent. Subagents do not load
+skills and do not borrow.
 
 # R0 - The whole pipeline is three tool calls
 

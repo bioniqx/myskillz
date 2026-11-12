@@ -9,6 +9,12 @@ over the model's guess.
   handoff.py route --self NAME     stdin: the user request. Always exit 0.
   handoff.py next  --self NAME --event EVENT
                                    stdin ignored. Always exit 0.
+  handoff.py call  --self NAME --to SKILL [--why TEXT]
+                                   explicit hand-off inside the seven-skill ring.
+  handoff.py agents                list borrowable agents and engine-only agents.
+  handoff.py borrow --self NAME --agent AGENT
+                                   AGENT: dispatch that subagent. HANDOFF: the
+                                   agent needs its owner skill. Always exit 0.
 
 A line "From: glm-a,glm-b" at the start of stdin is the chain so far. The
 script refuses a cycle and stops at 3 skills. Exit 2 is a usage error.
@@ -126,6 +132,97 @@ EXITS = {
     ),
 }
 
+# The seven skills that may call each other and borrow each other's agents.
+# glm-idea-to-spec stays on route/next only.
+RING = (
+    "glm-brainstorming",
+    "glm-dev-team",
+    "glm-doc-generator",
+    "glm-git-diff-summary",
+    "glm-requirements-code-audit",
+    "glm-systematic-debugging",
+    "glm-writing-plans",
+)
+
+# Direct Agent dispatch. The agent file holds the rules. prompt is the user
+# message, with [BRACKETS] for the caller to fill. write "none" means no file.
+# agent, owner, write, job, prompt
+BORROW = (
+    ("glm-explorer", "glm-brainstorming", "none",
+     "read-only code question in one repo slice",
+     "Task: [ONE LINE]. Root: [ROOT]. Today: [DATE].\n"
+     "Slice: [SLICE]. Siblings cover (stay out): [SIBLINGS].\n"
+     "Question: [ONE precise question]"),
+    ("glm-researcher", "glm-brainstorming", "none",
+     "cited web evidence for one question",
+     "Task: [ONE LINE]. Today: [DATE].\n"
+     "Our stack and versions: [STACK].\n"
+     "Angle: [ANGLE]. Sibling angles (skip): [SIBLINGS].\n"
+     "Question: [ONE precise question]"),
+    ("glm-drafter", "glm-brainstorming", "none",
+     "one approach draft for one lens, no repo writes",
+     "Lens: [ONE LENS].\n"
+     "Facts: [cited facts only].\n"
+     "Question: [draft one approach for this lens]"),
+    ("glm-design-breaker", "glm-brainstorming", "none",
+     "attack one option; counterexample or NO-BREAK",
+     "Option: [option text].\n"
+     "Facts: [fact ids and atoms].\n"
+     "Question: break this option, or reply NO-BREAK"),
+    ("glm-debug-worker", "glm-systematic-debugging", "none",
+     "one hypothesis, one command, 12-line verdict, no edits",
+     "Hypothesis: [ONE].\n"
+     "Command: [exact command].\n"
+     "FIX: n/a"),
+    ("glm-investigator", "glm-dev-team", ".claude/dev-team/research/",
+     "read-only survey or one root-cause angle",
+     "Briefing: [PATH under .claude/dev-team/research/]. Read it first.\n"
+     "Question: [ONE]. Angle: [ANGLE]. Sibling angles (stay out): [SIBLINGS].\n"
+     "Report: [same directory]/[slug].md"),
+    ("glm-spot-reviewer", "glm-dev-team", ".claude/dev-team/reviews/",
+     "read-only correctness and security review of a diff",
+     "Briefing: [PATH under .claude/dev-team/reviews/]. Read it first.\n"
+     "It names the request, acceptance criteria, file scope, git diff command, "
+     "test command, and the report path in that same directory."),
+    ("glm-code-reviewer", "glm-dev-team", ".claude/dev-team/reviews/",
+     "read-only full review of a diff against acceptance criteria",
+     "Briefing: [PATH under .claude/dev-team/reviews/]. Read it first.\n"
+     "It names the request, acceptance criteria, file scope, git diff command, "
+     "test command, and the report path in that same directory."),
+    ("glm-doc-writer", "glm-doc-generator", "the one markdown path in the prompt",
+     "one markdown file from facts inlined in the prompt",
+     "ROLE: Technical writer.\n"
+     "GOAL: Write [PATH] - [TITLE] for [AUDIENCE].\n"
+     "FACTS: [inlined facts]. SCOPE: [paths].\n"
+     "Return exactly 5 lines: title, path, tier, todos, risk."),
+    ("glm-doc-reviewer", "glm-doc-generator", "the one target markdown file",
+     "fact-check one markdown file and fix it in place",
+     "ROLE: Technical fact-checker with edit rights.\n"
+     "TARGET: [PATH]. FACTS: [same slice]. CODE TO CHECK AGAINST: [paths].\n"
+     "Return exactly 5 lines: path, verdict, fixes, unresolved, human."),
+)
+
+# These agents need the owner skill's engine. Dispatching them raw skips
+# worktrees, claim, or script-built briefs. agent, owner, job
+ENGINE = (
+    ("glm-programmer-lite", "glm-dev-team",
+     "one slice in a git worktree; devteam.py claims it"),
+    ("glm-programmer-strong", "glm-dev-team",
+     "a high-risk slice in a git worktree; devteam.py claims it"),
+    ("glm-team-leader", "glm-dev-team",
+     "planning writes plan.md through the dev-team engine"),
+    ("glm-plan-task-writer", "glm-writing-plans",
+     "plan_tool.py builds the writer brief"),
+    ("glm-plan-task-writer-deep", "glm-writing-plans",
+     "plan_tool.py builds the deep writer brief"),
+    ("glm-plan-reviewer", "glm-writing-plans",
+     "plan_tool.py builds the review brief"),
+    ("glm-rca-investigator", "glm-requirements-code-audit",
+     "audit.py builds the evidence batch"),
+    ("glm-rca-verifier", "glm-requirements-code-audit",
+     "audit.py builds the verifier batch"),
+)
+
 GUARDS = (
     "GUARD cite: do not state a path, line, number, URL, version, or command result you did not see in a tool result this session. Label the rest unverified or delete it.",
     "GUARD batch: if you planned several independent tool calls and only 1 or 2 ran, re-issue the rest in one message. Do not continue one call per turn.",
@@ -236,6 +333,38 @@ def exits_line(self_name):
     return "EXITS: " + (" ".join(pairs) if pairs else "none")
 
 
+def one_line(text):
+    text = " ".join((text or "").split())
+    text = "".join(c for c in text if 32 <= ord(c) < 127)
+    return text[:160]
+
+
+def borrow_row(agent):
+    for row in BORROW:
+        if row[0] == agent:
+            return row
+    return None
+
+
+def engine_row(agent):
+    for row in ENGINE:
+        if row[0] == agent:
+            return row
+    return None
+
+
+def _ring_handoff(self_name, target, because, seen):
+    """Explicit hand-off. Returns (action, name, because, seen_out)."""
+    owned = _with_self(seen, self_name)
+    if target == self_name or target in owned:
+        why = ("%s is already in this chain" % target) if target != self_name else (
+            "you are already running %s" % self_name)
+        return "stay", self_name, why, owned
+    if len(owned) >= MAX_CHAIN:
+        return "stop", "cap", "three skills already ran in this task", owned
+    return "handoff", target, because, owned + [target]
+
+
 def read_hint(name):
     roots = (
         "~/.zcode/skills/%s/SKILL.md",
@@ -330,6 +459,96 @@ def cmd_next(args):
     return 0
 
 
+def _print_emit(action, name, because, seen_out, self_name, result_prefix):
+    lines = emit(action, name, because, seen_out, self_name)
+    lines[-1] = "RESULT %s action=%s name=%s" % (result_prefix, action, name)
+    for line in lines:
+        print(line)
+
+
+def cmd_call(args):
+    if args.self not in RING:
+        print("RESULT call action=stop name=usage")
+        return 2
+    text = sys.stdin.read()
+    extra = [p for p in (args.seen or "").split(",") if p]
+    seen = chain_from(text, extra)
+    if args.to not in RING:
+        print("STAY %s" % args.self)
+        print("BECAUSE: %s is outside the seven-skill ring" % (args.to or ""))
+        print("RING: %s" % " ".join(RING))
+        print("NEXT: pick a skill from RING and run call again, or finish here.")
+        print("FROM-LINE: From: %s" % ",".join(_with_self(seen, args.self)))
+        print(exits_line(args.self))
+        for line in GUARDS:
+            print(line)
+        print("RESULT call action=stay name=%s" % args.self)
+        return 0
+    because = one_line(args.why) or "this skill needs that skill's procedure"
+    action, name, because, seen_out = _ring_handoff(args.self, args.to, because, seen)
+    _print_emit(action, name, because, seen_out, args.self, "call")
+    return 0
+
+
+def cmd_agents(_args):
+    for agent, owner, write, job, _prompt in BORROW:
+        print("BORROW %s owner=%s write=%s job=%s" % (agent, owner, write, job))
+    for agent, owner, job in ENGINE:
+        print("ENGINE %s owner=%s job=%s" % (agent, owner, job))
+    print("NEXT: borrow --agent NAME prints the Agent prompt. "
+          "An ENGINE row is a skill call, not an Agent call.")
+    print("RESULT agents borrow=%d engine=%d" % (len(BORROW), len(ENGINE)))
+    return 0
+
+
+def cmd_borrow(args):
+    if args.self not in RING:
+        print("RESULT borrow action=stop name=usage")
+        return 2
+    brow = borrow_row(args.agent)
+    erow = engine_row(args.agent)
+    if brow is None and erow is None:
+        names = " ".join([row[0] for row in BORROW] + [row[0] for row in ENGINE])
+        print("STAY %s" % args.self)
+        print("BECAUSE: unknown agent %s" % (args.agent or ""))
+        print("AGENTS: %s" % names)
+        print("NEXT: pick a name from AGENTS and run borrow again, or finish here.")
+        print("RESULT borrow action=stay name=%s" % args.self)
+        return 0
+    owner = brow[1] if brow else erow[1]
+    if owner == args.self:
+        print("STAY %s" % args.self)
+        print("BECAUSE: you own %s. Dispatch it with this skill's own procedure." % args.agent)
+        print("NEXT: do not switch skills.")
+        print("RESULT borrow action=stay name=%s" % args.self)
+        return 0
+    if brow:
+        _agent, owner, write, job, prompt = brow
+        print("AGENT %s" % _agent)
+        print("OWNER %s" % owner)
+        print("SUBAGENT_TYPE %s" % _agent)
+        print("WRITE %s" % write)
+        print("BECAUSE: %s" % job)
+        print("PROMPT:")
+        print(prompt)
+        print("NEXT: one Agent call. subagent_type is SUBAGENT_TYPE. "
+              "The user message is the PROMPT block with the brackets filled. "
+              "Do not add a model parameter. Do not load the owner skill. "
+              "If WRITE is not none, the caller writes only that path and names it in the prompt. "
+              "Subagents do not load skills and do not borrow.")
+        for line in GUARDS:
+            print(line)
+        print("RESULT borrow action=agent name=%s" % _agent)
+        return 0
+    text = sys.stdin.read()
+    extra = [p for p in (args.seen or "").split(",") if p]
+    seen = chain_from(text, extra)
+    _agent, owner, job = erow
+    action, name, because, seen_out = _ring_handoff(args.self, owner, job, seen)
+    _print_emit(action, name, because, seen_out, args.self, "borrow")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="handoff.py")
     sub = parser.add_subparsers(dest="cmd")
@@ -340,11 +559,27 @@ def main(argv=None):
     nxt.add_argument("--self", required=True)
     nxt.add_argument("--event", required=True)
     nxt.add_argument("--seen", default="")
+    call = sub.add_parser("call")
+    call.add_argument("--self", required=True)
+    call.add_argument("--to", required=True)
+    call.add_argument("--why", default="")
+    call.add_argument("--seen", default="")
+    sub.add_parser("agents")
+    borrow = sub.add_parser("borrow")
+    borrow.add_argument("--self", required=True)
+    borrow.add_argument("--agent", required=True)
+    borrow.add_argument("--seen", default="")
     args = parser.parse_args(argv)
     if args.cmd == "route":
         return cmd_route(args)
     if args.cmd == "next":
         return cmd_next(args)
+    if args.cmd == "call":
+        return cmd_call(args)
+    if args.cmd == "agents":
+        return cmd_agents(args)
+    if args.cmd == "borrow":
+        return cmd_borrow(args)
     parser.print_help(sys.stderr)
     return 2
 

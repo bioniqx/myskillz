@@ -1,3 +1,12 @@
+# 10.6 (from 10.5) — the seven skills call each other
+
+`handoff.py call --to` hands the next step to any of the seven skills when
+this skill does not own that step. `handoff.py borrow --agent` prints an
+`AGENT` dispatch for a sibling agent whose prompt is self-contained, and a
+`HANDOFF` for an agent that needs its owner's engine (programmers, leader,
+plan writers, audit batches). The chain cap of 3 still applies. Subagents
+still do not load skills.
+
 # 10.5 (from 10.4) — FAST mode
 
 Startup runs `ask.py mode` before any lane. The request names FAST, or the

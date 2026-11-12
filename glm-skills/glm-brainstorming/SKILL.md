@@ -101,6 +101,8 @@ the script saw nothing more specific; classify the path below. A mixed
 request hands off the first step only. At a real exit (R13), run
 `handoff.py next --self glm-brainstorming --event <event>` with an event
 from the `EXITS` line, and only when the user wants that next job.
+When a later step is a job this skill does not do, run
+`handoff.py call --self glm-brainstorming --to <skill>` and follow `NEXT:`.
 
 Hand-off guards: routing is not implementation, so R0 stands. At most 3
 skills; the script enforces the cap and a cycle. Subagents never invoke
@@ -322,12 +324,12 @@ Rules, one per agent:
    acceptance criteria, file scope, `git diff` command, test command and
    report path `.claude/dev-team/reviews/brainstorm-<slug>.md`.
 
-Every other sibling agent (`glm-team-leader`, `glm-programmer-*`,
-`glm-code-reviewer`, `glm-plan-*`, `glm-rca-*`, `glm-doc-*`) needs its
-owner skill's engine (worktrees, script-built briefs, run state):
-reach it only by handing off to that skill, never by direct dispatch.
-Sibling agent not installed → its Code-lane equivalent (`glm-explorer`),
-or the main thread runs the one command itself.
+Any other sibling agent: run
+`handoff.py borrow --self glm-brainstorming --agent <name>`.
+`AGENT` is one dispatch; the `PROMPT` block is the user message.
+`HANDOFF` means that agent needs its owner skill: follow `NEXT:` and do not dispatch it.
+`handoff.py agents` lists both kinds. Do not reconstruct the list from memory.
+Sibling agent not installed → `glm-explorer`, or the main thread runs the one command.
 
 **Merge:** scratch-list the `path:line` facts and cited claims, after
 `check.py` has run on them (R14). Conflicts → one direct check next round. Every UNKNOWN or UNVERIFIED
@@ -431,8 +433,8 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   request to classify.
 - "It's misrouted, but I can design it anyway" → routing costs one
   line; designing the wrong task costs the session.
-- "glm-programmer can just build the bounded change" → sibling agents
-  outside the R11 table need their owner's engine; hand off instead.
+- "glm-programmer can just build the bounded change" → run
+  `handoff.py borrow`. `HANDOFF` means the owner skill; do not dispatch it.
 - "An investigator is deeper, use it everywhere" → a long agent per
   lane; only when a shell or >4 hops is required, max 2.
 

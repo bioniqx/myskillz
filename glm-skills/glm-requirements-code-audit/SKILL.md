@@ -18,7 +18,7 @@ metadata:
 
 # Requirements ↔ Code Audit — GLM edition
 
-**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-requirements-code-audit` (next to `audit.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not brief. `STAY`: continue. `GUARD` lines bind the whole task. After `finalize`, run `next --event` only if the user asks: `implement-gaps`, `fix-gaps`, or `bug`. This skill still does not edit the code.
+**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-requirements-code-audit` (next to `audit.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not brief. `STAY`: continue. `GUARD` lines bind the whole task. After `finalize`, run `next --event` only if the user asks: `implement-gaps`, `fix-gaps`, or `bug`. This skill still does not edit the code. When a later step is a job this skill does not do, run `handoff.py call --self glm-requirements-code-audit --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-requirements-code-audit --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 Checks whether the **code faithfully implements a requirements document**, reports every divergence with
 `path:lines` evidence, and produces a prioritized remediation plan. It never changes the code.

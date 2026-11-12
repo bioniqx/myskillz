@@ -12,7 +12,7 @@ metadata:
 
 **Iron Law:** no fix until you can write `ROOT CAUSE: X causes Y because Z`, backed by evidence you observed in this session (output, trace, diff, repro). A guess is not evidence. Speed comes from fewer model turns, never from skipping the root cause.
 
-**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-systematic-debugging` (next to `debug_tool.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not probe. `STAY`: continue. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here.
+**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-systematic-debugging` (next to `debug_tool.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not probe. `STAY`: continue. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here. When a later step is a job this skill does not do, run `handoff.py call --self glm-systematic-debugging --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-systematic-debugging --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 ## R0. Bootstrap — put this in front of your FIRST command, once
 

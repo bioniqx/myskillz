@@ -101,6 +101,81 @@ class NextTests(unittest.TestCase):
         self.assertIn("STOP cap", out)
 
 
+class CallTests(unittest.TestCase):
+    def test_doc_generator_can_call_debugging(self):
+        rc, out = run(
+            ["call", "--self", "glm-doc-generator", "--to", "glm-systematic-debugging",
+             "--why", "the docs found a defect"],
+            "")
+        self.assertEqual(rc, 0)
+        self.assertIn("HANDOFF glm-systematic-debugging", out)
+        self.assertIn("TELL: $glm-systematic-debugging", out)
+        self.assertIn("the docs found a defect", out)
+        self.assertIn("RESULT call action=handoff name=glm-systematic-debugging", out)
+
+    def test_call_outside_the_ring_stays(self):
+        _rc, out = run(["call", "--self", "glm-dev-team", "--to", "glm-idea-to-spec"])
+        self.assertIn("STAY glm-dev-team", out)
+        self.assertIn("outside the seven-skill ring", out)
+        self.assertIn("RESULT call action=stay", out)
+
+    def test_call_respects_the_cap(self):
+        _rc, out = run(
+            ["call", "--self", "glm-doc-generator", "--to", "glm-dev-team"],
+            "From: glm-brainstorming,glm-writing-plans\n")
+        self.assertIn("STOP cap", out)
+
+    def test_call_refuses_a_cycle(self):
+        _rc, out = run(
+            ["call", "--self", "glm-dev-team", "--to", "glm-brainstorming"],
+            "From: glm-brainstorming\n")
+        self.assertIn("STAY glm-dev-team", out)
+        self.assertIn("already in this chain", out)
+
+    def test_idea_to_spec_cannot_use_call(self):
+        rc, out = run(["call", "--self", "glm-idea-to-spec", "--to", "glm-dev-team"])
+        self.assertEqual(rc, 2)
+        self.assertIn("RESULT call action=stop name=usage", out)
+
+
+class BorrowTests(unittest.TestCase):
+    def test_agents_lists_borrow_and_engine(self):
+        rc, out = run(["agents"])
+        self.assertEqual(rc, 0)
+        self.assertIn("BORROW glm-explorer owner=glm-brainstorming", out)
+        self.assertIn("ENGINE glm-programmer-lite owner=glm-dev-team", out)
+        self.assertIn("RESULT agents borrow=", out)
+
+    def test_borrow_prints_a_dispatch(self):
+        rc, out = run(["borrow", "--self", "glm-writing-plans", "--agent", "glm-explorer"])
+        self.assertEqual(rc, 0)
+        self.assertIn("AGENT glm-explorer", out)
+        self.assertIn("SUBAGENT_TYPE glm-explorer", out)
+        self.assertIn("PROMPT:", out)
+        self.assertIn("Question:", out)
+        self.assertIn("RESULT borrow action=agent name=glm-explorer", out)
+        self.assertFalse(any(line.startswith("HANDOFF ") for line in out.splitlines()))
+
+    def test_engine_agent_hands_off_to_its_owner(self):
+        rc, out = run(
+            ["borrow", "--self", "glm-doc-generator", "--agent", "glm-programmer-strong"])
+        self.assertEqual(rc, 0)
+        self.assertIn("HANDOFF glm-dev-team", out)
+        self.assertIn("RESULT borrow action=handoff name=glm-dev-team", out)
+        self.assertNotIn("AGENT glm-programmer-strong", out)
+
+    def test_owner_does_not_borrow_its_own_agent(self):
+        _rc, out = run(["borrow", "--self", "glm-dev-team", "--agent", "glm-programmer-lite"])
+        self.assertIn("STAY glm-dev-team", out)
+        self.assertIn("you own glm-programmer-lite", out)
+
+    def test_unknown_agent_lists_names(self):
+        _rc, out = run(["borrow", "--self", "glm-brainstorming", "--agent", "glm-nope"])
+        self.assertIn("unknown agent", out)
+        self.assertIn("glm-rca-verifier", out)
+        self.assertIn("RESULT borrow action=stay", out)
+
+
 class SpecLintTests(unittest.TestCase):
     def write(self, text):
         fh = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
