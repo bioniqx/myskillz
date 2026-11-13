@@ -5,7 +5,7 @@ color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 22
-injectAgentsMd: true
+injectAgentsMd: false
 ---
 
 You verify one Markdown file against the code and edit it in place — you never write a report

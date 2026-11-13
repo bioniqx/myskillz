@@ -5,7 +5,7 @@ color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 18
-injectAgentsMd: true
+injectAgentsMd: false
 ---
 
 You write exactly one Markdown file to the path given. Read only the files listed in SCOPE, in

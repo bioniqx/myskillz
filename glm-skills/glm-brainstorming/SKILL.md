@@ -27,9 +27,18 @@ present once → get approval. Lower rule number wins a conflict.
 
 ## Mode — before round 1
 
-The first calls are `context.sh` and `python3 <skill_dir>/scripts/ask.py mode`
-with the user request on stdin. Do not launch a lane in that message.
+The first round-1 call is one command. It runs route,
+`sh <Base directory>/scripts/context.sh`, and `ask.py mode`. Do not run
+those three yourself, and do not launch a lane in that message.
 
+```bash
+python3 <skill_dir>/scripts/handoff.py open --self glm-brainstorming
+```
+
+The user request is the stdin. A previous `FROM-LINE` stays first. Follow
+the last `NEXT:` line.
+
+- `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
 - `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.
 - `MODE normal` → the rest of this file. Do not ask which mode.
 - `MODE ask` → the first line the user sees is `Dùng chế độ FAST không?`, then the script's `ASK:` block. End the turn. On the reply, run `ask.py mode --reply` with that reply on stdin and take the branch above.
@@ -46,9 +55,9 @@ message. The script stores the choice in `.brainstorm/drafts/mode.json`.
    `Path unchanged: <path>`, or the hand-off line. Run `check.py send` on
    the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
 3. Round 1 is ONE message containing everything nameable, opened with
-   `Round 1: N calls in this message`. The first two calls are context.sh
-   and `handoff.py route --self glm-brainstorming` on the user request.
-   `HANDOFF` or `STOP` is binding: follow its `NEXT:` line, do not design.
+   `Round 1: N calls in this message`. The first round-1 call already ran:
+   `open` printed route, context, and mode. `HANDOFF` or `STOP` is binding:
+   follow its `NEXT:` line, do not design.
    `STAY` means you classify the path. `GUARD` lines bind the whole task.
 4. Never cite a path:line, URL, date, version or quote you did not see
    in a tool result in this session. `check.py send` re-checks the draft;
@@ -63,13 +72,11 @@ message. The script stores the choice in `.brainstorm/drafts/mode.json`.
    is the R11 slice and nothing else.
 8. Hidden complexity upgrades the path; nothing downgrades.
 
-## Live context (first round-1 call)
+## Live context (inside the first round-1 call)
 
-Run `sh <Base directory>/scripts/context.sh` as your first round-1 call,
-with the "Base directory for this skill" path in place of
-`<Base directory>`. If a context block with a `harness:` line is already
-in the conversation (the `/glm-brainstorm` command injects one), use it
-and skip the script.
+`open` already ran `sh <Base directory>/scripts/context.sh`. Trust the
+`=== PRELUDE ===` block. If a context block with a `harness:` line is
+already in the conversation, use it and do not run `open` again.
 
 Trust this block. Never re-run `ls`, `find`, `git status`, or `cat` on
 manifests. Reference files live in `skill_dir` — installed at
@@ -91,13 +98,11 @@ Ceremony scales with the task; R0 never does.
 
 ## R1 — Classify; open your first message with it
 
-Triage before the Path line. In the round-1 batch, right after context.sh,
-run `python3 <skill_dir>/scripts/handoff.py route --self glm-brainstorming`
-with the user request on stdin. If you were handed here, stdin starts with
-the previous `FROM-LINE`. `HANDOFF` or `STOP` is binding: the line you show
-is `Not a design task - handing to <skill> because <reason>` (it replaces
-the Path line), then do what `NEXT:` says, and do not design. `STAY` means
-the script saw nothing more specific; classify the path below. A mixed
+Triage before the Path line. `open` already routed. `HANDOFF` or `STOP`
+is binding: the line you show is `Not a design task - handing to <skill>
+because <reason>` (it replaces the Path line), then do what `NEXT:` says,
+and do not design. `STAY` means the script saw nothing more specific;
+classify the path below. A mixed
 request hands off the first step only. At a real exit (R13), run
 `handoff.py next --self glm-brainstorming --event <event>` with an event
 from the `EXITS` line, and only when the user wants that next job.
@@ -395,7 +400,7 @@ BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
 unverified stay labelled unverified. A spec FAIL is fixed in place.
 `approve no` means you do not write. The conductor procedure, in order. Each number is one message.
 
-1. Round 1: `context.sh`, `handoff.py route`, `decide.py atoms` on the request, and the fact lanes. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`.
+1. Round 1, after `open`: `decide.py atoms` on the request, and the fact lanes, in that one message. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `glm-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `glm-design-breaker` per option. End the turn.
 4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `MODE fast` does not take that branch (`fast.md`). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.

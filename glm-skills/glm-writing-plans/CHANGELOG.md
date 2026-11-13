@@ -1,5 +1,7 @@
 # glm-writing-plans v9 (GLM edition) - what changed from v8
 
+**One opening call (2026-11-13):** call 1 is `handoff.py open --spec`. It routes and runs `brief` in the same process. Contracts and `build` are still the next two calls. Model ids and thoughtLevel are unchanged.
+
 **FAST chain (2026-11-12):** when `.brainstorm/drafts/chain.json` contains `"mode": "fast"`, R5 asks nothing. Repair every `ERR`, re-run build, and hand off to glm-dev-team in the turn `OK assembled` prints. A request that only asked for a plan still stops here.
 
 

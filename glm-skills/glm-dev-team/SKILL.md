@@ -18,11 +18,13 @@ allowed-tools:
 
 You are the **Conductor**.
 
-**Sibling handoff, first.** In the same first message, before the bootstrap,
-run `scripts/handoff.py route --self glm-dev-team` (that file sits next to
-`devteam.py`) with the user request on stdin. A previous `FROM-LINE` stays the
-first stdin line. `HANDOFF` or `STOP` is binding: follow `NEXT:` and do not
-bootstrap. `STAY` means continue. `GUARD` lines bind the whole task. Before bootstrap, or after `finish`, a step this skill does not do is `handoff.py call --self glm-dev-team --to <skill>`; follow `NEXT:`. A read-only lane the six dev-team agents do not cover is `handoff.py agents`, then `handoff.py borrow --self glm-dev-team --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Never instead of a printed `LAUNCH` line. Subagents do not load skills and do not borrow. Run
+**Sibling handoff, first.** The first command is one call. It routes and prints `D=`. Do not run route and the path loop as two calls.
+
+```bash
+python3 scripts/handoff.py open --self glm-dev-team
+```
+
+The user request is the stdin. A previous `FROM-LINE` stays the first stdin line. `OPEN: routed` is binding: follow `NEXT:` and do not bootstrap. `OPEN: stay` prints `D=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. `GUARD` lines bind the whole task. Before bootstrap, or after `finish`, a step this skill does not do is `handoff.py call --self glm-dev-team --to <skill>`; follow `NEXT:`. A read-only lane the six dev-team agents do not cover is `handoff.py agents`, then `handoff.py borrow --self glm-dev-team --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Never instead of a printed `LAUNCH` line. Subagents do not load skills and do not borrow. Run
 `next --event` only when the user wants that exit: `root-cause`, `needs-plan`,
 `needs-design`, `audit`, `docs`, `commit-message`. If
 `.brainstorm/drafts/chain.json` contains `"continue": true` and the handoff
@@ -36,13 +38,7 @@ deploy, rewrite history, or migrate production. Loop `devteam next` until
 `devteam finish`. If start says the agents were installed this session, tell
 the user once to open a new session; the harness cannot load them sooner.
 
-**Bootstrap — put this in front of your FIRST command, once.** If the harness shows a "Base directory for this skill" line, replace `<base dir>` with that path. Otherwise leave it as is.
-
-```bash
-D=; for d in "<base dir>" ~/.zcode/skills/glm-dev-team .zcode/skills/glm-dev-team .agents/skills/glm-dev-team ~/.agents/skills/glm-dev-team; do [ -f "$d/scripts/devteam.py" ] && D=$(cd "$d/scripts" && pwd) && break; done; [ -n "$D" ] || { echo "glm-dev-team: scripts/devteam.py not found in any skills dir; use the Base directory for this skill" >&2; exit 1; }; echo "D=$D"
-```
-
-The output starts with `D=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path**. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. On a miss the snippet prints `glm-dev-team: scripts/devteam.py not found …` and exits 1. Install the skill first (README), and never run `python3 "" …`.
+**Bootstrap.** `open` already printed `D=`. On a miss it prints no `D=` line: install the skill first (README), and never run `python3 "" …`. Do not run the path loop again.
 
 - **Engine** — deterministic scheduler, integrator and concurrency governor. A whole run is
   `devteam start <plan.md>` once, then `devteam next` (no arguments) on every wake-up. `next` reads

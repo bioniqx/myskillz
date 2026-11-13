@@ -64,7 +64,7 @@ class ScriptTests(unittest.TestCase):
         self.text = read(SKILL)
 
     def test_recon_cache_hits_once_the_manifest_is_saved(self):
-        recon = bash_blocks(section(self.text, "2. TURN 1"))[0]
+        recon = (SKILL_DIR / "scripts" / "recon.sh").read_text(encoding="utf-8")
         first = run_bash(recon, self.repo)
         self.assertEqual(first.returncode, 0, first.stderr)
         head = re.search(r"^HEAD: (\S+)$", first.stdout, re.M).group(1)

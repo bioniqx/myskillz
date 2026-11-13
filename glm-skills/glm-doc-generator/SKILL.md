@@ -18,7 +18,7 @@ self-contained: every brief, template and script you need is below. **Never read
 other file of this skill.** `agents/` are installer assets. `scripts/handoff.py` is
 run, not read.
 
-**Sibling handoff, same message as Turn 1.** Run `scripts/handoff.py route --self glm-doc-generator` with the user request on stdin before the recon. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not recon. `STAY`: Turn 1 as written. `GUARD` lines bind the whole task. After the summary, `next --event commit-message` or `code-wrong` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self glm-doc-generator --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-doc-generator --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+**Sibling handoff is Turn 1.** One call, from the repo root, with the user request on stdin: `python3 scripts/handoff.py open --self glm-doc-generator`. A previous `FROM-LINE` stays first. `OPEN: routed` means follow `NEXT:` and do not recon. `OPEN: stay` means the prelude is the recon. `GUARD` lines bind the whole task. After the summary, `next --event commit-message` or `code-wrong` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self glm-doc-generator --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-doc-generator --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 ---
 
@@ -47,7 +47,7 @@ effort) — fire all of them in ONE message, one per doc, then end the turn.
 
 | Turn | Content (single message) |
 |------|--------------------------|
-| 1 | 1 bash: cache check + recon + fact pack |
+| 1 | 1 call: `handoff.py open` (route + cache check + recon + fact pack) |
 | 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped + 1 bash (manifest + state scaffold + index + dirs) + ≤ 8 writer Tasks (the ★ set, speculatively, while the Gate waits) |
 | 3 | Delta writers only if the Gate answer changed the set (with any still-running speculative writers ≤ 8 in flight) + reviewer Tasks (HIGH-tier only) + any 1 retry, together ≤ 8; extras next message |
 | 4 | 1 bash (mechanical verify + update state) + final summary |
@@ -73,34 +73,12 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 
 ---
 
-## 2. TURN 1 — RECON (exactly one bash call, nothing else)
+## 2. TURN 1 — RECON (exactly one call, nothing else)
 
-Run this verbatim from the repo root. It checks cache, builds the manifest AND the fact
-pack in one pass, and degrades gracefully with no git / no ripgrep.
+`open` already ran `scripts/recon.sh` from the repo root. It checks cache, builds the manifest AND the fact
+pack in one pass, and degrades gracefully with no git / no ripgrep. Do not run that script yourself, and do not read it.
 
-```bash
-S="${DOCGEN_STATE_DIR:-.zcode/doc-gen}"; mkdir -p "$S"; {
-H=$(git rev-parse --short HEAD 2>/dev/null); [ -z "$H" ] && H=$( (find . -path ./.git -prune -o -type f -print0 2>/dev/null | xargs -0 ls -la 2>/dev/null) | cksum | tr -d ' ' | cut -c1-12);
-if [ -f "$S/recon.md" ] && [ "$(sed -n 's/^HEAD: //p' "$S/recon.md" | head -n 1)" = "$H" ]; then echo "=== CACHE HIT ==="; cat "$S/recon.md"; cat "$S/state.json" 2>/dev/null; exit 0; fi
-O=$(sed -n 's/^HEAD: //p' "$S/recon.md" 2>/dev/null | head -n 1); [ -n "$O" ] && { echo "=== CHANGED SINCE $O ==="; git diff --name-only "$O"..HEAD 2>/dev/null | head -200; }
-echo "HEAD: $H"; echo "ROOT: $(pwd)"
-FL=$(git ls-files 2>/dev/null); [ -z "$FL" ] && FL=$(find . -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/venv/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/target/*' -not -path '*/vendor/*' -not -path '*/.next/*' 2>/dev/null | sed 's|^\./||')
-echo "FILES: $(printf '%s\n' "$FL" | wc -l)"
-echo "== TREE =="; printf '%s\n' "$FL" | awk -F/ 'NF>1{print $1"/"$2} NF==1{print $1}' | sort | uniq -c | sort -rn | head -40
-echo "== EXT =="; printf '%s\n' "$FL" | sed -n 's/.*\.\([A-Za-z0-9]\{1,6\}\)$/\1/p' | sort | uniq -c | sort -rn | head -12
-for m in package.json pyproject.toml requirements.txt go.mod Cargo.toml pom.xml build.gradle composer.json Gemfile Makefile Dockerfile docker-compose.yml .env.example; do [ -f "$m" ] && { echo "== $m =="; head -60 "$m"; }; done
-for r in README.md README.rst readme.md CONTRIBUTING.md; do [ -f "$r" ] && { echo "== $r =="; sed -n '1,120p' "$r"; }; done
-for d in requirements specs spec docs doc design; do for s in "$d"/*.md "$d"/*.txt; do [ -f "$s" ] && { echo "== SPEC(READ-ONLY): $s =="; sed -n '1,120p' "$s"; }; done; done
-echo "== FACTPACK =="
-P='app\.(get|post|put|patch|delete)\(|@app\.route|@(Get|Post|Put|Patch|Delete)Mapping|router\.(get|post|put|patch|delete)\(|func \(.*\) [A-Z][A-Za-z]*\(|http\.HandleFunc|export (default |async )?(function|class|const) [A-Za-z]|^[[:space:]]*(public|private) [A-Za-z<>\[\]]+ [a-zA-Z]+\(|class [A-Za-z]+(Model|Entity|Service|Controller|Repository)|CREATE TABLE|^[[:space:]]*(interface|type) [A-Z][A-Za-z]*|@(Entity|Table|Column)|models\.[A-Z][a-zA-Z]*Field|process\.env\.[A-Z_]+|os\.getenv\('
-if command -v rg >/dev/null 2>&1; then rg -n --no-heading -m 500 --max-filesize 512K -g '!*.min.*' -g '!*.lock' -e "$P" . 2>/dev/null | head -400; else grep -rnE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=vendor "$P" . 2>/dev/null | head -400; fi
-echo "== TESTS =="; printf '%s\n' "$FL" | grep -iE '(^|/)(tests?|spec|__tests__)/|\.(test|spec)\.[a-z]+$|_test\.[a-z]+$' | head -25
-echo "== CI =="; ls .github/workflows/*.y*ml Jenkinsfile .gitlab-ci.yml 2>/dev/null | head -10
-echo "== EXISTING DOCS =="; printf '%s\n' "$FL" | grep -iE '\.(md|rst|adoc)$' | head -40
-} 2>/dev/null | head -900
-```
-
-**Then, in your own head only** (no extra tool call), compress the output into this manifest.
+**Then, in your own head only** (no extra tool call), compress the prelude into this manifest.
 You will paste slices of it into Task prompts; it is written to `<state dir>/recon.md` in Turn 2, before any writer starts.
 
 ```
@@ -367,7 +345,7 @@ color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 18
-injectAgentsMd: true
+injectAgentsMd: false
 ---
 
 You write exactly one Markdown file to the path given. Read only the files listed in SCOPE, in
@@ -386,7 +364,7 @@ color: yellow
 model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 22
-injectAgentsMd: true
+injectAgentsMd: false
 ---
 
 You verify one Markdown file against the code and edit it in place — you never write a report

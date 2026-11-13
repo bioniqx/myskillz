@@ -15,15 +15,23 @@ over the model's guess.
   handoff.py borrow --self NAME --agent AGENT
                                    AGENT: dispatch that subagent. HANDOFF: the
                                    agent needs its owner skill. Always exit 0.
+  handoff.py open  --self NAME [--spec FILE] [--cmd TEXT] [--base REF]
+                                   stdin: the user request. route, then the
+                                   skill's local prelude, in this process.
+                                   Always exit 0 except usage (exit 2).
 
 A line "From: glm-a,glm-b" at the start of stdin is the chain so far. The
 script refuses a cycle and stops at 3 skills. Exit 2 is a usage error.
-Stdlib only. No network. No writes.
+route, next, call, agents, and borrow are stdlib only: no network, no writes.
+open may run that skill's existing local scripts, which can write their own
+state (mode.json, .audit) or fetch a git base. It never calls a model itself.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import subprocess
 import sys
 import unicodedata
 
@@ -381,27 +389,229 @@ def read_hint(name):
     ) % (paths, name)
 
 
-def emit(action, name, because, seen, self_name):
+def emit(action, name, because, seen, self_name, include_next=True):
     lines = []
     if action == "handoff":
         lines.append("HANDOFF %s" % name)
         lines.append("BECAUSE: %s" % because)
         lines.append("TELL: $%s" % name)
-        lines.append("NEXT: %s" % read_hint(name))
+        if include_next:
+            lines.append("NEXT: %s" % read_hint(name))
     elif action == "stop":
         lines.append("STOP cap")
         lines.append("BECAUSE: %s" % because)
-        lines.append("NEXT: three skills already ran. Finish in this skill or ask the user. Do not load another skill.")
+        if include_next:
+            lines.append("NEXT: three skills already ran. Finish in this skill or ask the user. Do not load another skill.")
     else:
         lines.append("STAY %s" % name)
         lines.append("BECAUSE: %s" % because)
-        lines.append("NEXT: this skill owns the request. Continue its own procedure.")
+        if include_next:
+            lines.append("NEXT: this skill owns the request. Continue its own procedure.")
     lines.append("FROM-LINE: From: %s" % ",".join(seen))
     lines.append("SEEN: %s" % ",".join(seen))
     lines.append(exits_line(self_name if action != "handoff" else name))
     lines.extend(GUARDS)
     lines.append("RESULT route action=%s name=%s" % (action, name))
     return lines
+
+
+BASE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+
+
+def _skill_scripts(self_name):
+    """Directory of this skill's scripts.
+
+    The installed copy lives at <skill>/scripts/handoff.py. The canonical
+    file lives in _shared/, next to the skill folders.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    if os.path.basename(os.path.dirname(here)) == self_name:
+        return here
+    sibling = os.path.normpath(os.path.join(here, "..", self_name, "scripts"))
+    if os.path.isdir(sibling):
+        return sibling
+    return here
+
+
+def _run_local(argv, stdin="", timeout=30):
+    try:
+        proc = subprocess.run(
+            argv, input=stdin, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        out = exc.stdout or ""
+        err = exc.stderr or ""
+        if isinstance(out, bytes):
+            out = out.decode("utf-8", "replace")
+        if isinstance(err, bytes):
+            err = err.decode("utf-8", "replace")
+        return 124, out + err + "PRELUDE-TIMEOUT %ss\n" % timeout
+    except OSError as exc:
+        return 127, "PRELUDE-SKIP %s\n" % exc
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+def _last_next(text):
+    found = ""
+    for line in (text or "").splitlines():
+        if line.startswith("NEXT:"):
+            found = line
+    return found
+
+
+def _print_block(text):
+    if not text:
+        return
+    sys.stdout.write(text)
+    if not text.endswith("\n"):
+        sys.stdout.write("\n")
+
+
+def _prelude(args, text):
+    """Run the deterministic opening. Return (rc, binding NEXT line)."""
+    scripts = _skill_scripts(args.self)
+    name = args.self
+    chunks = []
+    rc = 0
+
+    def add(argv, stdin="", timeout=30):
+        nonlocal rc
+        code, out = _run_local(argv, stdin=stdin, timeout=timeout)
+        chunks.append(out)
+        if code:
+            rc = code
+        return out
+
+    if name == "glm-brainstorming":
+        ctx = os.path.join(scripts, "context.sh")
+        ask = os.path.join(scripts, "ask.py")
+        if os.path.isfile(ctx):
+            add(["sh", ctx], timeout=20)
+        else:
+            chunks.append("PRELUDE-SKIP context.sh missing\n")
+            rc = rc or 1
+        mode_out = ""
+        if os.path.isfile(ask):
+            mode_out = add([sys.executable, ask, "mode"], stdin=text, timeout=15)
+        else:
+            chunks.append("PRELUDE-SKIP ask.py missing\n")
+            rc = rc or 1
+        _print_block("".join(chunks))
+        if "MODE ask" in mode_out:
+            nxt = ("NEXT: show the ASK block and end the turn. "
+                   "Do not launch lanes. Do not re-run open.")
+        elif "MODE fast" in mode_out:
+            nxt = ("NEXT: read fast.md. One message: decide.py atoms on this "
+                   "same request, plus the fact lanes. Do not ask. "
+                   "Do not re-run open.")
+        else:
+            nxt = ("NEXT: one message: decide.py atoms on this same request, "
+                   "plus the fact lanes. Do not re-run open.")
+        return rc, nxt
+
+    if name == "glm-git-diff-summary":
+        if args.base and not BASE_RE.match(args.base):
+            print("WARN_BASE_ARG_IGNORED=%s" % args.base)
+            return 0, ("NEXT: that base is not a branch, tag, or sha. "
+                       "Ask for a different base. Do not run gather.")
+        gather = os.path.join(scripts, "gather.sh")
+        if not os.path.isfile(gather):
+            print("PRELUDE-SKIP gather.sh missing")
+            return 1, "NEXT: run scripts/gather.sh yourself. Do not re-run route."
+        argv = ["bash", gather]
+        if args.base:
+            argv.append(args.base)
+        code, out = _run_local(argv, timeout=120)
+        _print_block(out)
+        return code, ("NEXT: write the summary from this gather output. "
+                      "MODE=INLINE means no more tool calls. Do not re-run open.")
+
+    if name == "glm-writing-plans":
+        tool = os.path.join(scripts, "plan_tool.py")
+        print("TOOL: python3 %s" % tool)
+        if not args.spec:
+            return 0, ("NEXT: re-run open --spec <file> with the spec path. "
+                       "Do not brief until that file exists.")
+        if not os.path.isfile(args.spec):
+            print("spec not found: %s" % args.spec)
+            return 2, "NEXT: that spec path is not a file. Ask for the path."
+        code, out = _run_local(
+            [sys.executable, tool, "brief", args.spec], timeout=120)
+        _print_block(out)
+        last = _last_next(out)
+        if last:
+            return code, last + " Do not re-run open or route."
+        return code, "NEXT: write the contracts from this brief. Do not re-run open."
+
+    if name == "glm-dev-team":
+        print("D=%s" % scripts)
+        return 0, ("NEXT: one engine call using that D= path. "
+                  "Do not re-run open or the path loop. "
+                  "A wake-up is devteam next, then exactly the LAUNCH lines.")
+
+    if name == "glm-systematic-debugging":
+        print("S=%s" % scripts)
+        tool = os.path.join(scripts, "debug_tool.py")
+        if args.probe_cmd and os.path.isfile(tool):
+            code, out = _run_local(
+                [sys.executable, tool, "probe", "--cmd", args.probe_cmd], timeout=600)
+            _print_block(out)
+            return code, ("NEXT: take the LANE line. "
+                          "Do not re-run open or probe.")
+        return 0, ("NEXT: one probe call, python3 %s probe, with --cmd or "
+                   "--error-file. Do not re-run open or the path loop." % tool)
+
+    if name == "glm-requirements-code-audit":
+        tool = os.path.join(scripts, "audit.py")
+        print("A=python3 %s" % tool)
+        if not args.spec:
+            return 0, ("NEXT: re-run open --spec <file> when the requirements "
+                       "file is known. Do not brief without it.")
+        if not os.path.isfile(args.spec):
+            print("spec not found: %s" % args.spec)
+            return 2, "NEXT: that spec path is not a file. Ask for the path."
+        code, out = _run_local(
+            [sys.executable, tool, "brief", "--spec", args.spec], timeout=180)
+        _print_block(out)
+        last = _last_next(out)
+        if last:
+            return code, last + " Do not re-run open or route."
+        return code, "NEXT: write the checklist from this brief. Do not re-run open."
+
+    if name == "glm-doc-generator":
+        recon = os.path.join(scripts, "recon.sh")
+        if not os.path.isfile(recon):
+            print("PRELUDE-SKIP recon.sh missing")
+            return 1, "NEXT: run the Turn 1 recon yourself. Do not re-run route."
+        code, out = _run_local(["bash", recon], timeout=60)
+        _print_block(out)
+        return code, ("NEXT: compress this recon in your head and go to Turn 2. "
+                      "Do not re-run open or recon.")
+
+    return 0, "NEXT: this skill owns the request. Continue its own procedure."
+
+
+def cmd_open(args):
+    if args.self not in SKILLS:
+        print("RESULT open action=stop name=usage")
+        return 2
+    text = sys.stdin.read()
+    extra = [p for p in (args.seen or "").split(",") if p]
+    seen = chain_from(text, extra)
+    action, name, because, seen_out = decide(text, args.self, seen)
+    for line in emit(action, name, because, seen_out, args.self,
+                     include_next=(action != "stay")):
+        print(line)
+    if action != "stay":
+        print("OPEN: routed")
+        print("RESULT open action=%s name=%s" % (action, name))
+        return 0
+    print("=== PRELUDE ===")
+    rc, nxt = _prelude(args, text)
+    print("PRELUDE-RC %d" % rc)
+    print("OPEN: stay")
+    print(nxt)
+    print("RESULT open action=stay name=%s" % args.self)
+    return 0
 
 
 def cmd_route(args):
@@ -569,9 +779,17 @@ def main(argv=None):
     borrow.add_argument("--self", required=True)
     borrow.add_argument("--agent", required=True)
     borrow.add_argument("--seen", default="")
+    opened = sub.add_parser("open")
+    opened.add_argument("--self", required=True)
+    opened.add_argument("--seen", default="")
+    opened.add_argument("--spec", default="")
+    opened.add_argument("--cmd", dest="probe_cmd", default="")
+    opened.add_argument("--base", default="")
     args = parser.parse_args(argv)
     if args.cmd == "route":
         return cmd_route(args)
+    if args.cmd == "open":
+        return cmd_open(args)
     if args.cmd == "next":
         return cmd_next(args)
     if args.cmd == "call":

@@ -119,12 +119,12 @@ Every port applies the same set of model facts; each skill with a tuning surface
   same way. The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
   bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
-- **glm-brainstorming**: the SKILL.md tells the model to run `scripts/context.sh` as its first
-  round-1 call (the `/glm-brainstorm` command can inject the block directly). It must stay read-only,
-  bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. It
-  also contains the visual-companion server (`server.cjs`, `start-server.sh`).
-- **glm-doc-generator**: a single self-contained SKILL.md; it runs no script of its own and states that it
-  must never read other files.
+- **glm-brainstorming**: the first round-1 call is `handoff.py open`, which runs route,
+  `scripts/context.sh`, and `ask.py mode` in one process. `context.sh` must stay read-only,
+  bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. The
+  skill also contains the visual-companion server (`server.cjs`, `start-server.sh`).
+- **glm-doc-generator**: SKILL.md plus `scripts/handoff.py` and `scripts/recon.sh`. Turn 1 is `open`,
+  which runs the recon. The model must not read the other files of the skill.
 - **glm-idea-to-spec**: a self-contained SKILL.md plus four reference docs (`evaluation-framework.md`,
   `question-bank.md`, `research-playbook.md`, `spec-template.md` under `references/`); no scripts, no
   agents, no tuning doc — every turn is pure model guidance for research-backed spec writing.

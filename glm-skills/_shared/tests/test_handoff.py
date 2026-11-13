@@ -1,5 +1,6 @@
 """Router shared by every glm skill. The script's lines are binding."""
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -174,6 +175,104 @@ class BorrowTests(unittest.TestCase):
         self.assertIn("unknown agent", out)
         self.assertIn("glm-rca-verifier", out)
         self.assertIn("RESULT borrow action=stay", out)
+
+
+class OpenTests(unittest.TestCase):
+    def run_at(self, args, stdin="", cwd=None, env=None):
+        proc = subprocess.run(
+            [sys.executable, HANDOFF] + args,
+            input=stdin, capture_output=True, text=True, timeout=60,
+            cwd=cwd, env=env)
+        return proc.returncode, proc.stdout, proc.stderr
+
+    def test_handoff_does_not_run_the_prelude(self):
+        rc, out, _err = self.run_at(
+            ["open", "--self", "glm-brainstorming"],
+            "the login tests fail with a traceback")
+        self.assertEqual(rc, 0)
+        self.assertIn("HANDOFF glm-systematic-debugging", out)
+        self.assertIn("OPEN: routed", out)
+        self.assertNotIn("=== PRELUDE ===", out)
+        self.assertNotIn("MODE ", out)
+
+    def test_brainstorm_stay_runs_context_and_asks_mode(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-brainstorming"],
+            "add a login endpoint to the existing api", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("STAY glm-brainstorming", out)
+        self.assertIn("=== PRELUDE ===", out)
+        self.assertIn("skill_dir:", out)
+        self.assertIn("MODE ask", out)
+        self.assertIn("Do not launch lanes", out)
+        self.assertIn("OPEN: stay", out)
+        self.assertFalse(os.path.exists(os.path.join(root, ".brainstorm")))
+
+    def test_dev_team_stay_prints_scripts_dir(self):
+        rc, out, _err = self.run_at(
+            ["open", "--self", "glm-dev-team"], "fix the failing test in login")
+        self.assertEqual(rc, 0)
+        self.assertIn("D=", out)
+        self.assertIn("glm-dev-team/scripts", out.replace("\\", "/"))
+        self.assertIn("one engine call", out)
+
+    def test_debug_stay_prints_s_and_does_not_probe(self):
+        rc, out, _err = self.run_at(
+            ["open", "--self", "glm-systematic-debugging"],
+            "the login tests fail with a traceback")
+        self.assertEqual(rc, 0)
+        self.assertIn("S=", out)
+        self.assertIn("debug_tool.py probe", out)
+        self.assertNotIn("LANE:", out)
+
+    def test_plans_without_spec_does_not_brief(self):
+        rc, out, _err = self.run_at(
+            ["open", "--self", "glm-writing-plans"],
+            "write the implementation plan for the spec")
+        self.assertEqual(rc, 0)
+        self.assertIn("TOOL:", out)
+        self.assertIn("plan_tool.py", out)
+        self.assertIn("re-run open --spec", out)
+        self.assertNotIn("=== SPEC", out)
+
+    def test_bad_base_does_not_gather(self):
+        rc, out, _err = self.run_at(
+            ["open", "--self", "glm-git-diff-summary", "--base=-evil"],
+            "summarize my changes vs main")
+        self.assertEqual(rc, 0)
+        self.assertIn("WARN_BASE_ARG_IGNORED", out)
+        self.assertNotIn("MODE=", out)
+
+    def test_doc_stay_runs_recon_in_the_given_cwd(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        with open(os.path.join(root, "hello.py"), "w", encoding="utf-8") as fh:
+            fh.write("print('hi')\n")
+        subprocess.run(["git", "add", "hello.py"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+             "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"],
+            cwd=root, check=True)
+        state = os.path.join(root, "state")
+        env = os.environ.copy()
+        env["DOCGEN_STATE_DIR"] = state
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-doc-generator"],
+            "please update the README", cwd=root, env=env)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("OPEN: stay", out)
+        self.assertIn("HEAD:", out)
+        self.assertIn("hello.py", out)
+        self.assertIn("Turn 2", out)
+
+    def test_unknown_self_is_usage(self):
+        rc, out, _err = self.run_at(["open", "--self", "glm-nope"], "hi")
+        self.assertEqual(rc, 2)
+        self.assertIn("RESULT open action=stop name=usage", out)
 
 
 class SpecLintTests(unittest.TestCase):

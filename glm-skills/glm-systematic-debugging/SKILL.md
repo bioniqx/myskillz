@@ -12,15 +12,13 @@ metadata:
 
 **Iron Law:** no fix until you can write `ROOT CAUSE: X causes Y because Z`, backed by evidence you observed in this session (output, trace, diff, repro). A guess is not evidence. Speed comes from fewer model turns, never from skipping the root cause.
 
-**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-systematic-debugging` (next to `debug_tool.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not probe. `STAY`: continue. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here. When a later step is a job this skill does not do, run `handoff.py call --self glm-systematic-debugging --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-systematic-debugging --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
-
-## R0. Bootstrap — put this in front of your FIRST command, once
+**Sibling handoff, before R0.** The first command is one call. It routes and prints `S=`. When the request already names a repro command, add `--cmd '<repro>'` so probe runs in that same process.
 
 ```bash
-for d in ~/.zcode/skills/glm-systematic-debugging .zcode/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging; do [ -f "$d/scripts/debug_tool.py" ] && S=$(cd "$d/scripts" && pwd) && break; done; echo "S=$S"
+python3 scripts/handoff.py open --self glm-systematic-debugging
 ```
 
-Every tool output starts with `S=<absolute path>`. Shell variables do not survive between tool calls, so paste that **literal absolute path** into every later command — `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags.
+The user request is the stdin. A previous `FROM-LINE` stays first. `OPEN: routed` means follow `NEXT:` and do not probe. `OPEN: stay` prints `S=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here. When a later step is a job this skill does not do, run `handoff.py call --self glm-systematic-debugging --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-systematic-debugging --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 ## R1. One call per phase — do not batch tool calls, batch *inside* one call
 
@@ -36,7 +34,7 @@ You emit few parallel tool calls per turn, and each turn costs seconds of latenc
 
 Rules:
 
-1. Round 1 is always `probe`. Put a long error into a file first; pass `--cmd` whenever you have a repro command.
+1. Round 1 is always `probe`. `open --cmd` already did it when you passed a repro. Otherwise this is the next call, not a path lookup. Put a long error into a file first; pass `--cmd` whenever you have a repro command. Do not probe twice.
 2. Never run two shell calls in a row when `run` can do both in one.
 3. Anything over ~60 s that you are not blocked on: `nohup <cmd> > /tmp/<name>.log 2>&1 &`, keep working, read the log later. Never edit, stash or check out a tree while a background command runs in it, and never `git stash` while a worktree or background job is live — the stash is shared by the whole repo.
 4. Run the single failing test, not the suite, while investigating. The tools already keep exit codes and tail the output for you.

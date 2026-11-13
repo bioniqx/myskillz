@@ -12,21 +12,15 @@ DRY. YAGNI. TDD.
 
 Announce once: "I'm using the glm-writing-plans skill to create the implementation plan."
 
-# R-hand - sibling skills, before call 1
+# R-hand - sibling skills, call 1
 
-Run `scripts/handoff.py route --self glm-writing-plans` (same directory as
-`plan_tool.py`) with the user request on stdin. If you were handed here, stdin
-starts with the previous `FROM-LINE`. `HANDOFF` or `STOP` is binding: follow
-`NEXT:` and do not plan. `STAY` means the three calls below. `GUARD` lines bind
-the whole task. Run `next --self glm-writing-plans --event <event>` only when
-the user wants that exit. Do not choose the sibling from memory. When a later
-step is a job this skill does not do, run `handoff.py call --self
-glm-writing-plans --to <skill>` and follow `NEXT:`. When a lane needs another
-skill's agent, run `handoff.py agents`, then `handoff.py borrow --self
-glm-writing-plans --agent <name>`. `AGENT` is one Agent call with that
-`subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF`
-means follow `NEXT:` and do not dispatch that agent. Subagents do not load
-skills and do not borrow.
+Call 1 is one command. It routes, and when `--spec` is a real file it runs `brief`.
+
+```bash
+python3 scripts/handoff.py open --self glm-writing-plans --spec SPEC
+```
+
+The user request is the stdin. If you were handed here, stdin starts with the previous `FROM-LINE`. `OPEN: routed` is binding: follow `NEXT:` and do not plan. `OPEN: stay` means the three calls below, and the prelude is call 1 when it printed `TOOL:` and the spec body. `GUARD` lines bind the whole task. Run `next --self glm-writing-plans --event <event>` only when the user wants that exit. Do not choose the sibling from memory. When a later step is a job this skill does not do, run `handoff.py call --self glm-writing-plans --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-writing-plans --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 # R0 - The whole pipeline is three tool calls
 
@@ -34,22 +28,9 @@ Call 1 `brief` -> Call 2 write the contracts -> Call 3 `build`. Nothing else.
 Every extra turn costs a full reasoning pass, so treat any fourth call as a
 defect to explain, not a habit.
 
-# R1 - Call 1: resolve the tool and load everything
+# R1 - Call 1: open already loaded everything
 
-Run this as your FIRST tool call, with the spec path in place of `SPEC`:
-
-```bash
-for d in ~/.zcode/skills/glm-writing-plans \
-  .zcode/skills/glm-writing-plans \
-  .agents/skills/glm-writing-plans \
-  ~/.agents/skills/glm-writing-plans; do
-  [ -f "$d/scripts/plan_tool.py" ] && T="$d/scripts/plan_tool.py" && break
-done
-[ -z "$T" ] && echo "glm-writing-plans skill not found in any standard location" >&2 && exit 1
-python3 "$T" brief SPEC
-```
-
-The output starts with a `TOOL:` line. Use that exact string for every later
+Do not run the path loop, and do not brief again. The prelude starts with a `TOOL:` line. Use that exact string for every later
 call. The brief already contains the spec body with real line numbers, the spec
 heading map, the repo file list, the stack, the test commands, the conventions
 file, and the 2-5 pattern files the brief ranks; if the repository is large and

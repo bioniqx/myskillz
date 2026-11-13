@@ -18,19 +18,18 @@ metadata:
 
 # Requirements ↔ Code Audit — GLM edition
 
-**Sibling handoff, before R0.** Run `scripts/handoff.py route --self glm-requirements-code-audit` (next to `audit.py`) with the user request on stdin. A previous `FROM-LINE` stays first. `HANDOFF` or `STOP`: follow `NEXT:` and do not brief. `STAY`: continue. `GUARD` lines bind the whole task. After `finalize`, run `next --event` only if the user asks: `implement-gaps`, `fix-gaps`, or `bug`. This skill still does not edit the code. When a later step is a job this skill does not do, run `handoff.py call --self glm-requirements-code-audit --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-requirements-code-audit --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+**Sibling handoff, before R0.** The first command is one call. Pass `--spec <file>` when the requirements file is already known: that call is R0 step 1, and you do not brief again.
+
+```bash
+python3 scripts/handoff.py open --self glm-requirements-code-audit --spec <file>
+```
+
+The user request is the stdin. A previous `FROM-LINE` stays first. `OPEN: routed` means follow `NEXT:` and do not brief. `OPEN: stay` prints `A=python3 <audit.py>` and, when `--spec` was a real file, the brief. `GUARD` lines bind the whole task. After `finalize`, run `next --event` only if the user asks: `implement-gaps`, `fix-gaps`, or `bug`. This skill still does not edit the code. When a later step is a job this skill does not do, run `handoff.py call --self glm-requirements-code-audit --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-requirements-code-audit --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 Checks whether the **code faithfully implements a requirements document**, reports every divergence with
 `path:lines` evidence, and produces a prioritized remediation plan. It never changes the code.
 
-Write `A` for the audit script, pinned as your first call of the run:
-`A=python3 <dir>/scripts/audit.py` for the first `<dir>` that has `scripts/audit.py`, trying in order the
-directory holding this file, `~/.zcode/skills/glm-requirements-code-audit`,
-`.zcode/skills/glm-requirements-code-audit`,
-`.agents/skills/glm-requirements-code-audit`, `~/.agents/skills/glm-requirements-code-audit`
-(`python` instead of `python3` on Windows). No candidate
-exists → say so and ask for the install dir; never guess a path. Every command prints a `NEXT:` line —
-follow it and do not deliberate about plumbing.
+`open` printed `A=`. Paste that literal. No `A=` line means this copy is not installed: look in `~/.zcode/skills/glm-requirements-code-audit`, then `.zcode/skills/glm-requirements-code-audit`, `.agents/skills/glm-requirements-code-audit`, `~/.agents/skills/glm-requirements-code-audit`. Say so and ask for the install dir if none of them has `scripts/audit.py`; never guess a path. Every command prints a `NEXT:` line — follow the last one and do not deliberate about plumbing. Do not brief again when the prelude already printed `AUDIT`.
 
 ## R0 — The whole audit is four calls
 
@@ -79,7 +78,7 @@ not override the user, who may amend scope explicitly ("also treat file X as par
 
 ## R3 — Step 1: brief
 
-In ONE turn, run
+Skip this step when the prelude already printed `AUDIT`. Otherwise, in ONE turn, run
 `A brief --spec <file> [--spec <file2>] [--repo <root>] [--tier light|std|deep] [--lang vi|en]`.
 
 - No requirements input → stop and ask. Pasted text → `--spec-text "..."` saves it verbatim first.
