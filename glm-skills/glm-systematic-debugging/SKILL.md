@@ -12,13 +12,16 @@ metadata:
 
 **Iron Law:** no fix until you can write `ROOT CAUSE: X causes Y because Z`, backed by evidence you observed in this session (output, trace, diff, repro). A guess is not evidence. Speed comes from fewer model turns, never from skipping the root cause.
 
-**Sibling handoff, before R0.** The first command is one call. It routes and prints `S=`. When the request already names a repro command, add `--cmd '<repro>'` so probe runs in that same process.
+**Sibling handoff.** The first command is one call. It routes and prints `S=`.
 
 ```bash
-python3 scripts/handoff.py open --self glm-systematic-debugging
+H=; for d in "<base dir>" ~/.zcode/skills/glm-systematic-debugging .zcode/skills/glm-systematic-debugging .agents/skills/glm-systematic-debugging ~/.agents/skills/glm-systematic-debugging; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "glm-systematic-debugging: handoff.py not found"; exit 1; }
+python3 "$H" open --self glm-systematic-debugging <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
 ```
 
-The user request is the stdin. A previous `FROM-LINE` stays first. `OPEN: routed` means follow `NEXT:` and do not probe. `OPEN: stay` prints `S=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here. When a later step is a job this skill does not do, run `handoff.py call --self glm-systematic-debugging --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-systematic-debugging --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+`<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route. When the request already names a repro command, add `--cmd=<repro>` on that same python3 line. `OPEN: routed` means follow `NEXT:` and do not probe. `OPEN: stay` prints `S=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here. When a later step is a job this skill does not do, run `handoff.py call --self glm-systematic-debugging --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-systematic-debugging --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 ## R1. One call per phase — do not batch tool calls, batch *inside* one call
 

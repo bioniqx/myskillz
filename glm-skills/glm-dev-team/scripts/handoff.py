@@ -466,36 +466,52 @@ def _print_block(text):
         sys.stdout.write("\n")
 
 
+FAIL_NEXT = (
+    "NEXT: the prelude failed. See PRELUDE-RC. Do not draft, brief, or "
+    "summarize from a partial prelude. Re-run open once."
+)
+
+
+def _ok_next(code, out, success):
+    """A failed prelude must not keep a success NEXT that was already printed."""
+    if code or "brief partial:" in (out or ""):
+        return code or 1, FAIL_NEXT
+    last = _last_next(out)
+    if last:
+        return 0, last + " Do not re-run open."
+    return 0, success
+
+
 def _prelude(args, text):
     """Run the deterministic opening. Return (rc, binding NEXT line)."""
     scripts = _skill_scripts(args.self)
     name = args.self
     chunks = []
-    rc = 0
-
-    def add(argv, stdin="", timeout=30):
-        nonlocal rc
-        code, out = _run_local(argv, stdin=stdin, timeout=timeout)
-        chunks.append(out)
-        if code:
-            rc = code
-        return out
 
     if name == "glm-brainstorming":
         ctx = os.path.join(scripts, "context.sh")
         ask = os.path.join(scripts, "ask.py")
+        ctx_code = 0
         if os.path.isfile(ctx):
-            add(["sh", ctx], timeout=20)
+            ctx_code, out = _run_local(["sh", ctx], timeout=45)
+            chunks.append(out)
         else:
             chunks.append("PRELUDE-SKIP context.sh missing\n")
-            rc = rc or 1
+            ctx_code = 1
+        ask_code = 0
         mode_out = ""
         if os.path.isfile(ask):
-            mode_out = add([sys.executable, ask, "mode"], stdin=text, timeout=15)
+            ask_code, mode_out = _run_local(
+                [sys.executable, ask, "mode"], stdin=text, timeout=15)
+            chunks.append(mode_out)
         else:
             chunks.append("PRELUDE-SKIP ask.py missing\n")
-            rc = rc or 1
+            ask_code = 1
         _print_block("".join(chunks))
+        if ctx_code or ask_code:
+            return ctx_code or ask_code, (
+                "NEXT: context or mode did not finish. Re-run open once. "
+                "Do not launch lanes.")
         if "MODE ask" in mode_out:
             nxt = ("NEXT: show the ASK block and end the turn. "
                    "Do not launch lanes. Do not re-run open.")
@@ -506,7 +522,7 @@ def _prelude(args, text):
         else:
             nxt = ("NEXT: one message: decide.py atoms on this same request, "
                    "plus the fact lanes. Do not re-run open.")
-        return rc, nxt
+        return 0, nxt
 
     if name == "glm-git-diff-summary":
         if args.base and not BASE_RE.match(args.base):
@@ -516,55 +532,66 @@ def _prelude(args, text):
         gather = os.path.join(scripts, "gather.sh")
         if not os.path.isfile(gather):
             print("PRELUDE-SKIP gather.sh missing")
-            return 1, "NEXT: run scripts/gather.sh yourself. Do not re-run route."
+            return 1, FAIL_NEXT
         argv = ["bash", gather]
         if args.base:
             argv.append(args.base)
         code, out = _run_local(argv, timeout=120)
         _print_block(out)
-        return code, ("NEXT: write the summary from this gather output. "
-                      "MODE=INLINE means no more tool calls. Do not re-run open.")
+        return _ok_next(code, out, (
+            "NEXT: act on the marker in the prelude "
+            "(NOT_A_REPO, EMPTY_DIFF, NO_BASE, MODE=INLINE, MODE=READ, "
+            "MODE=FAN_OUT). Do not re-run open."))
 
     if name == "glm-writing-plans":
         tool = os.path.join(scripts, "plan_tool.py")
         print("TOOL: python3 %s" % tool)
+        if not os.path.isfile(tool):
+            print("PRELUDE-SKIP plan_tool.py missing")
+            return 1, FAIL_NEXT
         if not args.spec:
-            return 0, ("NEXT: re-run open --spec <file> with the spec path. "
+            return 0, ("NEXT: re-run open --spec=<file> with the real spec path. "
                        "Do not brief until that file exists.")
         if not os.path.isfile(args.spec):
             print("spec not found: %s" % args.spec)
             return 2, "NEXT: that spec path is not a file. Ask for the path."
         code, out = _run_local(
-            [sys.executable, tool, "brief", args.spec], timeout=120)
+            [sys.executable, tool, "brief", args.spec], timeout=180)
         _print_block(out)
-        last = _last_next(out)
-        if last:
-            return code, last + " Do not re-run open or route."
-        return code, "NEXT: write the contracts from this brief. Do not re-run open."
+        return _ok_next(code, out, (
+            "NEXT: write the contracts from this brief. Do not re-run open."))
 
     if name == "glm-dev-team":
         print("D=%s" % scripts)
         return 0, ("NEXT: one engine call using that D= path. "
-                  "Do not re-run open or the path loop. "
-                  "A wake-up is devteam next, then exactly the LAUNCH lines.")
+                   "The first call is the route-first rule "
+                   "(start, brief-debug, or review-pr). "
+                   "Do not call next until a lane has finished. "
+                   "Do not re-run open.")
 
     if name == "glm-systematic-debugging":
         print("S=%s" % scripts)
         tool = os.path.join(scripts, "debug_tool.py")
-        if args.probe_cmd and os.path.isfile(tool):
-            code, out = _run_local(
-                [sys.executable, tool, "probe", "--cmd", args.probe_cmd], timeout=600)
-            _print_block(out)
-            return code, ("NEXT: take the LANE line. "
-                          "Do not re-run open or probe.")
-        return 0, ("NEXT: one probe call, python3 %s probe, with --cmd or "
-                   "--error-file. Do not re-run open or the path loop." % tool)
+        if not args.probe_cmd:
+            return 0, ("NEXT: one probe call, python3 %s probe, with --cmd or "
+                       "--error-file. Do not re-run open." % tool)
+        if not os.path.isfile(tool):
+            print("PRELUDE-SKIP debug_tool.py missing")
+            return 1, FAIL_NEXT
+        code, out = _run_local(
+            [sys.executable, tool, "probe", "--cmd", args.probe_cmd], timeout=600)
+        _print_block(out)
+        return _ok_next(code, out, (
+            "NEXT: take the LANE line. Do not re-run open or probe."))
 
     if name == "glm-requirements-code-audit":
         tool = os.path.join(scripts, "audit.py")
         print("A=python3 %s" % tool)
+        if not os.path.isfile(tool):
+            print("PRELUDE-SKIP audit.py missing")
+            return 1, FAIL_NEXT
         if not args.spec:
-            return 0, ("NEXT: re-run open --spec <file> when the requirements "
+            return 0, ("NEXT: re-run open --spec=<file> when the requirements "
                        "file is known. Do not brief without it.")
         if not os.path.isfile(args.spec):
             print("spec not found: %s" % args.spec)
@@ -572,20 +599,19 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "brief", "--spec", args.spec], timeout=180)
         _print_block(out)
-        last = _last_next(out)
-        if last:
-            return code, last + " Do not re-run open or route."
-        return code, "NEXT: write the checklist from this brief. Do not re-run open."
+        return _ok_next(code, out, (
+            "NEXT: write the checklist from this brief. Do not re-run open."))
 
     if name == "glm-doc-generator":
         recon = os.path.join(scripts, "recon.sh")
         if not os.path.isfile(recon):
             print("PRELUDE-SKIP recon.sh missing")
-            return 1, "NEXT: run the Turn 1 recon yourself. Do not re-run route."
-        code, out = _run_local(["bash", recon], timeout=60)
+            return 1, FAIL_NEXT
+        code, out = _run_local(["bash", recon], timeout=180)
         _print_block(out)
-        return code, ("NEXT: compress this recon in your head and go to Turn 2. "
-                      "Do not re-run open or recon.")
+        return _ok_next(code, out, (
+            "NEXT: compress this recon in your head and go to Turn 2. "
+            "Do not re-run open or recon."))
 
     return 0, "NEXT: this skill owns the request. Continue its own procedure."
 
@@ -595,6 +621,12 @@ def cmd_open(args):
         print("RESULT open action=stop name=usage")
         return 2
     text = sys.stdin.read()
+    if not text.strip():
+        print("OPEN: empty")
+        print("NEXT: re-run open with the user request on stdin. "
+              "An empty stdin does not route. Do not continue.")
+        print("RESULT open action=stop name=empty")
+        return 0
     extra = [p for p in (args.seen or "").split(",") if p]
     seen = chain_from(text, extra)
     action, name, because, seen_out = decide(text, args.self, seen)

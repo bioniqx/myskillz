@@ -2,7 +2,7 @@
 name: glm-git-diff-summary
 description: Use when the user wants to understand or summarize what the current branch changed versus the main branch — describing what the new code does, drafting a commit or PR/MR message, or reviewing branch changes before committing. Triggers on requests like "so sánh với main", "tóm tắt thay đổi", "mô tả code đã làm gì", "viết commit message", "what did this branch do", "summarize my changes vs main".
 argument-hint: "[base-branch|tag|sha]"
-allowed-tools: Read Bash(bash *gather.sh*) Bash(git diff *) Bash(git log *) Bash(git show *)
+allowed-tools: Read Bash(bash *gather.sh*) Bash(python3 *handoff.py*) Bash(git diff *) Bash(git log *) Bash(git show *)
 ---
 
 # glm-git-diff-summary
@@ -12,10 +12,13 @@ Goal: diff **merge-base(fresh base) → working tree** (committed + staged + uns
 **Sibling handoff, in front of gather.** One call does both. The user request is the stdin. A previous `FROM-LINE` stays first. `OPEN: routed` means follow `NEXT:` and do not read the diff. `OPEN: stay` means the prelude is the gather output.
 
 ```bash
-python3 scripts/handoff.py open --self glm-git-diff-summary
+H=; for d in "<base dir>" ~/.zcode/skills/glm-git-diff-summary .zcode/skills/glm-git-diff-summary .agents/skills/glm-git-diff-summary ~/.agents/skills/glm-git-diff-summary; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "glm-git-diff-summary: handoff.py not found"; exit 1; }
+python3 "$H" open --self glm-git-diff-summary <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
 ```
 
-If the user named a base (branch, tag or SHA), pass `--base=<base>` on that same call. A base that is not `^[A-Za-z0-9][A-Za-z0-9._/-]*$` is ignored and the last `NEXT:` tells you to ask. Do not run `gather.sh` yourself, and never run git commands one by one. `GUARD` lines bind the whole task. After the summary, `next --event bug` or `implement` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self glm-git-diff-summary --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-git-diff-summary --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow. Numbers in the answer come from the gather output, never from memory.
+`<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route. If the user named a base (branch, tag or SHA), add `--base=<base>` on that same python3 line. A base that is not `^[A-Za-z0-9][A-Za-z0-9._/-]*$` is ignored and the last `NEXT:` tells you to ask. Do not run `gather.sh` yourself, and never run git commands one by one. `GUARD` lines bind the whole task. After the summary, `next --event bug` or `implement` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self glm-git-diff-summary --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-git-diff-summary --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow. Numbers in the answer come from the gather output, never from memory.
 
 ## Context — gather it first (one tool call)
 

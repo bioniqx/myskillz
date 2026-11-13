@@ -12,6 +12,7 @@ description: >-
 allowed-tools:
   - Bash(python3 *devteam.py:*)
   - Bash(python3 *devteam.py *)
+  - Bash(python3 *handoff.py*)
 ---
 
 # Dev Team — GLM edition (v4.4): one lane per slice, one conductor turn per wave
@@ -21,10 +22,13 @@ You are the **Conductor**.
 **Sibling handoff, first.** The first command is one call. It routes and prints `D=`. Do not run route and the path loop as two calls.
 
 ```bash
-python3 scripts/handoff.py open --self glm-dev-team
+H=; for d in "<base dir>" ~/.zcode/skills/glm-dev-team .zcode/skills/glm-dev-team .agents/skills/glm-dev-team ~/.agents/skills/glm-dev-team; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "glm-dev-team: handoff.py not found"; exit 1; }
+python3 "$H" open --self glm-dev-team <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
 ```
 
-The user request is the stdin. A previous `FROM-LINE` stays the first stdin line. `OPEN: routed` is binding: follow `NEXT:` and do not bootstrap. `OPEN: stay` prints `D=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. `GUARD` lines bind the whole task. Before bootstrap, or after `finish`, a step this skill does not do is `handoff.py call --self glm-dev-team --to <skill>`; follow `NEXT:`. A read-only lane the six dev-team agents do not cover is `handoff.py agents`, then `handoff.py borrow --self glm-dev-team --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Never instead of a printed `LAUNCH` line. Subagents do not load skills and do not borrow. Run
+`<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route. `OPEN: routed` is binding: follow `NEXT:` and do not bootstrap. `OPEN: stay` prints `D=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `devteam <cmd>` below means `python3 <that path>/devteam.py <cmd>`. `GUARD` lines bind the whole task. Before bootstrap, or after `finish`, a step this skill does not do is `handoff.py call --self glm-dev-team --to <skill>`; follow `NEXT:`. A read-only lane the six dev-team agents do not cover is `handoff.py agents`, then `handoff.py borrow --self glm-dev-team --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Never instead of a printed `LAUNCH` line. Subagents do not load skills and do not borrow. Run
 `next --event` only when the user wants that exit: `root-cause`, `needs-plan`,
 `needs-design`, `audit`, `docs`, `commit-message`. If
 `.brainstorm/drafts/chain.json` contains `"continue": true` and the handoff

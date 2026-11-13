@@ -18,7 +18,16 @@ self-contained: every brief, template and script you need is below. **Never read
 other file of this skill.** `agents/` are installer assets. `scripts/handoff.py` is
 run, not read.
 
-**Sibling handoff is Turn 1.** One call, from the repo root, with the user request on stdin: `python3 scripts/handoff.py open --self glm-doc-generator`. A previous `FROM-LINE` stays first. `OPEN: routed` means follow `NEXT:` and do not recon. `OPEN: stay` means the prelude is the recon. `GUARD` lines bind the whole task. After the summary, `next --event commit-message` or `code-wrong` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self glm-doc-generator --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-doc-generator --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+**Sibling handoff is Turn 1.** One call. The working directory stays the repo. `<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route.
+
+```bash
+H=; for d in "<base dir>" ~/.zcode/skills/glm-doc-generator .zcode/skills/glm-doc-generator .agents/skills/glm-doc-generator ~/.agents/skills/glm-doc-generator; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "glm-doc-generator: handoff.py not found"; exit 1; }
+python3 "$H" open --self glm-doc-generator <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
+```
+
+`OPEN: routed` means follow `NEXT:` and do not recon. `OPEN: stay` means the prelude is the recon. `GUARD` lines bind the whole task. After the summary, `next --event commit-message` or `code-wrong` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self glm-doc-generator --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-doc-generator --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 ---
 

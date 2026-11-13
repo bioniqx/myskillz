@@ -218,6 +218,8 @@ class OpenTests(unittest.TestCase):
         self.assertIn("D=", out)
         self.assertIn("glm-dev-team/scripts", out.replace("\\", "/"))
         self.assertIn("one engine call", out)
+        self.assertNotIn("A wake-up is devteam next", out)
+        self.assertIn("Do not call next until a lane has finished", out)
 
     def test_debug_stay_prints_s_and_does_not_probe(self):
         rc, out, _err = self.run_at(
@@ -268,6 +270,41 @@ class OpenTests(unittest.TestCase):
         self.assertIn("HEAD:", out)
         self.assertIn("hello.py", out)
         self.assertIn("Turn 2", out)
+
+    def test_empty_stdin_does_not_run_the_prelude(self):
+        rc, out, _err = self.run_at(["open", "--self", "glm-brainstorming"], "  \n")
+        self.assertEqual(rc, 0)
+        self.assertIn("OPEN: empty", out)
+        self.assertNotIn("=== PRELUDE ===", out)
+        self.assertNotIn("STAY ", out)
+
+    def test_gather_not_a_repo_does_not_say_write_the_summary(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-git-diff-summary"],
+            "summarize the branch", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("NOT_A_REPO", out)
+        self.assertIn("MODE=INLINE", out)
+        self.assertNotIn("write the summary", out)
+
+    def test_audit_existing_dir_does_not_say_write_the_checklist(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        spec = os.path.join(root, "req.md")
+        with open(spec, "w", encoding="utf-8") as fh:
+            fh.write("The button must save.\n")
+        os.makedirs(os.path.join(root, ".audit"))
+        with open(os.path.join(root, ".audit", "config.json"), "w", encoding="utf-8") as fh:
+            fh.write("{}\n")
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-requirements-code-audit", "--spec", spec],
+            "gaps between spec and code", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("ERR:", out)
+        self.assertIn("prelude failed", out)
+        self.assertNotIn("write the checklist", out)
 
     def test_unknown_self_is_usage(self):
         rc, out, _err = self.run_at(["open", "--self", "glm-nope"], "hi")

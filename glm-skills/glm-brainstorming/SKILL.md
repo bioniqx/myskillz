@@ -32,11 +32,14 @@ The first round-1 call is one command. It runs route,
 those three yourself, and do not launch a lane in that message.
 
 ```bash
-python3 <skill_dir>/scripts/handoff.py open --self glm-brainstorming
+H=; for d in "<base dir>" ~/.zcode/skills/glm-brainstorming .zcode/skills/glm-brainstorming .agents/skills/glm-brainstorming ~/.agents/skills/glm-brainstorming; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "glm-brainstorming: handoff.py not found"; exit 1; }
+python3 "$H" open --self glm-brainstorming <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
 ```
 
-The user request is the stdin. A previous `FROM-LINE` stays first. Follow
-the last `NEXT:` line.
+`<base dir>` is the "Base directory for this skill" line. The heredoc is the
+user request. Empty stdin does not route. Follow the last `NEXT:` line.
 
 - `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
 - `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.
@@ -75,8 +78,8 @@ message. The script stores the choice in `.brainstorm/drafts/mode.json`.
 ## Live context (inside the first round-1 call)
 
 `open` already ran `sh <Base directory>/scripts/context.sh`. Trust the
-`=== PRELUDE ===` block. If a context block with a `harness:` line is
-already in the conversation, use it and do not run `open` again.
+`=== PRELUDE ===` block. If this request already has an `OPEN:` line
+above, do not run `open` again.
 
 Trust this block. Never re-run `ls`, `find`, `git status`, or `cat` on
 manifests. Reference files live in `skill_dir` — installed at
@@ -386,7 +389,7 @@ result: do not retry the same input.
 2. `close --root <repo> --ledger <path> --options <path>` — stdin is `## BREAKERS` only. It loads the options file itself and prints `DECISION`. Do not pass `## DRAFT` here: the pick is not known yet.
 3. `prove --ledger .brainstorm/drafts/ledger.json --offline` unless the user said live. Repair every FAIL, never show one.
 4. `spec <path>` — after the spec is written, before the five-lens review.
-5. `route` — same table as `handoff.py route`. Prefer `handoff.py` in round 1 (hard rule 3). `ROUTE` other than `none` is binding. Always exit 0.
+5. `route` — same table as `handoff.py route`. Round 1 already ran `open`. Do not run `route` again. `ROUTE` other than `none` is binding. Always exit 0.
 6. `send --ledger --pick <id>` — the draft, after `close` printed `DECISION pick=<id>`, and again after each repair. The pick id has to appear in the draft. Do not show a FAIL. `--approved` only after approve printed yes.
 7. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 

@@ -17,10 +17,13 @@ Announce once: "I'm using the glm-writing-plans skill to create the implementati
 Call 1 is one command. It routes, and when `--spec` is a real file it runs `brief`.
 
 ```bash
-python3 scripts/handoff.py open --self glm-writing-plans --spec SPEC
+H=; for d in "<base dir>" ~/.zcode/skills/glm-writing-plans .zcode/skills/glm-writing-plans .agents/skills/glm-writing-plans ~/.agents/skills/glm-writing-plans; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "glm-writing-plans: handoff.py not found"; exit 1; }
+python3 "$H" open --self glm-writing-plans --spec=<spec path> <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
 ```
 
-The user request is the stdin. If you were handed here, stdin starts with the previous `FROM-LINE`. `OPEN: routed` is binding: follow `NEXT:` and do not plan. `OPEN: stay` means the three calls below, and the prelude is call 1 when it printed `TOOL:` and the spec body. `GUARD` lines bind the whole task. Run `next --self glm-writing-plans --event <event>` only when the user wants that exit. Do not choose the sibling from memory. When a later step is a job this skill does not do, run `handoff.py call --self glm-writing-plans --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-writing-plans --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+`<base dir>` is the "Base directory for this skill" line. Replace `<spec path>` with the real file. The heredoc is the user request. Empty stdin does not route. `OPEN: routed` is binding: follow `NEXT:` and do not plan. `OPEN: stay` means the three calls below, and the prelude is call 1 when it printed `TOOL:` and the spec body. `GUARD` lines bind the whole task. Run `next --self glm-writing-plans --event <event>` only when the user wants that exit. Do not choose the sibling from memory. When a later step is a job this skill does not do, run `handoff.py call --self glm-writing-plans --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self glm-writing-plans --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
 
 # R0 - The whole pipeline is three tool calls
 

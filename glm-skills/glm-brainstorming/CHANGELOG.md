@@ -4,7 +4,10 @@ Model ids and thoughtLevel stay. The first model turn was route, then
 context, then mode, because GLM emits about one tool call per thinking
 pass. `handoff.py open` runs those three in one process and prints one
 `NEXT`. Atoms and the fact lanes stay the next message, so they still
-run together. `decide.py` still closes the pick.
+run together. `decide.py` still closes the pick. The call finds `handoff.py` from the
+skill's base directory, refuses an empty stdin, and a failed prelude
+does not print a success `NEXT`. Dev-team's first engine call is still
+`start`, not `next`.
 
 # 10.6 (from 10.5) — the seven skills call each other
 
