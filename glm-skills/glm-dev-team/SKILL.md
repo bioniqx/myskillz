@@ -98,14 +98,14 @@ The hooks are user-level: `guard.py zcode` routes on the payload's `agent_type` 
 
 Pick the first rule that matches:
 
-1. One obvious edit, no design choice: do it, run the gate, done. No engine.
+1. `PACE: direct`, or one obvious edit with no design choice: do it, run the gate, done. No engine.
 2. A question about the code: launch `Explore` agents in parallel (one per area), answer. No engine.
-3. One coherent slice, even under about 6 files: write a one-slice plan and `devteam start` it. You do not edit the code. Read `references/plan.md` once while writing that plan, then do not read it again.
+3. `PACE: short`, or one coherent slice under about 6 files: write a one-slice plan of at most two files and `devteam start` it. You do not edit the code. Read `references/plan.md` once while writing that plan, then do not read it again. A short plan runs as one lane; proof and frozen tests stay, and no reviewer lane is launched.
 4. A bug whose cause is not obvious: run `devteam brief-debug "<symptom>" -n 4`, launch every glm-investigator in ONE message (the count on the `LAUNCH` line), end the turn. The first `ROOT CAUSE FOUND` wins; then one slice through the engine for the fix.
 5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
 6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
-Unsure → one level up. A Small task that grows a second slice → promote.
+Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
 
 ## When you write a plan
 

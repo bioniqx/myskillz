@@ -36,6 +36,8 @@ briefing is the contract; this file only states what never changes.
 
 **Work in few, decisive turns** (every turn is a full model call, and thinking is always on): batch independent reads, greps and globs into ONE message as parallel tool calls; never re-read a file you already have; run only the pinned commands; no narration between tool calls. The turn cap is a stuck-run ceiling, not a budget: write the report as soon as the procedure allows.
 
+If the briefing or the prompt says QUICK, stay inside the footprint and do not explore. Finish commit-red, the implementation, commit-green, and the report. Stopping early makes the engine retry the slice, which is slower.
+
 If `claim` fails or the prompt has no slice id, stop and report `## Status: Blocked`.
 
 **Permissions never prompt you** (nobody is watching a background lane). The exact command

@@ -33,6 +33,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 
 SKILLS = (
@@ -54,6 +55,21 @@ MAX_CHAIN = 3
 FEATURE_RE = re.compile(r"\b(add|build|implement|create|design)\b")
 FIX_RE = re.compile(r"\b(fix|implement|patch|sua loi|sua)\b")
 FROM_RE = re.compile(r"(?m)^[ \t>*-]*From:\s*([a-z0-9,.-]+)\s*$", re.I)
+
+# A short request must not enter the lane chain. Heavy words stay on the full
+# pipeline. Model ids and thoughtLevel are not a speed dial; this classifier is.
+HEAVY_RE = re.compile(
+    r"architect|migrat|redesign|rewrite|greenfield|from scratch|"
+    r"new (?:system|service|project|subsystem|app)|"
+    r"\bauth(?:entication|orization)?\b|\blogin\b|\bpayment\b|\bbilling\b|"
+    r"\bconcurren|across the (?:repo|codebase)|whole (?:repo|codebase)|"
+    r"every module|kien truc|chuyen doi|he thong moi|toan bo",
+    re.I)
+PATH_RE = re.compile(
+    r"(?:^|[\s'\"`(])((?:[\w.-]+/)+[\w.-]+\.[A-Za-z0-9]{1,6}|"
+    r"[\w.-]+\.(?:py|ts|tsx|js|jsx|go|rs|rb|java|kt|swift|sh|css|html|vue|sql|"
+    r"json|yml|yaml|toml))")
+README_RE = re.compile(r"\breadme(?:\.md)?\b", re.I)
 
 # Order is priority. The first match wins. Feature words suppress the two
 # skills a feature request mentions only in passing (docs, commit message).
@@ -450,6 +466,111 @@ def _run_local(argv, stdin="", timeout=30):
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
+def _request_body(text):
+    lines = []
+    for line in (text or "").splitlines():
+        if FROM_RE.match(line):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def pace_of(text):
+    """direct: one named file. short: a small request. full: everything else.
+
+    direct and short are the cases that were spending an hour in lanes.
+    """
+    body = _request_body(text)
+    if not body or HEAVY_RE.search(body):
+        return "full"
+    # A question is not an edit. Treating it as short would start the engine.
+    if body.rstrip().endswith("?"):
+        return "full"
+    found = []
+    for path in PATH_RE.findall(body):
+        if path not in found:
+            found.append(path)
+    if len(found) > 3:
+        return "full"
+    if len(found) == 1 and len(body) <= 1600:
+        return "direct"
+    if README_RE.search(body) and len(body) <= 600 and len(found) <= 1:
+        return "direct"
+    if len(body) <= 320 and len(found) <= 3:
+        return "short"
+    return "full"
+
+
+# One named document is written on the main thread. "document this repo"
+# is the full catalog; a short sentence must not silently drop the rest.
+NAMED_DOC_RE = re.compile(
+    r"\b(readme(?:\.md)?|overview(?:\.md)?|setup-guide(?:\.md)?|"
+    r"api-reference(?:\.md)?|architecture(?:\.md)?|user-guide(?:\.md)?|"
+    r"data-model(?:\.md)?|configuration(?:\.md)?|[\w.-]+\.md)\b",
+    re.I)
+
+
+def _doc_pace(text):
+    body = _request_body(text)
+    if not body or HEAVY_RE.search(body) or body.rstrip().endswith("?"):
+        return "full"
+    names = []
+    for name in NAMED_DOC_RE.findall(body):
+        key = name.lower()
+        if key not in names:
+            names.append(key)
+    if len(names) == 1 or pace_of(text) == "direct":
+        return "direct"
+    return "full"
+
+
+def _line_count(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return sum(1 for _ in fh)
+    except OSError:
+        return 10 ** 9
+
+
+def _repo_root():
+    """init reads the pace file from the git toplevel, which may not be cwd."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return os.getcwd()
+    if proc.returncode != 0:
+        return os.getcwd()
+    root = (proc.stdout or "").strip()
+    return root or os.getcwd()
+
+
+def _set_pace_file(pace):
+    """dev-team init reads this once. Only `short` is written; anything else clears it."""
+    path = os.path.join(_repo_root(), ".claude", "dev-team", "pace")
+    if pace != "short":
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("short %d\n" % int(time.time()))
+    except OSError:
+        pass
+
+
+def _line_prefix(text, prefix):
+    """True when a script marker is its own line. A diff body must not count."""
+    for line in (text or "").splitlines():
+        if line.startswith(prefix):
+            return True
+    return False
+
+
 def _last_next(text):
     found = ""
     for line in (text or "").splitlines():
@@ -472,13 +593,18 @@ FAIL_NEXT = (
 )
 
 
-def _ok_next(code, out, success):
-    """A failed prelude must not keep a success NEXT that was already printed."""
+def _ok_next(code, out, success, keep=False):
+    """A failed prelude must not keep a success NEXT that was already printed.
+
+    keep=True uses `success` even when the prelude printed its own NEXT.
+    The caller prints that line last, so it wins.
+    """
     if code or "brief partial:" in (out or ""):
         return code or 1, FAIL_NEXT
-    last = _last_next(out)
-    if last:
-        return 0, last + " Do not re-run open."
+    if not keep:
+        last = _last_next(out)
+        if last:
+            return 0, last + " Do not re-run open."
     return 0, success
 
 
@@ -489,6 +615,7 @@ def _prelude(args, text):
     chunks = []
 
     if name == "glm-brainstorming":
+        pace = pace_of(text)
         ctx = os.path.join(scripts, "context.sh")
         ask = os.path.join(scripts, "ask.py")
         ctx_code = 0
@@ -500,19 +627,32 @@ def _prelude(args, text):
             ctx_code = 1
         ask_code = 0
         mode_out = ""
-        if os.path.isfile(ask):
+        # A short request that stops to ask FAST, then chains plan and dev-team,
+        # is the hour-long path. Skip that question unless the work is heavy.
+        if pace == "full" and os.path.isfile(ask):
             ask_code, mode_out = _run_local(
                 [sys.executable, ask, "mode"], stdin=text, timeout=15)
             chunks.append(mode_out)
-        else:
+        elif pace == "full":
             chunks.append("PRELUDE-SKIP ask.py missing\n")
             ask_code = 1
         _print_block("".join(chunks))
+        print("PACE: %s" % pace)
         if ctx_code or ask_code:
             return ctx_code or ask_code, (
                 "NEXT: context or mode did not finish. Re-run open once. "
                 "Do not launch lanes.")
-        if "MODE ask" in mode_out:
+        if pace == "direct":
+            nxt = ("NEXT: PACE direct. One obvious edit. Do not launch a lane. "
+                   "Do not read fast.md. Do not write a spec. Do not call "
+                   "glm-writing-plans or glm-dev-team. Implement the named "
+                   "file, tests first, then stop. Do not re-run open.")
+        elif pace == "short":
+            nxt = ("NEXT: PACE short. Do not launch explorer or researcher. "
+                   "Do not read fast.md. Do not write a multi-task plan. "
+                   "Implement in this session, tests first, at most 3 files, "
+                   "then stop. Do not re-run open.")
+        elif "MODE ask" in mode_out:
             nxt = ("NEXT: show the ASK block and end the turn. "
                    "Do not launch lanes. Do not re-run open.")
         elif "MODE fast" in mode_out:
@@ -538,6 +678,28 @@ def _prelude(args, text):
             argv.append(args.base)
         code, out = _run_local(argv, timeout=120)
         _print_block(out)
+        if code or "brief partial:" in (out or ""):
+            return _ok_next(code, out, FAIL_NEXT)
+        if any(_line_prefix(out, mark) for mark in (
+                "NOT_A_REPO", "GATHER_FAILED", "NO_BASE", "NO_MERGE_BASE",
+                "EMPTY_DIFF")):
+            print("PACE: direct")
+            return 0, ("NEXT: PACE direct. Say that marker in one line and "
+                       "stop. Zero more tool calls. Do not re-run open.")
+        if _line_prefix(out, "MODE=INLINE") or _line_prefix(out, "ONLY_NOISE"):
+            print("PACE: direct")
+            return 0, ("NEXT: PACE direct. Write Part 1 and Part 2 now. "
+                       "Zero more tool calls. Do not re-run open.")
+        if _line_prefix(out, "MODE=READ"):
+            print("PACE: short")
+            return 0, ("NEXT: PACE short. One message, Read every chunk path "
+                       "in parallel, then write the answer. No subagents. "
+                       "Do not re-run open.")
+        if _line_prefix(out, "MODE=FAN_OUT"):
+            print("PACE: full")
+            return 0, ("NEXT: PACE full. One message, at most 8 agents, then "
+                       "stop. Do not Read the chunks yourself. "
+                       "Do not re-run open.")
         return _ok_next(code, out, (
             "NEXT: act on the marker in the prelude "
             "(NOT_A_REPO, EMPTY_DIFF, NO_BASE, MODE=INLINE, MODE=READ, "
@@ -558,31 +720,75 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "brief", args.spec], timeout=180)
         _print_block(out)
-        return _ok_next(code, out, (
-            "NEXT: write the contracts from this brief. Do not re-run open."))
+        short = _line_count(args.spec) <= 80
+        if short:
+            success = ("NEXT: PACE short. The spec is short. Use the inline "
+                       "path: one write of the plan including every task body, "
+                       "then check. Do not call build. If chain.json contains "
+                       "continue true, or the user asked to implement this "
+                       "plan, run handoff.py next --self glm-writing-plans "
+                       "--event plan-ready and follow that NEXT. "
+                       "Do not re-run open.")
+        else:
+            success = ("NEXT: write the contracts from this brief. "
+                       "Do not re-run open.")
+        rc, nxt = _ok_next(code, out, success, keep=short)
+        if rc == 0:
+            print("PACE: %s" % ("short" if short else "full"))
+        return rc, nxt
 
     if name == "glm-dev-team":
+        pace = pace_of(text)
+        _set_pace_file(pace)
         print("D=%s" % scripts)
-        return 0, ("NEXT: one engine call using that D= path. "
+        print("PACE: %s" % pace)
+        if pace == "direct":
+            nxt = ("NEXT: PACE direct. One obvious edit in the named file. "
+                   "Tests first, run that test, stop. Do not call devteam "
+                   "start. Do not re-run open.")
+        elif pace == "short":
+            nxt = ("NEXT: PACE short. Write a one-slice plan, at most two "
+                   "files, risk low, size small. Then one devteam start. "
+                   "Do not launch glm-team-leader. Do not re-run open.")
+        else:
+            nxt = ("NEXT: one engine call using that D= path. "
                    "The first call is the route-first rule "
                    "(start, brief-debug, or review-pr). "
                    "Do not call next until a lane has finished. "
                    "Do not re-run open.")
+        return 0, nxt
 
     if name == "glm-systematic-debugging":
         print("S=%s" % scripts)
         tool = os.path.join(scripts, "debug_tool.py")
         if not args.probe_cmd:
-            return 0, ("NEXT: one probe call, python3 %s probe, with --cmd or "
-                       "--error-file. Do not re-run open." % tool)
+            pace = pace_of(text)
+            print("PACE: %s" % pace)
+            return 0, ("NEXT: PACE %s. One probe call, python3 %s probe, "
+                       "with --cmd or --error-file. Do not re-run open."
+                       % (pace, tool))
         if not os.path.isfile(tool):
             print("PRELUDE-SKIP debug_tool.py missing")
             return 1, FAIL_NEXT
         code, out = _run_local(
             [sys.executable, tool, "probe", "--cmd", args.probe_cmd], timeout=600)
         _print_block(out)
-        return _ok_next(code, out, (
-            "NEXT: take the LANE line. Do not re-run open or probe."))
+        if "LANE: FAST" in (out or ""):
+            print("PACE: direct")
+            success = ("NEXT: PACE direct. Follow the == NEXT == block. "
+                       "One experiment, then close on the next wake. "
+                       "Do not open a reference. Do not scan. "
+                       "Do not re-run open or probe.")
+        elif "LANE: SWARM" in (out or ""):
+            print("PACE: full")
+            success = ("NEXT: PACE full. Follow the == NEXT == block. "
+                       "Do not re-run open or probe.")
+        else:
+            print("PACE: short")
+            success = ("NEXT: PACE short. Follow the == NEXT == block. "
+                       "Two hypotheses, one experiment call. "
+                       "Do not re-run open or probe.")
+        return _ok_next(code, out, success)
 
     if name == "glm-requirements-code-audit":
         tool = os.path.join(scripts, "audit.py")
@@ -599,8 +805,25 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "brief", "--spec", args.spec], timeout=180)
         _print_block(out)
-        return _ok_next(code, out, (
-            "NEXT: write the checklist from this brief. Do not re-run open."))
+        short = _line_count(args.spec) <= 120
+        agent_lane = "lane agent" in (out or "")
+        if short and agent_lane:
+            success = ("NEXT: PACE short. Write the checklist from this brief "
+                       "in this turn. Then one run call. The brief says lane "
+                       "agent, so dispatch every printed batch in one message, "
+                       "then status. Do not re-read the spec. Do not re-run open.")
+        elif short:
+            success = ("NEXT: PACE short. Write the checklist from this brief "
+                       "in this turn. Then one run call. Do not re-read the "
+                       "spec. Do not dispatch a subagent. Do not read code "
+                       "until queue prints path:lines. Do not re-run open.")
+        else:
+            success = ("NEXT: write the checklist from this brief. "
+                       "Do not re-run open.")
+        rc, nxt = _ok_next(code, out, success, keep=short)
+        if rc == 0:
+            print("PACE: %s" % ("short" if short else "full"))
+        return rc, nxt
 
     if name == "glm-doc-generator":
         recon = os.path.join(scripts, "recon.sh")
@@ -609,9 +832,21 @@ def _prelude(args, text):
             return 1, FAIL_NEXT
         code, out = _run_local(["bash", recon], timeout=180)
         _print_block(out)
-        return _ok_next(code, out, (
-            "NEXT: compress this recon in your head and go to Turn 2. "
-            "Do not re-run open or recon."))
+        pace = _doc_pace(text)
+        if pace == "direct":
+            success = ("NEXT: PACE direct. Write the one named document "
+                       "yourself from this recon. No writer agent. No reviewer "
+                       "agent. No Gate. Then one finish bash. "
+                       "Do not re-run open or recon.")
+        else:
+            success = ("NEXT: PACE full. Do not speculate writers. Launch "
+                       "writers only after the set is known. Reviewer agents "
+                       "only for api-reference, data-model, and configuration. "
+                       "Do not re-run open or recon.")
+        rc, nxt = _ok_next(code, out, success)
+        if rc == 0:
+            print("PACE: %s" % pace)
+        return rc, nxt
 
     return 0, "NEXT: this skill owns the request. Continue its own procedure."
 

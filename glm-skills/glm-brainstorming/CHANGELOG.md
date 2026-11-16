@@ -1,3 +1,13 @@
+# 10.8 (from 10.7) — short work skips the lane chain
+
+Model ids and thoughtLevel stay. A one-file request was still offered FAST,
+then a spec, a plan, and a full glm-dev-team run. `handoff.py open` now prints
+`PACE: direct` or `PACE: short` and a `NEXT` line that implements the change
+in this session. A question mark stays on the full path. FAST, the plan, and
+the dev-team chain stay for heavy work (auth, payment, a new system, a rewrite).
+A general documentation request stays on the doc catalog. One quick dev-team
+slice is one code slice of at most two files; a second slice keeps review.
+
 # 10.7 (from 10.6) — one opening call
 
 Model ids and thoughtLevel stay. The first model turn was route, then

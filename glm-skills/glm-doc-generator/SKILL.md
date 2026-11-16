@@ -35,9 +35,10 @@ EOF
 
 | # | Rule | Violation = bug |
 |---|------|-----------------|
-| R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. | Adding a turn a batch could absorb |
+| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. | Launching an agent for one named doc |
+| R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. `PACE: direct` ignores this table. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 8 Tasks go in ONE message. | Sending calls one at a time |
-| R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Count what is already running: Turn-2 speculative writers + Gate-delta writers, or Turn-3 reviewers + the retry, together stay within ONE wave of 8; extras go in the next message. | 9+ in flight at once, or 1-at-a-time |
+| R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Writers start only after the set is known. Reviewers for api-reference, data-model, and configuration, plus one retry, stay within that wave of 8. | 9+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every Task prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
 | R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. | Any prose between tool calls |
@@ -57,8 +58,8 @@ effort) — fire all of them in ONE message, one per doc, then end the turn.
 | Turn | Content (single message) |
 |------|--------------------------|
 | 1 | 1 call: `handoff.py open` (route + cache check + recon + fact pack) |
-| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped + 1 bash (manifest + state scaffold + index + dirs) + ≤ 8 writer Tasks (the ★ set, speculatively, while the Gate waits) |
-| 3 | Delta writers only if the Gate answer changed the set (with any still-running speculative writers ≤ 8 in flight) + reviewer Tasks (HIGH-tier only) + any 1 retry, together ≤ 8; extras next message |
+| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped. Do not launch writers in this message |
+| 3 | Writers for the known set (≤ 8) + reviewer Tasks for api-reference, data-model, and configuration only + any 1 retry, together ≤ 8; extras next message |
 | 4 | 1 bash (mechanical verify + update state) + final summary |
 
 Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work on a cache hit.
@@ -71,7 +72,7 @@ Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work o
 |---|---|
 | Cache hit (`HEAD` unchanged) + all scopes unchanged | Report `[cached]` list, ask nothing, stop at Turn 2 |
 | User named specific docs | Use exactly those. Confirm in one clause inside Turn 2 |
-| User said nothing specific, interactive run | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set |
+| User said nothing specific | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set. Do not launch writers until the reply |
 | Non-interactive run (nobody to answer) | Use the ★ set (§3.1), state it in one line, skip the Gate |
 | > 8 docs selected | Waves of 8, longest/HIGH first |
 | Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `Explore`, a ZCode built-in. Ask which packages to document inside the Gate message |
@@ -127,7 +128,7 @@ Skip the Gate only when the user already named the docs (map each to its title a
   3. [update] Configuration (configuration.md) — covers: <scope>
 ```
 
-3. In the same message run the bash call of §3.3 for the ★ set and, where the harness starts subagents in the background, launch the ★-set writers now (speculation). End the turn. On "ok" the wave is already running; on a changed selection keep the writers whose doc is still selected, delete the rest, re-run the bash call with the final list and launch only the delta in Turn 3. Never speculate reviews. Without background subagents the writers start in Turn 3 instead.
+3. Do not launch writers in the Gate message. Speculation spends a full agent wave on docs the user may drop. End the turn after the list. On the reply, run the bash call of §3.3 for the chosen set and launch only those writers, at most 8. Never speculate reviews.
 
 ### 3.1 Catalog — include a row only when its condition holds
 
@@ -248,9 +249,9 @@ risk=<one clause: what you were least sure about, or "none">
 
 ---
 
-## 4. TURN 3 — REVIEW WAVE (HIGH tier only, one message, reviewers + retry ≤ 8 Tasks)
+## 4. TURN 3 — REVIEW WAVE (api, data model, configuration only)
 
-Skip this turn entirely if every doc is LOW or `[cached]`. Reviewer ≠ the writer, fresh context,
+Skip this turn unless a doc written this run is `api-reference.md`, `data-model.md`, or `configuration.md`. Other docs are checked by the finish bash (commands, links, secrets). Reviewer ≠ the writer, fresh context,
 subagent type `glm-doc-reviewer` (the installed ZCode agent, Appendix A; the built-in `general-purpose` agent if it is missing).
 
 ```
@@ -357,7 +358,7 @@ maxTurns: 18
 injectAgentsMd: false
 ---
 
-You write exactly one Markdown file to the path given. Read only the files listed in SCOPE, in
+You write exactly one Markdown file to the path given. Stay inside the BUDGET line, and the one write happens before you stop. Read only the files listed in SCOPE, in
 ranges. Every technical claim must trace to FACTS or a file you read; anything else becomes
 `TODO(human): …`. Never copy secrets. Never touch files outside the output dir. Return the
 5-line block requested, nothing else.
@@ -376,7 +377,7 @@ maxTurns: 22
 injectAgentsMd: false
 ---
 
-You verify one Markdown file against the code and edit it in place — you never write a report
+You verify one Markdown file against the code and edit it in place. Stay inside the BUDGET line, and the fixes happen before you stop. You never write a report
 instead of a fix. Check commands, paths, endpoints, signatures, env vars, schema fields,
 invented behaviour, secrets, links, clarity — in that order, until the budget runs out. Return
 the 5-line block requested, nothing else.

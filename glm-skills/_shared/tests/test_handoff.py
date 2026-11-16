@@ -216,10 +216,53 @@ class OpenTests(unittest.TestCase):
             ["open", "--self", "glm-dev-team"], "fix the failing test in login")
         self.assertEqual(rc, 0)
         self.assertIn("D=", out)
+        self.assertIn("PACE: full", out)
         self.assertIn("glm-dev-team/scripts", out.replace("\\", "/"))
-        self.assertIn("one engine call", out)
-        self.assertNotIn("A wake-up is devteam next", out)
-        self.assertIn("Do not call next until a lane has finished", out)
+
+    def test_pace_direct_is_one_file_and_login_stays_full(self):
+        sys.path.insert(0, os.path.join(HERE, ".."))
+        import handoff  # noqa: E402
+        self.assertEqual(handoff.pace_of("fix the typo in src/app.py"), "direct")
+        self.assertEqual(handoff.pace_of("make the empty state clearer"), "short")
+        self.assertEqual(
+            handoff.pace_of("add a login endpoint to the existing api"), "full")
+        self.assertEqual(handoff.pace_of("please update the README"), "direct")
+        self.assertEqual(handoff.pace_of("what does this function do?"), "full")
+        self.assertEqual(handoff._doc_pace("document this repo"), "full")
+        self.assertEqual(handoff._doc_pace("please update the README"), "direct")
+        self.assertFalse(handoff._line_prefix(
+            "MODE=INLINE\n+EMPTY_DIFF inside a file\n", "EMPTY_DIFF"))
+        self.assertTrue(handoff._line_prefix("EMPTY_DIFF\n", "EMPTY_DIFF"))
+
+    def test_brainstorm_direct_does_not_ask_or_chain(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-brainstorming"],
+            "fix the typo in src/app.py", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("PACE: direct", out)
+        self.assertNotIn("MODE ask", out)
+        self.assertIn("Do not write a spec", out)
+        self.assertIn("glm-dev-team", out)
+        self.assertIn("Do not launch a lane", out)
+
+    def test_dev_team_short_writes_a_one_shot_pace_file(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-dev-team"],
+            "make the empty state clearer", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("PACE: short", out)
+        self.assertIn("Do not launch glm-team-leader", out)
+        pace = os.path.join(root, ".claude", "dev-team", "pace")
+        self.assertTrue(os.path.isfile(pace))
+        with open(pace, encoding="utf-8") as fh:
+            self.assertTrue(fh.read().startswith("short "))
+        self.assertIn("one devteam start", out)
+        self.assertNotIn("Do not call next until a lane has finished", out)
 
     def test_debug_stay_prints_s_and_does_not_probe(self):
         rc, out, _err = self.run_at(
@@ -269,7 +312,8 @@ class OpenTests(unittest.TestCase):
         self.assertIn("OPEN: stay", out)
         self.assertIn("HEAD:", out)
         self.assertIn("hello.py", out)
-        self.assertIn("Turn 2", out)
+        self.assertIn("PACE: direct", out)
+        self.assertIn("No writer agent", out)
 
     def test_empty_stdin_does_not_run_the_prelude(self):
         rc, out, _err = self.run_at(["open", "--self", "glm-brainstorming"], "  \n")
@@ -286,8 +330,10 @@ class OpenTests(unittest.TestCase):
             "summarize the branch", cwd=root)
         self.assertEqual(rc, 0, err)
         self.assertIn("NOT_A_REPO", out)
-        self.assertIn("MODE=INLINE", out)
+        self.assertIn("PACE: direct", out)
+        self.assertIn("one line and stop", out)
         self.assertNotIn("write the summary", out)
+        self.assertNotIn("Part 1", out)
 
     def test_audit_existing_dir_does_not_say_write_the_checklist(self):
         root = tempfile.mkdtemp()

@@ -1149,6 +1149,61 @@ def slice_kind(s):
     return k if k in KINDS else "code"
 
 
+PACE_TTL_S = 1800
+
+
+def _unlink_pace(root):
+    try:
+        (state_dir(Path(root)) / "pace").unlink()
+    except OSError:
+        pass
+
+
+def read_pace(root):
+    """Read the one-shot pace file. The caller deletes it after state is saved."""
+    path = state_dir(Path(root)) / "pace"
+    try:
+        parts = path.read_text(encoding="utf-8").strip().split()
+    except OSError:
+        return ""
+    if len(parts) != 2 or parts[0] != "short":
+        _unlink_pace(root)
+        return ""
+    try:
+        ts = int(parts[1])
+    except ValueError:
+        _unlink_pace(root)
+        return ""
+    if time.time() - ts > PACE_TTL_S:
+        _unlink_pace(root)
+        return ""
+    return "short"
+
+
+def quick_shape(s):
+    """One source file plus its test, low risk. The RED/GREEN split stays for everything else."""
+    files = s.get("files") or []
+    return (0 < len(files) <= 2 and s.get("risk") != "high"
+            and s.get("size") != "large" and not s.get("from_review")
+            and slice_kind(s) == "code")
+
+
+def apply_quick(slices, pace):
+    """One small code slice only. Two slices keep RED, GREEN, and review."""
+    if pace != "short":
+        return False
+    code = [s for s in slices.values() if slice_kind(s) == "code"]
+    if len(code) != 1 or not quick_shape(code[0]):
+        return False
+    code[0]["quick"] = True
+    return True
+
+
+def plan_is_quick(st):
+    code = [s for s in (st.get("slices") or {}).values() if slice_kind(s) == "code"]
+    return bool(code) and all(s.get("quick") for s in code)
+
+
 def slice_weight(s):
     return SIZE_WEIGHT.get(s.get("size") or "small", SIZE_WEIGHT["small"])
 
@@ -1577,10 +1632,12 @@ def cmd_init(a):
     for sl in slices.values():
         missing = [f for f in sl["files"] if not (Path(root) / f).exists()]
         sl["new_files"] = list(dict.fromkeys(list(sl.get("new_files") or []) + missing))
+    quick = apply_quick(slices, read_pace(root))
     (sd / "atoms.json").write_text(json.dumps({"atoms": plan_atoms(st)}, indent=1) + "\n",
                                    encoding="utf-8")
     baseline_transcripts(root, st)
     save_state(root, st)
+    _unlink_pace(root)
     write_atomic(sd / "plan.json", json.dumps(plan, indent=1))
     n = len(slices)
     cap, _ = slots(st, [])
@@ -1597,6 +1654,8 @@ def cmd_init(a):
                }[policy["red_run"]]
     out(f"PROFILE {prof} — {gate_txt}; {red_txt}; "
         f"review {policy['review']}/{policy['review_depth']}; checkpoint {policy['checkpoint']}.")
+    if quick:
+        out("PACE quick: one lane per code slice; proof and frozen tests stay; no reviewer lane")
     if prof == "spike":
         out("  SPIKE: low-risk slices ship with NO TESTS (single commit); high-risk slices still write tests, in one lane."
             " Say this to the user in one line — it breaks the test-first rule on purpose.")
@@ -1713,6 +1772,10 @@ def briefing_text(st, s, mode):
     tag = fast_tag(st)
     lines = [f"# Briefing — {s['id']}: {s['title']}   [KIND: {kind.upper()}]  [MODE: {mode.upper()}]"
              + (f"   [{tag}]" if tag else ""), ""]
+    if s.get("quick"):
+        lines += ["> **QUICK.** Footprint only. Failing test, commit-red, "
+                  "implement, commit-green, then the report. Do not open any other file. "
+                  "Do not stop before the report.", ""]
     if mode == "fast":
         lines += ["> **SPIKE SLICE — no tests required.** The user opted into the `spike` profile for",
                   "> throwaway/prototype speed. Implement directly, prove it works once, `commit-fast`.",
@@ -1944,6 +2007,11 @@ def code_mode(st, s, fast=None):
         return "fast"
     if os.environ.get("DEVTEAM_SPLIT") == "off":
         return "slice"
+    # One lane. commit-red still freezes tests inside that lane, and integrate
+    # still rejects a missing RED commit or a later test edit. The second
+    # programmer and the attack reviewer are what made a two-file fix take an hour.
+    if s.get("quick") and s.get("status") != "red-done":
+        return "slice"
     if s.get("status") == "red-done":
         return "green"
     if fast < 2:
@@ -2024,6 +2092,8 @@ def context_paths(s):
 def claim_prompt(st, s, sid):
     """The launch prompt: claim, plus the context paths so the first turn can Read them in parallel."""
     prompt = f"python3 {q(st['script'])} claim {sid}"
+    if s.get("quick"):
+        prompt += " QUICK: footprint only. Finish the report."
     paths = context_paths(s)
     if paths:
         prompt += " CONTEXT: " + " ".join(paths)
@@ -3433,6 +3503,9 @@ def cmd_next(a):
     batch = st.get("review_batch", DEFAULT_REVIEW_BATCH)
     force_review = exhausted and not stuck
     do_review = bool(pending) and not a.no_review and (pending >= batch or force_review)
+    if do_review and plan_is_quick(st):
+        out("REVIEW: quick plan — proof and frozen tests are the gate; no reviewer lane")
+        do_review = False
     ready, inflight = ready_slices(st)
     cap, free = slots(st, inflight)
     todo = ready[:free]
@@ -3478,11 +3551,15 @@ def cmd_next(a):
             steps.append(f"`verify-brief` → glm-team-leader VERIFICATION (high-risk: {' '.join(high) or 'none'}"
                          + (f"; untested spike slices: {' '.join(spikes)}" if spikes else "") + ")")
         open_reviews = [rid for rid, r in (st.get("reviews") or {}).items() if r.get("status") != "done"]
-        steps += ["launch the review + checkpoint blocks above, then on the next wake-up call "
-                  "`next` with no ids: it reads the verdicts and the exit code out of the files and "
-                  "queues any fix slices itself"
-                  + (f" (open: {' '.join(open_reviews)})" if open_reviews else ""),
-                  "queue empty, reviews APPROVED, checkpoint PASS → `finish`"]
+        if plan_is_quick(st) and not open_reviews and not high and not spikes:
+            steps.append("queue empty and checkpoint PASS → `finish`. "
+                         "A quick plan does not launch a reviewer.")
+        else:
+            steps += ["launch the review + checkpoint blocks above, then on the next wake-up call "
+                      "`next` with no ids: it reads the verdicts and the exit code out of the files and "
+                      "queues any fix slices itself"
+                      + (f" (open: {' '.join(open_reviews)})" if open_reviews else ""),
+                      "queue empty, reviews APPROVED, checkpoint PASS → `finish`"]
         if not shown:
             out(*[f"  {i}. {s}" for i, s in enumerate(steps, start=1)])
             st["endgame_shown"] = True

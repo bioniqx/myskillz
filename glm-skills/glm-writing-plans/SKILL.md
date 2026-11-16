@@ -184,9 +184,10 @@ approach. The plan file stays portable (R8).
    conversation uncached.
 6. Independent subsystems get one plan each, and they can be built concurrently.
 
-# R7 - Inline path (N <= 1)
+# R7 - Inline path (N <= 1, or PACE short)
 
-Read `references/body-rules.md` in this skill directory for the body format.
+`PACE: short` means the spec is short enough that a writer fan-out costs more
+than it checks. Read `references/body-rules.md` in this skill directory for the body format.
 Write the skeleton and Contracts, then `<!-- TASKS -->`, then each task as
 `### T01: Name` followed by its body - all in ONE write. Then run
 `<TOOL> check <plan> --spec <spec>`, fix any `ERR`, done.

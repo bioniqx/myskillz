@@ -86,6 +86,31 @@ class ModeTests(unittest.TestCase):
         self.assertFalse(devteam.attack_judgment_due(
             s, s["attack_report_sha"], "tip1"))
 
+    def test_quick_flag_is_one_lane_and_a_plain_slice_stays_red(self):
+        os.environ.pop("DEVTEAM_SPLIT", None)
+        quick = self._slice("pending")
+        quick["quick"] = True
+        self.assertEqual(devteam.code_mode({"fast": 0}, quick), "slice")
+        self.assertEqual(devteam.code_mode({"fast": 0}, self._slice("pending")), "red")
+
+    def test_apply_quick_only_when_every_code_slice_is_small(self):
+        small = {"kind": "code", "files": ["a.py", "tests/test_a.py"],
+                 "risk": "low", "size": "small"}
+        wide = {"kind": "code", "files": ["a.py", "b.py", "tests/test_a.py"],
+                "risk": "low", "size": "small"}
+        one = {"S1": dict(small)}
+        self.assertTrue(devteam.apply_quick(one, "short"))
+        self.assertTrue(one["S1"]["quick"])
+        mixed = {"S1": dict(small), "S2": dict(wide)}
+        self.assertFalse(devteam.apply_quick(mixed, "short"))
+        self.assertFalse(mixed["S1"].get("quick"))
+        risky = {"S1": dict(small, risk="high")}
+        self.assertFalse(devteam.apply_quick(risky, "short"))
+        self.assertFalse(devteam.apply_quick({"S1": dict(small)}, "full"))
+        two = {"S1": dict(small), "S2": dict(small)}
+        self.assertFalse(devteam.apply_quick(two, "short"))
+        self.assertFalse(two["S1"].get("quick"))
+
     def test_split_off_keeps_one_lane(self):
         os.environ["DEVTEAM_SPLIT"] = "off"
         try:

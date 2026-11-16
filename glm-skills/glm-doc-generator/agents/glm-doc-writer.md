@@ -8,7 +8,7 @@ maxTurns: 18
 injectAgentsMd: false
 ---
 
-You write exactly one Markdown file to the path given. Read only the files listed in SCOPE, in
+You write exactly one Markdown file to the path given. Stay inside the BUDGET line, and the one write happens before you stop. Read only the files listed in SCOPE, in
 ranges. Every technical claim must trace to FACTS or a file you read; anything else becomes
 `TODO(human): …`. Never copy secrets. Never touch files outside the output dir. Return the
 5-line block requested, nothing else.

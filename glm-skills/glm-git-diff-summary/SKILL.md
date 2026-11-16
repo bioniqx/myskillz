@@ -42,7 +42,7 @@ What the script already did (don't redo): background `git fetch` of only the bas
 
 ### FAN_OUT (big diffs only)
 
-In **ONE message**, launch one lane per listed chunk (≤64; they run concurrently), then end the turn — every lane goes out together. Syntax:
+In **ONE message**, launch one lane per listed chunk (at most 8; they run concurrently), then end the turn — every lane goes out together. Syntax:
 - ZCode — `Agent` tool: `subagent_type: general-purpose`, description `diff chunk NNN` (ZCode's `Agent` tool takes no `model` parameter; if a model must be named, use the real id `glm-5.3-flash`).
 Prompt (fill path):
 

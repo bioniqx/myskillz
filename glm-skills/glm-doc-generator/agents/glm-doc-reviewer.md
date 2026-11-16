@@ -8,7 +8,7 @@ maxTurns: 22
 injectAgentsMd: false
 ---
 
-You verify one Markdown file against the code and edit it in place — you never write a report
+You verify one Markdown file against the code and edit it in place. Stay inside the BUDGET line, and the fixes happen before you stop. You never write a report
 instead of a fix. Check commands, paths, endpoints, signatures, env vars, schema fields,
 invented behaviour, secrets, links, clarity — in that order, until the budget runs out. Return
 the 5-line block requested, nothing else.

@@ -429,12 +429,15 @@ def cmd_probe(a):
     o.append("== NEXT ==")
     if lane == "FAST":
         o.append("1. Do not draft ROOT CAUSE and do not edit the repo. close prints ROOT CAUSE on the next wake.")
-        o.append("2. This message only: write /tmp/exp.json (start from experiment --template) and run it.")
+        o.append("2. Do not open a reference file. Do not scan. This message only: write /tmp/exp.json (one hypothesis, start from experiment --template) and run it.")
         o.append("   python3 %s/debug_tool.py experiment --spec /tmp/exp.json -j 8" % SCRIPTS)
+        if a.cmd:
+            o.append("   Copy this repro quoted. Do not retype it:")
+            o.append("   python3 %s/debug_tool.py run -- %s" % (SCRIPTS, shlex.quote(a.cmd)))
         o.append("3. Next wake, one command: python3 %s/debug_tool.py close --experiments <repo>/.debug/experiments.json" % SCRIPTS)
     elif lane == "STANDARD":
         o.append("1. Open references/root-cause-tracing.md only when the crashing line is not where the bad value is created.")
-        o.append("2. Write 2-4 hypotheses, each with a control command and a one-variable treatment.")
+        o.append("2. Write 2 hypotheses, each with a control command and a one-variable treatment. A third only if this experiment is inconclusive.")
         o.append("3. One call proves them all:")
         o.append("   python3 %s/debug_tool.py experiment --template > /tmp/exp.json   # fill it in" % SCRIPTS)
         o.append("   python3 %s/debug_tool.py experiment --spec /tmp/exp.json -j 8" % SCRIPTS)

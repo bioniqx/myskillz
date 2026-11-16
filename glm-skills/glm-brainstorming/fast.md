@@ -1,5 +1,9 @@
 # FAST
 
+If the prelude printed `PACE: direct` or `PACE: short`, stop reading here.
+That `NEXT` line is the whole job. Section 3 does not run, and this request
+does not chain into a plan or glm-dev-team.
+
 Read this only after `ask.py mode` printed `MODE fast`. It replaces the human
 gates in SKILL.md (R0's pause, R6, R12, R13's "only when the user wants the
 next job", the conductor's ask branch) and the question and review gate in

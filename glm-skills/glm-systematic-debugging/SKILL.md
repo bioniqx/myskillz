@@ -56,6 +56,8 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
 ## R3. FAST lane — 2 rounds
 
+The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
+
 1. `probe` (already done). The frame window and grep hits it printed are your evidence.
 2. One `experiment` for the suspected change. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
 

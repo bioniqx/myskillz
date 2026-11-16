@@ -40,6 +40,7 @@ EOF
 
 `<base dir>` is the "Base directory for this skill" line. The heredoc is the
 user request. Empty stdin does not route. Follow the last `NEXT:` line.
+`PACE: direct` or `PACE: short` replaces every later section, including `fast.md`.
 
 - `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
 - `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.

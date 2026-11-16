@@ -11,7 +11,7 @@ OUT_CAP=28500                            # stay under the ~30KB Bash/tool output
 READ_MAX=${GLM_GDS_READ_MAX:-80000}          # <= this: main agent reads chunks itself (no subagents)
 READ_CHUNK=45000                         # per-Read chunk (well under Read token cap)
 FAN_CHUNK=${GLM_GDS_FAN_CHUNK:-64000}        # min bytes per subagent chunk (~18k tokens: one Read)
-MAXN=64
+MAXN=8
 G="git -c core.quotepath=off -c diff.external= -c color.ui=never"
 
 $G rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo NOT_A_REPO; exit 0; }
@@ -223,7 +223,10 @@ else
     while [ "$k" -le "$N" ]; do rm -f "$T/c/$(printf '%03d' "$k").patch"; k=$((k+1)); done
     mv "$T/c/index.new" "$T/c/index"; echo "$m" > "$T/c/count"; N=$m
   fi
-  [ $ml -gt 1900 ] && echo "NOTE: chunks exceed one Read (lines<=$ml): subagents must page with offset/limit"
+  # A chunk can fit in 8 lanes and still be larger than one Read.
+  if [ "$ml" -gt 1900 ] || [ "$tgt" -gt "$READ_CHUNK" ]; then
+    echo "NOTE: chunks exceed one Read (lines<=$ml bytes<=$tgt): subagents must page with offset/limit"
+  fi
   echo "MODE=FAN_OUT chunks=$N dir=$T/c  (idx files first..last):"
   while IFS="$(printf '\t')" read -r i n r; do printf '%s/c/%03d.patch  files=%s  %s\n' "$T" "$i" "$n" "$r"; done < "$T/c/index"
   echo "== TOP FILES (lines changed, top 15) =="

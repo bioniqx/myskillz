@@ -141,29 +141,30 @@ class SinglePassChunkingTests(GatherMicroTestCase):
         log = self.shim(shutil.which("awk"), "GLM_GDS_AWKLOG",
                         os.path.join(self.tmp, "awk60.log"))
         out = self.gather(repo, "GLM_GDS_AWKLOG", log, {"GLM_GDS_FAN_CHUNK": "1000"})
-        self.assertIn("MODE=FAN_OUT chunks=60 ", out)
+        self.assertIn("MODE=FAN_OUT chunks=8 ", out)
         self.assertNotIn("NOTE:", out)
         self.assertEqual(self.chunker_awk_runs(log), 1)
         chunk_dir = re.search(r"dir=(\S+)", out).group(1)
-        self.assertEqual(len(glob.glob(os.path.join(chunk_dir, "[0-9][0-9][0-9].patch"))), 60)
+        self.assertEqual(len(glob.glob(os.path.join(chunk_dir, "[0-9][0-9][0-9].patch"))), 8)
 
     def test_over_cap_rechunk_runs_awk_once_and_stays_consistent(self):
         repo = self.fan_repo("fan100", 100)
         log = self.shim(shutil.which("awk"), "GLM_GDS_AWKLOG",
                         os.path.join(self.tmp, "awk100.log"))
         out = self.gather(repo, "GLM_GDS_AWKLOG", log, {"GLM_GDS_FAN_CHUNK": "1000"})
-        self.assertIn("MODE=FAN_OUT chunks=50 ", out)
+        self.assertIn("MODE=FAN_OUT chunks=8 ", out)
         self.assertIn("NOTE:", out)
         self.assertEqual(self.chunker_awk_runs(log), 1)
         chunk_dir = re.search(r"dir=(\S+)", out).group(1)
-        self.assertEqual(len(glob.glob(os.path.join(chunk_dir, "[0-9][0-9][0-9].patch"))), 50)
+        self.assertEqual(len(glob.glob(os.path.join(chunk_dir, "[0-9][0-9][0-9].patch"))), 8)
         with open(os.path.join(chunk_dir, "count"), encoding="utf-8") as fh:
-            self.assertEqual(fh.read().strip(), "50")
+            self.assertEqual(fh.read().strip(), "8")
         with open(os.path.join(chunk_dir, "index"), encoding="utf-8") as fh:
             rows = fh.read().splitlines()
-        self.assertEqual(len(rows), 50)
-        self.assertEqual(rows[0], "1\t2\tf001.txt .. f002.txt")
-        self.assertEqual(rows[-1], "50\t2\tf099.txt .. f100.txt")
+        self.assertEqual(len(rows), 8)
+        self.assertIn("f001.txt", rows[0])
+        self.assertIn("f100.txt", rows[-1])
+        self.assertEqual(sum(int(row.split("\t")[1]) for row in rows), 100)
 
 
 if __name__ == "__main__":

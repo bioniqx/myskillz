@@ -36,6 +36,8 @@ Checks whether the **code faithfully implements a requirements document**, repor
 
 ## R0 — The whole audit is four calls
 
+`PACE: short` (a short spec) is still these calls, minus the wandering: write the checklist from the brief, then one `run`. Do not dispatch a subagent unless the brief says `lane agent`. The second pass inside `run` stays.
+
 1. `A brief --spec <file>` — repo index, repo map, the spec verbatim, the checklist schema, lane and model report.
 2. You write `.audit/checklist.jsonl`. **This is the one step quality cannot delegate.**
 3. `A run` — retrieval, 8-way judgment, lint, repair, adversarial second pass, merge. One call.
