@@ -64,7 +64,7 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
             subprocess.run(["git"] + args, cwd=self.repo, check=True, capture_output=True)
         self.old = os.getcwd()
         os.chdir(self.repo)
-        self.env = mock.patch.dict(os.environ, {"HOME": self.home})
+        self.env = mock.patch.dict(os.environ, {"HOME": self.home, "GLM_FLASH": ""})
         self.env.start()
 
     def tearDown(self):
@@ -111,6 +111,16 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
     def test_zcode_agent_text_is_the_repo_file_verbatim(self):
         for name in ZCODE_AGENTS:
             self.assertEqual(dt.zcode_agent_text(AGENTS_SRC, name), self.source_text(name), name)
+
+    def test_deepseek_pin_file_stamps_agent_model_and_keeps_effort(self):
+        pin_dir = os.path.join(self.home, ".zcode")
+        os.makedirs(pin_dir)
+        with open(os.path.join(pin_dir, "glm-flash"), "w", encoding="utf-8") as fh:
+            fh.write("deepseek\n")
+        text = dt.zcode_agent_text(AGENTS_SRC, "glm-programmer-strong")
+        self.assertIn('model: "deepseek/deepseek-flash"', text)
+        self.assertNotIn("GLM-5.3-Flash", text)
+        self.assertIn("\nthoughtLevel: max\n", text)
 
     def test_fix_installs_six_agents_with_zcode_frontmatter(self):
         out = self.zfix()

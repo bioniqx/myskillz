@@ -5010,16 +5010,19 @@ def main(argv=None):
 
 
 def zcode_agent_text(agents_src, name) -> str:
-    """The installed `zcode` agent markdown for `name`: the skill's agents/<name>.md, verbatim.
+    """The installed agent markdown for `name`.
 
-    The repo files are the single source of truth — each one already carries
-    final ZCode frontmatter (real GLM model ids, thoughtLevel, maxTurns) — so
-    both this doctor and install-zcode.sh install agents by plain copy and
-    nothing rewrites them on the way in.
+    The repo file is the source. thoughtLevel stays. When ~/.zcode/glm-flash
+    says deepseek, the GLM-5.3-Flash model id becomes deepseek/deepseek-flash.
     """
     path = Path(agents_src) / (name + ".md")
     with open(path, encoding="utf-8") as fh:
-        return fh.read()
+        text = fh.read()
+    try:
+        import flash_pin
+    except ImportError:
+        return text
+    return flash_pin.stamp_agent(text)
 
 
 ZCODE_AGENTS = ("glm-programmer-lite", "glm-programmer-strong",
@@ -5203,9 +5206,9 @@ def doctor_zcode(a, root):
     """Check and install the six `zcode` agents plus the user-level hook config.
 
     CLI: `doctor --harness zcode [--fix]` (routed from `cmd_doctor`/`cmd_start`).
-    Agents are copied verbatim from the skill's `agents/` files (each already
-    carries final ZCode frontmatter — real GLM model ids, thoughtLevel,
-    maxTurns) into `~/.zcode/agents/`; the PreToolUse (`Write|Edit`, `Bash`)
+    Agents are copied from the skill's `agents/` files (thoughtLevel and maxTurns
+    stay). When ~/.zcode/glm-flash says deepseek, the model id becomes
+    deepseek/deepseek-flash. The PreToolUse (`Write|Edit`, `Bash`)
     and Stop hooks merge into `~/.zcode/cli/config.json`
     (`hooks.enabled: true`, `type: process`, absolute `guard.py` path).
     Nothing is written under the project root (`root` exists only for

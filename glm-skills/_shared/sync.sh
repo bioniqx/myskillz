@@ -25,6 +25,16 @@ for skill in $handoff_skills; do
     echo "synced $dest"
 done
 
+flash_src="$script_dir/flash_pin.py"
+flash_skills="glm-dev-team glm-systematic-debugging glm-writing-plans glm-requirements-code-audit"
+
+for skill in $flash_skills; do
+    dest="$dest_root/$skill/scripts/flash_pin.py"
+    mkdir -p "$(dirname "$dest")"
+    cp "$flash_src" "$dest"
+    echo "synced $dest"
+done
+
 decide_src="$script_dir/decide.py"
 decide_skills="glm-brainstorming glm-writing-plans glm-dev-team glm-requirements-code-audit glm-systematic-debugging"
 

@@ -35,6 +35,7 @@ import time
 import zipfile
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import decide  # vendored by _shared/sync.sh; closes atoms, the model does not
+import flash_pin  # vendored by _shared/sync.sh
 import zai_client  # vendored by skills/glm/_shared/sync.sh
 
 VERSION = "9.0"
@@ -231,6 +232,11 @@ discover_key = zai_client.find_key
 
 
 def discover_base():
+    if flash_pin.http_provider() == "deepseek":
+        base = zai_client.find_base()
+        if (os.environ.get("DEEPSEEK_BASE_URL") or "").strip():
+            return base, "env:DEEPSEEK_BASE_URL"
+        return base, "deepseek"
     for e in BASE_ENV:
         v = (os.environ.get(e) or "").strip().rstrip("/")
         if v:
@@ -3172,7 +3178,7 @@ def _plan_resume(c):
 
 ZCODE_DISPATCH = (u"ZCode: dispatch each worker as agent glm-rca-investigator (judge batches) or "
                   u"glm-rca-verifier (verify batches), all in one message — agents launched together run in "
-                  u"parallel; use real model ids only (glm-5.3-flash / glm-5.3).")
+                  u"parallel. Do not name a model. The agent file pins GLM-5.3-Flash or deepseek-flash.")
 
 
 def _dispatch(agent, prompt_path, description):
@@ -3375,21 +3381,24 @@ def cmd_doctor(a):
     key, ksrc = discover_key()
     base, bsrc = discover_base()
     route = route_of(base)
+    need = "DEEPSEEK_API_KEY" if flash_pin.http_provider() == "deepseek" else "ZAI_API_KEY"
     print("api key     %s" % ("found (%s)" % ksrc if key else
-                              "NOT FOUND -- set ZAI_API_KEY; without it the skill uses the "
-                              "subagent lane"))
+                              "NOT FOUND -- set %s; without it the skill uses the "
+                              "subagent lane" % need))
     print("base url    %s  (%s)" % (base, bsrc))
     print("route       %s -> %s" % (route, endpoint_of(base, route)))
     print("threads     %d" % cpu_threads(a.threads))
     print("tiers       " + " | ".join(
-        "%s: judge %s/%s verify %s/%s" % (t, v["judge"][0], v["judge"][1],
-                                          v["verify"][0], v["verify"][1])
+        "%s: judge %s/%s verify %s/%s" % (
+            t, flash_pin.resolve_http_model(v["judge"][0]), v["judge"][1],
+            flash_pin.resolve_http_model(v["verify"][0]), v["verify"][1])
         for t, v in (("light", TIERS["light"]), ("std", TIERS["std"]), ("deep", TIERS["deep"]))))
     if a.ping:
         if not key:
             die("cannot ping without a key")
         cl = Client(base, key, route)
-        for model in (FLASH, PRO):
+        models = (FLASH,) if flash_pin.http_provider() == "deepseek" else (FLASH, PRO)
+        for model in models:
             t0 = now()
             try:
                 txt = cl.call(model, "low", u"Reply with the single word: ok",
@@ -3428,7 +3437,11 @@ def cmd_setup(a):
         if os.path.isdir(src):
             for f in sorted(os.listdir(src)):
                 if f.endswith(".md"):
-                    shutil.copy2(os.path.join(src, f), os.path.join(ag, f))
+                    src_path = os.path.join(src, f)
+                    with open(src_path, encoding="utf-8") as fh:
+                        text = flash_pin.stamp_agent(fh.read(), home=home)
+                    with open(os.path.join(ag, f), "w", encoding="utf-8") as fh:
+                        fh.write(text)
                     print("  installed %s" % f)
         print("installed.")
     print("")

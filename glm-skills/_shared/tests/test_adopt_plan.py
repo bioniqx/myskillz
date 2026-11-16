@@ -101,6 +101,7 @@ class TestFindCredentials(unittest.TestCase):
         for k in list(os.environ):
             if k in plan_tool.KEY_ENV or k in ("ZAI_BASE_URL", "GLM_BASE_URL", "PLAN_BASE_URL", "ANTHROPIC_BASE_URL"):
                 del os.environ[k]
+        os.environ["GLM_FLASH"] = "glm"
         os.environ["ZAI_API_KEY"] = "sk-test-0123456789abcdef"
         os.environ["ANTHROPIC_BASE_URL"] = "https://example.invalid/should-be-ignored"
         key, base, proto, src = plan_tool.find_credentials()

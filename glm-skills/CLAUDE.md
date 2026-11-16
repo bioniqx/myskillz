@@ -41,14 +41,16 @@ python3 glm-dev-team/scripts/devteam.py doctor        # --fix installs the zcode
 python3 <skill>/scripts/<tool>.py setup
 
 # Install all eight skills into ZCode: skills to ~/.zcode/skills/<name>, every agents/*.md
-# verbatim to ~/.zcode/agents (17 agents, overwritten, nothing rewritten — the agent files already
-# carry final ZCode frontmatter), and every commands/*.md to ~/.zcode/commands with {{SKILL_DIR}}
+# to ~/.zcode/agents (overwritten, no backup). Default pin is GLM-5.3-Flash.
+# `sh install-zcode.sh --flash deepseek` rewrites that model id to deepseek/deepseek-flash
+# and records the word in ~/.zcode/glm-flash. thoughtLevel is not changed.
+# Commands go to ~/.zcode/commands with {{SKILL_DIR}}
 # replaced by the installed skill path. Guard hooks are NOT configured by the installer; they are opt-in:
 #   python3 glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
 # (also re-verifies its six agents against their source files; merges the hooks into
 # ~/.zcode/cli/config.json key-preserving, in place with no backup, re-run is a no-op, commands
 # pointing at the installed skill's absolute guard.py path)
-sh install-zcode.sh [--home DIR] [--dry-run]
+sh install-zcode.sh [--home DIR] [--dry-run] [--flash glm|deepseek]
 
 # Vendored-copy identity, py_compile and SKILL.md hygiene across all glm skills
 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
@@ -76,8 +78,10 @@ Every port applies the same set of model facts; each skill with a tuning surface
 `glm-tuning.md` (glm-idea-to-spec has none):
 
 - **Aliases collapse on Z.ai.** `haiku` maps to `glm-5.3-flash`. Both `sonnet` and `opus` map to `glm-5.3`,
-  so a "sonnet" lane is not cheaper. Worker lanes default to Flash and judgment lanes use GLM-5.3. Never
-  pick `opus` over `sonnet` for cost reasons.
+  so a "sonnet" lane is not cheaper. Every lane stays on GLM-5.3-Flash, or on DeepSeek V4.1 Flash
+  (`deepseek-flash`) when `~/.zcode/glm-flash` says deepseek. The HTTP fan-out uses that same pin.
+  Never promote a lane to GLM-5.3 or
+  deepseek-v4-pro, and never pick `opus` over `sonnet` for cost reasons.
 - **Thinking is always on.** `reasoning_effort` accepts only `low | high | max` (no `medium`) and defaults
   to `max`. Effort is the real latency dial, so every tier maps to one explicit effort. On ZCode, effort
   reaches GLM through the installed agent's `thoughtLevel` (honored only together with a specific
@@ -114,7 +118,8 @@ Every port applies the same set of model facts; each skill with a tuning surface
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
   ZCode agents live in `agents/` with final ZCode frontmatter; `install-zcode.sh` copies every skill's
-  `agents/*.md` verbatim (17 agents in all, including glm-debug-worker and the glm-writing-plans trio),
+  `agents/*.md` (17 agents in all, including glm-debug-worker and the glm-writing-plans trio;
+  `--flash deepseek` stamps the model id),
   and `plan_tool.py setup --harness zcode` / `devteam.py doctor --harness zcode --fix` copy theirs the
   same way. The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
@@ -156,8 +161,8 @@ All facts were verified against the local 3.14.4 binary unless marked otherwise.
   launched together in the foreground run in parallel. Frontmatter keys: `name`, `description`, `model`,
   `thoughtLevel` (honored only together with a specific `model`), `color`, `tools`/`disallowedTools`,
   `maxTurns`, `injectAgentsMd`, `mcpServers`; no haiku/sonnet/opus aliases exist. Model ids and
-  `thoughtLevel` are pinned per file in each skill's `agents/` folder — the single source of truth
-  every installer copies verbatim; nothing remaps models at install time.
+  `thoughtLevel` are pinned per file in each skill's `agents/` folder. Default install copies them.
+  `--flash deepseek` replaces only the GLM-5.3-Flash model id with `deepseek/deepseek-flash`.
 - **Dispatch.** Subagents are dispatched through the `Agent` tool (Task alias) whose input schema is
   `{description, prompt, subagent_type, run_in_background}` with `subagent_type` omitted defaulting to
   `general-purpose` (binary-verified; the web docs confirm the tool and the `general-purpose` + `Explore`

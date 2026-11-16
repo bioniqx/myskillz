@@ -12,6 +12,10 @@ class TestVendored(unittest.TestCase):
 
         skills = {
             'zai_client.py': ['glm-systematic-debugging', 'glm-writing-plans', 'glm-requirements-code-audit'],
+            'flash_pin.py': [
+                'glm-dev-team', 'glm-systematic-debugging', 'glm-writing-plans',
+                'glm-requirements-code-audit',
+            ],
             'handoff.py': [
                 'glm-brainstorming', 'glm-dev-team', 'glm-doc-generator', 'glm-git-diff-summary',
                 'glm-idea-to-spec', 'glm-requirements-code-audit', 'glm-systematic-debugging',

@@ -37,7 +37,7 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 
 ## Tier routing
 
-Every tier is GLM-5.3-Flash. Api-lane model and effort live only in the `GLM`
+Every tier is GLM-5.3-Flash, or deepseek-flash when `~/.zcode/glm-flash` says deepseek (`GLM_FLASH` overrides one process). Api-lane model and effort live only in the `GLM`
 dict; agent-lane model and effort live only in the agent frontmatter. `deep`
 is max effort on Flash, not a bigger model; `build` raises a tier when the
 spec range names auth, payment or concurrency work.

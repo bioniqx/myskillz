@@ -22,6 +22,45 @@ class TestBase(unittest.TestCase):
             self.assertEqual(zai_client.find_base(), "https://api.z.ai/api/coding/paas/v4")
         self.assertEqual(zai_client.DEFAULT_BASE, "https://api.z.ai/api/coding/paas/v4")
 
+    def test_deepseek_http_pin_ignores_zai_key(self):
+        env = {"GLM_FLASH": "deepseek", "ZAI_API_KEY": "z" * 20,
+               "DEEPSEEK_API_KEY": "d" * 20}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.deepseek.com")
+            key, source = zai_client.find_key()
+            self.assertEqual(key, "d" * 20)
+            self.assertEqual(source, "env:DEEPSEEK_API_KEY")
+        env.pop("DEEPSEEK_API_KEY")
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_pin_file_selects_deepseek_without_env_and_ignores_zai_key(self):
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        os.makedirs(os.path.join(home, ".zcode", "v2"))
+        with open(os.path.join(home, ".zcode", "glm-flash"), "w", encoding="utf-8") as fh:
+            fh.write("deepseek\n")
+        cfg = {
+            "config": {"providerConfigRules": {"providerRules": [
+                {"providerId": "zai-api", "config": {"access": {"apiKey": "z" * 20}}},
+                {"providerId": "deepseek", "config": {"access": {"apiKey": "d" * 24}}},
+            ]}}
+        }
+        with open(os.path.join(home, ".zcode", "v2", "provider_config.json"), "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh)
+        env = {"HOME": home, "ZAI_API_KEY": "z" * 20}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.deepseek.com")
+            key, source = zai_client.find_key()
+            self.assertEqual(key, "d" * 24)
+            self.assertTrue(source.endswith("provider_config.json"))
+            prose = 'Keep deepseek/deepseek-flash in prose.\nmodel: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n'
+            stamped = zai_client.flash_pin.stamp_agent(prose, home=home)
+            self.assertIn("Keep deepseek/deepseek-flash in prose.", stamped)
+            self.assertIn('model: "deepseek/deepseek-flash"', stamped)
+        with mock.patch.dict(os.environ, {"HOME": home, "GLM_FLASH": "glm"}, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.z.ai/api/coding/paas/v4")
+
     def test_base_order(self):
         env = {"ZAI_BASE_URL": "https://a.example/v4/",
                "GLM_BASE_URL": "https://b.example/v4",
@@ -235,6 +274,17 @@ class _FakeCase(unittest.TestCase):
 
 
 class TestClient(_FakeCase):
+    def test_deepseek_call_remaps_model_and_keeps_effort(self):
+        os.environ["GLM_FLASH"] = "deepseek"
+        fake = self.serve(chat("hello"))
+        c = zai_client.Client(KEY, base=fake.base)
+        self.assertEqual(c.call("glm-5.3-flash", "max", "SYS", "USER", 100, temperature=0.2), "hello")
+        body = fake.requests[0]["body"]
+        self.assertEqual(body["model"], "deepseek-flash")
+        self.assertEqual(body["reasoning_effort"], "max")
+        self.assertEqual(body["thinking"], {"type": "enabled"})
+        self.assertNotIn("temperature", body)
+
     def test_openai_call(self):
         fake = self.serve(chat("hello"))
         c = zai_client.Client(KEY, base=fake.base)

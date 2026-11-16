@@ -158,6 +158,57 @@ class InstallZcodeTests(unittest.TestCase):
         # The new glm- install still lands next to them.
         self.assertTrue(os.path.isfile(self.skill("glm-brainstorming", "SKILL.md")))
 
+    def test_flash_deepseek_stamps_installed_agents_only(self):
+        r = self.install("--flash", "deepseek")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        pin = os.path.join(self.home, ".zcode", "glm-flash")
+        with open(pin, encoding="utf-8") as fh:
+            self.assertEqual(fh.read().strip(), "deepseek")
+        installed = open(self.agent("glm-explorer"), encoding="utf-8").read()
+        source = open(self.source_agent("glm-explorer"), encoding="utf-8").read()
+        self.assertIn('model: "deepseek/deepseek-flash"', installed)
+        self.assertIn("thoughtLevel: high", installed)
+        self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"', source)
+        skill_agent = self.skill("glm-brainstorming", "agents", "glm-explorer.md")
+        with open(skill_agent, encoding="utf-8") as fh:
+            self.assertIn('model: "deepseek/deepseek-flash"', fh.read())
+        self.assertIn("stamped", r.stdout)
+
+    def test_reinstall_keeps_deepseek_pin_and_glm_flag_reverts_it(self):
+        self.assertEqual(self.install("--flash", "deepseek").returncode, 0)
+        foreign = os.path.join(self.home, ".zcode", "notes", "keep.md")
+        os.makedirs(os.path.dirname(foreign))
+        marker = 'model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n'
+        with open(foreign, "w", encoding="utf-8") as fh:
+            fh.write(marker)
+        again = self.install()
+        self.assertEqual(again.returncode, 0, again.stderr + again.stdout)
+        with open(os.path.join(self.home, ".zcode", "glm-flash"), encoding="utf-8") as fh:
+            self.assertEqual(fh.read().strip(), "deepseek")
+        with open(self.agent("glm-explorer"), encoding="utf-8") as fh:
+            self.assertIn('model: "deepseek/deepseek-flash"', fh.read())
+        with open(foreign, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), marker)
+        back = self.install("--flash", "glm")
+        self.assertEqual(back.returncode, 0, back.stderr + back.stdout)
+        with open(self.agent("glm-explorer"), encoding="utf-8") as fh:
+            self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"', fh.read())
+        with open(foreign, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), marker)
+
+    def test_flash_deepseek_dry_run_writes_nothing(self):
+        r = self.install("--dry-run", "--flash", "deepseek")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode")))
+        self.assertIn("pin: deepseek", r.stdout)
+        self.assertIn("Nothing written.", r.stdout)
+
+    def test_flash_rejects_an_unknown_name(self):
+        r = self.install("--flash", "opus")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("glm or deepseek", r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode")))
+
     def test_dry_run_writes_nothing(self):
         r = self.install("--dry-run")
         self.assertEqual(r.returncode, 0, r.stderr)

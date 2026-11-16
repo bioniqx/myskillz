@@ -52,7 +52,7 @@ the user once to open a new session; the harness cannot load them sooner.
 - **Workers** (background subagents; `doctor --fix` installs them user-level — model and effort are pinned
   in each agent's own frontmatter, the Agent tool takes no per-dispatch model):
 
-  | Agent | Model on Z.ai | Job |
+  | Agent | Flash pin | Job |
   | --- | --- | --- |
   | `glm-programmer-lite` | GLM-5.3-Flash | every slice that is not strong: the default lane |
   | `glm-programmer-strong` | GLM-5.3-Flash | `risk: high`, `size: large`, and any **retried** slice |
@@ -77,7 +77,7 @@ the user once to open a new session; the harness cannot load them sooner.
 9. Before `finish`, verify the last `next` printed no `UNRESOLVED`, no open review and no `FAIL` checkpoint. Then report with the evidence lines the engine printed.
 
 **Each turn = read what arrived → ONE engine call → launch everything it printed, as parallel tool
-calls in ONE message → end the turn.** GLM always thinks before answering, so every extra turn,
+calls in ONE message → end the turn.** The pinned Flash model thinks before answering, so every extra turn,
 tool call or paragraph you write sits on the critical path of every running lane. No narration.
 A wake-up does not re-read this file. Lane turn caps are stuck-run ceilings (programmer 40 or 48,
 reviewer 24, spot reviewer 16, investigator 24, leader 40), not budgets to spend. A cap below
@@ -87,7 +87,7 @@ one read-fix-commit cycle makes the engine retry the slice, which is slower.
 
 The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (15-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool. Follow these rules:
 
-1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`. The agent's own frontmatter picks the real model id (`glm-5.3` / `glm-5.3-flash`; there are no glm-5.3-flash/glm-5.3-flash/glm-5.3 aliases).
+1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `glm-programmer-strong`, all others to `glm-programmer-lite`. The agent's own frontmatter picks the flash id (`GLM-5.3-Flash`, or `deepseek/deepseek-flash` after `install-zcode.sh --flash deepseek`). Do not name GLM-5.3 or deepseek-v4-pro.
 2. ZCode has no SubagentStop event, but `doctor --harness zcode --fix` installs a Stop hook in `~/.zcode/cli/config.json` that routes programmer Stops through `guard.py`, which writes the `.done`/`.blocked` marker. Treat the lane completion notification as the wake-up. Run `devteam next [<id>]` with the finished slice's id. The Stop gate wrote the marker, and the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) still gates the merge.
 3. `SendMessage` and `TaskStop` exist. Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`.
 4. Installed agents and hook config load only in a new session. After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart).

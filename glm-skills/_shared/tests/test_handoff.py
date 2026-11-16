@@ -27,6 +27,9 @@ class RouteTests(unittest.TestCase):
         self.assertIn("STAY glm-brainstorming", out)
         self.assertIn("RESULT route action=stay", out)
         self.assertIn("GUARD cite:", out)
+        self.assertIn("GUARD flash:", out)
+        self.assertIn("deepseek-flash", out)
+        self.assertIn("GUARD schema:", out)
 
     def test_traceback_leaves_brainstorming(self):
         rc, out = run(["route", "--self", "glm-brainstorming"],

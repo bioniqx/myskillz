@@ -23,20 +23,31 @@
 # this installer wrote. A later run deletes only those entries that left the repo.
 # Anything not in the manifest is left alone.
 #
-# Usage: sh install-zcode.sh [--home DIR] [--dry-run]
+# Usage: sh install-zcode.sh [--home DIR] [--dry-run] [--flash glm|deepseek]
+# --flash glm (default) pins agents to GLM-5.3-Flash.
+# --flash deepseek pins agents to deepseek/deepseek-flash (DeepSeek V4.1 Flash).
+# thoughtLevel is not changed. HTTP fan-out stays on Z.ai until GLM_FLASH=deepseek.
 # In an interactive terminal the script waits for Enter before the window closes.
 set -eu
 
 HOME_DIR="${HOME:-}"
 DRY=0
+FLASH=glm
+FLASH_EXPLICIT=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --home) [ $# -ge 2 ] || { echo "Error: --home needs a value" >&2; exit 1; }; HOME_DIR="$2"; shift 2 ;;
         --dry-run) DRY=1; shift ;;
-        *) echo "Usage: $0 [--home DIR] [--dry-run]" >&2; exit 1 ;;
+        --flash) [ $# -ge 2 ] || { echo "Error: --flash needs glm or deepseek" >&2; exit 1; }; FLASH="$2"; FLASH_EXPLICIT=1; shift 2 ;;
+        *) echo "Usage: $0 [--home DIR] [--dry-run] [--flash glm|deepseek]" >&2; exit 1 ;;
     esac
 done
+
+case "$FLASH" in
+    glm|deepseek) ;;
+    *) echo "Error: --flash must be glm or deepseek, got $FLASH" >&2; exit 1 ;;
+esac
 
 [ -n "$HOME_DIR" ] || { echo "Error: HOME is unset; pass --home DIR" >&2; exit 1; }
 
@@ -350,11 +361,40 @@ if not dry:
             fh.write(rel + "\n")
 PY
 
+if [ "$FLASH_EXPLICIT" -eq 0 ] && [ -f "$HOME_DIR/.zcode/glm-flash" ]; then
+    saved=$(awk 'NF { print $1; exit }' "$HOME_DIR/.zcode/glm-flash" 2>/dev/null || true)
+    case "$saved" in
+        deepseek|ds|deepseek-flash) FLASH=deepseek ;;
+        glm|glm-5.3-flash|flash) FLASH=glm ;;
+    esac
+fi
+
+echo "== flash"
+if [ "$FLASH" = "deepseek" ]; then
+    echo "    pin: deepseek (agent id deepseek/deepseek-flash, DeepSeek V4.1 Flash)"
+else
+    echo "    pin: glm (agent id GLM-5.3-Flash)"
+fi
+echo "    thoughtLevel unchanged. HTTP fan-out uses this same pin. GLM_FLASH overrides one process."
+
 if [ "$DRY" -eq 1 ]; then
     echo
     echo "Dry run. Nothing written."
     exit 0
 fi
+
+mkdir -p "$HOME_DIR/.zcode"
+printf '%s\n' "$FLASH" > "$HOME_DIR/.zcode/glm-flash"
+python3 - "$HOME_DIR" "$SCRIPT_DIR/_shared/flash_pin.py" "$FLASH" <<'PY'
+import importlib.util
+import sys
+
+home, modpath, forced = sys.argv[1], sys.argv[2], sys.argv[3]
+spec = importlib.util.spec_from_file_location("flash_pin", modpath)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print("    stamped %d files" % mod.stamp_tree(home, forced=forced))
+PY
 
 if [ -z "$slash" ]; then
     slash_line="No slash commands in the discovered skills."
@@ -384,7 +424,8 @@ esac
 
 cat <<MSG
 
-Done. Open a NEW ZCode session: installed skills, agents and commands load
+Done. Flash pin is $FLASH, recorded in $HOME_DIR/.zcode/glm-flash.
+Open a NEW ZCode session: installed skills, agents and commands load
 only in a new session, not on a restart.
 $slash_line
 Skill descriptions are truncated when loaded into per-turn trigger metadata

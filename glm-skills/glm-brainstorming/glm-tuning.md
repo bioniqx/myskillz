@@ -88,7 +88,7 @@ Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target 
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/`, the bundled agents verbatim to
 `~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
 (/glm-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). Model and effort live only in the agent frontmatter (section 2). When a model
-must be named yourself, use the real ids `glm-5.3` / `glm-5.3-flash`. Installed skills, agents and
+must be named yourself, use `glm-5.3-flash` or `deepseek-flash`. Do not name `glm-5.3` or `deepseek-v4-pro`. Installed skills, agents and
 commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$glm-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
 characters, and a description over 1024 characters makes ZCode drop the skill — which is why the
 WHEN clause sits at the front of this skill's description. Agents launched together run in parallel

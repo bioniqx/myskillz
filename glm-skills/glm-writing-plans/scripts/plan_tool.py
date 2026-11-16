@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
+import flash_pin  # vendored by _shared/sync.sh
 import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
 import decide
 SKILL_DIR = os.path.dirname(HERE)
@@ -212,6 +213,8 @@ def protocol_for(base):
 def model_for(tier, api=True):
     m, effort, alias = GLM.get(tier, GLM["std"])
     m = os.environ.get("PLAN_MODEL_DEEP" if tier == "deep" else "PLAN_MODEL_STD", m)
+    m = flash_pin.resolve_http_model(m)
+    alias = flash_pin.resolve_http_model(alias)
     return (m, effort) if api else (alias, effort)
 
 
@@ -1679,7 +1682,7 @@ def cmd_review(a):
              else "general-purpose")
     summary = "REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked))
     rows = [summary,
-            "DISPATCH %d reviewers in ONE message | the `%s` agent | real ids `glm-5.3` / `glm-5.3-flash` where a model must be named | description 'review <ID>'" % (len(groups), agent),
+            "DISPATCH %d reviewers in ONE message | the `%s` agent | do not name a model; the agent file pins GLM-5.3-Flash or deepseek-flash | description 'review <ID>'" % (len(groups), agent),
             "prompt (verbatim): Read <brief path> and follow it exactly.",
             "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))
@@ -1894,7 +1897,11 @@ def cmd_brief(a):
             cap, capenv = agent_cap()
             out.append("lane: agent | no API key (checked %s) | subagent cap %s -> run `%s doctor`"
                        % (KEY_ENV[0] + "..", "%d%s" % (cap, "" if capenv else " assumed"), qtool()))
-        out.append("models: light/std=%s(effort low/high) deep=%s(effort max)" % (GLM["std"][0], GLM["deep"][0]))
+        light_m, light_e = model_for("light")
+        std_m, std_e = model_for("std")
+        deep_m, deep_e = model_for("deep")
+        out.append("models: light=%s/%s std=%s/%s deep=%s/%s" % (
+            light_m, light_e, std_m, std_e, deep_m, deep_e))
         if "--thorough" in args:
             out.append("mode: THOROUGH -> review every task")
         # read-only recon probes: each independent read becomes a zero-argument
@@ -2078,7 +2085,8 @@ def cmd_setup(a):
         print("ERR  %s not found; run setup from the skill tree" % agents_src)
         return 1
     targets = [(os.path.join(home, ".zcode", "agents", n + ".md"),
-                load(os.path.join(agents_src, n + ".md"))) for n in WRITER_AGENTS]
+                flash_pin.stamp_agent(load(os.path.join(agents_src, n + ".md")), home=home))
+               for n in WRITER_AGENTS]
     changes = []
     for path, text in targets:
         if not os.path.exists(path) or load(path) != text:

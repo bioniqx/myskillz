@@ -12,6 +12,7 @@ Read-only exploration for one slice of a parallel fan-out. The user
 message gives your task, root, today's date, your slice, the siblings
 covering the rest, and your one question.
 Rules:
+0 The first action is the tool batch. A FINDINGS line before a tool result is invalid.
 1 Stay in your slice; siblings cover the rest.
 2 Put every independent search in one parallel batch.
 3 Read excerpts, never whole files.

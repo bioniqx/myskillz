@@ -32,6 +32,7 @@ SCRIPTS = Path(__file__).resolve().parent
 SKILL = SCRIPTS.parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+import flash_pin
 import zai_client
 WORKER_AGENT = "glm-debug-worker"
 MAXJ = 64  # local CPU jobs (run/probe/experiment)
@@ -899,6 +900,7 @@ def cmd_scan(a):
         model = a.model
     if a.effort:
         effort = a.effort
+    model = flash_pin.resolve_http_model(model)
 
     if not key or a.print_prompts:
         # inside the project: no external_directory prompts for the workers
@@ -923,7 +925,7 @@ def cmd_scan(a):
               "VERDICTs." % (len(briefs), WORKER_AGENT, agent_lanes()))
         return 0
 
-    base = a.base or os.environ.get("ZAI_BASE_URL") or "https://api.z.ai/api/coding/paas/v4"
+    base = zai_client.find_base(a.base or "")
     anthropic = "/anthropic" in base
     j = clamp(a.jobs, min(MAX_API, len(tasks)), MAX_API)
     t0 = time.time()
@@ -1046,8 +1048,11 @@ def cmd_doctor(a):
         ("timeout bin", shutil.which("timeout") or shutil.which("gtimeout") or "missing (-t flags ignored)"),
         ("harness", detect_harness()),
         ("api key", ("%s (...%s)" % (src, key[-4:])) if key else "none -> scan falls back to the agent lane"),
-        ("base url", a.base or os.environ.get("ZAI_BASE_URL") or "https://api.z.ai/api/coding/paas/v4"),
-        ("tiers", "light=%s/%s  std=%s/%s  deep=%s/%s" % (TIERS["light"] + TIERS["std"] + TIERS["deep"])),
+        ("base url", zai_client.find_base(a.base or "")),
+        ("tiers", "light=%s/%s  std=%s/%s  deep=%s/%s" % (
+            flash_pin.resolve_http_model(TIERS["light"][0]), TIERS["light"][1],
+            flash_pin.resolve_http_model(TIERS["std"][0]), TIERS["std"][1],
+            flash_pin.resolve_http_model(TIERS["deep"][0]), TIERS["deep"][1])),
     ]
     print("S=%s" % SCRIPTS)
     for k, v in rows:
@@ -1066,7 +1071,7 @@ def cmd_doctor(a):
         if not key:
             print("ping: skipped, no key")
             return 1
-        base = a.base or os.environ.get("ZAI_BASE_URL") or "https://api.z.ai/api/coding/paas/v4"
+        base = zai_client.find_base(a.base or "")
         t0 = time.time()
         txt = api_call(key, base, TIERS["light"][0], "low", "Reply with the single word: ok", "ping", 32,
                        "/anthropic" in base)

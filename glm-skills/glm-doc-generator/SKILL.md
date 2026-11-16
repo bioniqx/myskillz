@@ -385,11 +385,7 @@ the 5-line block requested, nothing else.
 
 ## Appendix B — harness settings that matter for this pipeline
 
-GLM-5.3 and GLM-5.3-Flash keep reasoning always on (it cannot be disabled) and expose
-`reasoning_effort` at `low | high | max`; both carry a 1M-token context and 128K max output.
-For this skill: **main thread `high`** (routing and batching decisions), **writer subagents `high`**
-(checklist execution), **reviewer subagents `max`** (fact-check judgment). Z.ai's own recommended
-sampling for these models is `temperature: 1`, `top_p: 0.95`, with streaming and `tool_stream`
-enabled — tool streaming is what lets an 8-Task wave start moving immediately. GLM-5.3-Flash is
-the right model for recon shards, mechanical passes and both agent roles; the reviewer compensates
-with `max` effort.
+The conductor is GLM-5.3-Flash or DeepSeek V4.1 Flash (`deepseek-flash`). Effort stays
+`high` or `max`. Never `low`, and never turn DeepSeek thinking off: that is when citations
+are invented. GLM-5.3 and `deepseek-v4-pro` are not lanes. Main thread `high`, writers `high`,
+reviewers `max`. Do not request JSON schema output. Leave sampling at the provider default.

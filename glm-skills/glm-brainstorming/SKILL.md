@@ -1,6 +1,6 @@
 ---
 name: glm-brainstorming
-description: "Use this before ANY creative work, or when the user says FAST or che do FAST. Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a glm-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST is on. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3 and GLM-5.3-Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+description: "Use this before ANY creative work, or when the user says FAST or che do FAST. Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a glm-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST is on. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3-Flash and DeepSeek V4.1 Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, 'can we / is it possible' feasibility spikes, and FAST / che do FAST / design and build straight through. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
 allowed-tools:
   - Bash(sh *context.sh*)
@@ -168,7 +168,7 @@ Effort is pinned in the agent file. Do not set it from this file.
 
 ## R4 — Force the batch, plan the rounds
 
-GLM emits fewer parallel tool calls per turn than Claude unless given a
+Flash emits fewer parallel tool calls per turn unless given a
 number. Open the round with `Round 1: N calls in this message`, then make
 all N. If only 1-2 land, do NOT continue serially: re-issue the remainder
 as one batch, or move that work into Flash lanes (each batches
@@ -191,7 +191,7 @@ defect: fold the work into the open round or drop it.
 
 ## R5 — Carry state explicitly
 
-GLM loses accuracy on long chains, and a private restatement does not
+Flash loses accuracy on long chains, and a private restatement does not
 hold the state. Prefer wide-and-shallow (many one-hop lanes) over deep
 chains; never let a lane chain more than 4 tool calls. The Path line of
 the next message is the state, and `check.py send` rejects a draft that
@@ -430,7 +430,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   drop it. Never retry a denial.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
-- "A GLM-5.3 lane will be smarter" → every lane is Flash. `decide.py`
+- "A bigger model will be smarter" → every lane is GLM-5.3-Flash or deepseek-flash. `decide.py`
   picks. Never a lane for one search.
 - "Spawn 6 because I can" → width must buy a saved human turn or a
   better decision. One lane per question you will cite or act on; the

@@ -15,6 +15,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import flash_pin
+
 DEFAULT_BASE = "https://api.z.ai/api/coding/paas/v4"
 EFFORTS = ("low", "high", "max")
 # Z.ai rate/concurrency/frequency-limit codes: transient, safe to retry.
@@ -31,6 +33,12 @@ THROTTLE_WINDOW = 2.0
 
 
 def find_base(explicit: str = "") -> str:
+    if flash_pin.http_provider() == "deepseek":
+        for v in (explicit, os.environ.get("DEEPSEEK_BASE_URL")):
+            v = (v or "").strip().rstrip("/")
+            if v:
+                return v
+        return flash_pin.DEEPSEEK_BASE
     for v in (explicit, os.environ.get("ZAI_BASE_URL"), os.environ.get("GLM_BASE_URL")):
         v = (v or "").strip().rstrip("/")
         if v:
@@ -88,8 +96,49 @@ def _walk_for_key(obj, depth=0):
     return None
 
 
+def _deepseek_key_file():
+    """The DeepSeek provider apiKey in ZCode settings, or (None, None).
+
+    Only the deepseek provider block is read. HOME must be set, so a test
+    that clears the environment cannot pick up the developer key.
+    """
+    home = os.environ.get("HOME") or ""
+    if not home:
+        return None, None
+    path = os.path.join(home, ".zcode", "v2", "provider_config.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            obj = json.load(fh)
+    except (OSError, ValueError):
+        return None, None
+    rules = ((obj.get("config") or {}).get("providerConfigRules") or {}).get("providerRules") or []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if rule.get("providerId") != "deepseek" and rule.get("templateId") != "deepseek":
+            continue
+        key = ((rule.get("config") or {}).get("access") or {}).get("apiKey")
+        if _valid_key(key):
+            return key, path
+    return None, None
+
+
 def find_key(extra_env: tuple = ()) -> tuple:
-    """Return (key, source) or (None, None). Never returns ANTHROPIC_API_KEY."""
+    """Return (key, source) or (None, None). Never returns ANTHROPIC_API_KEY.
+
+    DeepSeek HTTP uses DEEPSEEK_API_KEY, then the deepseek block in
+    ~/.zcode/v2/provider_config.json. A Z.ai key is never sent there.
+    No DeepSeek key means the agent lane.
+    """
+    if flash_pin.http_provider() == "deepseek":
+        for name in ("DEEPSEEK_API_KEY", "DEEPSEEK_KEY"):
+            v = (os.environ.get(name) or "").strip()
+            if _valid_key(v):
+                return v, "env:" + name
+        got = _deepseek_key_file()
+        if got[0]:
+            return got
+        return None, None
     for name in tuple(extra_env) + KEY_ENV:
         if name in NEVER_ENV:
             continue
@@ -234,6 +283,11 @@ class Client:
         return h
 
     def _payload(self, model, effort, system, user, max_tokens, temperature):
+        model = flash_pin.resolve_http_model(model)
+        deepseek = flash_pin.http_provider() == "deepseek"
+        # DeepSeek thinking mode raises a temperature below 0.95. Omit it.
+        if deepseek and temperature is not None and temperature < 0.95:
+            temperature = None
         if self.route == "anthropic":
             p = {"model": model, "max_tokens": max_tokens,
                  "messages": [{"role": "user", "content": user}]}
@@ -243,7 +297,13 @@ class Client:
             msgs = [{"role": "system", "content": system}] if system else []
             msgs.append({"role": "user", "content": user})
             p = {"model": model, "max_tokens": max_tokens, "messages": msgs}
-        p["reasoning_effort"] = effort
+        if deepseek and self.route == "anthropic":
+            p["thinking"] = {"type": "enabled"}
+            p["output_config"] = {"effort": effort}
+        else:
+            p["reasoning_effort"] = effort
+            if deepseek:
+                p["thinking"] = {"type": "enabled"}
         if temperature is not None:
             p["temperature"] = temperature
         return p

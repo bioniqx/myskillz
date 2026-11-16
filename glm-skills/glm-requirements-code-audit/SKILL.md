@@ -12,7 +12,7 @@ description: >-
   yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
 metadata:
   version: 9.0
-  models: glm-5.3-flash
+  models: glm-5.3-flash | deepseek-flash
   parallelism: 8 threads inside scripts/audit.py
 ---
 
@@ -57,7 +57,7 @@ running inside the script.
    the report.
 3. **One shared prompt prefix per wave.** The rules and repo map are byte-identical across a wave, so request 2
    onward hits the prompt cache.
-4. **Both passes are GLM-5.3-Flash.** The verifier proposes an attack. `check` closes a status only when that attack's quote is in the file, or the user records `--set`. Never skip the second pass.
+4. **Both passes use the flash pin.** GLM-5.3-Flash, or deepseek-flash when `~/.zcode/glm-flash` says deepseek (`GLM_FLASH` overrides one process). The verifier proposes an attack. `check` closes a status only when that attack's quote is in the file, or the user records `--set`. Never skip the second pass.
 5. **Nothing is retyped.** Findings, verdicts, the report and the CSV are files written by the script. Never
    copy model output into chat or into a file yourself.
 
@@ -175,7 +175,7 @@ A discrepancy is anything not ✅; ❓ items are listed separately by tag.
 | `std` (default) | high | max | almost everything |
 | `deep` | max | max | security/payment specs, or a report someone signs |
 
-Every pass is GLM-5.3-Flash. Tier never selects another model. Higher tiers widen retrieval (more files, more context per file). `run` freezes spec atoms before it judges and refuses a checklist that drops one.
+Every pass uses that same flash pin. Tier never selects GLM-5.3 or deepseek-v4-pro. Higher tiers widen retrieval (more files, more context per file). `run` freezes spec atoms before it judges and refuses a checklist that drops one.
 
 ## R9 — Fallback lane
 
