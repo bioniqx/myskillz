@@ -29,6 +29,7 @@ state (mode.json, .audit) or fetch a git base. It never calls a model itself.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -546,10 +547,28 @@ def _repo_root():
     return root or os.getcwd()
 
 
+def _chain_is_fast():
+    """True when brainstorming already chose FAST and asked the chain to continue."""
+    seen = []
+    for root in (_repo_root(), os.getcwd()):
+        if root in seen:
+            continue
+        seen.append(root)
+        path = os.path.join(root, ".brainstorm", "drafts", "chain.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                body = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if body.get("mode") == "fast" and body.get("continue") is True:
+            return True
+    return False
+
+
 def _set_pace_file(pace):
-    """dev-team init reads this once. Only `short` is written; anything else clears it."""
+    """dev-team init reads this once. `short` and `fast` are written; anything else clears it."""
     path = os.path.join(_repo_root(), ".claude", "dev-team", "pace")
-    if pace != "short":
+    if pace not in ("short", "fast"):
         try:
             os.remove(path)
         except OSError:
@@ -558,7 +577,7 @@ def _set_pace_file(pace):
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write("short %d\n" % int(time.time()))
+            fh.write("%s %d\n" % (pace, int(time.time())))
     except OSError:
         pass
 
@@ -656,9 +675,14 @@ def _prelude(args, text):
             nxt = ("NEXT: show the ASK block and end the turn. "
                    "Do not launch lanes. Do not re-run open.")
         elif "MODE fast" in mode_out:
-            nxt = ("NEXT: read fast.md. One message: decide.py atoms on this "
-                   "same request, plus the fact lanes. Do not ask. "
-                   "Do not re-run open.")
+            nxt = ("NEXT: PACE fast. Do not launch a lane. Do not read "
+                   "architectural.md. In this message write "
+                   ".brainstorm/drafts/options.json with one option, id A, "
+                   "text equal to the request, then run ask.py fast. "
+                   "On DECISION pick, approve and send. Write a short spec: "
+                   "goal, files, acceptance, out of scope. Run check.py spec. "
+                   "Then handoff.py next --self glm-brainstorming "
+                   "--event architectural-approved. Do not re-run open.")
         else:
             nxt = ("NEXT: one message: decide.py atoms on this same request, "
                    "plus the fact lanes. Do not re-run open.")
@@ -720,8 +744,15 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "brief", args.spec], timeout=180)
         _print_block(out)
-        short = _line_count(args.spec) <= 80
-        if short:
+        fast = _chain_is_fast()
+        short = fast or _line_count(args.spec) <= 80
+        if fast:
+            success = ("NEXT: PACE fast. Inline path: one write of the plan "
+                       "including every task body, then check. Do not call "
+                       "build. Then handoff.py next --self glm-writing-plans "
+                       "--event plan-ready and follow that NEXT. "
+                       "Do not re-run open.")
+        elif short:
             success = ("NEXT: PACE short. The spec is short. Use the inline "
                        "path: one write of the plan including every task body, "
                        "then check. Do not call build. If chain.json contains "
@@ -734,11 +765,13 @@ def _prelude(args, text):
                        "Do not re-run open.")
         rc, nxt = _ok_next(code, out, success, keep=short)
         if rc == 0:
-            print("PACE: %s" % ("short" if short else "full"))
+            print("PACE: %s" % ("fast" if fast else ("short" if short else "full")))
         return rc, nxt
 
     if name == "glm-dev-team":
         pace = pace_of(text)
+        if pace != "direct" and _chain_is_fast():
+            pace = "fast"
         _set_pace_file(pace)
         print("D=%s" % scripts)
         print("PACE: %s" % pace)
@@ -750,6 +783,11 @@ def _prelude(args, text):
             nxt = ("NEXT: PACE short. Write a one-slice plan, at most two "
                    "files, risk low, size small. Then one devteam start. "
                    "Do not launch glm-team-leader. Do not re-run open.")
+        elif pace == "fast":
+            nxt = ("NEXT: PACE fast. One devteam start on the plan. "
+                   "Do not launch glm-team-leader. Do not ask. "
+                   "A high-risk slice keeps its review. Do not add a reviewer "
+                   "for any other slice. Do not re-run open.")
         else:
             nxt = ("NEXT: one engine call using that D= path. "
                    "The first call is the route-first rule "

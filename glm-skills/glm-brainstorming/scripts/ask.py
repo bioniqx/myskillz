@@ -183,8 +183,8 @@ def cmd_fast(a):
     pick, risk = force_pick(options, atoms, led, deps, reports)
     if not pick:
         print("DECISION stop")
-        print("NEXT: there is no option. Write one option from the request and the "
-              "kept facts, attack it once, run close again, and re-run fast. "
+        print("NEXT: there is no option. Write one option from the request, "
+              "id A, and re-run fast. Do not launch an attack lane. "
               "Do not ask the user.")
         return 2
     write_chain(a.chain, pick, "fast", mode="fast")
@@ -194,8 +194,9 @@ def cmd_fast(a):
     if risk:
         print("RISK %s" % risk)
     print("NEXT: pass the AUTO block to check.py approve --asked design. "
-          "On RESULT approve yes, write the spec of this pick and hand off. "
-          "Do not ask.")
+          "On RESULT approve yes, write a short spec (goal, files, acceptance, "
+          "out of scope), run check.py spec, and hand off. Do not read "
+          "architectural.md. Do not launch a lane. Do not ask.")
     return 0
 
 

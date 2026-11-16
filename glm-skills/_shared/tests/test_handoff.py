@@ -264,6 +264,30 @@ class OpenTests(unittest.TestCase):
         self.assertIn("one devteam start", out)
         self.assertNotIn("Do not call next until a lane has finished", out)
 
+    def test_fast_chain_skips_lanes_and_marks_dev_team(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-brainstorming"],
+            "FAST: build a new billing service", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("PACE fast", out)
+        self.assertNotIn("fact lanes", out)
+        self.assertIn("Do not launch a lane", out)
+        chain_dir = os.path.join(root, ".brainstorm", "drafts")
+        os.makedirs(chain_dir, exist_ok=True)
+        with open(os.path.join(chain_dir, "chain.json"), "w", encoding="utf-8") as fh:
+            fh.write('{"continue": true, "mode": "fast"}\n')
+        rc, out, err = self.run_at(
+            ["open", "--self", "glm-dev-team"],
+            "build the settings page", cwd=root)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("PACE: fast", out)
+        pace = os.path.join(root, ".claude", "dev-team", "pace")
+        with open(pace, encoding="utf-8") as fh:
+            self.assertTrue(fh.read().startswith("fast "))
+
     def test_debug_stay_prints_s_and_does_not_probe(self):
         rc, out, _err = self.run_at(
             ["open", "--self", "glm-systematic-debugging"],

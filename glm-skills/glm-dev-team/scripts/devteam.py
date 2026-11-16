@@ -1166,7 +1166,7 @@ def read_pace(root):
         parts = path.read_text(encoding="utf-8").strip().split()
     except OSError:
         return ""
-    if len(parts) != 2 or parts[0] != "short":
+    if len(parts) != 2 or parts[0] not in ("short", "fast"):
         _unlink_pace(root)
         return ""
     try:
@@ -1177,7 +1177,7 @@ def read_pace(root):
     if time.time() - ts > PACE_TTL_S:
         _unlink_pace(root)
         return ""
-    return "short"
+    return parts[0]
 
 
 def quick_shape(s):
@@ -1199,9 +1199,22 @@ def apply_quick(slices, pace):
     return True
 
 
+def apply_fast_lane(slices, pace):
+    """FAST: one programmer lane per code slice. High-risk slices stay on RED then GREEN."""
+    if pace != "fast":
+        return False
+    marked = False
+    for s in slices.values():
+        if (slice_kind(s) == "code" and s.get("risk") != "high"
+                and not s.get("from_review")):
+            s["fast_lane"] = True
+            marked = True
+    return marked
+
+
 def plan_is_quick(st):
     code = [s for s in (st.get("slices") or {}).values() if slice_kind(s) == "code"]
-    return bool(code) and all(s.get("quick") for s in code)
+    return bool(code) and all(s.get("quick") or s.get("fast_lane") for s in code)
 
 
 def slice_weight(s):
@@ -1632,7 +1645,9 @@ def cmd_init(a):
     for sl in slices.values():
         missing = [f for f in sl["files"] if not (Path(root) / f).exists()]
         sl["new_files"] = list(dict.fromkeys(list(sl.get("new_files") or []) + missing))
-    quick = apply_quick(slices, read_pace(root))
+    pace_name = read_pace(root)
+    quick = apply_quick(slices, pace_name)
+    fast_lane = apply_fast_lane(slices, pace_name)
     (sd / "atoms.json").write_text(json.dumps({"atoms": plan_atoms(st)}, indent=1) + "\n",
                                    encoding="utf-8")
     baseline_transcripts(root, st)
@@ -1656,6 +1671,9 @@ def cmd_init(a):
         f"review {policy['review']}/{policy['review_depth']}; checkpoint {policy['checkpoint']}.")
     if quick:
         out("PACE quick: one lane per code slice; proof and frozen tests stay; no reviewer lane")
+    if fast_lane:
+        out("PACE fast: one lane per code slice; high-risk slices keep RED, GREEN, and review; "
+            "proof and frozen tests stay")
     if prof == "spike":
         out("  SPIKE: low-risk slices ship with NO TESTS (single commit); high-risk slices still write tests, in one lane."
             " Say this to the user in one line — it breaks the test-first rule on purpose.")
@@ -1776,6 +1794,10 @@ def briefing_text(st, s, mode):
         lines += ["> **QUICK.** Footprint only. Failing test, commit-red, "
                   "implement, commit-green, then the report. Do not open any other file. "
                   "Do not stop before the report.", ""]
+    elif s.get("fast_lane"):
+        lines += ["> **FAST LANE.** One pass. Failing tests, commit-red, implement, "
+                  "commit-green, then the report. Do not explore. Do not stop before "
+                  "the report.", ""]
     if mode == "fast":
         lines += ["> **SPIKE SLICE — no tests required.** The user opted into the `spike` profile for",
                   "> throwaway/prototype speed. Implement directly, prove it works once, `commit-fast`.",
@@ -2010,7 +2032,7 @@ def code_mode(st, s, fast=None):
     # One lane. commit-red still freezes tests inside that lane, and integrate
     # still rejects a missing RED commit or a later test edit. The second
     # programmer and the attack reviewer are what made a two-file fix take an hour.
-    if s.get("quick") and s.get("status") != "red-done":
+    if (s.get("quick") or s.get("fast_lane")) and s.get("status") != "red-done":
         return "slice"
     if s.get("status") == "red-done":
         return "green"
@@ -2030,6 +2052,9 @@ def dispatch_route(st, s, mode):
     retry_at = 3 if mode == "green" else 2
     strong = (mode == "red" or s.get("risk") == "high" or s.get("size") == "large"
               or attempt >= retry_at)
+    # FAST spends the first attempt on the lite lane. A retry still moves to strong.
+    if s.get("fast_lane") and attempt < retry_at:
+        strong = False
     agent = "glm-programmer-strong" if strong else "glm-programmer-lite"
     description = s.get("title") or s.get("id") or "slice"
     return "Agent(subagent_type=" + agent + ", description=" + repr(description) + ")"
@@ -2094,6 +2119,8 @@ def claim_prompt(st, s, sid):
     prompt = f"python3 {q(st['script'])} claim {sid}"
     if s.get("quick"):
         prompt += " QUICK: footprint only. Finish the report."
+    elif s.get("fast_lane"):
+        prompt += " FAST LANE: tests first, then the code, then the report."
     paths = context_paths(s)
     if paths:
         prompt += " CONTEXT: " + " ".join(paths)
@@ -3504,7 +3531,7 @@ def cmd_next(a):
     force_review = exhausted and not stuck
     do_review = bool(pending) and not a.no_review and (pending >= batch or force_review)
     if do_review and plan_is_quick(st):
-        out("REVIEW: quick plan — proof and frozen tests are the gate; no reviewer lane")
+        out("REVIEW: quick or FAST plan — proof and frozen tests are the gate; no reviewer lane")
         do_review = False
     ready, inflight = ready_slices(st)
     cap, free = slots(st, inflight)

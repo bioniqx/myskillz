@@ -1,21 +1,18 @@
 # FAST
 
-If the prelude printed `PACE: direct` or `PACE: short`, stop reading here.
-That `NEXT` line is the whole job. Section 3 does not run, and this request
-does not chain into a plan or glm-dev-team.
+Read this only after `ask.py mode` printed `MODE fast`. It replaces the lane
+rounds and the human gates in SKILL.md. It does not replace `check.py`,
+`commit-red`, or a high-risk review. Do not change a model id or a thoughtLevel.
 
-Read this only after `ask.py mode` printed `MODE fast`. It replaces the human
-gates in SKILL.md (R0's pause, R6, R12, R13's "only when the user wants the
-next job", the conductor's ask branch) and the question and review gate in
-`architectural.md` §2 and §4. It does not replace `check.py`, the lane agent
-files, or a sibling skill's engine. Do not change a model id or a thoughtLevel.
+`PACE: direct` and `PACE: short` are already faster than this file. If the
+prelude printed either, follow that `NEXT` and stop reading.
 
-## 1. Do not pause for a choice
+## 1. Do not pause, and do not launch a lane
 
 Do not ask a question. Do not show `Approve this design?`. Do not arm
-`ask.py wait`. Do not offer the visual companion. Do not wait for a spec
-review. A missing preference is an assumption in the spec. Repair every
-`FAIL` and continue.
+`ask.py wait`. Do not offer the visual companion. Do not read
+`architectural.md`. Do not dispatch explorer, researcher, drafter, or breaker.
+A missing preference is one line in the spec.
 
 Three stops are not choices. Say each in one line, then keep going on
 everything else:
@@ -24,40 +21,29 @@ everything else:
 - The harness says the agents were installed this session and cannot load until a new session.
 - The next action would force-push, deploy, rewrite history, migrate production, or delete data.
 
-## 2. Same evidence, then the script's pick
+## 2. One option, then the script picks
 
-Run the conductor through `check.py close`. Do not show the draft.
+In the same message as `open`:
 
-```bash
-python3 <skill_dir>/scripts/ask.py fast --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json
-```
+1. Write `.brainstorm/drafts/options.json`: one object, `id` `A`, `text` the user request.
+2. Run `ask.py fast --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json`.
+3. Pass the printed `AUTO` block to `check.py approve --asked design`.
+4. `check.py send` on the draft that names the pick. The draft has a Path line, assumptions, and out of scope, and it has no question mark. Repair until `fail=0`. Do not show it.
 
-- It prints `DECISION pick=<id>`. That id is the option. Record a `RISK` line in the spec. Do not pick a different id.
-- Exit 2 means there is no option. Write one option from the request and the kept facts, attack it once, run `close` again, and re-run `fast`. Do not ask.
+Exit 2 means the options file was empty. Write the one option and re-run `fast`. Do not launch an attack lane.
 
-Pass this stdin to `check.py approve --asked design`, with the printed id:
+## 3. Short spec, inline plan, one lane
 
-```
-AUTO
-DECISION pick=<id> auto=1
-```
-
-`RESULT approve yes` is hard rule 1. Then `check.py send` on the draft that names the id. The draft has a Path line, assumptions, and out of scope, and it has no question mark. Repair until `fail=0`. Do not show it as a question.
-
-## 3. Spec, then the plan, then the code
-
-Write the spec the way `architectural.md` §4 steps 1-3 say. Skip the review gate in §4.4. Run `check.py spec` and fix every FAIL. Commit only when that section's commit rule already allows it.
-
-The hand-off event is always `architectural-approved`, including Spike and Bounded of any size. Do not implement in this skill.
+Write one short spec: goal, files, acceptance, out of scope. Run `check.py spec` and fix every FAIL. Do not run the five-lens review.
 
 ```bash
 python3 <skill_dir>/scripts/handoff.py next --self glm-brainstorming --event architectural-approved
 ```
 
-`ask.py fast` already wrote `.brainstorm/drafts/chain.json` with `"continue": true` and `"mode": "fast"`. Read the sibling `SKILL.md` that `NEXT:` names and follow it in this same session. Do not end the turn between a passing spec and the plan tool's first call except to wait for a script.
+`ask.py fast` already wrote `.brainstorm/drafts/chain.json` with `"continue": true` and `"mode": "fast"`.
 
-glm-writing-plans asks nothing. On `OK assembled`, hand off in that same turn.
+glm-writing-plans writes the plan in one file and runs `check`. It does not call `build`. On a clean check it hands off in that same turn.
 
-glm-dev-team runs `devteam start` on the plan and does not ask whether to begin. Answer a `BLOCKED` lane from the plan and SendMessage it. If init refuses a dirty integration checkout, `git stash push -m glm-fast` once and retry init once. Loop `devteam next` until `devteam finish`. Do not weaken a test, a gate, a footprint, or a review.
+glm-dev-team runs `devteam start` and loops `devteam next` until `devteam finish`. Each code slice that is not high-risk is one programmer lane: tests committed first, then the code, tests frozen after `commit-red`. No reviewer lane for those slices. A high-risk slice keeps RED, GREEN, and review. Do not add a reviewer the engine did not print. Do not weaken a test, a gate, or a footprint.
 
-A request that only asked a question is still specified and built. The spec is the chosen way to satisfy it.
+Answer a `BLOCKED` lane from the plan and SendMessage it. If init refuses a dirty checkout, `git stash push -m glm-fast` once and retry init once.

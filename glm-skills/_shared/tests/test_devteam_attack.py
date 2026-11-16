@@ -111,6 +111,23 @@ class ModeTests(unittest.TestCase):
         self.assertFalse(devteam.apply_quick(two, "short"))
         self.assertFalse(two["S1"].get("quick"))
 
+    def test_fast_lane_is_one_lite_pass_and_high_risk_stays_split(self):
+        os.environ.pop("DEVTEAM_SPLIT", None)
+        low = {"kind": "code", "files": ["a.py", "b.py", "c.py"],
+               "risk": "low", "size": "large", "status": "pending",
+               "from_review": False, "attempt": 1, "title": "wide"}
+        high = {"kind": "code", "files": ["p.py"], "risk": "high", "size": "small",
+                "status": "pending", "from_review": False, "attempt": 1, "title": "pay"}
+        slices = {"L": dict(low), "H": dict(high)}
+        self.assertTrue(devteam.apply_fast_lane(slices, "fast"))
+        self.assertTrue(slices["L"]["fast_lane"])
+        self.assertFalse(slices["H"].get("fast_lane"))
+        self.assertEqual(devteam.code_mode({"fast": 0}, slices["L"]), "slice")
+        self.assertEqual(devteam.code_mode({"fast": 0}, slices["H"]), "red")
+        self.assertIn("glm-programmer-lite", devteam.dispatch_route({}, slices["L"], "slice"))
+        slices["L"]["attempt"] = 2
+        self.assertIn("glm-programmer-strong", devteam.dispatch_route({}, slices["L"], "slice"))
+
     def test_split_off_keeps_one_lane(self):
         os.environ["DEVTEAM_SPLIT"] = "off"
         try:

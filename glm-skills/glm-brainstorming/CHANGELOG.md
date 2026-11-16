@@ -8,6 +8,15 @@ the dev-team chain stay for heavy work (auth, payment, a new system, a rewrite).
 A general documentation request stays on the doc catalog. One quick dev-team
 slice is one code slice of at most two files; a second slice keeps review.
 
+# 10.9 (from 10.8) — FAST skips the design lanes
+
+`MODE fast` no longer opens explorer, researcher, drafter, or breaker lanes,
+and it does not read `architectural.md`. One option is the request. The plan
+is one inline write plus `check`, not `build`. glm-dev-team runs each
+non-high-risk code slice as one lane. `commit-red` still freezes tests.
+A high-risk slice keeps RED, GREEN, and review. Model ids and thoughtLevel
+stay.
+
 # 10.7 (from 10.6) — one opening call
 
 Model ids and thoughtLevel stay. The first model turn was route, then

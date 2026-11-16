@@ -40,7 +40,7 @@ EOF
 
 `<base dir>` is the "Base directory for this skill" line. The heredoc is the
 user request. Empty stdin does not route. Follow the last `NEXT:` line.
-`PACE: direct` or `PACE: short` replaces every later section, including `fast.md`.
+`PACE: direct`, `PACE: short`, and `PACE: fast` replace every later section.
 
 - `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
 - `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.
@@ -404,7 +404,7 @@ BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
 unverified stay labelled unverified. A spec FAIL is fixed in place.
 `approve no` means you do not write. The conductor procedure, in order. Each number is one message.
 
-1. Round 1, after `open`: `decide.py atoms` on the request, and the fact lanes, in that one message. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
+1. Round 1, after `open`, when the prelude did not print `PACE: fast`: `decide.py atoms` on the request, and the fact lanes, in that one message. `PACE: fast` writes one option and does not launch a lane. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `glm-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `glm-design-breaker` per option. End the turn.
 4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `MODE fast` does not take that branch (`fast.md`). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.

@@ -105,7 +105,7 @@ Pick the first rule that matches:
 5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
 6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
-Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
+Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
 
 ## When you write a plan
 
