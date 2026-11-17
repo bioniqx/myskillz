@@ -248,6 +248,8 @@ class OpenTests(unittest.TestCase):
         self.assertIn("PACE: direct", out)
         self.assertNotIn("MODE ask", out)
         self.assertIn("Do not write a spec", out)
+        self.assertIn("fast-done", out)
+        self.assertIn("After that test passes", out)
         self.assertIn("glm-dev-team", out)
         self.assertIn("Do not launch a lane", out)
 
@@ -278,6 +280,7 @@ class OpenTests(unittest.TestCase):
         self.assertIn("PACE fast", out)
         self.assertNotIn("fact lanes", out)
         self.assertIn("Do not launch a lane", out)
+        self.assertIn("Do not commit in this step", out)
         chain_dir = os.path.join(root, ".brainstorm", "drafts")
         os.makedirs(chain_dir, exist_ok=True)
         with open(os.path.join(chain_dir, "chain.json"), "w", encoding="utf-8") as fh:
@@ -287,6 +290,8 @@ class OpenTests(unittest.TestCase):
             "build the settings page", cwd=root)
         self.assertEqual(rc, 0, err)
         self.assertIn("PACE: fast", out)
+        self.assertIn("fast-done", out)
+        self.assertIn("After devteam finish succeeds", out)
         pace = os.path.join(root, ".claude", "dev-team", "pace")
         with open(pace, encoding="utf-8") as fh:
             self.assertTrue(fh.read().startswith("fast "))
@@ -383,6 +388,115 @@ class OpenTests(unittest.TestCase):
         rc, out, _err = self.run_at(["open", "--self", "glm-nope"], "hi")
         self.assertEqual(rc, 2)
         self.assertIn("RESULT open action=stop name=usage", out)
+
+
+def _note_files():
+    msg = tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8")
+    note = tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8")
+    msg.write("Add the login retry limit\n\nCap retries at three.\n")
+    note.write(
+        "Cap login retries at three so a stuck client stops instead of looping.\n"
+        "The new limit is covered by the login test.\n")
+    msg.close()
+    note.close()
+    return msg.name, note.name
+
+
+class FastDoneTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        for key, value in (
+                ("user.email", "t@t"), ("user.name", "t"),
+                ("commit.gpgsign", "false")):
+            subprocess.run(
+                ["git", "config", key, value], cwd=self.root, check=True)
+        self.msg, self.note = _note_files()
+        self.addCleanup(os.remove, self.msg)
+        self.addCleanup(os.remove, self.note)
+
+    def _done(self, paths):
+        return run_at_cwd(
+            ["fast-done", "--message-file", self.msg, "--gitlab-file", self.note,
+             "--"] + paths,
+            self.root)
+
+    def test_commits_only_the_named_file(self):
+        path = os.path.join(self.root, "app.py")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("print('hi')\n")
+        rc, out, err = self._done(["app.py"])
+        self.assertEqual(rc, 0, err)
+        self.assertIn("FAST-DONE committed", out)
+        self.assertIn("COMMIT:", out)
+        self.assertIn("Add the login retry limit", out)
+        self.assertIn("GITLAB:", out)
+        self.assertIn("Cap login retries", out)
+        self.assertIn("Do not push", out)
+        log = subprocess.run(
+            ["git", "log", "-1", "--format=%s"], cwd=self.root,
+            capture_output=True, text=True, check=True)
+        self.assertEqual(log.stdout.strip(), "Add the login retry limit")
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=self.root,
+            capture_output=True, text=True, check=True)
+        self.assertEqual(status.stdout.strip(), "")
+
+    def test_second_run_does_not_commit_again(self):
+        with open(os.path.join(self.root, "app.py"), "w", encoding="utf-8") as fh:
+            fh.write("print('hi')\n")
+        self.assertEqual(self._done(["app.py"])[0], 0)
+        first = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.root,
+            capture_output=True, text=True, check=True).stdout
+        rc, out, err = self._done(["app.py"])
+        self.assertEqual(rc, 0, err)
+        self.assertIn("FAST-DONE already-committed", out)
+        second = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.root,
+            capture_output=True, text=True, check=True).stdout
+        self.assertEqual(first, second)
+
+    def test_trailer_and_secret_and_escape_do_not_commit(self):
+        with open(self.msg, "w", encoding="utf-8") as fh:
+            fh.write("Add the login retry limit\n\nCo-authored-by: Bot <b@b>\n")
+        with open(os.path.join(self.root, "app.py"), "w", encoding="utf-8") as fh:
+            fh.write("print('hi')\n")
+        rc, out, _err = self._done(["app.py"])
+        self.assertEqual(rc, 2)
+        self.assertIn("trailer", out)
+        log = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"], cwd=self.root,
+            capture_output=True, text=True)
+        self.assertNotEqual(log.returncode, 0)
+        with open(self.msg, "w", encoding="utf-8") as fh:
+            fh.write("Add the login retry limit\n")
+        with open(os.path.join(self.root, ".env"), "w", encoding="utf-8") as fh:
+            fh.write("TOKEN=1\n")
+        rc, out, _err = self._done([".env"])
+        self.assertEqual(rc, 2)
+        self.assertIn("secret", out)
+        rc, out, _err = self._done(["../outside.py"])
+        self.assertEqual(rc, 2)
+        self.assertIn("FAIL path", out)
+
+    def test_no_paths_prints_the_notes_and_does_not_commit(self):
+        rc, out, err = self._done([])
+        self.assertEqual(rc, 0, err)
+        self.assertIn("FAST-DONE clean", out)
+        self.assertIn("GITLAB:", out)
+        log = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"], cwd=self.root,
+            capture_output=True, text=True)
+        self.assertNotEqual(log.returncode, 0)
+
+
+def run_at_cwd(args, cwd):
+    proc = subprocess.run(
+        [sys.executable, HANDOFF] + args,
+        capture_output=True, text=True, timeout=60, cwd=cwd)
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 class SpecLintTests(unittest.TestCase):

@@ -196,6 +196,8 @@ scoped to the fix commits. **Loop cap 2**; leftovers and all MINOR findings go t
 Commits after the last passing checkpoint → run one more (background) and wait. `devteam finish` (refuses
 while a review is open or not `APPROVED`; `--force` ships anyway and names them) cleans up, writes
 `summary.md`, prints the diff stat, the last checkpoint, the trade-offs and the concurrency summary.
+When finish prints `FAST-DONE:`, run that `handoff.py fast-done` command before the report.
+Show `COMMIT` and `GITLAB` in the chat. Do not push.
 Report concisely: what was built, files changed, how it meets the request, review/verification outcome,
 final gate, trade-offs, high-risk assumptions that stood, remaining minor suggestions, `attempt/*`
 branches the user may delete.

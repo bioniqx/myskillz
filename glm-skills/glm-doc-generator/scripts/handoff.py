@@ -19,6 +19,9 @@ over the model's guess.
                                    stdin: the user request. route, then the
                                    skill's local prelude, in this process.
                                    Always exit 0 except usage (exit 2).
+  handoff.py fast-done --message-file MSG --gitlab-file NOTE -- PATHS
+                                   Commit PATHS when they are still dirty.
+                                   Never pushes. Prints COMMIT and GITLAB.
 
 A line "From: glm-a,glm-b" at the start of stdin is the chain so far. The
 script refuses a cycle and stops at 3 skills. Exit 2 is a usage error.
@@ -50,6 +53,27 @@ SKILLS = (
 
 # Skills check.py send accepts as a brainstorming hand-off target.
 HANDOFF_TARGETS = tuple(name for name in SKILLS if name != "glm-brainstorming")
+
+_BAD_COMMIT = re.compile(
+    r"(?im)^(co-authored-by|signed-off-by|generated-by)\b|generated with|made-with:")
+_SECRET_PATH = re.compile(
+    r"(?i)(^|/)\.env$|(^|/)credentials|id_rsa|\.pem$|\.key$")
+
+
+def _ship(when):
+    """Binding ending for a FAST task that edits the repo."""
+    return (
+        " %s, run this handoff.py fast-done "
+        "--message-file <msg> --gitlab-file <note> -- <paths this task changed>. "
+        "Both files are English. Show COMMIT and GITLAB in the chat. "
+        "Do not push. Do not commit any other path."
+        % when
+    )
+
+
+_HOLD = (
+    " Do not commit in this step. The last skill commits after its own check."
+)
 
 MAX_CHAIN = 3
 
@@ -669,12 +693,14 @@ def _prelude(args, text):
             nxt = ("NEXT: PACE direct. One obvious edit. Do not launch a lane. "
                    "Do not read fast.md. Do not write a spec. Do not call "
                    "glm-writing-plans or glm-dev-team. Implement the named "
-                   "file, tests first, then stop. Do not re-run open.")
+                   "file, tests first, then stop. Do not re-run open."
+                   ) + _ship("After that test passes, and not before")
         elif pace == "short":
             nxt = ("NEXT: PACE short. Do not launch explorer or researcher. "
                    "Do not read fast.md. Do not write a multi-task plan. "
                    "Implement in this session, tests first, at most 3 files, "
-                   "then stop. Do not re-run open.")
+                   "then stop. Do not re-run open."
+                   ) + _ship("After those tests pass, and not before")
         elif "MODE ask" in mode_out:
             nxt = ("NEXT: show the ASK block and end the turn. "
                    "Do not launch lanes. Do not re-run open.")
@@ -686,7 +712,8 @@ def _prelude(args, text):
                    "On DECISION pick, approve and send. Write a short spec: "
                    "goal, files, acceptance, out of scope. Run check.py spec. "
                    "Then handoff.py next --self glm-brainstorming "
-                   "--event architectural-approved. Do not re-run open.")
+                   "--event architectural-approved. Do not re-run open."
+                   ) + _HOLD
         else:
             nxt = ("NEXT: one message: decide.py atoms on this same request, "
                    "plus the fact lanes. Do not re-run open.")
@@ -755,7 +782,7 @@ def _prelude(args, text):
                        "including every task body, then check. Do not call "
                        "build. Then handoff.py next --self glm-writing-plans "
                        "--event plan-ready and follow that NEXT. "
-                       "Do not re-run open.")
+                       "Do not re-run open.") + _HOLD
         elif short:
             success = ("NEXT: PACE short. The spec is short. Use the inline "
                        "path: one write of the plan including every task body, "
@@ -763,7 +790,9 @@ def _prelude(args, text):
                        "continue true, or the user asked to implement this "
                        "plan, run handoff.py next --self glm-writing-plans "
                        "--event plan-ready and follow that NEXT. "
-                       "Do not re-run open.")
+                       "Do not re-run open. If you hand off, do not commit. "
+                       "If this plan file is the finished task, "
+                       ) + _ship("after check passes, and not before")
         else:
             success = ("NEXT: write the contracts from this brief. "
                        "Do not re-run open.")
@@ -782,16 +811,19 @@ def _prelude(args, text):
         if pace == "direct":
             nxt = ("NEXT: PACE direct. One obvious edit in the named file. "
                    "Tests first, run that test, stop. Do not call devteam "
-                   "start. Do not re-run open.")
+                   "start. Do not re-run open."
+                   ) + _ship("After that test passes, and not before")
         elif pace == "short":
             nxt = ("NEXT: PACE short. Write a one-slice plan, at most two "
                    "files, risk low, size small. Then one devteam start. "
-                   "Do not launch glm-team-leader. Do not re-run open.")
+                   "Do not launch glm-team-leader. Do not re-run open."
+                   ) + _ship("After devteam finish succeeds, and not before")
         elif pace == "fast":
             nxt = ("NEXT: PACE fast. One devteam start on the plan. "
                    "Do not launch glm-team-leader. Do not ask. "
                    "A high-risk slice keeps its review. Do not add a reviewer "
-                   "for any other slice. Do not re-run open.")
+                   "for any other slice. Do not re-run open."
+                   ) + _ship("After devteam finish succeeds, and not before")
         else:
             nxt = ("NEXT: one engine call using that D= path. "
                    "The first call is the route-first rule "
@@ -820,7 +852,9 @@ def _prelude(args, text):
             success = ("NEXT: PACE direct. Follow the == NEXT == block. "
                        "One experiment, then close on the next wake. "
                        "Do not open a reference. Do not scan. "
-                       "Do not re-run open or probe.")
+                       "Do not re-run open or probe."
+                       ) + _ship(
+                           "After close names the root cause and the fix test passes, and not before")
         elif "LANE: SWARM" in (out or ""):
             print("PACE: full")
             success = ("NEXT: PACE full. Follow the == NEXT == block. "
@@ -853,12 +887,14 @@ def _prelude(args, text):
             success = ("NEXT: PACE short. Write the checklist from this brief "
                        "in this turn. Then one run call. The brief says lane "
                        "agent, so dispatch every printed batch in one message, "
-                       "then status. Do not re-read the spec. Do not re-run open.")
+                       "then status. Do not re-read the spec. Do not re-run open."
+                       ) + _ship("After finalize succeeds, and not before")
         elif short:
             success = ("NEXT: PACE short. Write the checklist from this brief "
                        "in this turn. Then one run call. Do not re-read the "
                        "spec. Do not dispatch a subagent. Do not read code "
-                       "until queue prints path:lines. Do not re-run open.")
+                       "until queue prints path:lines. Do not re-run open."
+                       ) + _ship("After finalize succeeds, and not before")
         else:
             success = ("NEXT: write the checklist from this brief. "
                        "Do not re-run open.")
@@ -879,7 +915,8 @@ def _prelude(args, text):
             success = ("NEXT: PACE direct. Write the one named document "
                        "yourself from this recon. No writer agent. No reviewer "
                        "agent. No Gate. Then one finish bash. "
-                       "Do not re-run open or recon.")
+                       "Do not re-run open or recon."
+                       ) + _ship("After that finish bash passes, and not before")
         else:
             success = ("NEXT: PACE full. Do not speculate writers. Launch "
                        "writers only after the set is known. Reviewer agents "
@@ -1068,6 +1105,182 @@ def cmd_borrow(args):
     return 0
 
 
+def _git(argv, cwd):
+    try:
+        return subprocess.run(
+            ["git"] + argv, cwd=cwd, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(argv, 1, "", "git timed out\n")
+
+
+def _load_note(path, kind, limit):
+    if not path:
+        return "", "FAIL %s: missing path" % kind
+    try:
+        text = open(path, encoding="utf-8").read().strip()
+    except OSError as exc:
+        return "", "FAIL %s: %s" % (kind, exc)
+    if not text:
+        return "", "FAIL %s: empty" % kind
+    if not text.isascii():
+        return "", "FAIL %s: English ASCII only" % kind
+    if _BAD_COMMIT.search(text):
+        return "", "FAIL %s: trailer is not allowed" % kind
+    if len(text) > limit:
+        return "", "FAIL %s: longer than %d characters" % (kind, limit)
+    return text + "\n", ""
+
+
+def _check_message(text):
+    line = text.strip().splitlines()[0]
+    if len(line) < 8 or len(line) > 72:
+        return "FAIL message: subject must be 8 to 72 characters"
+    return ""
+
+
+def _check_gitlab(text):
+    body = text.strip()
+    if len(body) < 40:
+        return "FAIL gitlab: note is too short"
+    if len(body.splitlines()) > 12:
+        return "FAIL gitlab: note is longer than 12 lines"
+    return ""
+
+
+def _print_notes(msg, note):
+    print("COMMIT:")
+    sys.stdout.write(msg if msg.endswith("\n") else msg + "\n")
+    print("GITLAB:")
+    sys.stdout.write(note if note.endswith("\n") else note + "\n")
+
+
+def _dirty_paths(root):
+    proc = _git(["status", "--porcelain", "--untracked-files=all"], root)
+    found = set()
+    for line in (proc.stdout or "").splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        path = path.strip()
+        if len(path) >= 2 and path[0] == '"' and path[-1] == '"':
+            path = path[1:-1]
+        found.add(path)
+    return found
+
+
+def _safe_rel(root, raw):
+    if not raw or raw.startswith("-") or os.path.isabs(raw):
+        return ""
+    rel = raw.replace("\\", "/").strip()
+    if rel.startswith("./"):
+        rel = rel[2:]
+    parts = [part for part in rel.split("/") if part]
+    if not parts or ".." in parts:
+        return ""
+    rel = "/".join(parts)
+    root_real = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(root, rel))
+    if full != root_real and not full.startswith(root_real + os.sep):
+        return ""
+    return rel
+
+
+def _fail_note(err):
+    print(err)
+    print("NEXT: fix that file and run fast-done again. Do not push.")
+    return 2
+
+
+def cmd_fast_done(args):
+    """Commit only the paths this task still has dirty. Never push."""
+    msg, err = _load_note(args.message_file, "message", 2000)
+    if err:
+        return _fail_note(err)
+    err = _check_message(msg)
+    if err:
+        return _fail_note(err)
+    note, err = _load_note(args.gitlab_file, "gitlab", 800)
+    if err:
+        return _fail_note(err)
+    err = _check_gitlab(note)
+    if err:
+        return _fail_note(err)
+    top = _git(["rev-parse", "--show-toplevel"], os.getcwd())
+    if top.returncode != 0:
+        print("FAIL fast-done: not a git repository")
+        _print_notes(msg, note)
+        print("NEXT: Show COMMIT and GITLAB in the chat. Do not push.")
+        return 2
+    root = (top.stdout or "").strip()
+    raw_paths = [item for item in (args.paths or []) if item != "--"]
+    if not raw_paths:
+        print("FAST-DONE clean")
+        _print_notes(msg, note)
+        print("NEXT: Nothing to commit. Show COMMIT and GITLAB in the chat. "
+              "Do not commit unrelated files. Do not push.")
+        return 0
+    dirty = _dirty_paths(root)
+    commit_paths = []
+    already = []
+    for raw in raw_paths:
+        rel = _safe_rel(root, raw)
+        if not rel:
+            print("FAIL path: %s" % raw)
+            print("NEXT: pass paths relative to the repo. Do not push.")
+            return 2
+        if _SECRET_PATH.search("/" + rel):
+            print("FAIL secret: %s" % rel)
+            print("NEXT: remove that path and run fast-done again. Do not push.")
+            return 2
+        if rel in dirty:
+            ignored = _git(["check-ignore", "-q", "--", rel], root)
+            tracked = _git(["ls-files", "--error-unmatch", "--", rel], root)
+            if ignored.returncode == 0 and tracked.returncode != 0:
+                print("SKIP ignored %s" % rel)
+                continue
+            commit_paths.append(rel)
+            continue
+        known = _git(["ls-files", "--error-unmatch", "--", rel], root)
+        if known.returncode != 0 and not os.path.exists(os.path.join(root, rel)):
+            print("FAIL path: %s is not in this repo" % rel)
+            print("NEXT: name only files this task changed. Do not push.")
+            return 2
+        already.append(rel)
+    if not commit_paths:
+        print("FAST-DONE already-committed")
+        if already:
+            print("ALREADY %s" % " ".join(already))
+        _print_notes(msg, note)
+        print("NEXT: No new commit. Show COMMIT and GITLAB in the chat. "
+              "Do not push. Do not amend.")
+        return 0
+    added = _git(["add", "--"] + commit_paths, root)
+    if added.returncode != 0:
+        print("FAIL git add")
+        sys.stderr.write(added.stderr or "")
+        print("NEXT: fix the git error and run fast-done again. Do not push.")
+        return 1
+    committed = _git(
+        ["commit", "-F", os.path.abspath(args.message_file), "--"] + commit_paths,
+        root)
+    if committed.returncode != 0:
+        print("FAIL git commit")
+        sys.stderr.write(committed.stderr or "")
+        print("NEXT: the commit did not happen. Fix the git error. "
+              "Do not push. Do not amend.")
+        return 1
+    sha = _git(["rev-parse", "--short", "HEAD"], root)
+    print("FAST-DONE committed %s" % (sha.stdout or "").strip())
+    if already:
+        print("ALREADY %s" % " ".join(already))
+    _print_notes(msg, note)
+    print("NEXT: Show COMMIT and GITLAB in the chat, each in its own fence. "
+          "Do not push. Do not amend.")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="handoff.py")
     sub = parser.add_subparsers(dest="cmd")
@@ -1094,6 +1307,10 @@ def main(argv=None):
     opened.add_argument("--spec", default="")
     opened.add_argument("--cmd", dest="probe_cmd", default="")
     opened.add_argument("--base", default="")
+    done = sub.add_parser("fast-done")
+    done.add_argument("--message-file", required=True)
+    done.add_argument("--gitlab-file", required=True)
+    done.add_argument("paths", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.cmd == "route":
         return cmd_route(args)
@@ -1107,6 +1324,8 @@ def main(argv=None):
         return cmd_agents(args)
     if args.cmd == "borrow":
         return cmd_borrow(args)
+    if args.cmd == "fast-done":
+        return cmd_fast_done(args)
     parser.print_help(sys.stderr)
     return 2
 

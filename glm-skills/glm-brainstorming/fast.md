@@ -46,4 +46,6 @@ glm-writing-plans writes the plan in one file and runs `check`. It does not call
 
 glm-dev-team runs `devteam start` and loops `devteam next` until `devteam finish`. Each code slice that is not high-risk is one programmer lane: tests committed first, then the code, tests frozen after `commit-red`. No reviewer lane for those slices. A high-risk slice keeps RED, GREEN, and review. Do not add a reviewer the engine did not print. Do not weaken a test, a gate, or a footprint.
 
+After `devteam finish` succeeds, commit from the repo root. Do not commit before that. Run `handoff.py fast-done --message-file <msg> --gitlab-file <note> -- <paths this task changed>`. Both files are English. `<msg>` is the git commit subject plus a short body. `<note>` is the GitLab description, 4 to 8 lines: what changed, why, and how to tell it works. Show the printed `COMMIT` and `GITLAB` blocks in the chat, each in its own fence, so the user can copy them. Do not push. Do not amend. A path the engine already committed is not a second commit.
+
 Answer a `BLOCKED` lane from the plan and SendMessage it. If init refuses a dirty checkout, `git stash push -m glm-fast` once and retry init once.

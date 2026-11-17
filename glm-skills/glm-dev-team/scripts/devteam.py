@@ -1159,6 +1159,16 @@ def _unlink_pace(root):
         pass
 
 
+def _chain_mode_fast(root):
+    """True when brainstorming already stamped this run as FAST."""
+    path = Path(root) / ".brainstorm" / "drafts" / "chain.json"
+    try:
+        body = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return body.get("mode") == "fast" and body.get("continue") is True
+
+
 def read_pace(root):
     """Read the one-shot pace file. The caller deletes it after state is saved."""
     path = state_dir(Path(root)) / "pace"
@@ -1646,6 +1656,7 @@ def cmd_init(a):
         missing = [f for f in sl["files"] if not (Path(root) / f).exists()]
         sl["new_files"] = list(dict.fromkeys(list(sl.get("new_files") or []) + missing))
     pace_name = read_pace(root)
+    st["pace"] = pace_name
     quick = apply_quick(slices, pace_name)
     fast_lane = apply_fast_lane(slices, pace_name)
     (sd / "atoms.json").write_text(json.dumps({"atoms": plan_atoms(st)}, indent=1) + "\n",
@@ -4128,6 +4139,11 @@ def cmd_finish(a):
     attempts = git(["branch", "--list", "attempt/*"], root)
     if attempts:
         out("salvage branches left for you to delete: " + " ".join(attempts.split()))
+    if st.get("pace") in ("short", "fast") or _chain_mode_fast(root):
+        out("FAST-DONE: after this finish, run handoff.py fast-done "
+            "--message-file <msg> --gitlab-file <note> -- <paths this task changed>. "
+            "Both files are English. Show COMMIT and GITLAB in the chat. "
+            "Do not push. A path already committed is not a second commit.")
 
 
 def write_summary(root, st):
