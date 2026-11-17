@@ -44,10 +44,11 @@ class TestScriptShape(unittest.TestCase):
     def test_git_ls_files_runs_exactly_once(self):
         self.assertEqual(self.script_text().count("git ls-files"), 1)
 
-    def test_hot_dir_log_is_backgrounded_guarded_and_joined(self):
+    def test_no_git_history_is_read(self):
         text = self.script_text()
-        self.assertIn("|| true &", text)
-        self.assertRegex(text, r"(?m)^\s*wait\b")
+        self.assertNotIn("git log", text)
+        self.assertNotIn("git diff", text)
+        self.assertNotIn("git blame", text)
         self.assertTrue(text.rstrip().endswith("exit 0"))
 
 
@@ -67,12 +68,8 @@ class TestOutputContract(unittest.TestCase):
             next(i for i, l in enumerate(lines) if l.startswith("gate:")),
             next(i for i, l in enumerate(lines) if l.startswith("git: ")))
         git_line = next(i for i, l in enumerate(lines) if l.startswith("git: "))
-        commits = next(i for i, l in enumerate(lines) if l == "recent_commits:")
-        hot = next(i for i, l in enumerate(lines) if l.startswith("hot_dirs_30d:"))
         files = next(i for i, l in enumerate(lines) if l.startswith("files:"))
-        self.assertLess(git_line, commits)
-        self.assertLess(commits, hot)
-        self.assertLess(hot, files)
+        self.assertLess(git_line, files)
 
     def test_small_repo_counts_and_names_tracked_files(self):
         proc = run_context(self.repo)
@@ -81,16 +78,14 @@ class TestOutputContract(unittest.TestCase):
         files_line = next(l for l in proc.stdout.splitlines() if l.startswith("files:"))
         self.assertEqual(files_line, "files: alpha.txt docs/readme.md src/main.py ")
 
-    def test_hot_dirs_line_groups_top_level_dirs(self):
+    def test_hot_dirs_and_recent_commits_are_gone(self):
         proc = run_context(self.repo)
-        hot = next(l for l in proc.stdout.splitlines() if l.startswith("hot_dirs_30d:"))
-        self.assertIn("docs(1)", hot)
-        self.assertIn("src(1)", hot)
-        self.assertIn(".(1)", hot)
+        self.assertNotIn("hot_dirs_30d:", proc.stdout)
+        self.assertNotIn("recent_commits:", proc.stdout)
 
-    def test_recent_commits_lists_the_last_commit(self):
+    def test_no_commit_message_leaks_into_the_output(self):
         proc = run_context(self.repo)
-        self.assertIn("initial commit", proc.stdout)
+        self.assertNotIn("initial commit", proc.stdout)
 
     def test_two_runs_are_byte_identical(self):
         first = run_context(self.repo).stdout

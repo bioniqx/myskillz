@@ -649,11 +649,13 @@ class GlmScriptsTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout.splitlines()
 
-    def test_context_hot_dirs_are_scoped_to_the_working_directory(self):
+    def test_context_reads_no_git_history(self):
         repo = self.make_repo()
         lines = self.context_lines(os.path.join(repo, 'sub'))
-        hot = [line.strip() for line in lines if line.startswith('hot_dirs_30d:')]
-        self.assertEqual(hot, ['hot_dirs_30d: x(1)'], lines)
+        self.assertFalse([l for l in lines if l.startswith('hot_dirs_30d:')], lines)
+        self.assertFalse([l for l in lines if l.startswith('recent_commits:')], lines)
+        git_line = next(l for l in lines if l.startswith('git: '))
+        self.assertIn('tracked=', git_line)
 
     def test_context_npm_deps_lists_only_dependency_names(self):
         repo = self.make_repo()
