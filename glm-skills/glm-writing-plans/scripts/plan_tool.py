@@ -1682,7 +1682,7 @@ def cmd_review(a):
              else "general-purpose")
     summary = "REVIEW %d tasks: %s" % (len(picked), ", ".join("%s(%s)" % (c["id"], "+".join(w)) for c, w in picked))
     rows = [summary,
-            "DISPATCH %d reviewers in ONE message | the `%s` agent | do not name a model; the agent file pins GLM-5.3-Flash or deepseek-flash | description 'review <ID>'" % (len(groups), agent),
+            "DISPATCH %d reviewers in ONE message | the `%s` agent | do not name a model; the agent follows the session model | description 'review <ID>'" % (len(groups), agent),
             "prompt (verbatim): Read <brief path> and follow it exactly.",
             "ID   MODEL   TASKS     BRIEF"] + dispatch_lines(groups, work, "review")
     rows.append("THEN run: %s wait %s --review" % (qtool(), shlex.quote(plan_path)))

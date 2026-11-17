@@ -48,8 +48,8 @@ EOF
 | R10 | **Failure budget: 1 retry per doc, bundled into the next wave (still within its 8 slots, R3).** Never a dedicated retry turn, never a third attempt. | Retry loops |
 
 On ZCode, R2's Tasks are `Agent` tool calls with `subagent_type: "glm-doc-writer"`/`"glm-doc-reviewer"`,
-`run_in_background: true`, no `model` override (the installed agent's frontmatter already carries R7's
-effort) — fire all of them in ONE message, one per doc, then end the turn.
+`run_in_background: true`, and no `model` parameter. The agent file has no model id, so the
+lane uses the session model. Fire all of them in ONE message, one per doc, then end the turn.
 
 `<state dir>` is `$DOCGEN_STATE_DIR` when that variable is set, else `.zcode/doc-gen` (the scripts below read it as `S` with `${DOCGEN_STATE_DIR:-.zcode/doc-gen}`). The first line of `<state dir>/recon.md` is `HEAD: <hash>`; the manifest never repeats it.
 
@@ -352,7 +352,6 @@ Cuts per-Task prompt size; effort is pinned in the agent file. `~/.zcode/agents/
 name: "glm-doc-writer"
 description: "Writes one Markdown doc from an inlined fact pack and a scoped file list. Never plans, never deliberates."
 color: yellow
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 18
 injectAgentsMd: false
@@ -371,7 +370,6 @@ ranges. Every technical claim must trace to FACTS or a file you read; anything e
 name: "glm-doc-reviewer"
 description: "Fact-checks one generated Markdown doc against real source code and fixes it in place."
 color: yellow
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 22
 injectAgentsMd: false
@@ -385,7 +383,6 @@ the 5-line block requested, nothing else.
 
 ## Appendix B — harness settings that matter for this pipeline
 
-The conductor is GLM-5.3-Flash or DeepSeek V4.1 Flash (`deepseek-flash`). Effort stays
-`high` or `max`. Never `low`, and never turn DeepSeek thinking off: that is when citations
-are invented. GLM-5.3 and `deepseek-v4-pro` are not lanes. Main thread `high`, writers `high`,
-reviewers `max`. Do not request JSON schema output. Leave sampling at the provider default.
+Writers and reviewers do not pin a model. They use the session model, so switching models
+does not require an agent edit. Say the effort in the task prompt (`high` for writers, `max`
+for reviewers). Do not request JSON schema output. Leave sampling at the provider default.

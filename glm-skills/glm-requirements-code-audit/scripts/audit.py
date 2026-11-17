@@ -3178,7 +3178,7 @@ def _plan_resume(c):
 
 ZCODE_DISPATCH = (u"ZCode: dispatch each worker as agent glm-rca-investigator (judge batches) or "
                   u"glm-rca-verifier (verify batches), all in one message — agents launched together run in "
-                  u"parallel. Do not name a model. The agent file pins GLM-5.3-Flash or deepseek-flash.")
+                  u"parallel. Do not name a model. The agent follows the session model.")
 
 
 def _dispatch(agent, prompt_path, description):
@@ -3449,8 +3449,8 @@ def cmd_setup(a):
     print(SETUP_ENV)
     print("\nZCode: invoke with  $glm-requirements-code-audit <spec file>")
     print("Subagents launched together run in parallel there, so the agent lane is")
-    print("usable as a fallback. Agent files use `model:` with a real GLM id and")
-    print("`thoughtLevel:` -- ZCode has no haiku/sonnet aliases.")
+    print("usable as a fallback. Agent files do not set a model id, so they follow")
+    print("the session model. thoughtLevel stays in the file. No haiku/sonnet aliases.")
     print("\nVerify with: python3 %s doctor --ping" % os.path.join(sk, "scripts", "audit.py"))
 
 

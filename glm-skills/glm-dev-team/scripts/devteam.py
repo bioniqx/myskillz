@@ -5012,8 +5012,8 @@ def main(argv=None):
 def zcode_agent_text(agents_src, name) -> str:
     """The installed agent markdown for `name`.
 
-    The repo file is the source. thoughtLevel stays. When ~/.zcode/glm-flash
-    says deepseek, the GLM-5.3-Flash model id becomes deepseek/deepseek-flash.
+    The repo file is the source. A model: line is removed so the lane follows
+    the session model. thoughtLevel is left as written.
     """
     path = Path(agents_src) / (name + ".md")
     with open(path, encoding="utf-8") as fh:
@@ -5206,9 +5206,9 @@ def doctor_zcode(a, root):
     """Check and install the six `zcode` agents plus the user-level hook config.
 
     CLI: `doctor --harness zcode [--fix]` (routed from `cmd_doctor`/`cmd_start`).
-    Agents are copied from the skill's `agents/` files (thoughtLevel and maxTurns
-    stay). When ~/.zcode/glm-flash says deepseek, the model id becomes
-    deepseek/deepseek-flash. The PreToolUse (`Write|Edit`, `Bash`)
+    Agents are copied from the skill's `agents/` files. A model: line is
+    stripped so the lane follows the session model. thoughtLevel and maxTurns
+    stay. The PreToolUse (`Write|Edit`, `Bash`)
     and Stop hooks merge into `~/.zcode/cli/config.json`
     (`hooks.enabled: true`, `type: process`, absolute `guard.py` path).
     Nothing is written under the project root (`root` exists only for

@@ -84,14 +84,13 @@ class TierPinTests(unittest.TestCase):
         self.assertEqual(audit.TIERS["deep"]["judge"][1], "max")
         self.assertEqual(audit.TIERS["light"]["judge"][1], "high")
 
-    def test_agents_pin_flash_at_max(self):
+    def test_agents_follow_the_session_at_max_effort(self):
         agents = os.path.join(SCRIPTS, "..", "agents")
         for name in ("glm-rca-investigator.md", "glm-rca-verifier.md"):
             with open(os.path.join(agents, name), encoding="utf-8") as fh:
                 text = fh.read()
-            self.assertIn("GLM-5.3-Flash", text)
+            self.assertNotRegex(text.split("\n---\n", 1)[0], r"(?m)^model:")
             self.assertIn("thoughtLevel: max", text)
-            self.assertNotIn("GLM-5.3\"", text.split("GLM-5.3-Flash")[0] + "TAIL")
 
 
 class AtomCallTests(unittest.TestCase):

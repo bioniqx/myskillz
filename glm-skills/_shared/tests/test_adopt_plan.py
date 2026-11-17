@@ -240,7 +240,8 @@ class ZcodeAgentAndDispatchTests(unittest.TestCase):
         for name in ("glm-plan-task-writer", "glm-plan-task-writer-deep", "glm-plan-reviewer"):
             with open(os.path.join(AGENTS_DIR, name + ".md"), encoding="utf-8") as fh:
                 fm = fh.read().split("\n---\n")[0]
-            for key in ("model: ", "thoughtLevel:", "maxTurns:"):
+            self.assertNotRegex(fm, r"(?m)^model:", name)
+            for key in ("thoughtLevel:", "maxTurns:"):
                 self.assertIn(key, fm, (name, key))
 
     def test_the_three_plan_agents_pin_flash(self):
@@ -252,7 +253,7 @@ class ZcodeAgentAndDispatchTests(unittest.TestCase):
         for name, level in effort.items():
             with open(os.path.join(AGENTS_DIR, name + ".md"), encoding="utf-8") as fh:
                 fm = fh.read().split("\n---\n")[0]
-            self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"', fm, name)
+            self.assertNotRegex(fm, r"(?m)^model:", name)
             self.assertIn("thoughtLevel: %s\n" % level, fm, name)
             self.assertIn("injectAgentsMd: false", fm, name)
 

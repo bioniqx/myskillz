@@ -2,7 +2,6 @@
 name: "glm-plan-reviewer"
 description: "Reviews implementation-plan task bodies from a glm-writing-plans reviewer brief file. Use only when given a glm-writing-plans review brief path."
 color: yellow
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 maxTurns: 24
 injectAgentsMd: false

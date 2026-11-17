@@ -9,8 +9,6 @@ on GLM even when the developer has a pin installed.
 import os
 import re
 
-GLM_AGENT = "account:zai-individual-coding-plan/GLM-5.3-Flash"
-DEEPSEEK_AGENT = "deepseek/deepseek-flash"
 DEEPSEEK_API = "deepseek-flash"
 DEEPSEEK_BASE = "https://api.deepseek.com"
 API_REMAP = {
@@ -19,11 +17,7 @@ API_REMAP = {
     "GLM-5.3-Flash": DEEPSEEK_API,
     "GLM-5.3": DEEPSEEK_API,
 }
-_MODEL_LINE = re.compile(
-    r'(?m)^(model:[ \t]*)(["\']?)(?:'
-    + re.escape(GLM_AGENT) + r"|" + re.escape(DEEPSEEK_AGENT)
-    + r")\2[ \t]*$"
-)
+_MODEL_LINE = re.compile(r"(?m)^model:[ \t]*.*(?:\n|$)")
 
 
 def _word(text):
@@ -76,20 +70,13 @@ def http_provider():
 
 
 def stamp_agent(text, home=None, forced=None):
-    """Rewrite only a frontmatter model line. Prose that names both ids stays.
+    """Drop every frontmatter model line. The session model is the lane.
 
-    forced is glm or deepseek. The installer passes it so a GLM_FLASH value
-    in the shell cannot stamp the opposite of the pin just written.
+    home and forced are accepted so older callers keep working. They do not
+    write a model id back.
     """
-    which = _name(forced) if forced else ""
-    if which not in ("glm", "deepseek"):
-        which = provider(home)
-    target = DEEPSEEK_AGENT if which == "deepseek" else GLM_AGENT
-
-    def repl(match):
-        return match.group(1) + match.group(2) + target + match.group(2)
-
-    return _MODEL_LINE.sub(repl, text)
+    del home, forced
+    return _MODEL_LINE.sub("", text)
 
 
 def stamp_tree(home, forced=None):

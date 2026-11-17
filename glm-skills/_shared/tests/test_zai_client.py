@@ -57,7 +57,7 @@ class TestBase(unittest.TestCase):
             prose = 'Keep deepseek/deepseek-flash in prose.\nmodel: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n'
             stamped = zai_client.flash_pin.stamp_agent(prose, home=home)
             self.assertIn("Keep deepseek/deepseek-flash in prose.", stamped)
-            self.assertIn('model: "deepseek/deepseek-flash"', stamped)
+            self.assertNotIn("model:", stamped)
         with mock.patch.dict(os.environ, {"HOME": home, "GLM_FLASH": "glm"}, clear=True):
             self.assertEqual(zai_client.find_base(), "https://api.z.ai/api/coding/paas/v4")
 

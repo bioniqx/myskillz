@@ -167,8 +167,7 @@ class ZcodeAgentFileTests(unittest.TestCase):
     def test_zcode_agent_files(self):
         writer, reviewer = read(ZWRITER), read(ZREVIEWER)
         for role, text in (("writer", writer), ("reviewer", reviewer)):
-            self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n', text,
-                          "zcode %s frontmatter lacks the real GLM flash model id" % role)
+            self.assertNotRegex(text.split("\n---\n", 1)[0], r"(?m)^model:", role)
         self.assertIn("thoughtLevel: max\n", writer, "zcode writer frontmatter lacks thoughtLevel: max")
         self.assertIn("thoughtLevel: max\n", reviewer, "zcode reviewer frontmatter lacks thoughtLevel: max")
 
@@ -186,19 +185,16 @@ class ZcodeFactTests(unittest.TestCase):
                 self.fail("recon row still claims Explore is Claude Code only")
             self.assertIn("ZCode", row, "recon row does not name ZCode for Explore")
 
-    def test_appendix_a_frontmatters_carry_real_models(self):
+    def test_appendix_a_frontmatters_follow_the_session_model(self):
         lines = self.text.split("\n")
         seen = 0
         for i, line in enumerate(lines):
             if line.strip().startswith("thoughtLevel:"):
                 seen += 1
-                self.assertTrue(i > 0 and lines[i - 1].strip().startswith("model:"),
-                                "a thoughtLevel line has no model: line above it")
+                self.assertFalse(i > 0 and lines[i - 1].strip().startswith("model:"),
+                                 "a thoughtLevel line still sits under a hardcoded model")
         self.assertGreater(seen, 0, "no thoughtLevel lines in SKILL.md")
-        self.assertEqual(
-            self.text.count('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n'), 2,
-            "Appendix A writer and reviewer must both carry the real GLM flash model id "
-            "(agents/ is the source of truth)")
+        self.assertNotIn('model: "', self.text)
         self.assertEqual(fence_after(self.text, "agents/glm-doc-writer.md"),
                          read(ZWRITER).strip(),
                          "Appendix A writer snapshot must match agents/glm-doc-writer.md exactly")

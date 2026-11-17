@@ -67,11 +67,11 @@ class DebugTierTests(unittest.TestCase):
             self.assertNotEqual(effort, "low", name)
         self.assertEqual(debug_tool.TIERS["deep"][1], "max")
 
-    def test_worker_pins_flash_and_does_not_load_agents_md(self):
+    def test_worker_follows_the_session_and_does_not_load_agents_md(self):
         path = os.path.join(SCRIPTS, "..", "agents", "glm-debug-worker.md")
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
-        self.assertIn("GLM-5.3-Flash", text)
+        self.assertNotRegex(text.split("\n---\n", 1)[0], r"(?m)^model:")
         self.assertIn("thoughtLevel: max", text)
         self.assertIn("injectAgentsMd: false", text)
 

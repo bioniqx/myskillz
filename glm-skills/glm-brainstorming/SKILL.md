@@ -149,7 +149,7 @@ Human replies before hand-off: Spike 1-2 · Bounded 1-2 · Architectural
 ## R2 — Lane economics (biggest speed lever on GLM)
 
 `glm-explorer`, `glm-researcher`, `glm-drafter` and `glm-design-breaker`
-are Flash. Model and effort live only in each agent file; never add a
+follow the session model. The agent file has no model id; never add a
 `model` parameter. Sibling agents join only per the R11 sibling-lane
 table, when a lane needs a shell (explorer and researcher have none).
 
@@ -163,7 +163,7 @@ table, when a lane needs a shell (explorer and researcher have none).
 
 ## R3 — Decision, not a second effort ladder
 
-Effort is pinned in the agent file. Do not set it from this file.
+Do not set a model or an effort from this file. The session supplies both.
 `decide.py score` prints `DECISION`. Render that option (R14 procedure).
 
 ## R4 — Force the batch, plan the rounds
@@ -430,7 +430,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   drop it. Never retry a denial.
 - "A blog says so" / "more sources = more accurate" → check tier, date,
   version; accuracy drops as calls grow. Verify load-bearing claims only.
-- "A bigger model will be smarter" → every lane is GLM-5.3-Flash or deepseek-flash. `decide.py`
+- "A bigger model will be smarter" → the lane uses the session model. `decide.py`
   picks. Never a lane for one search.
 - "Spawn 6 because I can" → width must buy a saved human turn or a
   better decision. One lane per question you will cite or act on; the
@@ -461,7 +461,7 @@ Missing capability → substitute, never stall.
 
 **ZCode lane rule.** A lane is one `Agent` tool call: Code lanes use
 `subagent_type: "glm-explorer"`, Web lanes `"glm-researcher"`, approach drafts
-`"glm-drafter"`, attacks `"glm-design-breaker"`. Those files pin the model and effort, so never add
+`"glm-drafter"`, attacks `"glm-design-breaker"`. Those files do not set a model, so the lane uses the session model. Never add
 a `model` parameter. The prompt is the
 R11 slice. Agents not installed → the built-ins `Explore` (Code) and
 `general-purpose` (Web, drafts, verifier), and the prompt gains the agent-file

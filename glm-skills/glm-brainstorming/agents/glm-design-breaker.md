@@ -1,7 +1,6 @@
 ---
 name: "glm-design-breaker"
 description: "Flash lane for glm-brainstorming: attack one approach. Returns a counterexample or NO-BREAK. Does not pick."
-model: "account:zai-individual-coding-plan/GLM-5.3-Flash"
 thoughtLevel: max
 color: blue
 maxTurns: 4

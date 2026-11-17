@@ -13,9 +13,9 @@
 #             {{SKILL_DIR}} is replaced with the installed skill directory. ZCode only
 #             discovers commands under ~/.zcode/commands (not under a skill directory).
 #
-# The agent files already carry final ZCode frontmatter (real GLM model ids and
-# thoughtLevel; maxTurns where the file sets a turn budget), so this script only
-# copies agents — it never rewrites them. It does not touch ~/.zcode/cli/config.json.
+# Agent files carry thoughtLevel and maxTurns, and no model id, so a lane follows
+# the ZCode session model. Install strips a leftover model: line. It does not
+# touch ~/.zcode/cli/config.json.
 # glm-dev-team's guard hooks are opt-in afterwards:
 #   python3 <skills>/glm-dev-team/scripts/devteam.py doctor --harness zcode --fix
 #
@@ -24,9 +24,8 @@
 # Anything not in the manifest is left alone.
 #
 # Usage: sh install-zcode.sh [--home DIR] [--dry-run] [--flash glm|deepseek]
-# --flash glm (default) pins agents to GLM-5.3-Flash.
-# --flash deepseek pins agents to deepseek/deepseek-flash (DeepSeek V4.1 Flash).
-# thoughtLevel is not changed. HTTP fan-out stays on Z.ai until GLM_FLASH=deepseek.
+# Agents are not pinned to a model. --flash only selects the HTTP fan-out
+# (glm or deepseek). GLM_FLASH overrides that pin for one process.
 # In an interactive terminal the script waits for Enter before the window closes.
 set -eu
 
@@ -137,7 +136,7 @@ PY
 # Read-only pre-flight. Folder name and SKILL.md `name` are not compared: the
 # folder is the install identity. ZCode drops a skill whose description is
 # missing or over 1024 characters. A body over 100KB is truncated when loaded.
-# thoughtLevel is ignored unless the agent also pins a model id. A command that
+# A model: line is rejected: the agent must follow the session model. A command that
 # contains a dynamic shell line is rejected by ZCode.
 python3 - "$SCRIPT_DIR" $FOLDERS <<'PY' || exit 1
 import os, re, sys
@@ -173,8 +172,8 @@ for folder in folders:
                 bad.append("duplicate agent %s in %s and %s" % (fn, agents_seen[fn], folder))
             agents_seen[fn] = folder
             afm = open(os.path.join(agents, fn), encoding="utf-8").read().split("\n---\n", 1)[0]
-            if not re.search(r'(?m)^model:[ \t]*"?account:zai-', afm):
-                bad.append("%s: %s has no model id (ZCode ignores thoughtLevel without one)" % (folder, fn))
+            if re.search(r"(?m)^model:", afm):
+                bad.append("%s: %s hardcodes a model. Remove the model: line so the agent follows the session." % (folder, fn))
             if not re.search(r"(?m)^thoughtLevel:[ \t]*(low|high|max)[ \t]*$", afm):
                 bad.append("%s: %s has no thoughtLevel low|high|max" % (folder, fn))
     commands = os.path.join(root, folder, "commands")
@@ -371,11 +370,11 @@ fi
 
 echo "== flash"
 if [ "$FLASH" = "deepseek" ]; then
-    echo "    pin: deepseek (agent id deepseek/deepseek-flash, DeepSeek V4.1 Flash)"
+    echo "    pin: deepseek (HTTP fan-out only; agents follow the session model)"
 else
-    echo "    pin: glm (agent id GLM-5.3-Flash)"
+    echo "    pin: glm (HTTP fan-out only; agents follow the session model)"
 fi
-echo "    thoughtLevel unchanged. HTTP fan-out uses this same pin. GLM_FLASH overrides one process."
+echo "    No agent model id. GLM_FLASH overrides the HTTP pin for one process."
 
 if [ "$DRY" -eq 1 ]; then
     echo

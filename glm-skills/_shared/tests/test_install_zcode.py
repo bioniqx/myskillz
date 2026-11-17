@@ -126,7 +126,8 @@ class InstallZcodeTests(unittest.TestCase):
                 self.assertNotIn("\n" + bad, "\n" + fm, (name, bad))
             for alias in ("haiku", "sonnet", "opus"):
                 self.assertNotIn("\nmodel: " + alias, "\n" + fm, (name, alias))
-            self.assertRegex(fm, r'(?m)^model: "?account:zai-', name)
+            self.assertNotRegex(fm, r"(?m)^model:", name)
+            self.assertRegex(fm, r"(?m)^thoughtLevel:[ \t]*(low|high|max)[ \t]*$", name)
 
     def test_rerun_is_idempotent_and_replaces_changed_agents(self):
         self.assertEqual(self.install().returncode, 0)
@@ -166,12 +167,12 @@ class InstallZcodeTests(unittest.TestCase):
             self.assertEqual(fh.read().strip(), "deepseek")
         installed = open(self.agent("glm-explorer"), encoding="utf-8").read()
         source = open(self.source_agent("glm-explorer"), encoding="utf-8").read()
-        self.assertIn('model: "deepseek/deepseek-flash"', installed)
+        self.assertNotIn("\nmodel:", "\n" + installed)
+        self.assertNotIn("\nmodel:", "\n" + source)
         self.assertIn("thoughtLevel: high", installed)
-        self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"', source)
         skill_agent = self.skill("glm-brainstorming", "agents", "glm-explorer.md")
         with open(skill_agent, encoding="utf-8") as fh:
-            self.assertIn('model: "deepseek/deepseek-flash"', fh.read())
+            self.assertNotIn("\nmodel:", "\n" + fh.read())
         self.assertIn("stamped", r.stdout)
 
     def test_reinstall_keeps_deepseek_pin_and_glm_flag_reverts_it(self):
@@ -186,13 +187,13 @@ class InstallZcodeTests(unittest.TestCase):
         with open(os.path.join(self.home, ".zcode", "glm-flash"), encoding="utf-8") as fh:
             self.assertEqual(fh.read().strip(), "deepseek")
         with open(self.agent("glm-explorer"), encoding="utf-8") as fh:
-            self.assertIn('model: "deepseek/deepseek-flash"', fh.read())
+            self.assertNotIn("\nmodel:", "\n" + fh.read())
         with open(foreign, encoding="utf-8") as fh:
             self.assertEqual(fh.read(), marker)
         back = self.install("--flash", "glm")
         self.assertEqual(back.returncode, 0, back.stderr + back.stdout)
         with open(self.agent("glm-explorer"), encoding="utf-8") as fh:
-            self.assertIn('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"', fh.read())
+            self.assertNotIn("\nmodel:", "\n" + fh.read())
         with open(foreign, encoding="utf-8") as fh:
             self.assertEqual(fh.read(), marker)
 
@@ -370,16 +371,16 @@ class InstallZcodeTests(unittest.TestCase):
         with open(self.skill("glm-idea-to-spec", "SKILL.md"), encoding="utf-8") as fh:
             self.assertIn("name: some-other-name\n", fh.read())
 
-    def test_agent_without_model_is_rejected_before_any_copy(self):
+    def test_agent_with_hardcoded_model_is_rejected_before_any_copy(self):
         copy_root = self.copied_tree()
         agent = os.path.join(copy_root, "glm-systematic-debugging", "agents", "glm-debug-worker.md")
         with open(agent, encoding="utf-8") as fh:
             text = fh.read()
         with open(agent, "w", encoding="utf-8") as fh:
-            fh.write(text.replace('model: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n', "", 1))
+            fh.write(text.replace("thoughtLevel:", 'model: "deepseek/deepseek-flash"\nthoughtLevel:', 1))
         r = self.install(root=copy_root)
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("model", r.stderr)
+        self.assertIn("hardcodes a model", r.stderr)
         self.assertFalse(os.path.exists(self.agent("glm-debug-worker")))
 
 

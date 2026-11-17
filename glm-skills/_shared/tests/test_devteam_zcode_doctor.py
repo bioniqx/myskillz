@@ -91,20 +91,19 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         with open(os.path.join(AGENTS_SRC, name + ".md"), encoding="utf-8") as fh:
             return fh.read()
 
-    def test_source_agents_pin_model_and_effort(self):
-        """ZCode ignores thoughtLevel unless a real model id is in the same frontmatter.
-        A missing pin silently runs every lane on the session model."""
-        pins = {
-            "glm-programmer-lite": ("GLM-5.3-Flash", "high"),
-            "glm-programmer-strong": ("GLM-5.3-Flash", "max"),
-            "glm-code-reviewer": ("GLM-5.3-Flash", "high"),
-            "glm-spot-reviewer": ("GLM-5.3-Flash", "max"),
-            "glm-investigator": ("GLM-5.3-Flash", "high"),
-            "glm-team-leader": ("GLM-5.3-Flash", "max"),
+    def test_source_agents_follow_the_session_model(self):
+        """A model id would freeze the lane. thoughtLevel stays as the intended effort."""
+        levels = {
+            "glm-programmer-lite": "high",
+            "glm-programmer-strong": "max",
+            "glm-code-reviewer": "high",
+            "glm-spot-reviewer": "max",
+            "glm-investigator": "high",
+            "glm-team-leader": "max",
         }
-        for name, (model, level) in pins.items():
+        for name, level in levels.items():
             fm = frontmatter(os.path.join(AGENTS_SRC, name + ".md"))
-            self.assertIn('model: "account:zai-individual-coding-plan/%s"' % model, fm, name)
+            self.assertNotRegex(fm, r"(?m)^model:", name)
             self.assertIn("\nthoughtLevel: %s\n" % level, fm, name)
             self.assertTrue(fm.rstrip().endswith("\ninjectAgentsMd: false"), name)
 
@@ -118,8 +117,7 @@ class TestDevteamZcodeDoctor(unittest.TestCase):
         with open(os.path.join(pin_dir, "glm-flash"), "w", encoding="utf-8") as fh:
             fh.write("deepseek\n")
         text = dt.zcode_agent_text(AGENTS_SRC, "glm-programmer-strong")
-        self.assertIn('model: "deepseek/deepseek-flash"', text)
-        self.assertNotIn("GLM-5.3-Flash", text)
+        self.assertNotRegex(text.split("\n---\n", 1)[0], r"(?m)^model:")
         self.assertIn("\nthoughtLevel: max\n", text)
 
     def test_fix_installs_six_agents_with_zcode_frontmatter(self):
