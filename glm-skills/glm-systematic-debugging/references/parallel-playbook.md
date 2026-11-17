@@ -13,7 +13,7 @@ Goal: cut wall-clock time with width, without letting parallel work corrupt the 
 |---|---|---|---|
 | `python3 $S/debug_tool.py probe` | ~10 internal jobs | 1 | the whole evidence phase |
 | `python3 $S/debug_tool.py run -j N` | up to 64 | 1 | any N shell commands |
-| `bash $S/*.sh -j N` | up to 64 | 1 | reruns, bisect, polluter search |
+| `bash $S/*.sh -j N` | up to 64 | 1 | reruns, polluter search |
 | `python3 $S/debug_tool.py experiment -j N` | up to 64 (2 worktrees per hypothesis) | 1 | hypotheses, control vs treatment |
 | `python3 $S/debug_tool.py scan -j N` | at most 8 API workers | 1 | judgment: read an area, rank suspects |
 | Subagents dispatched by the harness | harness-dependent, see below | 1 message, N agent turns | last resort |
@@ -28,7 +28,6 @@ Volume goes to the shell. Judgment goes to `scan`. Verdicts come only from `expe
 - IO-bound (network, waiting on services): up to 64, each job with its own port / DB / temp dir; respect remote rate limits.
 - API workers (`scan`): at most 8 at once (the provider allows 8 concurrent calls); `-j` above 8 is clamped, and a longer task list runs in waves.
 - Agent-lane subagents: waves of 8, one per genuinely independent unit (hypothesis, module, service). Beyond ~6 for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
-- Nested parallelism multiplies: bisect `-j` × stress `-j` ≤ CPUs.
 
 ## 3. Isolation — the quality guard
 
@@ -88,15 +87,9 @@ bash $S/stress.sh -n 200 -t 120 -b 14/200 -- npx vitest run src/queue.test.ts  #
 - **Proving a fix:** `-b F/N` prints a one-sided Fisher exact p; require p < 0.05. Clean runs needed ≈ 3 / p_low, where p_low is the baseline's Wilson *lower* bound (the script prints it) — not the observed rate.
 - `-x` stops at the first failure when you only need one failing log.
 
-**Regression, unknown culprit**
-```bash
-cp tests/repro.sh /tmp/repro.sh   # keep the repro OUTSIDE the repo: old commits do not have it
-bash $S/bisect-parallel.sh -j 15 --link node_modules v1.4.0 HEAD -- sh /tmp/repro.sh
-```
-- Exit codes as `git bisect run`: 0 good, 125 skip, 1–127 bad, ≥128 skip. Make the repro exit 125 when a prerequisite is missing (does not build, file absent).
-- Rounds = ⌈log₍ⱼ₊₁₎ N⌉: 1,000 commits → 10 rounds with plain `git bisect`, 3 with `-j 15`, 2 with `-j 63`. First-parent history; merges are units. Endpoints are verified first unless `--no-verify`. Your working tree is never touched.
-- Dependency files changed inside the range (`probe` prints them) → do not `--link`; install per commit: `-- sh -c 'npm ci --prefer-offline >/dev/null && sh /tmp/repro.sh'`.
-- Flaky regression → each probe is itself a stress run: `-- bash $S/stress.sh -n <K> -j <m> -t <s> -- sh /tmp/repro.sh`. K ≥ 3/p so a bad commit passes all K runs less than 5% of the time (p = 10% → K = 30; p = 2% → K = 150); measure p on HEAD first. Budget bisect `-j` × stress `-j` ≤ CPUs. Put the per-run timeout on stress, not on bisect. A "good" commit after a bad one means K was too small — the script warns.
+**Regression, unknown culprit** — diagnose from the current code: the repro
+outside the repo, the code path it exercises, `run -j` for parallel greps/reads,
+hypotheses proven by `experiment`. Git history is not read.
 
 **Test pollution (files or dirs appear after tests)**
 ```bash
@@ -105,7 +98,7 @@ bash $S/find-polluter.sh -j 16 --cmd 'pytest -q' tmp/output.db 'tests/**/test_*.
 ```
 Run it from the directory you would normally run the tests in; paths are relative to it. Worktrees get tracked files, uncommitted edits and untracked non-ignored files — not ignored ones (`--link .env`). If the script reports that every run exited non-zero, fix `--cmd`/`--link` before trusting "no polluter". It detects paths only, not DB rows or globals.
 
-**Order-dependent failures** (passes alone, fails in the suite): run serially with a shuffled, printed seed — `jest -i --randomize`, `vitest --sequence.shuffle --no-file-parallelism`, pytest-randomly without `-n`, `go test -p 1 -shuffle=on` — reproduce with the seed, then bisect the predecessors: several candidate subsets (each: subset + victim, serial) as `experiment` entries with `treatment_cmd`, in parallel worktrees, until one predecessor remains.
+**Order-dependent failures** (passes alone, fails in the suite): run serially with a shuffled, printed seed — `jest -i --randomize`, `vitest --sequence.shuffle --no-file-parallelism`, pytest-randomly without `-n`, `go test -p 1 -shuffle=on` — reproduce with the seed, then halve the predecessor set: several candidate subsets (each: subset + victim, serial) as `experiment` entries with `treatment_cmd`, in parallel worktrees, until one predecessor remains.
 
 **Suites on one machine**: use the runner's native workers once (`--maxWorkers`, `pytest -n auto`, `go test -p N`, `cargo nextest run -j N`). `--shard=i/N` pays off only across separate machines.
 

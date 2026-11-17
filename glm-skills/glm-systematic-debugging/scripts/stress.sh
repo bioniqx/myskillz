@@ -9,7 +9,7 @@ Usage: stress.sh [-n RUNS] [-j JOBS] [-t SECONDS] [-o DIR] [-k] [-x] [-b F/N] --
   -k  keep logs of passing runs too (for diffing pass vs fail)
   -x  stop launching new runs after the first failure
   -b  baseline F/N (failures/runs before a fix): prints one-sided Fisher exact p (fixed if p < 0.05)
-Each run gets env STRESS_RUN=<i> and its own TMPDIR. Exit 0 = no failures, 1 = failures, 2 = usage, 125 = every run exited 125 (skip, for bisect).
+Each run gets env STRESS_RUN=<i> and its own TMPDIR. Exit 0 = no failures, 1 = failures, 2 = usage, 125 = every run exited 125 (skip).
 Example: stress.sh -n 200 -j 32 -t 120 -- npx vitest run src/queue.test.ts
 U
 }

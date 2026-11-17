@@ -14,6 +14,9 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on ZCode.
   doctor                               lane / key / model / connectivity report
   setup     [--apply]                  install the ZCode subagents (dry-run by default)
 Common: --allow WORD exempts a placeholder/portability hit. Exit 0 = OK, 1 = errors.
+A slow mode stamp (<repo>/.claude/dev-team/mode, first field 'slow') refuses the
+check inline path, makes build repairs default to 3, always runs the wide-contract
+split, and makes a task body that quotes an atom with no assertion-shaped token an ERR.
 """
 import argparse, ast, json, os, re, shlex, shutil, subprocess, sys, tempfile, textwrap, threading, time
 from concurrent.futures import ThreadPoolExecutor
@@ -583,6 +586,23 @@ def atom_errs(cs, spec_path, plan):
     return decide.coverage(atoms, homes)
 
 
+def slow_mode(root):
+    """True when the first field of <root>/.claude/dev-team/mode is 'slow'."""
+    try:
+        with open(os.path.join(root, ".claude", "dev-team", "mode"), encoding="utf-8") as fh:
+            fields = fh.readline().split()
+    except OSError:
+        return False
+    return bool(fields) and fields[0] == "slow"
+
+
+def spec_atoms(spec, root):
+    """Frozen spec atoms for the SLOW task lint; None unless the stamp is slow."""
+    if not spec or not os.path.isfile(spec) or not slow_mode(root):
+        return None
+    return decide.extract_atoms(load(spec)) or None
+
+
 def assert_count(body):
     return len(ASSERT_RE.findall(body or ""))
 
@@ -638,6 +658,11 @@ def rewrite_contracts_section(plan, lst):
     section = lines[start] + "\n\n" + "\n\n".join(c["text"] for c in lst) + "\n"
     rest = lines[end:]
     return "\n".join([section] + rest) if rest else section
+
+
+def split_enabled(no_split, slow):
+    """Under SLOW the wide-contract split always runs: --no-split is a FAST-only escape."""
+    return slow or not no_split
 
 
 def split_wide(cfg, plan, cs, spec, repo, budget=None):
@@ -874,8 +899,56 @@ def heading_outside_fences(body):
     return False
 
 
-def lint_body(c, body, allow, label, repo=None, earlier_files=(), prev_asserts=None):
-    """prev_asserts: the count stored in <task>.md.asserts; a lower new count is an ERR."""
+SLOW_ASSERT_RE = re.compile(r"\b(?:assert|assertEqual|assertTrue|assertFalse|pytest\.raises)\b"
+                            r"|(?i:\bexpect\b)|\bCHECK\b")
+
+
+def run_expected_spans(body):
+    """Fenced code blocks that sit between a `Run:` line and its `Expected:` line."""
+    spans, in_run, buf, open_n = [], False, [], 0
+    for l in body.splitlines():
+        m = re.match(r"^\s*(`{3,}|~{3,})(.*)$", l)
+        if open_n:
+            if m and len(m.group(1)) >= open_n and not m.group(2).strip():
+                if in_run:
+                    spans.append("\n".join(buf))
+                open_n = 0
+            else:
+                buf.append(l)
+            continue
+        if m:
+            open_n, buf = len(m.group(1)), []
+            continue
+        if re.match(r"^\s*(\*\*)?Expected:", l):
+            in_run = False
+        elif re.match(r"^\s*(\*\*)?Run:", l):
+            in_run = True
+    return spans
+
+
+def atom_token_errs(body, atoms, label):
+    """SLOW lint: an atom a task quotes needs an assertion-shaped token - assert,
+    expect or CHECK anywhere in the body, or that atom inside a Run/Expected fence."""
+    if not atoms or SLOW_ASSERT_RE.search(body):
+        return []
+    quoted = []
+    for atom in atoms:
+        if atom.isdigit():
+            if atom in decide.INTEGER.findall(body):
+                quoted.append(atom)
+        elif any(atom in m.group(1) for rx in (TICK, decide.QUOTED, decide.SINGLE)
+                 for m in rx.finditer(body)):
+            quoted.append(atom)
+    fenced = run_expected_spans(body)
+    return ["%s: atom %r is quoted with no assertion-shaped token "
+            "(assert, expect, CHECK, or a Run/Expected fence)" % (label, a[:70])
+            for a in quoted if not any(a in s for s in fenced)]
+
+
+def lint_body(c, body, allow, label, repo=None, earlier_files=(), prev_asserts=None, slow_atoms=None):
+    """prev_asserts: the count stored in <task>.md.asserts; a lower new count is an ERR.
+    slow_atoms: frozen spec atoms; when set (SLOW stamp), a quoted atom with no
+    assertion-shaped token is an ERR."""
     errs, warns = [], []
     if heading_outside_fences(body):
         errs.append("%s: '#', '##' or '###' heading inside a task body breaks plan structure (use '####' or bold)" % label)
@@ -956,6 +1029,7 @@ def lint_body(c, body, allow, label, repo=None, earlier_files=(), prev_asserts=N
     errs += commit_errors(blocks, label)
     errs += syntax_errors(blocks, label)
     errs += scan(body, allow, label, fenced_placeholders=True)
+    errs += atom_token_errs(body, slow_atoms, label)
     return errs, warns
 
 
@@ -1275,9 +1349,9 @@ def task_path(work, tid):
     return os.path.join(work, "tasks", tid + ".md")
 
 
-def lint_one(cs, c, body, allow, repo):
+def lint_one(cs, c, body, allow, repo, slow_atoms=None):
     earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
-    return lint_body(c, strip_generated(body), allow, c["id"], repo, earlier)
+    return lint_body(c, strip_generated(body), allow, c["id"], repo, earlier, slow_atoms=slow_atoms)
 
 
 def resume_todo(cs, work, resume):
@@ -1313,11 +1387,17 @@ def cmd_build(a):
     plan, cs, repo, errs, warns = prepare(plan_path, spec, a.allow)
     if errs:
         return report(errs, warns, "")
+    slow = slow_mode(repo)
+    slow_atoms = spec_atoms(spec, repo)
+    if a.repairs is None:
+        a.repairs = 3 if slow else 2
     work = default_work(plan_path)
     os.makedirs(os.path.join(work, "tasks"), exist_ok=True)
     save(os.path.join(work, "work.json"), json.dumps({
         "plan": plan_path, "spec": spec, "repo": repo, "allow": a.allow,
         "tasks": [c["id"] for c in cs], "review": []}, indent=1))
+    if slow:
+        print("SLOW | repairs %d | split always (mode stamp)" % a.repairs)
 
     key, base, proto, src = find_credentials()
     if a.lane == "agent" or (a.lane == "auto" and not key):
@@ -1329,7 +1409,7 @@ def cmd_build(a):
     cfg = {"key": key, "base": base, "protocol": proto}
     workers = workers_cap(a.workers)
     budget = Budget(limit=max(4, workers // 4))
-    if not a.no_split:
+    if split_enabled(a.no_split, slow):
         override = os.environ.get("PLAN_MODEL_DEEP", "")
         if override and override != GLM["deep"][0]:
             print("OUT OF BAR PLAN_MODEL_DEEP=%s (the bar is %s at max); the split pass is skipped"
@@ -1381,7 +1461,7 @@ def cmd_build(a):
         body = extract_body(text, tid)
         rounds = 0
         while True:
-            e, w = lint_one(cs, c, body, allow, repo)
+            e, w = lint_one(cs, c, body, allow, repo, slow_atoms)
             if not e or rounds >= a.repairs or budget.blown():
                 break
             rounds += 1
@@ -1417,8 +1497,8 @@ def cmd_build(a):
             return 0
         if not rewrite_ok(body, new):
             return 0
-        e_new, _ = lint_one(cs, c, new, allow, repo)
-        e_old, _ = lint_one(cs, c, body, allow, repo)
+        e_new, _ = lint_one(cs, c, new, allow, repo, slow_atoms)
+        e_old, _ = lint_one(cs, c, body, allow, repo, slow_atoms)
         if len(e_new) <= len(e_old):
             save(p, new)
             touch(p + ".ok")
@@ -1513,6 +1593,7 @@ def lint_file(plan_path, task_path, allow_extra=()):
     analyze(cs, None, None)
     allow = list(work.get("allow", [])) + list(allow_extra)
     repo = work.get("repo") or repo_root(plan_path)
+    slow_atoms = spec_atoms(work.get("spec"), repo)
     earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
     body = strip_generated(load(task_path))
     mark = task_path + ".asserts"
@@ -1522,7 +1603,7 @@ def lint_file(plan_path, task_path, allow_extra=()):
             prev = int(open(mark, encoding="utf-8").read().strip() or "0")
         except ValueError:
             prev = 0
-    e, w = lint_body(c, body, allow, c["id"], repo, earlier, prev)
+    e, w = lint_body(c, body, allow, c["id"], repo, earlier, prev, slow_atoms=slow_atoms)
     return e, w, c
 
 
@@ -1720,6 +1801,7 @@ def render_plan(plan_head, cs, bodies):
 
 def full_check(plan_path, plan, cs, bodies, spec, allow):
     repo = repo_root(plan_path)
+    slow_atoms = spec_atoms(spec, repo)
     errs, warns = analyze(cs, spec, repo)
     if errs:
         return errs, warns
@@ -1728,7 +1810,7 @@ def full_check(plan_path, plan, cs, bodies, spec, allow):
             errs.append("%s: task body missing" % c["id"])
             continue
         earlier = {f for x in cs if num(x["id"]) < num(c["id"]) for f in x["files"]}
-        e, w = lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier)
+        e, w = lint_body(c, bodies[c["id"]], allow, c["id"], repo, earlier, slow_atoms=slow_atoms)
         errs += e
         warns += w
     ids = {c["id"] for c in cs}
@@ -1766,6 +1848,9 @@ def cmd_assemble(a):
 
 def cmd_check(a):
     plan_path = os.path.abspath(a.plan)
+    if slow_mode(repo_root(plan_path)):
+        return report(["mode stamp is slow: the inline path is not taken - "
+                       "write the contracts and run build"], [], "")
     plan = load(plan_path)
     cs, errs = parse_contracts(plan)
     if cs is None:
@@ -2135,7 +2220,8 @@ def main(argv=None):
     p.add_argument("plan"); p.add_argument("--spec")
     p.add_argument("--lane", choices=["auto", "api", "agent"], default="auto")
     p.add_argument("--workers", type=int)
-    p.add_argument("--repairs", type=int, default=2)
+    p.add_argument("--repairs", type=int, default=None,
+                   help="writer repair rounds (default 2; 3 under a slow mode stamp)")
     p.add_argument("--max-tokens", type=int, default=16000)
     p.add_argument("--thorough", action="store_true", help="review every task, not only risky ones")
     p.add_argument("--no-split", action="store_true", help="do not propose splits for wide contracts")

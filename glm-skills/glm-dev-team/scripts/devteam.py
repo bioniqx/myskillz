@@ -90,7 +90,9 @@ Slice kinds (`kind` in the plan) — every kind runs on the same scheduler/workt
   research       read-only investigation; the deliverable is a report file, nothing is merged
 """
 import argparse
+import ast
 import contextlib
+import difflib
 import fnmatch
 import glob
 import hashlib
@@ -1152,6 +1154,18 @@ def slice_kind(s):
 PACE_TTL_S = 1800
 
 
+def mode_stamp(root):
+    """First field of <root>/.claude/dev-team/mode: fast, slow, or empty.
+
+    The handoff prelude writes it; under `slow` the engine forces the strict
+    profile and runs the mutant gate after GREEN."""
+    try:
+        parts = (state_dir(Path(root)) / "mode").read_text(encoding="utf-8").split()
+    except OSError:
+        return ""
+    return parts[0] if parts else ""
+
+
 def _unlink_pace(root):
     try:
         (state_dir(Path(root)) / "pace").unlink()
@@ -1623,6 +1637,12 @@ def cmd_init(a):
             "new_files": list(s.get("new_files") or []),
         }
     prof = resolve_profile(a, plan)
+    slow = mode_stamp(root) == "slow"
+    if slow:
+        # A slow stamp refuses turbo and spike even when the plan or a --fast
+        # level asks for them, and a stale FAST pace file must not win.
+        forced_from = prof if prof not in ("strict", DEFAULT_PROFILE) else ""
+        prof = "strict"
     policy = POLICY[prof]
     fast = policy["fast"]
     provider = detect_provider(root)
@@ -1656,6 +1676,9 @@ def cmd_init(a):
         missing = [f for f in sl["files"] if not (Path(root) / f).exists()]
         sl["new_files"] = list(dict.fromkeys(list(sl.get("new_files") or []) + missing))
     pace_name = read_pace(root)
+    if slow and pace_name:
+        pace_name = ""
+        _unlink_pace(root)
     st["pace"] = pace_name
     quick = apply_quick(slices, pace_name)
     fast_lane = apply_fast_lane(slices, pace_name)
@@ -1680,6 +1703,9 @@ def cmd_init(a):
                }[policy["red_run"]]
     out(f"PROFILE {prof} — {gate_txt}; {red_txt}; "
         f"review {policy['review']}/{policy['review_depth']}; checkpoint {policy['checkpoint']}.")
+    if slow:
+        out(f"PROFILE strict (mode stamp slow{'; ' + forced_from + ' refused' if forced_from else ''}) "
+            f"— every code slice RED then GREEN, MUTANT gate before review")
     if quick:
         out("PACE quick: one lane per code slice; proof and frozen tests stay; no reviewer lane")
     if fast_lane:
@@ -1829,8 +1855,9 @@ def briefing_text(st, s, mode):
                   "> make sure it asserts real behaviour — `commit-red` rejects tests with no assertions.", ""]
     lines += ["## Request", st["request"] or "(see slice goal)", ""]
     if mode == "research":
-        lines += ["## Commands", "Read-only: `git log`/`git show`/`git grep`, readers, and the project's own "
-                  "test command when running it is the only way to settle a question. Change nothing.", ""]
+        lines += ["## Commands", "Read-only: `git grep`, readers, and the project's own "
+                  "test command when running it is the only way to settle a question. Change nothing. "
+                  "The code as it is now is the only source; git history is not read.", ""]
     else:
         lines += ["## Project commands (run exactly these forms — they are pre-approved)"]
         for k in ("build", "test", "test_file", "lint", "lint_file", "typecheck", "typecheck_file", "bench"):
@@ -1904,7 +1931,8 @@ def briefing_text(st, s, mode):
                   f"4. Commit: `python3 {sp} commit-fast \"{s['title']}\"` (single commit, footprint-checked).",
                   "5. Report with the format below; list under `## Notes:` what a test would have covered."]
     elif mode == "research":
-        lines += ["1. Read whatever you need: code, config, history (`git log`), docs, tests. Run read-only commands.",
+        lines += ["1. Read whatever you need: code, config, docs, tests — the code as it is now. "
+                  "Run read-only commands; git history is not read.",
                   "2. Answer every question above with evidence — file:line, command output, measurements. "
                   "Where you are unsure, say so and say what would settle it.",
                   f"3. Write the report to {state_dir(Path(st['root'])) / 'research' / (s['id'] + '.md')} with a "
@@ -2321,6 +2349,166 @@ def run_proof(cwd, cmd, timeout):
     return r.returncode, tail[-1800:]
 
 
+# --- SLOW mutant gate: one assertion deleted after GREEN, before review -------
+# "Tests passed" is not the bar: a suite that still passes with one assertion
+# removed locks nothing. Only test files are mutated, only in a throwaway.
+
+_ASSERT_TOKEN = re.compile(r"\bassert\b|\bASSERT\b|expect\(|CHECK\(")
+MUTANT_SITES = 3
+MUTANT_REOPENS = 2
+
+
+def _py_assert_sites(text):
+    """[(start, end)] of the first ast Assert nodes, or None when it does not parse."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    spans = sorted({(n.lineno, getattr(n, "end_lineno", None) or n.lineno)
+                    for n in ast.walk(tree) if isinstance(n, ast.Assert)})
+    return spans[:MUTANT_SITES]
+
+
+def _line_assert_sites(text):
+    # module-loading lines (require / import / #include) are not assertions
+    return [i for i, ln in enumerate(text.splitlines(), 1)
+            if _ASSERT_TOKEN.search(ln)
+            and "require(" not in ln
+            and not ln.lstrip().startswith(("import ", "from ", "#include"))][:MUTANT_SITES]
+
+
+def _mutant_body(original, site_no, is_py):
+    """The site_no-th assertion deleted, or None when that mutant does not parse.
+
+    Python: the ast Assert node becomes `pass`. Other files: the matching line
+    is deleted. Sites are numbered from 1 over the ORIGINAL text."""
+    if is_py:
+        sites = _py_assert_sites(original)
+        if not sites or site_no > len(sites):
+            return None
+        lines = original.splitlines(keepends=True)
+        lo, hi = sites[site_no - 1]
+        indent = re.match(r"\s*", lines[lo - 1]).group(0)
+        lines[lo - 1:hi] = [indent + "pass\n"]
+    else:
+        sites = _line_assert_sites(original)
+        if not sites or site_no > len(sites):
+            return None
+        lines = original.splitlines(keepends=True)
+        del lines[sites[site_no - 1] - 1]
+    body = "".join(lines)
+    if is_py:
+        try:
+            ast.parse(body)
+        except SyntaxError:
+            return None
+    return body
+
+
+def _mutant_diff(original, mutant, rel):
+    return "\n".join(list(difflib.unified_diff(
+        original.splitlines(), mutant.splitlines(),
+        fromfile=rel, tofile=rel + " (mutant)", lineterm=""))[:40])
+
+
+def run_mutant_gate(files, cmd, cwd, timeout, pfx=""):
+    """Delete one assertion at a time (up to three sites, first decisive file)
+    and re-run the test command in `cwd`. The caller owns the checkout: every
+    mutated file is restored before returning.
+
+    ok: a mutant made the suite exit non-zero (it can fail). weak: a parsable
+    mutant still exits 0. skip: no assertion-shaped line, or the command could
+    not run (infrastructure never blocks a lane)."""
+    for rel in files:
+        path = Path(cwd) / rel
+        try:
+            original = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for site in range(1, MUTANT_SITES + 1):
+            mutant = _mutant_body(original, site, rel.endswith(".py"))
+            if mutant is None:
+                continue
+            if mutant == original:
+                break
+            path.write_text(mutant, encoding="utf-8")
+            try:
+                code, tail = run_proof(cwd, pfx + cmd, timeout)
+            finally:
+                path.write_text(original, encoding="utf-8")
+            if code is None or code == 127:
+                return {"verdict": "skip",
+                        "reason": f"test command could not run: {tail or 'command not found'}"}
+            if code != 0:
+                return {"verdict": "ok", "file": rel, "site": site}
+            return {"verdict": "weak", "file": rel, "site": site,
+                    "diff": _mutant_diff(original, mutant, rel)}
+    return {"verdict": "skip", "reason": "no assertion-shaped line in the test files"}
+
+
+def mutant_one(root, st, sid, pc):
+    """The engine-side mutant gate for one green slice, in a throwaway checkout
+    of the slice tip. None when the gate does not apply (not slow, not a code
+    slice, no RED tests, or nothing to prove)."""
+    if mode_stamp(root) != "slow":
+        return None
+    s = st["slices"][sid]
+    if slice_kind(s) != "code" or s.get("quick") or s.get("fast_lane"):
+        return None
+    red = (pc or {}).get("red") or s.get("red_sha")
+    tip = (pc or {}).get("tip")
+    if not red or not tip:
+        return None
+    frozen = frozen_files_of(red, root, st.get("test_globs") or [])
+    if not frozen:
+        return None
+    td = tempfile.mkdtemp(prefix="devteam-mutant-")
+    os.rmdir(td)
+    ok = False
+    try:
+        with _WT_LOCK:
+            r = sh(["git", "worktree", "add", "--detach", "--quiet", td, tip],
+                   cwd=root, check=False)
+        if r.returncode != 0:
+            return {"verdict": "skip", "reason": "could not check out the slice commit"}
+        ok = True
+        entries = proof_plan(st, s, pc.get("touched") or [], td)
+        cmd = next((c for label, c in entries if label == "tests"), "")
+        if not cmd:
+            return {"verdict": "skip", "reason": "no test command pinned in the plan"}
+        return run_mutant_gate(frozen, cmd, td, proof_timeout(),
+                               isolation_prefix(s.get("isolation")))
+    finally:
+        if ok:
+            with _WT_LOCK:
+                sh(["git", "worktree", "remove", "--force", "--force", td],
+                   cwd=root, check=False)
+        shutil.rmtree(td, ignore_errors=True)
+
+
+def mutant_reject(s, sid, proof):
+    """The hold line when the mutant still passes, else None. Cap 2 re-opens
+    (the mutant diff goes back to the lane); after the cap the leftover is
+    named and the slice does not merge."""
+    m = (proof or {}).get("mutant")
+    if not m or m.get("verdict") != "weak":
+        return None
+    n = int(s.get("mutant_n") or 0) + 1
+    s["mutant_n"] = n
+    where = f"{m.get('file')} site {m.get('site')}"
+    if n > MUTANT_REOPENS:
+        s["mutant_leftover"] = True
+        return (f"{sid}: MUTANT weak — leftover after {MUTANT_REOPENS} re-opens: the suite still "
+                f"passes with one assertion deleted ({where}). Named to the user; this slice does not merge.")
+    return reject(s, "mutant-weak",
+                  f"{sid}: MUTANT weak — the suite still exits 0 after the engine deleted one "
+                  f"assertion ({where}), so the green run locks nothing. Mutant diff:\n"
+                  + "\n".join("    " + ln for ln in (m.get("diff") or "").splitlines()) +
+                  f"\n  → The tests are frozen after RED, so warm-editing them is refused: "
+                  f"`retry {sid} --note \"MUTANT weak: write tests that fail when that "
+                  "assertion is deleted\"` (cold restart writes a stronger RED), then GREEN again.")
+
+
 def proof_plan(st, s, touched, wt):
     """[(label, command)] the engine runs itself in the slice worktree before merging."""
     c = st["commands"]
@@ -2628,13 +2816,28 @@ def proof_all(root, st, ids, prechecks):
         except Exception:
             return ("parent", sid, None)
 
+    def mutant_job(item):
+        sid, pc = item
+        try:
+            return ("mutant", sid, mutant_one(root, st, sid, pc))
+        except Exception as e:      # an engine-side problem never blocks a lane
+            return ("mutant", sid, {"verdict": "skip",
+                                    "reason": f"mutant error {type(e).__name__}: {str(e)[:120]}"})
+
+    slow = mode_stamp(root) == "slow"
     parent_ids = [sid for sid, _pc in todo if _parent_probe_wanted(st, st["slices"][sid])]
-    work = [("proof", item) for item in todo] + [("parent", item) for item in todo if item[0] in parent_ids]
+    mutant_ids = [sid for sid, _pc in todo
+                  if slow and slice_kind(st["slices"][sid]) == "code"]
+    work = ([("proof", item) for item in todo]
+            + [("parent", item) for item in todo if item[0] in parent_ids]
+            + [("mutant", item) for item in todo if item[0] in mutant_ids])
 
     def run(kind_item):
         kind, item = kind_item
         if kind == "proof":
             return proof_job(item)
+        if kind == "mutant":
+            return mutant_job(item)
         return parent_job(item)
 
     with ThreadPoolExecutor(max_workers=min(4, len(work))) as pool:
@@ -2643,6 +2846,10 @@ def proof_all(root, st, ids, prechecks):
     for kind, sid, val in rows:
         if kind == "proof":
             proofs[sid] = val
+        elif kind == "mutant":
+            proofs.setdefault(sid, {"ran": [], "skipped": [], "fail": None})
+            if val is not None:
+                proofs[sid]["mutant"] = val
         else:
             parents[sid] = val
     for sid, rc in parents.items():
@@ -2681,6 +2888,9 @@ def proof_note(proof):
         bits.append("proof passed: " + ", ".join(proof["ran"]))
     if proof.get("skipped"):
         bits.append("proof SKIPPED (" + "; ".join(proof["skipped"]) + ")")
+    m = proof.get("mutant")
+    if m:
+        bits.append(f"MUTANT {m['verdict']}" + (f" ({m['reason']})" if m.get("reason") else ""))
     return f" [{' | '.join(bits)}]" if bits else ""
 
 
@@ -2879,6 +3089,9 @@ def integrate_one(root, st, sid, remove=True, proof=None, pc=None):
                       f"{sid}: REJECTED — no implementation commit after RED. SendMessage the agent to implement and "
                       f"commit-green, then integrate again; or `retry {sid}`.")
     bad = proof_reject(s, sid, wt, proof)
+    if bad:
+        return bad
+    bad = mutant_reject(s, sid, proof)   # SLOW: after green proof, before review
     if bad:
         return bad
     pinned = False
@@ -3734,6 +3947,38 @@ def probe_commands(root):
     return found, notes
 
 
+def cmd_mutant(a):
+    """SLOW direct/short flow: the mutant gate on one working-tree test file.
+
+    Mutates the file in place (original bytes restored in a finally), re-runs
+    the given test command, and prints MUTANT weak / ok / skip. Exit 1 on weak."""
+    root = toplevel()
+    target = Path(a.file)
+    if not target.is_file():
+        raise DevteamError(f"no such file: {a.file}")
+    rel = target.resolve().relative_to(root.resolve()) if target.is_absolute() else target
+    try:
+        original = (root / rel).read_text(encoding="utf-8")
+    except OSError as e:
+        raise DevteamError(f"cannot read {rel}: {e}")
+    res = run_mutant_gate([str(rel)], a.cmd, root, proof_timeout())
+    where = (f" ({res['file']} site {res['site']})" if res.get("file") else
+             (f" ({res['reason']})" if res.get("reason") else ""))
+    out(f"MUTANT {res['verdict']}{where}")
+    if res["verdict"] == "weak":
+        out("The suite still passes with one assertion deleted. Mutant diff:")
+        out("\n".join("  " + ln for ln in (res.get("diff") or "").splitlines()))
+        out("NEXT: strengthen the tests so deleting that assertion fails them "
+            "(never delete the assertion), re-run this command, then commit.")
+        raise SystemExit(1)
+    if res["verdict"] == "ok":
+        out("NEXT: the suite can fail. Name MUTANT ok to the user and finish the task.")
+    else:
+        out("NEXT: no assertion-shaped line (or the command could not run). "
+            "Name MUTANT skip to the user; it is not a blocker.")
+    return 0
+
+
 def cmd_probe(a):
     root = toplevel()
     found, notes = probe_commands(root)
@@ -3846,7 +4091,6 @@ def cmd_review_pr(a):
 
 
 DEBUG_ANGLES = [
-    "recent changes: what landed just before the symptom appeared (git log/blame on the suspect paths)",
     "the data path: trace the actual input through the code that produces the symptom, function by function",
     "environment and configuration: versions, env vars, feature flags, build settings, differences between "
     "the environment where it works and the one where it does not",
@@ -4976,6 +5220,10 @@ def main(argv=None):
     pr = sp.add_parser("commit-fast"); pr.add_argument("title"); pr.set_defaults(fn=cmd_commit_fast)
     pr = sp.add_parser("commit-work"); pr.add_argument("title"); pr.add_argument("--force", action="store_true"); pr.set_defaults(fn=cmd_commit_work)
     sp.add_parser("probe").set_defaults(fn=cmd_probe)
+    pr = sp.add_parser("mutant")
+    pr.add_argument("--file", required=True)
+    pr.add_argument("--cmd", required=True)
+    pr.set_defaults(fn=cmd_mutant)
     pr = sp.add_parser("atoms"); pr.add_argument("plan", nargs="?"); pr.add_argument("--check", action="store_true"); pr.set_defaults(fn=cmd_atoms)
 
     def cmd_plan_lint(a):

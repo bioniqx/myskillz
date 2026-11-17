@@ -105,25 +105,38 @@ class _In(object):
 
 
 class ModeTests(unittest.TestCase):
-    def test_a_fast_phrase_is_fast_and_a_plain_request_asks(self):
-        self.assertEqual(ask.classify_request("dung che do FAST"), "fast")
-        self.assertEqual(ask.classify_request("use FAST mode for this feature"), "fast")
-        self.assertEqual(ask.classify_request("D\u00f9ng ch\u1ebf \u0111\u1ed9 fast"), "fast")
-        self.assertEqual(ask.classify_request("FAST"), "fast")
-        self.assertEqual(ask.classify_request("make the search fast"), "ask")
-        self.assertEqual(ask.classify_request("build an interactive dashboard"), "ask")
+    def test_a_fast_phrase_is_fast_and_a_plain_request_is_fast(self):
+        from handoff import mode_of
+        self.assertEqual(mode_of("dung che do FAST", ""), "fast")
+        self.assertEqual(mode_of("use FAST mode for this feature", ""), "fast")
+        self.assertEqual(mode_of("D\u00f9ng ch\u1ebf \u0111\u1ed9 fast", ""), "fast")
+        self.assertEqual(mode_of("FAST", ""), "fast")
+        self.assertEqual(mode_of("make the search fast", ""), "fast")
+        self.assertEqual(mode_of("build an interactive dashboard", ""), "fast")
 
-    def test_a_refusal_beats_a_fast_phrase(self):
-        self.assertEqual(ask.classify_request("khong dung fast"), "normal")
-        self.assertEqual(ask.classify_request("do not use FAST mode"), "normal")
+    def test_a_slow_phrase_is_slow(self):
+        from handoff import mode_of
+        self.assertEqual(mode_of("SLOW", ""), "slow")
+        self.assertEqual(mode_of("che do chat luong", ""), "slow")
+        self.assertEqual(mode_of("uu tien chat luong", ""), "slow")
 
-    def test_the_startup_reply_is_only_the_two_choices(self):
-        self.assertEqual(ask.classify_reply("1"), "fast")
-        self.assertEqual(ask.classify_reply("c\u00f3"), "fast")
-        self.assertEqual(ask.classify_reply("2"), "normal")
-        self.assertEqual(ask.classify_reply("th\u01b0\u1eddng"), "normal")
-        self.assertEqual(ask.classify_reply("ok"), "ask")
-        self.assertEqual(ask.classify_reply(""), "ask")
+    def test_a_refusal_does_not_select_the_other_mode(self):
+        from handoff import mode_of
+        self.assertEqual(mode_of("khong dung fast", ""), "fast")
+        self.assertEqual(mode_of("khong dung slow", ""), "fast")
+        self.assertEqual(mode_of("do not use FAST mode", ""), "fast")
+
+    def test_cmd_mode_never_asks(self):
+        dest = os.path.join(tempfile.mkdtemp(prefix="mode-"), "mode.json")
+        ns = type("N", (), {"file": dest})()
+        old = sys.stdin
+        sys.stdin = _In("build an interactive dashboard")
+        try:
+            rc = ask.cmd_mode(ns)
+        finally:
+            sys.stdin = old
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.load(open(dest))["mode"], "fast")
 
 
 class FastPickTests(unittest.TestCase):

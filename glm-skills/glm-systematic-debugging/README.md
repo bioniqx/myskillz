@@ -48,7 +48,6 @@ references/flaky-and-timing.md   condition waits, flake root causes
 scripts/debug_tool.py            probe · run · experiment · scan · doctor · setup
 scripts/snapshot.sh              git, deps, toolchain, CPUs in one call
 scripts/stress.sh                N parallel reruns, Wilson CI, Fisher test vs baseline
-scripts/bisect-parallel.sh       k-ary git bisect in worktrees, log_(J+1) N rounds
 scripts/find-polluter.sh         parallel polluter search, one worktree per worker
 agents/glm-debug-worker.md           subagent definition for the fallback lane
 evals/                           pressure + speed scenarios with pass criteria
@@ -60,11 +59,10 @@ Verified in this build (2-CPU container; the model-turn column is what actually 
 
 | | measured |
 |---|---|
-| `probe` on a 3-frame traceback | 0.3 s, **one** call — replaces snapshot + 3 frame reads + 2 greps + git history + 3 repro runs |
+| `probe` on a 3-frame traceback | 0.3 s, **one** call — replaces snapshot + 3 frame reads + 2 greps + 3 repro runs |
 | `scan`, 20 tasks, `-j 64` requested, mock latency | **peak concurrency 8** (capped), **1 distinct prompt prefix** (cache hit from worker 2) |
 | `experiment`, 8 hypotheses × 2 arms | 1.4 s, 16 isolated worktrees, 1 CONFIRMED / 7 REFUTED |
 | `run`, 3 × 1 s commands | 1.0 s wall, exit codes preserved |
-| `bisect-parallel.sh -j 5`, 13 commits | 2 rounds, correct culprit |
 | `stress.sh -n 60 -j 8` | 1 s, rate + Wilson CI + failing logs |
 
 Statistics in `stress.sh` were cross-checked against SciPy (`fisher_exact`, Wilson interval).

@@ -1,7 +1,7 @@
 ---
 name: glm-brainstorming
-description: "Use this before ANY creative work, or when the user says FAST or che do FAST. Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a glm-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST is on. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3-Flash and DeepSeek V4.1 Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
-when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, 'can we / is it possible' feasibility spikes, and FAST / che do FAST / design and build straight through. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
+description: "Use this before ANY creative work, or when the user says FAST or SLOW (che do FAST, che do chat luong). Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a glm-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST is on. Routes misrouted requests to the matching glm-* sibling skill and borrows sibling agents as lanes. Tuned for GLM-5.3-Flash and DeepSeek V4.1 Flash. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to glm-writing-plans (approved design in hand) or glm-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, 'can we / is it possible' feasibility spikes, and FAST / SLOW / che do FAST / che do chat luong / design and build straight through. Not for: writing a plan from an approved design (glm-writing-plans), implementing a settled plan (glm-dev-team), or trivial edits with no design choice."
 allowed-tools:
   - Bash(sh *context.sh*)
   - Bash(sh *start-server.sh*)
@@ -40,14 +40,14 @@ EOF
 
 `<base dir>` is the "Base directory for this skill" line. The heredoc is the
 user request. Empty stdin does not route. Follow the last `NEXT:` line.
-`PACE: direct`, `PACE: short`, and `PACE: fast` replace every later section.
+`PACE: direct`, `PACE: short`, `PACE: fast`, and `PACE: slow` replace every
+later section.
 
 - `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
 - `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.
-- `MODE normal` → the rest of this file. Do not ask which mode.
-- `MODE ask` → the first line the user sees is `Dùng chế độ FAST không?`, then the script's `ASK:` block. End the turn. On the reply, run `ask.py mode --reply` with that reply on stdin and take the branch above.
+- `MODE slow` → follow that `NEXT` and do not read `fast.md`. The default is FAST; SLOW starts only when the user says SLOW.
 
-A later message that names FAST or refuses it is a new `ask.py mode` on that
+A later message that names FAST or SLOW is a new `ask.py mode` on that
 message. The script stores the choice in `.brainstorm/drafts/mode.json`.
 
 ## Hard rules (the rest of this file is detail)

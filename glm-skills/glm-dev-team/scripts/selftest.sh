@@ -1292,6 +1292,91 @@ check "the blocked slice still holds (green-proved, not merged, not failed)" 'D 
 OUT=$(DX next 2>&1)
 check "a fix commit that survives the attack merges (no APPROVED anywhere in the loop)" '[[ "$OUT" == *"S1: MERGED"* ]]'
 
+# ---------------------------------------------------------------- SLOW MODE --
+echo "== slow mode: the mode stamp forces strict and runs the mutant gate"
+R3="$(mkt)/repo3"; mkdir -p "$R3"; cd "$R3"
+git init -q -b main; git config user.email t@t; git config user.name t
+mkdir -p src tests && echo base > src/a.js
+# the implementation stub exists at base (commit-red refuses an unresolvable
+# import); RED fails because the stub returns the wrong value
+printf 'def one():\n    return 0\n' > src/one.py
+git add -A && git commit -qm init
+mkdir -p .claude/dev-team && echo "slow $(date +%s)" > .claude/dev-team/mode
+echo "short $(date +%s)" > .claude/dev-team/pace
+cat > plan.md <<'EOF'
+# slow plan
+```json
+{"request":"quality run","profile":"turbo","commands":{"test":"python3 tests/test_one.py","test_file":"python3 {files}","lint":"echo lint"},
+ "slices":[{"id":"S1","title":"one","deps":[],"files":["src/one.py","tests/test_one.py"],"risk":"low","criteria":["one"]}]}
+```
+EOF
+OUT=$(DEVTEAM_PROOF=on D init plan.md 2>&1)
+check "slow stamp refuses turbo: PROFILE strict and MUTANT in one line" \
+  '[[ "$OUT" == *"PROFILE strict (mode stamp slow; turbo refused)"* && "$OUT" == *"MUTANT gate before review"* ]]'
+check "a stale short pace file did not mark the slice quick" '! grep -q "\"quick\": true" .claude/dev-team/state.json'
+D dispatch S1 >/dev/null 2>&1
+
+echo "-- a weak suite: MUTANT weak holds the merge"
+git worktree add -q ".claude/worktrees/sw1" -b wt-sw1 HEAD
+( cd .claude/worktrees/sw1 && D claim S1 > "$R3/claim-S1.out" 2>&1
+  mkdir -p tests
+  cat > tests/test_one.py <<'PY'
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.one import one
+
+
+class OneTest(unittest.TestCase):
+    def test_one(self):
+        assert one() == 1
+
+
+if __name__ == "__main__":
+    unittest.main()
+PY
+  D commit-red "RED one" >/dev/null 2>&1
+  printf 'def one():\n    return 1\n' > src/one.py
+  D commit-green "GREEN one" >/dev/null 2>&1 )
+OUT=$(DEVTEAM_PROOF=on D integrate S1 2>&1); echo "$OUT" | head -4
+check "MUTANT weak blocks the merge" '[[ "$OUT" == *"MUTANT weak"* && "$OUT" != *"S1: MERGED"* ]]'
+check "the weak gate points at retry (tests are frozen after RED)" '[[ "$OUT" == *"retry S1 --note"* ]]'
+
+echo "-- retry with a stronger RED: MUTANT ok merges"
+D retry S1 --note "MUTANT weak: bind got in the first assert so deleting it fails the second" >/dev/null 2>&1
+D dispatch S1 >/dev/null 2>&1
+git worktree add -q ".claude/worktrees/sw2" -b wt-sw2 HEAD
+( cd .claude/worktrees/sw2 && D claim S1 > "$R3/claim-S1b.out" 2>&1
+  mkdir -p tests
+  cat > tests/test_one.py <<'PY'
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.one import one
+
+
+class OneTest(unittest.TestCase):
+    def test_one(self):
+        assert (got := one()) == 1
+        assert got + 1 == 2
+
+
+if __name__ == "__main__":
+    unittest.main()
+PY
+  D commit-red "RED one strong" >/dev/null 2>&1
+  printf 'def one():\n    return 1\n' > src/one.py
+  D commit-green "GREEN one strong" >/dev/null 2>&1 )
+OUT=$(DEVTEAM_PROOF=on D integrate S1 2>&1); echo "$OUT" | head -4
+check "the stronger suite merges with MUTANT ok" '[[ "$OUT" == *"S1: MERGED"* && "$OUT" == *"MUTANT ok"* ]]'
+check "no MUTANT weak remains" '[[ "$OUT" != *"MUTANT weak"* ]]'
+
 echo
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

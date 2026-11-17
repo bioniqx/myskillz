@@ -553,6 +553,131 @@ def _doc_pace(text):
     return "full"
 
 
+# --- mode classifier: FAST is the default; SLOW only when the user says so ----
+# One classifier, shared by every prelude and by ask.py. The return is always
+# "fast" or "slow": there is no ask result and no normal mode.
+
+_FAST_PHRASE = re.compile(
+    r"(\bfast[\s-]*mode\b"
+    r"|\bmode\s*[:=]?\s*fast\b"
+    r"|che\s*do\s*fast"
+    r"|\b(?:dung|use|using|bat|chay|lam)\s+(?:che\s*do\s+)?fast\b"
+    r"|--fast\b"
+    r"|/fast\b)")
+_FAST_CAPS = re.compile(r"(?<![A-Za-z])FAST(?![A-Za-z])")
+_SLOW_PHRASE = re.compile(
+    r"(\bslow[\s-]*mode\b"
+    r"|\bmode\s*[:=]?\s*slow\b"
+    r"|che\s*do\s*slow"
+    r"|che\s*do\s+chat\s*luong"
+    r"|uu\s*tien\s+chat\s*luong"
+    r"|\bquality\s+mode\b"
+    r"|--slow\b"
+    r"|/slow\b)")
+_SLOW_CAPS = re.compile(r"(?<![A-Za-z])SLOW(?![A-Za-z])")
+
+
+def _refuses_mode(folded, word):
+    """khong/no/without/do not within 30 characters blocks that mode."""
+    return re.compile(
+        r"(\b(?:khong|no|without|don't|dont|do\s+not)\b.{0,30}\b%s\b"
+        r"|\bnot\s+%s\b"
+        r"|\bno\s*%s\b)" % (word, word, word)).search(folded) is not None
+
+
+def _fold_with_index(text):
+    """fold_ascii plus idx, where idx[i] is the original offset of folded char i.
+
+    The index lets a phrase match on the folded text report its position in
+    the original text, so the caps word and the phrase word share coordinates.
+    """
+    out, idx = [], []
+    for i, ch in enumerate(text):
+        if ch in ("\u0110", "\u0111"):
+            out.append("d")
+            idx.append(i)
+            continue
+        for part in unicodedata.normalize("NFD", ch):
+            if unicodedata.category(part) == "Mn":
+                continue
+            out.append(part)
+            idx.append(i)
+    return "".join(out).lower(), idx
+
+
+def _last_mode_pos(text, folded, idx, phrase, caps):
+    """Rightmost match end in original coordinates, -1 when absent."""
+    best = -1
+    for m in phrase.finditer(folded):
+        if 0 < m.end() <= len(idx):
+            best = max(best, idx[m.end() - 1] + 1)
+    for m in caps.finditer(text):
+        best = max(best, m.end())
+    return best
+
+
+def mode_of(text, stamped=""):
+    """fast or slow. A refusal blocks that mode; the later match wins.
+
+    Text that names neither mode keeps the stamp. An empty text, a missing
+    stamp, and a stored normal are fast.
+    """
+    if not (text or "").strip():
+        return "fast"
+    folded, idx = _fold_with_index(text)
+    fast_at = _last_mode_pos(text, folded, idx, _FAST_PHRASE, _FAST_CAPS)
+    slow_at = _last_mode_pos(text, folded, idx, _SLOW_PHRASE, _SLOW_CAPS)
+    if _refuses_mode(folded, "fast"):
+        fast_at = -1
+    if _refuses_mode(folded, "slow"):
+        slow_at = -1
+    if fast_at < 0 and slow_at < 0:
+        return stamped if stamped in ("fast", "slow") else "fast"
+    if fast_at < 0:
+        return "slow"
+    if slow_at < 0:
+        return "fast"
+    return "slow" if slow_at > fast_at else "fast"
+
+
+def _mode_stamp_path():
+    return os.path.join(_repo_root(), ".claude", "dev-team", "mode")
+
+
+def read_mode_stamp():
+    """First field of the mode stamp: fast, slow, or empty."""
+    try:
+        with open(_mode_stamp_path(), encoding="utf-8") as fh:
+            parts = fh.readline().split()
+    except OSError:
+        return ""
+    return parts[0] if parts else ""
+
+
+def write_mode_stamp(kind):
+    """One line, `fast` or `slow` plus the unix time. Same rules as the pace file."""
+    if kind not in ("fast", "slow"):
+        return
+    path = _mode_stamp_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("%s %d\n" % (kind, int(time.time())))
+    except OSError:
+        pass
+
+
+def _brainstorm_stamped():
+    """Brainstorming keeps its stamp in .brainstorm/drafts/mode.json."""
+    path = os.path.join(_repo_root(), ".brainstorm", "drafts", "mode.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            kind = json.load(fh).get("mode")
+    except (OSError, json.JSONDecodeError):
+        return ""
+    return kind if isinstance(kind, str) else ""
+
+
 def _line_count(path):
     try:
         with open(path, encoding="utf-8") as fh:
@@ -655,16 +780,93 @@ def _ok_next(code, out, success, keep=False):
     return 0, success
 
 
+def _sibling_scripts(scripts, skill):
+    """Scripts dir of a sibling skill: <skills>/<skill>/scripts."""
+    return os.path.normpath(
+        os.path.join(os.path.dirname(scripts), "..", skill, "scripts"))
+
+
+def _slow_fit_next(width, scripts, self_name):
+    """The fitted-width SLOW row: the edit stays small, the oracle still runs."""
+    decide = os.path.join(scripts, "decide.py")
+    mutant = os.path.join(_sibling_scripts(scripts, "glm-dev-team"), "devteam.py")
+    head = ("NEXT: PACE: slow. Width %s. Run python3 %s atoms on this request "
+            "first. " % (width, decide))
+    if width == "direct":
+        body = ("One named file, tests first, in this session. No design lane, "
+                "no plan, no dev-team. ")
+    else:
+        body = ("At most 3 files, in this session, tests first. One attacker: "
+                "handoff.py borrow --self %s --agent glm-design-breaker; its "
+                "prompt shows the contract and the diff, and decide.py break "
+                "re-runs its command. " % self_name)
+    if self_name == "glm-brainstorming":
+        body += "Do not start the chain. "
+    tail = ("After the tests pass, bind each new assertion: CLAIM <assertion "
+            "text> :: <file>:<line> lines on stdin to python3 %s claim --root "
+            "., then run the mutant gate: python3 %s mutant --file <the test "
+            "file> --cmd <the test command>. MUTANT weak or skip is named to "
+            "the user. Do not re-run open. Do not commit." % (decide, mutant))
+    return head + body + tail
+
+
+def _slow_brainstorm_next(pace, scripts):
+    decide = os.path.join(scripts, "decide.py")
+    if pace in ("direct", "short"):
+        return _slow_fit_next(pace, scripts, "glm-brainstorming")
+    return ("NEXT: PACE: slow. fast.md stays unread. Round 1: one message, "
+            "python3 %s atoms on this same request, plus the fact lanes. "
+            "Round 2: three drafters and three breakers, then check.py close. "
+            "Then one more breaker on the score leader with the fact list "
+            "reversed, then score again. Run python3 %s prove --cap 8 --ledger "
+            ".brainstorm/drafts/ledger.json on the load-bearing web facts. "
+            "DECISION ask is a user question; DECISION stop stops. Show the "
+            "design only after check.py send prints fail=0. Human approve "
+            "stays. Chain only when the user asked to implement or approve "
+            "returned yes: ask.py chain --pick <id> (chain.json mode slow, "
+            "continue true), write the short spec, check.py spec, then "
+            "handoff.py next --self glm-brainstorming --event "
+            "architectural-approved. Do not re-run open." % (decide, decide))
+
+
 def _prelude(args, text):
     """Run the deterministic opening. Return (rc, binding NEXT line)."""
     scripts = _skill_scripts(args.self)
     name = args.self
     chunks = []
 
+    # The seven ring skills classify the mode before anything else. FAST keeps
+    # today's branches byte-for-byte. SLOW writes the stamp, clears a stale
+    # short/fast pace file, and never falls through into a FAST branch.
+    mode = "fast"
+    if name in RING:
+        stamped = (read_mode_stamp() if name != "glm-brainstorming"
+                   else (_brainstorm_stamped() or read_mode_stamp()))
+        mode = mode_of(text, stamped)
+        write_mode_stamp(mode)
+        if mode == "slow":
+            _set_pace_file("slow")
+
     if name == "glm-brainstorming":
         pace = pace_of(text)
         ctx = os.path.join(scripts, "context.sh")
         ask = os.path.join(scripts, "ask.py")
+        if mode == "slow":
+            ask_code = 0
+            if os.path.isfile(ask):
+                # ask.py mode writes the .brainstorm/drafts/mode.json stamp.
+                ask_code, mode_out = _run_local(
+                    [sys.executable, ask, "mode"], stdin=text, timeout=15)
+                _print_block(mode_out)
+            else:
+                _print_block("PRELUDE-SKIP ask.py missing\n")
+                ask_code = 1
+            print("PACE: slow")
+            if ask_code:
+                return ask_code, (
+                    "NEXT: the mode stamp did not finish. Re-run open once. "
+                    "Do not launch lanes.")
+            return 0, _slow_brainstorm_next(pace, scripts)
         ctx_code = 0
         if os.path.isfile(ctx):
             ctx_code, out = _run_local(["sh", ctx], timeout=45)
@@ -701,9 +903,6 @@ def _prelude(args, text):
                    "Implement in this session, tests first, at most 3 files, "
                    "then stop. Do not re-run open."
                    ) + _ship("After those tests pass, and not before")
-        elif "MODE ask" in mode_out:
-            nxt = ("NEXT: show the ASK block and end the turn. "
-                   "Do not launch lanes. Do not re-run open.")
         elif "MODE fast" in mode_out:
             nxt = ("NEXT: PACE fast. Do not launch a lane. Do not read "
                    "architectural.md. In this message write "
@@ -735,6 +934,41 @@ def _prelude(args, text):
         _print_block(out)
         if code or "brief partial:" in (out or ""):
             return _ok_next(code, out, FAIL_NEXT)
+        if mode == "slow":
+            claims = os.path.join(scripts, "claims.py")
+            how = ("Filter every behavioral sentence through python3 %s "
+                   "--root . with CLAIM <quote> :: <chunk file> lines on "
+                   "stdin. Delete every DROP sentence; cap 2 re-binds. "
+                   "Do not re-run open." % claims)
+            if any(_line_prefix(out, mark) for mark in (
+                    "NOT_A_REPO", "GATHER_FAILED", "NO_BASE", "NO_MERGE_BASE",
+                    "EMPTY_DIFF")):
+                print("PACE: slow")
+                return 0, ("NEXT: PACE: slow. Say that marker in one line and "
+                           "stop. Zero more tool calls. Do not re-run open.")
+            if _line_prefix(out, "MODE=INLINE") or _line_prefix(out, "ONLY_NOISE"):
+                print("PACE: slow")
+                return 0, ("NEXT: PACE: slow, width INLINE. Write Part 1 and "
+                           "Part 2 now, then " + how)
+            if _line_prefix(out, "MODE=READ"):
+                print("PACE: slow")
+                return 0, ("NEXT: PACE: slow, width READ. One message, Read "
+                           "every chunk path in parallel, then write the "
+                           "answer, then " + how)
+            if _line_prefix(out, "MODE=FAN_OUT"):
+                print("PACE: slow")
+                return 0, ("NEXT: PACE: slow, width FAN_OUT. One message, at "
+                           "most 8 agents; each agent returns its section plus "
+                           "CLAIM <quote> :: <chunk file> lines. Do not Read "
+                           "the chunks yourself. Filter every CLAIM through "
+                           "python3 %s --root .; a chunk with zero surviving "
+                           "claims is re-dispatched once, then that chunk is "
+                           "UNVERIFIED, not a guess. Do not re-run open."
+                           % claims)
+            return _ok_next(code, out, (
+                "NEXT: PACE: slow. Act on the marker in the prelude "
+                "(NOT_A_REPO, EMPTY_DIFF, NO_BASE, MODE=INLINE, MODE=READ, "
+                "MODE=FAN_OUT), then " + how))
         if any(_line_prefix(out, mark) for mark in (
                 "NOT_A_REPO", "GATHER_FAILED", "NO_BASE", "NO_MERGE_BASE",
                 "EMPTY_DIFF")):
@@ -775,6 +1009,21 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "brief", args.spec], timeout=180)
         _print_block(out)
+        if mode == "slow":
+            success = ("NEXT: PACE: slow. Write the contracts from this brief, "
+                       "then one build call. Repairs are 3, read from the mode "
+                       "stamp inside plan_tool.py. The wide-contract split "
+                       "always runs. A task body that quotes an atom needs an "
+                       "assertion-shaped token (assert, expect, CHECK, or the "
+                       "atom inside a Run or Expected fence) or build prints "
+                       "ERR. When the plan passes its check and the user asked "
+                       "to implement, handoff.py next --self glm-writing-plans "
+                       "--event plan-ready. Do not take the inline path. "
+                       "Do not re-run open. Do not commit.")
+            rc, nxt = _ok_next(code, out, success, keep=True)
+            if rc == 0:
+                print("PACE: slow")
+            return rc, nxt
         fast = _chain_is_fast()
         short = fast or _line_count(args.spec) <= 80
         if fast:
@@ -803,6 +1052,18 @@ def _prelude(args, text):
 
     if name == "glm-dev-team":
         pace = pace_of(text)
+        if mode == "slow":
+            print("D=%s" % scripts)
+            print("PACE: slow")
+            if pace in ("direct", "short"):
+                return 0, _slow_fit_next(pace, scripts, "glm-dev-team")
+            return 0, ("NEXT: PACE: slow. One engine call using that D= path. "
+                       "The first call is the route-first rule (start, "
+                       "brief-debug, or review-pr). Profile is strict: every "
+                       "code slice is RED then GREEN with the mutant gate "
+                       "before review; the conductor prints PROFILE and "
+                       "MUTANT lines. Do not call next until a lane has "
+                       "finished. Do not re-run open.")
         if pace != "direct" and _chain_is_fast():
             pace = "fast"
         _set_pace_file(pace)
@@ -836,6 +1097,17 @@ def _prelude(args, text):
         print("S=%s" % scripts)
         tool = os.path.join(scripts, "debug_tool.py")
         if not args.probe_cmd:
+            if mode == "slow":
+                print("PACE: slow")
+            return 0, ("NEXT: PACE: slow. One probe call, python3 %s "
+                       "probe, with --cmd or --error-file. Two "
+                       "hypotheses, a control and a treatment, then "
+                       "close. Diagnose from the current code only; git "
+                       "history is not read. Flaky measures use "
+                       "stress.sh -n 200. close prints "
+                       "ROOT CAUSE only when its falsifier command was "
+                       "re-run and exited non-zero. Do not re-run open."
+                       % tool)
             pace = pace_of(text)
             print("PACE: %s" % pace)
             return 0, ("NEXT: PACE %s. One probe call, python3 %s probe, "
@@ -847,6 +1119,18 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "probe", "--cmd", args.probe_cmd], timeout=600)
         _print_block(out)
+        if mode == "slow":
+            print("PACE: slow")
+            swarm = "LANE: SWARM" in (out or "")
+            return _ok_next(
+                code, out,
+                "NEXT: PACE: slow. Follow the == NEXT == block. Two "
+                "hypotheses, a control and a treatment, then close%s. Flaky "
+                "measures use stress.sh -n 200. close prints ROOT CAUSE only "
+                "when its falsifier command was re-run and exited non-zero. "
+                "Do not re-run open or probe."
+                % ("" if swarm else ", one experiment call"),
+                keep=True)
         if "LANE: FAST" in (out or ""):
             print("PACE: direct")
             success = ("NEXT: PACE direct. Follow the == NEXT == block. "
@@ -881,6 +1165,17 @@ def _prelude(args, text):
         code, out = _run_local(
             [sys.executable, tool, "brief", "--spec", args.spec], timeout=180)
         _print_block(out)
+        if mode == "slow":
+            success = ("NEXT: PACE: slow. Write the checklist from this brief "
+                       "in this turn. Then one run call. A closing MATCHED or "
+                       "CONFLICT needs a quote that is a substring of the "
+                       "cited lines; a second judge runs in the same fan-out "
+                       "wave and the engine re-runs its counterexample "
+                       "command. Do not re-read the spec. Do not re-run open.")
+            rc, nxt = _ok_next(code, out, success, keep=True)
+            if rc == 0:
+                print("PACE: slow")
+            return rc, nxt
         short = _line_count(args.spec) <= 120
         agent_lane = "lane agent" in (out or "")
         if short and agent_lane:
@@ -910,6 +1205,24 @@ def _prelude(args, text):
             return 1, FAIL_NEXT
         code, out = _run_local(["bash", recon], timeout=180)
         _print_block(out)
+        if mode == "slow":
+            claims = os.path.join(scripts, "claims.py")
+            success = ("NEXT: PACE: slow. Launch writers only after the set is "
+                       "known; each writer returns its document plus CLAIM "
+                       "<quote> :: <file>:<line> lines for every behavioral "
+                       "sentence. Filter all CLAIM lines through python3 %s "
+                       "--root . and delete every sentence whose claim prints "
+                       "DROP; cap 2 re-binds. Then one glm-doc-reviewer pass "
+                       "that sees the document and the recon map; the engine "
+                       "checks its counterexample as a CLAIM. Reviewer agents "
+                       "are not limited to api-reference, data-model, and "
+                       "configuration. One reviewer wave, cap 8, is enough. "
+                       "Then one finish bash. Do not re-run open or recon."
+                       % claims)
+            rc, nxt = _ok_next(code, out, success, keep=True)
+            if rc == 0:
+                print("PACE: slow")
+            return rc, nxt
         pace = _doc_pace(text)
         if pace == "direct":
             success = ("NEXT: PACE direct. Write the one named document "

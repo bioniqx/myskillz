@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """Wait for a brainstorming answer, or start FAST and continue the chain.
 
-`mode` asks once unless the request already names FAST or refuses it.
-`fast` writes chain.json with mode fast and picks the scored leader even
-when decide would ask or stop. The 15-minute wait is unchanged: a stop or
-an unattacked leader is not a pick there. The chain file tells
-glm-writing-plans to hand the plan to glm-dev-team without another question.
+`mode` classifies FAST vs SLOW through handoff.mode_of and never asks: a
+request that names neither mode is FAST. `fast` writes chain.json with mode
+fast and picks the scored leader even when decide would ask or stop. The
+15-minute wait is unchanged: a stop or an unattacked leader is not a pick
+there. The chain file tells glm-writing-plans to hand the plan to
+glm-dev-team without another question.
 """
 import argparse
 import json
-import re
 import sys
 import time
 from pathlib import Path
 
 import check
 import decide
+from handoff import mode_of, read_mode_stamp
 
 DEFAULT_TIMEOUT = 900
 
@@ -58,63 +59,12 @@ def write_chain(path, pick, source, mode=None):
     dest.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
 
-_FAST_PHRASE = re.compile(
-    r"(\bfast[\s-]*mode\b"
-    r"|\bmode\s*[:=]?\s*fast\b"
-    r"|che\s*do\s*fast"
-    r"|\b(?:dung|use|using|bat|chay|lam)\s+(?:che\s*do\s+)?fast\b"
-    r"|--fast\b"
-    r"|/fast\b)")
-_FAST_CAPS = re.compile(r"(?<![A-Za-z])FAST(?![A-Za-z])")
-_FAST_REFUSE = re.compile(
-    r"(\b(?:khong|no|without|don't|dont|do not)\b.{0,30}\bfast\b"
-    r"|\bnot\s+fast\b"
-    r"|\bno\s*fast\b)")
-_REPLY_FAST = re.compile(r"^\s*(?:1\b|fast\b|yes\b|co\b|dung\b)")
-_REPLY_NORMAL = re.compile(r"^\s*(?:2\b|no\b|khong\b|thuong\b|normal\b)")
-
-
-def names_fast(text):
-    if _FAST_CAPS.search(text):
-        return True
-    return _FAST_PHRASE.search(check.fold_ascii(text)) is not None
-
-
-def refuses_fast(text):
-    return _FAST_REFUSE.search(check.fold_ascii(text)) is not None
-
-
-def classify_request(text):
-    """fast, normal, or ask. A refusal wins over a FAST phrase."""
-    if refuses_fast(text):
-        return "normal"
-    if names_fast(text):
-        return "fast"
-    return "ask"
-
-
-def classify_reply(text):
-    """The answer to the startup question. Anything else stays ask."""
-    if not text.strip():
-        return "ask"
-    if names_fast(text) and not refuses_fast(text):
-        return "fast"
-    if refuses_fast(text):
-        return "normal"
-    folded = check.fold_ascii(text)
-    if _REPLY_FAST.search(folded):
-        return "fast"
-    if _REPLY_NORMAL.search(folded):
-        return "normal"
-    return "ask"
-
-
 def _read_mode(path):
     try:
         kind = json.loads(Path(path).read_text(encoding="utf-8") or "{}").get("mode")
     except (OSError, json.JSONDecodeError):
         return ""
-    return kind if kind in ("fast", "normal") else ""
+    return kind if kind in ("fast", "slow", "normal") else ""
 
 
 def _write_mode(path, kind):
@@ -125,23 +75,13 @@ def _write_mode(path, kind):
 
 def cmd_mode(a):
     text = sys.stdin.read()
-    if text.strip():
-        kind = classify_reply(text) if a.reply else classify_request(text)
-    else:
-        kind = _read_mode(a.file) or "ask"
-    if kind in ("fast", "normal"):
-        _write_mode(a.file, kind)
+    kind = mode_of(text, _read_mode(a.file) or read_mode_stamp())
+    _write_mode(a.file, kind)
     print("MODE %s" % kind)
     if kind == "fast":
         print("NEXT: read fast.md and follow it. Do not ask which mode.")
-    elif kind == "normal":
-        print("NEXT: follow this skill's gates. Do not ask which mode.")
     else:
-        print("ASK: Use FAST mode?")
-        print("1. FAST - pick the best option, write the spec, write the plan, "
-              "run glm-dev-team until the code is done, and do not ask again.")
-        print("2. Normal - keep the approval gates.")
-        print("NEXT: show the ASK block and end the turn. Do not launch lanes.")
+        print("NEXT: follow this skill's gates. Do not ask which mode.")
     return 0
 
 
@@ -257,7 +197,8 @@ def cmd_wait(a):
 
 
 def cmd_chain(a):
-    write_chain(a.chain, a.pick, "user")
+    kind = mode_of("", _read_mode(a.mode) or read_mode_stamp())
+    write_chain(a.chain, a.pick, "user", mode=kind if kind in ("fast", "slow") else None)
     print("CHAIN %s" % a.pick)
     print("NEXT: handoff.py next --self glm-brainstorming --event architectural-approved")
     return 0
@@ -285,13 +226,8 @@ def main(argv=None):
     c = sub.add_parser("cancel")
     c.add_argument("--cancel", default=".brainstorm/drafts/ask.cancel")
     c.set_defaults(fn=cmd_cancel)
-    k = sub.add_parser("chain")
-    k.add_argument("--pick", required=True)
-    k.add_argument("--chain", default=".brainstorm/drafts/chain.json")
-    k.set_defaults(fn=cmd_chain)
     m = sub.add_parser("mode")
     m.add_argument("--file", default=".brainstorm/drafts/mode.json")
-    m.add_argument("--reply", action="store_true")
     m.set_defaults(fn=cmd_mode)
     f = sub.add_parser("fast")
     f.add_argument("--ledger", required=True)
@@ -299,6 +235,11 @@ def main(argv=None):
     f.add_argument("--chain", default=".brainstorm/drafts/chain.json")
     f.add_argument("--mode", default=".brainstorm/drafts/mode.json")
     f.set_defaults(fn=cmd_fast)
+    c = sub.add_parser("chain")
+    c.add_argument("--pick", required=True)
+    c.add_argument("--chain", default=".brainstorm/drafts/chain.json")
+    c.add_argument("--mode", default=".brainstorm/drafts/mode.json")
+    c.set_defaults(fn=cmd_chain)
     args = p.parse_args(argv)
     return args.fn(args)
 

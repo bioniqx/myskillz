@@ -4,7 +4,6 @@
 S="${DOCGEN_STATE_DIR:-.zcode/doc-gen}"; mkdir -p "$S"; {
 H=$(git rev-parse --short HEAD 2>/dev/null); [ -z "$H" ] && H=$( (find . -path ./.git -prune -o -type f -print0 2>/dev/null | xargs -0 ls -la 2>/dev/null) | cksum | tr -d ' ' | cut -c1-12);
 if [ -f "$S/recon.md" ] && [ "$(sed -n 's/^HEAD: //p' "$S/recon.md" | head -n 1)" = "$H" ]; then echo "=== CACHE HIT ==="; cat "$S/recon.md"; cat "$S/state.json" 2>/dev/null; exit 0; fi
-O=$(sed -n 's/^HEAD: //p' "$S/recon.md" 2>/dev/null | head -n 1); [ -n "$O" ] && { echo "=== CHANGED SINCE $O ==="; git diff --name-only "$O"..HEAD 2>/dev/null | head -200; }
 echo "HEAD: $H"; echo "ROOT: $(pwd)"
 FL=$(git ls-files 2>/dev/null); [ -z "$FL" ] && FL=$(find . -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/venv/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/target/*' -not -path '*/vendor/*' -not -path '*/.next/*' 2>/dev/null | sed 's|^\./||')
 echo "FILES: $(printf '%s\n' "$FL" | wc -l)"

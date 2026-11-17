@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
-# Debugging snapshot in one call: git state, recent changes, relevant toolchain versions, CPU count.
+# Debugging snapshot in one call: current git state, toolchain versions, CPU count.
+# No git history is read: the diagnosis works from the code as it is now.
 # Always exits 0. Output is capped to stay context-cheap.  Usage: snapshot.sh [dir]
 set +e
 . "$(dirname "$0")/_lib.sh"
 if [ -n "$1" ]; then cd "$1" 2>/dev/null || { echo "snapshot: no such dir: $1"; exit 0; }; fi
 echo "## cwd: $(pwd)   cpus: $(sd_cpus)   os: $(uname -sm)"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "## git: $(git rev-parse --abbrev-ref HEAD 2>/dev/null) @ $(git log -1 --pretty='%h %ad %s' --date=short 2>/dev/null)"
-  up=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) &&
-    echo "## upstream: $up (ahead/behind: $(git rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null | tr '\t' '/'))"
+  echo "## git: $(git rev-parse --abbrev-ref HEAD 2>/dev/null) @ $(git rev-parse --short HEAD 2>/dev/null)"
   st=$(git status --short 2>/dev/null); n=$(printf '%s' "$st" | grep -c . )
   echo "## uncommitted: $n file(s)"; printf '%s\n' "$st" | head -25 | grep .
-  git diff HEAD --stat 2>/dev/null | tail -1 | grep . | sed 's/^/## diff vs HEAD:/'
-  echo "## last 12 commits"; git log -12 --pretty='%h %ad %<(12,trunc)%an %s' --date=short 2>/dev/null
-  echo "## hot files (last 20 commits)"; git log -20 --name-only --pretty=format: 2>/dev/null | grep . | sort | uniq -c | sort -rn | awk '$1>1' | head -10
-  dep=$(git log -20 --pretty='%h %ad %s' --date=short -- package.json '*lock*' requirements*.txt pyproject.toml poetry.lock uv.lock go.mod go.sum Cargo.toml Cargo.lock Gemfile.lock composer.lock pom.xml build.gradle* '*.csproj' 2>/dev/null | head -5)
-  [ -n "$dep" ] && { echo "## dependency-file commits (last 20)"; echo "$dep"; }
   st=$(git stash list 2>/dev/null | head -3); [ -n "$st" ] && { echo "## stashes"; echo "$st"; }
 else
   echo "## not a git repository"

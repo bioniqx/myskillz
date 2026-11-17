@@ -36,7 +36,7 @@ for skill in $flash_skills; do
 done
 
 decide_src="$script_dir/decide.py"
-decide_skills="glm-brainstorming glm-writing-plans glm-dev-team glm-requirements-code-audit glm-systematic-debugging"
+decide_skills="glm-brainstorming glm-writing-plans glm-dev-team glm-requirements-code-audit glm-systematic-debugging glm-doc-generator glm-git-diff-summary"
 
 for skill in $decide_skills; do
     dest="$dest_root/$skill/scripts/decide.py"

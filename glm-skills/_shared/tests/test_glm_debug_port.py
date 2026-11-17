@@ -17,11 +17,9 @@ SKILL = os.path.dirname(SCRIPTS)
 TOOL = os.path.join(SCRIPTS, "debug_tool.py")
 LIB = os.path.join(SCRIPTS, "_lib.sh")
 STRESS = os.path.join(SCRIPTS, "stress.sh")
-BISECT = os.path.join(SCRIPTS, "bisect-parallel.sh")
 POLLUTER = os.path.join(SCRIPTS, "find-polluter.sh")
 SNAPSHOT = os.path.join(SCRIPTS, "snapshot.sh")
 
-STALE_PROBE = '#!/bin/sh\n[ -e junk ] && echo STALE >>"$LOG"\n: >junk\ngrep -q bad val && exit 1\nexit 0\n'
 MARK_PROBE = (
     "import os, time\n"
     "f = open(os.environ['MARK_FILE'], 'a')\n"
@@ -90,14 +88,6 @@ class Base(unittest.TestCase):
         self.commit(repo, "base")
         return repo
 
-    def history(self, total=7, bad_from=4):
-        repo = self.make_repo({".gitignore": "junk\n", "val": "good\n"})
-        good = self.git(repo, "rev-parse", "HEAD")
-        for i in range(1, total + 1):
-            self.write_files(repo, {"val": "good\n" if i < bad_from else "bad\n", "c%d" % i: "x\n"})
-            self.commit(repo, "c%d" % i)
-        return repo, good
-
     def run_cmd(self, argv, cwd=None, timeout=120, **extra):
         env = dict(self.env)
         env.update(extra)
@@ -148,35 +138,6 @@ class StressTests(Base):
         time.sleep(0.5)
         self.assertEqual(rc, 130)
         self.assertFalse(self.alive(marker))
-
-
-class BisectTests(Base):
-    def test_reused_worktree_is_cleaned_of_ignored_files(self):
-        repo, good = self.history()
-        probe = os.path.join(self.base, "probe.sh")
-        self.write_files(self.base, {"probe.sh": STALE_PROBE})
-        log = os.path.join(self.base, "stale.log")
-        done = self.run_cmd(["bash", BISECT, "-j", "1", good, "HEAD", "--", "sh", probe], cwd=repo, LOG=log)
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertIn("FIRST BAD COMMIT", done.stdout)
-        self.assertFalse(os.path.exists(log), "a reused worktree still held an ignored file from the last probe")
-
-    def test_sigint_kills_probes_and_removes_worktrees(self):
-        marker = "sleep 3575"
-        self.reap_later(marker)
-        repo, good = self.history()
-        proc = subprocess.Popen(["bash", BISECT, "-j", "2", "--no-verify", good, "HEAD", "--", "sleep", "3575"],
-                                cwd=repo, env=self.env, stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL, start_new_session=True)
-        self.assertTrue(wait_until(lambda: self.alive(marker), 20))
-        time.sleep(0.5)
-        proc.send_signal(signal.SIGINT)
-        rc = proc.wait(timeout=30)
-        time.sleep(0.5)
-        self.assertEqual(rc, 130)
-        self.assertFalse(self.alive(marker))
-        listing = self.git(repo, "worktree", "list", "--porcelain")
-        self.assertEqual(listing.count("worktree "), 1, listing)
 
 
 class PolluterTests(Base):

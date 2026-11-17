@@ -27,6 +27,7 @@ import os
 import posixpath
 import random
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1055,6 +1056,35 @@ VERIFY_RULES = u"""You are an adversarial verifier. A fast first pass produced a
 Reply exactly in this shape:
 """ + VERIFY_SCHEMA
 
+SECOND_SCHEMA = (
+    '{"id":"<the id>","kind":"COUNTEREXAMPLE|NO-BREAK",'
+    '"command":"<one command that fails when the requirement is violated; empty when you cite lines>",'
+    '"path":"<path from the cited lines>","lines":"10-12",'
+    '"quote":"<verbatim substring of those lines>"}'
+)
+
+SECOND_RULES = u"""You are a second judge. An earlier pass closed this requirement; you get the requirement and the exact lines its close cited, and nothing else -- no verdict, no notes, no other code. Try to OVERTURN the close. Reply with ONE JSON object and nothing else.
+
+1. The requirement is the only specification. Judge only from the cited lines shown. Never write that you searched for something.
+2. kind COUNTEREXAMPLE when the requirement is violated; NO-BREAK when the cited lines hold up under the exact wording: limits, defaults, error paths, edge conditions.
+3. COUNTEREXAMPLE carries EITHER a command OR a path+lines+quote, never both. The command is one line, runnable from the codebase root, no network and no writes, and it must exit non-zero when the requirement is violated. The quote is copied verbatim from the cited lines.
+4. NO-BREAK leaves command, path, lines and quote empty.
+5. An invented path, an out-of-range line or an invented quote is ignored: the engine re-runs every command and every quote before anything counts.
+
+Reply exactly in this shape:
+""" + SECOND_SCHEMA
+
+
+def second_prefix():
+    """SLOW wave C shares no cache prefix with waves A/B: its prompt carries
+    the rules and nothing else -- no repository map, no root, no retrieval."""
+    return SECOND_RULES
+
+
+def second_task(it, snips):
+    return (item_block(it) + u"\n" + snips_block(snips, u"CITED LINES") +
+            u"\nAttack requirement %s now. JSON only." % it.get("id"))
+
 PARSE_SCHEMA = (
     '{"id":"REQ-001","text":"faithful restatement in the document\'s language; quote load-bearing phrases",'
     '"strength":"MUST|SHOULD|MAY","category":"auth","stakes":"high|normal",'
@@ -1770,6 +1800,7 @@ class Merged(object):
         self.ver = {}
         self.ver_rejected = {}
         self.adj = {}
+        self.second = {}
         for r, _b in [read_jsonl(c.p("findings.jsonl"))]:
             for row in r:
                 if row.get("id"):
@@ -1784,6 +1815,10 @@ class Merged(object):
                     old = self.find.get(rid)
                     if old is None or _better(row, old):
                         self.find[rid] = row
+        for r, _b in [read_jsonl(c.p("second.jsonl"))]:
+            for row in r:
+                if row.get("id"):
+                    self.second[row["id"]] = row
         for r, _b in [read_jsonl(c.p("verdicts.jsonl"))]:
             for row in r:
                 self._add_verdict(row)
@@ -1878,6 +1913,263 @@ def _better(a, b):
     ca = {"low": 0, "medium": 1, "high": 2}
     return (rank.get(str(a.get("status")).upper(), 0), ca.get(a.get("confidence"), 0)) > \
            (rank.get(str(b.get("status")).upper(), 0), ca.get(b.get("confidence"), 0))
+
+
+# --------------------------------------------------------------------------- slow mode (wave C)
+# SLOW only, and only while the mode stamp under this audit's repo says slow.
+# FAST (no stamp, or a fast stamp) runs byte-for-byte the old pipeline.
+
+
+def slow_stamp(c):
+    """True when the first field of <repo>/.claude/dev-team/mode is `slow`.
+    Same stamp the handoff prelude writes; audit resolves the repo the way it
+    always has (config repo_root, else cwd)."""
+    try:
+        with io.open(os.path.join(c.repo, ".claude", "dev-team", "mode"),
+                     encoding="utf-8") as fh:
+            parts = fh.readline().split()
+    except OSError:
+        return False
+    return bool(parts) and parts[0] == "slow"
+
+
+def closing_of(f, v):
+    """The (status, row) an item closes with before the lead adjudicates: the
+    verifier verdict when it agrees with the finding, else the finding.
+    Mirrors Merged.final/Merged.evidence without touching the disk."""
+    vs = str((v or {}).get("verified_status") or "").upper()
+    fs = str((f or {}).get("status") or "").upper()
+    if v and vs == fs and vs in FINAL_STATUSES:
+        return vs, v
+    return (fs if fs in FINAL_STATUSES else "UNSEARCHED"), (f or {})
+
+
+def cited_snips(root, evidence, limit=6, max_lines=40):
+    """Numbered excerpts, in the wave's "N| " convention, of the exact lines a
+    closing row cited. The wave C prompt carries these and nothing else."""
+    out = []
+    for e in (evidence or [])[:limit]:
+        path, outside = norm_cite_path(e.get("path") or e.get("file"), root)
+        a, b = parse_lines(e.get("lines") or e.get("line"))
+        if not path or outside or a is None:
+            continue
+        lines = (span_text(root, path, a, b) or "").splitlines()
+        if not lines:
+            continue
+        b = min(b or a, a + len(lines) - 1, a + max_lines - 1)
+        body = u"\n".join(u"%d| %s" % (i, lines[i - a][:300]) for i in range(a, b + 1))
+        out.append({"path": path, "start": a, "end": b, "text": body})
+    return out
+
+
+def _run_command(cmd, root, timeout=60):
+    """Bounded re-run of a judge-supplied command. Exit code only; a command
+    that cannot be parsed, spawned or finished in time counts as 0, so a
+    counterexample never reproduces on an infrastructure hiccup."""
+    try:
+        argv = shlex.split(cmd)
+    except ValueError:
+        return 0
+    if not argv:
+        return 0
+    try:
+        proc = subprocess.run(argv, cwd=root, timeout=timeout,
+                              capture_output=True, text=True)
+    except (OSError, subprocess.TimeoutExpired):
+        return 0
+    return proc.returncode
+
+
+def second_reproduces(root, row):
+    """True only when the ENGINE reproduced the counterexample: a command whose
+    re-run exits non-zero, or a path:lines quote that is a substring of those
+    lines. NO-BREAK never reproduces. The model never sets this."""
+    if str(row.get("kind") or "").upper() != "COUNTEREXAMPLE":
+        return False
+    cmd = str(row.get("command") or "").strip()
+    if cmd:
+        return _run_command(cmd, root) != 0
+    probe = {"attack": {"kind": "COUNTEREXAMPLE", "path": row.get("path"),
+                        "lines": row.get("lines"), "quote": row.get("quote")}}
+    return attack_result(root, probe) == "counter"
+
+
+def _second_row(rid, raw, root):
+    """Normalise one second-judge reply. reproduced is engine-only."""
+    kind = str((raw or {}).get("kind") or "").strip().upper()
+    row = {"id": rid,
+           "kind": kind if kind in ("COUNTEREXAMPLE", "NO-BREAK") else "",
+           "command": clip(str((raw or {}).get("command") or ""), 400),
+           "path": str((raw or {}).get("path") or "").strip(),
+           "lines": str((raw or {}).get("lines") or "").strip(),
+           "quote": str((raw or {}).get("quote") or "").strip()}
+    row["reproduced"] = second_reproduces(root, row)
+    return row
+
+
+def second_one(cl, model_effort, prefix, it, evidence, root, mt):
+    """SLOW wave C: one fresh judge over the checklist item plus the lines its
+    close cited, and nothing else -- no preliminary verdict, no prior judge
+    output. The reply only proposes; the engine re-runs it before it counts."""
+    model, effort = model_effort
+    txt = cl.call(model, effort, prefix,
+                  second_task(it, cited_snips(root, evidence)), mt, temperature=0.0)
+    raw = extract_json(txt) or {}
+    if not raw and txt:
+        up = txt.upper()
+        if "NO-BREAK" in up or "COUNTEREXAMPLE" in up:
+            raw = {"kind": "NO-BREAK" if "NO-BREAK" in up else "COUNTEREXAMPLE"}
+    return _second_row(it.get("id"), raw, root)
+
+
+def slow_drop_unquoted(c, m):
+    """SLOW: a closing MATCHED or CONFLICT whose closing quote is not a
+    substring of the cited lines is dropped -- the finding row reopens as
+    UNSEARCHED, so `run --resume` re-judges it instead of trusting a
+    paraphrase. Local and always-run: it fires whether or not the second judge
+    answered. A reproduced counterexample (attack_result 'counter') is
+    engine-verified evidence, not a paraphrase, and stays with the queue."""
+    want = {}
+    for it in m.items:
+        rid = it.get("id")
+        if not rid or rid in m.adj or _tagged_unverifiable(it):
+            continue
+        if (m.find.get(rid) or {}).get("second_conflict"):
+            continue  # engine-verified counterexample, not a paraphrase
+        if m.final(rid)[0] not in ("MATCHED", "CONFLICT"):
+            continue
+        if attack_result(c.repo, m.ver.get(rid)) in ("absent", "missing"):
+            want[rid] = True
+    if not want:
+        return []
+    dropped = []
+    paths = [c.p("findings.jsonl")]
+    if os.path.isdir(c.p("findings")):
+        paths += [c.p("findings", n) for n in sorted(os.listdir(c.p("findings")))
+                  if n.endswith(".jsonl")]
+    for p in paths:
+        rows, _b = read_jsonl(p)
+        changed = False
+        for row in rows:
+            rid = row.get("id")
+            if (rid in want and str(row.get("status") or "").upper() in FINAL_STATUSES):
+                row["status"] = "UNSEARCHED"
+                row["confidence"] = "low"
+                row["notes"] = "slow drop: the closing quote is not a substring " \
+                               "of the cited lines"
+                changed = True
+                if rid not in dropped:
+                    dropped.append(rid)
+        if changed:
+            write_jsonl(p, rows)
+    return dropped
+
+
+def apply_second_conflicts(c, sec_rows):
+    """SLOW: a second-judge COUNTEREXAMPLE the engine reproduced sets the
+    item to CONFLICT. The flip lands in the finding row (flagged
+    second_conflict so the drop pass leaves it alone), evidence carries the
+    quote form when there is one, and the note names what reproduced."""
+    flipped = []
+    by_rid = {rid: row for rid, row in (sec_rows or {}).items()
+              if row.get("reproduced")
+              and str(row.get("kind") or "").upper() == "COUNTEREXAMPLE"}
+    if not by_rid:
+        return flipped
+    paths = [c.p("findings.jsonl")]
+    if os.path.isdir(c.p("findings")):
+        paths += [c.p("findings", n) for n in sorted(os.listdir(c.p("findings")))
+                  if n.endswith(".jsonl")]
+    for p in paths:
+        rows, _b = read_jsonl(p)
+        changed = False
+        for row in rows:
+            rid = row.get("id")
+            sec = by_rid.get(rid)
+            if sec is None:
+                continue
+            row["status"] = "CONFLICT"
+            row["confidence"] = "high"
+            row["second_conflict"] = True
+            if sec.get("path") and sec.get("lines") and sec.get("quote"):
+                row.setdefault("evidence", []).append(
+                    {"path": sec["path"], "lines": sec["lines"],
+                     "quote": sec["quote"], "note": "second judge counterexample"})
+            row["notes"] = "second judge COUNTEREXAMPLE reproduced by the engine%s" % (
+                u": " + sec["command"] if sec.get("command") else u"")
+            changed = True
+            if rid not in flipped:
+                flipped.append(rid)
+        if changed:
+            write_jsonl(p, rows)
+    return flipped
+
+
+def _second_ingest(c):
+    """Agent-lane wave C ingest: raw worker rows are engine-verified (commands
+    re-run, quotes re-checked as substrings) and only then folded into
+    second.jsonl. The model never writes reproduced."""
+    got = {}
+    d = c.p("second")
+    for name in sorted(os.listdir(d) if os.path.isdir(d) else []):
+        if not name.endswith(".jsonl"):
+            continue
+        rows, _b = read_jsonl(os.path.join(d, name))
+        for raw in rows:
+            if isinstance(raw, dict) and raw.get("id"):
+                got[raw["id"]] = _second_row(raw["id"], raw, c.repo)
+    if not got:
+        return
+    prev = {}
+    for r, _b in [read_jsonl(c.p("second.jsonl"))]:
+        for row in r:
+            if row.get("id"):
+                prev[row["id"]] = row
+    prev.update(dict((rid, row) for rid, row in got.items() if row.get("kind")))
+    if prev:
+        write_jsonl(c.p("second.jsonl"), [prev[k] for k in sorted(prev)])
+
+
+def _second_wave_agent(c, m, st):
+    """Agent-lane SLOW wave C. Returns None while a batch is still out, else
+    the list of reproduced-counterexample ids just applied to the findings."""
+    closing = [it["id"] for it in m.items
+               if it.get("id") and it["id"] not in m.adj
+               and not _tagged_unverifiable(it)
+               and m.final(it["id"])[0] in ("MATCHED", "CONFLICT")]
+    done_sec = set(m.second)
+    out_ids = set()
+    for b in (st.get("sbatches") or {}).values():
+        out_ids.update(b.get("ids") or [])
+    todo = [rid for rid in closing if rid not in done_sec and rid not in out_ids]
+    waiting = [rid for rid in closing if rid in out_ids and rid not in done_sec]
+    if todo:
+        name = "batch-C%02d" % (len(st.get("sbatches") or {}) + 1)
+        mk(c.p("second"))
+        L = [u"# SECOND JUDGE %s" % name, u""]
+        L.append(SECOND_RULES)
+        for rid in todo:
+            L.append(u"=" * 70)
+            L.append(second_task(m.by_id.get(rid) or {},
+                                 cited_snips(c.repo, m.evidence(rid))))
+        L.append(u"=" * 70)
+        L.append(u"Output file (JSONL, one object per requirement, no prose): %s"
+                 % c.p("second", name + ".jsonl"))
+        L.append(u"Write the file, then reply with exactly one line: %s done: k/n written"
+                 % name)
+        p = c.p("batches", name + ".md")
+        write_text(p, u"\n".join(L))
+        st.setdefault("sbatches", {})[name] = {"ids": todo, "wave": "C",
+                                               "dispatched": ts_iso()}
+        print("")
+        _print_dispatch(c, "C", [(name, p)], "glm-rca-verifier", "verify",
+                        "DISPATCH second judges (one batch)")
+        return None
+    if waiting:
+        print("  waiting on %d second-judge result(s) already dispatched: %s"
+              % (len(waiting), ", ".join(waiting[:20])))
+        return None
+    return apply_second_conflicts(c, m.second)
 
 
 # --------------------------------------------------------------------------- lane detection
@@ -2347,7 +2639,7 @@ def _client(c):
 # --------------------------------------------------------------------------- run (api lane)
 
 
-def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, warm_judge=None, warm_verify=None) -> (list, list):
+def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, warm_judge=None, warm_verify=None, second_fn=None, should_second=None, seconds=None) -> (list, list):
     """One completion-aware pool pass over items.
 
     Submits every judge job to the shared pool, then submits each item's
@@ -2357,10 +2649,25 @@ def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, wa
     Returns (findings, verdicts): two lists aligned with items; verdicts
     holds None where no verify job ran. In-flight work is bounded by the
     pool's own width; nothing here touches the disk or the client stats.
+
+    SLOW wave C, same pool: with second_fn set, an item whose finding (or
+    finding+verdict) closes as MATCHED or CONFLICT gets one more judge job
+    inside this same wave -- should_second(it, finding_row, verdict_pair)
+    gates it, second_fn(it, finding_row, verdict_pair) returns (value, err),
+    and results land in the optional `seconds` dict keyed by item index. A
+    failed second call is recorded as an error pair and flips nothing.
     """
     pending = {}
     findings = {}
     verdicts = {}
+
+    def queue_second(i, fpair, vpair):
+        if second_fn is None or fpair is None or fpair[1] is not None:
+            return
+        if should_second is not None and not should_second(items[i], fpair[0], vpair):
+            return
+        pending[fan.submit(second_fn, items[i], fpair[0], vpair)] = (i, "second")
+
     if items and warm_judge is not None:
         try:
             warm_judge()
@@ -2377,6 +2684,7 @@ def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, wa
             if phase == "judge":
                 findings[i] = (value, err)
                 if err is not None or not should_verify(items[i], value):
+                    queue_second(i, findings[i], None)
                     continue
                 if not verify_warmed:
                     verify_warmed = True
@@ -2385,8 +2693,12 @@ def run_judge_verify_pipeline(items, judge_fn, verify_fn, should_verify, fan, wa
                     except Exception as e:
                         print("verified warm-up failed: %s" % clip(str(e), 120), file=sys.stderr)
                 pending[fan.submit(verify_fn, items[i], value)] = (i, "verify")
-            else:
+            elif phase == "verify":
                 verdicts[i] = (value, err)
+                queue_second(i, findings.get(i), verdicts[i])
+            else:
+                if seconds is not None:
+                    seconds[i] = (value, err)
     return ([findings.get(i) for i in range(len(items))],
             [verdicts.get(i) for i in range(len(items))])
 
@@ -2465,10 +2777,14 @@ def cmd_run(a):
         prev_ver = dict((r["id"], r) for r in vrows if r.get("id"))
     warm_judge = warm_call(cl, c.tcfg["judge"], jp) if len(live) >= 6 else None
     warm_verify = warm_call(cl, c.tcfg["verify"], vp) if len(live) >= 6 else None
+    slow = slow_stamp(c)
     print("WAVES A+B  %d requirements  %d threads  judge=%s effort=%s  verify=%s effort=%s  retrieval=%s"
           % (len(live), min(c.threads, len(live)) if live else 0,
              c.tcfg["judge"][0], c.tcfg["judge"][1],
              c.tcfg["verify"][0], c.tcfg["verify"][1], retr.engine_name()))
+    if slow:
+        print("WAVE C     slow stamp: one second judge per closing MATCHED/CONFLICT, "
+              "in the same pool; the engine re-runs every counterexample")
 
     def judge_fn(it):
         try:
@@ -2486,10 +2802,26 @@ def cmd_run(a):
     def should_verify(it, row):
         return should_verify_item(a.no_verify, it, row)
 
+    def should_second(it, frow, vpair):
+        vrow = vpair[0] if (vpair and vpair[1] is None) else None
+        return closing_of(frow, vrow)[0] in ("MATCHED", "CONFLICT")
+
+    def second_fn(it, frow, vpair):
+        try:
+            vrow = vpair[0] if (vpair and vpair[1] is None) else None
+            _st, crow = closing_of(frow, vrow)
+            return second_one(cl, c.tcfg["verify"], second_prefix(), it,
+                              (crow or {}).get("evidence") or [], c.repo, mt), None
+        except Exception as e:
+            return None, e
+
     fan = Fan(cl, c.threads)
+    sec_out = {}
     findings, verdicts = run_judge_verify_pipeline(
         live, judge_fn, verify_fn, should_verify, fan,
-        warm_judge=warm_judge, warm_verify=warm_verify)
+        warm_judge=warm_judge, warm_verify=warm_verify,
+        second_fn=second_fn if slow else None,
+        should_second=should_second, seconds=sec_out)
     rows = dict(done)
     for it, pair in zip(live, findings):
         rid = it["id"]
@@ -2537,14 +2869,49 @@ def cmd_run(a):
         # kept + new verdicts together, so a --resume never drops settled ones
         write_jsonl(c.p("verdicts.jsonl"), [verdicts[i] for i in order if i in verdicts])
 
+    sec_rows = {}
+    if slow:
+        for i in sorted(sec_out):
+            rid = live[i]["id"]
+            row, err = sec_out[i]
+            if err is not None:
+                # a failed judge call flips nothing: the item keeps the status
+                # and stays subject to the ordinary open-item rules
+                print("WARN  second %s failed: %s" % (rid, clip(str(err), 120)))
+                continue
+            sec_rows[rid] = row
+        if sec_rows:
+            prev_sec = {}
+            for r, _b in [read_jsonl(c.p("second.jsonl"))]:
+                for row in r:
+                    if row.get("id"):
+                        prev_sec[row["id"]] = row
+            prev_sec.update(sec_rows)
+            write_jsonl(c.p("second.jsonl"), [prev_sec[i] for i in order if i in prev_sec])
+
     st = c.state()
     st["run"] = {"at": ts_iso(), "seconds": round(now() - t0, 1), "tier": c.tier,
                  "wave_a": len(live), "wave_b": len(verdicts), "skipped_tagged": len(skipped),
                  "calls": cl.calls, "in_tokens": cl.in_tok, "out_tokens": cl.out_tok,
                  "cached_in_tokens": cl.cache_read, "peak_threads": fan.peak}
+    if slow:
+        st["run"]["wave_c"] = len(sec_rows)
+        st["run"]["second_reproduced"] = sum(
+            1 for r in sec_rows.values() if r.get("reproduced"))
     c.save_state(st)
 
     m = Merged(c)
+    if slow:
+        flipped = apply_second_conflicts(c, sec_rows)
+        if flipped:
+            print("  slow: %d reproduced counterexample(s) set to CONFLICT: %s"
+                  % (len(flipped), ", ".join(flipped[:8])))
+            m = Merged(c)
+        dropped = slow_drop_unquoted(c, m)
+        if dropped:
+            print("  slow: dropped %d closing finding(s) whose quote is not a substring "
+                  "of the cited lines: %s" % (len(dropped), ", ".join(dropped[:8])))
+            m = Merged(c)
     cnt = m.counts()
     print("")
     print("RUN DONE  %s   %d api calls, %d in / %d out tokens, %d cached in"
@@ -2555,6 +2922,9 @@ def cmd_run(a):
     dis = m.disagreements()
     if dis:
         print("  verifier overturned %d preliminary finding(s)" % len(dis))
+    if slow:
+        print("  wave C: %d second judge(s), %d reproduced counterexample(s)"
+              % (len(sec_rows), sum(1 for r in sec_rows.values() if r.get("reproduced"))))
     if cnt["UNSEARCHED"]:
         print("  %d unsettled -- rerun with: audit.py run --resume" % cnt["UNSEARCHED"])
     print("")
@@ -3304,6 +3674,9 @@ def cmd_plan(a):
 
 def cmd_status(a):
     c = Ctx(a.out)
+    slow = slow_stamp(c)
+    if slow:
+        _second_ingest(c)
     m = Merged(c)
     st = c.state()
     items = m.items
@@ -3361,6 +3734,24 @@ def cmd_status(a):
         print("NEXT: when the verifiers report, run audit.py status again "
               "(audit.py status --redispatch re-packs them if a worker was lost)")
         return
+    if slow:
+        # SLOW: the local substring check always runs; wave C is one batch on
+        # the agent lane and the engine re-verifies whatever it wrote.
+        dropped = slow_drop_unquoted(c, m)
+        if dropped:
+            print("  slow: dropped %d closing finding(s) whose quote is not a substring "
+                  "of the cited lines: %s" % (len(dropped), ", ".join(dropped[:8])))
+            m = Merged(c)
+        flipped = _second_wave_agent(c, m, st)
+        if flipped is None:
+            c.save_state(st)
+            print("")
+            print("NEXT when they report: audit.py status again, then audit.py queue")
+            return
+        if flipped:
+            print("  slow: %d reproduced counterexample(s) set to CONFLICT: %s"
+                  % (len(flipped), ", ".join(flipped[:8])))
+            m = Merged(c)
     cnt = m.counts()
     print("")
     print("MATCHED %d  PARTIAL %d  MISSING %d  CONFLICT %d  UNVERIFIABLE %d  UNSEARCHED %d"

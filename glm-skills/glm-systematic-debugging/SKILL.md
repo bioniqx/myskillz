@@ -33,7 +33,7 @@ You emit few parallel tool calls per turn, and each turn costs seconds of latenc
 | Any N commands | `python3 $S/debug_tool.py run -j 8 'cmd1' 'cmd2' 'cmd3'` | N separate Bash calls |
 | Hypotheses | `python3 $S/debug_tool.py experiment --spec exp.json -j 16` | N subagents, each running one experiment |
 | Judgment fan-out | `python3 $S/debug_tool.py scan --area A --area B --question '...'` | N subagents reading N areas |
-| Flaky / bisect / polluter | `bash $S/stress.sh` · `bash $S/bisect-parallel.sh` · `bash $S/find-polluter.sh` | dozens of sequential reruns |
+| Flaky / polluter | `bash $S/stress.sh` · `bash $S/find-polluter.sh` | dozens of sequential reruns |
 
 Rules:
 
@@ -55,6 +55,8 @@ Take the lane `probe` printed. `probe` routes on the error text alone, so overri
 A null / undefined / None / nil / KeyError / index-out-of-range error is never FAST: the bad value was created somewhere upstream of the line that crashed.
 
 ## R3. FAST lane — 2 rounds
+
+When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`; the slow branch replaces this lane routing.
 
 The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
 
@@ -85,7 +87,7 @@ The `== NEXT ==` block is the whole round. Do not open a reference and do not sc
 Read `references/parallel-playbook.md` in the same call as the first command below.
 
 1. Intermittent → `bash $S/stress.sh -n 40 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball. Re-run at `-n 200` only when that interval is too wide to decide.
-2. Regression, culprit unknown → copy the repro outside the repo, then `bash $S/bisect-parallel.sh -j 15 <good> HEAD -- sh /tmp/repro.sh` (⌈log₁₆ N⌉ rounds instead of ⌈log₂ N⌉).
+2. Regression, culprit unknown → diagnose from the current code: read the code path the repro exercises (`debug_tool.py run -j` for parallel greps/reads) and hypothesize; git history is not read.
 3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
 4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to at most 8 workers at once itself (`-j` above 8 is clamped), with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `glm-debug-worker` agent instead — dispatch them in waves of 8 per message (the provider's full concurrent-call budget); ZCode runs subagents launched together in parallel. Beyond ~6 agent workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
 5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.

@@ -187,6 +187,8 @@ approach. The plan file stays portable (R8).
 
 # R7 - Inline path (N <= 1, or PACE short)
 
+`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`.
+
 `PACE: short` means the spec is short enough that a writer fan-out costs more
 than it checks. Read `references/body-rules.md` in this skill directory for the body format.
 Write the skeleton and Contracts, then `<!-- TASKS -->`, then each task as

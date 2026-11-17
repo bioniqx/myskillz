@@ -53,8 +53,7 @@ or a better decision.
 
 Code axes: by subsystem or package; by concern (auth, persistence,
 messaging, config, errors, tests, CI/deploy, observability); by artifact
-(README/ADRs/specs, migrations, API schemas, `git log --since=30.days
---stat`, TODOs); by open question from the scope check.
+(README/ADRs/specs, migrations, API schemas, TODOs); by open question from the scope check.
 
 Web axes — pick only those the decision needs:
 

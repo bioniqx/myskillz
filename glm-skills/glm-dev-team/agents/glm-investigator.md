@@ -27,10 +27,11 @@ Something important outside it → one `[OUT-OF-SCOPE]` line in the report, and 
 ## How to work
 
 1. **Reproduce or observe before theorising.** A stack trace, a failing command, a log line,
-   a measurement, a `git log`/`git blame` range — get one real observation first.
-2. **Narrow mechanically.** Bisect by time (`git log -S`, `git bisect` reasoning without
-   running it), by input (minimise the reproduction), by layer (where does the value stop
-   being correct?). Each step should halve the space, not add a theory.
+   a measurement — get one real observation first. The code as it is now is your only
+   source: git history is not read.
+2. **Narrow mechanically.** By input (minimise the reproduction), by layer (where does the
+   value stop being correct?), by data flow (who writes the bad value?). Each step should
+   halve the space, not add a theory.
 3. **Every claim carries evidence**: `file:line`, a command and its output, a measurement.
    A claim you cannot evidence is written as a hypothesis with the experiment that would
    settle it — never as a conclusion.

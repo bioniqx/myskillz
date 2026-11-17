@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -114,3 +115,94 @@ class CliTests(unittest.TestCase):
         self.assertIn("ATOM: must retry", out)
         self.assertIn("DROP: ATOM: not in source", out)
         self.assertIn("FROZEN n=1", out)
+
+
+class ProveCapTests(unittest.TestCase):
+    def _ledger(self, n):
+        return {"facts": [
+            {"id": "F-%d" % (i + 1), "kind": "web", "status": "OK",
+             "loc": "https://example.org/%d" % i, "text": "quote"}
+            for i in range(n)]}
+
+    def test_cap_4_stays_the_default(self):
+        ledger = self._ledger(6)
+        decide.prove_ledger(ledger, fetch=lambda url: ("quote", ""))
+        self.assertEqual(
+            [f["status"] for f in ledger["facts"]],
+            ["OK"] * 4 + ["UNPROVEN"] * 2)
+        self.assertEqual(ledger["facts"][4]["reason"], "cap")
+
+    def test_cap_8_proves_eight_and_clamps(self):
+        ledger = self._ledger(9)
+        decide.prove_ledger(ledger, cap=8, fetch=lambda url: ("quote", ""))
+        self.assertEqual(
+            [f["status"] for f in ledger["facts"]],
+            ["OK"] * 8 + ["UNPROVEN"])
+        ledger = self._ledger(3)
+        decide.prove_ledger(ledger, cap=99, fetch=lambda url: ("", "x"))
+        self.assertEqual([f["status"] for f in ledger["facts"]], ["UNPROVEN"] * 3)
+
+    def test_offline_never_opens_a_socket_even_at_cap_8(self):
+        ledger = self._ledger(2)
+        with mock.patch.object(decide.urllib.request, "urlopen") as up:
+            decide.prove_ledger(ledger, offline=True, cap=8)
+        up.assert_not_called()
+        self.assertEqual(
+            [f["reason"] for f in ledger["facts"]], ["offline"] * 2)
+
+
+class ClaimTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+
+    def write(self, name, body):
+        path = os.path.join(self.root, name)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(body)
+        return path
+
+    def test_a_substring_of_the_file_is_kept_and_a_paraphrase_is_dropped(self):
+        self.write("app.py", "def add(a, b):\n    return a + b\n")
+        buf = io.StringIO()
+        stdin = ("CLAIM return a + b :: app.py\n"
+                 "CLAIM adds the two values :: app.py\n"
+                 "CLAIM return a + b :: missing.py\n"
+                 "CLAIM no loc line\n")
+        with redirect_stdout(buf), mock.patch("sys.stdin", io.StringIO(stdin)):
+            code = decide.main(["claim", "--root", self.root])
+        out = buf.getvalue()
+        self.assertEqual(code, 0, out)
+        self.assertIn("KEEP CLAIM return a + b :: app.py", out)
+        self.assertIn("DROP CLAIM adds the two values :: app.py", out)
+        self.assertIn("DROP CLAIM return a + b :: missing.py", out)
+        self.assertIn("DROP CLAIM no loc line", out)
+        self.assertIn("RESULT claim keep=1 drop=3", out)
+
+    def test_a_quote_over_25_words_is_dropped(self):
+        self.write("app.py", "x = 1\n")
+        long_quote = " ".join(["word"] * 26)
+        self.assertFalse(decide.claim_ok(self.root, "app.py", long_quote))
+        self.assertTrue(decide.claim_ok(self.root, "app.py", "x = 1"))
+
+    def test_a_path_that_escapes_the_root_is_dropped(self):
+        outside = self.write("outside.py", "secret = 1\n")
+        self.assertFalse(decide.claim_ok(self.root, "../%s" % os.path.basename(outside), "secret = 1"))
+        self.assertFalse(decide.claim_ok(self.root, outside, "secret = 1"))
+
+    def test_a_gather_chunk_loc_compares_against_the_chunk_bytes(self):
+        chunk_dir = os.path.join(tempfile.mkdtemp(prefix="glm-gds.claim"), "c")
+        os.makedirs(chunk_dir)
+        self.addCleanup(shutil.rmtree, chunk_dir, True)
+        chunk = os.path.join(chunk_dir, "001.patch")
+        with open(chunk, "w", encoding="utf-8") as fh:
+            fh.write("+def sub(a, b):\n+    return a - b\n")
+        self.assertTrue(decide.claim_ok(self.root, chunk, "return a - b"))
+        self.assertFalse(decide.claim_ok(self.root, chunk, "handles errors"))
+
+    def test_a_line_loc_uses_the_cite_window_when_check_is_beside(self):
+        sys.path.insert(0, os.path.join(HERE, "..", "..", "glm-brainstorming", "scripts"))
+        self.write("app.py", "\n".join(
+            ["line %d" % i for i in range(1, 7)] + ["    return a + b"]))
+        self.assertTrue(decide.claim_ok(self.root, "app.py:7", "return a + b"))
+        self.assertFalse(decide.claim_ok(self.root, "app.py:1", "return a + b"))

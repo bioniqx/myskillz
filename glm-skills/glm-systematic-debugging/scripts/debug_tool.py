@@ -106,6 +106,16 @@ def repo_root(d="."):
     return out.strip() if rc == 0 and out.strip() else None
 
 
+def stamp_mode(root):
+    """First field of <root>/.claude/dev-team/mode: fast, slow, or empty."""
+    try:
+        with open(os.path.join(root, ".claude", "dev-team", "mode"), encoding="utf-8") as fh:
+            first = fh.readline().split()
+    except OSError:
+        return ""
+    return first[0] if first else ""
+
+
 def pmap(fn, items, j):
     """Ordered parallel map."""
     if not items:
@@ -280,6 +290,7 @@ def grep(root, pattern, literal, cap):
 
 def cmd_probe(a):
     root = repo_root(a.dir) or os.path.abspath(a.dir)
+    slow = stamp_mode(root) == "slow"
     err = ""
     if a.error_file:
         err = Path(a.error_file).read_text("utf-8", "replace")
@@ -313,13 +324,6 @@ def cmd_probe(a):
             jobs["grep_error"] = ex.submit(grep, root, sig, True, a.max_grep)
         for s in symbols:
             jobs["grep_" + s] = ex.submit(grep, root, s, True, a.max_grep)
-            jobs["hist_" + s] = ex.submit(
-                sh, "git log --oneline -S%s -6 -- . 2>/dev/null" % shlex.quote(s), root, 60)
-        if a.since:
-            jobs["diffstat"] = ex.submit(
-                sh, "git diff %s..HEAD --stat 2>/dev/null | tail -25" % shlex.quote(a.since), root, 60)
-            jobs["difflog"] = ex.submit(
-                sh, "git log --oneline %s..HEAD 2>/dev/null | head -20" % shlex.quote(a.since), root, 60)
         frames = parse_frames(err, root, a.max_frames) if err else []
         for rel, ln in frames:
             jobs["frame_%s_%d" % (rel, ln)] = ex.submit(read_window, root, rel, ln, a.ctx)
@@ -359,7 +363,8 @@ def cmd_probe(a):
     o = []
     o.append("S=%s" % SCRIPTS)
     o.append("ROOT=%s" % root)
-    o.append("LANE: %s  -- %s" % (lane, why))
+    # a slow stamp relabels the FAST lane only; the lane decision itself stands
+    o.append("LANE: %s  -- %s" % ("SLOW" if slow and lane == "FAST" else lane, why))
     if symbols:
         o.append("SYMBOLS: %s" % ", ".join(symbols))
     if sig:
@@ -406,23 +411,6 @@ def cmd_probe(a):
             o.append(head(v, a.max_grep))
         o.append("")
 
-    hist = []
-    for s in symbols:
-        v = jobs["hist_" + s].result()[1].strip()
-        if v:
-            hist.append("-- commits touching '%s'\n%s" % (s, v))
-    if a.since:
-        ds = jobs["diffstat"].result()[1].strip()
-        dl = jobs["difflog"].result()[1].strip()
-        if dl:
-            hist.append("-- commits %s..HEAD\n%s" % (a.since, dl))
-        if ds:
-            hist.append("-- diffstat %s..HEAD\n%s" % (a.since, ds))
-    if hist:
-        o.append("== HISTORY ==")
-        o.extend(hist)
-        o.append("")
-
     o.append("== SNAPSHOT ==")
     o.append(head(jobs["snapshot"].result()[1], 45))
     o.append("")
@@ -444,9 +432,12 @@ def cmd_probe(a):
         o.append("   python3 %s/debug_tool.py experiment --spec /tmp/exp.json -j 8" % SCRIPTS)
     else:
         o.append("1. Read references/parallel-playbook.md in the SAME call as the first command below.")
-        o.append("2. Measure, do not eyeball. Start at -n 40. Re-run at -n 200 only if the interval is too wide to decide:")
-        o.append("   bash %s/stress.sh -n 40 -- %s" % (SCRIPTS, a.cmd or "<single failing test>"))
-        o.append("   (regression, culprit unknown) bash %s/bisect-parallel.sh -j 15 <good> HEAD -- <repro>" % SCRIPTS)
+        if slow:
+            o.append("2. Measure, do not eyeball. SLOW lane starts at -n 200:")
+            o.append("   bash %s/stress.sh -n 200 -- %s" % (SCRIPTS, a.cmd or "<single failing test>"))
+        else:
+            o.append("2. Measure, do not eyeball. Start at -n 40. Re-run at -n 200 only if the interval is too wide to decide:")
+            o.append("   bash %s/stress.sh -n 40 -- %s" % (SCRIPTS, a.cmd or "<single failing test>"))
         o.append("3. Then one experiment call for all hypotheses (see experiment --template).")
     print("\n".join(o))
     return 0
@@ -1003,6 +994,40 @@ def classify_cause(records, report):
     return fails, "DECISION pick=%s" % only
 
 
+FALSIFY_TIMEOUT = 600  # close itself re-runs the falsifier, bounded
+FALSIFY_ASKS = 2  # a missing or exit-zero falsifier is asked for at most twice
+
+
+def confirm_falsifier(experiments, records, ident, root):
+    """Slow gate: a CONFIRMED diagnose counts only when THIS process re-ran its
+    falsify command and saw a non-zero exit. A stored or model-claimed exit
+    never passes. The observed exit is written back next to the record as
+    falsify_exit; every miss bumps falsify_asks in the same file.
+
+    Returns (passed, observed exit or None, asks after any bump)."""
+    rec = next((r for r in records if str(r.get("id")) == ident), None)
+    if rec is None:
+        return False, None, 1
+    rc = None
+    cmd = rec.get("falsify")
+    if isinstance(cmd, str) and cmd.strip():
+        rc, _ = sh(cmd, cwd=root, timeout=FALSIFY_TIMEOUT)
+        rec["falsify_exit"] = rc
+    try:
+        asks = int(rec.get("falsify_asks") or 0)
+    except (TypeError, ValueError):
+        asks = 0
+    ok = rc is not None and rc != 0
+    if not ok:
+        asks += 1
+        rec["falsify_asks"] = asks
+    try:
+        Path(experiments).write_text(json.dumps(records))
+    except OSError:
+        pass
+    return ok, rc, asks
+
+
 def cmd_close(a):
     if a.report:
         report = Path(a.report).read_text(encoding="utf-8")
@@ -1011,9 +1036,31 @@ def cmd_close(a):
     else:
         report = ""
     records = []
+    root = None
+    slow = False
     if a.experiments and os.path.isfile(a.experiments):
         records = json.loads(Path(a.experiments).read_text(encoding="utf-8"))
+        # the stamp lives at the toplevel that owns .debug/, same root `experiment` used
+        d = os.path.dirname(os.path.abspath(a.experiments))
+        root = repo_root(d) or (os.path.dirname(d) if os.path.basename(d) == ".debug" else d)
+        slow = stamp_mode(root) == "slow"
     fails, decision = classify_cause(records, report)
+    if slow and decision.startswith("DECISION pick=") and not decision.endswith("pick=none"):
+        ident = decision.split("=", 1)[1].strip()
+        ok, rc, asks = confirm_falsifier(a.experiments, records, ident, root)
+        if not ok:
+            why = ("its falsify command re-ran exit %d" % rc
+                   if rc is not None else "it has no falsify command to re-run")
+            print("FAIL falsify - %s is CONFIRMED but %s" % (ident, why))
+            if asks <= FALSIFY_ASKS:
+                print("NEXT: add ONE falsify command for %s to %s - a command that exits "
+                      "non-zero when %s is the cause - then re-run close (ask %d of %d)."
+                      % (ident, a.experiments, ident, asks, FALSIFY_ASKS))
+            else:
+                print("NEXT: falsifier ask cap reached for %s. Leftover: %s stays unconfirmed "
+                      "and close names no cause. Stop and state the leftover to the user."
+                      % (ident, ident))
+            return 2
     for line in fails:
         print(line)
     if decision.startswith("DECISION pick=") and not decision.endswith("pick=none"):
@@ -1043,7 +1090,7 @@ def cmd_doctor(a):
         ("skill dir", str(SKILL)),
         ("python", sys.version.split()[0]),
         ("cpus", str(cpus())),
-        ("git repo", root or "NOT IN A GIT REPO (experiment/bisect need one)"),
+        ("git repo", root or "NOT IN A GIT REPO (experiment needs one)"),
         ("git", sh("git --version")[1].strip() or "MISSING"),
         ("timeout bin", shutil.which("timeout") or shutil.which("gtimeout") or "missing (-t flags ignored)"),
         ("harness", detect_harness()),
@@ -1057,7 +1104,7 @@ def cmd_doctor(a):
     print("S=%s" % SCRIPTS)
     for k, v in rows:
         print("%-12s %s" % (k + ":", v))
-    for s in ("snapshot.sh", "stress.sh", "bisect-parallel.sh", "find-polluter.sh", "_lib.sh"):
+    for s in ("snapshot.sh", "stress.sh", "find-polluter.sh", "_lib.sh"):
         p = SCRIPTS / s
         print("%-12s %s" % (s + ":", "ok" if p.exists() else "MISSING"))
     if root:
@@ -1106,7 +1153,6 @@ def main(argv=None):
     q.add_argument("--error-file", help="file containing the error/stack text")
     q.add_argument("--cmd", help="minimal repro command (run filtered, with timeout)")
     q.add_argument("--symbol", action="append", help="extra symbol to grep and trace; repeatable")
-    q.add_argument("--since", help="last-known-good rev for 'it used to work'")
     q.add_argument("--flake-check", default="auto", help="auto (default) or N repro runs")
     q.add_argument("--ctx", type=int, default=30, help="lines around each frame (default 30)")
     q.add_argument("--max-frames", type=int, default=6)

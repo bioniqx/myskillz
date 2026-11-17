@@ -32,19 +32,8 @@ in_home=no
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   ls_out=$(git ls-files 2>/dev/null)
   files=$(printf '%s' "$ls_out" | awk 'END{print NR+0}')
-  hot_tmp=$(mktemp "${TMPDIR:-/tmp}/ctx_hot.XXXXXX")
-  ( git log --since=30.days -n 300 --name-only --pretty=format: --relative -- . 2>/dev/null \
-      | head -n 20000 \
-      | awk -F/ 'NF>2{print $1"/"$2} NF==2{print $1} NF==1&&$1!=""{print "."}' \
-      | sort | uniq -c | sort -rn | cap 6 \
-      | awk '{printf "%s(%s) ", $2, $1}' ) >"$hot_tmp" 2>/dev/null || true &
   dirty=$(git status --porcelain --untracked-files=no 2>/dev/null | wc -l | tr -d ' ')
   echo "git: root=$(git rev-parse --show-toplevel 2>/dev/null) branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) tracked=$files modified=$dirty"
-  echo "recent_commits:"
-  git log --oneline -n 6 2>/dev/null | cut -c1-100 | sed 's/^/  /'
-  wait 2>/dev/null || true
-  echo "hot_dirs_30d: $(cat "$hot_tmp" 2>/dev/null)"
-  rm -f "$hot_tmp" 2>/dev/null
   if [ "$files" -le 50 ] 2>/dev/null; then
     echo "files: $([ -n "$ls_out" ] && printf '%s\n' "$ls_out" | tr '\n' ' ')"
   else

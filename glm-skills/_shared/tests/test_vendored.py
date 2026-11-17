@@ -24,6 +24,7 @@ class TestVendored(unittest.TestCase):
             'decide.py': [
                 'glm-brainstorming', 'glm-writing-plans', 'glm-dev-team',
                 'glm-requirements-code-audit', 'glm-systematic-debugging',
+                'glm-doc-generator', 'glm-git-diff-summary',
             ],
         }
 

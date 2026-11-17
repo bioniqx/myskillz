@@ -1,4 +1,5 @@
 """Router shared by every glm skill. The script's lines are binding."""
+import json
 import os
 import shutil
 import subprocess
@@ -182,11 +183,23 @@ class BorrowTests(unittest.TestCase):
 
 class OpenTests(unittest.TestCase):
     def run_at(self, args, stdin="", cwd=None, env=None):
+        if cwd is None:
+            # The prelude writes the mode stamp under the repo root; never in
+            # this repository's own tree.
+            cwd = tempfile.mkdtemp()
+            self.addCleanup(shutil.rmtree, cwd, True)
         proc = subprocess.run(
             [sys.executable, HANDOFF] + args,
             input=stdin, capture_output=True, text=True, timeout=60,
             cwd=cwd, env=env)
         return proc.returncode, proc.stdout, proc.stderr
+
+    def binding_next(self, out):
+        found = ""
+        for line in out.splitlines():
+            if line.startswith("NEXT:"):
+                found = line
+        return found
 
     def test_handoff_does_not_run_the_prelude(self):
         rc, out, _err = self.run_at(
@@ -198,7 +211,7 @@ class OpenTests(unittest.TestCase):
         self.assertNotIn("=== PRELUDE ===", out)
         self.assertNotIn("MODE ", out)
 
-    def test_brainstorm_stay_runs_context_and_asks_mode(self):
+    def test_brainstorm_full_without_a_mode_word_defaults_to_fast(self):
         root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, root, True)
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
@@ -209,10 +222,14 @@ class OpenTests(unittest.TestCase):
         self.assertIn("STAY glm-brainstorming", out)
         self.assertIn("=== PRELUDE ===", out)
         self.assertIn("skill_dir:", out)
-        self.assertIn("MODE ask", out)
-        self.assertIn("Do not launch lanes", out)
+        self.assertIn("MODE fast", out)
+        self.assertIn("Do not launch a lane", out)
+        self.assertNotIn("ASK", out)
         self.assertIn("OPEN: stay", out)
-        self.assertFalse(os.path.exists(os.path.join(root, ".brainstorm")))
+        nxt = self.binding_next(out)
+        self.assertIn("PACE fast", nxt)
+        mode_json = os.path.join(root, ".brainstorm", "drafts", "mode.json")
+        self.assertEqual(json.load(open(mode_json))["mode"], "fast")
 
     def test_dev_team_stay_prints_scripts_dir(self):
         rc, out, _err = self.run_at(
@@ -388,6 +405,170 @@ class OpenTests(unittest.TestCase):
         rc, out, _err = self.run_at(["open", "--self", "glm-nope"], "hi")
         self.assertEqual(rc, 2)
         self.assertIn("RESULT open action=stop name=usage", out)
+
+
+class SlowModeTests(unittest.TestCase):
+    """A SLOW request takes the SLOW branch in every one of the seven skills."""
+
+    def git_root(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+        for key, value in (
+                ("user.email", "t@t"), ("user.name", "t"),
+                ("commit.gpgsign", "false")):
+            subprocess.run(["git", "config", key, value], cwd=root, check=True)
+        return root
+
+    def commit(self, root, name, body):
+        with open(os.path.join(root, name), "w", encoding="utf-8") as fh:
+            fh.write(body)
+        subprocess.run(["git", "add", name], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "add %s" % name],
+                       cwd=root, check=True)
+
+    def run_at(self, root, args, stdin="", env=None):
+        proc = subprocess.run(
+            [sys.executable, HANDOFF] + args,
+            input=stdin, capture_output=True, text=True, timeout=90,
+            cwd=root, env=env)
+        return proc.returncode, proc.stdout, proc.stderr
+
+    def binding_next(self, out):
+        found = ""
+        for line in out.splitlines():
+            if line.startswith("NEXT:"):
+                found = line
+        return found
+
+    def assert_slow(self, root, out, err):
+        nxt = self.binding_next(out)
+        self.assertTrue(nxt.startswith("NEXT:"), err or out)
+        self.assertIn("PACE: slow", nxt)
+        self.assertNotIn("read fast.md", nxt)
+        stamp = os.path.join(root, ".claude", "dev-team", "mode")
+        with open(stamp, encoding="utf-8") as fh:
+            self.assertTrue(fh.readline().startswith("slow "))
+        pace = os.path.join(root, ".claude", "dev-team", "pace")
+        self.assertFalse(os.path.exists(pace))
+
+    def test_brainstorming_slow_full(self):
+        root = self.git_root()
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-brainstorming"],
+            "SLOW add a login endpoint to the existing api")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("MODE slow", out)
+        self.assertIn("PACE: slow", out)
+        self.assert_slow(root, out, err)
+        self.assertIn("fact lanes", self.binding_next(out))
+        mode_json = os.path.join(root, ".brainstorm", "drafts", "mode.json")
+        self.assertEqual(json.load(open(mode_json))["mode"], "slow")
+
+    def test_dev_team_slow_full_forces_the_engine_path(self):
+        root = self.git_root()
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-dev-team"],
+            "SLOW fix the billing bug across the repo")
+        self.assertEqual(rc, 0, err)
+        self.assert_slow(root, out, err)
+        self.assertIn("route-first rule", self.binding_next(out))
+        self.assertIn("strict", self.binding_next(out))
+
+    def test_dev_team_slow_direct_stays_in_session(self):
+        root = self.git_root()
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-dev-team"],
+            "SLOW fix the typo in src/app.py")
+        self.assertEqual(rc, 0, err)
+        self.assert_slow(root, out, err)
+        self.assertIn("Width direct", self.binding_next(out))
+        self.assertIn("mutant", self.binding_next(out))
+        self.assertNotIn("devteam start", self.binding_next(out))
+
+    def test_writing_plans_slow_never_takes_the_inline_path(self):
+        root = self.git_root()
+        spec = os.path.join(root, "spec.md")
+        with open(spec, "w", encoding="utf-8") as fh:
+            fh.write("The button must save the form.\n")
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-writing-plans", "--spec", spec],
+            "SLOW write the implementation plan for the spec")
+        self.assertEqual(rc, 0, err)
+        self.assert_slow(root, out, err)
+        self.assertIn("build", self.binding_next(out))
+        self.assertNotIn("PACE: short", out)
+        self.assertNotIn("inline path: one write", self.binding_next(out))
+
+    def test_audit_slow_ignores_the_short_checklist_path(self):
+        root = self.git_root()
+        spec = os.path.join(root, "req.md")
+        with open(spec, "w", encoding="utf-8") as fh:
+            fh.write("The button must save.\n")
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-requirements-code-audit",
+                   "--spec", spec],
+            "SLOW audit the code against the spec")
+        self.assertEqual(rc, 0, err)
+        self.assert_slow(root, out, err)
+        self.assertIn("second judge", self.binding_next(out))
+        self.assertNotIn("PACE: short", out)
+
+    def test_debug_slow_without_cmd_names_the_slow_rules(self):
+        root = self.git_root()
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-systematic-debugging"],
+            "SLOW the login tests fail with a traceback")
+        self.assertEqual(rc, 0, err)
+        self.assert_slow(root, out, err)
+        self.assertIn("stress.sh -n 200", self.binding_next(out))
+        self.assertIn("falsifier", self.binding_next(out))
+
+    def test_doc_slow_always_recons_then_claims(self):
+        root = self.git_root()
+        self.commit(root, "hello.py", "print('hi')\n")
+        env = os.environ.copy()
+        env["DOCGEN_STATE_DIR"] = os.path.join(root, "state")
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-doc-generator"],
+            "SLOW document this repo", env=env)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("HEAD:", out)
+        self.assertIn("hello.py", out)
+        self.assert_slow(root, out, err)
+        self.assertIn("claims.py", self.binding_next(out))
+        self.assertIn("glm-doc-reviewer", self.binding_next(out))
+        self.assertNotIn("No writer agent", self.binding_next(out))
+
+    def test_diff_slow_inline_goes_through_claims(self):
+        root = self.git_root()
+        self.commit(root, "app.py", "def add(a, b):\n    return a + b\n")
+        with open(os.path.join(root, "app.py"), "a", encoding="utf-8") as fh:
+            fh.write("\n\ndef sub(a, b):\n    return a - b\n")
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-git-diff-summary"],
+            "SLOW summarize the branch")
+        self.assertEqual(rc, 0, err)
+        self.assert_slow(root, out, err)
+        self.assertIn("claims.py", self.binding_next(out))
+        self.assertNotIn("Zero more tool calls", self.binding_next(out))
+
+    def test_a_later_fast_message_restamps_fast(self):
+        root = self.git_root()
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-dev-team"],
+            "SLOW fix the billing bug across the repo")
+        self.assertEqual(rc, 0, err)
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "glm-dev-team"],
+            "FAST fix the billing bug across the repo")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("PACE: full", out)
+        self.assertIn("route-first rule", self.binding_next(out))
+        self.assertNotIn("PACE: slow", out)
+        stamp = os.path.join(root, ".claude", "dev-team", "mode")
+        with open(stamp, encoding="utf-8") as fh:
+            self.assertTrue(fh.readline().startswith("fast "))
 
 
 def _note_files():

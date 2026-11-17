@@ -11,6 +11,7 @@ accordingly.
 import argparse
 import hashlib
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -144,6 +145,45 @@ def cite_status(root, loc, text):
     return status == "ok"
 
 
+# A gather chunk the diff skill writes: <tmpdir>/glm-gds.XXXXX/c/NNN.patch.
+CHUNK_RE = re.compile(r"(?:^|/)glm-gds\.[^/]+/c/[^/]+\.patch$")
+
+
+def claim_ok(root, loc, quote):
+    """True when quote is a substring of the bytes at loc.
+
+    A `path:line` loc uses the existing cite window (whole-file substring when
+    check.py is not beside this copy). A loc under the gather chunk directory
+    compares against that chunk's bytes.
+    """
+    loc = (loc or "").strip()
+    if not loc or not quote:
+        return False
+    if CHUNK_RE.search(loc):
+        try:
+            data = Path(loc).read_bytes().decode("utf-8", "replace")
+        except OSError:
+            return False
+        return quote in data
+    m = LOC_LINE.match(loc)
+    rel = m.group(1) if m else loc
+    if os.path.isabs(rel) or ".." in rel.replace("\\", "/").split("/"):
+        return False
+    target = (Path(root) / rel).resolve()
+    rr = Path(root).resolve()
+    if target != rr and rr not in target.parents:
+        return False
+    if m:
+        status = cite_status(str(root), loc, quote)
+        if status is not None:
+            return bool(status)
+    try:
+        data = target.read_bytes().decode("utf-8", "replace")
+    except OSError:
+        return False
+    return quote in data
+
+
 def add_fact(ledger, fields, root=".", stdout="", source=""):
     """Assign the next id. The caller's id, if any, is ignored."""
     kind = (fields.get("kind") or "").strip()
@@ -187,8 +227,9 @@ def _fact_map(ledger):
     return {f["id"]: f for f in ledger.get("facts") or []}
 
 
-def prove_ledger(ledger, offline=False, fetch=None):
-    """Mark web facts. Offline never opens a socket. At most four fetches per call."""
+def prove_ledger(ledger, offline=False, fetch=None, cap=None):
+    """Mark web facts. Offline never opens a socket. At most `cap` fetches per call."""
+    limit = MAX_WEB if cap is None else max(1, min(8, cap))
     web = [f for f in ledger.get("facts") or [] if f.get("kind") == "web"]
     if offline:
         for fact in web:
@@ -197,7 +238,7 @@ def prove_ledger(ledger, offline=False, fetch=None):
         return
     fetch = fetch or _fetch
     for i, fact in enumerate(web):
-        if i >= MAX_WEB:
+        if i >= limit:
             fact["status"] = "UNPROVEN"
             fact["reason"] = "cap"
             continue
@@ -449,6 +490,10 @@ def main(argv=None):
     pp = sp.add_parser("prove")
     pp.add_argument("--ledger", required=True)
     pp.add_argument("--offline", action="store_true")
+    pp.add_argument("--cap", type=int, default=4)
+
+    pcl = sp.add_parser("claim")
+    pcl.add_argument("--root", default=".")
 
     pb = sp.add_parser("break")
     pb.add_argument("--root", required=True)
@@ -506,12 +551,28 @@ def main(argv=None):
         return 0
     if ns.cmd == "prove":
         ledger = load_ledger(ns.ledger)
-        prove_ledger(ledger, offline=ns.offline)
+        prove_ledger(ledger, offline=ns.offline, cap=ns.cap)
         save_ledger(ns.ledger, ledger)
         for fact in ledger["facts"]:
             if fact.get("kind") == "web":
                 print("%s status=%s%s" % (fact["id"], fact["status"],
                                           (" reason=%s" % fact["reason"]) if fact.get("reason") else ""))
+        return 0
+    if ns.cmd == "claim":
+        root = str(Path(ns.root).resolve())
+        keep = drop = 0
+        for raw in sys.stdin.read().splitlines():
+            line = raw.strip()
+            quote, sep, loc = (line[6:] if line.startswith("CLAIM ") else "").rpartition(" :: ")
+            ok = bool(sep) and len(quote.strip().split()) <= MAX_QUOTE_WORDS and claim_ok(
+                root, loc, quote.strip())
+            if ok:
+                keep += 1
+                print("KEEP %s" % line)
+            else:
+                drop += 1
+                print("DROP %s" % line)
+        print("RESULT claim keep=%d drop=%d" % (keep, drop))
         return 0
     if ns.cmd == "break":
         opt_path = Path(ns.options) if ns.options else Path(ns.ledger).parent / "options.json"
