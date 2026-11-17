@@ -220,7 +220,13 @@ class SpecChainTests(unittest.TestCase):
 
     def test_a_passing_spec_without_a_chain_prints_no_handoff(self):
         rc, out = run(["spec", self.path], cwd=self.root)
-        self.assertEqual(rc, 0, out)
+        self.assertEqual(rc, 0)
+        self.assertNotIn("HANDOFF", out)
+
+    def test_a_slow_chain_prints_no_handoff(self):
+        self.chain({"mode": "slow", "continue": True})
+        rc, out = run(["spec", self.path], cwd=self.root)
+        self.assertEqual(rc, 0)
         self.assertNotIn("HANDOFF", out)
 
 

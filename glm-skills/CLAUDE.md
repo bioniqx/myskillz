@@ -106,25 +106,34 @@ Every port applies the same set of model facts; each skill with a tuning surface
 ### Per-skill engines
 
 - **glm-dev-team**: `devteam.py` is a deterministic scheduler and integrator. The flow is
-  `start <plan.md>` once, then `next` on every wake-up. Programmers work in git worktrees. `guard.py` holds
+  `start <plan.md>` once, then `next` on every wake-up. `init` treats a fast `chain.json` as the
+  fast pace when the one-shot pace file is absent, so a HANDOFF may name `start` directly and skip
+  `open`. Programmers work in git worktrees. `guard.py` holds
   the PreToolUse hooks that enforce file footprints, frozen tests and read-only roles. An AIMD
   **governor** sizes concurrency by tier (`DEVTEAM_GLM_TIER`, default `api` — the full 15-call window), halves
   it on 429/1302/1305 errors; peak-hour halving is opt-in via `DEVTEAM_PEAK=on`. Agent definitions live in `agents/` and are installed by `doctor --fix`.
   `README.md` is in Vietnamese.
 - **glm-systematic-debugging**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
-  `experiment` (a separate worktree for each control and treatment arm) and `scan` (8 API workers). Helper
+  `experiment` (a separate worktree for each control and treatment arm) and `scan` (8 API workers). The
+  FAST lane's probe NEXT embeds the one-hypothesis experiment template, so no `experiment --template`
+  call runs. Helper
   shell scripts: `stress.sh` (Wilson CI and Fisher test) and `find-polluter.sh`.
 - **glm-requirements-code-audit**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
-  repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
+  repair, verify) → `adjudicate --finalize` (one call records the decisions, then runs report, the
+  check gate and finish; plain `finalize` still closes a run recorded without the flag). Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.
   ZCode agents live in `agents/` with final ZCode frontmatter; `install-zcode.sh` copies every skill's
   `agents/*.md` (including glm-debug-worker and the glm-writing-plans trio; no model id),
   and `plan_tool.py setup --harness zcode` / `devteam.py doctor --harness zcode --fix` copy theirs the
   same way. The `opencode/` source folders are gone.
 - **glm-writing-plans**: `plan_tool.py` works as `brief` → write contracts → `build`, which fans out task
-  bodies, lints them and repairs them. Tier routing is `light` / default / `deep`.
+  bodies, lints them and repairs them. Tier routing is `light` / default / `deep`. Under a fast
+  chain, `check` prints the `HANDOFF glm-dev-team` block (direct `devteam start`) itself on pass.
 - **glm-brainstorming**: the first round-1 call is `handoff.py open`, which runs route,
-  `scripts/context.sh`, and `ask.py mode` in one process. `context.sh` must stay read-only,
+  `scripts/context.sh`, and `ask.py mode` in one process. Under FAST with a full-pace request,
+  `open` also runs `ask.py fast --request` in the same process: the single option, the pick,
+  `RESULT approve yes` and `chain.json` all print from that one call, and nothing reads `fast.md`
+  at runtime (it is reference only). `context.sh` must stay read-only,
   bounded (about 55 lines or fewer) and **always exit 0**, because a non-zero exit cancels the skill. The
   skill also contains the visual-companion server (`server.cjs`, `start-server.sh`).
 - **glm-doc-generator**: SKILL.md plus `scripts/handoff.py` and `scripts/recon.sh`. Turn 1 is `open`,
