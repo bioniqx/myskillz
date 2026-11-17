@@ -1873,7 +1873,32 @@ def cmd_check(a):
     head = re.sub(re.escape(WAVES_OPEN) + r".*?" + re.escape(WAVES_CLOSE) + r"\s*", "", head, flags=re.S)
     out, n, width = render_plan(head, cs, bodies)
     save(plan_path, out)
-    return report([], warns, "OK plan: %d tasks | %d waves | max wave width %d -> %s" % (len(cs), n, width, plan_path))
+    extra_lines = []
+    # A passing check under a FAST chain advances into glm-dev-team here, so
+    # the model never needs a separate handoff.py next call. Not FAST, or a
+    # failing check: the output stays exactly as it was.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from handoff import advance_block, _chain_is_fast, _sibling_scripts
+    if _chain_is_fast():
+        seen = ["glm-writing-plans"]
+        try:
+            with open(os.path.join(repo_root(plan_path), ".brainstorm", "drafts",
+                                   "chain.json"), encoding="utf-8") as fh:
+                chain_next = json.load(fh).get("next") or []
+        except (OSError, ValueError):
+            chain_next = []
+        if "glm-brainstorming" in chain_next:
+            seen.insert(0, "glm-brainstorming")
+        sibling = _sibling_scripts(
+            os.path.dirname(os.path.abspath(__file__)), "glm-dev-team")
+        extra_lines = advance_block(
+            "glm-writing-plans", "plan-ready", seen=seen, extra=(
+                "FAST chain: skip glm-dev-team's open. Run python3 %s start %s "
+                "in the same turn; init reads the fast chain itself. "
+                "Read glm-dev-team/SKILL.md for the dispatch protocol first."
+                % (os.path.join(sibling, "devteam.py"), plan_path)))
+    return report([], warns, "OK plan: %d tasks | %d waves | max wave width %d -> %s"
+                  % (len(cs), n, width, plan_path), extra_lines)
 
 
 

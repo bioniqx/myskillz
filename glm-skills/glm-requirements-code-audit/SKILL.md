@@ -41,7 +41,7 @@ Checks whether the **code faithfully implements a requirements document**, repor
 1. `A brief --spec <file>` — repo index, repo map, the spec verbatim, the checklist schema, lane and model report.
 2. You write `.audit/checklist.jsonl`. **This is the one step quality cannot delegate.**
 3. `A run` — retrieval, 8-way judgment, lint, repair, adversarial second pass, merge. One call.
-4. `A queue` → read the printed lines → `A adjudicate` → write `.audit/plan.jsonl` → `A finalize`.
+4. `A queue` → read the printed lines → write `.audit/plan.jsonl` → ONE `A adjudicate --set/--accept ... --finalize` call (report, the `check` gate and `finish` run inside it; plain `A finalize` still closes when the decisions were recorded without `--finalize`).
 
 Do not invent extra steps between them. Do not dispatch subagents on the api lane: the parallelism is already
 running inside the script.
@@ -136,18 +136,23 @@ and prints the counts.
 `A queue` prints everything that needs your judgment — verifier disagreements, CONFLICT, low-confidence verdicts,
 unsettled items, UNVERIFIABLE results the checklist did not tag, checker rejections — each with the exact
 `path:lines` to read, plus a seeded random spot-check of unverified MATCHED items (at least 3, about 5%). Batch
-those `Read` calls in ONE turn, decide, then record:
+those `Read` calls in ONE turn, decide, then write `.audit/plan.jsonl` (schema printed by `queue`): priority
+anchors to strength — **P0** any CONFLICT or unmet MUST on a core/high-stakes flow, **P1** other unmet/partial
+MUSTs and SHOULD gaps with user-visible impact, **P2** the rest. Order P0 first, then by dependency.
 
-`A adjudicate --set REQ-007 MISSING --set REQ-009 PARTIAL --note "why"` · `A adjudicate --accept REQ-003 REQ-004` ·
-`A adjudicate --accept-queue` (accepts every queued item; an UNSEARCHED item is skipped and listed, it needs
-`A run --resume` first)
+Then record and close in ONE call: `--finalize` runs the whole finalize sequence (report, the `check` gate,
+finish) in the same process once the decisions are recorded.
 
-A status stands when `check` passes. `--set` is the human close. `--accept` only accepts an item whose attack quote reproduced. Keep MISSING only when both passes found nothing and the recorded searches were
-adequate. Then write `.audit/plan.jsonl` (schema printed by `queue`): priority anchors to strength — **P0** any
-CONFLICT or unmet MUST on a core/high-stakes flow, **P1** other unmet/partial MUSTs and SHOULD gaps with
-user-visible impact, **P2** the rest. Order P0 first, then by dependency.
+`A adjudicate --set REQ-007 MISSING --set REQ-009 PARTIAL --note "why" --finalize` · `A adjudicate --accept REQ-003 REQ-004 --finalize` ·
+`A adjudicate --accept-queue --finalize` (accepts every queued item; an UNSEARCHED item is skipped and listed, it needs
+`A run --resume` first). Without `--finalize` the call only records and plain `A finalize` closes afterwards;
+`--finalize` with no plan.jsonl yet prints the write-plan NEXT line instead of the report.
 
-`A finalize` = report + gate + close. It writes `.audit/glm-requirements-code-audit.md` and `traceability.csv` in
+A status stands when `check` passes. `--set` is the human close. `--accept` only accepts an item whose attack quote
+reproduced. Keep MISSING only when both passes found nothing and the recorded searches were adequate.
+
+`A adjudicate ... --finalize` (or plain `A finalize`) = record + report + gate + close. It writes
+`.audit/glm-requirements-code-audit.md` and `traceability.csv` in
 the spec's language and fails loudly on: a non-MATCHED item that no verifier or adjudication settled, a
 glm-rca-investigator/glm-rca-verifier disagreement, a MISSING that never had a second pass or lists no searches,
 an unplanned discrepancy, and a citation that does not exist, is prose documentation or lies under `.git/`. It warns on a

@@ -186,6 +186,44 @@ class SpecTests(unittest.TestCase):
         self.assertEqual(rc, 0, out)
 
 
+class SpecChainTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="bs_chain_")
+        fd, self.path = tempfile.mkstemp(suffix=".md")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(GOOD_SPEC)
+
+    def chain(self, body):
+        os.makedirs(os.path.join(self.root, ".brainstorm", "drafts"))
+        with open(os.path.join(self.root, ".brainstorm", "drafts", "chain.json"),
+                  "w", encoding="utf-8") as fh:
+            json.dump(body, fh)
+
+    def test_a_passing_spec_on_a_fast_chain_prints_the_handoff(self):
+        self.chain({"mode": "fast", "continue": True})
+        rc, out = run(["spec", self.path], cwd=self.root)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT spec fail=0", out)
+        self.assertIn("HANDOFF glm-writing-plans", out)
+        self.assertIn("NEXT-EXTRA:", out)
+        self.assertIn("--self glm-writing-plans", out)
+        self.assertLess(out.index("RESULT spec"), out.index("HANDOFF"))
+
+    def test_a_failing_spec_prints_no_handoff(self):
+        self.chain({"mode": "fast", "continue": True})
+        fd, path = tempfile.mkstemp(suffix=".md")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(GOOD_SPEC.replace("## 8. Out of scope\nNo UI changes.\n", ""))
+        rc, out = run(["spec", path], cwd=self.root)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("HANDOFF", out)
+
+    def test_a_passing_spec_without_a_chain_prints_no_handoff(self):
+        rc, out = run(["spec", self.path], cwd=self.root)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("HANDOFF", out)
+
+
 class SendTests(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix="bs_send_")

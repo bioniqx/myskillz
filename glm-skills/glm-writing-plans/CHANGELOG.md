@@ -1,5 +1,7 @@
 # glm-writing-plans v9 (GLM edition) - what changed from v8
 
+**FAST check folds the handoff (2026-11-17):** `plan_tool.py check` prints the `HANDOFF glm-dev-team` block itself when the plan passes and `.brainstorm/drafts/chain.json` says mode fast plus continue true, naming `devteam start` directly (init reads the fast chain when the pace file is absent). The separate `handoff.py next --event plan-ready` call is gone from the FAST path. Model ids and thoughtLevel are unchanged.
+
 **Short spec skips the writer fan-out (2026-11-16):** a spec of 80 lines or fewer prints `PACE: short`. The plan, including task bodies, is one write plus `check`. `build` stays the path for a longer spec. Model ids and thoughtLevel are unchanged.
 
 **One opening call (2026-11-13):** call 1 is `handoff.py open --spec`. It routes and runs `brief` in the same process. Contracts and `build` are still the next two calls. Model ids and thoughtLevel are unchanged.

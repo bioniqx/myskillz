@@ -23,7 +23,7 @@ allowed-tools:
 
 Classify → fan out wide in one round → decide on evidence → ask once →
 present once → get approval. Lower rule number wins a conflict.
-`MODE fast` does not ask: `fast.md` replaces that gate.
+`MODE fast` does not ask: the `PACE fast` NEXT replaces that gate.
 
 ## Mode — before round 1
 
@@ -44,8 +44,8 @@ user request. Empty stdin does not route. Follow the last `NEXT:` line.
 later section.
 
 - `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
-- `MODE fast` → read `fast.md` and follow it. It replaces the human gates below.
-- `MODE slow` → follow that `NEXT` and do not read `fast.md`. The default is FAST; SLOW starts only when the user says SLOW.
+- `MODE fast` → follow the PACE fast NEXT. It replaces the human gates below.
+- `MODE slow` → follow that `NEXT` and do not take the FAST branch. The default is FAST; SLOW starts only when the user says SLOW.
 
 A later message that names FAST or SLOW is a new `ask.py mode` on that
 message. The script stores the choice in `.brainstorm/drafts/mode.json`.
@@ -54,7 +54,7 @@ message. The script stores the choice in `.brainstorm/drafts/mode.json`.
 
 1. No code, scaffold or file write outside `.brainstorm/drafts/` until
    `check.py approve --asked design` prints `RESULT approve yes`. The
-   stdin is the human reply, or the `AUTO` block `ask.py` prints (R6, or `fast.md`).
+   stdin is the human reply, or the `AUTO` block `ask.py` prints (R6, or the FAST pick inside `open`).
 2. Line 1 of every message you show is `Path: <Spike|Bounded|Architectural> — reason`,
    `Path unchanged: <path>`, or the hand-off line. Run `check.py send` on
    the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
@@ -240,7 +240,7 @@ invalidates something shown.
 Spike/Bounded: this file only. Architectural: `architectural.md` in round 1.
 `research-playbook.md` for >3 web lanes or conflicting evidence.
 `glm-tuning.md` only when configuring the runtime or hitting a
-GLM-specific failure. `fast.md` only after `ask.py mode` printed `MODE fast`.
+GLM-specific failure. `fast.md` is reference only; follow the PACE fast NEXT.
 `spec-document-reviewer-prompt.md` on the
 Architectural path — load it for the inline self-review of every spec
 (architectural.md §4) and when launching escalated spec review lanes.
@@ -407,7 +407,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
 1. Round 1, after `open`, when the prelude did not print `PACE: fast`: `decide.py atoms` on the request, and the fact lanes, in that one message. `PACE: fast` writes one option and does not launch a lane. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `glm-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `glm-design-breaker` per option. End the turn.
-4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `MODE fast` does not take that branch (`fast.md`). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
+4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `MODE fast` does not take that branch (the PACE fast NEXT). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
 
 ## Checklist (∥ = one concurrent message)
 

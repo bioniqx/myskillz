@@ -1,4 +1,5 @@
 """A silent brainstorming ask picks the scored option and opens the chain."""
+import io
 import json
 import os
 import subprocess
@@ -131,12 +132,20 @@ class ModeTests(unittest.TestCase):
         ns = type("N", (), {"file": dest})()
         old = sys.stdin
         sys.stdin = _In("build an interactive dashboard")
+        buf = io.StringIO()
+        old_out = sys.stdout
+        sys.stdout = buf
         try:
             rc = ask.cmd_mode(ns)
         finally:
             sys.stdin = old
+            sys.stdout = old_out
         self.assertEqual(rc, 0)
         self.assertEqual(json.load(open(dest))["mode"], "fast")
+        printed = buf.getvalue()
+        self.assertIn("MODE fast", printed)
+        self.assertIn("NEXT: follow the PACE fast NEXT", printed)
+        self.assertNotIn("fast.md", printed)
 
 
 class FastPickTests(unittest.TestCase):
@@ -149,15 +158,23 @@ class FastPickTests(unittest.TestCase):
         json.dump({"facts": [{"id": "F-1", "status": "OK", "text": "pool"}],
                    "atoms": ["must ship"]}, open(self.ledger, "w"))
 
-    def _run(self, options, breaks):
+    def _run(self, options, breaks, request=""):
         json.dump(options, open(self.options, "w"))
         json.dump({"breaks": breaks}, open(os.path.join(self.dir, "breaks.json"), "w"))
         ns = type("N", (), {"ledger": self.ledger, "options": self.options,
-                            "chain": self.chain, "mode": self.mode})()
-        return ask.cmd_fast(ns)
+                            "chain": self.chain, "mode": self.mode,
+                            "request": request})()
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            rc = ask.cmd_fast(ns)
+        finally:
+            sys.stdout = old
+        return rc, buf.getvalue()
 
     def test_a_narrow_margin_writes_fast_chain(self):
-        rc = self._run([
+        rc, out = self._run([
             {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
             {"id": "B", "atoms_hit": ["must ship"], "fact_ids": [], "assumptions": []},
         ], [attacked("A"), attacked("B")])
@@ -168,9 +185,12 @@ class FastPickTests(unittest.TestCase):
         self.assertEqual(chain["pick"], "A")
         self.assertTrue(chain["continue"])
         self.assertEqual(json.load(open(self.mode))["mode"], "fast")
+        self.assertIn("RESULT approve yes", out)
+        self.assertIn("check.py send", out)
+        self.assertNotIn("check.py approve", out)
 
     def test_an_unattacked_leader_is_still_picked(self):
-        rc = self._run([
+        rc, _out = self._run([
             {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
         ], [])
         self.assertEqual(rc, 0)
@@ -178,7 +198,7 @@ class FastPickTests(unittest.TestCase):
 
     def test_an_all_broken_set_picks_the_least_bad(self):
         broken = {"kind": "COUNTEREXAMPLE", "reproduced": True}
-        rc = self._run([
+        rc, _out = self._run([
             {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
             {"id": "B", "atoms_hit": [], "fact_ids": [], "assumptions": []},
         ], [dict(broken, option="A"), dict(broken, option="B")])
@@ -186,9 +206,18 @@ class FastPickTests(unittest.TestCase):
         self.assertEqual(json.load(open(self.chain))["pick"], "A")
 
     def test_no_option_does_not_write_a_chain(self):
-        rc = self._run([], [])
+        rc, out = self._run([], [])
         self.assertEqual(rc, 2)
         self.assertFalse(os.path.exists(self.chain))
+        self.assertNotIn("RESULT approve yes", out)
+
+    def test_a_request_argument_writes_the_single_option(self):
+        rc, _out = self._run([], [], request="add an export flag to the api")
+        self.assertEqual(rc, 0)
+        options = json.load(open(self.options))
+        self.assertEqual([o["id"] for o in options], ["A"])
+        self.assertEqual(options[0]["text"], "add an export flag to the api")
+        self.assertEqual(json.load(open(self.chain))["pick"], "A")
 
     def test_the_silence_path_still_refuses_an_unattacked_leader(self):
         json.dump([

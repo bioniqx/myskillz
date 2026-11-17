@@ -1,7 +1,12 @@
 import concurrent.futures
 import importlib.util
+import io
+import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 
@@ -188,6 +193,103 @@ class ResumeSelectionTests(unittest.TestCase):
         self.assertEqual(audit.residual_verify_ids(["R1", "R2", "R3"], live, verdicts),
                          ["R1", "R3"])
         self.assertEqual(audit.residual_verify_ids(["R2"], live, verdicts), [])
+
+
+class AdjudicateFinalizeTests(unittest.TestCase):
+    """`adjudicate --finalize` folds the finalize call into adjudication."""
+
+    ITEM = {"text": "The system MUST do REQ-001", "strength": "MUST", "stakes": "normal",
+            "category": "core", "search_hints": ["alpha"], "tags": []}
+
+    def setUp(self):
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="glm-audit-fin-"))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.repo = os.path.join(self.root, "repo")
+        self.out = os.path.join(self.repo, ".audit")
+        for sub in ("findings", "verify", "batches", "spec"):
+            os.makedirs(os.path.join(self.out, sub))
+        src = os.path.join(self.repo, "src")
+        os.makedirs(src)
+        with io.open(os.path.join(src, "a.py"), "w", encoding="utf-8") as fh:
+            fh.write("".join("line %d\n" % n for n in range(1, 41)))
+        cfg = {"version": audit.VERSION, "active": True, "repo_root": self.repo,
+               "out_dir": self.out, "spec_files": ["spec.md"], "lang": "en", "lane": "api",
+               "tier": "std", "threads": 4, "retrieval": "python",
+               "models": {"judge": list(audit.TIERS["std"]["judge"]),
+                          "verify": list(audit.TIERS["std"]["verify"])}}
+        self.write(os.path.join(self.out, "config.json"), json.dumps(cfg))
+        self.checklist([dict(self.ITEM, id="REQ-001")])
+        self.write(os.path.join(self.out, "findings.jsonl"), json.dumps({
+            "id": "REQ-001", "status": "MATCHED", "confidence": "high",
+            "evidence": [{"path": "src/a.py", "lines": "1-5", "note": "n"}],
+            "searched": ["alpha"], "notes": "n"}) + "\n")
+
+    def write(self, path, text):
+        with io.open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def checklist(self, rows):
+        self.write(os.path.join(self.out, "checklist.jsonl"),
+                   "".join(json.dumps(r) + "\n" for r in rows))
+
+    def plan(self, rows):
+        self.write(os.path.join(self.out, "plan.jsonl"),
+                   "".join(json.dumps(r) + "\n" for r in rows))
+
+    def run_cli(self, *args):
+        env = dict(os.environ)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env.pop("AUDIT_DIR", None)
+        return subprocess.run(
+            [sys.executable, AUDIT, "--out", self.out] + list(args),
+            cwd=self.repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            encoding="utf-8", errors="replace")
+
+    def test_with_plan_and_rows_it_reports_and_closes_in_the_same_run(self):
+        self.plan([{"ids": ["REQ-001"], "title": "t", "priority": "P2", "effort": "S",
+                    "target": "x"}])
+        r = self.run_cli("adjudicate", "--set", "REQ-001", "MATCHED", "--note", "n",
+                         "--finalize")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("recorded REQ-001 = MATCHED", r.stdout)
+        self.assertIn("GATE: PASS", r.stdout)
+        self.assertIn("AUDIT CLOSED  1 requirements", r.stdout)
+        self.assertTrue(os.path.exists(
+            os.path.join(self.out, "glm-requirements-code-audit.md")))
+
+    def test_without_plan_jsonl_it_prints_the_hint_and_no_report(self):
+        r = self.run_cli("adjudicate", "--set", "REQ-001", "MATCHED", "--finalize")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("recorded REQ-001 = MATCHED", r.stdout)
+        self.assertIn("plan.jsonl", r.stdout)
+        self.assertIn("NEXT after that: audit.py finalize", r.stdout)
+        self.assertNotIn("GATE:", r.stdout)
+        self.assertNotIn("AUDIT CLOSED", r.stdout)
+        self.assertFalse(os.path.exists(
+            os.path.join(self.out, "glm-requirements-code-audit.md")))
+
+    def test_without_the_flag_adjudicate_only_records(self):
+        self.plan([{"ids": ["REQ-001"], "title": "t", "priority": "P2", "effort": "S",
+                    "target": "x"}])
+        r = self.run_cli("adjudicate", "--set", "REQ-001", "MATCHED")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("recorded REQ-001 = MATCHED", r.stdout)
+        self.assertNotIn("GATE:", r.stdout)
+        self.assertNotIn("AUDIT CLOSED", r.stdout)
+        self.assertFalse(os.path.exists(
+            os.path.join(self.out, "glm-requirements-code-audit.md")))
+
+    def test_a_failing_gate_still_stops_the_finalization(self):
+        self.checklist([dict(self.ITEM, id="REQ-001"),
+                        dict(self.ITEM, id="REQ-002", search_hints=["beta"])])
+        self.plan([{"ids": ["REQ-001"], "title": "t", "priority": "P2", "effort": "S",
+                    "target": "x"}])
+        r = self.run_cli("adjudicate", "--set", "REQ-001", "MATCHED", "--finalize")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("REQ-002 is still unsettled", r.stdout)
+        self.assertIn("GATE: FAIL", r.stdout)
+        self.assertIn("finalize stopped at the gate", r.stdout)
+        self.assertNotIn("AUDIT CLOSED", r.stdout)
 
 
 if __name__ == "__main__":

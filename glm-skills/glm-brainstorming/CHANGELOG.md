@@ -1,3 +1,15 @@
+# 10.10 (from 10.9) — FAST picks inside the opening call
+
+Model ids and thoughtLevel stay. `handoff.py open` now runs `ask.py fast`
+itself when the mode is fast and the pace is full: the single option is the
+request, and the pick, its `RESULT approve yes`, and `chain.json` all print
+from one call, so the model spends its next turn on the draft instead of an
+options write, a fast call, and an approve call. `fast.md` is reference
+only; the PACE fast NEXT carries the flow. `check.py spec` prints the
+`HANDOFF glm-writing-plans` block itself on fail=0 under the fast chain, so
+the separate `handoff.py next` call is gone from that step. Every gate
+(send, spec, cites) still runs.
+
 # 10.8 (from 10.7) — short work skips the lane chain
 
 Model ids and thoughtLevel stay. A one-file request was still offered FAST,

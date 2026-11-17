@@ -100,6 +100,25 @@ class DebugToolFastNextQuoteTest(_T16TmpRepo):
         self.assertIn("LANE: FAST", out)
         self.assertIn("debug_tool.py run -- " + shlex.quote(cmd), out)
 
+    def test_fast_next_embeds_inline_template_standard_uses_flag(self):
+        Path(self.tmp, "app.py").write_text("x = 1\nprint(foo)\n")
+        fast_err = ('  File "app.py", line 2, in <module>\n'
+                    "NameError: name 'foo' is not defined")
+        rc, out = _t16_main(["probe", "--error", fast_err, "--dir", self.tmp])
+        self.assertEqual(rc, 0)
+        self.assertIn("LANE: FAST", out)
+        fast_next = out[out.index("== NEXT =="):]
+        self.assertIn('"hypothesis"', fast_next)
+        self.assertIn("experiment --spec /tmp/exp.json", fast_next)
+        self.assertNotIn("--template", fast_next)
+        std_err = ('Traceback (most recent call last):\n'
+                   '  File "app.py", line 2, in <module>\n'
+                   'ValueError: bad literal')
+        rc, out = _t16_main(["probe", "--error", std_err, "--dir", self.tmp])
+        self.assertEqual(rc, 0)
+        self.assertIn("LANE: STANDARD", out)
+        self.assertIn("--template", out)
+
 
 class DebugToolRunWallTest(_T16TmpRepo):
     def test_wall_is_real_elapsed_time(self):

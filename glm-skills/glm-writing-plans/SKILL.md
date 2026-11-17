@@ -193,7 +193,9 @@ approach. The plan file stays portable (R8).
 than it checks. Read `references/body-rules.md` in this skill directory for the body format.
 Write the skeleton and Contracts, then `<!-- TASKS -->`, then each task as
 `### T01: Name` followed by its body - all in ONE write. Then run
-`<TOOL> check <plan> --spec <spec>`, fix any `ERR`, done.
+`<TOOL> check <plan> --spec <spec>`, fix any `ERR`, done. When check passes
+under a fast chain it prints `HANDOFF glm-dev-team` naming the start command -
+follow that block in the same turn; no separate `handoff.py next` call.
 
 # R8 - Portability (the plan is the product)
 

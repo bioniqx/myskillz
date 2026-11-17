@@ -440,6 +440,24 @@ def check_spec(a):
     for sec, why in warns:
         print(f"WARN {sec} - {why}")
     print(f"RESULT spec fail={len(fails)} warn={len(warns)}")
+    if not fails:
+        # A passing FAST spec chains into glm-writing-plans here, so the model
+        # never needs a separate handoff.py next call. Not FAST or fails > 0:
+        # the output stays exactly as it was.
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from handoff import _chain_is_fast, _sibling_scripts, advance_block
+        if _chain_is_fast():
+            sibling = _sibling_scripts(
+                os.path.dirname(os.path.abspath(__file__)), "glm-writing-plans")
+            extra = (
+                "Run python3 %s open --self glm-writing-plans --spec %s "
+                "in the same turn. "
+                "Chain only when the request is an implementation request; "
+                "a design-only request stops after the spec."
+                % (os.path.join(sibling, "handoff.py"), a.path))
+            for line in advance_block("glm-brainstorming", "architectural-approved",
+                                      seen=["glm-brainstorming"], extra=extra):
+                print(line)
     return 1 if fails else 0
 
 

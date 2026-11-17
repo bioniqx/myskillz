@@ -61,7 +61,7 @@ When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.m
 The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
 
 1. `probe` (already done). The frame window and grep hits it printed are your evidence.
-2. One `experiment` for the suspected change. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
+2. One `experiment` for the suspected change: write /tmp/exp.json directly from the one-hypothesis template the probe NEXT block prints inline (no `experiment --template` call), then run it. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
 
 ## R4. STANDARD lane — 3 rounds
 

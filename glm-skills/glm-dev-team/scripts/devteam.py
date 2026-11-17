@@ -1679,6 +1679,10 @@ def cmd_init(a):
     if slow and pace_name:
         pace_name = ""
         _unlink_pace(root)
+    if not pace_name and not slow and _chain_mode_fast(root):
+        # A FAST chain may hand off straight to `start`, skipping the open
+        # prelude and its pace file; init detects the chain itself.
+        pace_name = "fast"
     st["pace"] = pace_name
     quick = apply_quick(slices, pace_name)
     fast_lane = apply_fast_lane(slices, pace_name)

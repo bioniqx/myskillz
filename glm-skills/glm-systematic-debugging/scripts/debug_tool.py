@@ -418,7 +418,7 @@ def cmd_probe(a):
     o.append("== NEXT ==")
     if lane == "FAST":
         o.append("1. Do not draft ROOT CAUSE and do not edit the repo. close prints ROOT CAUSE on the next wake.")
-        o.append("2. Do not open a reference file. Do not scan. This message only: write /tmp/exp.json (one hypothesis, start from experiment --template) and run it.")
+        o.append('2. Do not open a reference file. Do not scan. This message only: write /tmp/exp.json as [{"id":"h1","hypothesis":"<yours>","cmd":"<control command>","env":{},"expect":"treatment_passes","runs":1}] (add "treatment_cmd" or "patch_file" for a one-variable treatment), then run it:')
         o.append("   python3 %s/debug_tool.py experiment --spec /tmp/exp.json -j 8" % SCRIPTS)
         if a.cmd:
             o.append("   Copy this repro quoted. Do not retype it:")

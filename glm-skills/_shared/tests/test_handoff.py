@@ -226,8 +226,14 @@ class OpenTests(unittest.TestCase):
         self.assertIn("Do not launch a lane", out)
         self.assertNotIn("ASK", out)
         self.assertIn("OPEN: stay", out)
+        # FAST merges pick, approval and the chain write into open itself.
+        self.assertIn("DECISION pick=A auto=1", out)
+        self.assertIn("RESULT approve yes", out)
+        chain_json = os.path.join(root, ".brainstorm", "drafts", "chain.json")
+        self.assertEqual(json.load(open(chain_json))["mode"], "fast")
         nxt = self.binding_next(out)
         self.assertIn("PACE fast", nxt)
+        self.assertIn("ask.py fast already ran", nxt)
         mode_json = os.path.join(root, ".brainstorm", "drafts", "mode.json")
         self.assertEqual(json.load(open(mode_json))["mode"], "fast")
 

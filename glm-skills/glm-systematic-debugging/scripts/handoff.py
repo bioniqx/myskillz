@@ -386,6 +386,27 @@ def exits_line(self_name):
     return "EXITS: " + (" ".join(pairs) if pairs else "none")
 
 
+def advance_block(self_name, event, seen=None, extra=""):
+    """The handoff lines `next` would print, for a gate script to print on pass.
+
+    Returning [] (unknown event, a loop, or the chain cap) means the caller
+    prints nothing and the model keeps its own `next` call. `seen` defaults to
+    [self_name]; a caller that knows the chain passes the skills that ran.
+    """
+    found = exit_target(self_name, event)
+    if found is None:
+        return []
+    _event, target, because = found
+    chain = list(seen) if seen else [self_name]
+    if target == self_name or target in chain or len(chain) >= MAX_CHAIN:
+        return []
+    lines = emit("handoff", target, because, chain + [target], self_name)
+    lines[-1] = "RESULT next action=handoff name=%s" % target
+    if extra:
+        lines.insert(len(lines) - 1, "NEXT-EXTRA: %s" % extra)
+    return lines
+
+
 def one_line(text):
     text = " ".join((text or "").split())
     text = "".join(c for c in text if 32 <= ord(c) < 127)
@@ -885,12 +906,27 @@ def _prelude(args, text):
             ctx_code = 1
         ask_code = 0
         mode_out = ""
+        fast_ran = False
         # A short request that stops to ask FAST, then chains plan and dev-team,
         # is the hour-long path. Skip that question unless the work is heavy.
         if pace == "full" and os.path.isfile(ask):
             ask_code, mode_out = _run_local(
                 [sys.executable, ask, "mode"], stdin=text, timeout=15)
             chunks.append(mode_out)
+            if (ask_code == 0 and "MODE fast" in mode_out
+                    and (text or "").strip()):
+                # FAST already knows its single option: the request. Picking,
+                # approving and chaining inside open saves the model the
+                # options write, the fast call and the approve call.
+                fast_code, fast_out = _run_local(
+                    [sys.executable, ask, "fast",
+                     "--ledger", ".brainstorm/drafts/ledger.json",
+                     "--options", ".brainstorm/drafts/options.json",
+                     "--request", _request_body(text)],
+                    timeout=60)
+                chunks.append(fast_out)
+                if fast_code == 0:
+                    fast_ran = True
         elif pace == "full":
             chunks.append("PRELUDE-SKIP ask.py missing\n")
             ask_code = 1
@@ -913,15 +949,35 @@ def _prelude(args, text):
                    "then stop. Do not re-run open."
                    ) + _ship("After those tests pass, and not before")
         elif "MODE fast" in mode_out:
-            nxt = ("NEXT: PACE fast. Do not launch a lane. Do not read "
-                   "architectural.md. In this message write "
-                   ".brainstorm/drafts/options.json with one option, id A, "
-                   "text equal to the request, then run ask.py fast. "
-                   "On DECISION pick, approve and send. Write a short spec: "
-                   "goal, files, acceptance, out of scope. Run check.py spec. "
-                   "Then handoff.py next --self glm-brainstorming "
-                   "--event architectural-approved. Do not re-run open."
-                   ) + _HOLD
+            if fast_ran:
+                nxt = ("NEXT: PACE fast. ask.py fast already ran above: the "
+                       "pick, its approval and chain.json are recorded. "
+                       "Do not read architectural.md or fast.md. Do not "
+                       "launch a lane. Do not ask. Three stops only, one "
+                       "line each: a second dirty-checkout refusal after one "
+                       "stash, agents installed this session, or an "
+                       "irreversible action. Write the design draft (Path "
+                       "line, assumptions, out of scope, no question mark) "
+                       "and run check.py send --ledger "
+                       ".brainstorm/drafts/ledger.json --pick <the pick> "
+                       "until it prints fail=0. Then write the short spec "
+                       "(goal, files, acceptance, out of scope) and run "
+                       "check.py spec <path>; when it prints fail=0 with "
+                       "HANDOFF lines, follow them in the same turn. A "
+                       "design-only request stops after the spec. "
+                       "Do not re-run open."
+                       ) + _HOLD
+            else:
+                nxt = ("NEXT: PACE fast. Do not launch a lane. Do not read "
+                       "architectural.md or fast.md. In this message run "
+                       "ask.py fast --ledger .brainstorm/drafts/ledger.json "
+                       "--options .brainstorm/drafts/options.json --request "
+                       "<the request>. On DECISION pick and RESULT approve "
+                       "yes, write the design draft and run check.py send "
+                       "--ledger .brainstorm/drafts/ledger.json --pick <the "
+                       "pick> until fail=0. Then the short spec and "
+                       "check.py spec <path>. Do not ask. Do not re-run open."
+                       ) + _HOLD
         else:
             nxt = ("NEXT: one message: decide.py atoms on this same request, "
                    "plus the fact lanes. Do not re-run open.")
@@ -1038,9 +1094,9 @@ def _prelude(args, text):
         if fast:
             success = ("NEXT: PACE fast. Inline path: one write of the plan "
                        "including every task body, then check. Do not call "
-                       "build. Then handoff.py next --self glm-writing-plans "
-                       "--event plan-ready and follow that NEXT. "
-                       "Do not re-run open.") + _HOLD
+                       "build. When check passes it prints HANDOFF "
+                       "glm-dev-team naming the start command - follow that "
+                       "block in the same turn. Do not re-run open.") + _HOLD
         elif short:
             success = ("NEXT: PACE short. The spec is short. Use the inline "
                        "path: one write of the plan including every task body, "

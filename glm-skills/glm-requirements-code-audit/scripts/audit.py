@@ -3030,7 +3030,9 @@ def cmd_queue(a):
           '"risk":"lockout DoS -- rate-limit by IP too"}')
     print("  P0 = any CONFLICT or unmet MUST on a core/high-stakes flow. P1 = other unmet or")
     print("  partial MUSTs and user-visible SHOULD gaps. P2 = the rest. Order P0 first, then")
-    print("  by dependency.  NEXT after that: audit.py finalize")
+    print("  by dependency.  NEXT after that: audit.py adjudicate <decisions> --finalize")
+    print("  (--finalize records, then runs report + check + finish in the same call;")
+    print("   without it: audit.py finalize after the adjudication)")
 
 
 def cmd_adjudicate(a):
@@ -3099,6 +3101,12 @@ def cmd_adjudicate(a):
             print("recorded %s = %s" % (r["id"], r["final_status"]))
     if skipped:
         print("skipped (UNSEARCHED, run `audit.py run --resume` first): %s" % ", ".join(skipped))
+    if a.finalize:
+        if os.path.exists(c.p("plan.jsonl")):
+            cmd_finalize(a)
+        else:
+            print("plan.jsonl not found. Write it (see `audit.py queue` output), "
+                  "NEXT after that: audit.py finalize")
 
 # --------------------------------------------------------------------------- report
 
@@ -3906,6 +3914,10 @@ def main(argv=None):
     p.add_argument("--accept-queue", action="store_true",
                    help="accept every queued item (UNSEARCHED ones are skipped)")
     p.add_argument("--note", default=None)
+    p.add_argument("--finalize", action="store_true",
+                   help="record, then report + check + finish in the same call")
+    p.add_argument("--lang", choices=["vi", "en"], default=None)
+    p.add_argument("--headings", default=None)
     p.set_defaults(fn=cmd_adjudicate)
 
     p = sub.add_parser("report", help="assemble the report + csv")

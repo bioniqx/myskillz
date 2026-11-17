@@ -41,6 +41,7 @@ Do not weaken a test, a gate, a footprint, or a review. Do not force-push,
 deploy, rewrite history, or migrate production. Loop `devteam next` until
 `devteam finish`. If start says the agents were installed this session, tell
 the user once to open a new session; the harness cannot load them sooner.
+A HANDOFF block that names `devteam start` directly may skip the open prelude: init reads the fast chain itself.
 
 **Bootstrap.** `open` already printed `D=`. On a miss it prints no `D=` line: install the skill first (README), and never run `python3 "" …`. Do not run the path loop again.
 

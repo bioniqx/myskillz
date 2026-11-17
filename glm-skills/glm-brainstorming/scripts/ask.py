@@ -78,7 +78,7 @@ def cmd_mode(a):
     _write_mode(a.file, kind)
     print("MODE %s" % kind)
     if kind == "fast":
-        print("NEXT: read fast.md and follow it. Do not ask which mode.")
+        print("NEXT: follow the PACE fast NEXT. Do not ask which mode.")
     else:
         print("NEXT: follow this skill's gates. Do not ask which mode.")
     return 0
@@ -113,6 +113,15 @@ def force_pick(options, atoms, ledger, deps, reports):
 
 
 def cmd_fast(a):
+    if (a.request or "").strip():
+        # FAST has exactly one option: the request itself. Writing it here
+        # saves the model the options.json write.
+        dest = Path(a.options)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(
+            json.dumps([{"id": "A", "text": a.request}], ensure_ascii=False,
+                       indent=1) + "\n",
+            encoding="utf-8")
     try:
         options, atoms, led, deps, reports = _load(a.ledger, a.options)
     except (OSError, json.JSONDecodeError) as exc:
@@ -132,10 +141,16 @@ def cmd_fast(a):
     print("DECISION pick=%s auto=1" % pick)
     if risk:
         print("RISK %s" % risk)
-    print("NEXT: pass the AUTO block to check.py approve --asked design. "
-          "On RESULT approve yes, write a short spec (goal, files, acceptance, "
-          "out of scope), run check.py spec, and hand off. Do not read "
-          "architectural.md. Do not launch a lane. Do not ask.")
+    # The AUTO block always satisfies approve's auto rule; recording it here
+    # keeps the gate while removing the separate approve call.
+    print("RESULT approve yes")
+    print("NEXT: the pick is approved and chain.json is written. Write the "
+          "design draft (Path line, assumptions, out of scope, no question "
+          "mark) and run check.py send --ledger %s --pick %s until it prints "
+          "fail=0. Then write the short spec (goal, files, acceptance, out "
+          "of scope), run check.py spec <path>, and on fail=0 follow the "
+          "HANDOFF it prints. Do not read architectural.md. Do not launch "
+          "a lane. Do not ask." % (a.ledger, pick))
     return 0
 
 
@@ -231,6 +246,8 @@ def main(argv=None):
     f = sub.add_parser("fast")
     f.add_argument("--ledger", required=True)
     f.add_argument("--options", required=True)
+    f.add_argument("--request", default="",
+                   help="the user request; writes it as the single option")
     f.add_argument("--chain", default=".brainstorm/drafts/chain.json")
     f.add_argument("--mode", default=".brainstorm/drafts/mode.json")
     f.set_defaults(fn=cmd_fast)
