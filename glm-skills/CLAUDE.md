@@ -113,7 +113,7 @@ Every port applies the same set of model facts; each skill with a tuning surface
   `README.md` is in Vietnamese.
 - **glm-systematic-debugging**: `debug_tool.py` runs one call per phase: `probe`, `run -j`,
   `experiment` (a separate worktree for each control and treatment arm) and `scan` (8 API workers). Helper
-  shell scripts: `stress.sh` (Wilson CI and Fisher test), `bisect-parallel.sh` and `find-polluter.sh`.
+  shell scripts: `stress.sh` (Wilson CI and Fisher test) and `find-polluter.sh`.
 - **glm-requirements-code-audit**: `audit.py` works as `brief` → checklist → `run` (retrieve, judge,
   repair, verify) → `finalize`. Retrieval is deterministic Python, not model search. A checker rejects
   invented `path:lines` citations before they reach the report. It writes only under `<cwd>/.audit/`.

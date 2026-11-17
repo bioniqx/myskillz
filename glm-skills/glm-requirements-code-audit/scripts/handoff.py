@@ -852,6 +852,15 @@ def _prelude(args, text):
         ctx = os.path.join(scripts, "context.sh")
         ask = os.path.join(scripts, "ask.py")
         if mode == "slow":
+            # SLOW keeps the repo context block: the fact lanes need the same
+            # tree, manifests and deps the FAST prelude prints.
+            ctx_code = 0
+            if os.path.isfile(ctx):
+                ctx_code, out = _run_local(["sh", ctx], timeout=45)
+                _print_block(out)
+            else:
+                _print_block("PRELUDE-SKIP context.sh missing\n")
+                ctx_code = 1
             ask_code = 0
             if os.path.isfile(ask):
                 # ask.py mode writes the .brainstorm/drafts/mode.json stamp.
@@ -862,9 +871,9 @@ def _prelude(args, text):
                 _print_block("PRELUDE-SKIP ask.py missing\n")
                 ask_code = 1
             print("PACE: slow")
-            if ask_code:
-                return ask_code, (
-                    "NEXT: the mode stamp did not finish. Re-run open once. "
+            if ctx_code or ask_code:
+                return ctx_code or ask_code, (
+                    "NEXT: context or mode did not finish. Re-run open once. "
                     "Do not launch lanes.")
             return 0, _slow_brainstorm_next(pace, scripts)
         ctx_code = 0

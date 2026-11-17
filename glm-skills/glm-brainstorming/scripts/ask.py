@@ -14,7 +14,6 @@ import sys
 import time
 from pathlib import Path
 
-import check
 import decide
 from handoff import mode_of, read_mode_stamp
 
