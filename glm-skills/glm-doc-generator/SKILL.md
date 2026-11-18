@@ -41,7 +41,7 @@ EOF
 | R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Writers start only after the set is known. Reviewers for api-reference, data-model, and configuration, plus one retry, stay within that wave of 8. | 9+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every Task prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
-| R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. | Any prose between tool calls |
+| R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. The doc table (§0.1) is the one exception. | Any prose between tool calls |
 | R7 | **Reasoning effort: main thread `high`, writers `high`, reviewers `max`.** Writers execute a checklist; the reviewer's fact-check fixes are judgment work. Say so in every Task prompt. | Deep reasoning on mechanical work |
 | R8 | **Never redo work.** Diff-skip via `<state dir>/state.json` before every wave. | Rewriting an unchanged doc |
 | R9 | **Subagent returns ≤ 5 lines.** Never the doc body. | Long subagent returns |
@@ -50,6 +50,20 @@ EOF
 On ZCode, R2's Tasks are `Agent` tool calls with `subagent_type: "glm-doc-writer"`/`"glm-doc-reviewer"`,
 `run_in_background: true`, and no `model` parameter. The agent file has no model id, so the
 lane uses the session model. Fire all of them in ONE message, one per doc, then end the turn.
+
+### 0.1 Progress table (the one allowed narration)
+
+Show the doc table in the Turn 2 message (chosen rows `chờ`, cached rows
+`cached`), again in any retry-wave message, and at the top of the Turn 4
+summary — one row per selected doc:
+
+| Doc | Trạng thái |
+| --- | --- |
+| overview.md | xong |
+| api-reference.md | đang review |
+| setup-guide.md | cached |
+
+Statuses: `xong`, `đang chạy`, `đang review`, `chờ`, `cached`, `retry 1`, `thất bại` (quote the error after it).
 
 `<state dir>` is `$DOCGEN_STATE_DIR` when that variable is set, else `.zcode/doc-gen` (the scripts below read it as `S` with `${DOCGEN_STATE_DIR:-.zcode/doc-gen}`). The first line of `<state dir>/recon.md` is `HEAD: <hash>`; the manifest never repeats it.
 

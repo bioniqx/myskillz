@@ -63,6 +63,24 @@ Rules for mode C: before any paid call, tell the user how many calls and the est
 
 Prices and limits change often. If web search works, re-check them before budgeting. Every script in Stage 3 must include a cost/credit budget.
 
+## Progress table
+
+Show the stage table in chat after every stage turn; an approval gate stays
+`chờ user duyệt` until the user answers. The Stage 5 wrap-up ends with the
+final table.
+
+| Stage | Trạng thái |
+| --- | --- |
+| 0 intake + setup check | xong |
+| 1 competitor analysis | đang chạy |
+| 2 topic options (GATE 1) | chờ user duyệt |
+| 3 script (GATE 2) | chờ |
+| 4 production + visual check | chờ |
+| 5 publish + optimize | chờ |
+
+Statuses: `xong`, `đang chạy`, `chờ user duyệt`, `thất bại` (quote the error
+line).
+
 ## Stage 0 — Intake (one message, wait for the answer)
 
 Ask only what is unknown, as one numbered list:

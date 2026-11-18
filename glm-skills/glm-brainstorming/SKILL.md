@@ -189,6 +189,10 @@ defect: fold the work into the open round or drop it.
 - Never serialize independent calls. Never re-run a denied or failed call
   unchanged — switch source or drop it.
 
+Show the lane table in every user-facing message, right under the Path line:
+`| Lane | Trạng thái |`, one row per lane (`đang chạy`, `chờ`, `xong — <n>
+facts`). Chat chrome only - never inside a draft sent to `check.py send`.
+
 ## R5 — Carry state explicitly
 
 Flash loses accuracy on long chains, and a private restatement does not

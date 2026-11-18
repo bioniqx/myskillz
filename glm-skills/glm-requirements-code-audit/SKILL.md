@@ -46,6 +46,17 @@ Checks whether the **code faithfully implements a requirements document**, repor
 Do not invent extra steps between them. Do not dispatch subagents on the api lane: the parallelism is already
 running inside the script.
 
+After each call, show the step table in chat:
+
+| Bước | Trạng thái |
+| --- | --- |
+| 1 brief | xong |
+| 2 checklist (18 yêu cầu) | đang chạy |
+| 3 run | chờ |
+| 4 adjudicate + finalize | chờ |
+
+Statuses: `xong`, `đang chạy`, `chờ`, `thất bại` (quote the ERR line). On the R9 agent lane, add one row per batch instead of row 3. The R6 chat report ends with the final table.
+
 ## R1 — Where the speed comes from (do not undo it)
 
 1. **The parallel work is not in your turn.** `audit.py run` opens up to 8 threads, each one request straight

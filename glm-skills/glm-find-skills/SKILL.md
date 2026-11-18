@@ -23,6 +23,19 @@ against vercel-labs/skills docs in 2026-11; if a command errors, re-check with
 
 Work through the five steps in order; each step is one command or one script.
 
+Show the step table in chat whenever a step changes state (starts or
+completes), and end the final report with the final table:
+
+| Bước | Trạng thái |
+| --- | --- |
+| 1 hiểu nhu cầu | xong |
+| 2 discover | đang chạy |
+| 3 vet 3 ứng viên | chờ |
+| 4 install vào ZCode | chờ |
+| 5 validate + reload | chờ |
+
+Statuses: `xong`, `đang chạy`, `chờ`, `thất bại` (quote the error line).
+
 ### 1. Understand the need
 
 Identify the domain (React, testing, Godot, deployment) and the specific task.

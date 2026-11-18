@@ -19,6 +19,22 @@ The end goal is not a document. The end goal is **software that makes money**. T
 
 **State:** keep all working files in `docs/<product-slug>/` so the session can resume: `research-notes.md` (findings + sources), `decisions.md` (answers, assumptions, decisions with dates). Track phases with TodoWrite if available.
 
+**Progress table:** show the phase table in chat after every phase turn; while
+Phase 1's research branches run in parallel, one row per branch replaces the
+single Phase 1 row. The Phase 5 handoff ends with the final table.
+
+| Giai đoạn | Trạng thái |
+| --- | --- |
+| 0 intake | xong |
+| 1 research (competitors · pain · market · tech · legal) | đang chạy |
+| 2 interview (round 2/4) | chờ |
+| 3 verdict + path to money | chờ |
+| 4 write spec | chờ |
+| 5 self-review + handoff | chờ |
+
+Statuses: `xong`, `đang chạy`, `chờ`, `chờ user trả lời` (open question round),
+`thất bại` (quote the blocker).
+
 ---
 
 ## Phase 0 — Intake (one turn)

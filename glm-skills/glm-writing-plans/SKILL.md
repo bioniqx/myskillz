@@ -31,6 +31,20 @@ Call 1 `brief` -> Call 2 write the contracts -> Call 3 `build`. Nothing else.
 Every extra turn costs a full reasoning pass, so treat any fourth call as a
 defect to explain, not a habit.
 
+# R0b - Progress table after every call
+
+After each of the three calls, show the phase table in chat (Vietnamese
+statuses). On the R4 `LANE agent` fallback, one row per task instead:
+
+| Bước | Trạng thái |
+| --- | --- |
+| Call 1 brief | xong |
+| Call 2 contracts (T01-T05) | đang chạy |
+| Call 3 build | chờ |
+
+`xong` carries its fact (task count, `OK assembled`, wave count, max width);
+the R5 report ends with the final table.
+
 # R1 - Call 1: open already loaded everything
 
 Do not run the path loop, and do not brief again. The prelude starts with a `TOOL:` line. Use that exact string for every later

@@ -74,11 +74,20 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
 5. On `PROOF FAILED` or `RED PROOF FAILED`, `SendMessage` the lane the printed command and output tail verbatim and tell it to fix the cause, rerun, commit and report. On the second rejection run `retry <id>` (the engine prints it).
 6. Never weaken a test, a gate, a footprint or a profile to get past a rejection.
 7. Do not implement slices yourself. The only exception is one obvious edit in a single file.
-8. No narration between tool calls. No summaries of engine output the user did not ask for.
+8. No narration between tool calls. No summaries of engine output the user did not ask for. The slice table (rule 10) is the one required exception.
 9. Before `finish`, verify the last `next` printed no `UNRESOLVED`, no open review and no `FAIL` checkpoint. Then report with the evidence lines the engine printed.
+10. After every engine call, in the same message as the launches, show the slice table below. One row per slice in S-order; statuses come only from engine output; rebuild the full table every wake-up.
 
-**Each turn = read what arrived → ONE engine call → launch everything it printed, as parallel tool
-calls in ONE message → end the turn.** The pinned Flash model thinks before answering, so every extra turn,
+| Slice | Trạng thái |
+| --- | --- |
+| S1 SDK 0.9.0 | MERGED c22f50fc |
+| S2 Build shape BNB | MERGED 2b54ac38 |
+| S7 wire→dto/wire, entity→document | đang chạy |
+
+`MERGED <8-char hash>` when the engine prints it, `đang chạy` while the lane is in flight, `chờ` when not ready, otherwise the printed word (`REJECTED`, `BLOCKED`, `FAILED`).
+
+**Each turn = read what arrived → ONE engine call → slice table + launch everything it printed, as
+parallel tool calls in ONE message → end the turn.** The pinned Flash model thinks before answering, so every extra turn,
 tool call or paragraph you write sits on the critical path of every running lane. No narration.
 A wake-up does not re-read this file. Lane turn caps are stuck-run ceilings (programmer 40 or 48,
 reviewer 24, spot reviewer 16, investigator 24, leader 40), not budgets to spend. A cap below
@@ -201,7 +210,7 @@ When finish prints `FAST-DONE:`, run that `handoff.py fast-done` command before 
 Show `COMMIT` and `GITLAB` in the chat. Do not push.
 Report concisely: what was built, files changed, how it meets the request, review/verification outcome,
 final gate, trade-offs, high-risk assumptions that stood, remaining minor suggestions, `attempt/*`
-branches the user may delete.
+branches the user may delete. End with the final slice table.
 
 ## Dispatch templates
 

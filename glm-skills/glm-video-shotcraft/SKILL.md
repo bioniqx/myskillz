@@ -193,6 +193,23 @@ Stages 2–3 scan `references/shots/` frontmatter to pick shots matching the ene
 cross-check `references/aesthetic-rules.md`; Stage 6 reads `references/sound-design.md`; beat-synced videos
 follow `references/music-beat-sync.md`.
 
+Show the stage table in chat at every stage boundary and in the same message as
+any dispatched subagent or render command — one row per pipeline stage; the
+delivery wrap-up ends with the final table:
+
+| Stage | Trạng thái |
+| --- | --- |
+| 0 product understanding + brief | xong |
+| 2 visual direction + styleframe | đang chạy |
+| 3 shot mapping + storyboard | chờ user duyệt |
+| 4 final asset capture | chờ |
+| 5 shot build + self-check | đang render |
+| 6 sound design | chờ |
+| 7 final review + delivery | chờ |
+
+Statuses: `xong`, `đang chạy`, `đang render`, `chờ`, `chờ user duyệt`
+(co-creation milestone), `thất bại` (quote the error).
+
 ### Delivery & Wrap-up (Shared Across All Modes)
 
 After delivering the video, **proactively open the Motion Workbench first** (do not wait for the user to ask):

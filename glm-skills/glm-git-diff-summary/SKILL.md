@@ -53,6 +53,19 @@ Prompt (fill path):
 
 Then synthesize from lane bullets + `INTENT` + `NUMSTAT` only. Never Read chunks yourself in this mode; if one summary is unclear, re-dispatch just that one lane in your next message.
 
+In FAN_OUT, show the lane table in the launch message and again above Part 1 of
+the answer — one row per chunk lane. It is the one allowed exception to the
+output contract. INLINE and READ modes answer in a single turn: no table.
+
+| Lane | Trạng thái |
+| --- | --- |
+| chunk 001 auth + session | đang chạy |
+| chunk 002 payments | đang chạy |
+| chunk 003 UI polish | đang chạy |
+
+`xong` when the lane returned, `đang chạy` while in flight, `thất bại` for a
+lane whose return is unusable (re-dispatch it).
+
 ## Output contract (both parts, this order, nothing else)
 
 **Part 1 — Mô tả thay đổi (song ngữ: tiếng Việt trước, tiếng Anh ngay dưới — khối tiếng Anh là bắt buộc)** for PM/QA/manager, non-technical:

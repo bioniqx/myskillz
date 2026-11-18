@@ -104,6 +104,20 @@ Model and effort live only in `debug_tool.py` `TIERS` and in `agents/glm-debug-w
 
 Five lines, no more: `BUG:` · `LANE:` · `EVIDENCE SO FAR:` · `RULED OUT:` · `FAILED FIXES: n/3`. This is what keeps a long investigation from drifting.
 
+Show the hypothesis table in chat after every tool phase (probe, experiment,
+scan, close) — one row per hypothesis or open lead:
+
+| Giả thuyết | Trạng thái |
+| --- | --- |
+| H1 stale fragment cache | CONFIRMED |
+| H2 worker-pool race | đang chạy |
+| H3 env config drift | chờ |
+
+`đang chạy` while the experiment runs, the engine's own verdicts (`CONFIRMED`,
+`REFUTED`, `INCONCLUSIVE`), `chờ` for not yet run, `thất bại` (quote the
+error). R11's 6-line cap counts only the report lines; the final table follows
+them.
+
 ## R9. Red flags → go back to R4.1
 
 "Quick fix now, investigate later" · "just try X" · several changes then run the tests · skipping the failing test · "probably X" with no evidence · adapting a pattern you have not read fully · listing fixes before tracing the data flow · bumping a sleep, timeout or retry as the fix · a null check at the crash site · "one more attempt" after 2 failures · the user says "stop guessing", "is that actually happening?", "we're stuck".
