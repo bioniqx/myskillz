@@ -1,3 +1,12 @@
+# 10.11 (from 10.10) — 2026-11-19: five session models in the wording
+
+The 2026-11-19 model layer names five session models. The description drops
+its flash-only tuning claim and now addresses any session model — flash,
+pro, or Claude-tier — inside the 1024-char ceiling. The companions stop
+assuming a flash session: visual-companion, fanout-playbook and
+research-playbook speak of the session model. Lane model ids and
+thoughtLevel stay.
+
 # 10.10 (from 10.9) — FAST picks inside the opening call
 
 Model ids and thoughtLevel stay. `handoff.py open` now runs `ask.py fast`

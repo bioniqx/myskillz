@@ -12,7 +12,7 @@ description: >-
   yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
 metadata:
   version: 9.0
-  models: glm-5.3-flash | deepseek-flash
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
   parallelism: 8 threads inside scripts/audit.py
 ---
 
@@ -68,7 +68,7 @@ Statuses: `xong`, `đang chạy`, `chờ`, `thất bại` (quote the ERR line). 
    the report.
 3. **One shared prompt prefix per wave.** The rules and repo map are byte-identical across a wave, so request 2
    onward hits the prompt cache.
-4. **Both passes use the flash pin.** GLM-5.3-Flash, or deepseek-flash when `~/.zcode/glm-flash` says deepseek (`GLM_FLASH` overrides one process). The verifier proposes an attack. `check` closes a status only when that attack's quote is in the file, or the user records `--set`. Never skip the second pass.
+4. **Both passes follow the session model.** Each pass runs on the session model's flash tier — glm-5.3-flash or deepseek-flash, per `~/.zcode/glm-flash` (`GLM_FLASH` overrides one process). The verifier proposes an attack. `check` closes a status only when that attack's quote is in the file, or the user records `--set`. Never skip the second pass.
 5. **Nothing is retyped.** Findings, verdicts, the report and the CSV are files written by the script. Never
    copy model output into chat or into a file yourself.
 
@@ -191,7 +191,7 @@ A discrepancy is anything not ✅; ❓ items are listed separately by tag.
 | `std` (default) | high | max | almost everything |
 | `deep` | max | max | security/payment specs, or a report someone signs |
 
-Every pass uses that same flash pin. Tier never selects GLM-5.3 or deepseek-v4-pro. Higher tiers widen retrieval (more files, more context per file). `run` freezes spec atoms before it judges and refuses a checklist that drops one.
+Every pass uses that same session-model flash tier. Tier never promotes a pass to a bigger model. Higher tiers widen retrieval (more files, more context per file). `run` freezes spec atoms before it judges and refuses a checklist that drops one.
 
 ## R9 — Fallback lane
 
