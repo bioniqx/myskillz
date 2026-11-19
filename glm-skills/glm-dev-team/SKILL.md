@@ -54,13 +54,14 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
   in each agent's own frontmatter, no agent pins a model so every lane follows the session model,
   and the Agent tool takes no per-dispatch model):
 
-| Agent | Session model | Job |
-| --- | --- | --- |
-| `glm-programmer-lite` | session model, effort high | every slice that is not strong: the default lane |
-| `glm-programmer-strong` | session model, effort max | `risk: high`, `size: large`, and any **retried** slice |
-| `glm-code-reviewer` | session model, effort high | full review, read-only |
-| `glm-spot-reviewer` / `glm-investigator` | session model, effort max / high | correctness-only review / research, root cause |
-| `glm-team-leader` | session model, effort max | planning, plan adoption, verification; remembers the repo |
+  | Agent | Session model | Job |
+  | --- | --- | --- |
+  | `glm-programmer-lite` | session model, effort high | every slice that is not strong: the default lane |
+  | `glm-programmer-strong` | session model, effort max | `risk: high`, `size: large`, and any **retried** slice |
+  | `glm-code-reviewer` | session model, effort high | full review, read-only |
+  | `glm-spot-reviewer` / `glm-investigator` | session model, effort max / high | correctness-only review / research, root cause |
+  | `glm-team-leader` | session model, effort max | planning, plan adoption, verification; remembers the repo |
+The lane model is the session model - GLM-5.3-Flash or DeepSeek V4.1 Flash by default; a GLM 5.3, DeepSeek V4 Pro or Claude Sonnet 5.5 session runs its own model under the same effort rules.
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
   read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
