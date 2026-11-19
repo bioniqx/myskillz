@@ -2,6 +2,23 @@
 
 Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 
+## Session models
+
+Five display names cover the three tiers a session can run on. The
+flash tier carries every lane and the main thread, the pro tier runs
+only when the session is pinned to it, and the Claude tier is the
+harness default when no GLM model is configured.
+
+| Model | Tier |
+| --- | --- |
+| GLM-5.3-Flash | flash tier |
+| DeepSeek V4.1 Flash | flash tier |
+| GLM 5.3 | pro tier |
+| DeepSeek V4 Pro | pro tier |
+| Claude Sonnet 5.5 | Claude tier |
+
+No speed or price numbers are pinned for these tiers.
+
 ## Model facts this design rests on
 
 | Fact | Consequence in this skill |

@@ -4,6 +4,23 @@ Read when configuring the runtime, when a GLM-specific failure appears,
 or when you want the numbers behind SKILL.md's R2/R3/R4. Not needed on a
 normal run.
 
+## Session models
+
+Five display names cover the three tiers a session can run on. The
+flash tier carries every lane and the main thread, the pro tier runs
+only when the session is pinned to it, and the Claude tier is the
+harness default when no GLM model is configured.
+
+| Model | Tier |
+| --- | --- |
+| GLM-5.3-Flash | flash tier |
+| DeepSeek V4.1 Flash | flash tier |
+| GLM 5.3 | pro tier |
+| DeepSeek V4 Pro | pro tier |
+| Claude Sonnet 5.5 | Claude tier |
+
+No speed or price numbers are pinned for these tiers.
+
 ## 1. Models
 
 Two models serve the whole skill:
@@ -11,7 +28,7 @@ Two models serve the whole skill:
 | Model | Out speed | $/M in | $/M out | Use |
 | --- | --- | --- | --- | --- |
 | GLM-5.3-Flash | 113.7 tok/s | 0.15 | 0.50 | every lane and the main thread |
-| GLM-5.3 | 63.4 tok/s | 1.40 | 4.40 | not used |
+| GLM-5.3 | 63.4 tok/s | 1.40 | 4.40 | pro tier: only when the session is pinned to it |
 
 A GLM-5.3 call is the same family at about 9× the price. It does not
 close a decision. `decide.py score` does. Flash is 1.8× the output
@@ -88,7 +105,7 @@ Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target 
 copies each `glm-<name>/` folder to `~/.zcode/skills/glm-<name>/`, the bundled agents verbatim to
 `~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
 (/glm-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). Model and effort live only in the agent frontmatter (section 2). When a model
-must be named yourself, use `glm-5.3-flash` or `deepseek-flash`. Do not name `glm-5.3` or `deepseek-v4-pro`. Installed skills, agents and
+must be named yourself, use `glm-5.3-flash` or `deepseek-flash`. Never promote a lane or a writer to a pro-tier model to lift quality; the pro tier runs only when the session is pinned to it. Installed skills, agents and
 commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$glm-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
 characters, and a description over 1024 characters makes ZCode drop the skill — which is why the
 WHEN clause sits at the front of this skill's description. Agents launched together run in parallel

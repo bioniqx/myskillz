@@ -2,6 +2,23 @@
 
 Read this when something is slow, when `scan` falls back to the agent lane, or when you are porting the skill to another harness.
 
+## Session models
+
+Five display names cover the three tiers a session can run on. The
+flash tier carries every lane and the main thread, the pro tier runs
+only when the session is pinned to it, and the Claude tier is the
+harness default when no GLM model is configured.
+
+| Model | Tier |
+| --- | --- |
+| GLM-5.3-Flash | flash tier |
+| DeepSeek V4.1 Flash | flash tier |
+| GLM 5.3 | pro tier |
+| DeepSeek V4 Pro | pro tier |
+| Claude Sonnet 5.5 | Claude tier |
+
+No speed or price numbers are pinned for these tiers.
+
 ## Model facts this design depends on
 
 | Fact | Consequence in the skill |
