@@ -3,6 +3,11 @@
 
 Canonical copy lives in skills/glm/_shared/; sync.sh vendors it into each
 skill's scripts/. Reads keys and base URLs, never writes them anywhere.
+
+Session models served through this client: GLM-5.3-Flash,
+DeepSeek V4.1 Flash, GLM 5.3, DeepSeek V4 Pro, Claude Sonnet 5.5.
+The flash pin picks the provider (glm or deepseek); a pro pin word
+sends every call to that pro API id.
 """
 
 import http.client
