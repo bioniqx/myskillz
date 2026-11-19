@@ -278,7 +278,7 @@ GUARDS = (
     "GUARD approve: ok, sounds good, and a reply to a side question are not approval. Do not write code, a spec, or a plan the user has not explicitly approved when this skill requires approval.",
     "GUARD tests: do not edit a test, a gate, or an assertion so that wrong code passes.",
     "GUARD done: say done only when this skill's own script printed its success line. A confident summary is not evidence.",
-    "GUARD flash: the session model is GLM-5.3-Flash or DeepSeek V4.1 Flash (deepseek-flash). Do not switch to GLM-5.3 or deepseek-v4-pro.",
+    "GUARD flash: the session model is GLM-5.3-Flash, DeepSeek V4.1 Flash (deepseek-flash), GLM 5.3, DeepSeek V4 Pro, or Claude Sonnet 5.5. Do not switch models and never promote a lane to another model.",
     "GUARD effort: keep high or max. low and disabled invent APIs and citations. Leave DeepSeek thinking enabled.",
     "GUARD tools: when NEXT names a script or a shell command, run that command this turn. When NEXT says to write the answer, write it and do not add a tool call. Send every independent call in one message.",
     "GUARD schema: do not set response_format or JSON schema mode. A JSONL file or labeled lines the script asked for are still required.",

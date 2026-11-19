@@ -4,6 +4,10 @@
 HTTP fan-out both follow it. GLM_FLASH overrides that file for one process.
 A missing HOME is "no pin file": unit tests that clear the environment stay
 on GLM even when the developer has a pin installed.
+
+The pro pin words glm-5.3 and deepseek-v4-pro name the non-flash session
+models: provider() keeps their provider and resolve_http_model returns
+that pro API id for every model.
 """
 
 import os
@@ -11,6 +15,11 @@ import re
 
 DEEPSEEK_API = "deepseek-flash"
 DEEPSEEK_BASE = "https://api.deepseek.com"
+# Pro pin words: the non-flash session models. The API id is the word itself.
+PRO_API = {
+    "glm-5.3": "glm-5.3",
+    "deepseek-v4-pro": "deepseek-v4-pro",
+}
 API_REMAP = {
     "glm-5.3-flash": DEEPSEEK_API,
     "glm-5.3": DEEPSEEK_API,
@@ -20,15 +29,15 @@ API_REMAP = {
 _MODEL_LINE = re.compile(r"(?m)^model:[ \t]*.*(?:\n|$)")
 
 
-def _word(text):
+def _first(text):
     parts = (text or "").strip().split()
-    return parts[0].lower() if parts else ""
+    return parts[0] if parts else ""
 
 
 def _name(word):
-    if word in ("deepseek", "ds", "deepseek-flash"):
+    if word in ("deepseek", "ds", "deepseek-flash", "deepseek-v4-pro"):
         return "deepseek"
-    if word in ("glm", "glm-5.3-flash", "flash"):
+    if word in ("glm", "glm-5.3-flash", "flash", "glm-5.3"):
         return "glm"
     return ""
 
@@ -39,21 +48,29 @@ def _home(home):
     return os.environ.get("HOME") or ""
 
 
-def from_env():
-    return _name(_word(os.environ.get("GLM_FLASH")))
-
-
-def from_file(home=None):
+def _file_word(home):
     home = _home(home)
     if not home:
         return ""
     path = os.path.join(home, ".zcode", "glm-flash")
     try:
         with open(path, encoding="utf-8") as fh:
-            word = _word(fh.read())
+            return _first(fh.read())
     except OSError:
         return ""
-    return _name(word)
+
+
+def pin_word(home=None):
+    """The raw pin word: first token of GLM_FLASH, else the pin file."""
+    return _first(os.environ.get("GLM_FLASH")) or _file_word(home)
+
+
+def from_env():
+    return _name(_first(os.environ.get("GLM_FLASH")).lower())
+
+
+def from_file(home=None):
+    return _name(_file_word(home).lower())
 
 
 def provider(home=None):
@@ -110,6 +127,9 @@ def stamp_tree(home, forced=None):
 
 
 def resolve_http_model(model):
+    api = PRO_API.get(pin_word().lower())
+    if api:
+        return api
     if http_provider() != "deepseek":
         return model
     return API_REMAP.get(model, model)
