@@ -197,7 +197,8 @@ approach. The plan file stays portable (R8).
 5. Do not switch model or effort mid-skill; each switch re-reads the whole
    conversation uncached. The lane follows the session model's flash tier through
    `~/.zcode/glm-flash`: glm-5.3-flash or deepseek-flash (`GLM_FLASH` overrides one
-   process). Never promote a lane to a bigger session model, never effort low.
+   process), or the pin names a pro id (glm-5.3, deepseek-v4-pro) and the lane runs
+   that model. Never promote a lane to a bigger session model, never effort low.
 6. Independent subsystems get one plan each, and they can be built concurrently.
 
 # R7 - Inline path (N <= 1, or PACE short)
