@@ -197,6 +197,20 @@ class InstallZcodeTests(unittest.TestCase):
         with open(foreign, encoding="utf-8") as fh:
             self.assertEqual(fh.read(), marker)
 
+    def test_saved_pro_pin_word_keeps_deepseek_provider(self):
+        pin = os.path.join(self.home, ".zcode", "glm-flash")
+        os.makedirs(os.path.dirname(pin))
+        with open(pin, "w", encoding="utf-8") as fh:
+            fh.write("deepseek-v4-pro\n")
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("pin: deepseek", r.stdout)
+        with open(pin, encoding="utf-8") as fh:
+            self.assertEqual(fh.read().strip(), "deepseek")
+        again = self.install()
+        self.assertEqual(again.returncode, 0, again.stderr + again.stdout)
+        self.assertIn("pin: deepseek", again.stdout)
+
     def test_flash_deepseek_dry_run_writes_nothing(self):
         r = self.install("--dry-run", "--flash", "deepseek")
         self.assertEqual(r.returncode, 0, r.stderr)

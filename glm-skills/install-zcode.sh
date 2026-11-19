@@ -362,9 +362,10 @@ PY
 
 if [ "$FLASH_EXPLICIT" -eq 0 ] && [ -f "$HOME_DIR/.zcode/glm-flash" ]; then
     saved=$(awk 'NF { print $1; exit }' "$HOME_DIR/.zcode/glm-flash" 2>/dev/null || true)
+    # The pro words deepseek-v4-pro and glm-5.3 map to their providers.
     case "$saved" in
-        deepseek|ds|deepseek-flash) FLASH=deepseek ;;
-        glm|glm-5.3-flash|flash) FLASH=glm ;;
+        deepseek|ds|deepseek-flash|deepseek-v4-pro) FLASH=deepseek ;;
+        glm|glm-5.3-flash|flash|glm-5.3) FLASH=glm ;;
     esac
 fi
 
