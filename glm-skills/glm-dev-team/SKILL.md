@@ -50,16 +50,17 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
   every finished lane's marker, report file and checkpoint log, merges, queues fixes, sizes the
   fan-out to what the API is serving, dispatches everything newly ready and prints the endgame.
   Never re-derive its work in prose.
-- **Workers** (background subagents; `doctor --fix` installs them user-level — model and effort are pinned
-  in each agent's own frontmatter, the Agent tool takes no per-dispatch model):
+- **Workers** (background subagents; `doctor --fix` installs them user-level — effort is pinned
+  in each agent's own frontmatter, no agent pins a model so every lane follows the session model,
+  and the Agent tool takes no per-dispatch model):
 
-  | Agent | Flash pin | Job |
-  | --- | --- | --- |
-  | `glm-programmer-lite` | GLM-5.3-Flash | every slice that is not strong: the default lane |
-  | `glm-programmer-strong` | GLM-5.3-Flash | `risk: high`, `size: large`, and any **retried** slice |
-  | `glm-code-reviewer` | GLM-5.3-Flash | full review, read-only |
-  | `glm-spot-reviewer` / `glm-investigator` | GLM-5.3-Flash | correctness-only review / research, root cause |
-  | `glm-team-leader` | GLM-5.3-Flash | planning, plan adoption, verification; remembers the repo |
+| Agent | Session model | Job |
+| --- | --- | --- |
+| `glm-programmer-lite` | session model, effort high | every slice that is not strong: the default lane |
+| `glm-programmer-strong` | session model, effort max | `risk: high`, `size: large`, and any **retried** slice |
+| `glm-code-reviewer` | session model, effort high | full review, read-only |
+| `glm-spot-reviewer` / `glm-investigator` | session model, effort max / high | correctness-only review / research, root cause |
+| `glm-team-leader` | session model, effort max | planning, plan adoption, verification; remembers the repo |
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
   read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
@@ -87,7 +88,7 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
 `MERGED <8-char hash>` when the engine prints it, `đang chạy` while the lane is in flight, `chờ` when not ready, otherwise the printed word (`REJECTED`, `BLOCKED`, `FAILED`).
 
 **Each turn = read what arrived → ONE engine call → slice table + launch everything it printed, as
-parallel tool calls in ONE message → end the turn.** The pinned Flash model thinks before answering, so every extra turn,
+parallel tool calls in ONE message → end the turn.** The session model thinks before answering, so every extra turn,
 tool call or paragraph you write sits on the critical path of every running lane. No narration.
 A wake-up does not re-read this file. Lane turn caps are stuck-run ceilings (programmer 40 or 48,
 reviewer 24, spot reviewer 16, investigator 24, leader 40), not budgets to spend. A cap below
@@ -173,7 +174,7 @@ Act on each block, in the same turn:
   its worktree); only the user can answer → ask **now**, keep everything else running.
 - `REJECTED` / `NOT READY` / `MERGE ERROR` → the slice stays in flight: `SendMessage` that agent the exact
   fix printed, `next` when it reports. `devteam retry <id>` (cold, fresh worktree, `--files …` to widen;
-  the retry runs on GLM-5.3-Flash) only when it can't be resumed — `TaskStop` a stuck one first.
+  the retry runs on the strong lane at max effort) only when it can't be resumed — `TaskStop` a stuck one first.
 - `UNCLAIMED` → those Agent calls never started (a dropped parallel launch). Launch each reprinted line once. Do not start a second copy of a slice that is already running.
 - `<id>: REJECTED - PROOF FAILED ...` / `RED PROOF FAILED` → `SendMessage` that agent the printed command and
   output tail verbatim, plus: fix the cause, rerun the command, commit, report. Do not edit anything

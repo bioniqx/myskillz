@@ -69,9 +69,11 @@ headless/remote setups, never a bare host:port. If you didn't capture
 stdout, read `$STATE_DIR/server-info`. Remind the user to gitignore
 `.brainstorm/` if it isn't already.
 
-Reading screenshots back: GLM-5.3-Flash is natively multimodal, so a
-Flash lane can look at a screenshot of the rendered page if you need a
-visual check. GLM-5.3 is text-only — do not send it images.
+Reading screenshots back: glm-5.3-flash reads images natively, so a
+flash-tier lane can look at a screenshot of the rendered page if you need
+a visual check; glm-5.3 is text-only — do not send it images. On any other
+session model, confirm it takes images before sending one; the lane always
+follows the session model.
 
 Platform notes: ZCode — no ZCode-specific server behavior is documented:
 run as above (the script backgrounds itself), and if the harness reaps

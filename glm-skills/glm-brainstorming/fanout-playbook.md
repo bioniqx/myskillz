@@ -25,7 +25,7 @@ in the settings allow-list.
 
 ## 1. Width in 10 seconds
 
-All counts assume Flash lanes (SKILL.md R2).
+All counts assume lanes follow the session model (SKILL.md R2).
 
 | Task | Direct calls | Code lanes | Web lanes |
 | --- | --- | --- | --- |

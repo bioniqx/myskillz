@@ -4,7 +4,7 @@ description: Root-cause-first debugging for any bug, test failure, flaky test, b
 license: MIT
 metadata:
   version: "9.0"
-  models: "glm-5.3-flash | deepseek-flash"
+  models: "glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5"
   harness: "zcode"
 ---
 
@@ -98,7 +98,7 @@ Count every candidate fix that failed, in the main tree or in a worktree. Diagno
 
 ## R7. Effort
 
-Model and effort live only in `debug_tool.py` `TIERS` and in `agents/glm-debug-worker.md`. Every tier is GLM-5.3-Flash, or deepseek-flash when `~/.zcode/glm-flash` says deepseek (`GLM_FLASH` overrides one process). `light` and `std` are effort high. `deep` is effort max. Do not name GLM-5.3 or deepseek-v4-pro, and do not lower effort to low or disabled. Why: `references/glm-tuning.md`, read only when retuning.
+Model and effort live only in `debug_tool.py` `TIERS` and in `agents/glm-debug-worker.md`. Every tier uses the session model's flash tier — glm-5.3-flash, or deepseek-flash when `~/.zcode/glm-flash` says deepseek (`GLM_FLASH` overrides one process). `light` and `std` are effort high. `deep` is effort max. Never promote a tier to a bigger session model, and do not lower effort to low or disabled. Why: `references/glm-tuning.md`, read only when retuning.
 
 ## R8. State carry — restate before each lane change and before the fix
 
