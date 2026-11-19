@@ -11,7 +11,7 @@ SKILL = Path(__file__).resolve().parents[2] / "glm-dev-team"
 GUARD = SKILL / "scripts" / "guard.py"
 LEADER = SKILL / "agents" / "glm-team-leader.md"
 
-ZCODE_FM_KEYS = ["name", "description", "color", "model", "thoughtLevel", "maxTurns", "injectAgentsMd"]
+ZCODE_FM_KEYS = ["name", "description", "color", "thoughtLevel", "maxTurns", "injectAgentsMd"]
 
 MEM_RE = re.compile(r"`?(\.claude/[^\s`]*MEMORY\.md)`?")
 

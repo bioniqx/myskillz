@@ -1726,8 +1726,19 @@ def needs_verify(it, f):
 def should_verify_item(no_verify, it, row):
     """Wave-B gate for one live item: identical to the pre-pipeline wave-B
     rule - a stale verdict never suppresses a fresh re-judge's adversarial
-    pass (--resume re-verifies live items that had one)."""
-    return (not no_verify) and needs_verify(it, row)
+    pass (--resume re-verifies live items that had one). A settled row
+    (high confidence with two recorded passes) stays settled."""
+    if no_verify:
+        return False
+    row = row or {}
+    if row.get("confidence") == "high":
+        try:
+            passes = int(row.get("passes") or 0)
+        except (TypeError, ValueError):
+            passes = 0
+        if passes >= 2:
+            return False
+    return needs_verify(it, row)
 
 
 def residual_verify_ids(vset, live_ids, verdict_ids):
