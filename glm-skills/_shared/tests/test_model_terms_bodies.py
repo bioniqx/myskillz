@@ -67,7 +67,8 @@ def frontmatter_description(rel):
 class TestTierWordingSweep(unittest.TestCase):
     def test_devteam_skill_uses_session_model_wording(self):
         content = read("glm-dev-team/SKILL.md")
-        header = [l for l in content.splitlines() if l.startswith("| Agent")]
+        header = [l for l in content.splitlines()
+                  if l.lstrip().startswith("| Agent")]  # rows live in the Workers list item
         self.assertTrue(header, "no workers table header row")
         self.assertIn("session model", header[0].lower(),
                       "lane table header must say 'session model', not a flash pin")
@@ -189,6 +190,94 @@ class TestTierWordingSweep(unittest.TestCase):
         self.assertEqual(recorded, ["glm-brainstorming", "glm-writing-plans"],
                          "exactly the two swept folders with a CHANGELOG"
                          " should record the sweep")
+
+
+class TestFiveModelLanePinning(unittest.TestCase):
+    """Pins the r1-4 fix contract: the five-model lane vocabulary returns to
+    the delivered prose — R6 names the pro-pin outcome alongside the flash
+    ids, R7 and the audit pass 4 keep pro sessions on their own model, the
+    dev-team workers table carries the plan sentence directly under it with
+    its rows inside the Workers list item, the debugging README broadens its
+    tool-call claim, and the writing-plans CHANGELOG claims what R6 says."""
+
+    PRO_PIN_CLAUSE = "the pin names a pro id (glm-5.3, deepseek-v4-pro)"
+    KEEPS_OWN_MODEL_CLAUSE = "a glm-5.3, deepseek-v4-pro or Claude Sonnet 5.5 session keeps its own model"
+    DEVTEAM_LANE_SENTENCE = "The lane model is the session model - GLM-5.3-Flash or DeepSeek V4.1 Flash by default; a GLM 5.3, DeepSeek V4 Pro or Claude Sonnet 5.5 session runs its own model under the same effort rules."
+
+    def _workers_table_rows(self, lines):
+        workers = [i for i, l in enumerate(lines)
+                   if l.startswith("- **Workers**")]
+        guards = [i for i, l in enumerate(lines)
+                  if l.startswith("- **Guards**")]
+        self.assertTrue(workers, "no Workers bullet")
+        self.assertTrue(guards, "no Guards bullet")
+        return [i for i, l in enumerate(lines)
+                if workers[0] < i < guards[0] and l.lstrip().startswith("|")]
+
+    def test_writing_plans_r6_lane_sentence_names_the_pro_pin_outcome(self):
+        f = flat(read("glm-writing-plans/SKILL.md"))
+        pos = f.find(self.PRO_PIN_CLAUSE)
+        self.assertGreaterEqual(pos, 0,
+                                "R6 lane sentence lost the pro-pin outcome")
+        window = f[max(0, pos - 160):pos + len(self.PRO_PIN_CLAUSE) + 60]
+        self.assertIn("glm-5.3-flash", window,
+                      "pro-pin outcome must sit alongside glm-5.3-flash")
+        self.assertIn("deepseek-flash", window,
+                      "pro-pin outcome must sit alongside deepseek-flash")
+
+    def test_debugging_r7_names_the_keeps_own_model_clause(self):
+        f = flat(read("glm-systematic-debugging/SKILL.md"))
+        self.assertIn(self.KEEPS_OWN_MODEL_CLAUSE, f,
+                      "R7 tier sentence lost the keeps-own-model clause")
+
+    def test_requirements_audit_pass_4_names_the_pro_id_outcome(self):
+        f = flat(read("glm-requirements-code-audit/SKILL.md"))
+        self.assertIn("the pro id the pin holds", f,
+                      "pass 4 lost the pro-id lane outcome")
+
+    def test_devteam_skill_names_the_claude_sonnet_session(self):
+        content = read("glm-dev-team/SKILL.md")
+        self.assertIn("Claude Sonnet 5.5", content,
+                      "dev-team SKILL.md must name the Claude Sonnet 5.5"
+                      " session model")
+
+    def test_devteam_workers_table_rows_sit_inside_the_list_item(self):
+        lines = read("glm-dev-team/SKILL.md").splitlines()
+        rows = self._workers_table_rows(lines)
+        self.assertGreaterEqual(len(rows), 4, "workers table lost rows")
+        for i in rows:
+            self.assertTrue(lines[i][:1].isspace(),
+                            "workers table rows must be re-indented inside"
+                            " the Workers list item")
+
+    def test_devteam_plan_sentence_directly_under_the_workers_table(self):
+        lines = read("glm-dev-team/SKILL.md").splitlines()
+        rows = self._workers_table_rows(lines)
+        self.assertTrue(rows, "no workers table rows")
+        tail = flat("\n".join(lines[rows[-1] + 1:]))
+        self.assertTrue(tail.startswith(self.DEVTEAM_LANE_SENTENCE),
+                        "the plan sentence must be the first content directly"
+                        " under the workers table")
+
+    def test_debugging_readme_broadens_tool_call_claim_and_names_pro_models(self):
+        f = flat(read("glm-systematic-debugging/README.md"))
+        self.assertIn("GLM-5.3 and the flash-tier models emit only a couple of tool calls per turn", f,
+                      "README tool-call claim still credits only GLM-5.3")
+        self.assertIn("DeepSeek V4 Pro and Claude Sonnet 5.5", f,
+                      "README must name the DeepSeek V4 Pro and Claude"
+                      " Sonnet 5.5 sessions")
+
+    def test_writing_plans_changelog_entry_matches_delivered_r6(self):
+        lines = read("glm-writing-plans/CHANGELOG.md").splitlines()
+        dated = [l for l in lines if "2026-11-19" in l]
+        self.assertTrue(dated,
+                        "writing-plans CHANGELOG has no 2026-11-19 entry")
+        entry = flat(dated[0])
+        self.assertIn("R6", entry,
+                      "2026-11-19 entry no longer describes the R6 change")
+        self.assertIn(self.PRO_PIN_CLAUSE, entry,
+                      "2026-11-19 entry still claims a flash-only R6 lane"
+                      " outcome instead of the delivered pro-pin wording")
 
 
 if __name__ == "__main__":
