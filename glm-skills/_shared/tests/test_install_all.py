@@ -1,4 +1,9 @@
+"""install-all.sh end-to-end tests (temp HOME only; the real four-target install is S5).
+The preflight cases pin review r1-3: every --only set must abort non-zero before the first
+copy when the shared preflight rejects the tree, and the existing six test_install_all.py
+cases must stay green."""
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -163,6 +168,57 @@ class InstallAllTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.home, ".agents")))
         self.assertFalse(os.path.exists(os.path.join(self.home, ".claude")))
         self.assertFalse(os.path.exists(os.path.join(self.xdg, "opencode")))
+
+    def test_over_1024_description_aborts_only_agents_with_nothing_installed(self):
+        """Criterion: in a copied repo tree where one skill's frontmatter description exceeds 1024 characters,
+        sh install-all.sh --home TMP --only agents exits non-zero and TMP contains no installed skill
+        (preflight aborts before the first copy for target sets without zcode)."""
+        copy_root = self.copied_tree()
+        skill_md = os.path.join(copy_root, "glm-brainstorming", "SKILL.md")
+        with open(skill_md, encoding="utf-8") as fh:
+            text = fh.read()
+        over, n = re.subn(r"(?m)^description:.*$", "description: " + "x" * (1024 + 1), text, count=1)
+        self.assertEqual(n, 1)
+        with open(skill_md, "w", encoding="utf-8") as fh:
+            fh.write(over)
+        r = self.install_all("--only", "agents", root=copy_root)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("glm-brainstorming", r.stdout + r.stderr)
+        self.assertEqual(os.listdir(self.home), ["tree"])
+
+    def test_agent_model_line_aborts_only_opencode_with_nothing_written(self):
+        """An agent file carrying a model: line aborts --only opencode non-zero before
+        anything is written: the preflight must run for target sets without zcode."""
+        copy_root = self.copied_tree()
+        agent_md = os.path.join(copy_root, "glm-brainstorming", "agents", "glm-explorer.md")
+        with open(agent_md, encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+        self.assertEqual(lines[0], "---")
+        lines.insert(1, "model: glm-5.3")
+        with open(agent_md, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines))
+        r = self.install_all("--only", "opencode", root=copy_root)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("glm-brainstorming", r.stdout + r.stderr)
+        self.assertEqual(os.listdir(self.home), ["tree"])
+
+    def test_opencode_dir_pruned_from_every_target_like_zcode(self):
+        """A skill's opencode/ dir is install junk (install-zcode.sh parity): pruned from
+        the agents and claude as-is copies, and from the opencode leg before the agents
+        move and the saved-commands restore."""
+        copy_root = self.copied_tree()
+        leak = os.path.join(copy_root, "glm-brainstorming", "opencode")
+        os.makedirs(leak)
+        with open(os.path.join(leak, "local.md"), "w", encoding="utf-8") as fh:
+            fh.write("# opencode-only content that must not leak to other targets\n")
+        r = self.install_all("--only", "agents,claude,opencode", root=copy_root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for harness in ("agents", "claude"):
+            self.assertFalse(os.path.exists(self.target(harness, "glm-brainstorming", "opencode")), harness)
+            self.assertTrue(os.path.isfile(self.target(harness, "glm-brainstorming", "SKILL.md")), harness)
+        oc = self.target("opencode", "glm-brainstorming")
+        self.assertFalse(os.path.exists(os.path.join(oc, "opencode", "local.md")))
+        self.assertTrue(os.path.isfile(os.path.join(oc, "opencode", "agents", "glm-explorer.md")))
 
 
 if __name__ == "__main__":

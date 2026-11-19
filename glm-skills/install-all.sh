@@ -12,6 +12,9 @@
 # Non-glm folders under a target are never touched. --dry-run writes nothing
 # anywhere (the zcode leg is delegated with --dry-run).
 #
+# The read-only preflight in install-zcode.sh runs before every target set:
+# a rejected tree aborts non-zero before the first copy, whatever --only says.
+#
 # Usage: sh install-all.sh [--home DIR] [--dry-run] [--only zcode,agents,claude,opencode]
 set -eu
 
@@ -64,9 +67,16 @@ for _folder in $FOLDERS; do
     skill_n=$((skill_n + 1))
 done
 
-# Same junk set install-zcode.sh prunes after its copy step.
+# Shared preflight: install-zcode.sh's read-only checks, delegated as a dry run
+# (stdout discarded, its Error: lines reach stderr). It writes nothing, so it is
+# safe in --dry-run mode too; a non-zero exit aborts here via set -e.
+[ -f "$SCRIPT_DIR/install-zcode.sh" ] || { echo "Error: install-zcode.sh not found next to install-all.sh" >&2; exit 1; }
+sh "$SCRIPT_DIR/install-zcode.sh" --home "$HOME_DIR" --dry-run >/dev/null
+
+# Same junk set install-zcode.sh prunes after its copy step (opencode/ dirs are
+# per-target local state, never shipped).
 prune_junk() {
-    find "$1" \( -name .DS_Store -o -name .idea -o -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
+    find "$1" \( -name opencode -o -name .DS_Store -o -name .idea -o -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} +
 }
 
 # rm -rf then copy each skill folder as-is with junk pruned. Only glm-* names
