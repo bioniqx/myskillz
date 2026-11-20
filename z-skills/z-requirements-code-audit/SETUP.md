@@ -1,0 +1,91 @@
+# Setup — z-requirements-code-audit (GLM edition)
+
+Two lanes. The **api lane** is the fast one and needs a key; the **agent lane** needs nothing and is picked
+automatically when no key is found.
+
+## 1. Install
+
+```bash
+# ZCode
+python3 z-requirements-code-audit/scripts/audit.py setup --harness zcode
+```
+
+That copies the skill to the harness's skills directory and the matching agent files to its agents directory
+(`--dry-run` prints what would happen).
+
+By hand instead:
+
+| Harness | Skill | Agents (fallback lane) |
+|---|---|---|
+| ZCode | `~/.zcode/skills/z-requirements-code-audit/` | `~/.zcode/agents/z-rca-*.md` from `agents/` |
+
+Invoke it in ZCode with `$z-requirements-code-audit <spec file>`.
+
+## 2. Environment
+
+```bash
+export ZAI_API_KEY=<your GLM Coding Plan key>
+export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
+export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY      # for the harness itself
+```
+
+`audit.py` also reads the key from `~/.zcode/*.json` — the v2 credentials file
+`~/.zcode/v2/credentials.json` via its `api-key` field — and from `~/.claude/settings.json`, only from
+fields whose name says they hold one (`apiKey`, `ANTHROPIC_AUTH_TOKEN`, `token`, `api-key`, …), never by
+scanning strings.
+
+The OpenAI-compatible route works too: point `ZAI_BASE_URL` at `https://api.z.ai/api/paas/v4` and the client
+switches to `chat/completions` with a `Bearer` header.
+
+Verify:
+
+```bash
+python3 <skill>/scripts/audit.py doctor --ping
+```
+
+It prints python and ripgrep versions, where the key came from, the resolved endpoint and route, the thread
+count, the tier table, a live ping to both models, and the request shape the gateway accepted.
+
+## 3. ripgrep
+
+Strongly recommended — it is the retrieval engine. Without it the script falls back to a pure-Python scanner,
+which is correct but much slower on large repositories.
+
+```bash
+brew install ripgrep   #  macOS
+apt install ripgrep    #  Debian/Ubuntu
+```
+
+`pdftotext` (poppler-utils) is optional: with it on PATH, `brief --spec spec.pdf` extracts the PDF text itself;
+without it the PDF is reported with a WARN and you extract it by hand. `.xlsx` sheets are read with the standard
+library alone. Retrieval also searches dot-directories such as `.github/` and `.circleci/` and template or
+contract files (`.erb`, `.sol`, `.cshtml`); `.git/` itself is never searched or cited.
+
+## 4. Threads
+
+8 by default, and 8 is the ceiling (the provider allows 8 concurrent API calls). Override with `run --threads N`, or
+`AUDIT_THREADS=N`. Lower it if the endpoint rate-limits you (the client already backs off on 429/5xx); values above 8
+are clamped to 8. The agent lane has its own width control: `OC_MAX_LANES` (agent-lane width) defaults to 8 and is clamped to 1-8 (0 gives 1, non-numeric or empty gives 8); batching items beats more workers.
+
+## 5. Permissions
+
+The skill needs to run one script and write under one directory:
+
+- Bash: `python3 <skill>/scripts/audit.py …`
+- Writes: `<cwd>/.audit/**` only. The codebase is never modified.
+- On the api lane the workers are HTTPS requests, not agents, so no per-agent tool permissions apply.
+- ZCode: the fallback-worker agent files declare no tool frontmatter; their read-only (write-one-file)
+  constraints live in the agents' prompt bodies.
+
+## 6. Where things go
+
+- `<cwd>/.audit/` — everything the audit writes: `index.json`, `repo-map.txt`, `spec/`, `checklist.jsonl`,
+  `batches/`, `findings/`, `verify/`, `findings.jsonl`, `verdicts.jsonl`, `adjudications.jsonl`, `plan.jsonl`,
+  `z-requirements-code-audit.md`, `traceability.csv`, `state.json`, `config.json`, `ACTIVE`. Added to `.git/info/exclude` automatically (local and
+  untracked — the repository itself is not touched).
+- `brief --force` archives a previous audit to `.audit.prev-<timestamp>/`.
+- Uninstall: delete the skill folder and the two agent files. Nothing is written outside audit dirs.
+
+## 7. Windows
+
+Use `python` instead of `python3`. Everything else is stdlib and portable; install ripgrep for speed.

@@ -1,0 +1,235 @@
+---
+name: z-writing-plans
+description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 8 concurrent writers by the script itself, verified by a deterministic linter.
+argument-hint: "[spec-path] [--thorough]"
+---
+
+# Writing Plans (v9 - GLM edition)
+
+Write implementation plans for an engineer with zero context and questionable
+taste: exact files, real code, exact commands with expected output, commits.
+DRY. YAGNI. TDD.
+
+Announce once: "I'm using the z-writing-plans skill to create the implementation plan."
+
+# R-hand - sibling skills, call 1
+
+Call 1 is one command. It routes, and when `--spec` is a real file it runs `brief`.
+
+```bash
+H=; for d in "<base dir>" ~/.zcode/skills/z-writing-plans .zcode/skills/z-writing-plans .agents/skills/z-writing-plans ~/.agents/skills/z-writing-plans; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "z-writing-plans: handoff.py not found"; exit 1; }
+python3 "$H" open --self z-writing-plans --spec=<spec path> <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
+```
+
+`<base dir>` is the "Base directory for this skill" line. Replace `<spec path>` with the real file. The heredoc is the user request. Empty stdin does not route. `OPEN: routed` is binding: follow `NEXT:` and do not plan. `OPEN: stay` means the three calls below, and the prelude is call 1 when it printed `TOOL:` and the spec body. `GUARD` lines bind the whole task. Run `next --self z-writing-plans --event <event>` only when the user wants that exit. Do not choose the sibling from memory. When a later step is a job this skill does not do, run `handoff.py call --self z-writing-plans --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self z-writing-plans --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+
+# R0 - The whole pipeline is three tool calls
+
+Call 1 `brief` -> Call 2 write the contracts -> Call 3 `build`. Nothing else.
+Every extra turn costs a full reasoning pass, so treat any fourth call as a
+defect to explain, not a habit.
+
+# R0b - Progress table after every call
+
+After each of the three calls, show the phase table in chat (Vietnamese
+statuses). On the R4 `LANE agent` fallback, one row per task instead:
+
+| Bước | Trạng thái |
+| --- | --- |
+| Call 1 brief | xong |
+| Call 2 contracts (T01-T05) | đang chạy |
+| Call 3 build | chờ |
+
+`xong` carries its fact (task count, `OK assembled`, wave count, max width);
+the R5 report ends with the final table.
+
+# R1 - Call 1: open already loaded everything
+
+Do not run the path loop, and do not brief again. The prelude starts with a `TOOL:` line. Use that exact string for every later
+call. The brief already contains the spec body with real line numbers, the spec
+heading map, the repo file list, the stack, the test commands, the conventions
+file, and the 2-5 pattern files the brief ranks; if the repository is large and
+the affected code is not in the brief, up to 3 narrow read-only explore
+dispatches may run in that same turn.
+
+# R2 - Read nothing the brief already gave you
+
+1. Do not re-read the spec. Do not open pattern files. Do not search the repo.
+2. The single exception: the brief names a file as "not inlined" AND a contract
+   cannot be written without it. Then read at most three such files, all in one
+   message, and go straight on.
+3. Never open the plan tool's source.
+
+# R3 - Call 2: write the Contracts file
+
+Count the tasks N from the spec. `N <= 1` -> inline path (R7). `N >= 2` ->
+write `docs/plans/YYYY-MM-DD-<feature>.md` in ONE write, containing
+only this:
+
+````markdown
+# [Feature] Implementation Plan
+
+**Goal:** [one sentence]
+
+**Out of scope:** [what this plan deliberately does not touch - one line]
+
+**Rollback:** [how to undo the whole plan: branch, migration down, flag | n/a]
+
+**Architecture:** [2-3 sentences]
+
+**Tech Stack:** [key technologies]
+
+## Global Constraints
+
+- [project-wide rule with exact values from the spec and the conventions file - one per line]
+
+## References
+
+- `path/to/pattern_file.py` - [why every writer should see it]
+
+## Contracts
+
+#### T01: Config loader
+- Files: `src/config.py`, `tests/test_config.py`
+- Produces: `def load_config(path: Path) -> Config`; `class Config`
+- Consumes: `class Path` (existing)
+- Spec: L12-40
+
+#### T02: HTTP app
+- Depends: T01
+- Files: `src/api.py`, `tests/test_api.py`
+- Produces: `def create_app(config: Config) -> App`
+- Read: `src/legacy_app.py`
+- Spec: L41-77, L120-131
+- Tier: deep
+````
+
+Contract rules - all plan quality is decided here, nowhere later:
+
+1. IDs run `T01, T02, ...` with no gaps (`T001` past 99). A producer's ID is
+   lower than every ID that consumes it.
+2. `Files` is required and lists every path the task creates, modifies or tests.
+   Two tasks sharing a file are serialized automatically, so give each task its
+   own files and wire shared registries in one final task.
+3. `Produces` holds exact backticked declarations - name, parameters, types,
+   return - written the way they will appear in code. `Consumes` copies the
+   producer's text byte for byte; `(existing)` marks a symbol already in the
+   codebase. Omit `Consumes` to mean "everything my Depends produce". Depends
+   are derived from Consumes automatically. A third-party symbol a task will
+   call is spelled exactly as the inlined files or the dependency's own types
+   spell it - a name recalled from memory is a fabricated API.
+4. `Spec` gives line ranges from the heading map. Each writer receives exactly
+   those lines and nothing else, so a wrong range silently starves a task.
+5. `Read` (optional) adds existing files that writer needs inlined.
+6. `Tier` (optional) is `light` for trivial config or docs, `deep` for
+   algorithmic, security, concurrency or migration work. Default is standard.
+   Tier is a hint: `build` may raise it, and it never selects a model other
+   than Flash.
+7. Right-size each task: the smallest unit with its own test cycle that a
+   reviewer could reject on its own.
+8. `References` is optional and is inlined into every writer's shared prefix -
+   put one or two exemplars there, never a pile.
+9. Legitimate project vocabulary that the placeholder or portability scan would
+   flag (a todo app, a class named Task) needs --allow WORD on every build,
+   check and assemble call. Decide it now, not after assemble fails.
+
+# R4 - Call 3: build
+
+```
+<TOOL> build <plan> --spec <spec>
+```
+
+Run it with a shell timeout of 900000 ms or more. It validates the contracts,
+fans out one writer per task over up to 8 concurrent threads, lints every body,
+repairs failures automatically, runs a risk-based review pass, then assembles
+and cleans up. Add `--thorough` (or when the user asked for maximum assurance)
+to review every task instead of only the risky ones.
+
+1. `ERR` before the fan-out means a contract problem. Fix those lines in the
+   plan file and re-run the same command.
+2. Named failing task IDs after the fan-out: re-run with `--resume` added. It
+   retries only those.
+3. `OK assembled ...` is done. Go to R5. An uncovered spec heading is an
+   `ERR`: fix it with a contract or an `Out of scope` line and re-run.
+4. `LANE agent` in the output means no API key was found, so the script fell
+   back to printing a DISPATCH table: dispatch one subagent per row, ALL in a
+   single message (ZCode runs subagents launched together in parallel), each
+   with the prompt `Read <brief path> and follow it
+   exactly.`, then run the printed `wait`, `review` and `assemble` commands in
+   that order. The table usually holds 8 rows or fewer, dispatched ALL in ONE
+   message; past 32 tasks it can hold more, and it is then dispatched in waves
+   of at most the lane width (`PLAN_LANE_WIDTH`, clamped 1..8, lowers the rows
+   per message; send the next wave after the previous one replied).
+   Tell the user once that `<TOOL> doctor` shows how to enable the fast lane.
+
+# R5 - Stop when the plan is assembled
+
+`OK assembled` means this skill is done. Report the path, the task count,
+the wave count, and the max wave width from the build output. Do not
+implement the plan here. Executing it in this session, one subagent per
+task with a review between waves, is a serial run of the same work the
+dev-team engine schedules in parallel, and it is what turns a plan into
+an all-day session.
+
+If `.brainstorm/drafts/chain.json` contains `"continue": true`, or the
+user's latest message tells you to implement this plan, run
+`handoff.py next --self z-writing-plans --event plan-ready` and follow
+`NEXT:`. When that file also contains `"mode": "fast"`, ask nothing: repair
+every `ERR`, re-run the same build, and hand off in the turn `OK assembled`
+prints. A request that only asked for the plan does not match, including
+one that says "implementation plan". Otherwise stop. Do not ask which
+approach. The plan file stays portable (R8).
+
+# R6 - Speed rules that decide the wall clock
+
+1. Never type what the script generates: Execution Protocol, File Structure,
+   Execution Waves, `[P]` markers, Depends and Runs-after lines, Interfaces
+   blocks, writer briefs. Output tokens are the bottleneck.
+2. Machines check, models judge. Structure, placeholders, portability, file
+   ownership, signatures, Run/Expected, `git add` scope and code-block syntax
+   are one script call - never a model re-read.
+3. Batch or die. When a step legitimately needs several tool calls, issue them
+   in ONE message. If only one or two land, re-issue the rest as a single batch
+   instead of trickling them.
+4. Fix and move on. After a fix, re-run the script only - no re-review.
+5. Do not switch model or effort mid-skill; each switch re-reads the whole
+   conversation uncached. The lane follows the session model's flash tier through
+   `~/.zcode/z-flash`: glm-5.3-flash or deepseek-flash (`GLM_FLASH` overrides one
+   process), or the pin names a pro id (glm-5.3, deepseek-v4-pro) and the lane runs
+   that model. Never promote a lane to a bigger session model, never effort low.
+6. Independent subsystems get one plan each, and they can be built concurrently.
+
+# R7 - Inline path (N <= 1, or PACE short)
+
+`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`.
+
+`PACE: short` means the spec is short enough that a writer fan-out costs more
+than it checks. Read `references/body-rules.md` in this skill directory for the body format.
+Write the skeleton and Contracts, then `<!-- TASKS -->`, then each task as
+`### T01: Name` followed by its body - all in ONE write. Then run
+`<TOOL> check <plan> --spec <spec>`, fix any `ERR`, done. When check passes
+under a fast chain it prints `HANDOFF z-dev-team` naming the start command -
+follow that block in the same turn; no separate `handoff.py next` call.
+
+# R8 - Portability (the plan is the product)
+
+The plan file must never mention an agent, a subagent, a model, a skill, a
+plugin or a vendor tool. It is plain Markdown that anyone with a shell, an
+editor and git can execute. The linter enforces this and will fail the build.
+
+# R9 - One-time setup
+
+`<TOOL> doctor` reports the lane, the key, the models and the concurrency.
+`<TOOL> setup --apply` installs the fallback subagents: all three `agents/*.md`,
+copied verbatim to `~/.zcode/agents/`.
+Never run `--apply` without the user's consent. The fast lane needs one export:
+
+```bash
+export ZAI_API_KEY=<GLM Coding Plan key>
+```
+
+GLM model facts, routing rationale and known GLM failure modes live in
+`references/z-tuning.md` - read it only when changing tier, effort or model
+choices, or when a GLM-specific failure appears.

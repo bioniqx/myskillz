@@ -1,0 +1,140 @@
+---
+name: z-systematic-debugging
+description: Root-cause-first debugging for any bug, test failure, flaky test, build/CI failure, regression, performance problem or unexpected behavior - use BEFORE proposing or making any fix. Triggers - an error or stack trace, a failing or intermittent test, "it worked before", passes locally but fails in CI, a fix that did not work, 2+ failed fix attempts. One tool call per phase instead of many, and fan-out to up to 8 parallel model workers (and up to 64 local jobs) from inside the tools, so width costs no extra model turns.
+license: MIT
+metadata:
+  version: "9.0"
+  models: "glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5"
+  harness: "zcode"
+---
+
+# Systematic Debugging
+
+**Iron Law:** no fix until you can write `ROOT CAUSE: X causes Y because Z`, backed by evidence you observed in this session (output, trace, diff, repro). A guess is not evidence. Speed comes from fewer model turns, never from skipping the root cause.
+
+**Sibling handoff.** The first command is one call. It routes and prints `S=`.
+
+```bash
+H=; for d in "<base dir>" ~/.zcode/skills/z-systematic-debugging .zcode/skills/z-systematic-debugging .agents/skills/z-systematic-debugging ~/.agents/skills/z-systematic-debugging; do [ -f "$d/scripts/handoff.py" ] && H=$d/scripts/handoff.py && break; done; [ -n "$H" ] || { echo "z-systematic-debugging: handoff.py not found"; exit 1; }
+python3 "$H" open --self z-systematic-debugging <<'EOF'
+<user request. A FROM-LINE stays first.>
+EOF
+```
+
+`<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route. When the request already names a repro command, add `--cmd=<repro>` on that same python3 line. `OPEN: routed` means follow `NEXT:` and do not probe. `OPEN: stay` prints `S=<absolute path of the scripts dir>`. Shell variables do not survive between tool calls, so paste that literal path. `$S` below is shorthand for it, not a variable you can rely on. `python3 $S/debug_tool.py -h` and every subcommand's `-h` list the flags. `GUARD` lines bind the whole task. After a known root cause, run `next --event` only when the user wants the next job: `fix-large` (more than 3 files), `fix-needs-plan`, or `design`. A one-file fix stays here. When a later step is a job this skill does not do, run `handoff.py call --self z-systematic-debugging --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self z-systematic-debugging --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow.
+
+## R1. One call per phase — do not batch tool calls, batch *inside* one call
+
+You emit few parallel tool calls per turn, and each turn costs seconds of latency. So width never lives in your message; it lives inside the tools, which open up to 64 local threads themselves (model/API workers stay at 8 or fewer, agent-lane subagents at 8 by default).
+
+| Phase | Exactly one call | Replaces |
+| --- | --- | --- |
+| Evidence | `python3 $S/debug_tool.py probe --cmd '<repro>' --error-file <file>` | snapshot + stack-frame reads + greps + repro + history + triage |
+| Any N commands | `python3 $S/debug_tool.py run -j 8 'cmd1' 'cmd2' 'cmd3'` | N separate Bash calls |
+| Hypotheses | `python3 $S/debug_tool.py experiment --spec exp.json -j 16` | N subagents, each running one experiment |
+| Judgment fan-out | `python3 $S/debug_tool.py scan --area A --area B --question '...'` | N subagents reading N areas |
+| Flaky / polluter | `bash $S/stress.sh` · `bash $S/find-polluter.sh` | dozens of sequential reruns |
+
+Rules:
+
+1. Round 1 is always `probe`. `open --cmd` already did it when you passed a repro. Otherwise this is the next call, not a path lookup. Put a long error into a file first; pass `--cmd` whenever you have a repro command. Do not probe twice.
+2. Never run two shell calls in a row when `run` can do both in one.
+3. Anything over ~60 s that you are not blocked on: `nohup <cmd> > /tmp/<name>.log 2>&1 &`, keep working, read the log later. Never edit, stash or check out a tree while a background command runs in it, and never `git stash` while a worktree or background job is live — the stash is shared by the whole repo.
+4. Run the single failing test, not the suite, while investigating. The tools already keep exit codes and tail the output for you.
+5. Do not spend a turn re-reading frames `probe` already printed. The analogue read, the experiment spec, and the `experiment` call belong in one message. A turn whose only work is Read or Grep is a spare thinking pass. Open `references/root-cause-tracing.md` only when the crashing line is not where the bad value is created, and open it in that same message.
+
+## R2. Triage — `probe` prints `LANE:` for you
+
+Take the lane `probe` printed. `probe` routes on the error text alone, so override it in these cases, and say which:
+
+1. FAST → STANDARD after 3 rounds without a verified fix, or after 1 failed fix.
+2. STANDARD → SWARM when the repro is not reproducible, when the failure is multi-component (CI→build→deploy, API→service→DB), when no hypothesis survives round 3, or after 2 failed fixes.
+3. Any lane → SWARM when the bug is intermittent or flaky, a regression with an unknown culprit, a performance problem, or has many plausible causes.
+4. Never de-escalate after a failed fix, and escalation keeps the failed-fix count.
+
+A null / undefined / None / nil / KeyError / index-out-of-range error is never FAST: the bad value was created somewhere upstream of the line that crashed.
+
+## R3. FAST lane — 2 rounds
+
+When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`; the slow branch replaces this lane routing.
+
+The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
+
+1. `probe` (already done). The frame window and grep hits it printed are your evidence.
+2. One `experiment` for the suspected change: write /tmp/exp.json directly from the one-hypothesis template the probe NEXT block prints inline (no `experiment --template` call), then run it. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
+
+## R4. STANDARD lane — 3 rounds
+
+1. **Evidence** — `probe` output. Read the error it printed: message, code, file:line, every in-repo frame, every `Caused by`. Do not re-open those files. A bad value created upstream of the crash line → `references/root-cause-tracing.md`, in the same call as the experiment. Multi-component (CI→build→deploy, API→service→DB) → instrument every boundary in ONE `run`, then investigate only the boundary that broke. Fails only in CI → first reproduce CI conditions locally (same image, same env vars, `CI=true`, load via `stress.sh -j`); if that is impossible, add boundary logging to the CI job and read its output.
+2. **Compare and hypothesize, in one message.** Find a working analogue (a sibling test that passes, the last good commit, the reference implementation), read the reference completely, then list every difference — do not pre-filter "can't matter" — including the implicit ones: config, env vars, versions, ordering, shared state. Then write 2–4 hypotheses in the spec file, each one as `H: <cause> because <evidence>. Experiment E: <one-variable change>. If H is true: <result A>. If false: <result B>.` — A ≠ B, or E is not worth running:
+
+   ```bash
+   python3 $S/debug_tool.py experiment --template > /tmp/exp.json     # fill in: hypothesis, cmd, and ONE of patch_file / env / treatment_cmd
+   python3 $S/debug_tool.py experiment --spec /tmp/exp.json -j 16
+   ```
+
+   Each hypothesis changes exactly one variable. The tool runs the control and treatment arms in two separate worktrees. An arm of a hypothesis with `runs` above 1 (a flaky or timing check) runs one after another, control first, so CPU contention cannot bias the result; single-run arms run at the same time. CONFIRMED means one arm passed every run and the other failed — nothing else; a failure rate that only moved is INCONCLUSIVE. Refuted → the evidence changed; write new hypotheses, never wilder ones. Stuck → say "I don't understand X", name the evidence that would settle it, and get it.
+3. **Fix and verify** — one fix at the source, no drive-by refactors. Turn the repro into a failing automated test first and see it fail for the expected reason. Then one call:
+
+   ```bash
+   python3 $S/debug_tool.py run -j 4 '<new test>' '<the failing test file>' '<affected suite>'
+   ```
+
+   Flaky bug → prove it with `bash $S/stress.sh -b <baseline F/N>` at the baseline's `-n`/`-j`; only Fisher p < 0.05 counts. When it is cheap and nothing else runs in the tree, prove causation too: run the fix as the treatment arm of one `experiment` entry (`patch_file` holding the fix, `expect: treatment_passes`), or revert only the fix, confirm the new test fails, and restore it. Bad data crossed layers → `references/defense-in-depth.md`. Timing bug → condition waits, never sleeps → `references/flaky-and-timing.md`.
+
+## R5. SWARM lane — 4 to 6 rounds
+
+Read `references/parallel-playbook.md` in the same call as the first command below.
+
+1. Intermittent → `bash $S/stress.sh -n 40 -- <single test cmd>` for a failure rate, a Wilson interval and failing logs. Measure, never eyeball. Re-run at `-n 200` only when that interval is too wide to decide.
+2. Regression, culprit unknown → diagnose from the current code: read the code path the repro exercises (`debug_tool.py run -j` for parallel greps/reads) and hypothesize; git history is not read.
+3. A test leaves files behind → `bash $S/find-polluter.sh -j 16 <path> '<test glob>'`.
+4. Unknown location or many plausible causes → `python3 $S/debug_tool.py scan --area <pkg> --area <pkg> --question '<one question>' --context-file /tmp/evidence.txt`. It fans out to at most 8 workers at once itself (`-j` above 8 is clamped), with one shared prefix so the cache hits from the second worker on. With no API key it writes the worker prompts to files and tells you to dispatch them as subagents with the `z-debug-worker` agent instead — dispatch them in waves of 8 per message (the provider's full concurrent-call budget); ZCode runs subagents launched together in parallel. Beyond ~6 agent workers for one bug, merge cost usually exceeds the gain unless the search space is truly wide.
+5. Everything the swarm returns is a *lead*. Promote a lead to a cause only through `experiment`.
+
+## R6. Fix-attempt limit
+
+Count every candidate fix that failed, in the main tree or in a worktree. Diagnostic toggles (changing a variable to learn, not to fix) do not count. **3 failed fixes → STOP.** Architecture signals: each fix exposes new coupling, fixes need large refactors, symptoms move. Stop earlier the moment you are about to weaken a test or silence a warning to get past it — that is a stuck sign, not a fix. The stop report is five lines: `STOPPING: <why>` · `CURRENT: <command + verbatim error>` · `TRIED: 1) … → …; 2) …; 3) …` · `RULED OUT: <eliminated causes>` · `NEEDED: <decision or fact only the user can give>` — then talk to the user before attempt #4.
+
+## R7. Effort
+
+Model and effort live only in `debug_tool.py` `TIERS` and in `agents/z-debug-worker.md`. Every tier uses the session model's flash tier — glm-5.3-flash, or deepseek-flash when `~/.zcode/z-flash` says deepseek (`GLM_FLASH` overrides one process); a glm-5.3, deepseek-v4-pro or Claude Sonnet 5.5 session keeps its own model. `light` and `std` are effort high. `deep` is effort max. Never promote a tier to a bigger session model, and do not lower effort to low or disabled. Why: `references/z-tuning.md`, read only when retuning.
+
+## R8. State carry — restate before each lane change and before the fix
+
+Five lines, no more: `BUG:` · `LANE:` · `EVIDENCE SO FAR:` · `RULED OUT:` · `FAILED FIXES: n/3`. This is what keeps a long investigation from drifting.
+
+Show the hypothesis table in chat after every tool phase (probe, experiment,
+scan, close) — one row per hypothesis or open lead:
+
+| Giả thuyết | Trạng thái |
+| --- | --- |
+| H1 stale fragment cache | CONFIRMED |
+| H2 worker-pool race | đang chạy |
+| H3 env config drift | chờ |
+
+`đang chạy` while the experiment runs, the engine's own verdicts (`CONFIRMED`,
+`REFUTED`, `INCONCLUSIVE`), `chờ` for not yet run, `thất bại` (quote the
+error). R11's 6-line cap counts only the report lines; the final table follows
+them.
+
+## R9. Red flags → go back to R4.1
+
+"Quick fix now, investigate later" · "just try X" · several changes then run the tests · skipping the failing test · "probably X" with no evidence · adapting a pattern you have not read fully · listing fixes before tracing the data flow · bumping a sleep, timeout or retry as the fix · a null check at the crash site · "one more attempt" after 2 failures · the user says "stop guessing", "is that actually happening?", "we're stuck".
+
+| Rationalization | Reality |
+| --- | --- |
+| "Simple / urgent, no time" | FAST costs 2 rounds; guessing costs more. |
+| "Prod is down" | Mitigate first with a reversible, cause-agnostic action (rollback, feature flag, failover, degrade the feature) — that is not a fix — while ONE `probe` call gathers evidence (change timeline vs error onset, DNS/TLS/egress from the host, provider status). The root cause still precedes the code change. |
+| "Several fixes at once saves time" | Parallelize isolated experiments, never fixes in one tree. |
+| "Senior/author says it's X" | That is a hypothesis; one `experiment` entry settles it. |
+| "4 hours of sleeps can't be wasted" | Sunk cost. Delete them; a timing guess is not a root cause. |
+| "I'll write the test after" | Untested fixes regress; the failing test is the proof. |
+
+## R10. When evidence says "no code root cause"
+
+Only after ruling causes out with evidence (environment, external service, true nondeterminism): record what was ruled out, add bounded handling (timeout, capped retry with backoff, clear error) and logging that would catch it next time. Most "no root cause" verdicts are incomplete investigations.
+
+## R11. Final report — always, at most 6 lines
+
+Run `debug_tool.py close --experiments <repo>/.debug/experiments.json`. It prints `ROOT CAUSE` when exactly one experiment is CONFIRMED. Do not write that line first. Show the rest of the report only after `DECISION pick`. Otherwise ask, or run the missing experiment. The lines, when it picks: `ROOT CAUSE` (the experiment id) · `EVIDENCE` · `FIX` (file:line, only after a CONFIRMED `role: fix`) · `VERIFIED BY` (commands + result) · `RISK / FOLLOW-UP`. `NO CAUSE` is legal only when every experiment is REFUTED or INCONCLUSIVE.

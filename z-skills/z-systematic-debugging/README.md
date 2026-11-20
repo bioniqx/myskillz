@@ -1,0 +1,74 @@
+# z-systematic-debugging 9.0
+
+Root-cause-first debugging, rebuilt for **ZCode** and its five session models — glm-5.3-flash, deepseek-flash (DeepSeek), glm-5.3, deepseek-v4-pro, and claude-sonnet-5.5 (Claude).
+
+The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` line is backed by evidence observed in this session. Everything else changed to remove model turns.
+
+## What is different from the generic version
+
+The generic skill buys speed by telling the model to put many tool calls in one message and to launch many subagents at once. On this pairing, both assumptions fail:
+
+- GLM-5.3 and the flash-tier models emit only a couple of tool calls per turn, so a "batch of 12 reads" quietly becomes six round-trips. DeepSeek V4 Pro and Claude Sonnet 5.5 sessions follow the same one-call-per-phase plan.
+- ZCode does run foreground subagents launched together in parallel, but each dispatch is still a model turn, so a wide agent fan-out spends exactly the turns the tools were built to remove.
+
+So the parallelism moved **out of the model's turn and into the tools**. One call per phase; each call opens its own threads: up to 64 for local jobs, at most 8 for model/API workers.
+
+| Phase | 9.0: one call | Generic version |
+|---|---|---|
+| Evidence | `debug_tool.py probe` | snapshot + N frame reads + M greps + repro + git history, batched by the model |
+| N commands | `debug_tool.py run -j N` | N Bash calls in one message |
+| Hypotheses | `debug_tool.py experiment -j N` | one subagent per hypothesis |
+| Judgment fan-out | `debug_tool.py scan -j 8` | one subagent per area |
+
+Plus: deterministic lane triage printed by `probe` (no model reasoning spent on a routing table), an effort ladder so mechanical work does not run at `reasoning_effort: max`, a byte-identical prompt prefix across all `scan` workers (at most 8 at once) so the provider cache hits from the second worker on, a 5-line state carry against long-horizon drift, and prose rewritten as numbered rules — GLM follows those better than behavior tables.
+
+## Install
+
+| Harness | Path |
+|---|---|
+| ZCode | `~/.zcode/skills/z-systematic-debugging/` — invoke with `$z-systematic-debugging`; `sh install-zcode.sh` installs the skill and copies the `z-debug-worker` agent verbatim (`thoughtLevel: max` is pinned in the file) into `~/.zcode/agents/` |
+
+```bash
+export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)
+python3 <skill>/scripts/debug_tool.py doctor --ping
+python3 <skill>/scripts/debug_tool.py setup --harness zcode
+```
+
+Needs bash (3.2+ works), git and python3 (stdlib only). `timeout`/`gtimeout` is optional, for `-t`. Without an API key everything still works except `scan`, which falls back to writing subagent prompts.
+
+## Layout
+
+```
+SKILL.md                         12 numbered rules, loaded on use
+references/z-tuning.md         model + harness facts, failure modes
+references/parallel-playbook.md  concurrency layers, isolation, recipes
+references/root-cause-tracing.md backward tracing, one-shot instrumentation
+references/defense-in-depth.md   layered guards after the fix
+references/flaky-and-timing.md   condition waits, flake root causes
+scripts/debug_tool.py            probe · run · experiment · scan · doctor · setup
+scripts/snapshot.sh              git, deps, toolchain, CPUs in one call
+scripts/stress.sh                N parallel reruns, Wilson CI, Fisher test vs baseline
+scripts/find-polluter.sh         parallel polluter search, one worktree per worker
+agents/z-debug-worker.md           subagent definition for the fallback lane
+evals/                           pressure + speed scenarios with pass criteria
+```
+
+## Measured
+
+Verified in this build (2-CPU container; the model-turn column is what actually dominates wall time in practice):
+
+| | measured |
+|---|---|
+| `probe` on a 3-frame traceback | 0.3 s, **one** call — replaces snapshot + 3 frame reads + 2 greps + 3 repro runs |
+| `scan`, 20 tasks, `-j 64` requested, mock latency | **peak concurrency 8** (capped), **1 distinct prompt prefix** (cache hit from worker 2) |
+| `experiment`, 8 hypotheses × 2 arms | 1.4 s, 16 isolated worktrees, 1 CONFIRMED / 7 REFUTED |
+| `run`, 3 × 1 s commands | 1.0 s wall, exit codes preserved |
+| `stress.sh -n 60 -j 8` | 1 s, rate + Wilson CI + failing logs |
+
+Statistics in `stress.sh` were cross-checked against SciPy (`fisher_exact`, Wilson interval).
+
+## Quality guards that did not move
+
+Iron Law; two-sided hypotheses; failed candidate fixes count toward the 3-fix stop even inside a worktree, diagnostic toggles do not; null/undefined/KeyError errors never take the FAST lane; statistical proof for flaky fixes (Fisher p < 0.05, not "it passed a few times"); reversible mitigation allowed during a production incident but never as the fix; the 3-fix stop ends in a five-line report (current state verbatim, what was tried, what is ruled out, what is needed from the user), and weakening a test or silencing a warning to get past a failure is itself a stop sign.
+
+One guard got **stronger**: `experiment` now gives the control arm and the treatment arm a worktree each. Sharing one tree between arms lets build caches and stale compiled files leak across — during this build that silently turned a real root cause into "REFUTED" until the arms were separated. Arms of a hypothesis with `runs` above 1 run one after another, control first, so CPU contention cannot bias a flaky or timing verdict. CONFIRMED means one arm passed every run while the other failed.

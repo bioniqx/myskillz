@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A monorepo of **agent skills** (SKILL.md instructions plus the stdlib-only Python/shell scripts, subagent
 definitions and hooks behind them). There is no application code, no package manager and no build step.
 Six core workflows (brainstorming, dev-team, doc-generator, requirements-code-audit,
-systematic-debugging, writing-plans) exist as variants in the `glm-skills/` and `opencode-skills/` folders
+systematic-debugging, writing-plans) exist as variants in the `z-skills/` and `opencode-skills/` folders
 (`hybrid-skills/` has four of them: brainstorming, dev-team, requirements-code-audit, writing-plans).
 `claude-skills/` holds the originals: those six plus `git-diff-summary` and `frontend-design`, 8 skills in
 total, and the last two have no variants by design. The four top-level folders are:
@@ -15,7 +15,7 @@ total, and the last two have no variants by design. The four top-level folders a
 | Folder | Role | Naming |
 |---|---|---|
 | `claude-skills/` | **Original, source of truth** for Claude Code | `claude-<skill>-<ver>` |
-| `glm-skills/` | Variants for ZCode / GLM (Z.ai route) | `<skill>-glm` |
+| `z-skills/` | Variants for ZCode / GLM (Z.ai route) | `<skill>-glm` |
 | `hybrid-skills/` | Variants that mix Claude + the local `opencode` CLI to cut cost (Claude keeps all judgment, opencode executes low-judgment units behind a machine-checked oracle) | `hybrid-<skill>-v1.0` |
 | `opencode-skills/` | Variants built only for opencode | `oc-<skill>` |
 
@@ -27,7 +27,7 @@ constraints and conventions, and are not repeated here.
 
 - **Change behaviour in `claude-skills/` first, then port.** Variants are derived from the originals;
   never treat a variant as the reference, and keep harness-specific changes inside the variant.
-- Files under `hybrid-skills/`, `glm-skills/` and `opencode-skills/` have intentionally different
+- Files under `hybrid-skills/`, `z-skills/` and `opencode-skills/` have intentionally different
   frontmatter and installed names (e.g. the `-glm` suffix is dropped from `name`); don't "normalize" them
   back to the original's form.
 - Nothing here is active in a Claude Code session: skills are loaded only after being installed into a
@@ -49,7 +49,7 @@ cd claude-skills && python3 -m unittest discover -s tests -v
 python3 -m unittest tests.test_plan_lint -v
 python3 -m unittest tests.test_plan_lint.PortabilityScanTests.test_todo_tbd_fixme_xxx_are_case_sensitive -v
 
-# glm-skills/ and opencode-skills/ — full suite; frontmatter/naming check only
+# z-skills/ and opencode-skills/ — full suite; frontmatter/naming check only
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s _shared/tests -t _shared/tests
 python3 -m unittest discover -s _shared/tests -t _shared/tests -p test_all_skills.py -v
 
@@ -58,7 +58,7 @@ cd hybrid-skills/<skill> && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discov
 ```
 
 Installers: `claude-skills/install-skill.sh`, `hybrid-skills/install.sh`, and
-`sh install-opencode.sh [--home DIR]` in `glm-skills/` and `opencode-skills/`.
+`sh install-opencode.sh [--home DIR]` in `z-skills/` and `opencode-skills/`.
 `install-claude-code.sh` at the repo root installs all 13 Claude Code skills at once (9 originals + 4 hybrids).
 
 ## Repo gotchas

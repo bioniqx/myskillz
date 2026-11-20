@@ -1,0 +1,548 @@
+import json
+import os
+import shutil
+import socket
+import sys
+import tempfile
+import threading
+import time
+import unittest
+from unittest import mock
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, HERE)
+
+import zai_client  # noqa: E402
+
+
+class TestBase(unittest.TestCase):
+    def test_default_base(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.z.ai/api/coding/paas/v4")
+        self.assertEqual(zai_client.DEFAULT_BASE, "https://api.z.ai/api/coding/paas/v4")
+
+    def test_deepseek_http_pin_ignores_zai_key(self):
+        env = {"GLM_FLASH": "deepseek", "ZAI_API_KEY": "z" * 20,
+               "DEEPSEEK_API_KEY": "d" * 20}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.deepseek.com")
+            key, source = zai_client.find_key()
+            self.assertEqual(key, "d" * 20)
+            self.assertEqual(source, "env:DEEPSEEK_API_KEY")
+        env.pop("DEEPSEEK_API_KEY")
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_pin_file_selects_deepseek_without_env_and_ignores_zai_key(self):
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        os.makedirs(os.path.join(home, ".zcode", "v2"))
+        with open(os.path.join(home, ".zcode", "z-flash"), "w", encoding="utf-8") as fh:
+            fh.write("deepseek\n")
+        cfg = {
+            "config": {"providerConfigRules": {"providerRules": [
+                {"providerId": "zai-api", "config": {"access": {"apiKey": "z" * 20}}},
+                {"providerId": "deepseek", "config": {"access": {"apiKey": "d" * 24}}},
+            ]}}
+        }
+        with open(os.path.join(home, ".zcode", "v2", "provider_config.json"), "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh)
+        env = {"HOME": home, "ZAI_API_KEY": "z" * 20}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.deepseek.com")
+            key, source = zai_client.find_key()
+            self.assertEqual(key, "d" * 24)
+            self.assertTrue(source.endswith("provider_config.json"))
+            prose = 'Keep deepseek/deepseek-flash in prose.\nmodel: "account:zai-individual-coding-plan/GLM-5.3-Flash"\n'
+            stamped = zai_client.flash_pin.stamp_agent(prose, home=home)
+            self.assertIn("Keep deepseek/deepseek-flash in prose.", stamped)
+            self.assertNotIn("model:", stamped)
+        with mock.patch.dict(os.environ, {"HOME": home, "GLM_FLASH": "glm"}, clear=True):
+            self.assertEqual(zai_client.find_base(), "https://api.z.ai/api/coding/paas/v4")
+
+    def test_base_order(self):
+        env = {"ZAI_BASE_URL": "https://a.example/v4/",
+               "GLM_BASE_URL": "https://b.example/v4",
+               "ANTHROPIC_BASE_URL": "https://c.example/api/anthropic"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(zai_client.find_base("https://x.example/v4"), "https://x.example/v4")
+            self.assertEqual(zai_client.find_base(), "https://a.example/v4")
+            del os.environ["ZAI_BASE_URL"]
+            self.assertEqual(zai_client.find_base(), "https://b.example/v4")
+            del os.environ["GLM_BASE_URL"]
+            self.assertEqual(zai_client.find_base(), zai_client.DEFAULT_BASE)
+
+    def test_route(self):
+        self.assertEqual(zai_client.route_of(zai_client.DEFAULT_BASE), "openai")
+        self.assertEqual(zai_client.route_of("https://api.z.ai/api/anthropic"), "anthropic")
+        self.assertEqual(zai_client.route_of("https://proxy.example/v4"), "openai")
+        self.assertEqual(zai_client.route_of(""), "openai")
+
+    def test_endpoint(self):
+        base = zai_client.DEFAULT_BASE
+        self.assertEqual(zai_client.endpoint_of(base, "openai"), base + "/chat/completions")
+        self.assertEqual(zai_client.endpoint_of(base + "/chat/completions", "openai"),
+                         base + "/chat/completions")
+        self.assertEqual(zai_client.endpoint_of("https://api.z.ai/api/anthropic/", "anthropic"),
+                         "https://api.z.ai/api/anthropic/v1/messages")
+
+
+class TestFindKey(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.cwd = tempfile.mkdtemp()
+        self.old = os.getcwd()
+        os.chdir(self.cwd)
+        self.env = mock.patch.dict(os.environ, {"HOME": self.home}, clear=True)
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        os.chdir(self.old)
+        shutil.rmtree(self.home)
+        shutil.rmtree(self.cwd)
+
+    def put(self, rel, obj):
+        p = os.path.join(self.home, rel)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(obj, f)
+        return p
+
+    def test_env_order(self):
+        os.environ["ANTHROPIC_API_KEY"] = "a" * 20
+        os.environ["GLM_API_KEY"] = "g" * 20
+        self.assertEqual(zai_client.find_key(), ("g" * 20, "env:GLM_API_KEY"))
+        os.environ["Z_AI_API_KEY"] = "z" * 20
+        self.assertEqual(zai_client.find_key(), ("z" * 20, "env:Z_AI_API_KEY"))
+
+    def test_file_order(self):
+        self.put(".zcode/auth.json", {"key": "y" * 20})
+        self.put(".claude/settings.json", {"env": {"ANTHROPIC_AUTH_TOKEN": "c" * 20}})
+        self.assertEqual(zai_client.find_key(), ("c" * 20, self.put and
+                         os.path.join(self.home, ".claude", "settings.json")))
+
+    def test_extra_env_first(self):
+        os.environ["ZAI_API_KEY"] = "z" * 20
+        os.environ["MY_KEY"] = "m" * 20
+        self.assertEqual(zai_client.find_key(("MY_KEY",)), ("m" * 20, "env:MY_KEY"))
+        self.assertEqual(zai_client.find_key(), ("z" * 20, "env:ZAI_API_KEY"))
+
+    def test_field_filter(self):
+        self.put(".claude/settings.json",
+                 {"env": {"token": "t" * 30,
+                          "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic"},
+                  "apiKey": "short"})
+        self.put(".zcode/auth.json", {"key": "has spaces in this key value"})
+        self.assertEqual(zai_client.find_key(), (None, None))
+
+class _HomeCase(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.cwd = tempfile.mkdtemp()
+        self.old = os.getcwd()
+        os.chdir(self.cwd)
+        self.env = mock.patch.dict(os.environ, {"HOME": self.home}, clear=True)
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        os.chdir(self.old)
+        shutil.rmtree(self.home)
+        shutil.rmtree(self.cwd)
+
+    def put(self, rel, obj):
+        p = os.path.join(self.home, rel)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(obj, f)
+        return p
+
+
+class TestNoAnthropicKey(_HomeCase):
+    def test_env_anthropic_api_key_never_used(self):
+        os.environ["ANTHROPIC_API_KEY"] = "a" * 20
+        self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_extra_env_cannot_reintroduce_it(self):
+        os.environ["ANTHROPIC_API_KEY"] = "a" * 20
+        self.assertEqual(zai_client.find_key(("ANTHROPIC_API_KEY",)), (None, None))
+
+    def test_settings_field_never_used(self):
+        self.put(".claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "a" * 20}})
+        self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_auth_token_still_used(self):
+        os.environ["ANTHROPIC_API_KEY"] = "a" * 20
+        os.environ["ANTHROPIC_AUTH_TOKEN"] = "t" * 20
+        self.assertEqual(zai_client.find_key(), ("t" * 20, "env:ANTHROPIC_AUTH_TOKEN"))
+
+
+class TestGate(unittest.TestCase):
+    def test_default_client_gate_is_8(self):
+        g = zai_client.Client(KEY, base="http://127.0.0.1:1/v1").gate
+        self.assertEqual((g.width, g.max), (8, 8))
+
+    def test_halves_on_throttle(self):
+        g = zai_client.Gate(8)
+        with mock.patch("zai_client.time.monotonic", side_effect=[0, 3, 6, 9]):
+            self.assertEqual([g.throttled() for _ in range(4)], [4, 2, 1, 1])
+
+    def test_throttle_debounced_within_window(self):
+        """A burst of concurrent 429s inside one window halves width only once."""
+        g = zai_client.Gate(8)
+        with mock.patch("zai_client.time.monotonic", side_effect=[0, 0.1, 1, 1.9]):
+            self.assertEqual([g.throttled() for _ in range(4)], [4, 4, 4, 4])
+        with mock.patch("zai_client.time.monotonic", return_value=10):
+            self.assertEqual(g.throttled(), 2)
+
+    def test_grows_after_clean_window(self):
+        g = zai_client.Gate(8)
+        g.throttled()
+        self.assertEqual([g.ok() for _ in range(3)], [4, 4, 4])
+        self.assertEqual(g.ok(), 5)
+        for _ in range(100):
+            g.ok()
+        self.assertEqual(g.width, 8)
+
+    def run_six(self, g):
+        live = [0]
+        peak = [0]
+        lock = threading.Lock()
+
+        def work():
+            with g:
+                with lock:
+                    live[0] += 1
+                    peak[0] = max(peak[0], live[0])
+                time.sleep(0.05)
+                with lock:
+                    live[0] -= 1
+
+        ts = [threading.Thread(target=work) for _ in range(6)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        return peak[0]
+
+    def test_caps_live_threads(self):
+        g = zai_client.Gate(2)
+        self.assertEqual(self.run_six(g), 2)
+        g.throttled()
+        self.assertEqual(self.run_six(g), 1)
+
+
+class TestApiErrorThrottle(unittest.TestCase):
+    def test_rate_frequency_codes_transient_regardless_of_status(self):
+        for code in ("1302", "1305", "1313"):
+            self.assertTrue(zai_client.ApiError(429, code).throttle)
+            self.assertTrue(zai_client.ApiError(200, code).throttle)
+
+    def test_429_empty_code_transient(self):
+        self.assertTrue(zai_client.ApiError(429, "").throttle)
+
+    def test_429_terminal_business_code_not_transient(self):
+        for code in ("1113", "1308", "1309", "1310", "1311", "1314", "1315", "1316", "1317"):
+            self.assertFalse(zai_client.ApiError(429, code).throttle)
+
+    def test_non_429_without_throttle_code_not_transient(self):
+        self.assertFalse(zai_client.ApiError(200, "").throttle)
+        self.assertFalse(zai_client.ApiError(400, "1113").throttle)
+
+
+from fakeapi import chat, fail, messages, start_fake  # noqa: E402
+
+KEY = "k" * 24
+
+
+class _FakeCase(unittest.TestCase):
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {}, clear=True)
+        self.env.start()
+        self.fake = None
+
+    def tearDown(self):
+        if self.fake is not None:
+            self.fake.stop()
+        self.env.stop()
+
+    def serve(self, *script):
+        self.fake = start_fake(list(script))
+        return self.fake
+
+
+class TestClient(_FakeCase):
+    def test_deepseek_call_remaps_model_and_keeps_effort(self):
+        os.environ["GLM_FLASH"] = "deepseek"
+        fake = self.serve(chat("hello"))
+        c = zai_client.Client(KEY, base=fake.base)
+        self.assertEqual(c.call("glm-5.3-flash", "max", "SYS", "USER", 100, temperature=0.2), "hello")
+        body = fake.requests[0]["body"]
+        self.assertEqual(body["model"], "deepseek-flash")
+        self.assertEqual(body["reasoning_effort"], "max")
+        self.assertEqual(body["thinking"], {"type": "enabled"})
+        self.assertNotIn("temperature", body)
+
+    def test_openai_call(self):
+        fake = self.serve(chat("hello"))
+        c = zai_client.Client(KEY, base=fake.base)
+        self.assertEqual(c.route, "openai")
+        self.assertEqual(c.call("glm-5.3-flash", "high", "SYS", "USER", 100), "hello")
+        req = fake.requests[0]
+        self.assertEqual(req["path"], "/api/coding/paas/v4/chat/completions")
+        self.assertEqual(req["headers"]["authorization"], "Bearer " + KEY)
+        self.assertEqual(req["headers"]["user-agent"], "z-skill")
+        body = req["body"]
+        self.assertEqual(body["model"], "glm-5.3-flash")
+        self.assertEqual(body["reasoning_effort"], "high")
+        self.assertEqual(body["max_tokens"], 100)
+        self.assertEqual(body["messages"], [{"role": "system", "content": "SYS"},
+                                            {"role": "user", "content": "USER"}])
+        self.assertNotIn("temperature", body)
+        self.assertNotIn("thinking", body)
+        st = c.stats()
+        self.assertEqual((st["calls"], st["ok"], st["in_tok"], st["out_tok"]), (1, 1, 10, 5))
+
+    def test_options(self):
+        fake = self.serve(chat("x"))
+        c = zai_client.Client(KEY, base=fake.base, user_agent="plan_tool/7")
+        c.call("glm-5.3", "max", "SYS", "USER", 50, temperature=0.2)
+        req = fake.requests[0]
+        self.assertEqual(req["body"]["temperature"], 0.2)
+        self.assertEqual(req["body"]["reasoning_effort"], "max")
+        self.assertEqual(req["headers"]["user-agent"], "plan_tool/7")
+
+    def test_anthropic_route(self):
+        fake = self.serve(messages("hi"))
+        c = zai_client.Client(KEY, base=fake.root + "/api/anthropic")
+        self.assertEqual(c.route, "anthropic")
+        self.assertEqual(c.call("glm-5.3", "low", "SYS", "USER", 100), "hi")
+        req = fake.requests[0]
+        self.assertEqual(req["path"], "/api/anthropic/v1/messages")
+        self.assertEqual(req["headers"]["x-api-key"], KEY)
+        self.assertEqual(req["headers"]["anthropic-version"], "2023-06-01")
+        self.assertEqual(req["body"]["system"], "SYS")
+        self.assertEqual(req["body"]["messages"], [{"role": "user", "content": "USER"}])
+        self.assertEqual(c.stats()["in_tok"], 10)
+
+    def test_env_base(self):
+        fake = self.serve(chat("x"))
+        os.environ["ZAI_BASE_URL"] = fake.base
+        c = zai_client.Client(KEY)
+        self.assertEqual(c.url, fake.base + "/chat/completions")
+        self.assertEqual(c.call("glm-5.3-flash", "low", "S", "U", 10), "x")
+
+    def test_bad_effort(self):
+        fake = self.serve(chat("x"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with self.assertRaises(ValueError):
+            c.call("glm-5.3", "medium", "S", "U", 10)
+        self.assertEqual(fake.requests, [])
+
+    def test_client_error(self):
+        fake = self.serve(fail(400, "1214", "bad param"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with self.assertRaises(zai_client.ApiError) as cm:
+            c.call("glm-5.3", "high", "S", "U", 10)
+        self.assertEqual(cm.exception.status, 400)
+        self.assertEqual(cm.exception.code, "1214")
+        for part in ("HTTP 400", "1214", "bad param"):
+            self.assertIn(part, str(cm.exception))
+        self.assertEqual(len(fake.requests), 1)
+        self.assertEqual(c.stats()["errors"], 1)
+
+    def test_malformed_body_counts_as_error_not_ok(self):
+        fake = self.serve({"status": 200, "body": {"usage": {"prompt_tokens": 5}}})
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            with self.assertRaises(zai_client.ApiError) as cm:
+                c.call("glm-5.3", "high", "S", "U", 10)
+        self.assertIn("no choices", str(cm.exception))
+        sleep.assert_not_called()
+        st = c.stats()
+        self.assertEqual((st["calls"], st["ok"], st["errors"], st["in_tok"]), (1, 0, 1, 0))
+
+    def test_gate_caps_requests(self):
+        reply = dict(chat("x"), delay=0.1)
+        fake = self.serve(reply)
+        c = zai_client.Client(KEY, base=fake.base, gate=zai_client.Gate(2))
+        out = []
+        ts = [threading.Thread(target=lambda: out.append(c.call("glm-5.3-flash", "low", "S", "U", 10)))
+              for _ in range(6)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        self.assertEqual(out, ["x"] * 6)
+        self.assertEqual(len(fake.requests), 6)
+        self.assertLessEqual(fake.peak, 2)
+
+
+class TestRetry(_FakeCase):
+    def test_retry_after_on_429(self):
+        fake = self.serve(fail(429, "", "slow down", {"Retry-After": "0.3"}), chat("ok"))
+        gate = zai_client.Gate(8)
+        c = zai_client.Client(KEY, base=fake.base, gate=gate)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            self.assertEqual(c.call("glm-5.3", "high", "S", "U", 10), "ok")
+        sleep.assert_called_once_with(0.3)
+        self.assertEqual(gate.width, 4)
+        st = c.stats()
+        self.assertEqual((st["calls"], st["ok"], st["retries"], st["throttles"]), (2, 1, 1, 1))
+
+    def test_business_throttle_codes(self):
+        fake = self.serve({"status": 200, "body": {"error": {"code": "1302", "message": "rate"}}},
+                          fail(400, "1305", "busy"), chat("ok"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep"):
+            self.assertEqual(c.call("glm-5.3", "high", "S", "U", 10), "ok")
+        self.assertEqual(len(fake.requests), 3)
+        self.assertEqual(c.stats()["throttles"], 2)
+
+    def test_server_error_retried(self):
+        fake = self.serve(fail(503, "", "down"), chat("ok"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            self.assertEqual(c.call("glm-5.3", "high", "S", "U", 10), "ok")
+        self.assertEqual(sleep.call_count, 1)
+        self.assertTrue(1.0 <= sleep.call_args[0][0] <= 3.0)
+        st = c.stats()
+        self.assertEqual((st["retries"], st["throttles"]), (1, 0))
+
+    def test_gives_up_after_retries(self):
+        fake = self.serve(fail(500, "", "boom"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            with self.assertRaises(zai_client.ApiError) as cm:
+                c.call("glm-5.3", "high", "S", "U", 10, retries=2)
+        self.assertEqual(cm.exception.status, 500)
+        self.assertEqual(len(fake.requests), 3)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(c.stats()["errors"], 1)
+
+    def test_terminal_business_code_429_not_retried(self):
+        fake = self.serve(fail(429, "1113", "insufficient balance"))
+        c = zai_client.Client(KEY, base=fake.base)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            with self.assertRaises(zai_client.ApiError) as cm:
+                c.call("glm-5.3", "high", "S", "U", 10)
+        self.assertEqual((cm.exception.status, cm.exception.code), (429, "1113"))
+        self.assertEqual(len(fake.requests), 1)
+        sleep.assert_not_called()
+        st = c.stats()
+        self.assertEqual((st["retries"], st["throttles"], st["errors"]), (0, 0, 1))
+
+    def test_no_response(self):
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        c = zai_client.Client(KEY, base="http://127.0.0.1:%d/api/coding/paas/v4" % port)
+        with mock.patch("zai_client.time.sleep") as sleep:
+            with self.assertRaises(zai_client.ApiError) as cm:
+                c.call("glm-5.3", "high", "S", "U", 10, retries=1)
+        self.assertEqual(cm.exception.status, 0)
+        self.assertEqual(sleep.call_count, 1)
+
+
+import json  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import tempfile  # noqa: E402
+import unittest  # noqa: E402
+from unittest import mock  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import zai_client  # noqa: E402
+
+
+class TestZcodeCredentialsKey(unittest.TestCase):
+    """The v2 credentials file: the api-key field under account-provider → coding-plan → account → <plan> → <uuid> → api-key is found; sibling OAuth/JWT fields are never picked; env vars still win."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.home = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def write_credentials(self, api_key):
+        d = os.path.join(self.home, ".zcode", "v2")
+        os.makedirs(d, exist_ok=True)
+        payload = {
+            "account-provider": {
+                "coding-plan": {
+                    "account": {
+                        "contribute": {
+                            "00000000-1111-2222-3333-444444444444": {
+                                "api-key": api_key,
+                                "oauth": "oauth-sibling-not-a-key",
+                                "zcodejwttoken": "jwt-sibling-not-a-key",
+                                "access_token": "access-sibling-not-a-key",
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        with open(os.path.join(d, "credentials.json"), "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+
+    def test_v2_credentials_walk_finds_api_key_and_ignores_siblings(self):
+        self.write_credentials("sk-zcode-plan-key")
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-zcode-plan-key", result,
+                      "zcode v2 credentials api-key not found by find_key()")
+        for sibling in ("oauth-sibling-not-a-key", "jwt-sibling-not-a-key",
+                        "access-sibling-not-a-key"):
+            self.assertNotIn(sibling, result,
+                             "sibling OAuth/JWT field picked instead of api-key: " + sibling)
+
+    def test_env_var_wins_over_zcode_credentials_file(self):
+        self.write_credentials("sk-zcode-file-key")
+        with mock.patch.dict(os.environ, {"HOME": self.home, "ZAI_API_KEY": "sk-env-key"},
+                             clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-env-key", result, "env var must win over the zcode credentials file")
+        self.assertNotIn("sk-zcode-file-key", result, "zcode file key must lose to the env var")
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-zcode-file-key", result,
+                      "without env vars the zcode file key must be found by find_key()")
+
+    def test_v2_credentials_is_the_first_zcode_entry(self):
+        self.write_credentials("sk-zcode-plan-key")
+        with open(os.path.join(self.home, ".zcode", "settings.json"),
+                  "w", encoding="utf-8") as fh:
+            json.dump({"apiKey": "sk-root-zcode-settings-key"}, fh)
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            result = zai_client.find_key()
+        self.assertIn("sk-zcode-plan-key", result,
+                      "the v2 credentials file must win over the root-level zcode files")
+
+    def test_missing_or_corrupt_credentials_json_yields_no_key_and_no_crash(self):
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            self.assertEqual(zai_client.find_key(), (None, None))
+        d = os.path.join(self.home, ".zcode", "v2")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "credentials.json"), "w", encoding="utf-8") as fh:
+            fh.write("{not json at all")
+        with mock.patch.dict(os.environ, {"HOME": self.home}, clear=True):
+            self.assertEqual(zai_client.find_key(), (None, None))
+
+    def test_vendored_copies_stay_byte_identical_after_sync(self):
+        root = os.path.dirname(os.path.dirname(HERE))
+        with open(os.path.join(root, "_shared", "zai_client.py"), "rb") as fh:
+            shared = fh.read()
+        for skill in ("z-systematic-debugging", "z-writing-plans",
+                      "z-requirements-code-audit"):
+            path = os.path.join(root, skill, "scripts", "zai_client.py")
+            with open(path, "rb") as fh:
+                self.assertEqual(fh.read(), shared,
+                                 "%s vendored copy diverges from _shared" % skill)
+
+
+if __name__ == "__main__":
+    unittest.main()
