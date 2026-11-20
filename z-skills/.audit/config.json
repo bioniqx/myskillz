@@ -1,0 +1,30 @@
+{
+  "active": false,
+  "base_url": "https://api.z.ai/api/coding/paas/v4",
+  "created": "2026-11-05 12:26:59",
+  "finished": "2026-11-05 12:52:54",
+  "harness": "",
+  "key_source": "",
+  "lane": "agent",
+  "lang": "en",
+  "models": {
+    "judge": [
+      "glm-5.3-flash",
+      "high"
+    ],
+    "verify": [
+      "glm-5.3",
+      "max"
+    ]
+  },
+  "out_dir": "/Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills/.audit",
+  "repo_root": "/Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills",
+  "retrieval": "ripgrep",
+  "route": "openai",
+  "spec_files": [
+    "/Users/yamazaki-ethan/Documents/Projects/skillz/glm-skills/.audit/spec/2026-11-05-flash-opus-quality.md"
+  ],
+  "threads": 8,
+  "tier": "std",
+  "version": "9.0"
+}

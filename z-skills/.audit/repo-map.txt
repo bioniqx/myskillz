@@ -1,0 +1,26 @@
+files=857  dirs=44  tests=yes  langs=json(390),tsx(269),py(89),ts(37),sh(14)
+stack: glm-video-shotcraft/package.json, glm-video-shotcraft/template/package.json, glm-video-shotcraft/template/tsconfig.json, glm-video-shotcraft/videos/readme-workflow/package.json, glm-video-shotcraft/workbench/package.json, glm-video-shotcraft/workbench/tsconfig.json
+entry: glm-brainstorming/scripts/server.cjs, glm-video-shotcraft/gallery/app.js, glm-video-shotcraft/gallery/index.html, glm-video-shotcraft/template/src/aifl/Main.tsx, glm-video-shotcraft/template/src/index.ts, glm-video-shotcraft/videos/readme-workflow/index.html, glm-video-shotcraft/videos/readme-workflow/index.motion.json, glm-video-shotcraft/workbench/index.html
+api:     glm-video-shotcraft/gallery
+ui:      glm-video-shotcraft/template, glm-video-shotcraft/videos
+test:    _shared/tests, glm-idea-to-spec/scripts, glm-video-shotcraft/assets, glm-video-shotcraft/jianying-export, glm-video-shotcraft/publish
+tree:
+  glm-video-shotcraft/shot-polish             374
+  glm-video-shotcraft/demos                   229
+  glm-video-shotcraft/workbench                62
+  _shared/tests                                44
+  glm-video-shotcraft/template                 30
+  glm-video-shotcraft/gallery                  15
+  glm-video-shotcraft/assets                   15
+  glm-brainstorming/scripts                     9
+  glm-video-shotcraft/videos                    9
+  glm-systematic-debugging/scripts              8
+  glm-viral-video-studio/scripts                7
+  glm-dev-team/scripts                          5
+  glm-video-shotcraft/jianying-export           5
+  .                                             4
+  glm-writing-plans/scripts                     4
+  glm-video-shotcraft/.github                   4
+  glm-requirements-code-audit/scripts           3
+  glm-idea-to-spec/scripts                      2
+  glm-video-shotcraft/publish                   2
