@@ -5,7 +5,7 @@ license: MIT
 metadata:
   version: "9.0"
   models: "glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5"
-  harness: "zcode"
+  harness: "zcode | dsh"
 ---
 
 # Systematic Debugging

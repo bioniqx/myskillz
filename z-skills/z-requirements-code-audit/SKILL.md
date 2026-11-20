@@ -13,10 +13,11 @@ description: >-
 metadata:
   version: 9.0
   models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  harness: zcode | dsh
   parallelism: 8 threads inside scripts/audit.py
 ---
 
-# Requirements ↔ Code Audit — GLM edition
+# Requirements ↔ Code Audit
 
 **Sibling handoff, before R0.** The first command is one call. Pass `--spec <file>` when the requirements file is already known: that call is R0 step 1, and you do not brief again.
 

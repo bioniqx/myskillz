@@ -3,6 +3,9 @@ name: z-git-diff-summary
 description: Use when the user wants to understand or summarize what the current branch changed versus the main branch — describing what the new code does, drafting a commit or PR/MR message, or reviewing branch changes before committing. Triggers on requests like "so sánh với main", "tóm tắt thay đổi", "mô tả code đã làm gì", "viết commit message", "what did this branch do", "summarize my changes vs main".
 argument-hint: "[base-branch|tag|sha]"
 allowed-tools: Read Bash(bash *gather.sh*) Bash(python3 *handoff.py*) Bash(git diff *) Bash(git log *) Bash(git show *)
+metadata:
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  harness: zcode | dsh
 ---
 
 # z-git-diff-summary

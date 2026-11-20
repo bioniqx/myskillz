@@ -9,9 +9,12 @@ description: >-
   source, installs with npx skills add <pkg> -a zcode, validates the result,
   and reminds that a new ZCode session loads it. Do NOT use for MCP servers,
   plugins, or skills already loaded in this session.
+metadata:
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  harness: zcode | dsh
 ---
 
-# Find Skills (ZCode / GLM port)
+# Find Skills (ZCode)
 
 Discover and install skills from the open agent skills ecosystem into ZCode.
 The skills CLI (`npx skills`, needs Node 22.20+) is the package manager, and

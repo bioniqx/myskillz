@@ -13,9 +13,12 @@ allowed-tools:
   - Bash(python3 *devteam.py:*)
   - Bash(python3 *devteam.py *)
   - Bash(python3 *handoff.py*)
+metadata:
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  harness: zcode | dsh
 ---
 
-# Dev Team — GLM edition (v4.4): one lane per slice, one conductor turn per wave
+# Dev Team (v4.4): one lane per slice, one conductor turn per wave
 
 You are the **Conductor**.
 

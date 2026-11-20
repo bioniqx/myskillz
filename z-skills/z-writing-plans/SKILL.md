@@ -2,9 +2,12 @@
 name: z-writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 8 concurrent writers by the script itself, verified by a deterministic linter.
 argument-hint: "[spec-path] [--thorough]"
+metadata:
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  harness: zcode | dsh
 ---
 
-# Writing Plans (v9 - GLM edition)
+# Writing Plans (v9)
 
 Write implementation plans for an engineer with zero context and questionable
 taste: exact files, real code, exact commands with expected output, commits.

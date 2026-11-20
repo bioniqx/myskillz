@@ -313,28 +313,31 @@ class ZcodeSurfaceTests(unittest.TestCase):
 
     def test_skill_md_zcode_surface(self):
         text = self.read("SKILL.md")
-        lines = self.prose_lines(text)
+        # The frontmatter metadata.models line carries the five session ids
+        # (AGENTS.md); the no-Claude-model-name surface rule covers the body.
+        body = re.sub(r"^---\n.*?\n---\n", "", text, flags=re.DOTALL)
+        lines = self.prose_lines(body)
         self.assertIn("~/.zcode/skills/z-brainstorming", self.flat(text))
         self.assertTrue(any("TaskCreate" in ln and "TodoWrite" in ln for ln in lines),
                         "the TaskCreate fallback row must name TodoWrite")
         self.assertTrue(any("AskUserQuestion" in ln and "ZCode" in ln for ln in lines),
                         "the AskUserQuestion fallback row must name ZCode")
-        self.assertNotIn("Workflow (Claude Code)", self.flat(text),
+        self.assertNotIn("Workflow (Claude Code)", self.flat(body),
                          "the Claude Code Workflow fallback row must be gone")
-        self.assertNotIn("`!` preprocessing", self.flat(text),
+        self.assertNotIn("`!` preprocessing", self.flat(body),
                          "the `!` preprocessing fallback row must be gone")
-        self.assertNotIn("haiku", self.flat(text))
-        self.assertNotIn("sonnet", self.flat(text))
-        self.assertNotIn("opus", self.flat(text))
-        self.assertNotIn("CLAUDE_SKILL_DIR", self.flat(text))
+        self.assertNotIn("haiku", self.flat(body))
+        self.assertNotIn("sonnet", self.flat(body))
+        self.assertNotIn("opus", self.flat(body))
+        self.assertNotIn("CLAUDE_SKILL_DIR", self.flat(body))
         for ln in lines:
             if "CLAUDE_CODE_" in ln:
                 self.assertIn("Claude Code", ln, ln)
         # ZCode-only surface: no OpenCode harness instructions remain.
-        self.assertNotIn("OpenCode", self.flat(text))
-        self.assertNotIn("oc_harness", self.flat(text))
-        self.assertNotIn("todowrite", self.flat(text))
-        self.assertNotIn("webfetch", self.flat(text))
+        self.assertNotIn("OpenCode", self.flat(body))
+        self.assertNotIn("oc_harness", self.flat(body))
+        self.assertNotIn("todowrite", self.flat(body))
+        self.assertNotIn("webfetch", self.flat(body))
 
     def test_fanout_playbook_has_no_claude_code_runtime(self):
         text = self.read("fanout-playbook.md")

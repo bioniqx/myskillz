@@ -176,6 +176,30 @@ class TestSkillMdHygiene(unittest.TestCase):
             self.assertLessEqual(len(desc), 1024,
                                   "%s description is %d chars, max 1024" % (skill_md, len(desc)))
 
+    def test_metadata_declares_models_and_harness(self):
+        """AGENTS.md: every non-video skill declares metadata.models (all five
+        session ids on one flat line) and metadata.harness (both harnesses)."""
+        for skill in ALL_SKILLS + ["z-find-skills"]:
+            skill_md = os.path.join(GLM_ROOT, skill, "SKILL.md")
+            with open(skill_md, encoding="utf-8") as fh:
+                content = fh.read()
+            match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
+            self.assertIsNotNone(match, "%s has no frontmatter" % skill_md)
+            fm = match.group(1)
+
+            models = [l for l in fm.splitlines() if re.match(r"^\s*models:", l)]
+            self.assertEqual(len(models), 1,
+                             "%s must keep exactly one metadata models line" % skill_md)
+            self.assertIn(
+                "glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5",
+                models[0], "%s models line must list all five ids flat" % skill_md)
+
+            harness = [l for l in fm.splitlines() if re.match(r"^\s*harness:", l)]
+            self.assertEqual(len(harness), 1,
+                             "%s must keep exactly one metadata harness line" % skill_md)
+            self.assertRegex(harness[0], r"zcode \| dsh",
+                             "%s harness line must name both harnesses" % skill_md)
+
 
 
 
