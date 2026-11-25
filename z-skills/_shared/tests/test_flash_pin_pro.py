@@ -151,6 +151,13 @@ class FlashTierUnchanged(unittest.TestCase):
                 with self.subTest(model=model):
                     self.assertEqual(flash_pin.resolve_http_model(model), want)
 
+    def test_deepseek_flash_pin_remaps_the_second_glm_pro_word_too(self):
+        # Under a deepseek provider pin no GLM id may reach api.deepseek.com.
+        with _env({"GLM_FLASH": "deepseek"}):
+            for model in ("glm-5.4", "GLM-5.4"):
+                with self.subTest(model=model):
+                    self.assertEqual(flash_pin.resolve_http_model(model), "deepseek-flash")
+
     def test_z_flash_pin_keeps_passthrough(self):
         with _env({"GLM_FLASH": "glm"}):
             self.assertEqual(flash_pin.provider(), "glm")

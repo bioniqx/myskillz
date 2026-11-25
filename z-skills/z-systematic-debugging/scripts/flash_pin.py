@@ -26,6 +26,8 @@ API_REMAP = {
     "glm-5.3": DEEPSEEK_API,
     "GLM-5.3-Flash": DEEPSEEK_API,
     "GLM-5.3": DEEPSEEK_API,
+    "glm-5.4": DEEPSEEK_API,
+    "GLM-5.4": DEEPSEEK_API,
 }
 _MODEL_LINE = re.compile(r"(?m)^model:[ \t]*.*(?:\n|$)")
 
