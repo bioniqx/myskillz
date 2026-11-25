@@ -146,7 +146,7 @@ Re-read the whole document as (a) a developer starting tomorrow, (b) an AI codin
 - [ ] The "Instructions for AI coding agents" section is complete.
 - [ ] No contradictions between sections (pricing, scope, stack, persona).
 
-Fix what fails. Run `scripts/check_spec.py` on the spec file and repair every FAIL before showing it; a money figure with no URL and no ASSUMPTION, ESTIMATE, or UNVERIFIED label does not ship. Then give the user: file path(s), a 5-line summary, the verdict, the assumptions they must confirm, and the next 3 actions (usually: run the validation test, build M0, get the first paying customer). Run `handoff.py next --event spec-ready`, `plan`, or `implement` only when the user wants that next job.
+Fix what fails. Run `scripts/check_spec.py` on the spec file and repair every FAIL before showing it; a price or a percentage with no URL and no ASSUMPTION, ESTIMATE, UNVERIFIED or TARGET label does not ship, and a bare count such as 10k users is not a money figure. Then give the user: file path(s), a 5-line summary, the verdict, the assumptions they must confirm, and the next 3 actions (usually: run the validation test, build M0, get the first paying customer). Run `handoff.py next --event spec-ready`, `plan`, or `implement` only when the user wants that next job.
 
 ---
 

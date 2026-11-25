@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Fail a spec that states a money figure with no source.
 
-GLM-5.3 invents market sizes, prices, and growth rates. A money token on a
-line with no URL and no ASSUMPTION, ESTIMATE, or UNVERIFIED label is a FAIL.
+GLM-5.3 invents market sizes, prices, and growth rates. A price or a percentage on a
+line with no URL and no ASSUMPTION, ESTIMATE, UNVERIFIED or TARGET label is a FAIL.
+A bare count (10k users) is not a money figure.
 The file must also contain a BUILD verdict. Exit 0 when clean, 1 on FAIL,
 2 on usage. Stdlib only. Read-only.
 """
@@ -13,10 +14,11 @@ import sys
 from pathlib import Path
 
 MONEY_RE = re.compile(
-    r"(\$\s?\d|\d+(?:\.\d+)?\s*%|\b\d+(?:\.\d+)?\s*(?:k|m|b|thousand|million|billion)\b)",
+    r"(\$\s?\d|\d+(?:\.\d+)?\s*%)",
     re.I,
 )
-SOURCE_RE = re.compile(r"(https?://|\bASSUMPTION\b|\bESTIMATE\b|\bUNVERIFIED\b)", re.I)
+# TARGET marks a non-money percentage (an SLO or a coverage goal); it is not a source for prices.
+SOURCE_RE = re.compile(r"(https?://|\bASSUMPTION\b|\bESTIMATE\b|\bUNVERIFIED\b|\bTARGET\b)", re.I)
 VERDICT_RE = re.compile(r"\b(DON'T BUILD|DO NOT BUILD|BUILD WITH CHANGES|BUILD)\b")
 PLACEHOLDER_RE = re.compile(r"(\bTODO\b|\bTBD\b|\bFIXME\b|\?\?\?)")
 

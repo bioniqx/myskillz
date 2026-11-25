@@ -38,7 +38,7 @@ Use this structure. Replace every `[...]` with real content. If a section doesn'
 ### 2.5 Gap & positioning
 
 ## 3. Verdict & path to money
-[Scorecard, revenue scenarios, unit economics, risks, beachhead, pricing, channels, first-10/first-100 plan, validation test, kill criteria — from evaluation-framework.md]
+[Scorecard, revenue scenarios, unit economics, risks, beachhead, pricing, channels, first-10/first-100 plan, validation test, kill criteria — the Phase 3 verdict]
 
 ## 4. Customers
 ### 4.1 Personas (1–3): role, context, goal, pain, current tools, budget, who pays/approves
@@ -76,7 +76,7 @@ Use this structure. Replace every `[...]` with real content. If a section doesn'
 ### 8.3 UI principles: language(s), responsive, accessibility, design system
 
 ## 9. Non-functional requirements
-| Type | Requirement |
+| Type | Requirement (write TARGET before a target percentage) |
 |---|---|
 | Performance | e.g. p95 API < 300 ms; page load < 2 s on 4G |
 | Scale | users/records in year 1 and 2 |
