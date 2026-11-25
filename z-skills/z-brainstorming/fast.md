@@ -27,8 +27,10 @@ everything else:
 
 Write the design draft (Path line, assumptions, out of scope, no question
 mark) and run `check.py send --ledger .brainstorm/drafts/ledger.json --pick
-<the pick>` until it prints `fail=0`. Do not show it. Then write the short
-spec (goal, files, acceptance, out of scope) and run `check.py spec <path>`;
+<the pick>` until it prints `fail=0`. Do not show it. Then write the spec
+with the eight headings `check.py spec` requires (Architecture, Components,
+Data flow, Error handling, Testing, Evidence, Assumptions, Out of scope), one
+or two lines each, and run `check.py spec <path>`;
 fix every FAIL. Do not run the five-lens review. On `fail=0` with the fast
 chain active, `spec` itself prints the `HANDOFF z-writing-plans` block: run
 its `NEXT-EXTRA` command in the same turn. A design-only request stops after

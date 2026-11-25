@@ -6,7 +6,7 @@ The upstream skill dropped its spec/plan reviewer subagent loop: its
 regression testing across 5 versions with 5 trials each showed identical
 quality scores regardless of whether the review loop ran; the loop cost
 ~25 minutes, while self-review catches 3-5 real bugs per run in ~30s.
-Review inline. `check.py close` already gated the claims. Do not dispatch
+Review inline. `check.py intake` already gated the claims. Do not dispatch
 a claim verifier.
 
 On GLM this matters more, not less: a reviewer loop is a deep chain, and

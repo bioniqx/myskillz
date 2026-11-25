@@ -4,6 +4,10 @@ Read when a decision needs more than 3 web lanes, when sources conflict,
 or when the user asks for the latest or best method. SKILL.md's R10 and
 the web-lane prompt still apply; this file adds the how.
 
+## Contents
+
+Research or skip (5 seconds) - Query design - Source tiers - Recency and version fit - Verification without slowing down - Budgets and stopping - Privacy - How evidence reaches the user
+
 ## 1. Research or skip (5 seconds)
 
 Research when the recommendation depends on any of:
@@ -18,8 +22,8 @@ Research when the recommendation depends on any of:
 
 Skip when the answer lives in the repo (internal logic, conventions), the
 user said offline, or the question is pure product preference. If a
-thorough multi-source report is itself the deliverable, suggest the user
-run a deep-research command in parallel.
+thorough multi-source report is itself the deliverable, say that this skill
+returns dated evidence lines inside a design, not a research report.
 
 ## 2. Query design
 
@@ -62,7 +66,7 @@ run a deep-research command in parallel.
 
 Agents drift toward SEO content over authoritative sources unless told
 otherwise. The tier rule in every web-lane prompt is what prevents it,
-and Flash lanes need it stated explicitly, not implied.
+and lanes on GLM-5.3-Flash need it stated explicitly, not implied.
 
 ## 4. Recency and version fit
 
@@ -95,9 +99,9 @@ and Flash lanes need it stated explicitly, not implied.
 
 | Question type | Direct calls | Lane budget |
 | --- | --- | --- |
-| Single fact or API detail | 1-3 | none, or 1 Flash lane at ≤4 calls |
-| Comparison of 2-4 options | 4-8 searches + 2-6 fetches, two parallel batches | 0-2 Flash lanes at ≤5 calls each, only for multi-hop angles |
-| Broad landscape or new domain | 4-8 | 4-8 Flash lanes (waves of `lanes=`, default 8, hard max 8) at ≤5 calls each |
+| Single fact or API detail | 1-3 | none, or 1 lane at ≤4 calls |
+| Comparison of 2-4 options | 4-8 searches + 2-6 fetches, two parallel batches | 0-2 lanes at ≤5 calls each, only for multi-hop angles |
+| Broad landscape or new domain | 4-8 | 4-8 lanes (waves of `lanes=`, default 8, hard max 8) at ≤5 calls each |
 
 Never promote a lane to a bigger session model. A contested comparison is
 a `DECISION` line, not a bigger model.

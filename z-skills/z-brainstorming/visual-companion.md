@@ -3,6 +3,10 @@
 Browser-based companion for mockups, diagrams, and side-by-side visual
 options. Read this only after the user accepts the offer.
 
+## Contents
+
+When to use (per question - not per session) - Speed rules - How it works - Starting - The loop - Writing fragments - CSS classes provided by the frame - Events format - Design tips
+
 ## When to use (per question, not per session)
 
 Test: **would the user understand this better by seeing it?**
@@ -34,11 +38,11 @@ The loop is human-gated; hide machine latency inside the human wait.
 - **Bundle visual questions.** If two visual questions are independent,
   put both on one screen (two sections, two option groups) and let one
   reply resolve both.
-- **Write screens at `reasoning_effort: low`.** Producing HTML is
-  mechanical; deep reasoning here only adds latency at ~63 tok/s.
-- **Delegate screen writing to a Flash lane** when the screen is long
+- **Keep the session effort for screens.** Producing HTML is
+  mechanical; do not raise or lower the effort for it.
+- **Delegate screen writing to a lane** when the screen is long
   (a full mockup set) and you have other work in the same turn. Give the
-  lane the exact fragment contract below and a word cap; Flash is
+  lane the exact fragment contract below and a word cap; GLM-5.3-Flash is
   verbose unless bounded.
 
 ## How it works

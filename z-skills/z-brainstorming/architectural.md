@@ -5,6 +5,10 @@ lane results to `z-writing-plans`. SKILL.md's R0-R12 still apply; this file
 adds the shape of the messages. If `ask.py mode` printed `MODE fast`,
 `fast.md` replaces the question in §2 and the review gate in §4. Do not ask.
 
+## Contents
+
+Merge or split the first message - The design message - No extra lanes on the design turn - After approval — spec turn (one turn - no intermediate message) - Hand-off
+
 ## 1. Merge or split the first message
 
 **Merge (default).** Goal and key constraints are clear, no open question
@@ -88,8 +92,8 @@ as the design message and requires Out of scope and Assumptions.
 ## 3. No extra lanes on the design turn
 
 Do not launch a claim verifier, a runner-up, or a spec pre-draft. Each
-one finishes later and wakes a full thinking pass, and `check.py close`
-already gates the claims and the pick (SKILL.md R8). Write the design
+one finishes later and wakes a full thinking pass, and `check.py intake`
+and `check.py close` already gate the claims and the pick (SKILL.md R8). Write the design
 in the same turn, after `check.py close` prints `DECISION` and `check.py send` accepts the draft. Do not start work the user's
 reply is likely to invalidate wholesale. A lane that may outlive the
 turn goes out with `run_in_background: true`; `TaskStop` exists when a
@@ -97,7 +101,7 @@ stuck lane must be stopped cold.
 
 ## 4. After approval — spec turn (one turn, no intermediate message)
 
-Stay on the effort pinned in the agent file. This turn is formatting
+Stay on the effort pinned for this session. This turn is formatting
 and targeted edits, in one message.
 
 1. Write the spec to `docs/specs/YYYY-MM-DD-<topic>-design.md` (user

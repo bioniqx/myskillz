@@ -4,6 +4,10 @@ Read when planning a wave-based fan-out (more than `lanes=` lanes in total), or 
 whole exploration costs one tool round plus background time that overlaps
 the human's reading time.
 
+## Contents
+
+Capacity facts - Width in 10 seconds - Partition — one axis per lane - no overlap - Dispatch - Failure handling - Merge protocol (in your head - not a doc) - Overlap with human wait
+
 ## 0. Capacity facts
 
 - Lane width: `lanes=` in Live context (default 8, hard max 8). Fewer, fuller
@@ -12,13 +16,12 @@ the human's reading time.
   with "Concurrent subagent limit reached" and tells you not to retry.
 - Subagents run in the background in interactive sessions; results arrive
   as completion notifications. They have WebSearch/WebFetch but not
-  AskUserQuestion. They may nest three levels — do not. Flat
-  fan-outs keep merging and cost under your control.
+  AskUserQuestion. Flat fan-outs keep merging and cost under your control.
 - Direct Read/Grep/Glob/WebSearch/WebFetch calls are not subagents and do
   not count toward the cap.
 - Live context prints the caps actually in force. Trust it over this page.
 
-Settings for the 8-wide cap are in `z-tuning.md` §2. Skill
+The cap is `OC_MAX_LANES` (1..8, default 8); Live context prints it as `lanes=`. Skill
 `allowed-tools` pre-approve only the invoking turn; background lanes
 follow session permission rules, which is why WebSearch/WebFetch belong
 in the settings allow-list.
@@ -96,14 +99,14 @@ Vague boundaries are the main cause of duplicated work between lanes.
 - "Concurrent subagent limit reached" → do not retry the call. The cap in
   Live context was wrong or other agents are running; continue in waves.
 - Lane denied WebSearch/WebFetch (background permission rules) → do its
-  1-2 decisive fetches yourself; suggest the settings in `z-tuning.md`.
+  1-2 decisive fetches yourself; suggest allowing WebSearch and WebFetch in the ZCode permission settings.
 - Rate limit, 429, or empty result → halve the remaining wave; re-dispatch
   only lanes whose answer the design still needs; otherwise convert to an
   assumption.
 - Lane stopped at its turn limit with partial output → continue it with
   `SendMessage`, which keeps its context, instead of spawning a fresh one.
   On ZCode `SendMessage` exists: only if the send
-  fails should a fresh Flash lane be re-dispatched as fallback, with the
+  fails should a fresh lane be re-dispatched as fallback, with the
   partial output pasted in and the remaining budget stated.
 - Lane returns off-contract prose (common on Flash) → take what is usable.
   Do not re-run it for formatting.

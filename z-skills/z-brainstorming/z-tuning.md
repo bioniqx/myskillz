@@ -4,6 +4,10 @@ Read when configuring the runtime, when a GLM-specific failure appears,
 or when you want the numbers behind SKILL.md's R2/R3/R4. Not needed on a
 normal run.
 
+## Contents
+
+Session models - Models - Model and effort - Known failure modes - Evidence - ZCode runtime - Mechanical verification
+
 ## Session models
 
 Six display names cover the three tiers a session can run on. The
@@ -20,7 +24,7 @@ harness default when no GLM model is configured.
 | DeepSeek V4 Pro | pro tier |
 | Claude Sonnet 5.5 | Claude tier |
 
-No speed or price numbers are pinned for these tiers.
+No speed or price numbers are claimed for GLM 5.4, the DeepSeek models or Claude Sonnet 5.5.
 
 GLM 5.4 (api id glm-5.4), from the vendor model page read on
 2026-11-25: 1M context, 128K max output, thinking mode, tool calling,
@@ -29,7 +33,7 @@ pending at that date. Nothing else is claimed for it here.
 
 ## 1. Models
 
-Two models serve the whole skill:
+Speed and price are pinned for two models only; the other session models have no numbers here:
 
 | Model | Out speed | $/M in | $/M out | Use |
 | --- | --- | --- | --- | --- |
@@ -44,8 +48,8 @@ Time to first token: GLM-5.3 3.43 s, Flash 2.34 s. Both carry a 1M
 context window and 128K max output, so "read everything plausible in
 round 1" is cheap in context and expensive only in rounds.
 
-Judgment lanes on Flash. Approach drafts and escalated spec reviewers
-run on Flash (R2). A claim verifier and a spec pre-draft are not
+Judgment lanes follow the session model. Approach drafts and escalated
+spec reviewers are lanes (R2). A claim verifier and a spec pre-draft are not
 dispatched (SKILL.md R8): each completion wakes a full thinking pass.
 Flash and GLM-5.3 are one model family, so a lane shares the main
 thread's blind spots. Force different lenses on drafts. `decide.py
@@ -62,10 +66,10 @@ thoughtLevel line of each agent file, and no dispatch names a model
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Only 1-2 of the round's calls were made | GLM emits fewer parallel calls per turn than Claude unless given a count | R4: state the count, re-issue the remainder as one batch, or push the work into Flash lanes |
+| Only 1-2 of the round's calls were made | GLM emits fewer parallel calls per turn than Claude unless given a count | R4: state the count, re-issue the remainder as one batch, or push the work into lanes |
 | Lane ignores half the prompt | Rigid XML-tag ceremony and delegation tables are mishandled | Numbered imperative rules; tables only for reference data, never for behaviour |
 | Lane returns 400 words of prose | Flash is verbose by default (≈1.3× the median output on public index runs) | Word cap plus exact output labels in the prompt; take what is usable rather than re-running for formatting |
-| Every lane feels slow | Lanes running on GLM-5.3 instead of Flash | Lanes dispatch the installed Flash agent files (R2). The main thread renders `DECISION` |
+| Every lane feels slow | The session runs a pro model, so every lane does too | Expected on a pro pin; do not add a model parameter (R2). The main thread renders `DECISION` |
 | Accuracy drifts late in a long task | Long-horizon chains compound errors | R5: wide-and-shallow lanes, ≤4 tool calls per lane, restate state before each gate |
 | Cache hit rate collapses across siblings | Prefix-based caching; one changed character upstream invalidates the rest | Byte-identical shared block, slice lines last |
 | Tool-call parse errors on a self-hosted server | Known GLM tool-parser bugs on some vLLM/SGLang builds | Update the serving stack; do not work around it in the prompt |
@@ -75,7 +79,7 @@ thoughtLevel line of each agent file, and no dispatch names a model
 | Lane output cited without a check | Lane text looks authoritative once merged | R14: run `check.py` in round 2, before anything is cited |
 | The design message cites a path the lane never proved | The model rewrites citations after the check | `check.py send` re-verifies every path:line in the draft |
 | "sounds good" started implementation | Soft agreement read as a yes | `check.py approve`; only an approval token at the start of the reply passes |
-| A bug report got a design | Misroute | `check.py route` in round 1; `ROUTE` other than `none` is binding |
+| A bug report got a design | Misroute | `handoff.py open` routes in round 1; `ROUTE` other than `none` is binding |
 | A lane invented findings to hit a minimum count | "3-6 lines" forces fabrication | The agent file says up to 6, and zero is valid |
 | The path was forgotten by message 3 | Long-horizon drift; private restatement does not hold | Every message line 1 is Path or Path unchanged; `send` enforces it |
 | A lane ran at an effort other than its agent file's thoughtLevel | A lane follows the session model; the agent file's thoughtLevel line is its only effort setting | Keep the thoughtLevel line and no model line in the agent file; never add a model id (SKILL.md R2) |
@@ -118,13 +122,13 @@ characters, and a description over 1024 characters makes ZCode drop the skill �
 WHEN clause sits at the front of this skill's description. Agents launched together run in parallel
 and cannot spawn nested subagents, so keep the fan-out flat: width cap 8, default 8 (Live context
 prints `harness: zcode` with the lane cap in force). Lane economics (R2) are unchanged: every lane
-Flash. `decide.py score` prints the pick.
+on the session model. `decide.py score` prints the pick.
 
 ## 6. Mechanical verification
 
 `scripts/check.py` is a stdlib-only, read-only checker. The main thread
 pastes lane output into it on stdin through a heredoc, so a check costs
-one Bash call and no file write. It has three modes (SKILL.md R14):
+one Bash call and no file write. Its modes (SKILL.md R14):
 
 - `check.py cites [--root DIR]` verifies Code-lane FINDINGS: the file
   exists, the line exists, and the quoted snippet appears within 3 lines
@@ -132,6 +136,8 @@ one Bash call and no file write. It has three modes (SKILL.md R14):
 - `check.py web` lints Web-lane CLAIMS: https URL, valid and recent date,
   version, quote of 25 words or less, known tier. Prints OK, WEAK or
   DROP per claim. Exit 1 if any claim is DROPped.
+- `check.py intake [--root DIR]` runs `cites` and `web` in one call.
+  `check.py close` breaks and scores; `bind` pins the pick to the ledger.
 - `check.py spec PATH` lints a written spec: required headings, no
   placeholders or empty sections, dated https Evidence lines. Exit 1 if
   any FAIL.

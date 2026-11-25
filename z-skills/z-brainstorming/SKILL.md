@@ -134,7 +134,7 @@ Nothing downgrades. In doubt, go heavier.
   No doc, no spec.
 - **Bounded** — well-scoped change to a flow that ALREADY EXISTS here
   (flag, small endpoint, field, one-file fix). No existing flow to read =
-  not bounded. Direct calls only, plus 2-4 Flash lanes in a large or
+  not bounded. Direct calls only, plus 2-4 lanes in a large or
   unfamiliar repo. Message: short design (approach, files, testing) + one
   out-of-scope line + Evidence if researched + assumptions + ≤4 forking
   questions. Explicit
@@ -171,10 +171,10 @@ Do not set a model or an effort from this file. The session supplies both.
 
 ## R4 — Force the batch, plan the rounds
 
-Flash emits fewer parallel tool calls per turn unless given a
+GLM-5.3-Flash emits fewer parallel tool calls per turn unless given a
 number. Open the round with `Round 1: N calls in this message`, then make
 all N. If only 1-2 land, do NOT continue serially: re-issue the remainder
-as one batch, or move that work into Flash lanes (each batches
+as one batch, or move that work into lanes (each batches
 internally).
 
 Plan rounds, never discover them. Each main turn is a full thinking
@@ -198,7 +198,7 @@ facts`). Chat chrome only - never inside a draft sent to `check.py send`.
 
 ## R5 — Carry state explicitly
 
-Flash loses accuracy on long chains, and a private restatement does not
+GLM-5.3-Flash loses accuracy on long chains, and a private restatement does not
 hold the state. Prefer wide-and-shallow (many one-hop lanes) over deep
 chains; never let a lane chain more than 4 tool calls. The Path line of
 the next message is the state, and `check.py send` rejects a draft that
@@ -402,16 +402,18 @@ result: do not retry the same input.
 7. `approve --asked design` — the reply to the design message, before any write outside `.brainstorm/drafts/`. `--asked other` is never a yes.
 
 ```
-python3 <skill_dir>/scripts/check.py send --root <repo> <<'EOF'
+python3 <skill_dir>/scripts/check.py send --root <repo> --ledger .brainstorm/drafts/ledger.json --pick <id> <<'EOF'
 <the draft>
 EOF
 ```
+
+A design message needs `--ledger`; drop `--pick` when the message is not a design message.
 
 BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
 unverified stay labelled unverified. A spec FAIL is fixed in place.
 `approve no` means you do not write. The conductor procedure, in order. Each number is one message.
 
-1. Round 1, after `open`, when the prelude did not print `PACE: fast`: `decide.py atoms` on the request, and the fact lanes, in that one message. `PACE: fast` writes one option and does not launch a lane. Make the Flash atom call only when atoms printed no `ATOM` line; then `atoms --check`. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
+1. Round 1, after `open`, when the prelude printed `PACE: full`: `decide.py atoms` on the request, and the fact lanes, in that one message. `PACE: fast` writes one option and does not launch a lane. Make the atom call only when atoms printed no `ATOM` line; then `atoms --check --source <the request file>` with the call's ATOM lines on stdin. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `z-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `z-design-breaker` per option. End the turn.
 4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and arms `ask.py wait` (R6). `MODE fast` does not take that branch (the PACE fast NEXT). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>`.
@@ -449,7 +451,7 @@ unverified stay labelled unverified. A spec FAIL is fixed in place.
   request to classify.
 - "It's misrouted, but I can design it anyway" → routing costs one
   line; designing the wrong task costs the session.
-- "z-programmer can just build the bounded change" → run
+- "z-programmer-lite can just build the bounded change" → run
   `handoff.py borrow`. `HANDOFF` means the owner skill; do not dispatch it.
 - "An investigator is deeper, use it everywhere" → a long agent per
   lane; only when a shell or >4 hops is required, max 2.
@@ -471,7 +473,7 @@ Missing capability → substitute, never stall.
 `"z-drafter"`, attacks `"z-design-breaker"`. Those files do not set a model, so the lane uses the session model. Never add
 a `model` parameter. The prompt is the
 R11 slice. Agents not installed → the built-ins `Explore` (Code) and
-`general-purpose` (Web, drafts, verifier), and the prompt gains the agent-file
+`general-purpose` (Web, drafts), and the prompt gains the agent-file
 body in front of that slice. Launch every
 lane of the round in ONE message (ZCode runs subagents launched together in
 parallel), then end the turn. A lane that may outlive the turn goes out with

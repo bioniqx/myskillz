@@ -11,7 +11,7 @@ skill_dir=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
 echo "date: $(date +%F)   cwd: $(pwd)"
 echo "skill_dir: $skill_dir"
 echo "gate: check.py send must print fail=0 before you show a message (R14)"
-echo "gate: round 1 includes check.py route; ROUTE other than none is binding (R1)"
+echo "gate: open already ran route; ROUTE other than none is binding (R1)"
 echo "gate: no write outside .brainstorm/drafts/ until RESULT approve yes is printed (check.py approve --asked design, or ask.py fast inside open)"
 
 # --- runtime: harness, caps ------------------------------------------------
