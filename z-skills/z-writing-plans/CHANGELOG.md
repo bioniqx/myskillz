@@ -1,6 +1,6 @@
 # z-writing-plans v9 (GLM edition) - what changed from v8
 
-**Audit fixes (2026-11-25):** `doctor` and `setup` name the key the pinned provider reads (`DEEPSEEK_API_KEY` under the deepseek pin) and `doctor` prints the model ids the pin selects; the tier rule says a pro pin runs its own id; a stale `fast.md` pointer and the pattern-file count are corrected; the tuning doc dates its numbers, names the three key files it reads and the 100KB body limit; the reviewer agent and prompt agree on five questions and on the `Status: Approved` reply.
+**Audit fixes (2026-11-25):** `doctor` and `setup` name the key the pinned provider reads (`DEEPSEEK_API_KEY` under the deepseek pin) and `doctor` prints the model ids the pin selects; the tier rule says a pro pin runs its own id; a stale `fast.md` pointer and the pattern-file count are corrected; the tuning doc dates its numbers, names the key files it reads and the 100KB body limit; the reviewer agent and prompt agree on five questions and on the `Status: Approved` reply. The v9 baseline below keeps the flags it shipped with: today `setup` takes only `--apply` and installs the three agents into `~/.zcode/agents/`, and the client does not read `ANTHROPIC_BASE_URL`.
 
 **Six session models in R6 (2026-11-25):** R6 names the third pro id, glm-5.4, next to glm-5.3 and deepseek-v4-pro; the metadata models line and the tuning table list six ids. The lane still follows the session model; no agent file names a model.
 
@@ -114,7 +114,7 @@ explicit shell call that also resolves the tool path across the skill dirs.
 - `build` - validate, fan out, lint, repair, review, assemble, clean.
 - `doctor [--ping]` - lane, key source, base URL, protocol, models, concurrency,
   live probe.
-- `setup [--apply]` - installs the fallback
+- `setup [--harness zcode|claude] [--apply]` - installs the fallback
   subagent in the right place for the detected harness.
 
 `contracts`, `wait`, `review`, `assemble`, `check`, `lint-task` and `hook-lint`
@@ -125,7 +125,8 @@ are unchanged in behavior and still drive the agent lane.
 1. Unzip into one of:
    - `~/.zcode/skills/z-writing-plans/`
    - `~/.claude/skills/z-writing-plans/`
-2. `export ZAI_API_KEY=<key>`
+2. `export ZAI_API_KEY=<key>` and
+   `export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic`
 3. `python3 <skill>/scripts/plan_tool.py doctor --ping`
 4. Optional: `python3 <skill>/scripts/plan_tool.py setup --apply` for the
    agent-lane fallback subagent. Invoke the skill with `$z-writing-plans`.

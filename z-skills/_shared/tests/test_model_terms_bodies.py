@@ -10,6 +10,8 @@ line, and the brainstorming description keeps its trigger clause inside the
 
 import os
 import re
+import subprocess
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -62,6 +64,21 @@ def frontmatter_description(rel):
             return rest[1:-1]
         return rest
     return None
+
+
+def swept_docs():
+    """AGENTS.md and every Markdown file of the nine non-video skills, relative to
+    GLM_ROOT. A CHANGELOG is left out: a dated entry is history and keeps what it said."""
+    docs = ["AGENTS.md"]
+    folders = SWEPT_FOLDERS + ["z-doc-generator", "z-find-skills",
+                               "z-git-diff-summary", "z-idea-to-spec"]
+    for folder in folders:
+        for dirpath, dirnames, filenames in os.walk(os.path.join(GLM_ROOT, folder)):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            docs += [os.path.relpath(os.path.join(dirpath, name), GLM_ROOT)
+                     for name in filenames
+                     if name.endswith(".md") and name != "CHANGELOG.md"]
+    return docs
 
 
 class TestTierWordingSweep(unittest.TestCase):
@@ -125,7 +142,7 @@ class TestTierWordingSweep(unittest.TestCase):
         self.assertIn("Never skip the second pass", content,
                       "second-pass rule changed")
 
-    def test_metadata_models_lines_list_five_ids_flat(self):
+    def test_metadata_models_lines_list_six_ids_flat(self):
         for rel in ("z-systematic-debugging/SKILL.md",
                     "z-requirements-code-audit/SKILL.md"):
             content = read(rel)
@@ -182,19 +199,9 @@ class TestTierWordingSweep(unittest.TestCase):
                           "%s must say it runs on the session model" % rel)
 
     def test_every_skill_doc_names_glm_5_4_where_it_lists_the_other_models(self):
-        docs = [os.path.join(GLM_ROOT, "AGENTS.md")]
-        for folder in ("z-brainstorming", "z-dev-team", "z-doc-generator",
-                       "z-find-skills", "z-git-diff-summary", "z-idea-to-spec",
-                       "z-requirements-code-audit", "z-systematic-debugging",
-                       "z-writing-plans"):
-            for dirpath, dirnames, filenames in os.walk(os.path.join(GLM_ROOT, folder)):
-                dirnames[:] = [d for d in dirnames if d != "__pycache__"]
-                docs += [os.path.join(dirpath, name) for name in filenames
-                         if name.endswith(".md") and name != "CHANGELOG.md"]
-        for path in docs:
-            with open(path, encoding="utf-8") as fh:
+        for relative in swept_docs():
+            with open(os.path.join(GLM_ROOT, relative), encoding="utf-8") as fh:
                 text = fh.read()
-            relative = os.path.relpath(path, GLM_ROOT)
             if "DeepSeek V4 Pro" in text and "Claude Sonnet 5.5" in text:
                 self.assertTrue("GLM 5.4" in text or "glm-5.4" in text,
                                 "%s lists the other models but not GLM 5.4" % relative)
@@ -220,6 +227,65 @@ class TestTierWordingSweep(unittest.TestCase):
         self.assertEqual(recorded, ["z-brainstorming", "z-writing-plans"],
                          "exactly the two swept folders with a CHANGELOG"
                          " should record the sweep")
+
+    def test_no_swept_doc_keeps_a_sentence_the_code_contradicts(self):
+        # Each sentence states the opposite of what the scripts do: no agent file
+        # names a model, `bind` only checks a draft, a code slice is two dispatches,
+        # and only z-brainstorming has a fast.md to point at.
+        stale = ("Model and effort live only in the agent file",
+                 "bind` pins the pick to the ledger",
+                 "is a stdlib-only, read-only checker",
+                 "A code slice finishes in one lane",
+                 "follow that `NEXT` and do not read `fast.md`")
+        for relative in swept_docs():
+            with open(os.path.join(GLM_ROOT, relative), encoding="utf-8") as fh:
+                text = flat(fh.read())
+            for phrase in stale:
+                self.assertNotIn(phrase, text, "%s keeps %r" % (relative, phrase))
+
+    def test_brainstorming_tuning_names_the_modes_that_write(self):
+        f = flat(read("z-brainstorming/z-tuning.md"))
+        self.assertIn("Only `close` (it writes `breaks.json` beside the ledger) "
+                      "and `prove` (it updates the ledger) write a file.", f)
+        self.assertIn("`bind` is the read-only check `send` runs with `--ledger`", f)
+
+    def test_contents_lines_list_every_section_by_its_real_name(self):
+        # A contents line is a map: one item per section, named as its heading.
+        for rel, separator in (("z-brainstorming/architectural.md", " - "),
+                               ("z-brainstorming/fanout-playbook.md", " - "),
+                               ("z-brainstorming/research-playbook.md", " - "),
+                               ("z-brainstorming/visual-companion.md", " - "),
+                               ("z-brainstorming/z-tuning.md", " - "),
+                               ("z-writing-plans/references/z-tuning.md", " \u00b7 ")):
+            with self.subTest(doc=rel):
+                lines = read(rel).splitlines()
+                listed = lines[lines.index("## Contents") + 2]
+                headings = [re.sub(r"^\d+\.\s+", "", line[3:]) for line in lines
+                            if line.startswith("## ") and line != "## Contents"]
+                self.assertEqual(listed.split(separator), headings)
+
+    def test_writing_plans_changelog_keeps_the_v9_baseline_and_dates_the_change(self):
+        content = read("z-writing-plans/CHANGELOG.md")
+        # Release notes record the surface that release shipped; they are not rewritten.
+        self.assertIn("- `setup [--harness zcode|claude] [--apply]` - installs the fallback",
+                      content)
+        self.assertIn("2. `export ZAI_API_KEY=<key>` and\n"
+                      "   `export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic`\n",
+                      content)
+        # Today's surface is stated in the dated entry and matches the parser.
+        dated = [line for line in content.splitlines()
+                 if "Audit fixes (2026-11-25)" in line]
+        self.assertEqual(len(dated), 1, "expected one Audit fixes (2026-11-25) entry")
+        self.assertIn("today `setup` takes only `--apply` and installs the three agents "
+                      "into `~/.zcode/agents/`", dated[0])
+        self.assertIn("the client does not read `ANTHROPIC_BASE_URL`", dated[0])
+        help_text = subprocess.run(
+            [sys.executable, os.path.join(GLM_ROOT, "z-writing-plans", "scripts",
+                                          "plan_tool.py"), "setup", "--help"],
+            capture_output=True, text=True, timeout=120)
+        self.assertEqual(help_text.returncode, 0, help_text.stderr)
+        self.assertIn("--apply", help_text.stdout)
+        self.assertNotIn("--harness", help_text.stdout)
 
 
 class TestFiveModelLanePinning(unittest.TestCase):
@@ -297,6 +363,9 @@ class TestFiveModelLanePinning(unittest.TestCase):
         self.assertIn("DeepSeek V4 Pro and Claude Sonnet 5.5", f,
                       "README must name the DeepSeek V4 Pro and Claude"
                       " Sonnet 5.5 sessions")
+        self.assertIn("GLM 5.4, DeepSeek V4 Pro and Claude Sonnet 5.5 sessions "
+                      "follow the same one-call-per-phase plan", f,
+                      "the one-call-per-phase sentence leaves the GLM 5.4 session out")
 
     def test_writing_plans_changelog_entry_matches_delivered_r6(self):
         lines = read("z-writing-plans/CHANGELOG.md").splitlines()
