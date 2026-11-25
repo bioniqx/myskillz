@@ -178,9 +178,9 @@ Docs that need business context beyond the code (roadmap, rationale, parts of BA
 
 ### 3.2 Diff-skip (apply before launching anything)
 
-For each selected doc with an entry in `state.json`: if the doc file exists **and**
-`changed-files ∩ its scope = ∅` → mark `[cached]`, launch no writer and no reviewer.
-No script prints a changed-file list, so when `HEAD` changed treat every scope as changed;
+For each selected doc with an entry in `state.json`: when `HEAD` is unchanged and
+the doc file exists → mark `[cached]`, launch no writer and no reviewer. No script
+prints a changed-file list, so a changed `HEAD` makes every scope changed;
 `state.json` serves the full cache hit only (R8).
 
 ### 3.3 The one message
