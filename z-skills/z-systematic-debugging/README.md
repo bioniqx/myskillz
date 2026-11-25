@@ -30,6 +30,7 @@ Plus: deterministic lane triage printed by `probe` (no model reasoning spent on 
 
 ```bash
 export ZAI_API_KEY=<GLM Coding Plan key>       # optional: enables the scan lane (at most 8 API workers at once)
+export DEEPSEEK_API_KEY=<your DeepSeek key>   # instead of the line above, for a `deepseek` pin in ~/.zcode/z-flash
 python3 <skill>/scripts/debug_tool.py doctor --ping
 python3 <skill>/scripts/debug_tool.py setup --harness zcode
 ```
@@ -39,13 +40,13 @@ Needs bash (3.2+ works), git and python3 (stdlib only). `timeout`/`gtimeout` is 
 ## Layout
 
 ```
-SKILL.md                         12 numbered rules, loaded on use
+SKILL.md                         11 numbered rules (R1-R11), loaded on use
 references/z-tuning.md         model + harness facts, failure modes
 references/parallel-playbook.md  concurrency layers, isolation, recipes
 references/root-cause-tracing.md backward tracing, one-shot instrumentation
 references/defense-in-depth.md   layered guards after the fix
 references/flaky-and-timing.md   condition waits, flake root causes
-scripts/debug_tool.py            probe · run · experiment · scan · doctor · setup
+scripts/debug_tool.py            probe · run · experiment · scan · close · doctor · setup
 scripts/snapshot.sh              git, deps, toolchain, CPUs in one call
 scripts/stress.sh                N parallel reruns, Wilson CI, Fisher test vs baseline
 scripts/find-polluter.sh         parallel polluter search, one worktree per worker

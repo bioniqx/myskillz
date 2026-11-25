@@ -9,7 +9,7 @@ Use when the error surfaces deep in a call chain, far from where the bad value w
 3. **Who called it, with what value?** Walk up the frames, recording the value at each hop:
    `WorktreeManager.create(projectDir='')` ← `Session.init()` ← `Session.create()` ← test `Project.create()`
 4. **Keep going until the value is created, not just passed.** Here `setupCoreTest()` returned `{ tempDir: '' }` and the test read it before `beforeEach` ran. `cwd: ''` silently means `process.cwd()` → the source tree.
-5. **Fix at the origin** (tempDir getter throws if read before setup), then consider guards on the path (`defense-in-depth.md`).
+5. **Fix at the origin** (tempDir getter throws if read before setup), then consider guards on the path (SKILL.md R4 step 3 opens `references/defense-in-depth.md` for that case).
 
 Shortcut: `python3 $S/debug_tool.py probe --error-file <trace> --symbol <suspicious fn>` already read every in-repo frame and grepped every call site in one call. The origin is usually visible in that output without another round.
 
@@ -36,7 +36,7 @@ log.Printf("DEBUG dir=%q\n%s", dir, debug.Stack())
 
 ## Which test triggers it?
 
-Unknown test creates files/dirs → `bash $S/find-polluter.sh` (parallel, isolated worktrees; `$S` = the absolute scripts path printed as `S=` by every tool output). State in DBs or globals → order-dependent recipe in parallel-playbook §6.
+Unknown test creates files/dirs → `bash $S/find-polluter.sh` (parallel, isolated worktrees; `$S` = the absolute scripts path printed as `S=` by every tool output). State in DBs or globals → order-dependent recipe in `references/parallel-playbook.md` §6 (SKILL.md R5 opens that file).
 
 ## Rules
 

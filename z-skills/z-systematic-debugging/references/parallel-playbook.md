@@ -41,7 +41,7 @@ Parallel work that writes anything must not share mutable state.
   # cleanup: git worktree remove --force "$wt"; git worktree prune
   ```
   Copy the untracked/ignored files the build needs (`.env`, generated code) — worktrees do not carry them. `--link node_modules` (repo-root-relative) symlinks deps in; tests that *write* into a linked dir break isolation.
-- Per job: `TMPDIR`, port, DB/schema name, cache dir. The scripts export `STRESS_RUN` / `BISECT_JOB` / `POLLUTER_JOB`, `experiment` exports `SD_EXPERIMENT` / `SD_ARM` / `SD_RUN`. Combine when nested: `PORT=$((20000 + ${BISECT_JOB:-0} * 100 + ${STRESS_RUN:-0}))`.
+- Per job: `TMPDIR`, port, DB/schema name, cache dir. The scripts export `STRESS_RUN` / `POLLUTER_JOB`, `experiment` exports `SD_EXPERIMENT` / `SD_ARM` / `SD_RUN`. Combine when nested: `PORT=$((20000 + ${POLLUTER_JOB:-0} * 100 + ${STRESS_RUN:-0}))`.
 - `git stash` is shared by every worktree of a repo — never stash from a parallel worker.
 - Anything outside the repo (`~/.cache`, a shared DB, system services) is shared: serialize it or namespace it.
 

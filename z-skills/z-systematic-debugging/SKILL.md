@@ -25,7 +25,7 @@ EOF
 
 ## R1. One call per phase — do not batch tool calls, batch *inside* one call
 
-You emit few parallel tool calls per turn, and each turn costs seconds of latency. So width never lives in your message; it lives inside the tools, which open up to 64 local threads themselves (model/API workers stay at 8 or fewer, agent-lane subagents at 8 by default).
+GLM-5.3 and the flash-tier models emit few parallel tool calls per turn, and each turn costs seconds of latency; every session model, DeepSeek V4 Pro and Claude Sonnet 5.5 included, uses the same one-call-per-phase plan. So width never lives in your message; it lives inside the tools, which open up to 64 local threads themselves (model/API workers stay at 8 or fewer, agent-lane subagents at 8 by default).
 
 | Phase | Exactly one call | Replaces |
 | --- | --- | --- |
@@ -56,12 +56,12 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
 ## R3. FAST lane — 2 rounds
 
-When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`; the slow branch replaces this lane routing.
+When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this lane routing.
 
 The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
 
 1. `probe` (already done). The frame window and grep hits it printed are your evidence.
-2. One `experiment` for the suspected change: write /tmp/exp.json directly from the one-hypothesis template the probe NEXT block prints inline (no `experiment --template` call), then run it. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run '<the failing command>' <path/to/test/file>`. A fix that only reveals the *next* compile error is progress, not a failed fix.
+2. One `experiment` for the suspected change: write /tmp/exp.json directly from the one-hypothesis template the probe NEXT block prints inline (no `experiment --template` call), then run it. That command is local: it does not call a model. Then `python3 $S/debug_tool.py close --experiments <repo>/.debug/experiments.json`. When exactly one experiment is CONFIRMED, close prints `ROOT CAUSE`. Do not draft that line first. Then the minimal fix as a second experiment with `"role": "fix"`, then `python3 $S/debug_tool.py run -- '<the failing command>'`. A fix that only reveals the *next* compile error is progress, not a failed fix.
 
 ## R4. STANDARD lane — 3 rounds
 

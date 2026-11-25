@@ -6,6 +6,7 @@ Subcommands
   run         N shell commands in parallel, capped output, exit codes kept
   experiment  N hypotheses tested control-vs-treatment in isolated worktrees (up to 64)
   scan        N judgment workers fanned out to the model API directly (at most 8 at once)
+  close       accept a root cause only from experiment records (experiments.json)
   doctor      environment / key / harness check
   setup       print the ZCode config block
 
@@ -1130,8 +1131,9 @@ SETUP = {
     "zcode": """# ZCode
 # Settings -> Model Settings -> Z.ai account or API key; thinking effort is per-model in the UI.
 # Skill:  ~/.zcode/skills/z-systematic-debugging/SKILL.md
-Run `sh install-zcode.sh` from the z-skills checkout instead of copying the file raw: it installs this skill to ~/.zcode/skills/ and copies agents/z-debug-worker.md verbatim into ~/.zcode/agents/ (real model ids, `thoughtLevel: max`).
+Run `sh install-zcode.sh` from the z-skills checkout instead of copying the file raw: it installs this skill to ~/.zcode/skills/ and copies agents/z-debug-worker.md verbatim into ~/.zcode/agents/ (no model id: it follows the session model; `thoughtLevel: max`).
 # export ZAI_API_KEY=<GLM Coding Plan key>   # so debug_tool.py scan can fan out by itself
+# export DEEPSEEK_API_KEY=<your DeepSeek key>   # instead, for a deepseek pin in ~/.zcode/z-flash
 # Foreground subagents run truly in parallel here: the agent lane of `scan` is fine on ZCode.""",
 }
 
