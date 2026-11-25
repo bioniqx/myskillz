@@ -845,7 +845,7 @@ def _slow_brainstorm_next(pace, scripts):
             "design only after check.py send prints fail=0. Human approve "
             "stays. Chain only when the user asked to implement or approve "
             "returned yes: ask.py chain --pick <id> (chain.json mode slow, "
-            "continue true), write the short spec, check.py spec, then "
+            "continue true), write the spec, check.py spec, then "
             "handoff.py next --self z-brainstorming --event "
             "architectural-approved. Do not re-run open." % (decide, decide))
 
@@ -960,8 +960,8 @@ def _prelude(args, text):
                        "line, assumptions, out of scope, no question mark) "
                        "and run check.py send --ledger "
                        ".brainstorm/drafts/ledger.json --pick <the pick> "
-                       "until it prints fail=0. Then write the short spec "
-                       "(goal, files, acceptance, out of scope) and run "
+                       "until it prints fail=0. Then write the spec with the eight "
+                       "headings check.py spec requires (Architecture, Components, Data flow, Error handling, Testing, Evidence, Assumptions, Out of scope), one or two lines each, and run "
                        "check.py spec <path>; when it prints fail=0 with "
                        "HANDOFF lines, follow them in the same turn. A "
                        "design-only request stops after the spec. "
@@ -975,7 +975,7 @@ def _prelude(args, text):
                        "<the request>. On DECISION pick and RESULT approve "
                        "yes, write the design draft and run check.py send "
                        "--ledger .brainstorm/drafts/ledger.json --pick <the "
-                       "pick> until fail=0. Then the short spec and "
+                       "pick> until fail=0. Then the spec with the eight headings check.py spec requires, and "
                        "check.py spec <path>. Do not ask. Do not re-run open."
                        ) + _HOLD
         else:

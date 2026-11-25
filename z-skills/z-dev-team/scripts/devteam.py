@@ -4025,7 +4025,7 @@ def cmd_atoms(a):
         return 0
     for atom in decide.extract_atoms(text):
         out("ATOM: %s" % atom)
-    out("NEXT: one Flash call, no other context, prompt = the request text plus "
+    out("NEXT: one call on the session model, no other context, prompt = the request text plus "
         "'Emit only ATOM: lines, each span copied verbatim'; paste its stdout to `atoms %s --check`."
         % (a.plan or "<plan>"))
     return 0

@@ -524,7 +524,7 @@ def main(argv=None):
         text = sys.stdin.read()
         for atom in extract_atoms(text):
             print("ATOM: %s" % atom)
-        print("NEXT: one Flash call, no other context. Prompt is the request text plus: "
+        print("NEXT: one call on the session model, no other context. Prompt is the request text plus: "
               "Emit only ATOM: lines, each span copied verbatim. Then run atoms --check --source <file>.")
         return 0
     if ns.cmd == "atoms-check":
