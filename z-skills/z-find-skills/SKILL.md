@@ -83,13 +83,13 @@ install command. Install counts change daily - present them as approximate.
   a multi-skill repo; add `--copy` to copy files instead of symlinks.
 
 Never download a skill archive by hand into the workspace. A hand-placed
-folder lands outside both skill scopes, skips every frontmatter check, and
+folder lands outside the two scopes the CLI installs to, skips every frontmatter check, and
 pollutes version control; the CLI installs the same package in one command.
 
 ### 5. Validate and reload
 
-Run the validator (relative to this skill's folder; no args scans both
-scopes):
+Run the validator (relative to this skill's folder; no args scans `~/.zcode/skills` and
+`<cwd>/.zcode/skills`; pass a dir to check a `.agents/skills` install):
 
     python3 scripts/validate_install.py [skill-dirs...]
 

@@ -38,14 +38,14 @@ EOF
 
 | # | Rule | Violation = bug |
 |---|------|-----------------|
-| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`. | Launching an agent for one named doc |
-| R1 | **Turn budget ≤ 4** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. `PACE: direct` ignores this table. | Adding a turn a batch could absorb |
+| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. When the prelude prints `PACE: slow`, follow that `NEXT`. | Launching an agent for one named doc |
+| R1 | **Turn budget ≤ 4 without a Gate, ≤ 5 with one** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. `PACE: direct` ignores this table. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 8 Tasks go in ONE message. | Sending calls one at a time |
 | R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Writers start only after the set is known. Reviewers for api-reference, data-model, and configuration, plus one retry, stay within that wave of 8. | 9+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
 | R5 | **Zero cold-start reads for subagents.** Inline the facts + brief + file list into every Task prompt. Its first tool call hits target code, never a brief or manifest file. | Subagent reading this skill or the manifest |
 | R6 | **No narration.** No "Let me…", no phase summaries, no pasting doc bodies into the main thread. Docs live on disk. The doc table (§0.1) is the one exception. | Any prose between tool calls |
-| R7 | **Reasoning effort: main thread `high`, writers `high`, reviewers `max`.** Writers execute a checklist; the reviewer's fact-check fixes are judgment work. Say so in every Task prompt. | Deep reasoning on mechanical work |
+| R7 | **Reasoning effort: main thread `high`, writers `max`, reviewers `max`.** The two agent files pin `thoughtLevel: max`; say the same effort in every Task prompt. | An effort in a Task prompt that contradicts the agent file |
 | R8 | **Never redo work.** Diff-skip via `<state dir>/state.json` before every wave. | Rewriting an unchanged doc |
 | R9 | **Subagent returns ≤ 5 lines.** Never the doc body. | Long subagent returns |
 | R10 | **Failure budget: 1 retry per doc, bundled into the next wave (still within its 8 slots, R3).** Never a dedicated retry turn, never a third attempt. | Retry loops |
@@ -75,11 +75,11 @@ Statuses: `xong`, `đang chạy`, `đang review`, `chờ`, `cached`, `retry 1`, 
 | Turn | Content (single message) |
 |------|--------------------------|
 | 1 | 1 call: `handoff.py open` (route + cache check + recon + fact pack) |
-| 2 | Gate list (§3.0), or 1 line of intent when the Gate is skipped. Do not launch writers in this message |
-| 3 | Writers for the known set (≤ 8) + reviewer Tasks for api-reference, data-model, and configuration only + any 1 retry, together ≤ 8; extras next message |
-| 4 | 1 bash (mechanical verify + update state) + final summary |
+| 2 | Gate list (section 3.0) only; it ends the turn. Gate skipped: this is the write wave (1 line of intent + 1 bash + up to 8 writers) |
+| 3 | Gate skipped: the review wave (section 4). Gate ran: the write wave of section 3.3 (1 bash + up to 8 writers) |
+| 4 | 1 bash (mechanical verify + update state) + final summary. Gate ran: the review wave is Turn 4 and finish is Turn 5 |
 
-Skip Turn 3 entirely when no HIGH doc was written this run. Skip Turn 1's work on a cache hit.
+Skip the review wave unless a doc written this run is `api-reference.md`, `data-model.md` or `configuration.md` (section 4). A cache hit is known only after the Turn 1 call: Turn 2 then reports the `[cached]` list and stops (decision table).
 
 ---
 
@@ -180,8 +180,8 @@ Docs that need business context beyond the code (roadmap, rationale, parts of BA
 
 For each selected doc with an entry in `state.json`: if the doc file exists **and**
 `changed-files ∩ its scope = ∅` → mark `[cached]`, launch no writer and no reviewer.
-If the recon printed no usable `CHANGED SINCE` list (shallow clone, rewritten history, no git),
-treat every scope as changed — correctness beats the cache.
+No script prints a changed-file list, so when `HEAD` changed treat every scope as changed;
+`state.json` serves the full cache hit only (R8).
 
 ### 3.3 The one message
 
@@ -205,7 +205,7 @@ EOF
 3. **≤ 8 writer Tasks**, subagent type `z-doc-writer` (the installed ZCode agent, Appendix A; the built-in `general-purpose` agent if it is missing), one per non-cached doc, **each using this exact template**:
 
 ```
-ROLE: Technical writer. Effort: high — follow the checklist, do not deliberate, no plan step.
+ROLE: Technical writer. Effort: max (pinned by your agent file) — follow the checklist, do not deliberate, no plan step.
 GOAL: Write <output dir>/<file> — "<title>" for <audience>.
 TAG: <create|update> (update = the file already exists).
 
@@ -401,5 +401,5 @@ the 5-line block requested, nothing else.
 ## Appendix B — harness settings that matter for this pipeline
 
 Writers and reviewers do not pin a model. They use the session model, so switching models
-does not require an agent edit. Say the effort in the task prompt (`high` for writers, `max`
-for reviewers). Do not request JSON schema output. Leave sampling at the provider default.
+does not require an agent edit. Say the effort in the task prompt (`max` for writers and
+reviewers, as their agent files pin it). Do not request JSON schema output. Leave sampling at the provider default.
