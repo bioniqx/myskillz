@@ -37,7 +37,7 @@ import zipfile
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import decide  # vendored by _shared/sync.sh; closes atoms, the model does not
 import flash_pin  # vendored by _shared/sync.sh
-import zai_client  # vendored by skills/glm/_shared/sync.sh
+import zai_client  # vendored by _shared/sync.sh
 
 VERSION = "9.0"
 
@@ -2575,7 +2575,7 @@ def _reply_truncated(cl):
 
 
 def freeze_with_client(cl, spec_text):
-    """One Flash call. A second call runs only when that reply was cut off.
+    """One call on the session model's provider. A second call runs only when that reply was cut off.
 
     The model cannot invent a span. A finished reply that simply omits a prose
     span is not retried: the mechanical atoms still bind the checklist.

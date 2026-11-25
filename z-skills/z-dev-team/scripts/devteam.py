@@ -2134,7 +2134,7 @@ def _pid_alive(pid) -> bool:
 
 def emit_agent(agent, prompt, label) -> str:
     """The launch line for one agent: the `Agent →` instruction (no model — the Agent tool takes none,
-    the agent's own frontmatter pins it)."""
+    the lane follows the session model)."""
     return f"Agent → subagent_type: {agent}, description: \"{label}\", prompt: \"{prompt}\""
 
 
@@ -4004,7 +4004,7 @@ def cmd_probe(a):
 
 def cmd_atoms(a):
     """Mechanical requirement atoms from the plan's request (stdin when there is no plan yet).
-    --check freezes the one Flash atom call's stdout into atoms.json."""
+    --check freezes the stdout of the one atom call into atoms.json."""
     root = find_root()
     text = ""
     if a.plan and os.path.isfile(a.plan):

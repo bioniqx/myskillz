@@ -17,6 +17,8 @@ STALE = (
     "effort is max on every agent",
     "thoughtLevel is ignored unless that model id is present",
     "(GLM-5.3-Flash, thoughtLevel max)",
+    "frontmatter pins it",
+    "Flash atom call",
 )
 
 
