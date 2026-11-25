@@ -404,13 +404,14 @@ def check_spec(a):
             fails.append((name, "required section is missing"))
             continue
         body = "\n".join(hit[1]).strip()
-        if len(re.sub(r"\s", "", body)) < 6:
+        no_evidence = name == "Evidence" and re.search(r"\b(none|n/a|repo-internal)\b", body, re.I)
+        if len(re.sub(r"\s", "", body)) < 6 and not no_evidence:
             fails.append((name, "section is empty"))
         if len(body.split()) > MAX_SECTION_WORDS:
             warns.append((name, f"{len(body.split())} words: split it or cut it"))
         if name == "Evidence":
             lines = [x for x in body.splitlines() if x.strip().lstrip("-*0123456789.) ")]
-            if not re.search(r"\b(none|n/a|repo-internal)\b", body, re.I):
+            if not no_evidence:
                 if not 2 <= len(lines) <= 7:
                     warns.append((name, f"{len(lines)} evidence lines (expected 2-7)"))
                 for ln in lines:

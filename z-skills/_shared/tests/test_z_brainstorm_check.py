@@ -185,6 +185,24 @@ class SpecTests(unittest.TestCase):
         rc, out = self.lint(text)
         self.assertEqual(rc, 0, out)
 
+    def test_a_bare_none_or_na_evidence_is_not_called_empty(self):
+        for body in ("none", "n/a", "None"):
+            with self.subTest(body=body):
+                text = GOOD_SPEC.split("## 6. Evidence")[0] + (
+                    "## 6. Evidence\n%s\n\n## 7. Assumptions\n- Same DB.\n\n"
+                    "## 8. Out of scope\nNo UI work planned.\n" % body)
+                rc, out = self.lint(text)
+                self.assertEqual(rc, 0, out)
+                self.assertNotIn("section is empty", out)
+
+    def test_a_blank_evidence_section_is_still_empty(self):
+        text = GOOD_SPEC.split("## 6. Evidence")[0] + (
+            "## 6. Evidence\n\n## 7. Assumptions\n- Same DB.\n\n"
+            "## 8. Out of scope\nNo UI work planned.\n")
+        rc, out = self.lint(text)
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL Evidence - section is empty", out)
+
 
 class SpecChainTests(unittest.TestCase):
     def setUp(self):

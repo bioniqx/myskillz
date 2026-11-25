@@ -1,6 +1,6 @@
 ---
 name: "z-drafter"
-description: "Lane for z-brainstorming, on the session model: one assigned lens, approach draft, claim check, or runner-up. No repo writes."
+description: "Lane for z-brainstorming, on the session model: one assigned lens or approach draft. No repo writes."
 thoughtLevel: max
 color: blue
 maxTurns: 4
