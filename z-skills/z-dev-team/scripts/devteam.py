@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """z-dev-team engine v4.0 — deterministic scheduler, integrator, worktree helper and concurrency governor,
-tuned for ZCode on Z.ai GLM-5.3-Flash (strong) + GLM-5.3-Flash (fast). The provider is auto-detected from
+tuned for ZCode. Every lane follows the session model; no agent file pins a model. The provider is auto-detected from
 ANTHROPIC_BASE_URL (`DEVTEAM_PROVIDER=glm|anthropic` forces it); model routing itself is ZCode-only
-(z-programmer-strong / z-programmer-lite, pinned in the agents' own frontmatter).
+(z-programmer-strong / z-programmer-lite, each with the thoughtLevel in its own frontmatter).
 
 Stdlib only (Python 3.8+), git >= 2.31.
 
@@ -68,11 +68,11 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
 Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
 Provider + governor (v4):
-  routing   ZCode-only: every lane rides z-programmer-lite (GLM-5.3-Flash, thoughtLevel max); high-risk,
-            large and RETRIED slices escalate to z-programmer-strong (GLM-5.3-Flash, thoughtLevel max). Model
-            ids stay as pinned; effort is max on every agent. Both are pinned in the agents' own
-            frontmatter — the Agent tool takes no per-dispatch model, and `doctor --fix` installs the
-            agents verbatim. thoughtLevel is ignored unless that model id is present.
+  routing   ZCode-only: every lane rides z-programmer-lite (thoughtLevel high); high-risk,
+            large and RETRIED slices escalate to z-programmer-strong (thoughtLevel max). Both follow
+            the session model: no agent file pins a model id, the Agent tool takes no
+            per-dispatch model, and `doctor --fix` installs the
+            agents verbatim.
   governor  AIMD window over the fan-out: default tier api opens the full 15-call window at once
             (PROVIDER_CAP is 15, so no tier goes above 15); DEVTEAM_GLM_TIER=lite|pro|max trades
             width for gentler rate limits (starts 3/6/7, ceiling 15); +1 per finished lane; halve on a
@@ -167,8 +167,8 @@ SIZES = ("trivial", "small", "large")
 SIZE_WEIGHT = {"trivial": 1, "small": 3, "large": 8}
 
 # --- providers: which API serves the run. Model routing itself is ZCode-only — the Agent tool takes no
-# per-dispatch model, so each agents/<name>.md file pins its own model id + thoughtLevel
-# (z-programmer-strong = GLM-5.3-Flash/max, z-programmer-lite = GLM-5.3-Flash/max, reviewer/leader likewise).
+# per-dispatch model, so each agents/<name>.md file follows the session model and carries only a
+# thoughtLevel (z-programmer-strong max, z-programmer-lite high, reviewer/leader per their own files).
 # The provider name only drives detection, stats labels and the z-only peak-hour governor.
 PROVIDERS = {
     "glm": {"label": "Z.ai GLM"},
@@ -1727,8 +1727,8 @@ def cmd_init(a):
         out("  KINDS: " + ", ".join(f"{k}×{v}" for k, v in sorted(kinds.items())))
     out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; z-programmer slots {cap} "
         f"(hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
-    out(f"PROVIDER {PROVIDERS[provider]['label']}: lanes on z-programmer-lite (GLM-5.3-Flash); high-risk, large "
-        "and retried slices on z-programmer-strong (GLM-5.3-Flash); model + effort pinned in the agents' frontmatter")
+    out(f"PROVIDER {PROVIDERS[provider]['label']}: lanes on z-programmer-lite; high-risk, large "
+        "and retried slices on z-programmer-strong; every lane follows the session model")
     if gov_line(st):
         out(gov_line(st))
     high = [sid for sid, s in slices.items() if s["risk"] == "high"]

@@ -755,7 +755,7 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch T1 D1 D2 N1 2>&1)
-check "a trivial slice rides the lite lane (GLM-5.3-Flash, thoughtLevel max)" 'grep -q "subagent_type=z-programmer-lite, description=.tiny." <<<"$OUT"'
+check "a trivial slice rides the lite lane" 'grep -q "subagent_type=z-programmer-lite, description=.tiny." <<<"$OUT"'
 check "a small docs slice rides the lite lane too" 'grep -q "subagent_type=z-programmer-lite, description=.readme." <<<"$OUT"'
 check "a LARGE docs slice escalates to the strong lane" 'grep -q "subagent_type=z-programmer-strong, description=.big docs." <<<"$OUT"'
 check "a normal code slice rides the lite lane with no model override" 'grep -q "subagent_type=z-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
@@ -883,9 +883,9 @@ cat > plan.md <<'EOF'
 ```
 EOF
 OUT=$(D init plan.md 2>&1 && D dispatch N1 T1 H1 L1 X1 2>&1)
-check "a normal slice rides the lite lane (GLM-5.3-Flash, thoughtLevel max) with no model override" 'grep -q "subagent_type=z-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
+check "a normal slice rides the lite lane with no model override" 'grep -q "subagent_type=z-programmer-lite, description=.normal." <<<"$OUT" && ! grep -q "model:" <<<"$OUT"'
 check "a trivial slice takes the lite lane too" 'grep -q "subagent_type=z-programmer-lite, description=.tiny." <<<"$OUT"'
-check "a high-risk slice escalates to the strong lane (GLM-5.3-Flash)" 'grep -q "subagent_type=z-programmer-strong, description=.auth." <<<"$OUT"'
+check "a high-risk slice escalates to the strong lane" 'grep -q "subagent_type=z-programmer-strong, description=.auth." <<<"$OUT"'
 check "a large slice escalates to the strong lane" 'grep -q "subagent_type=z-programmer-strong, description=.big." <<<"$OUT"'
 check "a large research slice still goes to the z-investigator" '[[ "$OUT" == *"subagent_type: z-investigator, description: \"X1\""* ]]'
 D fail N1 --why "stuck" >/dev/null 2>&1; D fail T1 --why "stuck" >/dev/null 2>&1; D retry N1 >/dev/null 2>&1; D retry T1 >/dev/null 2>&1
