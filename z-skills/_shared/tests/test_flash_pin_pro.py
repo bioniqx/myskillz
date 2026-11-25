@@ -1,4 +1,4 @@
-"""S1: five-model GUARD line, pro pin words, pro API id, zai_client docstring."""
+"""S1: six-model GUARD line, pro pin words, pro API id, zai_client docstring."""
 import contextlib
 import importlib.util
 import os
@@ -27,6 +27,7 @@ SESSION_MODELS = (
     "GLM-5.3-Flash",
     "DeepSeek V4.1 Flash",
     "GLM 5.3",
+    "GLM 5.4",
     "DeepSeek V4 Pro",
     "Claude Sonnet 5.5",
 )
@@ -70,6 +71,15 @@ class ProPinWords(unittest.TestCase):
                 with _env({}):
                     self.assertEqual(flash_pin.provider(home), want)
 
+
+    def test_glm_5_4_env_word_selects_glm(self):
+        with _env({"GLM_FLASH": "glm-5.4"}):
+            self.assertEqual(flash_pin.from_env(), "glm")
+
+    def test_glm_5_4_pin_file_word_selects_glm(self):
+        home = _pin_home(self, "glm-5.4\n")
+        with _env({}):
+            self.assertEqual(flash_pin.from_file(home), "glm")
 
 class PinWord(unittest.TestCase):
     def test_returns_raw_first_env_token(self):
@@ -118,11 +128,17 @@ class ProHttpResolve(unittest.TestCase):
                 with self.subTest(model=model):
                     self.assertEqual(flash_pin.resolve_http_model(model), "glm-5.3")
 
-    def test_pro_api_maps_both_pro_words_to_their_api_ids(self):
+    def test_pro_api_maps_every_pro_word_to_its_api_id(self):
         pro_api = getattr(flash_pin, "PRO_API", {})
         self.assertEqual(pro_api.get("deepseek-v4-pro"), "deepseek-v4-pro")
         self.assertEqual(pro_api.get("glm-5.3"), "glm-5.3")
+        self.assertEqual(pro_api.get("glm-5.4"), "glm-5.4")
 
+
+    def test_glm_5_4_pro_pin_resolves_the_glm_5_4_api_id_for_every_model(self):
+        for model in ("glm-5.3-flash", "some-other-model"):
+            with self.subTest(model=model), _env({"GLM_FLASH": "glm-5.4"}):
+                self.assertEqual(flash_pin.resolve_http_model(model), "glm-5.4")
 
 class FlashTierUnchanged(unittest.TestCase):
     def test_deepseek_flash_pin_keeps_today_remap(self):
@@ -161,7 +177,7 @@ class GuardFlashLine(unittest.TestCase):
             len(lines), 1, "expected one GUARD flash line, found %d" % len(lines))
         return lines[0]
 
-    def test_names_all_five_session_models(self):
+    def test_names_all_six_session_models(self):
         line = self._line()
         for name in SESSION_MODELS:
             with self.subTest(model=name):
@@ -172,7 +188,7 @@ class GuardFlashLine(unittest.TestCase):
 
 
 class ZaiClientDocstring(unittest.TestCase):
-    def test_names_five_session_models_and_both_providers(self):
+    def test_names_six_session_models_and_both_providers(self):
         doc = zai_client.__doc__ or ""
         for name in SESSION_MODELS:
             with self.subTest(model=name):

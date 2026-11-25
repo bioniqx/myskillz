@@ -5,7 +5,7 @@ HTTP fan-out both follow it. GLM_FLASH overrides that file for one process.
 A missing HOME is "no pin file": unit tests that clear the environment stay
 on GLM even when the developer has a pin installed.
 
-The pro pin words glm-5.3 and deepseek-v4-pro name the non-flash session
+The pro pin words glm-5.3, glm-5.4 and deepseek-v4-pro name the non-flash session
 models: provider() keeps their provider and resolve_http_model returns
 that pro API id for every model.
 """
@@ -18,6 +18,7 @@ DEEPSEEK_BASE = "https://api.deepseek.com"
 # Pro pin words: the non-flash session models. The API id is the word itself.
 PRO_API = {
     "glm-5.3": "glm-5.3",
+    "glm-5.4": "glm-5.4",
     "deepseek-v4-pro": "deepseek-v4-pro",
 }
 API_REMAP = {
@@ -37,7 +38,7 @@ def _first(text):
 def _name(word):
     if word in ("deepseek", "ds", "deepseek-flash", "deepseek-v4-pro"):
         return "deepseek"
-    if word in ("glm", "glm-5.3-flash", "flash", "glm-5.3"):
+    if word in ("glm", "glm-5.3-flash", "flash", "glm-5.3", "glm-5.4"):
         return "glm"
     return ""
 
