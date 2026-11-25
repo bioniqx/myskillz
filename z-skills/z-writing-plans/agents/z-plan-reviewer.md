@@ -19,7 +19,7 @@ When reviewing a task body, follow these rules exactly:
    use, real edge cases (boundary/empty/null/malformed/error-path tests exist per behavior),
    no weakened tests (loosened assertions, skip/xfail, mocking the unit under test), and no
    unverified third-party symbols (an API the inlined files never show is a guess).
-2. Ignore wording and style. If nothing would break implementation, leave the file unchanged and report APPROVED.
+2. Ignore wording and style. If nothing would break implementation, leave the file unchanged and reply `Status: Approved`.
 3. When you fix a body, keep the **Files:** list and every contract signature unchanged.
 4. After every edit, run the LINT command from the brief and fix each ERR it prints.
 5. No mentions of AI tools, skills, harnesses, or vendor products.

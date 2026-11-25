@@ -53,7 +53,7 @@ the R5 report ends with the final table.
 Do not run the path loop, and do not brief again. The prelude starts with a `TOOL:` line. Use that exact string for every later
 call. The brief already contains the spec body with real line numbers, the spec
 heading map, the repo file list, the stack, the test commands, the conventions
-file, and the 2-5 pattern files the brief ranks; if the repository is large and
+file, and the up to 4 pattern files the brief ranks; if the repository is large and
 the affected code is not in the brief, up to 3 narrow read-only explore
 dispatches may run in that same turn.
 
@@ -128,8 +128,8 @@ Contract rules - all plan quality is decided here, nowhere later:
 5. `Read` (optional) adds existing files that writer needs inlined.
 6. `Tier` (optional) is `light` for trivial config or docs, `deep` for
    algorithmic, security, concurrency or migration work. Default is standard.
-   Tier is a hint: `build` may raise it, and it never selects a model other
-   than Flash.
+   Tier is a hint: `build` may raise it, and it never selects a model on its
+   own: the lane is the pinned flash model or the pinned pro id (R6 rule 5).
 7. Right-size each task: the smallest unit with its own test cycle that a
    reviewer could reject on its own.
 8. `References` is optional and is inlined into every writer's shared prefix -
@@ -206,7 +206,7 @@ approach. The plan file stays portable (R8).
 
 # R7 - Inline path (N <= 1, or PACE short)
 
-`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`.
+`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT`.
 
 `PACE: short` means the spec is short enough that a writer fan-out costs more
 than it checks. Read `references/body-rules.md` in this skill directory for the body format.
@@ -227,10 +227,12 @@ editor and git can execute. The linter enforces this and will fail the build.
 `<TOOL> doctor` reports the lane, the key, the models and the concurrency.
 `<TOOL> setup --apply` installs the fallback subagents: all three `agents/*.md`,
 copied verbatim to `~/.zcode/agents/`.
-Never run `--apply` without the user's consent. The fast lane needs one export:
+Never run `--apply` without the user's consent. The fast lane needs one export, picked by
+the pin in `~/.zcode/z-flash`:
 
 ```bash
-export ZAI_API_KEY=<GLM Coding Plan key>
+export ZAI_API_KEY=<GLM Coding Plan key>              # glm pin
+export DEEPSEEK_API_KEY=<DeepSeek key>            # deepseek pin
 ```
 
 GLM model facts, routing rationale and known GLM failure modes live in

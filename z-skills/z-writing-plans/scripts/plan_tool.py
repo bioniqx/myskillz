@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """plan_tool.py v9 GLM - deterministic engine + in-process 8-way fan-out.
-Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on ZCode.
+Stdlib only, Python 3.8+. Tuned on GLM-5.3-Flash; runs on every declared session model and harness.
 
   brief     [SPEC] [--thorough]        repo+spec+patterns in ONE call (replaces Phase 0)
   build     PLAN --spec S [opts]       validate -> fan out writers -> lint+repair -> review -> assemble
@@ -8,7 +8,7 @@ Stdlib only, Python 3.8+. Tuned for GLM-5.3 / GLM-5.3-Flash on ZCode.
   wait      PLAN [--review]            agent lane: block until every task file lints OK
   review    PLAN [--all]               agent lane: pick risky tasks, write reviewer briefs
   assemble  PLAN [--clean]             full check + render canonical plan
-  check     PLAN [--spec S]            inline path (<= 3 tasks): check + render
+  check     PLAN [--spec S]            inline path (N <= 1 task, or PACE short / fast): check + render
   lint-task PLAN TASKFILE [--mark ok|rev]
   hook-lint                            PostToolUse hook -> additionalContext
   doctor                               lane / key / model / connectivity report
@@ -2157,18 +2157,26 @@ def cmd_doctor(a):
     print("api key   : %s (%s)" % (mask(key), src))
     print("base url  : %s" % base)
     print("protocol  : %s" % proto)
+    lanes = {tier: flash_pin.resolve_http_model(GLM[tier][0])
+             for tier in ("light", "std", "deep")}
     print("models    : light=%s/%s  std=%s/%s  deep=%s/%s" % (
-        GLM["light"][0], GLM["light"][1], GLM["std"][0], GLM["std"][1],
-        GLM["deep"][0], GLM["deep"][1]))
+        lanes["light"], GLM["light"][1], lanes["std"], GLM["std"][1],
+        lanes["deep"], GLM["deep"][1]))
     print("workers   : %d (script-side threads; PLAN_MAX_WORKERS to change)" % workers_cap())
     print("agent cap : %d%s" % (cap, " (%s)" % capenv if capenv else " assumed - agent lane only"))
     print("lane      : %s" % ("api - one tool call fans out %d writers" % workers_cap() if key
                               else "agent - no key; falls back to subagent dispatch"))
     if not key:
         print("")
-        print("To enable the api lane, export one of: %s" % ", ".join(KEY_ENV[:5]))
-        print("  export ZAI_API_KEY=<your GLM Coding Plan key>")
-        print("  export ZAI_BASE_URL=%s   # optional, this is the default" % DEFAULT_BASE)
+        if flash_pin.http_provider() == "deepseek":
+            print("To enable the api lane, export one of: DEEPSEEK_API_KEY, DEEPSEEK_KEY")
+            print("  export DEEPSEEK_API_KEY=<your DeepSeek key>")
+            print("  export DEEPSEEK_BASE_URL=%s   # optional, this is the default"
+                  % flash_pin.DEEPSEEK_BASE)
+        else:
+            print("To enable the api lane, export one of: %s" % ", ".join(KEY_ENV[:5]))
+            print("  export ZAI_API_KEY=<your GLM Coding Plan key>")
+            print("  export ZAI_BASE_URL=%s   # optional, this is the default" % DEFAULT_BASE)
         return 1
     if not a.ping:
         print("\nRun with --ping to send a 1-token probe to the endpoint.")
@@ -2219,8 +2227,12 @@ def cmd_setup(a):
         print("Re-run with --apply to write them.")
     print("")
     print("Fastest lane (recommended) - script-side fan-out, no subagents:")
-    print("  export ZAI_API_KEY=<GLM Coding Plan key>")
-    print("  export ZAI_BASE_URL=%s" % DEFAULT_BASE)
+    if flash_pin.http_provider() == "deepseek":
+        print("  export DEEPSEEK_API_KEY=<DeepSeek key>")
+        print("  export DEEPSEEK_BASE_URL=%s" % flash_pin.DEEPSEEK_BASE)
+    else:
+        print("  export ZAI_API_KEY=<GLM Coding Plan key>")
+        print("  export ZAI_BASE_URL=%s" % DEFAULT_BASE)
     print("ZCode runs foreground subagents in parallel; the agent lane works without extra flags.")
     print("Verify with: %s doctor --ping" % qtool())
     return 0

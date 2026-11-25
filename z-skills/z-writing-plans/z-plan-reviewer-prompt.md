@@ -17,7 +17,7 @@ nothing): `{LINT}`
 1. Read all the files above in ONE message. Contracts and spec excerpts follow
    below. The task bodies and existing target files are inlined in this brief;
    read nothing else.
-2. Judge each task against four questions only:
+2. Judge each task against five questions only:
    - Spec alignment: is a requirement in the excerpt missing or contradicted?
    - Correctness: would the test really fail first and pass after? Is any
      command, expected output, import, API call or fixture wrong?

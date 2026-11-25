@@ -19,7 +19,7 @@ harness default when no GLM model is configured.
 | DeepSeek V4 Pro | pro tier |
 | Claude Sonnet 5.5 | Claude tier |
 
-No speed or price numbers are pinned for these tiers.
+No speed or price numbers are claimed for GLM 5.4, the DeepSeek models or Claude Sonnet 5.5.
 
 GLM 5.4 (api id glm-5.4), from the vendor model page read on
 2026-11-25: 1M context, 128K max output, thinking mode, tool calling,

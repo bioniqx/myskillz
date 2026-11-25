@@ -1,5 +1,7 @@
 # z-writing-plans v9 (GLM edition) - what changed from v8
 
+**Audit fixes (2026-11-25):** `doctor` and `setup` name the key the pinned provider reads (`DEEPSEEK_API_KEY` under the deepseek pin) and `doctor` prints the model ids the pin selects; the tier rule says a pro pin runs its own id; a stale `fast.md` pointer and the pattern-file count are corrected; the tuning doc dates its numbers, names the three key files it reads and the 100KB body limit; the reviewer agent and prompt agree on five questions and on the `Status: Approved` reply.
+
 **Six session models in R6 (2026-11-25):** R6 names the third pro id, glm-5.4, next to glm-5.3 and deepseek-v4-pro; the metadata models line and the tuning table list six ids. The lane still follows the session model; no agent file names a model.
 
 **Five session models in R6 (2026-11-19):** the R6 speed rule stops listing only the two flash models and drops the denylist that named the pro models as forbidden switches — the lane now follows the session model's flash tier through `~/.zcode/z-flash` (glm-5.3-flash or deepseek-flash), or the pin names a pro id (glm-5.3, deepseek-v4-pro) and the lane runs that model; promotion to a bigger session model stays out. The lane's model ids and thoughtLevel are unchanged.
