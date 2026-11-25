@@ -9,6 +9,8 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENGINE = os.path.join(HERE, "..", "..", "z-dev-team", "scripts", "devteam.py")
 SELFTEST = os.path.join(HERE, "..", "..", "z-dev-team", "scripts", "selftest.sh")
+SKILL = os.path.join(HERE, "..", "..", "z-dev-team", "SKILL.md")
+PLAN = os.path.join(HERE, "..", "..", "z-dev-team", "references", "plan.md")
 
 STALE = (
     "tuned for ZCode on Z.ai GLM-5.3-Flash",
@@ -40,8 +42,29 @@ class EngineRoutingText(unittest.TestCase):
         self.assertEqual(len(starts), 1, "expected exactly one PROVIDER line")
         statement = "\n".join(lines[starts[0]:starts[0] + 2])
         self.assertIn("every lane follows the session model", statement)
+        self.assertIn("every RED dispatch", statement)
         self.assertNotIn("GLM-5.3-Flash", statement)
         self.assertNotIn("frontmatter", statement)
+
+
+class SkillLaneText(unittest.TestCase):
+    """The lane text says what dispatch_route does: RED, high-risk, large and
+    retried dispatches take the strong lane, every other dispatch the lite lane."""
+
+    def test_lite_row_covers_every_dispatch_the_engine_sends_there(self):
+        rows = [line for line in _read(SKILL).splitlines()
+                if line.lstrip().startswith("| `z-programmer-lite` |")]
+        self.assertEqual(len(rows), 1, "expected one z-programmer-lite row")
+        for words in ("neither RED nor strong", "first GREEN of a code slice",
+                      "test, refactor, chore, docs or perf slice"):
+            self.assertIn(words, rows[0])
+
+    def test_docs_row_names_every_escalation_to_the_strong_lane(self):
+        rows = [line for line in _read(PLAN).splitlines()
+                if line.startswith("| `docs` |")]
+        self.assertEqual(len(rows), 1, "expected one docs row")
+        for words in ("`size: large`", "`risk: high`", "retried"):
+            self.assertIn(words, rows[0])
 
 
 class SelftestLabels(unittest.TestCase):

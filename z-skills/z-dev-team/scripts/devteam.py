@@ -68,8 +68,9 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
 Legacy `--fast N` is still accepted: 0->strict, 1|2->turbo, 3->turbo, 4->spike.
 
 Provider + governor (v4):
-  routing   ZCode-only: every lane rides z-programmer-lite (thoughtLevel high); high-risk,
-            large and RETRIED slices escalate to z-programmer-strong (thoughtLevel max). Both follow
+  routing   ZCode-only: every lane rides z-programmer-lite (thoughtLevel high); every RED
+            dispatch and every high-risk, large or RETRIED slice escalates to
+            z-programmer-strong (thoughtLevel max). Both follow
             the session model: no agent file pins a model id, the Agent tool takes no
             per-dispatch model, and `doctor --fix` installs the
             agents verbatim.
@@ -1727,8 +1728,8 @@ def cmd_init(a):
         out("  KINDS: " + ", ".join(f"{k}×{v}" for k, v in sorted(kinds.items())))
     out(f"INIT ok: {n} slices on branch {branch} @ {st['start_sha'][:9]}; z-programmer slots {cap} "
         f"(hard cap {hard_cap(st)}, {reserved_slots(st)} reserved for reviewers/leader)")
-    out(f"PROVIDER {PROVIDERS[provider]['label']}: lanes on z-programmer-lite; high-risk, large "
-        "and retried slices on z-programmer-strong; every lane follows the session model")
+    out(f"PROVIDER {PROVIDERS[provider]['label']}: lanes on z-programmer-lite; every RED dispatch "
+        "and every high-risk, large or retried slice on z-programmer-strong; every lane follows the session model")
     if gov_line(st):
         out(gov_line(st))
     high = [sid for sid, s in slices.items() if s["risk"] == "high"]

@@ -10,7 +10,7 @@ Read this only when writing or adopting a plan. Do not read it on a wake-up.
 | `test` | tests only; must really add tests | coverage backfill, characterization |
 | `refactor` | one commit; may not touch any test file; before/after runs pasted | renames, extractions, codemods |
 | `chore` | one commit; the slice's `verify` output is the proof | build, CI, deps, config, scaffolding |
-| `docs` | one commit; `verify` proof; lite lane unless `size: large` | READMEs, ADRs, runbooks |
+| `docs` | one commit; `verify` proof; lite lane unless `size: large`, `risk: high` or retried | READMEs, ADRs, runbooks |
 | `perf` | one commit; before and after numbers | optimization |
 | `research` | read-only report; nothing merged; its `fixes` block queues follow-ups | feasibility, upgrade, security, architecture |
 

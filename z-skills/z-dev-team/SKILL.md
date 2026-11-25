@@ -59,7 +59,7 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
 
   | Agent | Session model | Job |
   | --- | --- | --- |
-  | `z-programmer-lite` | session model, effort high | the first GREEN of a slice that is not strong: the default lane |
+  | `z-programmer-lite` | session model, effort high | a dispatch that is neither RED nor strong: the first GREEN of a code slice, and a test, refactor, chore, docs or perf slice |
   | `z-programmer-strong` | session model, effort max | every RED dispatch, `risk: high`, `size: large`, and any **retried** slice |
   | `z-code-reviewer` | session model, effort high | full review, read-only |
   | `z-spot-reviewer` / `z-investigator` | session model, effort max / high | correctness-only review / research, root cause |
@@ -120,7 +120,7 @@ Pick the first rule that matches:
 5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
 6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
-Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`; it replaces this routing. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
+Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
 
 ## When you write a plan
 
@@ -172,7 +172,7 @@ Act on each block, in the same turn:
   **verbatim and nothing else** (never add a `model`).
 - `=== REVIEW <rN> …` / `=== INVESTIGATE …` → the printed Agent line(s).
 - `CHECKPOINT … run in the BACKGROUND` → Bash `run_in_background: true` with the printed command.
-- `MERGED` / `RESEARCH RECORDED` → nothing. A code slice finishes in one lane.
+- `MERGED` / `RESEARCH RECORDED` → nothing.
 - `REVIEW: programmers fill the window` → nothing. The next wake-up launches it when a slot is free.
 - `BLOCKED <id>: <question>` → `SendMessage` that agent the answer from plan/contracts (warm resume in
   its worktree); only the user can answer → ask **now**, keep everything else running.
