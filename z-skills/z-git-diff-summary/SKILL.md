@@ -21,13 +21,13 @@ python3 "$H" open --self z-git-diff-summary <<'EOF'
 EOF
 ```
 
-`<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route. If the user named a base (branch, tag or SHA), add `--base=<base>` on that same python3 line. A base that is not `^[A-Za-z0-9][A-Za-z0-9._/-]*$` is ignored and the last `NEXT:` tells you to ask. Do not run `gather.sh` yourself, and never run git commands one by one. `GUARD` lines bind the whole task. When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`. After the summary, `next --event bug` or `implement` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self z-git-diff-summary --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self z-git-diff-summary --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow. Numbers in the answer come from the gather output, never from memory.
+`<base dir>` is the "Base directory for this skill" line. The heredoc is the user request. Empty stdin does not route. If the user named a base (branch, tag or SHA), add `--base=<base>` on that same python3 line. A base that is not `^[A-Za-z0-9][A-Za-z0-9._/-]*$` is ignored and the last `NEXT:` tells you to ask. Do not run `gather.sh` yourself, and never run git commands one by one. `GUARD` lines bind the whole task. When the prelude prints `PACE: slow`, follow that `NEXT`. After the summary, `next --event bug` or `implement` only when the user wants that job. When a later step is a job this skill does not do, run `handoff.py call --self z-git-diff-summary --to <skill>` and follow `NEXT:`. When a lane needs another skill's agent, run `handoff.py agents`, then `handoff.py borrow --self z-git-diff-summary --agent <name>`. `AGENT` is one Agent call with that `subagent_type` and the printed `PROMPT`, and no `model` parameter. `HANDOFF` means follow `NEXT:` and do not dispatch that agent. Subagents do not load skills and do not borrow. Numbers in the answer come from the gather output, never from memory.
 
 ## Context — gather it first (one tool call)
 
 `open` already ran `gather.sh`. The script resolves the base with `git rev-parse`, so a branch, tag or SHA all work.
 
-What the script already did (don't redo): background `git fetch` of only the base branch (6s hard timeout, no prompts, skipped if fetched <5 min ago) · speculative diff on the cached base in parallel (reused when merge-base is unchanged) · untracked files included · lockfiles/generated/minified/`*.meta`/dist excluded from content but listed in NUMSTAT · ticket parsed from branch · diff pre-split into chunks that each fit one Read.
+What the script already did (don't redo): background `git fetch` of only the base branch (6s hard timeout, no prompts, skipped if fetched <5 min ago and for a tag or SHA base) · speculative diff on the cached base in parallel (reused when merge-base is unchanged) · untracked files included · lockfiles/generated/minified/`*.meta`/dist excluded from content but listed in NUMSTAT · ticket parsed from branch · diff pre-split into chunks that each fit one Read.
 
 ## Act on the markers — pick the fastest path
 
@@ -37,6 +37,7 @@ What the script already did (don't redo): background `git fetch` of only the bas
 | `NOT_A_REPO` / `EMPTY_DIFF` | Say so in one line. Stop. |
 | `NO_BASE` / `NO_MERGE_BASE` | Ask the user for the base (branch, tag or SHA), validate it as described above, then re-run once. |
 | `WARN_STALE_BASE*` / `WARN_BASE_ARG_IGNORED` | First line of the answer = one-line warning. Continue. |
+| `BASE=immutable` | The base is a tag or a SHA; nothing was fetched. Continue. |
 | `(detached HEAD)` | Mention it; continue. |
 | `ONLY_NOISE_OR_BINARY` | Describe from NUMSTAT paths. |
 | `MODE=INLINE` | Diff is above. **Write the answer now** — no more tool calls. |

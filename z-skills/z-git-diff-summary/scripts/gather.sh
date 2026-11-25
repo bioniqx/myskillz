@@ -58,9 +58,17 @@ else
   B=${B:-main}
 fi
 
+# An explicit tag or SHA has no remote branch to fetch: skip the fetch and say so, with no stale-base
+# alarm. One ref-name lookup, only for an explicit argument: a branch prints refs/heads/... or
+# refs/remotes/..., a tag refs/tags/..., a SHA nothing.
+IMM=0
+if [ $ARG_OK -eq 1 ]; then
+  case "$($G rev-parse --symbolic-full-name "$B" 2>/dev/null)" in refs/heads/*|refs/remotes/*) ;; *) IMM=1 ;; esac
+fi
+
 # ---- fetch in background (portable timeout, never prompts, never holds our stdout) ----------
 FST=skip
-if [ -n "$REMOTE" ] && [ -z "${GLM_GDS_NO_FETCH:-}" ]; then
+if [ "$IMM" = 0 ] && [ -n "$REMOTE" ] && [ -z "${GLM_GDS_NO_FETCH:-}" ]; then
   last=$($G log -g -n1 --date=unix --format=%gd "refs/remotes/$REMOTE/$B" 2>/dev/null | sed -n 's/.*@{\([0-9]*\)}.*/\1/p')  # reflog time, not commit time
   STAMP=$($G rev-parse --git-path "z-gds-fetched-$(printf %s "$REMOTE-$B" | tr '/' '_')")
   st=$(cat "$STAMP" 2>/dev/null); [ -n "$st" ] && { [ -z "$last" ] || [ "$st" -gt "$last" ]; } && last=$st
@@ -145,12 +153,13 @@ NF=$(grep -c . "$T/numstat"); BYTES=$(wc -c < "$T/diff.patch" | tr -d ' ')
 H="$T/head"
 {
   echo "BRANCH=${BR:-(detached HEAD)} TICKET=${TICKET:-none} REF=$REF MB=$(printf %.10s "$MB")"
-  case "$FST:$FRC" in
-    run:0) echo "BASE=fresh (fetched)";; fresh:*) echo "BASE=fresh (fetched <${FRESH_SECS}s ago)";;
-    skip:*) echo "WARN_STALE_BASE (no remote / fetch disabled): using $REF";;
+  case "$IMM:$FST:$FRC" in
+    1:*) echo "BASE=immutable (tag or sha $B; not fetched)";;
+    0:run:0) echo "BASE=fresh (fetched)";; 0:fresh:*) echo "BASE=fresh (fetched <${FRESH_SECS}s ago)";;
+    0:skip:*) echo "WARN_STALE_BASE (no remote / fetch disabled): using $REF";;
     *) echo "WARN_STALE_BASE (fetch failed/timeout ${FETCH_TIMEOUT}s): using cached $REF";;
   esac
-  [ "$REF" = "$B" ] && [ -n "$REMOTE" ] && echo "WARN_STALE_BASE_LOCAL (no $REMOTE/$B; using local $B)"
+  [ "$IMM" = 0 ] && [ "$REF" = "$B" ] && [ -n "$REMOTE" ] && echo "WARN_STALE_BASE_LOCAL (no $REMOTE/$B; using local $B)"
   echo "AHEAD_BEHIND(behind ahead)=$($G rev-list --left-right --count "$REF...HEAD" 2>/dev/null | tr '\t' ' ')"
   $G diff --quiet HEAD 2>/dev/null || echo "UNCOMMITTED=yes (included)"
   echo "== STYLE (recent base subjects) =="; $G log -n 6 --no-merges --format='%s' "$REF" 2>/dev/null

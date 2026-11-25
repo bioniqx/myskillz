@@ -64,7 +64,7 @@ class GatherMicroTestCase(unittest.TestCase):
         _git(root, "add", ".")
         _git(root, "commit", "-qm", "bulk")
 
-    def gather(self, repo, log_var=None, log_path=None, extra=None):
+    def gather(self, repo, log_var=None, log_path=None, extra=None, base=None):
         env = dict(os.environ)
         env["GLM_GDS_NO_FETCH"] = "1"
         env["TMPDIR"] = self.tmp
@@ -72,7 +72,7 @@ class GatherMicroTestCase(unittest.TestCase):
         if log_var:
             env[log_var] = log_path
         env.update(extra or {})
-        proc = subprocess.run(["bash", GATHER], cwd=repo, env=env,
+        proc = subprocess.run(["bash", GATHER] + ([base] if base else []), cwd=repo, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
         out = proc.stdout.decode("utf-8", "replace")
         self.assertEqual(proc.returncode, 0, out + proc.stderr.decode("utf-8", "replace"))
@@ -165,6 +165,47 @@ class SinglePassChunkingTests(GatherMicroTestCase):
         self.assertIn("f001.txt", rows[0])
         self.assertIn("f100.txt", rows[-1])
         self.assertEqual(sum(int(row.split("\t")[1]) for row in rows), 100)
+
+
+class ImmutableBaseTests(GatherMicroTestCase):
+    """A tag or SHA base has no remote branch to fetch: no fetch, no stale-base alarm."""
+
+    def remote_repo(self, name):
+        repo = self.make_repo(name)
+        bare = os.path.join(self.tmp, name + "-origin.git")
+        _git(self.tmp, "init", "-q", "--bare", bare)
+        _git(repo, "remote", "add", "origin", bare)
+        _git(repo, "push", "-q", "origin", "main")
+        _git(repo, "tag", "v1.0", "main")
+        return repo
+
+    @staticmethod
+    def fetch_calls(log):
+        with open(log, encoding="utf-8") as fh:
+            return [line for line in fh.read().splitlines() if " fetch " in line]
+
+    def test_a_tag_or_sha_base_is_not_fetched_and_never_warns_stale(self):
+        repo = self.remote_repo("imm")
+        sha = subprocess.run(["git", "rev-parse", "main"], cwd=repo, check=True,
+                             stdout=subprocess.PIPE, text=True).stdout.strip()
+        for base in ("v1.0", sha):
+            with self.subTest(base=base):
+                log = self.shim(shutil.which("git"), "GLM_GDS_GITLOG",
+                                os.path.join(self.tmp, "git-%s.log" % base))
+                out = self.gather(repo, "GLM_GDS_GITLOG", log, {"GLM_GDS_NO_FETCH": ""}, base=base)
+                self.assertIn("BASE=immutable (tag or sha %s; not fetched)" % base, out)
+                self.assertNotIn("WARN_STALE_BASE", out)
+                self.assertEqual(self.fetch_calls(log), [], "an immutable base must not be fetched")
+
+    def test_a_branch_base_is_still_fetched_and_reported_fresh(self):
+        repo = self.remote_repo("br")
+        # A push leaves a fresh remote-tracking ref behind; drop it so the script must fetch.
+        _git(repo, "update-ref", "-d", "refs/remotes/origin/main")
+        log = self.shim(shutil.which("git"), "GLM_GDS_GITLOG", os.path.join(self.tmp, "git-br.log"))
+        out = self.gather(repo, "GLM_GDS_GITLOG", log, {"GLM_GDS_NO_FETCH": ""}, base="main")
+        self.assertEqual(len(self.fetch_calls(log)), 1, "a branch base is fetched exactly once")
+        self.assertIn("BASE=fresh (fetched)", out)
+        self.assertNotIn("WARN_STALE_BASE", out)
 
 
 if __name__ == "__main__":
