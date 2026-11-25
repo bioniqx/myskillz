@@ -28,7 +28,7 @@ pending at that date. Nothing else is claimed for it here.
 
 ## Contents
 
-Model facts the design is built on · Tier routing · Lanes · Environment · Harness notes · Failure modes seen in practice
+Session models · Model facts the design is built on · Tier routing · Lanes · Environment · Harness notes · Failure modes seen in practice
 
 ## Model facts the design is built on
 
@@ -102,10 +102,12 @@ export PLAN_MAX_WORKERS=8         # optional, 8 is the default and the cap (prov
 export PLAN_PROTOCOL=anthropic    # optional override: anthropic | openai
 ```
 
-The script also reads keys out of `~/.claude/settings.json`,
-`~/.zcode/v2/credentials.json` (its `api-key` field), `~/.zcode/settings.json`,
-`~/.zcode/auth.json` and `~/.zcode/config.json` when no environment variable is set. `doctor` prints which
-source won; `doctor --ping` sends a one-token probe.
+Under a `glm` pin the script also reads keys out of `~/.claude/settings.json`,
+`~/.claude/settings.local.json`, `~/.zcode/v2/credentials.json` (its `api-key` field),
+`~/.zcode/settings.json`, `~/.zcode/auth.json` and `~/.zcode/config.json` when no
+environment variable is set. Under a `deepseek` pin it reads `DEEPSEEK_API_KEY`,
+`DEEPSEEK_KEY` or the deepseek block of `~/.zcode/v2/provider_config.json`, never
+a Z.ai key. `doctor` prints which source won; `doctor --ping` sends a one-token probe.
 
 The coding endpoint is for coding scenarios only and is not interchangeable
 with the general endpoint.

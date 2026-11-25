@@ -9,6 +9,7 @@ brainstorming economics row for the pro model never says "not used".
 
 import os
 import re
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -66,7 +67,7 @@ def _session_models_block(text):
 class SessionModelNameTests(unittest.TestCase):
     """Criterion: six model names in each of the four docs."""
 
-    def test_all_four_docs_name_the_five_session_models(self):
+    def test_all_four_docs_name_the_six_session_models(self):
         for rel in DOCS:
             with self.subTest(doc=rel):
                 text = _read(rel)
@@ -149,6 +150,24 @@ class BrainstormingProRowTests(unittest.TestCase):
     def test_no_economics_table_row_says_not_used(self):
         for row in _table_rows(_read(self.DOC)):
             self.assertNotIn("not used", row)
+
+
+class KeyFileListTests(unittest.TestCase):
+    """Two tuning docs enumerate the key files `zai_client.find_key` reads. A list
+    that reads as complete names every file in KEY_FILES."""
+
+    DOCS = (DOCS[1], DOCS[3])
+
+    def test_every_key_file_the_client_reads_is_named(self):
+        sys.path.insert(0, os.path.join(HERE, ".."))
+        try:
+            import zai_client
+        finally:
+            sys.path.pop(0)
+        for rel in self.DOCS:
+            text = _read(rel)
+            for path in zai_client.KEY_FILES:
+                self.assertIn(path, text, "%s does not name %s" % (rel, path))
 
 
 class DenylistRemovedTests(unittest.TestCase):
