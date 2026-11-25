@@ -1242,7 +1242,8 @@ def _prelude(args, text):
                 print("PACE: slow")
             return rc, nxt
         short = _line_count(args.spec) <= 120
-        agent_lane = "lane agent" in (out or "")
+        # The brief pads its label ("lane      agent"), so match the line, not one spacing.
+        agent_lane = re.search(r"(?m)^lane\s+agent\b", out or "") is not None
         if short and agent_lane:
             success = ("NEXT: PACE short. Write the checklist from this brief "
                        "in this turn. Then one run call. The brief says lane "

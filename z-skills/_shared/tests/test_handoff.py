@@ -407,6 +407,28 @@ class OpenTests(unittest.TestCase):
         self.assertIn("prelude failed", out)
         self.assertNotIn("write the checklist", out)
 
+    def test_audit_short_spec_without_a_key_says_dispatch_the_batches(self):
+        # audit 2026-11-25: the brief pads its lane label ("lane      agent"); the NEXT must
+        # still take the agent-lane branch instead of the api-lane "do not dispatch" text.
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        spec = os.path.join(root, "req.md")
+        with open(spec, "w", encoding="utf-8") as fh:
+            fh.write("The button must save.\n")
+        home = os.path.join(root, "home")
+        os.makedirs(home)
+        env = {"HOME": home, "PATH": os.environ.get("PATH", ""), "GLM_FLASH": "glm",
+               "PYTHONDONTWRITEBYTECODE": "1"}
+        rc, out, err = self.run_at(
+            ["open", "--self", "z-requirements-code-audit", "--spec", spec],
+            "find gaps between the spec and the code", cwd=root, env=env)
+        self.assertEqual(rc, 0, err)
+        self.assertRegex(out, r"(?m)^lane\s+agent\b")
+        nxt = self.binding_next(out)
+        self.assertIn("dispatch every printed batch in one message", nxt)
+        self.assertNotIn("Do not dispatch a subagent", nxt)
+
     def test_unknown_self_is_usage(self):
         rc, out, _err = self.run_at(["open", "--self", "z-nope"], "hi")
         self.assertEqual(rc, 2)
