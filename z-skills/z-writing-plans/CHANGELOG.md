@@ -44,7 +44,7 @@
 
 **Protocol alignment (2026-10-11):** contracts gain an Out-of-scope line and a Rollback line next to Goal; contract rule 3 forbids third-party symbols recalled from memory; body-rules adds edges-are-concrete-tests (rule 16), no-weakened-tests (rule 17) and verified-third-party-symbols (rule 15 extension); the reviewer agent and the reviewer prompt check edge coverage, weakened tests and unverified third-party calls.
 
-Target: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
+Target at the v9 release: GLM-5.3 and GLM-5.3-Flash, running in ZCode.
 
 ## The structural change: parallelism moved out of the model's turn
 
@@ -114,7 +114,7 @@ explicit shell call that also resolves the tool path across the skill dirs.
 - `build` - validate, fan out, lint, repair, review, assemble, clean.
 - `doctor [--ping]` - lane, key source, base URL, protocol, models, concurrency,
   live probe.
-- `setup [--harness zcode|claude] [--apply]` - installs the fallback
+- `setup [--apply]` - installs the fallback
   subagent in the right place for the detected harness.
 
 `contracts`, `wait`, `review`, `assemble`, `check`, `lint-task` and `hook-lint`
@@ -125,8 +125,7 @@ are unchanged in behavior and still drive the agent lane.
 1. Unzip into one of:
    - `~/.zcode/skills/z-writing-plans/`
    - `~/.claude/skills/z-writing-plans/`
-2. `export ZAI_API_KEY=<key>` and
-   `export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic`
+2. `export ZAI_API_KEY=<key>`
 3. `python3 <skill>/scripts/plan_tool.py doctor --ping`
 4. Optional: `python3 <skill>/scripts/plan_tool.py setup --apply` for the
    agent-lane fallback subagent. Invoke the skill with `$z-writing-plans`.

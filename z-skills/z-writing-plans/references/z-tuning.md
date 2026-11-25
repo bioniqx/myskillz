@@ -39,6 +39,9 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 | Coding-plan credits in/out | 6.9x / 24x | 2.3x / 8x |
 | Coding-plan quota | 1x | 3x |
 
+Speed and TTFT were measured in 2026-08 (sources in z-brainstorming/z-tuning.md
+section 4); the credit and quota multipliers carry no date. Re-check both before tuning.
+
 - Thinking is always on. `thinking.type` accepts only `enabled`; a request for
   `disabled` is silently downgraded to the `low` effort level.
 - `reasoning_effort` is `low | high | max`, default `max`. Effort, not model
@@ -60,7 +63,7 @@ Model facts the design is built on · Tier routing · Lanes · Environment · Ha
 
 ## Tier routing
 
-Every tier is GLM-5.3-Flash, or deepseek-flash when `~/.zcode/z-flash` says deepseek (`GLM_FLASH` overrides one process). Api-lane model and effort live only in the `GLM`
+Every tier is GLM-5.3-Flash, or deepseek-flash when `~/.zcode/z-flash` says deepseek (`GLM_FLASH` overrides one process); a pro pin word (glm-5.3, glm-5.4, deepseek-v4-pro) sends every tier to that model. Api-lane model and effort live only in the `GLM`
 dict; agent lanes do not set a model id and follow the session model. `deep`
 is max effort on Flash, not a bigger model; `build` raises a tier when the
 spec range names auth, payment or concurrency work.
@@ -68,7 +71,8 @@ spec range names auth, payment or concurrency work.
 The z.ai Anthropic-compatible route maps the `haiku` alias to Flash and both
 `sonnet` and `opus` to GLM-5.3, so never ask for `opus`: it costs the same as
 `sonnet`. The provider cap on parallel requests is a stated limit of this
-route, not a design goal. Width stays the product you are designing.
+route, not a design goal. Width stays the product you are designing. The alias
+map is the z.ai route as this file was written; re-check it before relying on it.
 
 Override with `PLAN_MODEL_STD` and `PLAN_MODEL_DEEP` (a `deep` id other than
 `glm-5.3-flash` prints `OUT OF BAR` — that run sits outside this skill's bar).
@@ -91,15 +95,16 @@ Force a lane with `build --lane api|agent`.
 ## Environment
 
 ```bash
-export ZAI_API_KEY=<GLM Coding Plan key>          # or ANTHROPIC_AUTH_TOKEN
+export ZAI_API_KEY=<GLM Coding Plan key>          # or ANTHROPIC_AUTH_TOKEN; glm pin
+export DEEPSEEK_API_KEY=<DeepSeek key>            # when the pin file says deepseek
 # China / BigModel: https://open.bigmodel.cn/api/paas/v4  (protocol auto-detects as openai)
 export PLAN_MAX_WORKERS=8         # optional, 8 is the default and the cap (provider limit)
 export PLAN_PROTOCOL=anthropic    # optional override: anthropic | openai
 ```
 
 The script also reads keys out of `~/.claude/settings.json`,
-`~/.zcode/v2/credentials.json` (its `api-key` field) and `~/.zcode/*.json`
-when no environment variable is set. `doctor` prints which
+`~/.zcode/v2/credentials.json` (its `api-key` field), `~/.zcode/settings.json`,
+`~/.zcode/auth.json` and `~/.zcode/config.json` when no environment variable is set. `doctor` prints which
 source won; `doctor --ping` sends a one-token probe.
 
 The coding endpoint is for coding scenarios only and is not interchangeable
@@ -108,7 +113,7 @@ with the general endpoint.
 ## Harness notes
 
 **ZCode.** Skills live in `~/.zcode/skills/<name>/SKILL.md` and are invoked with
-`$z-writing-plans`. The description is capped at 1024 characters; a body-size cap is unverified.
+`$z-writing-plans`. The description is capped at 1024 characters; the body is truncated at 100KB (docs/skill-criteria.md section 1).
 Subagents live in `~/.zcode/agents/` (user level only, created from
 Settings), cannot spawn further subagents, and run in parallel in the
 foreground. ZCode can import a Claude- or Codex-format skill directory directly
@@ -118,7 +123,7 @@ from Settings, by symlink or copy.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `LANE agent` when you expected api | no key found | `doctor`, then export `ZAI_API_KEY` |
+| `LANE agent` when you expected api | no key found | `doctor`, then export the key the pin names: `DEEPSEEK_API_KEY` or `ZAI_API_KEY` |
 | Many `LINT` rows after the fan-out | contracts too vague - signatures or Files under-specified | tighten `Produces` and `Files`, re-run with `--resume` |
 | Writers invent symbols | `Spec` ranges miss the section | widen the ranges from the heading map |
 | Bodies truncated mid-code | `--max-tokens` too low for a huge task | raise it, or split the contract |
