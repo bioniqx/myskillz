@@ -2157,7 +2157,9 @@ def cmd_doctor(a):
     print("api key   : %s (%s)" % (mask(key), src))
     print("base url  : %s" % base)
     print("protocol  : %s" % proto)
-    print("models    : light=%s/low  std=%s/high  deep=%s/max" % (GLM["light"][0], GLM["std"][0], GLM["deep"][0]))
+    print("models    : light=%s/%s  std=%s/%s  deep=%s/%s" % (
+        GLM["light"][0], GLM["light"][1], GLM["std"][0], GLM["std"][1],
+        GLM["deep"][0], GLM["deep"][1]))
     print("workers   : %d (script-side threads; PLAN_MAX_WORKERS to change)" % workers_cap())
     print("agent cap : %d%s" % (cap, " (%s)" % capenv if capenv else " assumed - agent lane only"))
     print("lane      : %s" % ("api - one tool call fans out %d writers" % workers_cap() if key
