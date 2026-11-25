@@ -2195,7 +2195,7 @@ def detect_lane(requested):
     if key:
         return "api", key, src, "key from %s" % src
     if requested == "api":
-        die("lane api needs a key. Set ZAI_API_KEY (GLM Coding Plan), or run with "
+        die("lane api needs a key. Set ZAI_API_KEY (GLM Coding Plan) or DEEPSEEK_API_KEY (deepseek pin), or run with "
             "--lane agent. See: audit.py doctor")
     return "agent", None, None, "no API key found -- falling back to subagents"
 
@@ -3819,6 +3819,7 @@ def cmd_doctor(a):
 
 
 SETUP_ENV = u"""export ZAI_API_KEY=<your GLM Coding Plan key>
+# deepseek pin: export DEEPSEEK_API_KEY=<your DeepSeek key> instead
 export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY"""
 
@@ -3869,7 +3870,7 @@ def cmd_setup(a):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="audit.py", add_help=True,
-                                 description="z-requirements-code-audit %s (GLM edition)" % VERSION)
+                                 description="z-requirements-code-audit %s (z.ai and DeepSeek)" % VERSION)
     ap.add_argument("--out", default=None, help="audit dir (default .audit)")
     sub = ap.add_subparsers(dest="cmd")
 

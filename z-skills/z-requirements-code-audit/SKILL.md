@@ -37,7 +37,7 @@ Checks whether the **code faithfully implements a requirements document**, repor
 
 ## R0 — The whole audit is four calls
 
-`PACE: short` (a short spec) is still these calls, minus the wandering: write the checklist from the brief, then one `run`. Do not dispatch a subagent unless the brief says `lane agent`. The second pass inside `run` stays. When the prelude prints `PACE: slow`, follow that `NEXT` and do not read `fast.md`; the short path is off and the four calls stay.
+`PACE: short` (a short spec) is still these calls, minus the wandering: write the checklist from the brief, then one `run`. Do not dispatch a subagent unless the brief says `lane agent`. The second pass inside `run` stays. When the prelude prints `PACE: slow`, follow that `NEXT`; the short path is off and the four calls stay.
 
 1. `A brief --spec <file>` — repo index, repo map, the spec verbatim, the checklist schema, lane and model report.
 2. You write `.audit/checklist.jsonl`. **This is the one step quality cannot delegate.**
@@ -61,7 +61,7 @@ Statuses: `xong`, `đang chạy`, `chờ`, `thất bại` (quote the ERR line). 
 ## R1 — Where the speed comes from (do not undo it)
 
 1. **The parallel work is not in your turn.** `audit.py run` opens up to 8 threads, each one request straight
-   at the GLM endpoint. Nothing depends on the harness dispatching anything, so the api lane is equally fast
+   at the session model's provider endpoint (z.ai or DeepSeek, by the flash pin). Nothing depends on the harness dispatching anything, so the api lane is equally fast
    everywhere; the agent lane is the one that needs a harness with parallel subagents.
 2. **Retrieval is deterministic, not agentic.** ripgrep plus a symbol/route index finds candidate code over six
    independent strategies; the model only judges what it is shown. GLM emits few parallel tool calls per turn,

@@ -30,13 +30,12 @@ pending at that date. Nothing else is claimed for it here.
 | Fact | Consequence in this skill |
 |---|---|
 | `glm-5.3` and `glm-5.3-flash`: 1M context, 128K max output | retrieval can be generous; context is never the binding constraint, latency is |
-| Reasoning is **always on**; `thinking.type` accepts only `enabled` | no "thinking off" path exists; there is nothing to disable |
+| On the z.ai API reasoning is **always on**; `thinking.type` accepts only `enabled` | no "thinking off" path exists; there is nothing to disable |
 | `reasoning_effort` is `low` \| `high` \| `max`, default `max` | **there is no `medium`** — the old agent files pinned `effort: medium`, which is not a GLM value. Tiers use low/high/max only |
-| z.ai recommends `thinking.clear_thinking: false` | sent on every request |
 | Context caching is supported | one byte-identical prefix per wave; the `cache_read_input_tokens` figure is printed by `run` |
-| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. Every judge, verifier, and parse pass is `glm-5.3-flash`. Tier changes effort only (`TIERS` in `audit.py`). The agent files carry no model id; a lane follows the session model. A status word is not a close: `check` requires a reproduced NO-BREAK quote, or a `--set` adjudication |
+| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. Every judge, verifier, and parse pass names `glm-5.3-flash`, which the flash pin resolves to `deepseek-flash` or to the pro id. Tier changes effort only (`TIERS` in `audit.py`). The agent files carry no model id; a lane follows the session model. A status word is not a close: `check` requires a reproduced NO-BREAK quote, or a `--set` adjudication |
 | GLM emits few parallel tool calls per turn | an agentic search loop is the wrong place for this work → retrieval moved into Python |
-| Flash is more verbose than median | `max_tokens` is capped per tier and every prompt demands JSON only |
+| GLM-5.3-Flash is more verbose than median | `max_tokens` is capped per tier and every prompt demands JSON only |
 | GLM is trained toward brevity; long prompts fight the training | SKILL.md and every system block are numbered rules, no XML ceremony, no behaviour tables |
 
 ## Harness facts
@@ -64,9 +63,8 @@ pending at that date. Nothing else is claimed for it here.
 4. **Pipeline: 10+ lead turns → 4.** `brief` (init + index + map + spec + schema), your checklist, `run`
    (retrieve + judge + repair + second pass + verify + merge), `queue`/`adjudicate` + `finalize`
    (report + gate + close).
-5. **Request-shape discovery.** If the gateway refuses `reasoning_effort`, `thinking` or `cache_control`, the
-   client drops that one field, retries without spending a retry, and remembers the working shape for the rest
-   of the run. `doctor --ping` prints the shape that was accepted.
+5. **Transport.** Retries, 429 backoff and the shared request width live in the vendored `zai_client.py`;
+   `audit.py` only re-asks a reply that stopped at the token cap, with a larger cap.
 
 6. **Gate parity with the original port.** `check` applies the original gate: a non-MATCHED item must be
    verified or adjudicated, a verifier disagreement must be adjudicated, a MISSING needs a second pass and

@@ -1,6 +1,6 @@
-# Setup — z-requirements-code-audit (GLM edition)
+# Setup — z-requirements-code-audit (z.ai and DeepSeek)
 
-Two lanes. The **api lane** is the fast one and needs a key; the **agent lane** needs nothing and is picked
+Two automatic lanes (a third, `--lane solo`, only labels a run the lead does by hand). The **api lane** is the fast one and needs a key; the **agent lane** needs nothing and is picked
 automatically when no key is found.
 
 ## 1. Install
@@ -29,13 +29,14 @@ export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY      # for the harness itself
 ```
 
+With a `deepseek` pin in `~/.zcode/z-flash`, export `DEEPSEEK_API_KEY=<your DeepSeek key>` instead: the client ignores `ZAI_API_KEY` there. `audit.py doctor` names the key it needs.
+
 `audit.py` also reads the key from `~/.zcode/*.json` — the v2 credentials file
 `~/.zcode/v2/credentials.json` via its `api-key` field — and from `~/.claude/settings.json`, only from
-fields whose name says they hold one (`apiKey`, `ANTHROPIC_AUTH_TOKEN`, `token`, `api-key`, …), never by
+fields whose name says they hold one (`apiKey`, `ANTHROPIC_AUTH_TOKEN`, `api-key`, …), never by
 scanning strings.
 
-The OpenAI-compatible route works too: point `ZAI_BASE_URL` at `https://api.z.ai/api/paas/v4` and the client
-switches to `chat/completions` with a `Bearer` header.
+The default route is already OpenAI-compatible (`chat/completions` with a `Bearer` header); `ZAI_BASE_URL` overrides the base URL, and a base that contains `/anthropic` switches to the Messages route.
 
 Verify:
 
@@ -44,7 +45,7 @@ python3 <skill>/scripts/audit.py doctor --ping
 ```
 
 It prints python and ripgrep versions, where the key came from, the resolved endpoint and route, the thread
-count, the tier table, a live ping to both models, and the request shape the gateway accepted.
+count, the tier table, and a live ping to each model the pin allows (two on z.ai, one on DeepSeek).
 
 ## 3. ripgrep
 
@@ -84,7 +85,7 @@ The skill needs to run one script and write under one directory:
   `z-requirements-code-audit.md`, `traceability.csv`, `state.json`, `config.json`, `ACTIVE`. Added to `.git/info/exclude` automatically (local and
   untracked — the repository itself is not touched).
 - `brief --force` archives a previous audit to `.audit.prev-<timestamp>/`.
-- Uninstall: delete the skill folder and the two agent files. Nothing is written outside audit dirs.
+- Uninstall: delete the skill folder and the two agent files. Nothing else is written outside audit dirs, except the `.git/info/exclude` lines.
 
 ## 7. Windows
 

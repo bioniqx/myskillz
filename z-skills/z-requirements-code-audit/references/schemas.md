@@ -41,8 +41,11 @@ keys `more_queries`, `retrieval`, `lint_warn` and `lint_error` exist only on row
 ```json
 {"id":"REQ-001","verified_status":"MATCHED|PARTIAL|MISSING|CONFLICT|UNVERIFIABLE","agree":true,
  "confidence":"high|medium|low","evidence":[{"path":"…","lines":"10-20","note":"…"}],
- "searched":["second-pass queries"],"reason":"<=200 chars"}
+ "searched":["second-pass queries"],"reason":"<=200 chars",
+ "attack":{"kind":"COUNTEREXAMPLE|NO-BREAK","path":"<excerpt path>","lines":"10-12","quote":"<verbatim substring of those lines>"}}
 ```
+
+`attack` is required: a status closes only when its quote reproduces in the cited lines, otherwise the item stays open for `adjudicate --set`.
 
 `agree` is recomputed by the script: it is false whenever `verified_status` differs from the preliminary status.
 
