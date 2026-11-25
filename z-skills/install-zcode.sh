@@ -4,8 +4,8 @@
 #
 #   skills    z-<name>/  ->  <home>/.zcode/skills/z-<name>/   (copied as-is; the z- prefix
 #             keeps them distinct from the Claude-tuned originals; ZCode loads SKILL.md `name`)
-#             Folders matching z-* without a root SKILL.md are skipped (they are not
-#             ZCode skill packs; z-viral-video-studio has its own installer).
+#             Folders matching z-* without a root SKILL.md are skipped. None exist today: all 11
+#             z-* folders, the two video skills included, are installed.
 #   agents    <skill>/agents/*.md across the discovered skills
 #             ->  <home>/.zcode/agents/   (copied verbatim; existing files are overwritten, no backup)
 #   commands  <skill>/commands/*.md

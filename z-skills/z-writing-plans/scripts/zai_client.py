@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """zai_client -- one stdlib client for the Z.ai GLM API.
 
-Canonical copy lives in skills/glm/_shared/; sync.sh vendors it into each
+Canonical copy lives in z-skills/_shared/; sync.sh vendors it into each
 skill's scripts/. Reads keys and base URLs, never writes them anywhere.
 
 Session models served through this client: GLM-5.3-Flash,

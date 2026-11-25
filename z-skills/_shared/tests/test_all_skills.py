@@ -1,7 +1,7 @@
 """All-skill hygiene checks and the dev-team doctor.
 
 Verifies: shared modules are vendored byte-identically into each skill's
-scripts/, every .py file in skills/glm compiles, every SKILL.md has
+scripts/, every .py file under z-skills compiles, every SKILL.md has
 name == directory (the z- prefix) and a description <= 1024 chars, and
 devteam.py doctor reports its harness hermetically.
 """
