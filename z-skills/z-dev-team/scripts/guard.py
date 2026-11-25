@@ -20,6 +20,9 @@
                     test/lint commands are `allow`ed so a reviewer can gather evidence without a prompt.
   guard.py perm     PermissionRequest (optional): same allow-list as `bash`, in the PermissionRequest
                     output schema. Not needed when the PreToolUse hooks are installed.
+  guard.py zcode    any event the ZCode hooks send: routes on agent_type - z-programmer roles get
+                    the edit, bash and stop checks, the read-only roles get the -ro checks, every
+                    other role is allowed. This is the mode `doctor --harness zcode --fix` installs.
 
 Fail-open by design: any internal error allows the action (the integrator re-checks at merge time).
 Deny/allow = JSON on stdout (exit 0). Stop-block = exit 2 with the reason on stderr.

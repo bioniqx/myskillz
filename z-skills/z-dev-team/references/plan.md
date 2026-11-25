@@ -6,7 +6,7 @@ Read this only when writing or adopting a plan. Do not read it on a wake-up.
 
 | `kind` | What the engine runs | Use it for |
 | --- | --- | --- |
-| `code` *(default)* | one lane: RED tests committed, then GREEN | features, bug fixes, including `risk: high` |
+| `code` *(default)* | strict/balanced: two dispatches, RED on the strong lane then GREEN; turbo/spike: one lane, RED then GREEN | features, bug fixes, including `risk: high` |
 | `test` | tests only; must really add tests | coverage backfill, characterization |
 | `refactor` | one commit; may not touch any test file; before/after runs pasted | renames, extractions, codemods |
 | `chore` | one commit; the slice's `verify` output is the proof | build, CI, deps, config, scaffolding |
@@ -27,7 +27,7 @@ Task shapes: **greenfield** → `start` runs `git init`; S1 = `chore` scaffold (
 
 A skipped RED run is replaced by a static check: `commit-red` refuses tests with no assertions or fewer cases than criteria. Choose `turbo` or `spike` only when the user asks ("fast mode", "nhanh nhất", "prototype", "throwaway", "no tests"). In `spike`, say in one line what is traded and list every untested slice at the end. In `turbo`/`spike` never block on a question: take the recommended default and record it under `## Assumptions`.
 
-High-risk slices write tests inside the same lane as every other `code` slice. The engine still re-runs the RED commit and rejects tests that already pass.
+High-risk slices take the same path as every other `code` slice. The engine still re-runs the RED commit and rejects tests that already pass.
 
 ## Plan file (`.claude/dev-team/plan.md`)
 
@@ -54,7 +54,7 @@ Slicing rules:
 - Vertical: S1 is the thinnest end-to-end path.
 - `deps` only for true runtime prerequisites. A pinned contract is not a dependency.
 - `files` are exact source and test paths, pairwise disjoint.
-- `size` is the scheduler weight and the model router: `trivial` and `small` use the lite lane, `large` uses the strong lane. `risk: high` also uses the strong lane, still one dispatch.
+- `size` is the scheduler weight and the lane router: every RED dispatch runs on the strong lane; the first GREEN of a `trivial` or `small` low-risk slice runs on the lite lane, `large` runs on the strong lane. `risk: high` also uses the strong lane.
 - `risk: high` only for security, concurrency, or subtle logic. The engine runs RED proof on it.
 - `isolation: true` when tests touch a port, database, or filesystem outside the footprint.
 - Put paths the lane must read under `context`. The launch line carries them so the first turn can Read them with `claim`.

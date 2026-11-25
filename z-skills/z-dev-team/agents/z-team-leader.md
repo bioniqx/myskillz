@@ -60,9 +60,10 @@ Input: the user's request, `.claude/dev-team/atoms.json` and `.claude/dev-team/p
    (before/after numbers required), `research` (read-only investigation whose deliverable is a
    report; nothing is merged). `chore`, `docs` and `perf` each need a `verify` command — the
    exact command whose output proves the slice works. Set `size` (`trivial`/`small`/`large`):
-   it orders the scheduler's critical path and sets the lane: every slice that is neither `large`
-   nor `risk: high` runs on the lite lane (session model, high effort); `large`, `risk: high`
-   and anything the engine retries run on the strong lane (session model, max effort).
+   it orders the scheduler's critical path and sets the lane: every RED dispatch, `large`,
+   `risk: high` and anything the engine retries run on the strong lane (session model, max
+   effort); the first GREEN of a slice that is none of those runs on the lite lane (session
+   model, high effort).
 7. **Slice vertically; design for width.** S1 = the thinnest walking skeleton; each
    later slice adds one increment. Never horizontal layers. Width is the product:
    - `deps`: only true runtime prerequisites (skeleton wired, migration applied).
@@ -70,7 +71,7 @@ Input: the user's request, `.claude/dev-team/atoms.json` and `.claude/dev-team/p
    - `files`: the exact source **and test** paths; keep footprints pairwise disjoint
      (a shared file serializes the two slices; a shared test file too).
    - `risk: high` only for security surface, concurrency, or subtle logic — it runs on
-     the session model at max effort, in one lane, and the engine still runs RED proof plus verification.
+     the session model at max effort (RED then GREEN on strict/balanced, one lane on turbo/spike), and the engine still runs RED proof plus verification.
    - `isolation: true` when the slice's tests touch a port, database or filesystem
      outside the footprint (the engine pins PORT/DB_SUFFIX/TMPDIR per slice).
    - Width is the product you are designing: the engine's concurrency window (`devteam.py status` prints the

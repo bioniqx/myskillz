@@ -39,7 +39,7 @@ Conductor commands (run in the integration checkout):
   checkpoint [--result pass|fail] [--note ...]
   status                    compact progress table (+ provider and governor window)
   stats [--all]             measured per role/model: requests, output tokens, cache hit, effort sent, API
-                            errors, wall time — read from Claude Code's transcripts (tune with evidence)
+                            errors, wall time — read from Claude Code transcripts only (DEVTEAM_TRANSCRIPTS_DIR or ~/.claude/projects); empty under ZCode
   finish                    final cleanup + summary
   reset --yes               delete run state
 
@@ -60,7 +60,7 @@ Profiles (`--profile`; default balanced). Each sets four independent dials:
             Reviews still run incrementally (they overlap the build, so they cost no wall-clock).
   turbo     gate=deferred  red_run=never     review=final  checkpoint=final  review_depth=spot
             All lint/type-check/build deferred to ONE final full gate; one final sharded review on
-            the fast model (z-spot-reviewer), correctness/security only. Tests are still written first.
+            z-spot-reviewer (session model), correctness/security only. Tests are still written first.
   spike     turbo + low-risk slices ship with NO tests (single commit). High-risk slices still
             write tests, in the same one lane as every other code slice. Breaks the test-first
             rule on low-risk slices on purpose: prototypes only.
@@ -892,7 +892,7 @@ PLAN_TEMPLATE = {
             "title": "walking skeleton: <thinnest end-to-end path>",
             "goal": "what this slice delivers",
             "kind": "code | test | refactor | chore | docs | perf | research   (default code)",
-            "size": "trivial | small | large   (default small; drives scheduling order and model)",
+            "size": "trivial | small | large   (default small; drives scheduling order and the lane)",
             "deps": [],
             "files": ["src/x.ts", "tests/x.test.ts"],
             "risk": "low",
@@ -2072,8 +2072,8 @@ def code_mode(st, s, fast=None):
         return "fast"
     if os.environ.get("DEVTEAM_SPLIT") == "off":
         return "slice"
-    # One lane. commit-red still freezes tests inside that lane, and integrate
-    # still rejects a missing RED commit or a later test edit. The second
+    # One lane for quick and fast-lane slices: commit-red still freezes tests inside that
+    # lane, and integrate still rejects a missing RED commit or a later test edit. The second
     # programmer and the attack reviewer are what made a two-file fix take an hour.
     if (s.get("quick") or s.get("fast_lane")) and s.get("status") != "red-done":
         return "slice"
@@ -3623,10 +3623,12 @@ def harvest_reviews(root, st):
         sig = report_signature(reports)
         if r.get("status") == "done" and r.get("sig") == sig:
             continue                                   # already harvested, and unchanged since
-        verdicts, added, no_evidence = [], [], []
+        verdicts, added, no_evidence, no_verdict = [], [], [], []
         for rp in reports:
             text = rp.read_text()
             m = VERDICT_RE.search(text)
+            if not m:
+                no_verdict.append(rp.name)
             v = normalize_verdict(m.group(1) if m else "")
             if v == "APPROVED" and not EVIDENCE_RE.search(text):
                 v = "UNKNOWN"                       # an approval that shows no evidence is a rubber stamp
@@ -3640,7 +3642,7 @@ def harvest_reviews(root, st):
                   "shard_verdicts": verdicts})
         lines.append(f"REVIEW {rid}: {verdict}" + (f" (re-review, round {rounds})" if rounds > 1 else "")
                      + (f" → queued {' '.join(added)}" if added else "")
-                     + (" (no verdict line found in the report — read it yourself)" if verdict == "UNKNOWN" else "")
+                     + (" (no verdict line found in the report — read it yourself)" if no_verdict else "")
                      + (f" ! APPROVED without a `## Evidence` section in {', '.join(no_evidence)}: counted as NOT approved "
                         f"— SendMessage that reviewer to add the commands it ran and the files it read, then `next`"
                         if no_evidence else ""))
@@ -3876,7 +3878,7 @@ def cmd_start(a):
     if provider_of(st) == "glm":
         out("TIP (GLM): the fan-out opens at the full 15-call width (tier api); DEVTEAM_GLM_TIER=lite|pro|max "
             "trades width for gentler rate limits; DEVTEAM_PEAK=on opts into Z.ai's peak-hour halving "
-            "(Mon–Fri 14–18 UTC+8) to spare credits; `stats` shows measured tokens/effort/errors per role.")
+            "(Mon–Fri 14–18 UTC+8) to spare credits.")
 
 
 PROBE_RULES = [

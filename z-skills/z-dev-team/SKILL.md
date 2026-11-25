@@ -46,7 +46,7 @@ deploy, rewrite history, or migrate production. Loop `devteam next` until
 the user once to open a new session; the harness cannot load them sooner.
 A HANDOFF block that names `devteam start` directly may skip the open prelude: init reads the fast chain itself.
 
-**Bootstrap.** `open` already printed `D=`. On a miss it prints no `D=` line: install the skill first (README), and never run `python3 "" …`. Do not run the path loop again.
+**Bootstrap.** `open` already printed `D=`. On a miss it prints no `D=` line: install the skill first (run `sh install-zcode.sh` or `sh install-dsh.sh` inside the z-skills folder), and never run `python3 "" …`. Do not run the path loop again.
 
 - **Engine** — deterministic scheduler, integrator and concurrency governor. A whole run is
   `devteam start <plan.md>` once, then `devteam next` (no arguments) on every wake-up. `next` reads
@@ -59,8 +59,8 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
 
   | Agent | Session model | Job |
   | --- | --- | --- |
-  | `z-programmer-lite` | session model, effort high | every slice that is not strong: the default lane |
-  | `z-programmer-strong` | session model, effort max | `risk: high`, `size: large`, and any **retried** slice |
+  | `z-programmer-lite` | session model, effort high | the first GREEN of a slice that is not strong: the default lane |
+  | `z-programmer-strong` | session model, effort max | every RED dispatch, `risk: high`, `size: large`, and any **retried** slice |
   | `z-code-reviewer` | session model, effort high | full review, read-only |
   | `z-spot-reviewer` / `z-investigator` | session model, effort max / high | correctness-only review / research, root cause |
   | `z-team-leader` | session model, effort max | planning, plan adoption, verification; remembers the repo |
@@ -102,7 +102,7 @@ one read-fix-commit cycle makes the engine retry the slice, which is slower.
 
 The engine detects ZCode itself (`is_zcode()`: a `DEVTEAM_HARNESS=zcode` override wins, otherwise the vendored detector decides — the skill sitting under `~/.zcode/skills/` marks it). The provider defaults to `glm` there (15-call cap), and `doctor --harness zcode --fix` installs the six agents user-level into `~/.zcode/agents/` and merges the guard hooks into `~/.zcode/cli/config.json` (`start` runs it automatically). The Conductor routes every lane through ZCode's `Agent` tool. Follow these rules:
 
-1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: strong slices (risk high / size large / retried) route to `z-programmer-strong`, all others to `z-programmer-lite`. The agent file has no model id, so the lane uses the session model. Do not add a model id.
+1. `Agent` (the Task alias) takes `subagent_type`, `description`, `prompt`, `run_in_background` and no per-dispatch `model`. Launch every printed `Agent →` line in ONE message with `run_in_background: true`, prompt verbatim, and never add a `model` parameter. The printed lines carry no `model:` segment: every RED dispatch and every strong slice (risk high / size large / retried) route to `z-programmer-strong`, the other GREEN dispatches to `z-programmer-lite`. The agent file has no model id, so the lane uses the session model. Do not add a model id.
 2. ZCode has no SubagentStop event, but `doctor --harness zcode --fix` installs a Stop hook in `~/.zcode/cli/config.json` that routes programmer Stops through `guard.py`, which writes the `.done`/`.blocked` marker. Treat the lane completion notification as the wake-up. Run `devteam next [<id>]` with the finished slice's id. The Stop gate wrote the marker, and the engine-side integrate re-check (claim, worktree, RED/GREEN, footprints) still gates the merge.
 3. `SendMessage` and `TaskStop` exist. Answer a `BLOCKED` question, or send a `REJECTED` / `NOT READY` / `MERGE ERROR` fix, with `SendMessage` to that agent. `TaskStop` a stuck lane first, then cold-retry with `devteam retry <id>`.
 4. Installed agents and hook config load only in a new session. After `doctor --fix` installs or changes agents/hooks, tell the user to open a new ZCode session once (not an app restart).
@@ -185,12 +185,13 @@ Act on each block, in the same turn:
   yourself. On the second rejection of the same dispatch the engine prints `retry <id>`: run it.
 - `LANE DOWN <id>` (API failed after retries) → `SendMessage` that agent `continue`.
 - `SPAWN FAILED → re-queued …` / `RUNTIME LIMIT` / `THROTTLED` → nothing: the engine re-queued and resized.
+  These lines and `LANE DOWN` come from harness transcripts (`DEVTEAM_TRANSCRIPTS_DIR` or `~/.claude/projects`); ZCode writes none, so there a dropped launch shows as `UNCLAIMED` and a silent lane as `STALLED?`.
   `… relaunch these printed Agent lines` → relaunch those (reviewers/leader) when a slot frees. `marked
   failed … new ZCode session was not opened` → tell the user to open a new session (agents load at
   startup), then `retry`.
 - `NOT INTEGRATED — no claim recorded` with a `## Worktree:` line → `devteam bind <id> <path>`, `next`.
 - `CONFLICT` → fix footprints in `plan.md`, `devteam retry <id>`.
-- Review `UNKNOWN` (no verdict line) → read the report; `devteam add-fixes <report>` / `review-done <rN>
+- Review `UNKNOWN` (no verdict line, or `APPROVED` with no `## Evidence`; the printed line says which) → read the report; `devteam add-fixes <report>` / `review-done <rN>
   --verdict …`. Any verdict that is not a clear `APPROVED` counts as `CHANGES_REQUIRED` (fails closed).
 - `NOTE: fix specs refused: …` → read that report; queue real work with `add-fix`.
 - Checkpoint `FAIL` → `devteam add-fix --title … --files … --criteria …`; dispatching continues.
@@ -245,7 +246,7 @@ branches the user may delete. End with the final slice table.
 
 `DEVTEAM_PEAK=on` when a big run sits inside Z.ai's peak window (spares credits) · `--tier lite|pro|max` to
 trade width for rate-limit headroom (default `api` is the full 15) · profile `turbo`/`spike` (only when
-asked) · `review_batch` / `checkpoint_every` up for very large runs. Effort and model live in each
+asked) · `review_batch` / `checkpoint_every` up for very large runs. Effort lives in each
 agent file. Past `spike` only two rules remain — independent review and one writer per
 path. If asked to cut those, say plainly what breaks, and don't.
 
