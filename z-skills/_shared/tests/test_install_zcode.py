@@ -197,19 +197,47 @@ class InstallZcodeTests(unittest.TestCase):
         with open(foreign, encoding="utf-8") as fh:
             self.assertEqual(fh.read(), marker)
 
-    def test_saved_pro_pin_word_keeps_deepseek_provider(self):
+    def _saved_pin(self, word):
         pin = os.path.join(self.home, ".zcode", "z-flash")
         os.makedirs(os.path.dirname(pin))
         with open(pin, "w", encoding="utf-8") as fh:
-            fh.write("deepseek-v4-pro\n")
+            fh.write(word)
+        return pin
+
+    @staticmethod
+    def _pin_word(pin):
+        with open(pin, encoding="utf-8") as fh:
+            return fh.read().strip()
+
+    def test_saved_pro_pin_word_keeps_the_deepseek_provider_and_the_word(self):
+        pin = self._saved_pin("deepseek-v4-pro\n")
         r = self.install()
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertIn("pin: deepseek", r.stdout)
-        with open(pin, encoding="utf-8") as fh:
-            self.assertEqual(fh.read().strip(), "deepseek")
+        self.assertEqual(self._pin_word(pin), "deepseek-v4-pro")
         again = self.install()
         self.assertEqual(again.returncode, 0, again.stderr + again.stdout)
         self.assertIn("pin: deepseek", again.stdout)
+        self.assertEqual(self._pin_word(pin), "deepseek-v4-pro")
+
+    def test_saved_glm_5_4_pin_word_keeps_the_glm_provider_and_the_word(self):
+        pin = self._saved_pin("glm-5.4\n")
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("pin: glm", r.stdout)
+        self.assertEqual(self._pin_word(pin), "glm-5.4")
+
+    def test_explicit_flash_flag_replaces_a_saved_pro_word(self):
+        pin = self._saved_pin("glm-5.3\n")
+        r = self.install("--flash", "deepseek")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertEqual(self._pin_word(pin), "deepseek")
+
+    def test_unknown_saved_pin_word_falls_back_to_glm(self):
+        pin = self._saved_pin("nonsense\n")
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertEqual(self._pin_word(pin), "glm")
 
     def test_flash_deepseek_dry_run_writes_nothing(self):
         r = self.install("--dry-run", "--flash", "deepseek")

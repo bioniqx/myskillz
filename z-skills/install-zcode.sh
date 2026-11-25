@@ -48,6 +48,9 @@ case "$FLASH" in
     *) echo "Error: --flash must be glm or deepseek, got $FLASH" >&2; exit 1 ;;
 esac
 
+# The word written back to the pin file: the provider, unless a saved word is kept below.
+PIN="$FLASH"
+
 [ -n "$HOME_DIR" ] || { echo "Error: HOME is unset; pass --home DIR" >&2; exit 1; }
 
 pause() {
@@ -362,11 +365,14 @@ PY
 
 if [ "$FLASH_EXPLICIT" -eq 0 ] && [ -f "$HOME_DIR/.zcode/z-flash" ]; then
     saved=$(awk 'NF { print $1; exit }' "$HOME_DIR/.zcode/z-flash" 2>/dev/null || true)
-    # The pro words deepseek-v4-pro and glm-5.3 map to their providers.
+    # The pro words deepseek-v4-pro, glm-5.3 and glm-5.4 map to their providers.
     case "$saved" in
         deepseek|ds|deepseek-flash|deepseek-v4-pro) FLASH=deepseek ;;
-        glm|glm-5.3-flash|flash|glm-5.3) FLASH=glm ;;
+        glm|glm-5.3-flash|flash|glm-5.3|glm-5.4) FLASH=glm ;;
+        *) saved="" ;;
     esac
+    # A saved word the runtime knows is kept: a re-install must not drop a pro pin.
+    if [ -n "$saved" ]; then PIN="$saved"; fi
 fi
 
 echo "== flash"
@@ -384,7 +390,7 @@ if [ "$DRY" -eq 1 ]; then
 fi
 
 mkdir -p "$HOME_DIR/.zcode"
-printf '%s\n' "$FLASH" > "$HOME_DIR/.zcode/z-flash"
+printf '%s\n' "$PIN" > "$HOME_DIR/.zcode/z-flash"
 python3 - "$HOME_DIR" "$SCRIPT_DIR/_shared/flash_pin.py" "$FLASH" <<'PY'
 import importlib.util
 import sys
