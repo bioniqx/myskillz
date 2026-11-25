@@ -365,6 +365,8 @@ PY
 
 if [ "$FLASH_EXPLICIT" -eq 0 ] && [ -f "$HOME_DIR/.zcode/z-flash" ]; then
     saved=$(awk 'NF { print $1; exit }' "$HOME_DIR/.zcode/z-flash" 2>/dev/null || true)
+    # The runtime lower-cases the saved word, so the match is case-insensitive too.
+    saved=$(printf '%s' "$saved" | tr '[:upper:]' '[:lower:]')
     # The pro words deepseek-v4-pro, glm-5.3 and glm-5.4 map to their providers.
     case "$saved" in
         deepseek|ds|deepseek-flash|deepseek-v4-pro) FLASH=deepseek ;;
@@ -376,10 +378,13 @@ if [ "$FLASH_EXPLICIT" -eq 0 ] && [ -f "$HOME_DIR/.zcode/z-flash" ]; then
 fi
 
 echo "== flash"
-if [ "$FLASH" = "deepseek" ]; then
+if [ "$FLASH" = deepseek ]; then
     echo "    pin: deepseek (HTTP fan-out only; agents follow the session model)"
 else
     echo "    pin: glm (HTTP fan-out only; agents follow the session model)"
+fi
+if [ "$PIN" != "$FLASH" ]; then
+    echo "    saved pin word kept: $PIN (the HTTP fan-out uses that pro id)"
 fi
 echo "    No agent model id. GLM_FLASH overrides the HTTP pin for one process."
 
@@ -422,8 +427,14 @@ esac
 plans_block=""
 case " $FOLDERS " in
     *" z-writing-plans "*)
+        # The hint names the key the pinned provider reads; the other one is ignored there.
+        if [ "$FLASH" = deepseek ]; then
+            plans_key="DEEPSEEK_API_KEY (DeepSeek key)"
+        else
+            plans_key="ZAI_API_KEY (GLM Coding Plan key)"
+        fi
         plans_block="
-Next: export ZAI_API_KEY (GLM Coding Plan key) and check it with
+Next: export $plans_key and check it with
   python3 $SKILLS_DIR/z-writing-plans/scripts/plan_tool.py doctor --ping"
         ;;
 esac

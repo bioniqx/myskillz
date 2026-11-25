@@ -199,7 +199,7 @@ class InstallZcodeTests(unittest.TestCase):
 
     def _saved_pin(self, word):
         pin = os.path.join(self.home, ".zcode", "z-flash")
-        os.makedirs(os.path.dirname(pin))
+        os.makedirs(os.path.dirname(pin), exist_ok=True)
         with open(pin, "w", encoding="utf-8") as fh:
             fh.write(word)
         return pin
@@ -239,11 +239,34 @@ class InstallZcodeTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertEqual(self._pin_word(pin), "glm")
 
-    def test_flash_deepseek_dry_run_writes_nothing(self):
-        r = self.install("--dry-run", "--flash", "deepseek")
+    def test_saved_pin_word_with_mixed_case_is_kept_in_lower_case(self):
+        # The runtime lower-cases the saved word; the installer must not read it case-sensitively
+        # and switch the provider or drop the pro id.
+        for written, kept in (("DeepSeek", "deepseek"), ("GLM-5.4", "glm-5.4")):
+            with self.subTest(written=written):
+                pin = self._saved_pin(written + "\n")
+                r = self.install()
+                self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+                self.assertEqual(self._pin_word(pin), kept)
+
+    def test_output_names_the_kept_word_and_the_key_of_the_pinned_provider(self):
+        pin = self._saved_pin("deepseek-v4-pro\n")
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("saved pin word kept: deepseek-v4-pro", r.stdout)
+        self.assertIn("export DEEPSEEK_API_KEY", r.stdout)
+        self.assertNotIn("export ZAI_API_KEY", r.stdout)
+        back = self.install("--flash", "glm")
+        self.assertEqual(back.returncode, 0, back.stderr + back.stdout)
+        self.assertIn("export ZAI_API_KEY", back.stdout)
+        self.assertNotIn("export DEEPSEEK_API_KEY", back.stdout)
+        self.assertNotIn("saved pin word kept", back.stdout)
+        self._saved_pin("deepseek-v4-pro\n")
+        r = self.install("--dry-run", "--flash", "glm")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertFalse(os.path.exists(os.path.join(self.home, ".zcode")))
-        self.assertIn("pin: deepseek", r.stdout)
+        # A dry run never replaces the saved pro word, even with an explicit --flash.
+        self.assertEqual(self._pin_word(pin), "deepseek-v4-pro")
+        self.assertIn("pin: glm", r.stdout)
         self.assertIn("Nothing written.", r.stdout)
 
     def test_flash_rejects_an_unknown_name(self):
