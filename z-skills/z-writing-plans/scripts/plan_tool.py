@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import flash_pin  # vendored by _shared/sync.sh
-import zai_client  # vendored by skills/glm/_shared/sync.sh, see T05
+import zai_client  # vendored by _shared/sync.sh
 import decide
 SKILL_DIR = os.path.dirname(HERE)
 TOOL = os.path.abspath(__file__)
@@ -2157,8 +2157,8 @@ def cmd_doctor(a):
     print("api key   : %s (%s)" % (mask(key), src))
     print("base url  : %s" % base)
     print("protocol  : %s" % proto)
-    lanes = {tier: flash_pin.resolve_http_model(GLM[tier][0])
-             for tier in ("light", "std", "deep")}
+    # The same selection the api lane makes, PLAN_MODEL_* overrides included.
+    lanes = {tier: model_for(tier)[0] for tier in ("light", "std", "deep")}
     print("models    : light=%s/%s  std=%s/%s  deep=%s/%s" % (
         lanes["light"], GLM["light"][1], lanes["std"], GLM["std"][1],
         lanes["deep"], GLM["deep"][1]))
