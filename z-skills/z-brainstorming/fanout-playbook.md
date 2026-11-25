@@ -6,7 +6,7 @@ the human's reading time.
 
 ## Contents
 
-Capacity facts - Width in 10 seconds - Partition — one axis per lane - no overlap - Dispatch - Failure handling - Merge protocol (in your head - not a doc) - Overlap with human wait
+Capacity facts - Width in 10 seconds - Partition — one axis per lane, no overlap - Dispatch - Failure handling - Merge protocol (in your head, not a doc) - Overlap with human wait
 
 ## 0. Capacity facts
 
@@ -87,7 +87,8 @@ Vague boundaries are the main cause of duplicated work between lanes.
   Do not paste the lane rules again.
 - Model per lane: none. Code lanes dispatch z-explorer, web lanes
   z-researcher, approach drafts z-drafter, attacks
-  z-design-breaker. Model and effort live only in the agent file.
+  z-design-breaker. Every lane follows the session model (SKILL.md R2);
+  an agent file carries a thoughtLevel line and no model id.
   `decide.py score` prints the pick; the main thread renders it.
 - **Lanes over the cap → waves.** Dispatch the highest-value lanes first
   (the ones that can change the approach set), then refill in batches as

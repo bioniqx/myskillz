@@ -1,13 +1,17 @@
-# 10.13 (from 10.12) - 2026-11-25: audit fixes
+# 10.13 (from 10.12) — 2026-11-25: audit fixes
 
 Read-only audit of this folder. The FAST spec text now names the eight
 headings `check.py spec` requires (the binding NEXT line lives in
 `handoff.py`). Remaining "Flash lane" wording became lane wording, the
 companion files point at existing settings and commands again, the
 `check.py` mode list is complete, `context.sh` says `open` already
-routed, and five files over 100 lines gained a contents list.
+routed, and five files over 100 lines gained a contents list. An independent
+review then corrected what that audit got wrong: `bind` checks a draft and
+saves nothing while `close` and `prove` write files, no agent file holds the
+model or the effort, the effort row says what is not documented, and the
+contents lines quote the real section names.
 
-# 10.12 (from 10.11) - 2026-11-25: six session models in the wording
+# 10.12 (from 10.11) — 2026-11-25: six session models in the wording
 
 The model layer names six session models: GLM 5.4 (id glm-5.4, pro tier)
 joins the five of the previous sweep. The tuning table and the metadata

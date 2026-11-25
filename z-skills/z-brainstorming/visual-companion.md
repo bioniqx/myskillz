@@ -5,7 +5,7 @@ options. Read this only after the user accepts the offer.
 
 ## Contents
 
-When to use (per question - not per session) - Speed rules - How it works - Starting - The loop - Writing fragments - CSS classes provided by the frame - Events format - Design tips
+When to use (per question, not per session) - Speed rules - How it works - Starting - The loop - Writing fragments - CSS classes provided by the frame - Events format - Design tips
 
 ## When to use (per question, not per session)
 

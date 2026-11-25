@@ -7,7 +7,7 @@ adds the shape of the messages. If `ask.py mode` printed `MODE fast`,
 
 ## Contents
 
-Merge or split the first message - The design message - No extra lanes on the design turn - After approval — spec turn (one turn - no intermediate message) - Hand-off
+Merge or split the first message - The design message - No extra lanes on the design turn - After approval — spec turn (one turn, no intermediate message) - Hand-off
 
 ## 1. Merge or split the first message
 

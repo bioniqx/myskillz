@@ -37,7 +37,7 @@ Speed and price are pinned for two models only; the other session models have no
 
 | Model | Out speed | $/M in | $/M out | Use |
 | --- | --- | --- | --- | --- |
-| GLM-5.3-Flash | 113.7 tok/s | 0.15 | 0.50 | every lane and the main thread |
+| GLM-5.3-Flash | 113.7 tok/s | 0.15 | 0.50 | flash-tier session: every lane and the main thread |
 | GLM-5.3 | 63.4 tok/s | 1.40 | 4.40 | pro tier: only when the session is pinned to it |
 
 A GLM-5.3 call is the same family at about 9× the price. It does not
@@ -82,7 +82,7 @@ thoughtLevel line of each agent file, and no dispatch names a model
 | A bug report got a design | Misroute | `handoff.py open` routes in round 1; `ROUTE` other than `none` is binding |
 | A lane invented findings to hit a minimum count | "3-6 lines" forces fabrication | The agent file says up to 6, and zero is valid |
 | The path was forgotten by message 3 | Long-horizon drift; private restatement does not hold | Every message line 1 is Path or Path unchanged; `send` enforces it |
-| A lane ran at an effort other than its agent file's thoughtLevel | A lane follows the session model; the agent file's thoughtLevel line is its only effort setting | Keep the thoughtLevel line and no model line in the agent file; never add a model id (SKILL.md R2) |
+| A lane ran at an effort other than its agent file's thoughtLevel | Whether the harness honors `thoughtLevel` without a model line is not documented, and the main thread sets no effort | Keep the thoughtLevel line and no model line in the agent file (SKILL.md R2); nothing in this skill can change the effort, so report it |
 
 ## 4. Evidence
 
@@ -126,9 +126,10 @@ on the session model. `decide.py score` prints the pick.
 
 ## 6. Mechanical verification
 
-`scripts/check.py` is a stdlib-only, read-only checker. The main thread
+`scripts/check.py` is a stdlib-only checker. The main thread
 pastes lane output into it on stdin through a heredoc, so a check costs
-one Bash call and no file write. Its modes (SKILL.md R14):
+one Bash call. Only `close` (it writes `breaks.json` beside the ledger)
+and `prove` (it updates the ledger) write a file. Its modes (SKILL.md R14):
 
 - `check.py cites [--root DIR]` verifies Code-lane FINDINGS: the file
   exists, the line exists, and the quoted snippet appears within 3 lines
@@ -137,7 +138,10 @@ one Bash call and no file write. Its modes (SKILL.md R14):
   version, quote of 25 words or less, known tier. Prints OK, WEAK or
   DROP per claim. Exit 1 if any claim is DROPped.
 - `check.py intake [--root DIR]` runs `cites` and `web` in one call.
-  `check.py close` breaks and scores; `bind` pins the pick to the ledger.
+  `check.py close` breaks and scores (it writes `breaks.json` beside the
+  ledger). `bind` is the read-only check `send` runs with `--ledger`: a
+  line with a path, URL or version must cite an OK fact, and a `--pick`
+  must appear in the draft.
 - `check.py spec PATH` lints a written spec: required headings, no
   placeholders or empty sections, dated https Evidence lines. Exit 1 if
   any FAIL.
