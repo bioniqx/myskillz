@@ -19,12 +19,12 @@ REFERENCE = re.compile(
 
 def missing_references(skill_root, text):
     """Paths named in `text` that do not exist under `skill_root`, or under the
-    repository root when the path names another skill. A token followed by a
-    comma is a word pair in prose, not a path."""
+    repository root when the path names another skill. A bare word pair whose
+    last word has no file extension (`agents/hooks,`) is prose, not a path."""
     missing = []
     for match in REFERENCE.finditer(text):
         path = match.group(1)
-        if text[match.end():match.end() + 1] == ",":
+        if text[match.end():match.end() + 1] == "," and "." not in path.rsplit("/", 1)[-1]:
             continue
         base = ROOT if path.startswith("z-") else skill_root
         if not os.path.exists(os.path.join(base, path)):
@@ -48,9 +48,10 @@ class ScannerTests(unittest.TestCase):
         self._write("references/rules.md")
         self.assertEqual(missing_references(self.skill, "Read `references/rules.md` first."), [])
 
-    def test_a_broken_reference_is_reported_once_per_path(self):
+    def test_a_broken_reference_is_reported_even_before_a_comma(self):
+        # Only a word pair without an extension may hide behind the comma rule.
         self._write("references/rules.md")
-        text = "Read `references/missing.md`, then references/other.py."
+        text = "Read references/missing.md, then references/other.py."
         self.assertEqual(missing_references(self.skill, text),
                          ["references/missing.md", "references/other.py"])
 

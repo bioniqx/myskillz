@@ -1,4 +1,5 @@
 """Router shared by every glm skill. The script's lines are binding."""
+import importlib.util
 import json
 import os
 import shutil
@@ -428,6 +429,26 @@ class OpenTests(unittest.TestCase):
         nxt = self.binding_next(out)
         self.assertIn("dispatch every printed batch in one message", nxt)
         self.assertNotIn("Do not dispatch a subagent", nxt)
+
+    def test_fast_next_names_every_heading_the_spec_gate_requires(self):
+        # The FAST spec text lists the gate's headings by hand; it must not drift from check.py.
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        rc, out, err = self.run_at(
+            ["open", "--self", "z-brainstorming"],
+            "add a login endpoint to the existing api", cwd=root)
+        self.assertEqual(rc, 0, err)
+        scripts = os.path.join(HERE, "..", "..", "z-brainstorming", "scripts")
+        sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location("brainstorm_check_required", os.path.join(scripts, "check.py"))
+        check = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(check)
+        nxt = self.binding_next(out)
+        self.assertIn("PACE fast", nxt)
+        for heading, _pattern in check.REQUIRED:
+            with self.subTest(heading=heading):
+                self.assertIn(heading, nxt)
 
     def test_unknown_self_is_usage(self):
         rc, out, _err = self.run_at(["open", "--self", "z-nope"], "hi")
