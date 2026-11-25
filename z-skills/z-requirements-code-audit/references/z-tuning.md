@@ -1,10 +1,10 @@
-# GLM-5.3 tuning — what was verified, what it changed
+# Session-model tuning — what was verified, what it changed
 
 Verified 2026-09-18 against z.ai's own model pages and the ZCode docs.
 
 ## Session models
 
-Five display names cover the three tiers a session can run on. The
+Six display names cover the three tiers a session can run on. The
 flash tier carries every lane and the main thread, the pro tier runs
 only when the session is pinned to it, and the Claude tier is the
 harness default when no GLM model is configured.
@@ -14,10 +14,16 @@ harness default when no GLM model is configured.
 | GLM-5.3-Flash | flash tier |
 | DeepSeek V4.1 Flash | flash tier |
 | GLM 5.3 | pro tier |
+| GLM 5.4 | pro tier |
 | DeepSeek V4 Pro | pro tier |
 | Claude Sonnet 5.5 | Claude tier |
 
 No speed or price numbers are pinned for these tiers.
+
+GLM 5.4 (api id glm-5.4), from the vendor model page read on
+2026-11-25: 1M context, 128K max output, thinking mode, tool calling,
+JSON output, image and video input; the general Model API was still
+pending at that date. Nothing else is claimed for it here.
 
 ## Model facts this design rests on
 
@@ -28,7 +34,7 @@ No speed or price numbers are pinned for these tiers.
 | `reasoning_effort` is `low` \| `high` \| `max`, default `max` | **there is no `medium`** — the old agent files pinned `effort: medium`, which is not a GLM value. Tiers use low/high/max only |
 | z.ai recommends `thinking.clear_thinking: false` | sent on every request |
 | Context caching is supported | one byte-identical prefix per wave; the `cache_read_input_tokens` figure is printed by `run` |
-| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. Every judge, verifier, and parse pass is `glm-5.3-flash`. Tier changes effort only (`TIERS` in `audit.py`). The agent files pin the same Flash id. A status word is not a close: `check` requires a reproduced NO-BREAK quote, or a `--set` adjudication |
+| On the Anthropic-compatible route, `haiku` → `glm-5.3-flash` and **both `sonnet` and `opus`** → `glm-5.3` | asking for `opus` costs more for the same model. Every judge, verifier, and parse pass is `glm-5.3-flash`. Tier changes effort only (`TIERS` in `audit.py`). The agent files carry no model id; a lane follows the session model. A status word is not a close: `check` requires a reproduced NO-BREAK quote, or a `--set` adjudication |
 | GLM emits few parallel tool calls per turn | an agentic search loop is the wrong place for this work → retrieval moved into Python |
 | Flash is more verbose than median | `max_tokens` is capped per tier and every prompt demands JSON only |
 | GLM is trained toward brevity; long prompts fight the training | SKILL.md and every system block are numbered rules, no XML ceremony, no behaviour tables |
@@ -38,7 +44,7 @@ No speed or price numbers are pinned for these tiers.
 | Harness | Fact | Consequence |
 |---|---|---|
 | ZCode | subagents launched **together run in parallel**; they cannot spawn nested subagents | the agent lane is a real fallback here |
-| ZCode | agents at `~/.zcode/agents/<name>.md`; fields `name`, `description`, `model`, `thoughtLevel`, `tools`/`disallowedTools`, `maxTurns`, `injectAgentsMd`, `mcpServers`, `color`. **No `effort`, no `permissionMode`, no haiku/sonnet aliases** | `agents/*.md` uses real GLM ids + `thoughtLevel` |
+| ZCode | agents at `~/.zcode/agents/<name>.md`; fields `name`, `description`, `model`, `thoughtLevel`, `tools`/`disallowedTools`, `maxTurns`, `injectAgentsMd`, `mcpServers`, `color`. **No `effort`, no `permissionMode`, no haiku/sonnet aliases** | `agents/*.md` carries `thoughtLevel` and no model id |
 | ZCode | skills at `~/.zcode/skills/<name>/SKILL.md`, invoked `$z-requirements-code-audit`; a description over 1024 chars **drops the skill**; per-turn trigger metadata is a description excerpt of up to 250 chars (the WHEN-clause sits up front); a body over 100KB is truncated when loaded, not dropped | description reordered with the WHEN-clause first; description measured at 920 chars |
 | ZCode | user-level hooks exist, merged into `~/.zcode/cli/config.json` | this skill installs none; the api lane's structural enforcement carries the rules here anyway |
 

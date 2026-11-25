@@ -1,6 +1,6 @@
 # z-systematic-debugging 9.0
 
-Root-cause-first debugging, rebuilt for **ZCode** and its five session models — glm-5.3-flash, deepseek-flash (DeepSeek), glm-5.3, deepseek-v4-pro, and claude-sonnet-5.5 (Claude).
+Root-cause-first debugging, rebuilt for **ZCode** and its six session models — glm-5.3-flash, deepseek-flash (DeepSeek), glm-5.3, glm-5.4, deepseek-v4-pro, and claude-sonnet-5.5 (Claude).
 
 The Iron Law is unchanged: no fix until a `ROOT CAUSE: X causes Y because Z` line is backed by evidence observed in this session. Everything else changed to remove model turns.
 

@@ -6,7 +6,7 @@ normal run.
 
 ## Session models
 
-Five display names cover the three tiers a session can run on. The
+Six display names cover the three tiers a session can run on. The
 flash tier carries every lane and the main thread, the pro tier runs
 only when the session is pinned to it, and the Claude tier is the
 harness default when no GLM model is configured.
@@ -16,10 +16,16 @@ harness default when no GLM model is configured.
 | GLM-5.3-Flash | flash tier |
 | DeepSeek V4.1 Flash | flash tier |
 | GLM 5.3 | pro tier |
+| GLM 5.4 | pro tier |
 | DeepSeek V4 Pro | pro tier |
 | Claude Sonnet 5.5 | Claude tier |
 
 No speed or price numbers are pinned for these tiers.
+
+GLM 5.4 (api id glm-5.4), from the vendor model page read on
+2026-11-25: 1M context, 128K max output, thinking mode, tool calling,
+JSON output, image and video input; the general Model API was still
+pending at that date. Nothing else is claimed for it here.
 
 ## 1. Models
 
@@ -48,8 +54,9 @@ that pick.
 
 ## 2. Model and effort
 
-Model and effort live only in the agent frontmatter. This file is the
-economics and the failure table.
+The session supplies the model. The only per-lane effort setting is the
+thoughtLevel line of each agent file, and no dispatch names a model
+(SKILL.md R2 and R3). This file is the economics and the failure table.
 
 ## 3. Known failure modes
 
@@ -71,7 +78,7 @@ economics and the failure table.
 | A bug report got a design | Misroute | `check.py route` in round 1; `ROUTE` other than `none` is binding |
 | A lane invented findings to hit a minimum count | "3-6 lines" forces fabrication | The agent file says up to 6, and zero is valid |
 | The path was forgotten by message 3 | Long-horizon drift; private restatement does not hold | Every message line 1 is Path or Path unchanged; `send` enforces it |
-| Lanes ran on the session model at effort max | Agent frontmatter had no model id, so thoughtLevel was ignored | Model and effort live only in the agent frontmatter |
+| A lane ran at an effort other than its agent file's thoughtLevel | A lane follows the session model; the agent file's thoughtLevel line is its only effort setting | Keep the thoughtLevel line and no model line in the agent file; never add a model id (SKILL.md R2) |
 
 ## 4. Evidence
 
@@ -101,10 +108,10 @@ instruction; R4 is written to hold either way.
 
 ## 5. ZCode runtime
 
-Install all eight skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
+Install all eleven skills with `sh install-zcode.sh` (add `--home DIR` to target another home); it
 copies each `z-<name>/` folder to `~/.zcode/skills/z-<name>/`, the bundled agents verbatim to
 `~/.zcode/agents/`, and slash commands to `~/.zcode/commands/` with the skill path filled in
-(/z-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). Model and effort live only in the agent frontmatter (section 2). When a model
+(/z-brainstorm runs context.sh from the installed skill; ZCode has no `!` preload support and rejects a dynamic-shell preload). The session supplies the model; each agent file carries only a thoughtLevel line (section 2). When a model
 must be named yourself, use `glm-5.3-flash` or `deepseek-flash`. Never promote a lane or a writer to a pro-tier model to lift quality; the pro tier runs only when the session is pinned to it. Installed skills, agents and
 commands load only in a NEW ZCode session, not on a restart. Invoke the skill with `$z-brainstorming`. Per-turn trigger metadata is the skill name plus a description excerpt of up to 250
 characters, and a description over 1024 characters makes ZCode drop the skill — which is why the

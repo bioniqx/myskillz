@@ -3,7 +3,7 @@
 Pins the five-model vocabulary of the 2026-11-19 spec: lane tables and
 denylist sentences switch to session-model wording (no flash-only claim, no
 promotion wording that names GLM-5.3 or deepseek-v4-pro as forbidden
-switches), the two metadata `models:` lines list all five ids on one flat
+switches), the two metadata `models:` lines list all six ids on one flat
 line, and the brainstorming description keeps its trigger clause inside the
 1024-char ceiling even when the rewritten text sits near that ceiling.
 """
@@ -15,8 +15,8 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 GLM_ROOT = os.path.dirname(os.path.dirname(HERE))
 
-FIVE_ID_LINE = ("glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro"
-                " | claude-sonnet-5.5")
+SIX_ID_LINE = ("glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4"
+                " | deepseek-v4-pro | claude-sonnet-5.5")
 
 SWEPT_FOLDERS = [
     "z-brainstorming",
@@ -135,11 +135,11 @@ class TestTierWordingSweep(unittest.TestCase):
                      if re.match(r"^\s*models:", l)]
             self.assertEqual(len(lines), 1,
                              "%s must keep exactly one models: line" % rel)
-            self.assertIn(FIVE_ID_LINE, lines[0],
-                          "%s models: line must list all five ids on one"
+            self.assertIn(SIX_ID_LINE, lines[0],
+                          "%s models: line must list all six ids on one"
                           " flat line" % rel)
             self.assertRegex(lines[0], r"claude-sonnet-5\.5[\"']?\s*$",
-                             "%s models: line must end at the fifth id"
+                             "%s models: line must end at the sixth id"
                              " (stay flat)" % rel)
 
     def test_brainstorming_description_ceiling_and_when_clause(self):
@@ -172,6 +172,36 @@ class TestTierWordingSweep(unittest.TestCase):
             self.assertIn("session model", content,
                           "%s must address the session model" % rel)
 
+    def test_brainstorming_lane_agents_do_not_call_themselves_flash(self):
+        for rel in ("z-brainstorming/agents/z-drafter.md",
+                    "z-brainstorming/agents/z-design-breaker.md"):
+            content = read(rel)
+            self.assertNotIn("Flash lane", content,
+                             "%s still calls itself a flash lane" % rel)
+            self.assertIn("on the session model", content,
+                          "%s must say it runs on the session model" % rel)
+
+    def test_every_skill_doc_names_glm_5_4_where_it_lists_the_other_models(self):
+        docs = [os.path.join(GLM_ROOT, "AGENTS.md")]
+        for folder in ("z-brainstorming", "z-dev-team", "z-doc-generator",
+                       "z-find-skills", "z-git-diff-summary", "z-idea-to-spec",
+                       "z-requirements-code-audit", "z-systematic-debugging",
+                       "z-writing-plans"):
+            for dirpath, dirnames, filenames in os.walk(os.path.join(GLM_ROOT, folder)):
+                dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+                docs += [os.path.join(dirpath, name) for name in filenames
+                         if name.endswith(".md") and name != "CHANGELOG.md"]
+        for path in docs:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            relative = os.path.relpath(path, GLM_ROOT)
+            if "DeepSeek V4 Pro" in text and "Claude Sonnet 5.5" in text:
+                self.assertTrue("GLM 5.4" in text or "glm-5.4" in text,
+                                "%s lists the other models but not GLM 5.4" % relative)
+            for stale in ("five session models", "Five display names",
+                          "four session models"):
+                self.assertNotIn(stale, text, "%s still says %r" % (relative, stale))
+
     def test_changelog_records_sweep_skipping_folders_without_one(self):
         recorded = []
         for folder in SWEPT_FOLDERS:
@@ -200,9 +230,10 @@ class TestFiveModelLanePinning(unittest.TestCase):
     its rows inside the Workers list item, the debugging README broadens its
     tool-call claim, and the writing-plans CHANGELOG claims what R6 says."""
 
-    PRO_PIN_CLAUSE = "the pin names a pro id (glm-5.3, deepseek-v4-pro)"
-    KEEPS_OWN_MODEL_CLAUSE = "a glm-5.3, deepseek-v4-pro or Claude Sonnet 5.5 session keeps its own model"
-    DEVTEAM_LANE_SENTENCE = "The lane model is the session model - GLM-5.3-Flash or DeepSeek V4.1 Flash by default; a GLM 5.3, DeepSeek V4 Pro or Claude Sonnet 5.5 session runs its own model under the same effort rules."
+    PRO_PIN_CLAUSE = "the pin names a pro id (glm-5.3, glm-5.4, deepseek-v4-pro)"
+    PRO_PIN_CLAUSE_DELIVERED_2026_11_19 = "the pin names a pro id (glm-5.3, deepseek-v4-pro)"
+    KEEPS_OWN_MODEL_CLAUSE = "a glm-5.3, glm-5.4, deepseek-v4-pro or Claude Sonnet 5.5 session keeps its own model"
+    DEVTEAM_LANE_SENTENCE = "The lane model is the session model - GLM-5.3-Flash or DeepSeek V4.1 Flash by default; a GLM 5.3, GLM 5.4, DeepSeek V4 Pro or Claude Sonnet 5.5 session runs its own model under the same effort rules."
 
     def _workers_table_rows(self, lines):
         workers = [i for i, l in enumerate(lines)
@@ -275,7 +306,7 @@ class TestFiveModelLanePinning(unittest.TestCase):
         entry = flat(dated[0])
         self.assertIn("R6", entry,
                       "2026-11-19 entry no longer describes the R6 change")
-        self.assertIn(self.PRO_PIN_CLAUSE, entry,
+        self.assertIn(self.PRO_PIN_CLAUSE_DELIVERED_2026_11_19, entry,
                       "2026-11-19 entry still claims a flash-only R6 lane"
                       " outcome instead of the delivered pro-pin wording")
 

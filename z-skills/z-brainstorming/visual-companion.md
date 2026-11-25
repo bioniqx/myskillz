@@ -69,9 +69,10 @@ headless/remote setups, never a bare host:port. If you didn't capture
 stdout, read `$STATE_DIR/server-info`. Remind the user to gitignore
 `.brainstorm/` if it isn't already.
 
-Reading screenshots back: glm-5.3-flash reads images natively, so a
-flash-tier lane can look at a screenshot of the rendered page if you need
-a visual check; glm-5.3 is text-only — do not send it images. On any other
+Reading screenshots back: glm-5.3-flash reads images natively, and glm-5.4
+takes image input too (vendor model page, 2026-11-25), so a flash-tier or
+GLM 5.4 lane can look at a screenshot of the rendered page if you need a
+visual check; glm-5.3 is text-only — do not send it images. On any other
 session model, confirm it takes images before sending one; the lane always
 follows the session model.
 

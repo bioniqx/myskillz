@@ -1,6 +1,6 @@
 """Session-model tier vocabulary pinned across the four tuning docs.
 
-Authoritative vocabulary: five session models (display names exactly
+Authoritative vocabulary: six session models (display names exactly
 GLM-5.3-Flash, DeepSeek V4.1 Flash, GLM 5.3, DeepSeek V4 Pro,
 Claude Sonnet 5.5), three tier words (flash tier, pro tier, Claude tier),
 no numeric speed/price table rows for the new tiers, and the
@@ -22,12 +22,13 @@ SESSION_MODELS = [
     "GLM-5.3-Flash",
     "DeepSeek V4.1 Flash",
     "GLM 5.3",
+    "GLM 5.4",
     "DeepSeek V4 Pro",
     "Claude Sonnet 5.5",
 ]
 TIER_WORDS = ["flash tier", "pro tier", "Claude tier"]
 # Models that had no table row in any tuning doc before this slice.
-NEW_TIER_MODELS = ["DeepSeek V4 Pro", "Claude Sonnet 5.5"]
+NEW_TIER_MODELS = ["GLM 5.4", "DeepSeek V4 Pro", "Claude Sonnet 5.5"]
 PINNED_PRO_RULE = "pro tier: only when the session is pinned to it"
 # "GLM 5.3" counts only as its own display name, never inside a Flash name.
 STANDALONE_GLM_53 = re.compile(r"GLM 5\.3(?!-Flash)")
@@ -63,7 +64,7 @@ def _session_models_block(text):
 
 
 class SessionModelNameTests(unittest.TestCase):
-    """Criterion: five model names in each of the four docs."""
+    """Criterion: six model names in each of the four docs."""
 
     def test_all_four_docs_name_the_five_session_models(self):
         for rel in DOCS:
@@ -102,6 +103,17 @@ class SessionModelsBlockTests(unittest.TestCase):
                 self.assertNotIn("$", block)
                 self.assertNotIn("tok/s", block)
 
+
+class Glm54RowTests(unittest.TestCase):
+    """Criterion: the GLM 5.4 row sits in every table and its facts are dated."""
+
+    def test_every_doc_carries_the_glm_5_4_row_and_a_dated_note(self):
+        for rel in DOCS:
+            with self.subTest(doc=rel):
+                text = _read(rel)
+                self.assertIn("| GLM 5.4 | pro tier |", text)
+                self.assertIn("glm-5.4", text)
+                self.assertIn("2026-11-25", text)
 
 class NewTierNumericRowTests(unittest.TestCase):
     """Criterion: no numeric table rows for the new tiers."""

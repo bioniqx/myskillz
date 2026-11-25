@@ -1,10 +1,10 @@
-# GLM-5.3 / GLM-5.3-Flash tuning — why this skill is shaped the way it is
+# Session-model tuning — why this skill is shaped the way it is
 
 Read this when something is slow, when `scan` falls back to the agent lane, or when you are porting the skill to another harness.
 
 ## Session models
 
-Five display names cover the three tiers a session can run on. The
+Six display names cover the three tiers a session can run on. The
 flash tier carries every lane and the main thread, the pro tier runs
 only when the session is pinned to it, and the Claude tier is the
 harness default when no GLM model is configured.
@@ -14,10 +14,16 @@ harness default when no GLM model is configured.
 | GLM-5.3-Flash | flash tier |
 | DeepSeek V4.1 Flash | flash tier |
 | GLM 5.3 | pro tier |
+| GLM 5.4 | pro tier |
 | DeepSeek V4 Pro | pro tier |
 | Claude Sonnet 5.5 | Claude tier |
 
 No speed or price numbers are pinned for these tiers.
+
+GLM 5.4 (api id glm-5.4), from the vendor model page read on
+2026-11-25: 1M context, 128K max output, thinking mode, tool calling,
+JSON output, image and video input; the general Model API was still
+pending at that date. Nothing else is claimed for it here.
 
 ## Model facts this design depends on
 

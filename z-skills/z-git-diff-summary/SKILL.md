@@ -4,7 +4,7 @@ description: Use when the user wants to understand or summarize what the current
 argument-hint: "[base-branch|tag|sha]"
 allowed-tools: Read Bash(bash *gather.sh*) Bash(python3 *handoff.py*) Bash(git diff *) Bash(git log *) Bash(git show *)
 metadata:
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
 ---
 

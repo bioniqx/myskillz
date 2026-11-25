@@ -2,7 +2,7 @@
 name: z-idea-to-spec
 description: Use this skill WHENEVER the user describes a product or software idea, says "I have an idea", asks to write a PRD, spec, product doc or build plan, or asks whether an idea is good, viable or profitable. Trigger the same way when they want market or competitor analysis for an app, or want to plan a software business — even if they never say "document" or "spec". Turns a raw software idea (app, SaaS, web tool, AI agent, bot, extension, marketplace, game) into a complete, build-ready markdown spec whose purpose is to make money. Researches the latest market, competitor, pricing, tech and legal data on the web with cited sources; interviews the user in rounds to deepen the idea; gives a blunt, evidence-based verdict on whether the idea can earn money and how to make it succeed; then writes a PRD/technical spec detailed enough for any AI coding agent or developer to build without guessing.
 metadata:
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
 ---
 

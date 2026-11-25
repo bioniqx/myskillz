@@ -1,3 +1,14 @@
+# 10.12 (from 10.11) - 2026-11-25: six session models in the wording
+
+The model layer names six session models: GLM 5.4 (id glm-5.4, pro tier)
+joins the five of the previous sweep. The tuning table and the metadata
+models line list six ids. The tuning doc no longer says model and effort
+live in the agent frontmatter: the session supplies the model and each
+agent file carries only a thoughtLevel line. It counts eleven installed
+skills. The drafter and design-breaker agents no longer call themselves
+flash lanes. The visual companion lets a GLM 5.4 lane read a screenshot
+(vendor model page, 2026-11-25). No lane is promoted.
+
 # 10.11 (from 10.10) — 2026-11-19: five session models in the wording
 
 The 2026-11-19 model layer names five session models. The description drops

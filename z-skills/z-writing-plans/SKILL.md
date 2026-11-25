@@ -3,7 +3,7 @@ name: z-writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code. Produces a portable TDD checkbox implementation plan in three tool calls - contracts locked once, task bodies fanned out to up to 8 concurrent writers by the script itself, verified by a deterministic linter.
 argument-hint: "[spec-path] [--thorough]"
 metadata:
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
 ---
 
@@ -200,7 +200,7 @@ approach. The plan file stays portable (R8).
 5. Do not switch model or effort mid-skill; each switch re-reads the whole
    conversation uncached. The lane follows the session model's flash tier through
    `~/.zcode/z-flash`: glm-5.3-flash or deepseek-flash (`GLM_FLASH` overrides one
-   process), or the pin names a pro id (glm-5.3, deepseek-v4-pro) and the lane runs
+   process), or the pin names a pro id (glm-5.3, glm-5.4, deepseek-v4-pro) and the lane runs
    that model. Never promote a lane to a bigger session model, never effort low.
 6. Independent subsystems get one plan each, and they can be built concurrently.
 

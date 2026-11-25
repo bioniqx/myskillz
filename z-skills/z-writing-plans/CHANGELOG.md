@@ -1,5 +1,7 @@
 # z-writing-plans v9 (GLM edition) - what changed from v8
 
+**Six session models in R6 (2026-11-25):** R6 names the third pro id, glm-5.4, next to glm-5.3 and deepseek-v4-pro; the metadata models line and the tuning table list six ids. The lane still follows the session model; no agent file names a model.
+
 **Five session models in R6 (2026-11-19):** the R6 speed rule stops listing only the two flash models and drops the denylist that named the pro models as forbidden switches — the lane now follows the session model's flash tier through `~/.zcode/z-flash` (glm-5.3-flash or deepseek-flash), or the pin names a pro id (glm-5.3, deepseek-v4-pro) and the lane runs that model; promotion to a bigger session model stays out. The lane's model ids and thoughtLevel are unchanged.
 
 **FAST check folds the handoff (2026-11-17):** `plan_tool.py check` prints the `HANDOFF z-dev-team` block itself when the plan passes and `.brainstorm/drafts/chain.json` says mode fast plus continue true, naming `devteam start` directly (init reads the fast chain when the pace file is absent). The separate `handoff.py next --event plan-ready` call is gone from the FAST path. Model ids and thoughtLevel are unchanged.

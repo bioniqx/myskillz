@@ -1,6 +1,6 @@
 ---
 name: "z-design-breaker"
-description: "Flash lane for z-brainstorming: attack one approach. Returns a counterexample or NO-BREAK. Does not pick."
+description: "Lane for z-brainstorming, on the session model: attack one approach. Returns a counterexample or NO-BREAK. Does not pick."
 thoughtLevel: max
 color: blue
 maxTurns: 4

@@ -6,13 +6,13 @@ reference for this folder.
 
 ## Target models and harnesses
 
-These skills target four session models - GLM-5.3-Flash, DeepSeek-V4.1-Flash (model id
-`deepseek-flash`), GLM-5.3 and DeepSeek-V4-Pro - and two harnesses: ZCode and DeepSeek Harness
+These skills target six session models - GLM-5.3-Flash, DeepSeek-V4.1-Flash (model id
+`deepseek-flash`), GLM-5.3, GLM-5.4, DeepSeek-V4-Pro and Claude-Sonnet-5.5 - and two harnesses: ZCode and DeepSeek Harness
 (dsh). Declare them in each SKILL.md frontmatter (`metadata.models`, `metadata.harness`). The
 provider route is picked at runtime by `_shared/flash_pin.py`: pin word in `~/.zcode/z-flash`
-(`glm` or `deepseek`; env `GLM_FLASH` wins; `glm-5.3` / `deepseek-v4-pro` pin the pro lane). Keys:
+(`glm` or `deepseek`; env `GLM_FLASH` wins; `glm-5.3` / `glm-5.4` / `deepseek-v4-pro` pin the pro lane). Keys:
 GLM via `ZAI_API_KEY` (or the other `KEY_ENV` names in `zai_client.py`), DeepSeek via
-`DEEPSEEK_API_KEY` / `DEEPSEEK_KEY`. Every change must keep all four models and both harnesses
+`DEEPSEEK_API_KEY` / `DEEPSEEK_KEY`. Every change must keep all six models and both harnesses
 working - never hardcode one provider or one harness.
 
 ## Layout

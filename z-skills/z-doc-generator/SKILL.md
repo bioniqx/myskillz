@@ -10,7 +10,7 @@ description: >-
   project documentation", or "the docs are out of date". Trigger for any request
   to produce Markdown docs derived from source code.
 metadata:
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
 ---
 

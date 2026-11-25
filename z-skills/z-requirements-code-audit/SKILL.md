@@ -5,14 +5,14 @@ description: >-
   SRS, user stories or requirements list — even when the user does not say "audit". Audit whether a codebase
   implements a requirements/spec document and produce a traceability report plus a prioritized fix plan. The
   requirements file is the only source of truth (no git history, no README/docs). A bundled script does the
-  retrieval and fans out up to 8 parallel GLM requests, then an adversarial second pass, then scripted
+  retrieval and fans out up to 8 parallel API requests, then an adversarial second pass, then scripted
   merging and reporting. Trigger phrases: "does the code match the requirements", "find gaps between spec
   and code", "requirement traceability", "conformance/compliance check", "what is missing vs the spec and
   how do I fix it", "compare my doc to my code", or Vietnamese requests like "kiểm tra code có đúng tài liệu
   yêu cầu không", "đối chiếu spec với code", "code còn thiếu gì so với yêu cầu".
 metadata:
   version: 9.0
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
   parallelism: 8 threads inside scripts/audit.py
 ---

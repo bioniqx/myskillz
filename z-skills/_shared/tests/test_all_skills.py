@@ -177,7 +177,7 @@ class TestSkillMdHygiene(unittest.TestCase):
                                   "%s description is %d chars, max 1024" % (skill_md, len(desc)))
 
     def test_metadata_declares_models_and_harness(self):
-        """AGENTS.md: every non-video skill declares metadata.models (all five
+        """AGENTS.md: every non-video skill declares metadata.models (all six
         session ids on one flat line) and metadata.harness (both harnesses)."""
         for skill in ALL_SKILLS + ["z-find-skills"]:
             skill_md = os.path.join(GLM_ROOT, skill, "SKILL.md")
@@ -191,8 +191,8 @@ class TestSkillMdHygiene(unittest.TestCase):
             self.assertEqual(len(models), 1,
                              "%s must keep exactly one metadata models line" % skill_md)
             self.assertIn(
-                "glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5",
-                models[0], "%s models line must list all five ids flat" % skill_md)
+                "glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5",
+                models[0], "%s models line must list all six ids flat" % skill_md)
 
             harness = [l for l in fm.splitlines() if re.match(r"^\s*harness:", l)]
             self.assertEqual(len(harness), 1,

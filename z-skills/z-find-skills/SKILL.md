@@ -10,7 +10,7 @@ description: >-
   and reminds that a new ZCode session loads it. Do NOT use for MCP servers,
   plugins, or skills already loaded in this session.
 metadata:
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
 ---
 

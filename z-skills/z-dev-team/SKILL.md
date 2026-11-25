@@ -14,7 +14,7 @@ allowed-tools:
   - Bash(python3 *devteam.py *)
   - Bash(python3 *handoff.py*)
 metadata:
-  models: glm-5.3-flash | deepseek-flash | glm-5.3 | deepseek-v4-pro | claude-sonnet-5.5
+  models: glm-5.3-flash | deepseek-flash | glm-5.3 | glm-5.4 | deepseek-v4-pro | claude-sonnet-5.5
   harness: zcode | dsh
 ---
 
@@ -64,7 +64,7 @@ A HANDOFF block that names `devteam start` directly may skip the open prelude: i
   | `z-code-reviewer` | session model, effort high | full review, read-only |
   | `z-spot-reviewer` / `z-investigator` | session model, effort max / high | correctness-only review / research, root cause |
   | `z-team-leader` | session model, effort max | planning, plan adoption, verification; remembers the repo |
-The lane model is the session model - GLM-5.3-Flash or DeepSeek V4.1 Flash by default; a GLM 5.3, DeepSeek V4 Pro or Claude Sonnet 5.5 session runs its own model under the same effort rules.
+The lane model is the session model - GLM-5.3-Flash or DeepSeek V4.1 Flash by default; a GLM 5.3, GLM 5.4, DeepSeek V4 Pro or Claude Sonnet 5.5 session runs its own model under the same effort rules.
 
 - **Guards** — hooks enforce footprints, frozen tests, refactor invariants, no history rewriting and
   read-only roles, and pre-approve every pinned command. A lane never waits on a prompt; an unapproved
