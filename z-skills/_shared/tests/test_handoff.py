@@ -494,6 +494,7 @@ class SlowModeTests(unittest.TestCase):
         nxt = self.binding_next(out)
         self.assertTrue(nxt.startswith("NEXT:"), err or out)
         self.assertIn("PACE: slow", nxt)
+        self.assertIn("never an assumption", nxt)
         self.assertNotIn("read fast.md", nxt)
         stamp = os.path.join(root, ".claude", "dev-team", "mode")
         with open(stamp, encoding="utf-8") as fh:
@@ -615,9 +616,47 @@ class SlowModeTests(unittest.TestCase):
         self.assertIn("PACE: full", out)
         self.assertIn("route-first rule", self.binding_next(out))
         self.assertNotIn("PACE: slow", out)
+        self.assertNotIn("never an assumption", self.binding_next(out))
         stamp = os.path.join(root, ".claude", "dev-team", "mode")
         with open(stamp, encoding="utf-8") as fh:
             self.assertTrue(fh.readline().startswith("fast "))
+
+
+class BrainstormModeTests(unittest.TestCase):
+    """brainstorm_mode: mode.json wins, else the repo stamp, else an empty string."""
+
+    def chdir_repo(self, *stamps):
+        root = tempfile.mkdtemp(prefix="stamp-")
+        self.addCleanup(shutil.rmtree, root, True)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(root)
+        for rel, body in stamps:
+            path = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(path))
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(body)
+
+    def mode(self):
+        sys.path.insert(0, os.path.join(HERE, ".."))
+        import handoff
+        return handoff.brainstorm_mode()
+
+    def test_no_stamp_is_empty(self):
+        self.chdir_repo()
+        self.assertEqual(self.mode(), "")
+
+    def test_brainstorm_mode_reads_the_brainstorm_stamp_first(self):
+        self.chdir_repo((".brainstorm/drafts/mode.json", '{"mode": "fast"}\n'),
+                        (".claude/dev-team/mode", "slow 1\n"))
+        self.assertEqual(self.mode(), "fast")
+
+    def test_the_repo_stamp_is_read_when_mode_json_is_absent(self):
+        self.chdir_repo((".claude/dev-team/mode", "slow 1795679871\n"))
+        self.assertEqual(self.mode(), "slow")
+
+    def test_a_stored_normal_is_empty(self):
+        self.chdir_repo((".brainstorm/drafts/mode.json", '{"mode": "normal"}\n'))
+        self.assertEqual(self.mode(), "")
 
 
 def _note_files():

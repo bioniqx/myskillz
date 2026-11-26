@@ -807,6 +807,29 @@ def _sibling_scripts(scripts, skill):
         os.path.join(os.path.dirname(scripts), "..", skill, "scripts"))
 
 
+# --- SLOW human gate: ask, then wait ------------------------------------------
+# One sentence, printed at the end of every SLOW NEXT line the prelude returns.
+SLOW_ASK = ("SLOW asks: anything a tool result in this session or the user's own "
+            "words has not settled is a question for the user, never an assumption, "
+            "and there is no cap of four. Ask, then end the turn and wait for the "
+            "reply: no timer, no default, no pick.")
+
+
+def slow_next(text):
+    """A SLOW NEXT line ends with SLOW_ASK. FAST lines never pass through here."""
+    return "%s %s" % (text, SLOW_ASK)
+
+
+def brainstorm_mode():
+    """The brainstorming stamp: fast, slow, or empty.
+
+    mode.json wins over the repo stamp, the order the mode subcommand of
+    ask.py reads them in.
+    """
+    kind = _brainstorm_stamped() or read_mode_stamp()
+    return kind if kind in ("fast", "slow") else ""
+
+
 def _slow_fit_next(width, scripts, self_name):
     """The fitted-width SLOW row: the edit stays small, the oracle still runs."""
     decide = os.path.join(scripts, "decide.py")
@@ -1332,6 +1355,8 @@ def cmd_open(args):
         return 0
     print("=== PRELUDE ===")
     rc, nxt = _prelude(args, text)
+    if args.self in RING and read_mode_stamp() == "slow":
+        nxt = slow_next(nxt)
     print("PRELUDE-RC %d" % rc)
     print("OPEN: stay")
     print(nxt)
