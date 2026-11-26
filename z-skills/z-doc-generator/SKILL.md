@@ -38,7 +38,7 @@ EOF
 
 | # | Rule | Violation = bug |
 |---|------|-----------------|
-| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. When the prelude prints `PACE: slow`, follow that `NEXT`. | Launching an agent for one named doc |
+| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. When the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nothing is assumed: ask, then end the turn and wait for the reply. | Launching an agent for one named doc |
 | R1 | **Turn budget ≤ 4 without a Gate, ≤ 5 with one** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. `PACE: direct` ignores this table. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 8 Tasks go in ONE message. | Sending calls one at a time |
 | R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Writers start only after the set is known. Reviewers for api-reference, data-model, and configuration, plus one retry, stay within that wave of 8. | 9+ in flight at once, or 1-at-a-time |

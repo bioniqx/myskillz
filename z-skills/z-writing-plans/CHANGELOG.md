@@ -1,5 +1,7 @@
 # z-writing-plans v9 (GLM edition) - what changed from v8
 
+**SLOW asks and waits (2026-11-26):** the R7 pointer says that under SLOW nothing is assumed: the run asks, then ends the turn and waits for the reply. No command changes.
+
 **Audit fixes (2026-11-25):** `doctor` and `setup` name the key the pinned provider reads (`DEEPSEEK_API_KEY` under the deepseek pin) and `doctor` prints the model ids the pin selects; the tier rule says a pro pin runs its own id; a stale `fast.md` pointer and the pattern-file count are corrected; the tuning doc dates its numbers, names the key files it reads and the 100KB body limit; the reviewer agent and prompt agree on five questions and on the `Status: Approved` reply. The v9 baseline below keeps the flags it shipped with: today `setup` takes only `--apply` and installs the three agents into `~/.zcode/agents/`, and the client does not read `ANTHROPIC_BASE_URL`.
 
 **Six session models in R6 (2026-11-25):** R6 names the third pro id, glm-5.4, next to glm-5.3 and deepseek-v4-pro; the metadata models line and the tuning table list six ids. The lane still follows the session model; no agent file names a model.

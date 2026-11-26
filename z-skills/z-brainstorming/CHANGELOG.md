@@ -1,3 +1,14 @@
+# 10.14 (from 10.13) — 2026-11-26: SLOW asks and waits
+
+Under SLOW nothing is assumed: every SLOW `NEXT` line the prelude prints
+ends with one sentence that sends each unsettled point to the user and ends
+the turn until the reply, with no cap of four. `ask.py wait` has no deadline
+under SLOW and never picks; `check.py approve` refuses an AUTO block and
+`check.py send` has no four-question cap under a slow stamp. R6 is retitled
+"Ask, then wait", and R8, R11, the red flag and R13 no longer turn a question
+into an assumption. Two tests that read the real repository's mode stamp now
+state their own stamp. FAST is unchanged.
+
 # 10.13 (from 10.12) — 2026-11-25: audit fixes
 
 Read-only audit of this folder. The FAST spec text now names the eight

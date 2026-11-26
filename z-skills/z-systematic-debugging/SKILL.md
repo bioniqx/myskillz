@@ -56,7 +56,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
 ## R3. FAST lane — 2 rounds
 
-When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this lane routing.
+When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this lane routing. Under SLOW nothing is assumed: ask, then end the turn and wait for the reply.
 
 The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
 

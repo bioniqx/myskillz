@@ -120,7 +120,7 @@ Pick the first rule that matches:
 5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
 6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
-Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
+Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Under SLOW nothing is assumed: ask, then end the turn and wait for the reply. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
 
 ## When you write a plan
 
@@ -157,6 +157,7 @@ Default profile is `balanced`. `turbo` and `spike` only when the user asks for f
    Blocking = a dependency the plan must add, a public API/schema change, a money/auth/privacy
    surface, an irreversible step, or a pinned gate you cannot run — anything else is an assumption.
    Launch everything `start` printed except slices the open questions would change.
+   Under SLOW this step is a stop: ask every blocking question and every assumption the plan lists in one message, start no lane before the reply, and stop the run the same way when a lane reports a blocking question.
 
 ### Phase 2 — the event loop (until the DAG is exhausted)
 
