@@ -264,6 +264,30 @@ class ChainCommandTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertTrue(json.load(open(dest))["continue"])
 
+    def test_a_slow_stamp_writes_a_slow_chain(self):
+        home = tempfile.mkdtemp(prefix="chain-slow-")
+        cases = ((json.dumps({"mode": "slow"}), None), (None, "slow 1\n"))
+        for mode_file, stamp in cases:
+            with self.subTest(stamp=stamp):
+                mode = os.path.join(home, "mode.json")
+                if mode_file is not None:
+                    with open(mode, "w", encoding="utf-8") as fh:
+                        fh.write(mode_file + "\n")
+                repo = tempfile.mkdtemp(prefix="chain-repo-")
+                subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+                if stamp is not None:
+                    os.makedirs(os.path.join(repo, ".claude", "dev-team"))
+                    with open(os.path.join(repo, ".claude", "dev-team", "mode"), "w",
+                              encoding="utf-8") as fh:
+                        fh.write(stamp)
+                dest = os.path.join(home, "chain.json")
+                rc = subprocess.call(
+                    [sys.executable, os.path.join(SCRIPTS, "ask.py"), "chain",
+                     "--pick", "A", "--chain", dest, "--mode", mode],
+                    stdout=subprocess.DEVNULL, cwd=repo)
+                self.assertEqual(rc, 0)
+                self.assertEqual(json.load(open(dest))["mode"], "slow")
+
 
 if __name__ == "__main__":
     unittest.main()

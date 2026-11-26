@@ -7,7 +7,8 @@ under SLOW and never picks; `check.py approve` refuses an AUTO block and
 `check.py send` has no four-question cap under a slow stamp. R6 is retitled
 "Ask, then wait", and R8, R11, the red flag and R13 no longer turn a question
 into an assumption. Two tests that read the real repository's mode stamp now
-state their own stamp. FAST is unchanged.
+state their own stamp. `ask.py chain` records a SLOW run as mode slow; it used to
+write fast. FAST is unchanged.
 
 # 10.13 (from 10.12) — 2026-11-25: audit fixes
 

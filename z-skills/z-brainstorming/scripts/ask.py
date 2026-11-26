@@ -218,7 +218,7 @@ def cmd_wait(a):
 
 
 def cmd_chain(a):
-    kind = mode_of("", _read_mode(a.mode) or read_mode_stamp())
+    kind = _read_mode(a.mode) or read_mode_stamp()
     write_chain(a.chain, a.pick, "user", mode=kind if kind in ("fast", "slow") else None)
     print("CHAIN %s" % a.pick)
     print("NEXT: handoff.py next --self z-brainstorming --event architectural-approved")
