@@ -30,7 +30,7 @@ uneven detail are not issues.
    Unrequested features or over-engineering get cut. Independent
    subsystems get decomposed.
 5. **Evidence** — every load-bearing external claim has a dated source,
-   unverified items are labeled as assumptions.
+   unverified items are labeled and asked.
 
 Mechanical part: lens 1 (completeness) and the format half of lens 5
 (evidence: https URL and date on every line) are checked by

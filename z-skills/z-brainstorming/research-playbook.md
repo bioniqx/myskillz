@@ -115,8 +115,7 @@ Report UNVERIFIED rather than digging for sources that may not exist.
 Queries leave the machine. Use generic technical terms ("Next.js 15 app
 router middleware auth pattern"), never proprietary code, file contents,
 internal project or customer names, hostnames, keys, or data samples. If
-a question cannot be asked without them, make it an assumption or ask the
-user.
+a question cannot be asked without them, ask the user instead.
 
 ## 8. How evidence reaches the user
 
@@ -130,4 +129,4 @@ Evidence (checked YYYY-MM-DD)
 ```
 
 Evidence lines are short; trade-offs cite them by content. Unverified
-items appear as assumptions the user can veto.
+items appear as open questions for the user.

@@ -21,8 +21,8 @@ decisive lanes are still running, end the turn with one status line
 
 **Split.** The request is too open to design (unknown users, goal, or a
 constraint that eliminates whole approaches), or lanes exceed `lanes=` (default 8,
-hard max 8) and must run in waves. Send questions + assumptions right away while lanes
-keep running; the user thinks while machines work. Next message is the
+hard max 8) and must run in waves. Send the questions right away and end the
+turn: under SLOW no lane runs while the user thinks. Next message is the
 design. Budget: 3 human turns.
 
 Decomposition (multi-subsystem request → sub-projects, first one only) is
@@ -76,8 +76,8 @@ nuanced:
    items labeled; the version gap between the repo and the latest release.
    Every line must come from `check.py web` output marked OK or WEAK
    (SKILL.md R14); a WEAK line is labelled unverified.
-7. Assumptions — every ≥80%-likely answer you did not ask about, one line
-   each, phrased so one "yes" confirms all of them.
+7. Assumptions — none under SLOW; every open point is a question in the
+   message.
 8. Out of scope — one line naming what this design deliberately will not do,
    so the approval covers the exclusion too.
 
