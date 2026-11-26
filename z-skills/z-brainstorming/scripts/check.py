@@ -33,6 +33,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 import decide
+from handoff import brainstorm_mode
 
 STALE_DAYS = 548            # 18 months
 MAX_QUOTE_WORDS = 25
@@ -557,7 +558,7 @@ def check_send(a):
         visible, fences = visible_lines(text)
         body = "\n".join(visible)
         questions = URL_RE.sub(" ", re.sub(r"(?i)approve this design\?", " ", body)).count("?")
-        if questions > 4:
+        if questions > 4 and brainstorm_mode() != "slow":
             fails.append(f"FAIL questions - {questions} question marks (max 4); merge the rest into assumptions")
         design = re.search(r"(?i)approve this design\?", body) is not None
         if design:
@@ -620,6 +621,9 @@ def check_approve(a):
         print("RESULT approve no - empty reply")
         return 1
     if re.search(r"(?m)^auto$", folded) and re.search(r"(?m)^decision pick=\S+", folded):
+        if brainstorm_mode() == "slow":
+            print("RESULT approve no - SLOW does not pick for the user; wait for the reply")
+            return 1
         print("RESULT approve yes")
         return 0
     if REJECT_RE.search(folded):

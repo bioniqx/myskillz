@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -437,6 +438,53 @@ class SendTests(unittest.TestCase):
             {"id": "F-1", "status": "OK", "kind": "web",
              "loc": "https://docs.example.org/client", "text": "retries"}]))["facts"]}
         self.assertEqual(decide.score_option(option, ["must ship"], ok, [], []), 5)
+
+
+class StampGateTests(unittest.TestCase):
+    """Under a slow stamp the gate never picks for the user: SLOW asks and waits."""
+
+    AUTO = "AUTO\nDECISION pick=A auto=1\n"
+
+    def repo(self, mode):
+        """A temporary git repo whose brainstorming stamp is `mode`; None writes no stamp."""
+        root = tempfile.mkdtemp(prefix="bs_stamp_")
+        self.addCleanup(shutil.rmtree, root, True)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        if mode is not None:
+            os.makedirs(os.path.join(root, ".brainstorm", "drafts"))
+            with open(os.path.join(root, ".brainstorm", "drafts", "mode.json"), "w",
+                      encoding="utf-8") as fh:
+                fh.write(json.dumps({"mode": mode}) + "\n")
+        return root
+
+    def draft(self, count):
+        return "Path unchanged: Architectural\n\n" + " ".join(
+            "Q%d?" % number for number in range(1, count + 1)) + "\n"
+
+    def test_an_auto_block_is_refused_under_a_slow_stamp(self):
+        rc, out = run(["approve", "--asked", "design"], self.AUTO, cwd=self.repo("slow"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("SLOW does not pick for the user", out)
+
+    def test_an_auto_block_still_approves_under_a_fast_stamp(self):
+        rc, out = run(["approve", "--asked", "design"], self.AUTO, cwd=self.repo("fast"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT approve yes", out)
+
+    def test_an_auto_block_still_approves_with_no_stamp(self):
+        rc, out = run(["approve", "--asked", "design"], self.AUTO, cwd=self.repo(None))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT approve yes", out)
+
+    def test_send_takes_six_questions_under_a_slow_stamp(self):
+        rc, out = run(["send", "--root", "."], self.draft(6), cwd=self.repo("slow"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT send fail=0", out)
+
+    def test_send_still_fails_five_questions_with_no_stamp(self):
+        rc, out = run(["send", "--root", "."], self.draft(5), cwd=self.repo(None))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("FAIL questions", out)
 
 
 class ApproveTests(unittest.TestCase):
