@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.realpath(os.path.join(HERE, "..", "..", "z-brainstorming", "scripts"))
@@ -76,6 +77,16 @@ class WaitTests(unittest.TestCase):
             self.ledger, self.options, self.reply, self.cancel, self.chain, now=5, deadline=1)
         self.assertEqual(kind, "CANCEL")
 
+    def test_a_slow_wait_never_picks(self):
+        self.assertIsNone(ask.wait_deadline(900, "slow"))
+        self.assertEqual(ask.wait_deadline(900, "fast"), 900)
+        self.assertEqual(ask.wait_deadline(900, ""), 900)
+        kind = ask.resolve_once(
+            self.ledger, self.options, self.reply, self.cancel, self.chain,
+            now=10 ** 12, deadline=ask.wait_deadline(900, "slow"))
+        self.assertIsNone(kind)
+        self.assertFalse(os.path.exists(self.chain))
+
 
 class ApproveAutoTests(unittest.TestCase):
     def test_the_auto_block_approves(self):
@@ -83,7 +94,18 @@ class ApproveAutoTests(unittest.TestCase):
         old = sys.stdin
         sys.stdin = _In("AUTO\nDECISION pick=A auto=1\n")
         try:
-            self.assertEqual(check.check_approve(ns), 0)
+            with mock.patch.object(check, "brainstorm_mode", return_value=""):
+                self.assertEqual(check.check_approve(ns), 0)
+        finally:
+            sys.stdin = old
+
+    def test_the_auto_block_is_refused_under_a_slow_stamp(self):
+        ns = type("N", (), {"asked": "design"})()
+        old = sys.stdin
+        sys.stdin = _In("AUTO\nDECISION pick=A auto=1\n")
+        try:
+            with mock.patch.object(check, "brainstorm_mode", return_value="slow"):
+                self.assertEqual(check.check_approve(ns), 1)
         finally:
             sys.stdin = old
 
@@ -134,12 +156,13 @@ class ModeTests(unittest.TestCase):
         sys.stdin = _In("build an interactive dashboard")
         buf = io.StringIO()
         old_out = sys.stdout
-        sys.stdout = buf
-        try:
-            rc = ask.cmd_mode(ns)
-        finally:
-            sys.stdin = old
-            sys.stdout = old_out
+        with mock.patch.object(ask, "read_mode_stamp", return_value=""):
+            sys.stdout = buf
+            try:
+                rc = ask.cmd_mode(ns)
+            finally:
+                sys.stdin = old
+                sys.stdout = old_out
         self.assertEqual(rc, 0)
         self.assertEqual(json.load(open(dest))["mode"], "fast")
         printed = buf.getvalue()

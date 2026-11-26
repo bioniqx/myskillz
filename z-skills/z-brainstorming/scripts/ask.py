@@ -4,6 +4,7 @@
 `mode` classifies FAST vs SLOW through handoff.mode_of and never asks: a
 request that names neither mode is FAST. `fast` writes chain.json with mode
 fast and picks the scored leader even when decide would ask or stop. The
+Under SLOW the wait has no deadline and never picks. Under FAST the
 15-minute wait is unchanged: a stop or an unattacked leader is not a pick
 there. The chain file tells z-writing-plans to hand the plan to
 z-dev-team without another question.
@@ -15,7 +16,7 @@ import time
 from pathlib import Path
 
 import decide
-from handoff import mode_of, read_mode_stamp
+from handoff import brainstorm_mode, mode_of, read_mode_stamp
 
 DEFAULT_TIMEOUT = 900
 
@@ -161,6 +162,11 @@ def _reply_text(path):
     return p.read_text(encoding="utf-8").strip()
 
 
+def wait_deadline(timeout, mode):
+    """None under SLOW: the wait never ends on its own."""
+    return None if mode == "slow" else timeout
+
+
 def resolve_once(ledger, options, reply, cancel, chain, now, deadline):
     """One observation. Returns (kind, text) or None while the wait should continue."""
     if Path(cancel).is_file():
@@ -168,7 +174,7 @@ def resolve_once(ledger, options, reply, cancel, chain, now, deadline):
     text = _reply_text(reply)
     if text:
         return "REPLY", text
-    if now < deadline:
+    if deadline is None or now < deadline:
         return None
     options, atoms, led, deps, reports = _load(ledger, options)
     line = auto_decision(options, atoms, led, deps, reports)
@@ -179,7 +185,7 @@ def resolve_once(ledger, options, reply, cancel, chain, now, deadline):
 
 
 def wait_loop(ledger, options, reply, cancel, chain, timeout, sleep=time.sleep, clock=time.monotonic):
-    deadline = clock() + timeout
+    deadline = None if timeout is None else clock() + timeout
     while True:
         got = resolve_once(ledger, options, reply, cancel, chain, clock(), deadline)
         if got is not None:
@@ -188,7 +194,8 @@ def wait_loop(ledger, options, reply, cancel, chain, timeout, sleep=time.sleep, 
 
 
 def cmd_wait(a):
-    kind, text = wait_loop(a.ledger, a.options, a.reply, a.cancel, a.chain, a.timeout)
+    timeout = wait_deadline(a.timeout, brainstorm_mode())
+    kind, text = wait_loop(a.ledger, a.options, a.reply, a.cancel, a.chain, timeout)
     if kind == "CANCEL":
         print("CANCEL")
         print("NEXT: the user replied in chat. Pass that reply to check.py approve. Ignore a later AUTO.")
