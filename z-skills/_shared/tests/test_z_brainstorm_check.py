@@ -673,5 +673,59 @@ class IntakeAndCloseTests(unittest.TestCase):
         self.assertIn("RESULT close fail=1", out)
 
 
+SKILL_MD = os.path.join(os.path.dirname(CHECK), "..", "SKILL.md")
+ARCH_MD = os.path.join(os.path.dirname(CHECK), "..", "architectural.md")
+
+
+class SlowProseTests(unittest.TestCase):
+    """The SLOW prose of z-brainstorming agrees with what the engine prints (review, 2026-11-27)."""
+
+    @staticmethod
+    def flat(path):
+        with open(path, encoding="utf-8") as fh:
+            return " ".join(fh.read().split())
+
+    def test_no_prose_keys_a_wait_on_the_pace_line_fast_prints(self):
+        # The FAST prelude prints `PACE: full`; a wait keyed on that label would
+        # stall a FAST run, and no pace starts the wait any more.
+        for path in (SKILL_MD, ARCH_MD):
+            text = self.flat(path)
+            self.assertNotIn("non-SLOW `PACE: full` pace", text, path)
+            self.assertNotIn("ask.py wait", text, path)
+
+    def test_the_slow_approval_names_the_fitted_widths(self):
+        # A Width direct or Width short NEXT line orders the edit and starts no
+        # chain, so it is the approval there; hard rule 1 must not forbid it.
+        text = self.flat(SKILL_MD)
+        for anchor in ("Under SLOW the approval is", "Under SLOW `ask.py chain` prints the approval"):
+            self.assertIn(anchor, text)
+            self.assertIn("Width direct", text[text.index(anchor):text.index(anchor) + 400])
+
+    def test_the_design_only_stop_comes_before_the_chain_order(self):
+        order = "handoff.py next --self z-brainstorming --event architectural-approved"
+        for path in (SKILL_MD, ARCH_MD, os.path.join(os.path.dirname(ARCH_MD),
+                                                     "spec-document-reviewer-prompt.md")):
+            text = self.flat(path)
+            self.assertIn("design-only request", text, path)
+            self.assertIn("slow-done", text, path)
+            if order in text:
+                self.assertLess(text.index("design-only request stops after its answer or its spec"),
+                                text.index(order), path)
+
+    def test_send_with_pick_always_names_the_ledger(self):
+        # Under a slow stamp a draft sent with --pick is a design message and
+        # fails without --ledger; the prose must print the full form.
+        for path in (SKILL_MD, ARCH_MD):
+            self.assertNotIn("send --pick", self.flat(path), path)
+
+    def test_the_description_gives_slow_no_approval_gate(self):
+        with open(SKILL_MD, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        description = next(line for line in lines if line.startswith("description:"))
+        self.assertIn("unless FAST or SLOW is on", description)
+        self.assertLessEqual(len(description[len('description: "'):-1]), 1024)
+        self.assertIn("`MODE fast` and `MODE slow` do not ask", " ".join(lines))
+
+
 if __name__ == "__main__":
     unittest.main()

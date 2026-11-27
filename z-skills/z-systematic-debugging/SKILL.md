@@ -56,7 +56,7 @@ A null / undefined / None / nil / KeyError / index-out-of-range error is never F
 
 ## R3. FAST lane — 2 rounds
 
-When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this lane routing. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
+When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this lane routing. Under SLOW nobody is asked: quality first, the best approach is chosen and carried out without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
 
 The `== NEXT ==` block is the whole round. Do not open a reference and do not scan.
 

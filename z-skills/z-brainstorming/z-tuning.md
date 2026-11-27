@@ -75,7 +75,7 @@ thoughtLevel line of each agent file, and no dispatch names a model
 | Tool-call parse errors on a self-hosted server | Known GLM tool-parser bugs on some vLLM/SGLang builds | Update the serving stack; do not work around it in the prompt |
 | Fabricated `path:line`, URL or quote in lane output | Flash fills gaps with plausible text and shares the main model's blind spots | Lane rules require copied paths and verbatim snippets; `check.py cites` / `check.py web` (R14) verify before citing |
 | A lane hit its turn limit and returned nothing | The report was written after the last allowed turn | `maxTurns` has slack over the tool-call cap, and the lane rule says "write the report now" after 3-4 turns |
-| A casual reply was treated as approval | A "sounds good" to a side question or a lane result read as a yes | Hard rule 1 (only a human reply to the design message counts) plus the "Approve this design?" item in every ask |
+| A casual reply was treated as approval | A "sounds good" to a side question or a lane result read as a yes | Hard rule 1 (only a human reply to the design message, or the engine's own AUTO block, counts) plus the "Approve this design?" item in every ask |
 | Lane output cited without a check | Lane text looks authoritative once merged | R14: run `check.py` in round 2, before anything is cited |
 | The design message cites a path the lane never proved | The model rewrites citations after the check | `check.py send` re-verifies every path:line in the draft |
 | "sounds good" started implementation | Soft agreement read as a yes | `check.py approve`; only an approval token at the start of the reply passes |

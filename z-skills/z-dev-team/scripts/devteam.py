@@ -4000,11 +4000,12 @@ def cmd_mutant(a):
         out("NEXT: strengthen the tests so deleting that assertion fails them "
             "(never delete the assertion), re-run this command, then commit.")
         raise SystemExit(1)
+    who = "in the summary" if mode_stamp(root) == "slow" else "to the user"
     if res["verdict"] == "ok":
-        out("NEXT: the suite can fail. Name MUTANT ok in the summary and finish the task.")
+        out("NEXT: the suite can fail. Name MUTANT ok %s and finish the task." % who)
     else:
         out("NEXT: no assertion-shaped line (or the command could not run). "
-            "Name MUTANT skip in the summary; it is not a blocker.")
+            "Name MUTANT skip %s; it is not a blocker." % who)
     return 0
 
 
@@ -4417,6 +4418,12 @@ def cmd_finish(a):
             "--message-file <msg> --gitlab-file <note> -- <paths this task changed>. "
             "Both files are English. Show COMMIT and GITLAB in the chat. "
             "Do not push. A path already committed is not a second commit.")
+    elif mode_stamp(root) == "slow":
+        out("SLOW-DONE: after the review loop, run handoff.py slow-done "
+            "--summary-file <md> --check <the test command> --message-file <msg> "
+            "--gitlab-file <note> -- <paths this task changed>. Both files are English. "
+            "Show SUMMARY, COMMIT and GITLAB in the chat. Do not push. Code this engine "
+            "already committed is not committed twice; the summary is.")
 
 
 def write_summary(root, st):

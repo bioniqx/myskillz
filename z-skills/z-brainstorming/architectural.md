@@ -4,8 +4,11 @@ Read in round 1, alongside the fan-out. Covers everything from the first
 lane results to `z-writing-plans`. SKILL.md's R0-R12 still apply; this file
 adds the shape of the messages. If `ask.py mode` printed `MODE fast`,
 `fast.md` replaces the question in §2 and the review gate in §4. Do not ask.
-Under SLOW, SKILL.md R6 replaces both the same way: no question is sent,
-and after `check.py spec` comes `handoff.py next --self z-brainstorming --event architectural-approved`.
+Under SLOW, SKILL.md R6 replaces both the same way: no question is sent;
+a Spike or a design-only request stops after its answer or its spec and
+ends with `handoff.py slow-done`; only a request that asks to build runs
+`handoff.py next --self z-brainstorming --event architectural-approved`
+after `check.py spec`.
 
 ## Contents
 
@@ -24,9 +27,9 @@ message is the design. Budget: 2 human turns, none under SLOW.
 
 **Split.** The request is too open to design (unknown users, goal, or a
 constraint that eliminates whole approaches), or lanes exceed `lanes=` (default 8,
-hard max 8) and must run in waves. On the non-SLOW `PACE: full` pace, send
-the questions right away and end the turn; next message is the design.
-Under SLOW no question is sent: the open points go to lanes, the lanes
+hard max 8) and must run in waves. On a pace that is neither FAST nor SLOW,
+send the questions right away and end the turn; next message is the
+design. Under SLOW no question is sent: the open points go to lanes, the lanes
 keep running, and the next message is the design. Budget: 3 human turns,
 none under SLOW.
 
@@ -90,13 +93,14 @@ Keep sections short: small single-purpose units, well-defined interfaces,
 independently testable; follow existing repo patterns; targeted
 improvements only where an existing problem affects this work.
 
-**Close with the R6 ask** on the non-SLOW `PACE: full` pace, including
-the exact line `Approve this design?` so one reply both answers and
-approves. `check.py send` treats that line as the design message and
+**Close with the R6 ask** on a pace that is neither FAST nor SLOW,
+including the exact line `Approve this design?` so one reply both answers
+and approves. `check.py send` treats that line as the design message and
 requires Out of scope and Assumptions. Under SLOW close with the pick
 instead: a design note with no `Approve this design?` line and no
-question mark, sent through `check.py send --pick <the chained id>`, which
-still requires Out of scope and Assumptions.
+question mark, sent through `check.py send --ledger
+.brainstorm/drafts/ledger.json --pick <the chained id>`, which still
+requires Out of scope and Assumptions.
 
 ## 3. No extra lanes on the design turn
 
@@ -129,7 +133,7 @@ and targeted edits, in one message.
    file says not to commit self-initiated files; otherwise leave the spec
    untracked. Under SLOW do not commit by hand here: `handoff.py slow-done`
    commits at the end of the task (SKILL.md R13).
-4. On the non-SLOW `PACE: full` pace, end the turn with the review gate:
+4. On a pace that is neither FAST nor SLOW, end the turn with the review gate:
 
    > "Spec written and committed to `<path>`. Please review it and let me
    > know if you want to make any changes before we start writing out the
@@ -145,6 +149,10 @@ only, commit if committing, ask again. Proceed only on approval. Under
 SLOW there is no review gate: go straight to §5.
 
 ## 5. Hand-off
+
+Under SLOW only a request that asks to build comes here: a Spike or a
+design-only request stops after its answer or its spec and ends with
+`handoff.py slow-done` (SKILL.md R6).
 
 Invoke `z-writing-plans` (the name this port installs under). Pass the
 spec path as its input: the committed path

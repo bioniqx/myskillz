@@ -66,6 +66,9 @@ Engine layer:
 - `handoff.py slow-done --summary-file MD [--check CMD] [--message-file MSG --gitlab-file NOTE]
   [-- PATHS...]`: validates the summary, runs the check, files the summary, commits. It reuses
   the `fast-done` commit code through three defaulted parameters, so FAST output is unchanged.
+- `_shared/decide.py`: `atoms --check --ledger LEDGER` stores the frozen atoms. Nothing stored
+  them before, so `score`, `close` and `chain` credited every option with covering every atom;
+  the pick's atom term was inert. Without `--ledger` the command prints what it always printed.
 
 Prose layer: every SLOW-only sentence that says ask, wait for the reply, human approve stays or
 do not commit is rewritten in place: seven `SKILL.md` files, `z-brainstorming/architectural.md`,
@@ -74,14 +77,22 @@ do not commit is rewritten in place: seven `SKILL.md` files, `z-brainstorming/ar
 (`plan_tool.py`, `devteam.py`, `debug_tool.py`, `audit.py`) keep their oracles; only SLOW wording
 that hands a decision to the user changes.
 
+Three sentences carry what a second review found. Hard rule 1 of z-brainstorming scopes the SLOW
+approval: `ask.py chain` where the NEXT line starts the chain, and the `Width direct` or
+`Width short` NEXT line itself where it orders the edit. No prose keys a wait on `PACE: full`:
+the FAST prelude prints that pace line, and no pace starts `ask.py wait`. The design-only stop
+stands before every order to chain, in R6, R13, `architectural.md` and the reviewer prompt.
+
 ## Data flow
 
 `open` classifies the mode and writes the stamp, as today. Under SLOW every NEXT line ends with
 `SLOW_AUTO`. On z-brainstorming at full pace: atoms, fact lanes (code and web), three drafters
 and three breakers, `check.py close`, the extra breaker on the leader, `prove --cap 8`, then
 `ask.py chain` chains the engine's leader and prints the approval; the design note passes
-`check.py send`, the spec passes `check.py spec`, `handoff.py next` moves to z-writing-plans.
-The plan and the z-dev-team run proceed with their SLOW oracles and no question. The last skill
+`check.py send`, the spec passes `check.py spec`. A Spike or a design-only request stops after
+its answer or its spec; only a request that asks to build runs `handoff.py next` and moves to
+z-writing-plans. The plan and the z-dev-team run proceed with their SLOW oracles and no
+question. The last skill
 runs one reviewer pass on the whole change, fixes every BLOCKER and MAJOR, repeats until clean
 (cap 3), then calls `slow-done`. A read-only SLOW run (a summary, an audit report, a Spike)
 calls `slow-done` with no check and no notes: the summary is filed and left untracked.
@@ -92,7 +103,10 @@ name is never quoted and a folder covers every dirty file under it; when any of 
 dirty, check the two note files, require `--check` and run it with `sh -c` in the repo root
 (1800 seconds); move the summary into `.done-slow/` under a name built from the date, the time
 and a slug taken from its first heading; commit the dirty files with the summary through the
-`fast-done` code; print `SUMMARY`, `COMMIT` and `GITLAB`. It never pushes and never amends.
+`fast-done` code. A named path that is clean because the engine already committed it (a
+z-dev-team run merges its slices itself) gets the summary as its own commit and is printed
+under `ALREADY`. Then `SUMMARY`, `COMMIT` and `GITLAB` are printed. It never pushes and never
+amends.
 
 ## Error handling
 
@@ -104,6 +118,12 @@ and a slug taken from its first heading; commit the dirty files with the summary
   `.done-slow/` and nothing is committed.
 - A named path that is neither tracked nor on disk, or a missing note file while files
   changed: `FAIL` before anything is filed, so a re-run files no second copy of the summary.
+- The summary's own path is never a changed path, and a summary written over a tracked file
+  is refused: filing moves the file, which would delete a tracked one.
+- A secret path among the named ones: `FAIL secret` before anything is filed.
+- The named paths are read again after the check runs, so a path the check changed is judged
+  before anything is filed. Running `slow-done` again with the already filed summary keeps
+  its name: no second copy.
 - A name collision in `.done-slow`: the second file gets `-2`, the third `-3`.
 - `ask.py chain` on `ask=unattacked` or `DECISION stop`: exit 2, chain.json is not written,
   NEXT names the one repair. A human reply is never waited for under SLOW.

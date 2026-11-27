@@ -37,7 +37,7 @@ Checks whether the **code faithfully implements a requirements document**, repor
 
 ## R0 — The whole audit is four calls
 
-`PACE: short` (a short spec) is still these calls, minus the wandering: write the checklist from the brief, then one `run`. Do not dispatch a subagent unless the brief says `lane agent`. The second pass inside `run` stays. When the prelude prints `PACE: slow`, follow that `NEXT`; the short path is off and the four calls stay. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
+`PACE: short` (a short spec) is still these calls, minus the wandering: write the checklist from the brief, then one `run`. Do not dispatch a subagent unless the brief says `lane agent`. The second pass inside `run` stays. When the prelude prints `PACE: slow`, follow that `NEXT`; the short path is off and the four calls stay. Under SLOW nobody is asked: quality first, the best approach is chosen and carried out without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
 
 1. `A brief --spec <file>` — repo index, repo map, the spec verbatim, the checklist schema, lane and model report.
 2. You write `.audit/checklist.jsonl`. **This is the one step quality cannot delegate.**

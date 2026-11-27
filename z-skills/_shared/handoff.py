@@ -310,7 +310,10 @@ def opening_hits(text):
     feature = FEATURE_RE.search(folded)
     strong_debug = re.compile(
         r"\b(traceback|stack ?trace|stacktrace|failing tests?|tests? fails?|flaky|regression|bi loi)\b")
-    bug_denied = re.search(r"\bno\b.{0,24}\bbugs?\b", folded) and not strong_debug.search(folded)
+    # "no bug" in English and in Vietnamese ("khong co bug", "khong con bug") is a
+    # denial, not a report.
+    denied = re.search(r"\b(?:no|khong (?:co|con))\b.{0,24}\bbugs?\b", folded)
+    bug_denied = denied and not strong_debug.search(folded)
     hits = []
     for name, rx in ROUTE_RULES:
         if name in SUPPRESS_IF_FEATURE and feature:
@@ -817,8 +820,9 @@ def _sibling_scripts(scripts, skill):
 # --- SLOW contract: quality first, nobody is asked -----------------------------
 # One sentence, printed at the end of every SLOW NEXT line the prelude returns.
 SLOW_AUTO = ("SLOW decides: quality first, nobody is asked. Read the code, and research a "
-             "load-bearing fact on primary sources before trusting it. Pick the scored "
-             "leader and continue the chain without approval. After the build, review the "
+             "load-bearing fact on primary sources before trusting it. Weigh the "
+             "approaches, choose the best one and continue the chain without approval. "
+             "After the build, review the "
              "whole change, fix every finding, and repeat until a review is clean; a cap the "
              "engine reaches is finished on the main thread, not handed to the user. Lanes "
              "have no budget: dispatch every lane you will cite, in batches. Three stops "
@@ -883,7 +887,7 @@ def _slow_fit_next(width, scripts, self_name):
                 "prompt shows the contract and the diff, and decide.py break "
                 "re-runs its command. " % self_name)
     if self_name == "z-brainstorming":
-        body += "Do not start the chain. "
+        body += "Do not start the chain: this line is the SLOW approval. "
         reviewer = "handoff.py borrow --self z-brainstorming --agent z-spot-reviewer"
     else:
         reviewer = "one lane, briefed under .claude/dev-team/reviews/"
@@ -915,12 +919,14 @@ def _slow_brainstorm_next(pace, scripts):
             "--options .brainstorm/drafts/options.json: it chains the engine's "
             "leader and prints RESULT approve yes. ask=unattacked: run the "
             "missing breaker once. DECISION stop: rewrite the options once from "
-            "what survived, attack again, then chain. Write the design note "
-            "and run check.py send --ledger .brainstorm/drafts/ledger.json "
-            "--pick <the chained id> until it prints fail=0. Write the spec, run "
-            "check.py spec, then handoff.py next --self z-brainstorming "
-            "--event architectural-approved; that chain does not commit in "
-            "this step. Do not re-run open."
+            "what survived, attack again, then chain. A Spike or a design-only "
+            "request stops after its answer or its spec and takes no chain. "
+            "When the request asks to build, write the design note and run "
+            "check.py send --ledger .brainstorm/drafts/ledger.json --pick <the "
+            "chained id> until it prints fail=0, write the spec, run check.py "
+            "spec, then handoff.py next --self z-brainstorming --event "
+            "architectural-approved; that chain does not commit in this step. "
+            "Do not re-run open."
             % (decide, decide, decide, os.path.join(scripts, "ask.py"))
             ) + _slow_ship("For a Spike or a design-only request, once the spec or the "
                            "answer is written")
@@ -1276,20 +1282,11 @@ def _prelude(args, text):
                            "--agent z-spot-reviewer). %sDo not re-run open."
                            % (tool, _SLOW_REVIEW)) + _slow_ship(
                                "After that review is clean, and not before")
-            return 0, ("NEXT: PACE: slow. One probe call, python3 %s "
-                       "probe, with --cmd or --error-file. Two "
-                       "hypotheses, a control and a treatment, then "
-                       "close. Diagnose from the current code only; git "
-                       "history is not read. Flaky measures use "
-                       "stress.sh -n 200. close prints "
-                       "ROOT CAUSE only when its falsifier command was "
-                       "re-run and exited non-zero. Do not re-run open."
-                       % tool)
-            pace = pace_of(text)
-            print("PACE: %s" % pace)
-            return 0, ("NEXT: PACE %s. One probe call, python3 %s probe, "
-                       "with --cmd or --error-file. Do not re-run open."
-                       % (pace, tool))
+        pace = pace_of(text)
+        print("PACE: %s" % pace)
+        return 0, ("NEXT: PACE %s. One probe call, python3 %s probe, "
+                   "with --cmd or --error-file. Do not re-run open."
+                   % (pace, tool))
         if not os.path.isfile(tool):
             print("PRELUDE-SKIP debug_tool.py missing")
             return 1, FAIL_NEXT
@@ -1845,26 +1842,29 @@ def _summary_dest(root, text):
 
 
 def _dirty_named(root, raw_paths):
-    """(dirty paths the named paths cover, the first named path that is not usable, why).
+    """(dirty paths the named cover, named paths that are clean, an unusable one, why).
 
-    A named path covers itself and, as a folder, every dirty file under it.
-    `why` is "unsafe" for a path that leaves the repo, "missing" for one that
-    is neither tracked nor on disk.
+    A named path covers itself and, as a folder, every dirty file under it. A
+    named path with nothing dirty under it is clean when it is tracked or on
+    disk: code the engine already committed. `why` is "unsafe" for a path
+    that leaves the repo, "missing" for one that is neither tracked nor on disk.
     """
     dirty = _dirty_paths(root)
-    found = []
+    found, clean = [], []
     for raw in raw_paths:
         rel = _safe_rel(root, raw)
         if not rel:
-            return [], raw, "unsafe"
+            return [], [], raw, "unsafe"
         hits = [path for path in dirty
                 if path == rel or path.startswith(rel + "/")]
-        if not hits:
-            known = _git(["ls-files", "--error-unmatch", "--", rel], root)
-            if known.returncode != 0 and not os.path.exists(os.path.join(root, rel)):
-                return [], raw, "missing"
-        found.extend(hits)
-    return sorted(set(found)), None, ""
+        if hits:
+            found.extend(hits)
+            continue
+        known = _git(["ls-files", "--error-unmatch", "--", rel], root)
+        if known.returncode != 0 and not os.path.exists(os.path.join(root, rel)):
+            return [], [], raw, "missing"
+        clean.append(rel)
+    return sorted(set(found)), clean, None, ""
 
 
 def _note_problem(args):
@@ -1879,12 +1879,34 @@ def _note_problem(args):
     return err
 
 
+def _summary_rel(root, summary_file):
+    """The summary's path from the repo root, or '' when it sits outside the repo.
+
+    Both sides are real paths: git names the toplevel without a symlink, and
+    the caller's path may still carry one.
+    """
+    rel = os.path.relpath(os.path.realpath(summary_file),
+                          os.path.realpath(root)).replace(os.sep, "/")
+    return "" if rel == ".." or rel.startswith("../") else rel
+
+
+def _fail_path(bad, why):
+    """FAIL path or FAIL secret for slow-done, each with the repair it needs."""
+    print(("FAIL secret: %s" if why == "secret" else "FAIL path: %s") % bad)
+    print("NEXT: %s Do not push." % {
+        "secret": "remove that path and run slow-done again.",
+        "missing": "name only files this task changed.",
+        }.get(why, "pass paths relative to the repo."))
+    return 2
+
+
 def cmd_slow_done(args):
     """The SLOW ending: run the check, file the summary under .done-slow, commit.
 
     Nothing is filed and nothing is committed until the summary is valid, the
-    named paths exist, the notes may commit and the check exits 0. A task that
-    changed nothing leaves its summary untracked. Never pushes.
+    named paths may commit, the notes may commit and the check exits 0. A task
+    that changed nothing leaves its summary untracked; code the engine already
+    committed gets the summary as its own commit. Never pushes.
     """
     root = _repo_root()
     try:
@@ -1901,19 +1923,38 @@ def cmd_slow_done(args):
             print("FAIL summary - %s" % problem)
         print("NEXT: fix the summary file and run slow-done again. Do not push.")
         return 2
-    raw_paths = [item for item in (args.paths or []) if item != "--"]
-    changed, bad, why = _dirty_named(root, raw_paths)
-    if bad is not None:
-        print("FAIL path: %s" % bad)
-        print("NEXT: %s Do not push." % (
-            "name only files this task changed." if why == "missing"
-            else "pass paths relative to the repo."))
+    mine = _summary_rel(root, args.summary_file)
+    filed = mine.startswith(".done-slow/")
+    if mine and not filed and _git(
+            ["ls-files", "--error-unmatch", "--", mine], root).returncode == 0:
+        # Filing moves the summary away; over a tracked file that would delete it.
+        print("FAIL summary: %s is a tracked file; write the summary to a new file" % mine)
+        print("NEXT: write the summary to a new file and run slow-done again. Do not push.")
         return 2
-    if changed:
+    raw_paths = [item for item in (args.paths or []) if item != "--"]
+
+    def named():
+        """(dirty, clean) named paths. The summary itself is left out; a secret stops it."""
+        changed, clean, bad, why = _dirty_named(root, raw_paths)
+        if bad is not None:
+            return [], [], bad, why
+        changed = [path for path in changed if path != mine]
+        clean = [path for path in clean if path != mine]
+        for path in changed + clean:
+            if _SECRET_PATH.search("/" + path):
+                return [], [], path, "secret"
+        return changed, clean, None, ""
+
+    changed, clean, bad, why = named()
+    if bad is not None:
+        return _fail_path(bad, why)
+    notes_ok = False
+    if changed or clean:
         err = _note_problem(args)
         if err:
             return _fail_note(err, "slow-done")
-        if not (args.check or "").strip():
+        notes_ok = True
+        if changed and not (args.check or "").strip():
             print("FAIL check - files changed and no --check was given")
             print("NEXT: pass --check <the project's test command> and run slow-done "
                   "again. Do not push.")
@@ -1929,7 +1970,16 @@ def cmd_slow_done(args):
             print("NEXT: fix every failure and run slow-done again. Nothing was "
                   "filed or committed. Do not push.")
             return 1
-    dest = _summary_dest(root, text)
+        # The check may itself change the tree: name the paths once more, before
+        # anything is filed.
+        changed, clean, bad, why = named()
+        if bad is not None:
+            return _fail_path(bad, why)
+        if (changed or clean) and not notes_ok:
+            err = _note_problem(args)
+            if err:
+                return _fail_note(err, "slow-done")
+    dest = os.path.join(root, mine) if filed else _summary_dest(root, text)
     try:
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.realpath(args.summary_file) != os.path.realpath(dest):
@@ -1939,14 +1989,19 @@ def cmd_slow_done(args):
         return 2
     rel = os.path.relpath(dest, root)
     print("SUMMARY %s" % rel)
-    if not changed:
-        print("SLOW-DONE clean")
-        print("NEXT: Show the summary table in the chat. Nothing to commit. "
-              "Do not push.")
-        return 0
-    args.paths = ["--"] + changed
-    return cmd_fast_done(args, name="slow-done", rides=rel,
-                         show="SUMMARY, COMMIT and GITLAB")
+    if changed:
+        args.paths = ["--"] + changed
+        return cmd_fast_done(args, name="slow-done", rides=rel,
+                             show="SUMMARY, COMMIT and GITLAB")
+    if clean:
+        # The engine already committed the code (a z-dev-team run merges its
+        # slices itself): the summary is the one commit left.
+        args.paths = ["--"] + clean + [rel]
+        return cmd_fast_done(args, name="slow-done", show="SUMMARY, COMMIT and GITLAB")
+    print("SLOW-DONE clean")
+    print("NEXT: Show the summary table in the chat. Nothing to commit. "
+          "Do not push.")
+    return 0
 
 
 def main(argv=None):

@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import shutil
 import sys
@@ -115,6 +116,55 @@ class CliTests(unittest.TestCase):
         self.assertIn("ATOM: must retry", out)
         self.assertIn("DROP: ATOM: not in source", out)
         self.assertIn("FROZEN n=1", out)
+
+    def test_atoms_check_stores_the_frozen_list_in_the_ledger(self):
+        # score, close and chain read the atoms from the ledger. Nothing stored
+        # them, so every option was credited with covering every atom.
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        source = os.path.join(tmp, "request.txt")
+        ledger = os.path.join(tmp, "ledger.json")
+        with open(source, "w", encoding="utf-8") as fh:
+            fh.write("must retry\n")
+        buf = io.StringIO()
+        with redirect_stdout(buf), mock.patch("sys.stdin", io.StringIO("ATOM: must retry\n")):
+            code = decide.main(["atoms-check", "--source", source, "--ledger", ledger])
+        self.assertEqual(code, 0, buf.getvalue())
+        self.assertEqual(decide.load_ledger(ledger)["atoms"], ["must retry"])
+        self.assertIn("ATOMS STORED", buf.getvalue())
+
+    def test_without_a_ledger_atoms_check_still_writes_nothing(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        source = os.path.join(tmp, "request.txt")
+        with open(source, "w", encoding="utf-8") as fh:
+            fh.write("must retry\n")
+        with redirect_stdout(io.StringIO()), mock.patch("sys.stdin", io.StringIO("")):
+            decide.main(["atoms-check", "--source", source])
+        self.assertEqual(os.listdir(tmp), ["request.txt"])
+
+    def test_score_reads_the_stored_atoms(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        ledger = os.path.join(tmp, "ledger.json")
+        decide.save_ledger(ledger, {
+            "facts": [{"id": "F-1", "kind": "command", "status": "OK", "text": "probe ok"}],
+            "atoms": ["must retry"]})
+        with open(os.path.join(tmp, "breaks.json"), "w", encoding="utf-8") as fh:
+            json.dump({"breaks": [{"option": name, "kind": "NO-BREAK", "reproduced": True}
+                                  for name in ("A", "B")]}, fh)
+        options = [
+            {"id": "A", "atoms_hit": ["must retry"], "fact_ids": ["F-1"], "new_deps": [],
+             "assumptions": [], "out_of_scope": ""},
+            {"id": "B", "atoms_hit": [], "fact_ids": [], "new_deps": [], "assumptions": [],
+             "out_of_scope": ""},
+        ]
+        buf = io.StringIO()
+        with redirect_stdout(buf), mock.patch("sys.stdin", io.StringIO(json.dumps(options))):
+            decide.main(["score", "--ledger", ledger])
+        # A covers the atom and the fact, B covers neither. With an empty atom list
+        # both got the +3 and the margin fell to 2.
+        self.assertEqual(buf.getvalue().strip(), "DECISION pick=A margin=5", buf.getvalue())
 
 
 class ProveCapTests(unittest.TestCase):

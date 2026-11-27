@@ -273,7 +273,9 @@ def cmd_chain(a):
     print("CHAIN %s" % pick)
     if source == "auto":
         print("NEXT: write the design note and run check.py send --ledger %s --pick %s "
-              "until it prints fail=0; write the spec and run check.py spec <path>; then "
+              "until it prints fail=0; write the spec and run check.py spec <path>. "
+              "A Spike or a design-only request stops after its answer or its spec and "
+              "ends with handoff.py slow-done. Only when the request asks to build, run "
               "handoff.py next --self z-brainstorming --event architectural-approved."
               % (a.ledger, pick))
     else:

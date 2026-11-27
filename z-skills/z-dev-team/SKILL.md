@@ -120,7 +120,7 @@ Pick the first rule that matches:
 5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
 6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
-Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
+Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Under SLOW nobody is asked: quality first, the best approach is chosen and carried out without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
 
 ## When you write a plan
 
@@ -140,7 +140,8 @@ Default profile is `balanced`. `turbo` and `spike` only when the user asks for f
    tracked files → one bundled question (`init` refuses a dirty index). `SendMessage` and `TaskStop` may
    be deferred tools: if a call fails because the tool is not available, load it with ToolSearch
    `select:SendMessage,TaskStop`, then retry. Under SLOW nobody is asked about dirty files:
-   `git stash push -m z-slow` once and retry `start` once; a second refusal is a stop.
+   `git stash push -m z-slow` once and retry `start` once; a second refusal is a stop. Name a
+   `z-slow` stash in the summary's Rollback line.
 2. **Plan at the lowest rung that fits:**
    - **User supplied a plan** (message, `PLAN.md`, spec, ticket): adopt it. Execution-ready → write
      `plan.md` from it. Gaps → `z-team-leader` in **PLAN ADOPTION** mode. Plans in files the user didn't
@@ -226,8 +227,9 @@ When finish prints `FAST-DONE:`, run that `handoff.py fast-done` command before 
 Under SLOW, after `devteam finish`, brief z-code-reviewer under `.claude/dev-team/reviews/` for the review loop: one
 reviewer pass on the whole final diff; fix every BLOCKER or MAJOR on the main thread, tests first, and run the pass
 again on the new delta until a review is clean, three rounds at most; name what is left in the summary. Then
-`handoff.py slow-done` files the summary table under `.done-slow` and commits.
-Show `COMMIT` and `GITLAB` in the chat. Do not push.
+`handoff.py slow-done` files the summary table under `.done-slow` and commits it; code this engine already committed is not
+committed twice.
+Show `SUMMARY`, `COMMIT` and `GITLAB` in the chat. Do not push.
 Report concisely: what was built, files changed, how it meets the request, review/verification outcome,
 final gate, trade-offs, high-risk assumptions that stood, remaining minor suggestions, `attempt/*`
 branches the user may delete. End with the final slice table.

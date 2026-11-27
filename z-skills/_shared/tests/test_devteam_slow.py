@@ -206,6 +206,11 @@ class MutantCliTests(unittest.TestCase):
         self.assertEqual(before, after)
 
     def test_ok_and_skip_are_named_in_the_summary_not_to_the_user(self):
+        # `devteam mutant` is the SLOW direct/short gate: its wording follows the stamp.
+        os.makedirs(os.path.join(self.root, ".claude", "dev-team"), exist_ok=True)
+        with open(os.path.join(self.root, ".claude", "dev-team", "mode"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("slow 1\n")
         for name, body, verdict in (("test_ok.py", OK_TEST, "ok"),
                                     ("test_none.py", NO_ASSERT_TEST, "skip")):
             with open(os.path.join(self.root, name), "w", encoding="utf-8") as fh:
@@ -214,6 +219,13 @@ class MutantCliTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             self.assertIn("Name MUTANT %s in the summary" % verdict, proc.stdout)
             self.assertNotIn("to the user", proc.stdout)
+
+    def test_without_a_slow_stamp_the_names_go_to_the_user(self):
+        with open(os.path.join(self.root, "test_ok.py"), "w", encoding="utf-8") as fh:
+            fh.write(OK_TEST)
+        proc = self.run_cli("test_ok.py")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("Name MUTANT ok to the user and finish the task.", proc.stdout)
 
     def test_a_missing_file_is_a_usage_error(self):
         proc = subprocess.run(

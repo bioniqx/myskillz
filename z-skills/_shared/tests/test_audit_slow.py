@@ -184,7 +184,7 @@ class SlowPointerTests(unittest.TestCase):
         self.assertIn(
             "When the prelude prints `PACE: slow`, follow that `NEXT`; the short path "
             "is off and the four calls stay. Under SLOW nobody is asked: quality first, "
-            "the scored leader is picked and built without approval, the change is "
+            "the best approach is chosen and carried out without approval, the change is "
             "reviewed and fixed until a review is clean, and `handoff.py slow-done` "
             "files the summary table under `.done-slow`.", body)
         self.assertIn(

@@ -542,7 +542,13 @@ def copy_untracked(root, path):
 
 
 def make_worktree(root, path, links, wip_patch):
-    rc, out = sh("git worktree add --detach --force %s HEAD" % shlex.quote(path), cwd=root, timeout=300)
+    add = "git worktree add --detach --force %s HEAD" % shlex.quote(path)
+    rc, out = sh(add, cwd=root, timeout=300)
+    if rc != 0:
+        # Under load git now and then cannot read the new worktree's commondir;
+        # one retry after a prune turns that into a pass.
+        sh("git worktree prune", cwd=root)
+        rc, out = sh(add, cwd=root, timeout=300)
     if rc != 0:
         return "worktree add failed: " + tail(out, 5)
     if wip_patch and os.path.getsize(wip_patch) > 0:
@@ -1073,6 +1079,10 @@ def cmd_close(a):
         if not named:
             print("ROOT CAUSE: %s" % ident)
     print(decision)
+    if decision.endswith("pick=none"):
+        print("NEXT: no experiment is confirmed, so the report says NO CAUSE%s." % (
+            "; name what is left in the summary" if slow else ""))
+        return 0
     if decision.startswith("DECISION pick="):
         print("NEXT: the cause is the id in that line. Do not name another.")
         return 0

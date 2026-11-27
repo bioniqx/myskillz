@@ -370,6 +370,10 @@ class EngineChainTests(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertIn("DECISION pick=A auto=1", out)
         self.assertIn("RESULT approve yes", out)
+        # The design-only stop comes before the order to chain (review, 2026-11-27).
+        self.assertLess(out.index("A Spike or a design-only request stops"),
+                        out.index("handoff.py next"))
+        self.assertIn("Only when the request asks to build", out)
         chain = json.load(open(self.chain))
         self.assertEqual((chain["pick"], chain["source"]), ("A", "auto"))
         self.assertTrue(chain["continue"])

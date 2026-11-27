@@ -66,5 +66,6 @@ Lens instructions: [LENS INSTRUCTIONS from the list above]
 
 Merge: union the ISSUES, drop duplicates, fix inline, then make the one
 spec commit only when committing is allowed (`architectural.md` §4). No
-re-review loop — go straight to the user review gate; under SLOW, straight
-to `handoff.py next` (SKILL.md R13).
+re-review loop — go straight to the user review gate. Under SLOW a Spike or
+a design-only request ends with `handoff.py slow-done`; only a request that
+asks to build goes straight to `handoff.py next` (SKILL.md R6).

@@ -218,7 +218,7 @@ through `handoff.py slow-done`.
 
 # R7 - Inline path (N <= 1, or PACE short)
 
-`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
+`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nobody is asked: quality first, the best approach is chosen and carried out without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
 
 `PACE: short` means the spec is short enough that a writer fan-out costs more
 than it checks. Read `references/body-rules.md` in this skill directory for the body format.

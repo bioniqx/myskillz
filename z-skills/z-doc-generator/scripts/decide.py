@@ -480,6 +480,7 @@ def main(argv=None):
 
     pc = sp.add_parser("atoms-check")
     pc.add_argument("--source", required=True)
+    pc.add_argument("--ledger")
 
     pa = sp.add_parser("add")
     pa.add_argument("--ledger", required=True)
@@ -518,6 +519,8 @@ def main(argv=None):
             p.error("unrecognized arguments: %s" % " ".join(extra))
         chk = argparse.ArgumentParser(prog="decide.py atoms --check")
         chk.add_argument("--source", required=True)
+        chk.add_argument("--ledger",
+                         help="also store the frozen list here, where score reads it")
         ns = chk.parse_args(extra[1:])
         ns.cmd = "atoms-check"
     if ns.cmd == "atoms":
@@ -535,6 +538,13 @@ def main(argv=None):
         for line in dropped:
             print("DROP: %s" % line)
         print("FROZEN n=%d" % len(frozen))
+        if getattr(ns, "ledger", None):
+            # score reads the atoms from the ledger. Nothing else stores them, and
+            # an empty list credits every option with covering every atom.
+            ledger = load_ledger(ns.ledger)
+            ledger["atoms"] = frozen
+            save_ledger(ns.ledger, ledger)
+            print("ATOMS STORED %s" % ns.ledger)
         return 0
     if ns.cmd == "add":
         ledger = load_ledger(ns.ledger)

@@ -10,12 +10,20 @@ files the summary table under `.done-slow` and commits those paths with
 it, never pushing. R6 is now "Decide, then continue": an unsettled point
 gets one more lane or a decided default (hard rule 6, R8, R11), there is
 no round budget under SLOW (R4), and a Bounded change built here always
-gets one z-spot-reviewer pass (R13). `ask.py wait` and `ask.py cancel`
-stay in R6 in two sentences, for the non-SLOW `PACE: full` pace only.
-The playbooks send an open point to a lane instead of the user. FAST is
-unchanged.
+gets one z-spot-reviewer pass (R13). No pace starts `ask.py wait` or
+`ask.py cancel` any more; their code stays for a caller that has a reply
+to wait for. A Spike or a design-only request stops after its answer or
+its spec; only a request that asks to build chains. Hard rule 1 scopes the
+SLOW approval: `ask.py chain` where the NEXT line starts the chain, and the
+`Width direct` or `Width short` NEXT line itself where it orders the edit.
+The playbooks send an open point to a lane instead of the user. `decide.py
+atoms --check --ledger` now stores the frozen atoms: nothing stored them, so
+`score` credited every option with covering every atom. FAST is unchanged.
 
 # 10.15 (from 10.14) — 2026-11-26: the SLOW wait has a limit
+
+Superseded the same day by 10.16: its code half stands (`ask.py wait`
+stops at `--timeout`), its R6 half does not; no pace starts the wait now.
 
 Under SLOW `ask.py wait` now stops at `--timeout` (900 seconds) like
 FAST, and picks nothing when it does: it prints TIMEOUT, writes no chain

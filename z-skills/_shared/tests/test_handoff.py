@@ -320,6 +320,19 @@ class OpenTests(unittest.TestCase):
         with open(pace, encoding="utf-8") as fh:
             self.assertTrue(fh.read().startswith("fast "))
 
+    def test_a_vietnamese_phrase_that_denies_a_bug_is_not_a_bug_report(self):
+        # The router knows "no bug" in English; "khong co bug" is the same denial.
+        rc, out = run(["route", "--self", "z-brainstorming"],
+                      "SLOW mode. Ket qua cuoi cung la khong co bat cu bug nao.")
+        self.assertEqual(rc, 0)
+        self.assertIn("STAY z-brainstorming", out)
+
+    def test_a_vietnamese_bug_report_still_leaves_for_debugging(self):
+        rc, out = run(["route", "--self", "z-brainstorming"],
+                      "sua bug dang nhap: khong luu duoc mat khau")
+        self.assertEqual(rc, 0)
+        self.assertIn("HANDOFF z-systematic-debugging", out)
+
     def test_debug_stay_prints_s_and_does_not_probe(self):
         rc, out, _err = self.run_at(
             ["open", "--self", "z-systematic-debugging"],
@@ -328,6 +341,11 @@ class OpenTests(unittest.TestCase):
         self.assertIn("S=", out)
         self.assertIn("debug_tool.py probe", out)
         self.assertNotIn("LANE:", out)
+        # Without a repro command the FAST branch used to print the SLOW procedure.
+        last = [line for line in out.splitlines() if line.startswith("NEXT:")][-1]
+        self.assertTrue(last.startswith("NEXT: PACE "), last)
+        self.assertNotIn("PACE: slow", out)
+        self.assertNotIn("hypotheses", last)
 
     def test_plans_without_spec_does_not_brief(self):
         rc, out, _err = self.run_at(
@@ -516,6 +534,10 @@ class SlowModeTests(unittest.TestCase):
         self.assertIn("PACE: slow", out)
         self.assert_slow(root, out, err)
         self.assertIn("fact lanes", self.binding_next(out))
+        # A design-only request stops before the order to chain (review, 2026-11-27).
+        nxt = self.binding_next(out)
+        self.assertLess(nxt.index("stops after its answer or its spec"),
+                        nxt.index("handoff.py next"))
         mode_json = os.path.join(root, ".brainstorm", "drafts", "mode.json")
         self.assertEqual(json.load(open(mode_json))["mode"], "slow")
 
@@ -1024,6 +1046,99 @@ class SlowDoneTests(unittest.TestCase):
         self.assertEqual(rc, 2, err or out)
         self.assertIn("FAIL summary - no markdown table", out)
         self.assertEqual(self.filed(), [])
+
+    def test_code_the_engine_already_committed_gets_the_summary_as_its_own_commit(self):
+        # A z-dev-team run merges its slices itself, so slow-done finds the
+        # named paths clean. The summary still lands in git, on its own.
+        self.write_summary()
+        self.change()
+        subprocess.run(["git", "add", "app.py"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "slice one"], cwd=self.root, check=True)
+        engine_commit = self.git("rev-parse", "HEAD").stdout
+        rc, out, err = self.done(["app.py"])
+        self.assertEqual(rc, 0, err or out)
+        self.assertIn("SLOW-DONE committed", out)
+        self.assertIn("ALREADY app.py", out)
+        self.assertNotIn("SLOW-DONE clean", out)
+        self.assertEqual(self.git("rev-parse", "HEAD~1").stdout, engine_commit)
+        tracked = self.git("show", "--name-only", "--format=", "HEAD").stdout.split()
+        self.assertEqual(tracked, [".done-slow/" + self.filed()[0]])
+
+    def done_at(self, summary, paths, check=None):
+        args = ["slow-done", "--summary-file", summary, "--message-file", self.msg,
+                "--gitlab-file", self.note]
+        if check is not None:
+            args += ["--check", check]
+        return run_at_cwd(args + ["--"] + paths, self.root)
+
+    def test_a_summary_inside_a_named_folder_is_not_a_changed_file(self):
+        # Review finding (2026-11-27): the summary used to be moved away first and
+        # then reported as a path "not in this repo", after it was already filed.
+        os.makedirs(os.path.join(self.root, "docs"))
+        summary = os.path.join("docs", "summary.md")
+        with open(os.path.join(self.root, summary), "w", encoding="utf-8") as fh:
+            fh.write(SUMMARY)
+        self.change()
+        self.change(os.path.join("docs", "guide.md"), "guide\n")
+        rc, out, err = self.done_at(summary, ["app.py", "docs"], check="true")
+        self.assertEqual(rc, 0, err or out)
+        self.assertIn("SLOW-DONE committed", out)
+        self.assertEqual(len(self.filed()), 1, out)
+        tracked = sorted(self.git("show", "--name-only", "--format=", "HEAD").stdout.split())
+        self.assertEqual(tracked, sorted([".done-slow/" + self.filed()[0], "app.py",
+                                          "docs/guide.md"]))
+
+    def test_a_secret_under_a_named_folder_stops_before_anything_is_filed(self):
+        self.write_summary()
+        os.makedirs(os.path.join(self.root, "config"))
+        self.change(os.path.join("config", "credentials"), "token=1\n")
+        rc, out, err = self.done(["config"], check="true")
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL secret: config/credentials", out)
+        self.assertEqual(self.filed(), [])
+        self.assertTrue(os.path.exists(self.summary))
+        self.assertNotEqual(self.git("rev-parse", "--verify", "HEAD").returncode, 0)
+
+    def test_a_summary_written_over_a_tracked_file_is_refused_and_left_in_place(self):
+        os.makedirs(os.path.join(self.root, "docs"))
+        readme = os.path.join(self.root, "docs", "README.md")
+        with open(readme, "w", encoding="utf-8") as fh:
+            fh.write("guide\n")
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "docs"], cwd=self.root, check=True)
+        with open(readme, "w", encoding="utf-8") as fh:
+            fh.write(SUMMARY)
+        before = self.git("rev-parse", "HEAD").stdout
+        rc, out, err = self.done_at(os.path.join("docs", "README.md"), ["docs"], check="true")
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL summary: docs/README.md is a tracked file", out)
+        self.assertTrue(os.path.exists(readme))
+        self.assertEqual(self.filed(), [])
+        self.assertEqual(self.git("rev-parse", "HEAD").stdout, before)
+        self.assertEqual(self.git("status", "--porcelain").stdout.rstrip("\n"),
+                         " M docs/README.md")
+
+    def test_rerunning_with_the_filed_summary_files_no_second_copy(self):
+        self.write_summary()
+        self.change()
+        self.assertEqual(self.done(["app.py"], check="true")[0], 0)
+        filed = self.filed()
+        self.assertEqual(len(filed), 1, filed)
+        rc, out, err = self.done_at(os.path.join(self.root, ".done-slow", filed[0]), ["app.py"])
+        self.assertEqual(rc, 0, err or out)
+        self.assertEqual(self.filed(), filed)
+        self.assertIn("SLOW-DONE already-committed", out)
+
+    def test_a_named_path_the_check_removes_fails_before_filing(self):
+        # The paths are read again after the check, so a vanished one is judged
+        # before the summary is filed, not after.
+        self.write_summary()
+        self.change("extra.txt", "scratch\n")
+        rc, out, err = self.done(["extra.txt"], check="rm extra.txt")
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL path: extra.txt", out)
+        self.assertEqual(self.filed(), [])
+        self.assertTrue(os.path.exists(self.summary))
 
 
 def run_at_cwd(args, cwd):

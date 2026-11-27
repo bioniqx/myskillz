@@ -1,6 +1,6 @@
 ---
 name: z-brainstorming
-description: "Use this before ANY creative work, or when the user says FAST or SLOW (che do FAST, che do chat luong). Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a z-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST is on. Routes misrouted requests to the matching z-* sibling skill and borrows sibling agents as lanes. Tuned for the session model, whatever its tier - flash, pro, or Claude. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to z-writing-plans (approved design in hand) or z-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
+description: "Use this before ANY creative work, or when the user says FAST or SLOW (che do FAST, che do chat luong). Creating features, building components, adding functionality, choosing a library or architecture, or modifying behavior. Turns intent into an approved design, or in FAST into a spec, a plan, and a z-dev-team run that codes until done without another question. Preloaded repo context, up to 8 parallel lanes (default 8) across the codebase AND the live web (current docs, releases, best practices), cited evidence, one approval gate before implementation unless FAST or SLOW is on. Routes misrouted requests to the matching z-* sibling skill and borrows sibling agents as lanes. Tuned for the session model, whatever its tier - flash, pro, or Claude. Do NOT use when the design or plan is already settled or the user asks for direct implementation - go straight to z-writing-plans (approved design in hand) or z-dev-team (plan in hand); a trivial one-touch edit needs no design at all."
 when_to_use: "Use for: 'build/add/implement X', 'how should we design or architect X', picking the best current approach, library, framework, or service for something we will build, new projects or subsystems, refactors that change interfaces, 'can we / is it possible' feasibility spikes, and FAST / SLOW / che do FAST / che do chat luong / design and build straight through. Not for: writing a plan from an approved design (z-writing-plans), implementing a settled plan (z-dev-team), or trivial edits with no design choice."
 allowed-tools:
   - Bash(sh *context.sh*)
@@ -26,7 +26,7 @@ metadata:
 
 Classify → fan out wide in one round → decide on evidence → ask once →
 present once → get approval. Lower rule number wins a conflict.
-`MODE fast` does not ask: the `PACE fast` NEXT replaces that gate.
+`MODE fast` and `MODE slow` do not ask: their `PACE` NEXT replaces that gate.
 
 ## Mode — before round 1
 
@@ -48,8 +48,7 @@ later section.
 
 - `OPEN: routed` → follow `HANDOFF` or `STOP`. Do not design.
 - `MODE fast` → follow the PACE fast NEXT. It replaces the human gates below.
-- `MODE slow` → follow that `NEXT` and do not take the FAST branch. The default is FAST; SLOW starts only when the user says SLOW.
-  Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
+- `MODE slow` → follow that `NEXT` and do not take the FAST branch. The default is FAST; SLOW starts only when the user says SLOW. Under SLOW nobody is asked: quality first, the best approach is chosen and carried out without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
 
 A later message that names FAST or SLOW is a new `ask.py mode` on that
 message. The script stores the choice in `.brainstorm/drafts/mode.json`.
@@ -59,7 +58,7 @@ message. The script stores the choice in `.brainstorm/drafts/mode.json`.
 1. No code, scaffold or file write outside `.brainstorm/drafts/` until
    `check.py approve --asked design` prints `RESULT approve yes`. The
    stdin is the human reply, or the AUTO block of the FAST pick inside `open`.
-   Under SLOW the approval is `ask.py chain` printing `RESULT approve yes`; it still gates every write outside `.brainstorm/drafts/`.
+   Under SLOW the approval is `ask.py chain` printing `RESULT approve yes` where the NEXT line starts the chain; a `Width direct` or `Width short` NEXT line orders the edit itself and starts no chain.
 2. Line 1 of every message you show is `Path: <Spike|Bounded|Architectural> — reason`,
    `Path unchanged: <path>`, or the hand-off line. Run `check.py send` on
    the draft first; repair every FAIL and re-run, and never show a FAIL (R14).
@@ -213,12 +212,12 @@ Under SLOW nobody is asked. `check.py close` prints `DECISION`; then run
 with no `--pick`: it chains the engine's leader and prints
 `RESULT approve yes`. `ask=unattacked` runs the missing breaker once;
 `DECISION stop` rewrites the options once from what survived and attacks
-again. Then the design note (no `Approve this design?` line, no question
-mark) goes through `check.py send --pick <the chained id>`, then the spec,
+again. A Spike or a design-only request stops after its answer or its
+spec and ends with `handoff.py slow-done`; only a request that asks to
+build takes the chain. There the design note (no `Approve this design?`
+line, no question mark) goes through `check.py send --ledger
+.brainstorm/drafts/ledger.json --pick <the chained id>`, then the spec,
 `check.py spec`, `handoff.py next --self z-brainstorming --event architectural-approved`.
-On the non-SLOW `PACE: full` pace the fork is asked instead: start
-`ask.py wait` with `run_in_background: true` and end the turn; a chat
-reply before it finishes: first `ask.py cancel`, then `approve` on it.
 
 ## R7 — Width
 
@@ -372,7 +371,7 @@ The approved deliverable picks the next owner; announce it in one line. Under SL
 
 - **Architectural** → write the spec, then `z-writing-plans` with that
   path (`architectural.md` §5). On a human `approve yes`, run
-  `ask.py chain --pick <id>` first. Nothing else. Under SLOW the chain runs without a human approval: `ask.py chain` with no `--pick`.
+  `ask.py chain --pick <id>` first. Nothing else. Under SLOW a Spike or a design-only request stops after its answer or its spec and ends with `handoff.py slow-done`; only a request that asks to build chains, without a human approval: `ask.py chain` with no `--pick`.
 - **Bounded**, ≤3 files, one flow → implement here (TDD applies); then
   the `z-spot-reviewer` lane if R11 says so, fix its BLOCKER/MAJOR
   findings, report done with the test line. Under SLOW that pass always runs: one reviewer pass on the whole final diff; fix every BLOCKER or MAJOR on the main thread, tests first, and run the pass again on the new delta until a review is clean, three rounds at most; name what is left in the summary.
@@ -410,7 +409,7 @@ BAD, DROP, and a failed cite are dropped or re-read. WEAK, NOQUOTE, and
 unverified stay labelled unverified. A spec FAIL is fixed in place.
 `approve no` means you do not write. The conductor procedure, in order. Each number is one message.
 
-1. Round 1, after `open`, when the prelude printed `PACE: full`: `decide.py atoms` on the request, and the fact lanes, in that one message. `PACE: fast` writes one option and does not launch a lane. Make the atom call only when atoms printed no `ATOM` line; then `atoms --check --source <the request file>` with the call's ATOM lines on stdin. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
+1. Round 1, after `open`, when the prelude printed `PACE: full`: `decide.py atoms` on the request, and the fact lanes, in that one message. `PACE: fast` writes one option and does not launch a lane. Make the atom call only when atoms printed no `ATOM` line; then `atoms --check --source <the request file> --ledger .brainstorm/drafts/ledger.json` with the call's ATOM lines on stdin, so `score` reads the frozen atoms. `decide.py add` once per kept finding, ledger at `.brainstorm/drafts/ledger.json`. Do not re-run context, mode, or route.
 2. When those lanes return: `check.py intake --root <repo>` on their findings and claims (`## CITES` and `## WEB`), and the drafters, in that same message. Architectural: three `z-drafter` lenses. Bounded with one existing flow: one drafter. Spike: no drafter. The answer is still one option and still needs a breaker.
 3. When the drafters return: write `.brainstorm/drafts/options.json` and launch one `z-design-breaker` per option. End the turn.
 4. When the breakers return: one `check.py close --root <repo> --ledger .brainstorm/drafts/ledger.json --options .brainstorm/drafts/options.json` with stdin `## BREAKERS` only. It prints `DECISION` from the options file. Then, in that same wake, `check.py send --ledger .brainstorm/drafts/ledger.json --pick <id>` on the draft that names that id. Show the design only when send prints `RESULT send fail=0`. `pick` renders that card. `ask` asks that one fork and ends the turn (R6); under SLOW `ask=<id>` is chained by `ask.py chain` with no `--pick` as the leader. `MODE fast` does not take that branch (the PACE fast NEXT). `stop` does not render. `unattacked` runs the missing breaker once. Never invent a fact. On `approve yes`, run `ask.py chain --pick <id>` (under SLOW the chain with no `--pick` already printed it, R6).
@@ -489,13 +488,13 @@ requirements, trade-offs and scope stay in the terminal. Under SLOW nobody is as
 
 ---
 
-R0 still applies: no implementation until `check.py approve` printed yes.
+R0 still applies: no implementation until `check.py approve` printed yes, or under SLOW `ask.py chain` did or a `Width` NEXT line ordered the edit.
 
 ## Before you send (every message)
 
 1. `check.py send` printed `RESULT send fail=0`. A FAIL is repaired, not shown.
 2. Line 1 is the Path line, `Path unchanged:`, or the hand-off line.
 3. A design message contains `Approve this design?`, an Assumptions section, and Out of scope. Under SLOW no message carries a question mark, and the design note is the one sent with `--pick`: no `Approve this design?` line; it states the pick, why it won, the assumptions it decided, and Out of scope.
-4. No write outside `.brainstorm/drafts/` until `check.py approve --asked design` printed yes on this reply. Under SLOW `ask.py chain` prints the approval.
+4. No write outside `.brainstorm/drafts/` until `check.py approve --asked design` printed yes on this reply. Under SLOW `ask.py chain` prints the approval, or a `Width direct` / `Width short` NEXT line is it.
 5. The reply budget for this path is not exceeded.
 6. Each lane prompt is only the R11 slice. The rules were left in the agent file.

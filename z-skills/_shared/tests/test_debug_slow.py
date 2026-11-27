@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 TOOL = (Path(__file__).resolve().parents[2]
         / "z-systematic-debugging" / "scripts" / "debug_tool.py")
@@ -52,11 +53,11 @@ class SlowRepo(unittest.TestCase):
         argv = ["probe", "--error", error, "--dir", self.tmp]
         return self.main(argv)
 
-    def close(self, records):
+    def close(self, records, report=""):
         d = Path(self.tmp, ".debug")
         d.mkdir(parents=True, exist_ok=True)
         (d / "experiments.json").write_text(json.dumps(records))
-        Path(self.tmp, "report.txt").write_text("")
+        Path(self.tmp, "report.txt").write_text(report)
         return self.main(["close", "--experiments", str(d / "experiments.json"),
                           "--report", str(Path(self.tmp, "report.txt"))])
 
@@ -206,6 +207,54 @@ class SlowCloseFalsifierTests(SlowRepo):
         self.assertIn("NEXT: do not write a root cause. Run the experiment the line names, "
                       "or ask the user.", out)
         self.assertNotIn("Nobody is asked", out)
+
+
+class NoCauseCloseTests(SlowRepo):
+    """`close` on a report that legally says NO CAUSE: pick=none is not a pick."""
+
+    def test_under_a_slow_stamp_it_names_the_summary(self):
+        self.stamp("slow 123\n")
+        rc, out = self.close([{"id": "h1", "verdict": "REFUTED", "role": "diagnose"}],
+                             report="NO CAUSE\n")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("DECISION pick=none", out)
+        self.assertIn("NEXT: no experiment is confirmed, so the report says NO CAUSE; "
+                      "name what is left in the summary.", out)
+        self.assertNotIn("the cause is the id", out)
+
+    def test_without_a_stamp_it_keeps_the_short_line(self):
+        rc, out = self.close([{"id": "h1", "verdict": "REFUTED", "role": "diagnose"}],
+                             report="NO CAUSE\n")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("NEXT: no experiment is confirmed, so the report says NO CAUSE.", out)
+        self.assertNotIn("summary", out)
+
+
+class WorktreeRetryTests(unittest.TestCase):
+    """Under load git now and then fails a worktree add; one retry after a prune."""
+
+    def test_a_failed_worktree_add_is_retried_once_after_a_prune(self):
+        calls = []
+
+        def fake_sh(cmd, cwd=None, timeout=None, env=None):
+            calls.append(cmd)
+            if cmd.startswith("git worktree add"):
+                return (1, "fatal: failed to read commondir") if len(calls) == 1 else (0, "")
+            return (0, "")
+
+        with mock.patch.object(DT, "sh", fake_sh):
+            self.assertIsNone(DT.make_worktree("/nowhere", "/nowhere/.debug/w/x", [], None))
+        self.assertTrue(calls[0].startswith("git worktree add --detach --force"), calls)
+        self.assertEqual(calls[1], "git worktree prune")
+        self.assertEqual(calls[0], calls[2])
+
+    def test_a_second_failure_is_still_reported(self):
+        def fake_sh(cmd, cwd=None, timeout=None, env=None):
+            return (1, "fatal: nope") if cmd.startswith("git worktree add") else (0, "")
+
+        with mock.patch.object(DT, "sh", fake_sh):
+            err = DT.make_worktree("/nowhere", "/nowhere/.debug/w/x", [], None)
+        self.assertTrue(err and err.startswith("worktree add failed"), err)
 
 
 if __name__ == "__main__":
