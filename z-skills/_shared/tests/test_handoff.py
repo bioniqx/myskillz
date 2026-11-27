@@ -494,7 +494,11 @@ class SlowModeTests(unittest.TestCase):
         nxt = self.binding_next(out)
         self.assertTrue(nxt.startswith("NEXT:"), err or out)
         self.assertIn("PACE: slow", nxt)
-        self.assertIn("never an assumption", nxt)
+        # 2026-11-27: SLOW decides. The contract sentence ends every SLOW NEXT
+        # line, and nothing in it asks the user or waits for a reply.
+        self.assertIn("SLOW decides: quality first, nobody is asked", nxt)
+        self.assertNotIn("SLOW asks", nxt)
+        self.assertNotIn("wait for the reply", nxt)
         self.assertNotIn("read fast.md", nxt)
         stamp = os.path.join(root, ".claude", "dev-team", "mode")
         with open(stamp, encoding="utf-8") as fh:
@@ -547,6 +551,7 @@ class SlowModeTests(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assert_slow(root, out, err)
         self.assertIn("build", self.binding_next(out))
+        self.assertIn("slow-done --summary-file", self.binding_next(out))
         self.assertNotIn("PACE: short", out)
         self.assertNotIn("inline path: one write", self.binding_next(out))
 
@@ -562,6 +567,7 @@ class SlowModeTests(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assert_slow(root, out, err)
         self.assertIn("second judge", self.binding_next(out))
+        self.assertIn("slow-done --summary-file", self.binding_next(out))
         self.assertNotIn("PACE: short", out)
 
     def test_debug_slow_without_cmd_names_the_slow_rules(self):
@@ -603,6 +609,26 @@ class SlowModeTests(unittest.TestCase):
         self.assertIn("claims.py", self.binding_next(out))
         self.assertNotIn("Zero more tool calls", self.binding_next(out))
 
+    def test_diff_summary_fan_out_slow_line_ends_with_slow_done(self):
+        # The widest diff-summary width is its own NEXT line; it ends the task
+        # like INLINE and READ do (review finding, 2026-11-27).
+        root = self.git_root()
+        self.commit(root, "base.txt", "base\n")
+        subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=root, check=True)
+        for n in range(60):
+            with open(os.path.join(root, "f%03d.txt" % n), "w", encoding="utf-8") as fh:
+                fh.write("line\n" * 200)
+        subprocess.run(["git", "add", "."], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "bulk"], cwd=root, check=True)
+        env = dict(os.environ, GLM_GDS_NO_FETCH="1", GLM_GDS_READ_MAX="1000")
+        rc, out, err = self.run_at(
+            root, ["open", "--self", "z-git-diff-summary"],
+            "SLOW summarize the branch", env=env)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("MODE=FAN_OUT", out)
+        self.assert_slow(root, out, err)
+        self.assertIn("slow-done --summary-file", self.binding_next(out))
+
     def test_a_later_fast_message_restamps_fast(self):
         root = self.git_root()
         rc, out, err = self.run_at(
@@ -616,10 +642,33 @@ class SlowModeTests(unittest.TestCase):
         self.assertIn("PACE: full", out)
         self.assertIn("route-first rule", self.binding_next(out))
         self.assertNotIn("PACE: slow", out)
-        self.assertNotIn("never an assumption", self.binding_next(out))
+        self.assertNotIn("SLOW decides", self.binding_next(out))
         stamp = os.path.join(root, ".claude", "dev-team", "mode")
         with open(stamp, encoding="utf-8") as fh:
             self.assertTrue(fh.readline().startswith("fast "))
+
+    def test_every_slow_line_that_ends_a_task_names_slow_done(self):
+        # 2026-11-27: a SLOW run ends with its summary table under .done-slow,
+        # so each skill's own last step carries the slow-done ending.
+        cases = (
+            ("z-brainstorming", [], "SLOW add a login endpoint to the existing api"),
+            ("z-brainstorming", [], "SLOW fix the typo in src/app.py"),
+            ("z-dev-team", [], "SLOW fix the billing bug across the repo"),
+            ("z-dev-team", [], "SLOW fix the typo in src/app.py"),
+            ("z-systematic-debugging", [], "SLOW the login tests fail with a traceback"),
+            ("z-doc-generator", [], "SLOW document this repo"),
+        )
+        for skill, extra, text in cases:
+            with self.subTest(skill=skill, text=text):
+                root = self.git_root()
+                self.commit(root, "hello.py", "print('hi')\n")
+                env = os.environ.copy()
+                env["DOCGEN_STATE_DIR"] = os.path.join(root, "state")
+                rc, out, err = self.run_at(
+                    root, ["open", "--self", skill] + extra, text, env=env)
+                self.assertEqual(rc, 0, err)
+                self.assert_slow(root, out, err)
+                self.assertIn("slow-done --summary-file", self.binding_next(out))
 
 
 class BrainstormModeTests(unittest.TestCase):
@@ -759,6 +808,222 @@ class FastDoneTests(unittest.TestCase):
             ["git", "rev-parse", "--verify", "HEAD"], cwd=self.root,
             capture_output=True, text=True)
         self.assertNotEqual(log.returncode, 0)
+
+
+SUMMARY = (
+    "# SLOW summary: add the retry limit\n\n"
+    "| # | Idea | What was done | What verified it |\n"
+    "| --- | --- | --- | --- |\n"
+    "| 1 | Cap retries at three | app.py plus a test | suite green |\n\n"
+    "Leftovers: none\n"
+    "Rollback: git revert HEAD\n")
+
+
+class SlowDoneTests(unittest.TestCase):
+    """slow-done: the check, the summary under .done-slow, the commit with it."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        for key, value in (
+                ("user.email", "t@t"), ("user.name", "t"),
+                ("commit.gpgsign", "false")):
+            subprocess.run(
+                ["git", "config", key, value], cwd=self.root, check=True)
+        self.msg, self.note = _note_files()
+        self.addCleanup(os.remove, self.msg)
+        self.addCleanup(os.remove, self.note)
+        self.summary = os.path.join(self.root, "summary.md")
+
+    def write_summary(self, text=SUMMARY):
+        with open(self.summary, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def change(self, name="app.py", body="print('hi')\n"):
+        with open(os.path.join(self.root, name), "w", encoding="utf-8") as fh:
+            fh.write(body)
+
+    def done(self, paths, check=None, notes=True):
+        args = ["slow-done", "--summary-file", self.summary]
+        if check is not None:
+            args += ["--check", check]
+        if notes:
+            args += ["--message-file", self.msg, "--gitlab-file", self.note]
+        return run_at_cwd(args + ["--"] + paths, self.root)
+
+    def filed(self):
+        folder = os.path.join(self.root, ".done-slow")
+        return sorted(os.listdir(folder)) if os.path.isdir(folder) else []
+
+    def git(self, *args):
+        return subprocess.run(["git"] + list(args), cwd=self.root,
+                              capture_output=True, text=True)
+
+    def test_commits_the_dirty_paths_with_the_summary(self):
+        self.write_summary()
+        self.change()
+        self.change("notes.txt", "scratch\n")
+        rc, out, err = self.done(["app.py"], check="true")
+        self.assertEqual(rc, 0, err or out)
+        self.assertIn("SLOW-DONE committed", out)
+        self.assertIn("SUMMARY .done-slow/", out)
+        self.assertIn("Do not push", out)
+        filed = self.filed()
+        self.assertEqual(len(filed), 1, out)
+        self.assertRegex(
+            filed[0],
+            r"^\d{4}-\d{2}-\d{2}-\d{4}-slow-summary-add-the-retry-limit\.md$")
+        self.assertFalse(os.path.exists(self.summary))
+        tracked = self.git("show", "--name-only", "--format=", "HEAD").stdout.split()
+        self.assertEqual(sorted(tracked), [".done-slow/" + filed[0], "app.py"])
+        self.assertEqual(self.git("log", "-1", "--format=%s").stdout.strip(),
+                         "Add the login retry limit")
+        self.assertEqual(self.git("status", "--porcelain").stdout.strip(),
+                         "?? notes.txt")
+
+    def test_a_changed_file_needs_a_check(self):
+        self.write_summary()
+        self.change()
+        rc, out, err = self.done(["app.py"])
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL check - files changed and no --check was given", out)
+        self.assertEqual(self.filed(), [])
+
+    def test_a_failing_check_files_and_commits_nothing(self):
+        self.write_summary()
+        self.change()
+        rc, out, err = self.done(
+            ["app.py"], check="echo 'FAILED (failures=1)' >&2; exit 1")
+        self.assertEqual(rc, 1, err or out)
+        self.assertIn("FAIL check - exit 1", out)
+        self.assertIn("FAILED (failures=1)", out)
+        self.assertIn("Nothing was filed or committed", out)
+        self.assertEqual(self.filed(), [])
+        self.assertTrue(os.path.exists(self.summary))
+        self.assertNotEqual(self.git("rev-parse", "--verify", "HEAD").returncode, 0)
+
+    def test_an_invalid_summary_is_not_filed(self):
+        data_row = "| 1 | Cap retries at three | app.py plus a test | suite green |\n"
+        cases = (
+            ("no table", SUMMARY.replace("|", "/"), "no markdown table"),
+            ("header only", SUMMARY.replace(data_row, ""), "no markdown table"),
+            ("no leftovers", SUMMARY.replace("Leftovers: none\n", ""),
+             "no 'Leftovers:' line"),
+            ("no rollback", SUMMARY.replace("Rollback: git revert HEAD\n", ""),
+             "no 'Rollback:' line"),
+            ("not ascii", SUMMARY + "\u1ea1\n", "not English ASCII"),
+            ("empty label", SUMMARY.replace("Leftovers: none", "Leftovers:"),
+             "no 'Leftovers:' line"),
+        )
+        for name, text, problem in cases:
+            with self.subTest(name=name):
+                self.write_summary(text)
+                rc, out, err = self.done(["app.py"], check="true")
+                self.assertEqual(rc, 2, err or out)
+                self.assertIn("FAIL summary - " + problem, out)
+                self.assertEqual(self.filed(), [])
+
+    def test_a_read_only_run_files_the_summary_and_commits_nothing(self):
+        self.write_summary()
+        rc, out, err = self.done([], notes=False)
+        self.assertEqual(rc, 0, err or out)
+        self.assertIn("SLOW-DONE clean", out)
+        self.assertEqual(len(self.filed()), 1, out)
+        self.assertNotEqual(self.git("rev-parse", "--verify", "HEAD").returncode, 0)
+
+    def test_a_name_collision_gets_a_numbered_name(self):
+        for _ in range(2):
+            self.write_summary()
+            self.assertEqual(self.done([], notes=False)[0], 0)
+        filed = self.filed()
+        self.assertEqual(len(filed), 2, filed)
+        self.assertTrue(any(name.endswith("-2.md") for name in filed), filed)
+
+    def test_an_unsafe_path_is_refused_before_anything_is_filed(self):
+        self.write_summary()
+        rc, out, err = self.done(["../outside.py"], check="true")
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL path: ../outside.py", out)
+        self.assertEqual(self.filed(), [])
+
+    def test_a_named_folder_covers_the_dirty_files_under_it(self):
+        # Review finding (2026-11-27): a folder is a natural answer to "paths
+        # this task changed"; it must not read as "nothing changed".
+        self.write_summary()
+        os.makedirs(os.path.join(self.root, "pkg"))
+        self.change(os.path.join("pkg", "mod.py"))
+        rc, out, err = self.done(["pkg"])
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL check - files changed and no --check was given", out)
+        self.assertEqual(self.filed(), [])
+        rc, out, err = self.done(["pkg"], check="true")
+        self.assertEqual(rc, 0, err or out)
+        self.assertIn("SLOW-DONE committed", out)
+        tracked = self.git("show", "--name-only", "--format=", "HEAD").stdout.split()
+        self.assertEqual(sorted(tracked),
+                         sorted([".done-slow/" + self.filed()[0], "pkg/mod.py"]))
+
+    def test_a_file_with_a_non_ascii_name_is_seen_as_changed(self):
+        self.write_summary()
+        name = "th\u1ee3c.py"
+        self.change(name)
+        rc, out, err = self.done([name])
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL check - files changed and no --check was given", out)
+        self.assertEqual(self.filed(), [])
+        rc, out, err = self.done([name], check="true")
+        self.assertEqual(rc, 0, err or out)
+        tracked = self.git("-c", "core.quotepath=off", "show", "--name-only",
+                           "--format=", "HEAD").stdout.split()
+        self.assertEqual(sorted(tracked), sorted([".done-slow/" + self.filed()[0], name]))
+
+    def test_a_folder_that_is_not_a_repository_files_the_summary_and_commits_nothing(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        summary = os.path.join(root, "summary.md")
+        with open(summary, "w", encoding="utf-8") as fh:
+            fh.write(SUMMARY)
+        rc, out, err = run_at_cwd(["slow-done", "--summary-file", summary], root)
+        self.assertEqual(rc, 0, err or out)
+        self.assertIn("SUMMARY .done-slow/", out)
+        self.assertIn("SLOW-DONE clean", out)
+        self.assertEqual(len(os.listdir(os.path.join(root, ".done-slow"))), 1, out)
+        self.assertFalse(os.path.exists(os.path.join(root, ".git")))
+
+    def test_missing_notes_fail_before_anything_is_filed(self):
+        self.write_summary()
+        self.change()
+        rc, out, err = self.done(["app.py"], check="true", notes=False)
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL message: missing path", out)
+        self.assertEqual(self.filed(), [])
+
+    def test_a_named_path_that_is_not_in_the_repo_fails_before_filing(self):
+        self.write_summary()
+        self.change()
+        rc, out, err = self.done(["app.py", "nope.py"], check="true")
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL path: nope.py", out)
+        self.assertEqual(self.filed(), [])
+
+    def test_a_summary_that_is_not_utf_8_is_refused(self):
+        with open(self.summary, "wb") as fh:
+            fh.write(b"# SLOW summary: \xff\xfe\n")
+        rc, out, err = self.done([], notes=False)
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL summary: cannot read it", out)
+        self.assertEqual(self.filed(), [])
+
+    def test_two_table_headers_with_no_data_row_are_refused(self):
+        header = "| # | Idea | What was done | What verified it |\n| --- | --- | --- | --- |\n"
+        text = ("# SLOW summary: add the retry limit\n\n" + header + "\n" + header +
+                "\nLeftovers: none\nRollback: git revert HEAD\n")
+        self.write_summary(text)
+        rc, out, err = self.done([], notes=False)
+        self.assertEqual(rc, 2, err or out)
+        self.assertIn("FAIL summary - no markdown table", out)
+        self.assertEqual(self.filed(), [])
 
 
 def run_at_cwd(args, cwd):

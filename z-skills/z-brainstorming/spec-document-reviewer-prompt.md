@@ -30,7 +30,7 @@ uneven detail are not issues.
    Unrequested features or over-engineering get cut. Independent
    subsystems get decomposed.
 5. **Evidence** — every load-bearing external claim has a dated source,
-   unverified items are labeled and asked.
+   unverified items are labeled and asked (under SLOW: labeled, never asked).
 
 Mechanical part: lens 1 (completeness) and the format half of lens 5
 (evidence: https URL and date on every line) are checked by
@@ -66,4 +66,5 @@ Lens instructions: [LENS INSTRUCTIONS from the list above]
 
 Merge: union the ISSUES, drop duplicates, fix inline, then make the one
 spec commit only when committing is allowed (`architectural.md` §4). No
-re-review loop — go straight to the user review gate.
+re-review loop — go straight to the user review gate; under SLOW, straight
+to `handoff.py next` (SKILL.md R13).

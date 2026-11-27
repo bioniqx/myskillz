@@ -130,6 +130,11 @@ class MutantRejectTests(unittest.TestCase):
         self.assertIn("leftover after 2", third)
         self.assertIn("does not merge", third)
         self.assertTrue(s3["mutant_leftover"])
+        # SLOW contract: a cap the engine reaches is finished on the main thread and named in the summary
+        self.assertIn("on the main thread", third)
+        self.assertIn("name it in the summary", third)
+        self.assertIn("nobody is asked", third)
+        self.assertNotIn("to the user", third)
 
     def test_ok_skip_and_none_do_not_hold(self):
         for proof in ({"mutant": {"verdict": "ok"}}, {"mutant": {"verdict": "skip"}}, {}, None):
@@ -149,6 +154,31 @@ class ModeStampTests(unittest.TestCase):
         with open(os.path.join(sd, "mode"), "w", encoding="utf-8") as fh:
             fh.write("fast 1770000000\n")
         self.assertEqual(devteam.mode_stamp(root), "fast")
+
+
+class SlowHintTests(unittest.TestCase):
+    """Printed SLOW wording: the Conductor answers itself; the full-pace lines stay byte for byte."""
+
+    def test_a_blocked_lane_under_a_slow_stamp_is_answered_by_the_conductor(self):
+        line = devteam.blocked_hint("S9", True)
+        self.assertIn("SendMessage the S9 agent", line)
+        self.assertIn("nobody is asked", line)
+        self.assertIn("irreversible action", line)
+        self.assertNotIn("ask now", line)
+
+    def test_a_blocked_lane_without_a_slow_stamp_keeps_the_full_pace_line(self):
+        # the engine's own line, arrow included (U+2192), byte for byte
+        self.assertEqual(
+            devteam.blocked_hint("S9", False),
+            "  \u2192 SendMessage the S9 agent the answer (plan/contracts) and it resumes in its worktree; "
+            "if only the user can answer, ask now and keep everything else running.")
+
+    def test_the_third_lint_failure_asks_nobody_under_a_slow_stamp(self):
+        self.assertEqual(devteam.lint_stuck_hint(False), "ASK the user")
+        line = devteam.lint_stuck_hint(True)
+        self.assertIn("nobody is asked", line)
+        self.assertIn("then `start` again", line)
+        self.assertNotIn("ASK", line)
 
 
 class MutantCliTests(unittest.TestCase):
@@ -174,6 +204,16 @@ class MutantCliTests(unittest.TestCase):
         self.assertIn("Mutant diff", proc.stdout)
         after = open(os.path.join(self.root, "test_weak.py"), encoding="utf-8").read()
         self.assertEqual(before, after)
+
+    def test_ok_and_skip_are_named_in_the_summary_not_to_the_user(self):
+        for name, body, verdict in (("test_ok.py", OK_TEST, "ok"),
+                                    ("test_none.py", NO_ASSERT_TEST, "skip")):
+            with open(os.path.join(self.root, name), "w", encoding="utf-8") as fh:
+                fh.write(body)
+            proc = self.run_cli(name)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn("Name MUTANT %s in the summary" % verdict, proc.stdout)
+            self.assertNotIn("to the user", proc.stdout)
 
     def test_a_missing_file_is_a_usage_error(self):
         proc = subprocess.run(

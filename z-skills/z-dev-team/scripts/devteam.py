@@ -2504,7 +2504,8 @@ def mutant_reject(s, sid, proof):
     if n > MUTANT_REOPENS:
         s["mutant_leftover"] = True
         return (f"{sid}: MUTANT weak — leftover after {MUTANT_REOPENS} re-opens: the suite still "
-                f"passes with one assertion deleted ({where}). Named to the user; this slice does not merge.")
+                f"passes with one assertion deleted ({where}). Finish the leftover on the main thread "
+                f"and name it in the summary; nobody is asked. This slice does not merge.")
     return reject(s, "mutant-weak",
                   f"{sid}: MUTANT weak — the suite still exits 0 after the engine deleted one "
                   f"assertion ({where}), so the green run locks nothing. Mutant diff:\n"
@@ -3714,6 +3715,18 @@ def checkpoint_killed(pending):
     return isinstance(pid, int) and not _pid_alive(pid)
 
 
+def blocked_hint(sid, slow):
+    """The one line printed under `BLOCKED <id>: <question>`. Under a slow stamp the
+    Conductor answers the lane itself: nobody is asked."""
+    if slow:
+        return (f"  -> SendMessage the {sid} agent the answer you decided yourself (read the code; one web "
+                f"lane for a load-bearing fact, generic terms only) in this same wake and it resumes in "
+                f"its worktree; under SLOW nobody is asked, so keep everything else running. An "
+                f"irreversible action is the one stop: say it in one line.")
+    return (f"  → SendMessage the {sid} agent the answer (plan/contracts) and it resumes in its worktree; "
+            f"if only the user can answer, ask now and keep everything else running.")
+
+
 def cmd_next(a):
     """THE call, once per wake-up. Everything that finished is harvested from its own artefact
     (branches, report files, checkpoint logs), everything newly possible is launched, and the turn
@@ -3741,11 +3754,11 @@ def cmd_next(a):
     if gov_lines:
         out(*gov_lines)
         out("")
+    slow = mode_stamp(root) == "slow"
     for sid, note in blocked:
         clear_markers(root, sid)     # printed once; a still-blocked agent writes it again on its next stop
         out(f"BLOCKED {sid}: {note or '(no note in the report: read the last message of that agent)'}",
-            f"  → SendMessage the {sid} agent the answer (plan/contracts) and it resumes in its worktree; "
-            f"if only the user can answer, ask now and keep everything else running.")
+            blocked_hint(sid, slow))
     if blocked:
         out("")
     if harvested:
@@ -3839,6 +3852,15 @@ def ensure_repo():
         out("GIT: created an empty first commit (an unborn HEAD cannot be branched)")
 
 
+def lint_stuck_hint(slow):
+    """Printed by `start` when the plan failed its lint three times in a row. Under a slow
+    stamp nobody is asked: the Conductor repairs the plan itself."""
+    if slow:
+        return ("SLOW: nobody is asked. Fix plan.md from the lint lines above, or have z-team-leader "
+                "redo it in PLAN ADOPTION mode, then `start` again.")
+    return "ASK the user"
+
+
 def cmd_start(a):
     """doctor --fix + init + dispatch the whole ready set in ONE call — a whole wave of agents in one turn."""
     ensure_repo()
@@ -3862,7 +3884,7 @@ def cmd_start(a):
         n += 1
         count_path.write_text(str(n), encoding="utf-8")
         if n >= 3:
-            out("ASK the user")
+            out(lint_stuck_hint(mode_stamp(root) == "slow"))
         else:
             out("Edit plan.md (or run `atoms <plan> --check`), then `start` again — attempt %d of 3" % n)
         return
@@ -3979,10 +4001,10 @@ def cmd_mutant(a):
             "(never delete the assertion), re-run this command, then commit.")
         raise SystemExit(1)
     if res["verdict"] == "ok":
-        out("NEXT: the suite can fail. Name MUTANT ok to the user and finish the task.")
+        out("NEXT: the suite can fail. Name MUTANT ok in the summary and finish the task.")
     else:
         out("NEXT: no assertion-shaped line (or the command could not run). "
-            "Name MUTANT skip to the user; it is not a blocker.")
+            "Name MUTANT skip in the summary; it is not a blocker.")
     return 0
 
 

@@ -557,10 +557,19 @@ def check_send(a):
             fails.append(f"FAIL path - unknown hand-off target {value}")
         visible, fences = visible_lines(text)
         body = "\n".join(visible)
+        slow = brainstorm_mode() == "slow"
+        approve_line = re.search(r"(?i)approve this design\?", body) is not None
         questions = URL_RE.sub(" ", re.sub(r"(?i)approve this design\?", " ", body)).count("?")
-        if questions > 4 and brainstorm_mode() != "slow":
-            fails.append(f"FAIL questions - {questions} question marks (max 4); merge the rest into assumptions")
-        design = re.search(r"(?i)approve this design\?", body) is not None
+        # SLOW asks nobody: one question mark fails, the approve question too.
+        # The design note there is the draft sent with --pick: it keeps the
+        # design-message shape without the approve question.
+        limit = 0 if slow else 4
+        if questions > limit:
+            fails.append(f"FAIL questions - {questions} question marks (max {limit}); "
+                         + ("SLOW asks nobody" if slow else "merge the rest into assumptions"))
+        if slow and approve_line:
+            fails.append("FAIL approve - SLOW asks nobody: drop the 'Approve this design?' line")
+        design = approve_line or (slow and bool(a.pick))
         if design:
             low = body.lower()
             if not re.search(r"out of scope|out-of-scope|non-goal", low):
@@ -621,9 +630,6 @@ def check_approve(a):
         print("RESULT approve no - empty reply")
         return 1
     if re.search(r"(?m)^auto$", folded) and re.search(r"(?m)^decision pick=\S+", folded):
-        if brainstorm_mode() == "slow":
-            print("RESULT approve no - SLOW does not pick for the user; wait for the reply")
-            return 1
         print("RESULT approve yes")
         return 0
     if REJECT_RE.search(folded):

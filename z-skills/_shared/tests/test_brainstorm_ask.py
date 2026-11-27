@@ -77,15 +77,59 @@ class WaitTests(unittest.TestCase):
             self.ledger, self.options, self.reply, self.cancel, self.chain, now=5, deadline=1)
         self.assertEqual(kind, "CANCEL")
 
-    def test_a_slow_wait_never_picks(self):
-        self.assertIsNone(ask.wait_deadline(900, "slow"))
-        self.assertEqual(ask.wait_deadline(900, "fast"), 900)
-        self.assertEqual(ask.wait_deadline(900, ""), 900)
-        kind = ask.resolve_once(
+    def test_a_slow_wait_stops_at_its_limit_and_picks_nothing(self):
+        before = ask.resolve_once(
             self.ledger, self.options, self.reply, self.cancel, self.chain,
-            now=10 ** 12, deadline=ask.wait_deadline(900, "slow"))
-        self.assertIsNone(kind)
+            now=1, deadline=2, allow_pick=False)
+        self.assertIsNone(before)
+        at_limit = ask.resolve_once(
+            self.ledger, self.options, self.reply, self.cancel, self.chain,
+            now=2, deadline=2, allow_pick=False)
+        self.assertEqual(at_limit, ("TIMEOUT", ""))
         self.assertFalse(os.path.exists(self.chain))
+
+    def test_the_wait_loop_hands_the_no_pick_flag_to_the_deadline(self):
+        ticks = iter([0, 0, 5])
+        kind, text = ask.wait_loop(
+            self.ledger, self.options, self.reply, self.cancel, self.chain, 1,
+            allow_pick=False, sleep=lambda _seconds: None, clock=lambda: next(ticks))
+        self.assertEqual((kind, text), ("TIMEOUT", ""))
+        self.assertFalse(os.path.exists(self.chain))
+
+    def test_cmd_wait_picks_only_outside_a_slow_stamp(self):
+        for mode in ("slow", "fast", ""):
+            with self.subTest(mode=mode):
+                seen = {}
+
+                def fake_loop(*args, **kwargs):
+                    seen.update(kwargs)
+                    if kwargs.get("allow_pick"):
+                        return "AUTO", "DECISION pick=A auto=1"
+                    return "TIMEOUT", ""
+
+                ns = type("N", (), {"ledger": self.ledger, "options": self.options,
+                                    "reply": self.reply, "cancel": self.cancel,
+                                    "chain": self.chain, "timeout": 0})()
+                buf = io.StringIO()
+                old = sys.stdout
+                sys.stdout = buf
+                try:
+                    with mock.patch.object(ask, "brainstorm_mode", return_value=mode):
+                        with mock.patch.object(ask, "wait_loop", fake_loop):
+                            rc = ask.cmd_wait(ns)
+                finally:
+                    sys.stdout = old
+                out = buf.getvalue()
+                self.assertEqual(rc, 0, out)
+                self.assertEqual(out.splitlines()[0],
+                                 "TIMEOUT" if mode == "slow" else "AUTO", out)
+                self.assertIs(seen.get("allow_pick"), mode != "slow")
+                if mode == "slow":
+                    self.assertIn("Nothing is approved", out)
+                    self.assertNotIn("AUTO", out)
+                    self.assertFalse(os.path.exists(self.chain))
+                else:
+                    self.assertIn("APPROVE: approved", out)
 
 
 class ApproveAutoTests(unittest.TestCase):
@@ -99,13 +143,15 @@ class ApproveAutoTests(unittest.TestCase):
         finally:
             sys.stdin = old
 
-    def test_the_auto_block_is_refused_under_a_slow_stamp(self):
+    def test_the_auto_block_is_approved_under_a_slow_stamp(self):
+        # 2026-11-27: SLOW decides, so the engine's pick is the approval and
+        # the stamp no longer refuses an AUTO block.
         ns = type("N", (), {"asked": "design"})()
         old = sys.stdin
         sys.stdin = _In("AUTO\nDECISION pick=A auto=1\n")
         try:
             with mock.patch.object(check, "brainstorm_mode", return_value="slow"):
-                self.assertEqual(check.check_approve(ns), 1)
+                self.assertEqual(check.check_approve(ns), 0)
         finally:
             sys.stdin = old
 
@@ -287,6 +333,79 @@ class ChainCommandTests(unittest.TestCase):
                     stdout=subprocess.DEVNULL, cwd=repo)
                 self.assertEqual(rc, 0)
                 self.assertEqual(json.load(open(dest))["mode"], "slow")
+
+
+class EngineChainTests(unittest.TestCase):
+    """chain without --pick: the engine names the pick, which is all SLOW needs."""
+
+    CLEAR = ({"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
+             {"id": "B", "atoms_hit": [], "fact_ids": [], "assumptions": []})
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="chain-engine-")
+        self.ledger = os.path.join(self.dir, "ledger.json")
+        self.options = os.path.join(self.dir, "options.json")
+        self.chain = os.path.join(self.dir, "chain.json")
+        json.dump({"facts": [{"id": "F-1", "status": "OK", "text": "pool"}],
+                   "atoms": ["must ship"]}, open(self.ledger, "w"))
+
+    def _chain(self, options, breaks, stamp=""):
+        json.dump(options, open(self.options, "w"))
+        json.dump({"breaks": breaks}, open(os.path.join(self.dir, "breaks.json"), "w"))
+        ns = type("N", (), {"pick": "", "ledger": self.ledger, "options": self.options,
+                            "chain": self.chain,
+                            "mode": os.path.join(self.dir, "mode.json")})()
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            with mock.patch.object(ask, "read_mode_stamp", return_value=stamp):
+                rc = ask.cmd_chain(ns)
+        finally:
+            sys.stdout = old
+        return rc, buf.getvalue()
+
+    def test_a_clear_leader_is_chained_and_approved(self):
+        rc, out = self._chain(list(self.CLEAR), [attacked("A"), attacked("B")])
+        self.assertEqual(rc, 0, out)
+        self.assertIn("DECISION pick=A auto=1", out)
+        self.assertIn("RESULT approve yes", out)
+        chain = json.load(open(self.chain))
+        self.assertEqual((chain["pick"], chain["source"]), ("A", "auto"))
+        self.assertTrue(chain["continue"])
+        self.assertNotIn("mode", chain)
+
+    def test_a_narrow_margin_chains_its_leader_and_the_slow_stamp(self):
+        options = [
+            {"id": "A", "atoms_hit": ["must ship"], "fact_ids": ["F-1"], "assumptions": []},
+            {"id": "B", "atoms_hit": ["must ship"], "fact_ids": [], "assumptions": []},
+        ]
+        rc, out = self._chain(options, [attacked("A"), attacked("B")], stamp="slow")
+        self.assertEqual(rc, 0, out)
+        chain = json.load(open(self.chain))
+        self.assertEqual((chain["pick"], chain["mode"], chain["source"]),
+                         ("A", "slow", "auto"))
+        self.assertIn("RESULT approve yes", out)
+
+    def test_an_unattacked_leader_is_refused_with_its_repair(self):
+        rc, out = self._chain(list(self.CLEAR), [attacked("B")])
+        self.assertEqual(rc, 2, out)
+        self.assertIn("DECISION ask=unattacked", out)
+        self.assertIn("the score leader A has no reproduced break", out)
+        self.assertIn("run one breaker on it", out)
+        self.assertIn("Do not ask the user.", out)
+        self.assertNotIn("RESULT approve yes", out)
+        self.assertFalse(os.path.exists(self.chain))
+
+    def test_a_stop_is_refused_with_its_repair(self):
+        broken = {"kind": "COUNTEREXAMPLE", "reproduced": True}
+        rc, out = self._chain(list(self.CLEAR),
+                              [dict(broken, option="A"), dict(broken, option="B")])
+        self.assertEqual(rc, 2, out)
+        self.assertIn("DECISION stop", out)
+        self.assertIn("rewrite the options once", out)
+        self.assertIn("Do not ask the user.", out)
+        self.assertFalse(os.path.exists(self.chain))
 
 
 if __name__ == "__main__":

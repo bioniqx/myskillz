@@ -1,3 +1,28 @@
+# 10.16 (from 10.15) — 2026-11-27: SLOW is fully automatic
+
+Under SLOW nobody is asked: SLOW is fully automatic. The engine's pick is
+the approval, so `ask.py chain` without `--pick` chains the engine's
+leader and prints `RESULT approve yes`. `check.py send` fails any question
+mark under SLOW, the `Approve this design?` line included; the design note
+sent with `--pick` still needs an Out of scope line and an assumptions
+line. Every SLOW task ends with `handoff.py slow-done`, which
+files the summary table under `.done-slow` and commits those paths with
+it, never pushing. R6 is now "Decide, then continue": an unsettled point
+gets one more lane or a decided default (hard rule 6, R8, R11), there is
+no round budget under SLOW (R4), and a Bounded change built here always
+gets one z-spot-reviewer pass (R13). `ask.py wait` and `ask.py cancel`
+stay in R6 in two sentences, for the non-SLOW `PACE: full` pace only.
+The playbooks send an open point to a lane instead of the user. FAST is
+unchanged.
+
+# 10.15 (from 10.14) — 2026-11-26: the SLOW wait has a limit
+
+Under SLOW `ask.py wait` now stops at `--timeout` (900 seconds) like
+FAST, and picks nothing when it does: it prints TIMEOUT, writes no chain
+and does not read the ledger or the options. Its NEXT line says nothing
+is approved and the reply comes in chat. The sentence every SLOW NEXT
+line ends with drops "no timer", and R6 names TIMEOUT. FAST is unchanged.
+
 # 10.14 (from 10.13) — 2026-11-26: SLOW asks and waits
 
 Under SLOW nothing is assumed: every SLOW `NEXT` line the prelude prints

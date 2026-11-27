@@ -1054,13 +1054,16 @@ def cmd_close(a):
                    if rc is not None else "it has no falsify command to re-run")
             print("FAIL falsify - %s is CONFIRMED but %s" % (ident, why))
             if asks <= FALSIFY_ASKS:
-                print("NEXT: add ONE falsify command for %s to %s - a command that exits "
-                      "non-zero when %s is the cause - then re-run close (ask %d of %d)."
+                print("NEXT: nobody is asked. Write ONE falsify command for %s into %s on the "
+                      "main thread - a command that exits non-zero when %s is the cause - then "
+                      "re-run close (try %d of %d)."
                       % (ident, a.experiments, ident, asks, FALSIFY_ASKS))
             else:
-                print("NEXT: falsifier ask cap reached for %s. Leftover: %s stays unconfirmed "
-                      "and close names no cause. Stop and state the leftover to the user."
-                      % (ident, ident))
+                print("NEXT: falsifier cap reached for %s. Leftover: %s stays unconfirmed "
+                      "and close names no cause. Nobody is asked: finish it on the main "
+                      "thread - write and run a falsifier for %s yourself, then re-run "
+                      "close - and name what is left in the summary."
+                      % (ident, ident, ident))
             return 2
     for line in fails:
         print(line)
@@ -1073,7 +1076,11 @@ def cmd_close(a):
     if decision.startswith("DECISION pick="):
         print("NEXT: the cause is the id in that line. Do not name another.")
         return 0
-    print("NEXT: do not write a root cause. Run the experiment the line names, or ask the user.")
+    if slow:
+        print("NEXT: do not write a root cause. Nobody is asked: do on the main thread what "
+              "the FAIL lines name, then re-run close; name what is left in the summary.")
+    else:
+        print("NEXT: do not write a root cause. Run the experiment the line names, or ask the user.")
     return 2
 
 

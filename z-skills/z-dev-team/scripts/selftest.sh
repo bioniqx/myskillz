@@ -742,6 +742,12 @@ check "consumed markers are removed (no double integration, no stale block)" '[ 
 check "a second next does not re-integrate or re-print anything" 'OUT2=$(D next 2>&1); [[ "$OUT2" != *"M1:"* && "$OUT2" != *"BLOCKED M2"* ]]'
 check "a forged .done for an unfinished lane is harmless: integrate re-checks and rejects" 'echo "{}" > .claude/dev-team/slices/M2.done; OUT=$(D next 2>&1); [[ "$OUT" == *"M2: REJECTED"* ]] && [ ! -f .claude/dev-team/slices/M2.done ]'
 check "M2 stays inflight for a warm fix after the rejection" 'D status | grep -q "M2     inflight"'
+# SLOW contract: the same BLOCKED lane is answered by the Conductor itself, nobody is asked
+check "under a slow stamp a BLOCKED lane is answered by the conductor: nobody is asked" 'mkdir -p .claude/dev-team && echo "slow $(date +%s)" > .claude/dev-team/mode
+stopq "$MW2" "## Status: Blocked
+## Notes: need src/shared.js which is outside my footprint" >/dev/null
+OUT=$(D next 2>&1); rm -f .claude/dev-team/mode
+[[ "$OUT" == *"BLOCKED M2: need src/shared.js"* && "$OUT" == *"nobody is asked"* && "$OUT" != *"ask now"* ]]'
 
 echo "== v3.2 model routing + the dispatch block is one line per agent"
 RT="$(newrepo rt32)"; cd "$RT"

@@ -49,6 +49,7 @@ Input: the user's request, `.claude/dev-team/atoms.json` and `.claude/dev-team/p
    inputs, error paths, auth). Name each case concretely — tests are written from it.
 5. **Blocking questions — only real ones.** 2–3 options + a recommended default +
    `affects: S<n>` each, so the user answers once and unaffected slices start now.
+   Under SLOW the Conductor answers them itself: nobody is asked, so make the recommended default stand on its own.
    Real blockers: a dependency the plan must add, a public API or schema change,
    a money/auth/privacy surface, an irreversible step (deploy, destructive
    migration), or a pinned command you could not run. Everything else →

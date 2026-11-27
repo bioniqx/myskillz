@@ -171,6 +171,36 @@ class AgentLaneWaveCTests(SlowAuditTestBase):
         self.assertEqual(audit.Merged(c).final("REQ-001")[0], "CONFLICT")
 
 
+class SlowPointerTests(unittest.TestCase):
+    def test_the_skill_pointer_says_nobody_is_asked_and_names_both_endings(self):
+        # 2026-11-27: SLOW is automatic. The pointer is the contract sentence
+        # and the ending is slow-done (audit only) or next --event (the request
+        # also asks for the fix). Nothing asks or waits; the full-pace rule
+        # beside it does not change.
+        skill = os.path.normpath(os.path.join(
+            HERE, "..", "..", "z-requirements-code-audit", "SKILL.md"))
+        with io.open(skill, encoding="utf-8") as fh:
+            body = fh.read()
+        self.assertIn(
+            "When the prelude prints `PACE: slow`, follow that `NEXT`; the short path "
+            "is off and the four calls stay. Under SLOW nobody is asked: quality first, "
+            "the scored leader is picked and built without approval, the change is "
+            "reviewed and fixed until a review is clean, and `handoff.py slow-done` "
+            "files the summary table under `.done-slow`.", body)
+        self.assertIn(
+            "This skill still does not edit the code. Under SLOW nobody is asked: an "
+            "audit-only request ends with `handoff.py slow-done` and its summary (no "
+            "check, no notes, the summary stays untracked); a request that also asks for "
+            "the fix continues with `handoff.py next --self z-requirements-code-audit "
+            "--event fix-gaps` or `implement-gaps`, and that skill ends the run.", body)
+        self.assertIn(
+            "After `finalize`, run `next --event` only if the user asks: "
+            "`implement-gaps`, `fix-gaps`, or `bug`.", body)
+        self.assertNotIn("nothing is assumed", body)
+        self.assertNotIn("end the turn", body)
+        self.assertNotIn("wait for the reply", body)
+
+
 class FastLaneUntouchedTests(unittest.TestCase):
     def test_no_slow_stamp_runs_neither_pass(self):
         repo = _repo()

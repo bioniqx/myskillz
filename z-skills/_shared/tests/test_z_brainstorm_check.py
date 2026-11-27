@@ -441,7 +441,7 @@ class SendTests(unittest.TestCase):
 
 
 class StampGateTests(unittest.TestCase):
-    """Under a slow stamp the gate never picks for the user: SLOW asks and waits."""
+    """Under a slow stamp the engine picks: SLOW asks nobody, so no question mark."""
 
     AUTO = "AUTO\nDECISION pick=A auto=1\n"
 
@@ -461,10 +461,25 @@ class StampGateTests(unittest.TestCase):
         return "Path unchanged: Architectural\n\n" + " ".join(
             "Q%d?" % number for number in range(1, count + 1)) + "\n"
 
-    def test_an_auto_block_is_refused_under_a_slow_stamp(self):
+    def note(self):
+        """A SLOW design note: the approaches, the pick, no question mark."""
+        return ("Path unchanged: Architectural\n\nAPPROACH 1: a\nAPPROACH 2: b\n"
+                "Pick B, the scored leader.\n"
+                "Assumptions: every open point was researched; none is left.\n"
+                "Out of scope: nothing.\n")
+
+    def slow_send(self, text, pick=None):
+        root = self.repo("slow")
+        args = ["send", "--root", ".", "--ledger", os.path.join(root, "ledger.json")]
+        if pick:
+            args += ["--pick", pick]
+        return run(args, text, cwd=root)
+
+    def test_an_auto_block_is_approved_under_a_slow_stamp(self):
+        # 2026-11-27: SLOW decides, so the engine's pick is the approval.
         rc, out = run(["approve", "--asked", "design"], self.AUTO, cwd=self.repo("slow"))
-        self.assertEqual(rc, 1, out)
-        self.assertIn("SLOW does not pick for the user", out)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT approve yes", out)
 
     def test_an_auto_block_still_approves_under_a_fast_stamp(self):
         rc, out = run(["approve", "--asked", "design"], self.AUTO, cwd=self.repo("fast"))
@@ -476,10 +491,34 @@ class StampGateTests(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertIn("RESULT approve yes", out)
 
-    def test_send_takes_six_questions_under_a_slow_stamp(self):
-        rc, out = run(["send", "--root", "."], self.draft(6), cwd=self.repo("slow"))
+    def test_one_question_mark_fails_under_a_slow_stamp(self):
+        rc, out = self.slow_send(self.draft(1))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("FAIL questions - 1 question marks (max 0); SLOW asks nobody", out)
+
+    def test_the_approve_line_fails_under_a_slow_stamp(self):
+        rc, out = self.slow_send(self.note() + "Approve this design?\n", pick="B")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("FAIL approve - SLOW asks nobody", out)
+
+    def test_a_status_line_under_a_slow_stamp_needs_no_design_shape(self):
+        rc, out = self.slow_send("Path unchanged: Architectural\n\nThree explorers are running.\n")
         self.assertEqual(rc, 0, out)
         self.assertIn("RESULT send fail=0", out)
+
+    def test_the_design_note_passes_with_its_pick_under_a_slow_stamp(self):
+        rc, out = self.slow_send(self.note(), pick="B")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("RESULT send fail=0", out)
+
+    def test_the_slow_design_note_still_needs_scope_and_assumptions(self):
+        for missing in ("Out of scope", "Assumptions"):
+            with self.subTest(missing=missing):
+                text = "\n".join(line for line in self.note().splitlines()
+                                 if not line.startswith(missing))
+                rc, out = self.slow_send(text, pick="B")
+                self.assertEqual(rc, 1, out)
+                self.assertIn("FAIL", out)
 
     def test_send_still_fails_five_questions_with_no_stamp(self):
         rc, out = run(["send", "--root", "."], self.draft(5), cwd=self.repo(None))

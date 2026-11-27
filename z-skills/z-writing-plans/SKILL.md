@@ -138,6 +138,10 @@ Contract rules - all plan quality is decided here, nowhere later:
    flag (a todo app, a class named Task) needs --allow WORD on every build,
    check and assemble call. Decide it now, not after assemble fails.
 
+Under SLOW do not ask about an open point in the spec: settle it from the code
+or one web lane (generic terms only) and write the answer into that task's
+contract or a Global Constraint; a writer reads the plan, never the chat.
+
 # R4 - Call 3: build
 
 ```
@@ -185,6 +189,14 @@ prints. A request that only asked for the plan does not match, including
 one that says "implementation plan". Otherwise stop. Do not ask which
 approach. The plan file stays portable (R8).
 
+When the prelude printed `PACE: slow`, ask nothing either, whatever
+`chain.json` says: repair every `ERR`, re-run the same build, and run that
+`next` in the turn `OK assembled` prints, so the chain continues to
+z-dev-team without a question. Only a design-only request, one that only
+asked for the plan, stops at the plan and makes this the last skill. Do not
+commit before the chain ends: the last skill commits after its own review
+through `handoff.py slow-done`.
+
 # R6 - Speed rules that decide the wall clock
 
 1. Never type what the script generates: Execution Protocol, File Structure,
@@ -206,7 +218,7 @@ approach. The plan file stays portable (R8).
 
 # R7 - Inline path (N <= 1, or PACE short)
 
-`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nothing is assumed: ask, then end the turn and wait for the reply.
+`PACE: slow` never takes this inline path: when the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`.
 
 `PACE: short` means the spec is short enough that a writer fan-out costs more
 than it checks. Read `references/body-rules.md` in this skill directory for the body format.

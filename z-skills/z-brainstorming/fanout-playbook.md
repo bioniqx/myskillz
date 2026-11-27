@@ -102,8 +102,9 @@ Vague boundaries are the main cause of duplicated work between lanes.
 - Lane denied WebSearch/WebFetch (background permission rules) → do its
   1-2 decisive fetches yourself; suggest allowing WebSearch and WebFetch in the ZCode permission settings.
 - Rate limit, 429, or empty result → halve the remaining wave; re-dispatch
-  only lanes whose answer the design still needs; otherwise ask the user
-  instead of assuming (SLOW).
+  only lanes whose answer the design still needs. Under SLOW nobody is
+  asked: there is no lane budget, so dispatch every lane you will cite,
+  in batches, or decide the point and record it (SKILL.md R6).
 - Lane stopped at its turn limit with partial output → continue it with
   `SendMessage`, which keeps its context, instead of spawning a fresh one.
   On ZCode `SendMessage` exists: only if the send
@@ -121,8 +122,9 @@ Vague boundaries are the main cause of duplicated work between lanes.
 2. Conflicts between lanes or sources → one direct check (Read, or
    WebFetch asking for the exact passage) batched into your next message.
    Prefer the newer primary source that matches our version.
-3. UNKNOWN or UNVERIFIED → a question for the user (SLOW). A
-   new exploration round only if the design cannot be drafted without it.
+3. UNKNOWN or UNVERIFIED → under SLOW one more lane, or a decided
+   default labelled unverified in the spec and the summary (SKILL.md R11).
+   A new exploration round only if the design cannot be drafted without it.
 4. Do not summarize the exploration to the user. Show the design with
    inline citations.
 
@@ -130,6 +132,6 @@ Vague boundaries are the main cause of duplicated work between lanes.
 
 | Message you send | Leave running |
 | --- | --- |
-| Questions (SLOW) | nothing; the turn ends until the reply |
+| Under SLOW: no question; the next message is the design | every lane: no lane budget, dispatch every lane you will cite, in batches |
 | Design message | nothing. Extra lanes wake a full thinking pass (SKILL.md R8) |
 | Spec review gate | nothing — the user's edits change the input |

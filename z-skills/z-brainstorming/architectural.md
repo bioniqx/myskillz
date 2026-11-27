@@ -4,6 +4,8 @@ Read in round 1, alongside the fan-out. Covers everything from the first
 lane results to `z-writing-plans`. SKILL.md's R0-R12 still apply; this file
 adds the shape of the messages. If `ask.py mode` printed `MODE fast`,
 `fast.md` replaces the question in §2 and the review gate in §4. Do not ask.
+Under SLOW, SKILL.md R6 replaces both the same way: no question is sent,
+and after `check.py spec` comes `handoff.py next --self z-brainstorming --event architectural-approved`.
 
 ## Contents
 
@@ -16,14 +18,17 @@ would change WHICH approaches are viable, and all lanes fit under the
 `lanes=` width. Send the design message (§2) as soon as the lanes that
 decide the approach set are back; fold later lanes into the spec. While
 decisive lanes are still running, end the turn with one status line
-("Exploring N code + M web lanes; design follows") — do not poll. Budget:
-2 human turns.
+("Exploring N code + M web lanes; design follows") — do not poll. Under
+SLOW that line asks nothing: the lanes wake this thread, and the next
+message is the design. Budget: 2 human turns, none under SLOW.
 
 **Split.** The request is too open to design (unknown users, goal, or a
 constraint that eliminates whole approaches), or lanes exceed `lanes=` (default 8,
-hard max 8) and must run in waves. Send the questions right away and end the
-turn: under SLOW no lane runs while the user thinks. Next message is the
-design. Budget: 3 human turns.
+hard max 8) and must run in waves. On the non-SLOW `PACE: full` pace, send
+the questions right away and end the turn; next message is the design.
+Under SLOW no question is sent: the open points go to lanes, the lanes
+keep running, and the next message is the design. Budget: 3 human turns,
+none under SLOW.
 
 Decomposition (multi-subsystem request → sub-projects, first one only) is
 stated inside whichever message goes first, so the user can veto it there
@@ -76,8 +81,8 @@ nuanced:
    items labeled; the version gap between the repo and the latest release.
    Every line must come from `check.py web` output marked OK or WEAK
    (SKILL.md R14); a WEAK line is labelled unverified.
-7. Assumptions — none under SLOW; every open point is a question in the
-   message.
+7. Assumptions — under SLOW every open point was researched or decided:
+   list each decided default, an unproven one labelled unverified.
 8. Out of scope — one line naming what this design deliberately will not do,
    so the approval covers the exclusion too.
 
@@ -85,9 +90,13 @@ Keep sections short: small single-purpose units, well-defined interfaces,
 independently testable; follow existing repo patterns; targeted
 improvements only where an existing problem affects this work.
 
-**Close with the R6 ask**, including the exact line `Approve this design?`
-so one reply both answers and approves. `check.py send` treats that line
-as the design message and requires Out of scope and Assumptions.
+**Close with the R6 ask** on the non-SLOW `PACE: full` pace, including
+the exact line `Approve this design?` so one reply both answers and
+approves. `check.py send` treats that line as the design message and
+requires Out of scope and Assumptions. Under SLOW close with the pick
+instead: a design note with no `Approve this design?` line and no
+question mark, sent through `check.py send --pick <the chained id>`, which
+still requires Out of scope and Assumptions.
 
 ## 3. No extra lanes on the design turn
 
@@ -118,8 +127,9 @@ and targeted edits, in one message.
 3. Commit the spec (`git add` + `git commit`, one commit, after fixes)
    only when neither the user nor a loaded project or user instruction
    file says not to commit self-initiated files; otherwise leave the spec
-   untracked.
-4. End the turn with the review gate:
+   untracked. Under SLOW do not commit by hand here: `handoff.py slow-done`
+   commits at the end of the task (SKILL.md R13).
+4. On the non-SLOW `PACE: full` pace, end the turn with the review gate:
 
    > "Spec written and committed to `<path>`. Please review it and let me
    > know if you want to make any changes before we start writing out the
@@ -131,7 +141,8 @@ and targeted edits, in one message.
    implementation plan."
 
 Changes requested → apply, re-run the self-review on the changed sections
-only, commit if committing, ask again. Proceed only on approval.
+only, commit if committing, ask again. Proceed only on approval. Under
+SLOW there is no review gate: go straight to §5.
 
 ## 5. Hand-off
 

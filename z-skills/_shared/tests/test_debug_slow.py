@@ -130,7 +130,10 @@ class SlowCloseFalsifierTests(SlowRepo):
         self.assertEqual(rc, 2)
         self.assertNotIn("ROOT CAUSE", out)
         self.assertIn("FAIL falsify - h1", out)
-        self.assertIn("NEXT: add ONE falsify command for h1", out)
+        self.assertIn("NEXT: nobody is asked. Write ONE falsify command for h1", out)
+        self.assertIn("on the main thread", out)
+        self.assertNotIn("(ask ", out)
+        self.assertNotIn("ask the user", out)
 
     def test_slow_nonzero_falsify_prints_root_cause_and_stores_exit(self):
         self.stamp("slow 123\n")
@@ -160,10 +163,13 @@ class SlowCloseFalsifierTests(SlowRepo):
         rc2, out2 = self.close(self.saved_records())
         rc3, out3 = self.close(self.saved_records())
         self.assertEqual((rc1, rc2, rc3), (2, 2, 2))
-        self.assertIn("ask 1 of 2", out1)
-        self.assertIn("ask 2 of 2", out2)
+        self.assertIn("try 1 of 2", out1)
+        self.assertIn("try 2 of 2", out2)
         self.assertIn("Leftover: h1 stays unconfirmed", out3)
-        self.assertNotIn("ask 3", out3)
+        self.assertNotIn("try 3", out3)
+        self.assertIn("finish it on the main thread", out3)
+        self.assertIn("name what is left in the summary", out3)
+        self.assertNotIn("to the user", out3)
         for out in (out1, out2, out3):
             self.assertNotIn("ROOT CAUSE", out)
 
@@ -185,6 +191,21 @@ class SlowCloseFalsifierTests(SlowRepo):
         rc, out = self.close(self.records())
         self.assertEqual(rc, 0)
         self.assertIn("ROOT CAUSE: h1", out)
+
+    def test_slow_unpicked_close_hands_nothing_to_the_user(self):
+        self.stamp("slow 123\n")
+        rc, out = self.close([])
+        self.assertEqual(rc, 2)
+        self.assertIn("NEXT: do not write a root cause. Nobody is asked", out)
+        self.assertIn("name what is left in the summary", out)
+        self.assertNotIn("ask the user", out)
+
+    def test_no_stamp_unpicked_close_keeps_asking_the_user(self):
+        rc, out = self.close([])
+        self.assertEqual(rc, 2)
+        self.assertIn("NEXT: do not write a root cause. Run the experiment the line names, "
+                      "or ask the user.", out)
+        self.assertNotIn("Nobody is asked", out)
 
 
 if __name__ == "__main__":

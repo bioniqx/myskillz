@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Wait for a brainstorming answer, or start FAST and continue the chain.
+"""Wait for a brainstorming answer, or start FAST or SLOW and continue the chain.
 
 `mode` classifies FAST vs SLOW through handoff.mode_of and never asks: a
 request that names neither mode is FAST. `fast` writes chain.json with mode
-fast and picks the scored leader even when decide would ask or stop. The
-Under SLOW the wait has no deadline and never picks. Under FAST the
-15-minute wait is unchanged: a stop or an unattacked leader is not a pick
-there. The chain file tells z-writing-plans to hand the plan to
-z-dev-team without another question.
+fast and picks the scored leader even when decide would ask or stop.
+`chain` without --pick is the SLOW form: nobody approves, so the engine names
+the pick (a narrow margin chains its leader), writes chain.json with the
+stamped mode and prints the approval; an unattacked leader or a stop is
+refused with its one repair. Under SLOW the wait stops at --timeout and picks
+nothing. Under FAST the 15-minute wait is unchanged: a stop or an unattacked
+leader is not a pick there. The chain file tells z-writing-plans to hand the
+plan to z-dev-team without another question.
 """
 import argparse
 import json
@@ -162,13 +165,12 @@ def _reply_text(path):
     return p.read_text(encoding="utf-8").strip()
 
 
-def wait_deadline(timeout, mode):
-    """None under SLOW: the wait never ends on its own."""
-    return None if mode == "slow" else timeout
+def resolve_once(ledger, options, reply, cancel, chain, now, deadline, allow_pick=True):
+    """One observation. Returns (kind, text) or None while the wait should continue.
 
-
-def resolve_once(ledger, options, reply, cancel, chain, now, deadline):
-    """One observation. Returns (kind, text) or None while the wait should continue."""
+    allow_pick=False is the SLOW wait: the deadline ends it with TIMEOUT, before
+    the ledger or the options are read.
+    """
     if Path(cancel).is_file():
         return "CANCEL", ""
     text = _reply_text(reply)
@@ -176,6 +178,8 @@ def resolve_once(ledger, options, reply, cancel, chain, now, deadline):
         return "REPLY", text
     if deadline is None or now < deadline:
         return None
+    if not allow_pick:
+        return "TIMEOUT", ""
     options, atoms, led, deps, reports = _load(ledger, options)
     line = auto_decision(options, atoms, led, deps, reports)
     pick = _pick_id(line)
@@ -184,18 +188,20 @@ def resolve_once(ledger, options, reply, cancel, chain, now, deadline):
     return "AUTO", line
 
 
-def wait_loop(ledger, options, reply, cancel, chain, timeout, sleep=time.sleep, clock=time.monotonic):
+def wait_loop(ledger, options, reply, cancel, chain, timeout, allow_pick=True, sleep=time.sleep,
+              clock=time.monotonic):
     deadline = None if timeout is None else clock() + timeout
     while True:
-        got = resolve_once(ledger, options, reply, cancel, chain, clock(), deadline)
+        got = resolve_once(ledger, options, reply, cancel, chain, clock(), deadline, allow_pick)
         if got is not None:
             return got
         sleep(0.2)
 
 
 def cmd_wait(a):
-    timeout = wait_deadline(a.timeout, brainstorm_mode())
-    kind, text = wait_loop(a.ledger, a.options, a.reply, a.cancel, a.chain, timeout)
+    slow = brainstorm_mode() == "slow"
+    kind, text = wait_loop(a.ledger, a.options, a.reply, a.cancel, a.chain, a.timeout,
+                           allow_pick=not slow)
     if kind == "CANCEL":
         print("CANCEL")
         print("NEXT: the user replied in chat. Pass that reply to check.py approve. Ignore a later AUTO.")
@@ -204,6 +210,12 @@ def cmd_wait(a):
         print("REPLY")
         print(text)
         print("NEXT: pass the REPLY body to check.py approve --asked design.")
+        return 0
+    if kind == "TIMEOUT":
+        print("TIMEOUT")
+        print("NEXT: no reply within the limit. Nothing is approved: do not pick, "
+              "do not write, do not restart the wait. Tell the user in one line "
+              "and end the turn; a later reply goes to check.py approve --asked design.")
         return 0
     print("AUTO")
     print(text)
@@ -217,11 +229,55 @@ def cmd_wait(a):
     return 2
 
 
+def _chain_repair(line, options, atoms, ledger, deps, reports):
+    """The one repair a refused chain names. SLOW never hands it to the user."""
+    if line == "DECISION ask=unattacked":
+        ranked = _ranked(options, atoms, ledger, deps, reports)
+        leader = " %s" % ranked[0].get("id") if ranked else ""
+        return ("the score leader%s has no reproduced break: run one breaker on it, "
+                "then chain again." % leader)
+    if line == "DECISION stop":
+        return ("every option is broken or scores under zero: rewrite the options once "
+                "from what survived the breakers, attack them, then chain again.")
+    return "re-run check.py close with ## BREAKERS, then chain again."
+
+
 def cmd_chain(a):
     kind = _read_mode(a.mode) or read_mode_stamp()
-    write_chain(a.chain, a.pick, "user", mode=kind if kind in ("fast", "slow") else None)
-    print("CHAIN %s" % a.pick)
-    print("NEXT: handoff.py next --self z-brainstorming --event architectural-approved")
+    mode = kind if kind in ("fast", "slow") else None
+    pick = a.pick
+    source = "user"
+    if not pick:
+        # SLOW has nobody to approve, so the engine names the pick: a narrow
+        # margin chains its leader; an unattacked leader or a stop is refused.
+        try:
+            options, atoms, led, deps, reports = _load(a.ledger, a.options)
+        except (OSError, json.JSONDecodeError) as exc:
+            print("NEXT: options or ledger is not readable (%s). Fix them and re-run "
+                  "chain. Do not ask the user." % exc)
+            return 2
+        line = auto_decision(options, atoms, led, deps, reports)
+        pick = _pick_id(line)
+        if not pick:
+            print(line)
+            print("NEXT: %s Do not ask the user."
+                  % _chain_repair(line, options, atoms, led, deps, reports))
+            return 2
+        source = "auto"
+        print("AUTO")
+        print("DECISION pick=%s auto=1" % pick)
+        # The AUTO block satisfies approve's auto rule; recording it here keeps
+        # that gate without a separate approve call, as `fast` does.
+        print("RESULT approve yes")
+    write_chain(a.chain, pick, source, mode=mode)
+    print("CHAIN %s" % pick)
+    if source == "auto":
+        print("NEXT: write the design note and run check.py send --ledger %s --pick %s "
+              "until it prints fail=0; write the spec and run check.py spec <path>; then "
+              "handoff.py next --self z-brainstorming --event architectural-approved."
+              % (a.ledger, pick))
+    else:
+        print("NEXT: handoff.py next --self z-brainstorming --event architectural-approved")
     return 0
 
 
@@ -259,7 +315,10 @@ def main(argv=None):
     f.add_argument("--mode", default=".brainstorm/drafts/mode.json")
     f.set_defaults(fn=cmd_fast)
     c = sub.add_parser("chain")
-    c.add_argument("--pick", required=True)
+    c.add_argument("--pick", default="",
+                   help="omit it and the engine names the pick (the SLOW form)")
+    c.add_argument("--ledger", default=".brainstorm/drafts/ledger.json")
+    c.add_argument("--options", default=".brainstorm/drafts/options.json")
     c.add_argument("--chain", default=".brainstorm/drafts/chain.json")
     c.add_argument("--mode", default=".brainstorm/drafts/mode.json")
     c.set_defaults(fn=cmd_chain)

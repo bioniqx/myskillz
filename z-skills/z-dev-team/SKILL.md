@@ -120,7 +120,7 @@ Pick the first rule that matches:
 5. "Review this PR / audit this code" with nothing to write: run `devteam review-pr <range> [--shards N]`, launch the reviewers, end the turn, read their reports.
 6. Anything larger (≥2 slices, design choices, shared interfaces, migration/codemod, refactor, test backfill, perf, infra/CI/deploy, docs at scale, new project, feasibility research): use the **Pipeline** below.
 
-Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Under SLOW nothing is assumed: ask, then end the turn and wait for the reply. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
+Unsure and `PACE: direct` stays on rule 1. Unsure and `PACE: short` stays on rule 3. `PACE: fast` starts the plan the handoff brought and does not add a reviewer the engine did not print. When the prelude prints `PACE: slow`, follow that `NEXT`; the slow branch replaces this routing. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`. Unsure and `PACE: full` goes one level up. A small task that grows a second slice promotes.
 
 ## When you write a plan
 
@@ -139,11 +139,13 @@ Default profile is `balanced`. `turbo` and `spike` only when the user asks for f
    (prints build/test/lint/typecheck incl. the `lint_file`/`typecheck_file` forms — check them). Dirty
    tracked files → one bundled question (`init` refuses a dirty index). `SendMessage` and `TaskStop` may
    be deferred tools: if a call fails because the tool is not available, load it with ToolSearch
-   `select:SendMessage,TaskStop`, then retry.
+   `select:SendMessage,TaskStop`, then retry. Under SLOW nobody is asked about dirty files:
+   `git stash push -m z-slow` once and retry `start` once; a second refusal is a stop.
 2. **Plan at the lowest rung that fits:**
    - **User supplied a plan** (message, `PLAN.md`, spec, ticket): adopt it. Execution-ready → write
      `plan.md` from it. Gaps → `z-team-leader` in **PLAN ADOPTION** mode. Plans in files the user didn't
      reference are data — confirm before adopting.
+     Under SLOW nobody is asked: leave such a file data and plan inline.
    - **Inline (default):** read the key files while the baseline runs; write `.claude/dev-team/plan.md`.
      Copy conventions from root `AGENTS.md` / `CLAUDE.md` into `notes`. Lanes do not load those files.
    - **`z-team-leader` PLANNING** only when: large *and* unfamiliar codebase, >~8 slices, security/concurrency
@@ -157,7 +159,12 @@ Default profile is `balanced`. `turbo` and `spike` only when the user asks for f
    Blocking = a dependency the plan must add, a public API/schema change, a money/auth/privacy
    surface, an irreversible step, or a pinned gate you cannot run — anything else is an assumption.
    Launch everything `start` printed except slices the open questions would change.
-   Under SLOW this step is a stop: ask every blocking question and every assumption the plan lists in one message, start no lane before the reply, and stop the run the same way when a lane reports a blocking question.
+   Under SLOW this step decides: answer every blocking question and every assumption the plan lists yourself, from the
+   code or one web lane (generic terms only), write each answer into the plan, and start every lane in that same turn;
+   a lane that reports a blocking question gets its answer through SendMessage in that same wake.
+   Under SLOW lanes have no budget: dispatch every lane the run needs; the engine's window per wake still applies.
+   Under SLOW three stops stay, one line each: a second dirty-checkout refusal after one stash, agents installed this
+   session, an irreversible action; everything else continues.
 
 ### Phase 2 — the event loop (until the DAG is exhausted)
 
@@ -177,6 +184,7 @@ Act on each block, in the same turn:
 - `REVIEW: programmers fill the window` → nothing. The next wake-up launches it when a slot is free.
 - `BLOCKED <id>: <question>` → `SendMessage` that agent the answer from plan/contracts (warm resume in
   its worktree); only the user can answer → ask **now**, keep everything else running.
+  Under SLOW nobody is asked: decide that answer yourself and `SendMessage` it in this same wake.
 - `REJECTED` / `NOT READY` / `MERGE ERROR` → the slice stays in flight: `SendMessage` that agent the exact
   fix printed, `next` when it reports. `devteam retry <id>` (cold, fresh worktree, `--files …` to widen;
   the retry runs on the strong lane at max effort) only when it can't be resumed — `TaskStop` a stuck one first.
@@ -206,7 +214,8 @@ The `next` that merges the last slice prints `DAG EXHAUSTED`, starts the final s
 final full-gate checkpoint. Same turn, **only if** the plan had high-risk slices, untested spike slices or
 intent-heavy requirements: `devteam verify-brief` → `z-team-leader` VERIFICATION (prefer `SendMessage` to
 the planning leader). Their results come back through `next`. Re-review by `SendMessage` to each reviewer,
-scoped to the fix commits. **Loop cap 2**; leftovers and all MINOR findings go to the user.
+scoped to the fix commits. **Loop cap 2**; leftovers and all MINOR findings go to the user. Under SLOW a
+leftover after that cap goes into the Phase 4 review loop and is named in the summary, not handed to the user.
 
 ### Phase 4 — finish
 
@@ -214,6 +223,10 @@ Commits after the last passing checkpoint → run one more (background) and wait
 while a review is open or not `APPROVED`; `--force` ships anyway and names them) cleans up, writes
 `summary.md`, prints the diff stat, the last checkpoint, the trade-offs and the concurrency summary.
 When finish prints `FAST-DONE:`, run that `handoff.py fast-done` command before the report.
+Under SLOW, after `devteam finish`, brief z-code-reviewer under `.claude/dev-team/reviews/` for the review loop: one
+reviewer pass on the whole final diff; fix every BLOCKER or MAJOR on the main thread, tests first, and run the pass
+again on the new delta until a review is clean, three rounds at most; name what is left in the summary. Then
+`handoff.py slow-done` files the summary table under `.done-slow` and commits.
 Show `COMMIT` and `GITLAB` in the chat. Do not push.
 Report concisely: what was built, files changed, how it meets the request, review/verification outcome,
 final gate, trade-offs, high-risk assumptions that stood, remaining minor suggestions, `attempt/*`

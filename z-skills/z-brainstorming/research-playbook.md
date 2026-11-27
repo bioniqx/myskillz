@@ -115,7 +115,9 @@ Report UNVERIFIED rather than digging for sources that may not exist.
 Queries leave the machine. Use generic technical terms ("Next.js 15 app
 router middleware auth pattern"), never proprietary code, file contents,
 internal project or customer names, hostnames, keys, or data samples. If
-a question cannot be asked without them, ask the user instead.
+a question cannot be asked without them, a research lane answers it in
+generic terms or from the repo; a fact that stays unproven is labelled
+unverified, never asked (SKILL.md R11).
 
 ## 8. How evidence reaches the user
 
@@ -129,4 +131,5 @@ Evidence (checked YYYY-MM-DD)
 ```
 
 Evidence lines are short; trade-offs cite them by content. Unverified
-items appear as open questions for the user.
+items stay labelled unverified: under SLOW one more research lane answers
+what it can, and a fact that stays unproven is never asked (SKILL.md R11).

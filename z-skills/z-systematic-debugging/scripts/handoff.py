@@ -22,6 +22,12 @@ over the model's guess.
   handoff.py fast-done --message-file MSG --gitlab-file NOTE -- PATHS
                                    Commit PATHS when they are still dirty.
                                    Never pushes. Prints COMMIT and GITLAB.
+  handoff.py slow-done --summary-file MD [--check CMD] [--message-file MSG
+                 --gitlab-file NOTE] [-- PATHS]
+                                   The SLOW ending: run the check, file the
+                                   summary under .done-slow, then commit like
+                                   fast-done. Never pushes. Prints SUMMARY,
+                                   COMMIT and GITLAB.
 
 A line "From: z-a,z-b" at the start of stdin is the chain so far. The
 script refuses a cycle and stops at 3 skills. Exit 2 is a usage error.
@@ -35,6 +41,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -467,7 +474,7 @@ def emit(action, name, because, seen, self_name, include_next=True):
         lines.append("STOP cap")
         lines.append("BECAUSE: %s" % because)
         if include_next:
-            lines.append("NEXT: three skills already ran. Finish in this skill or ask the user. Do not load another skill.")
+            lines.append("NEXT: three skills already ran. Finish in this skill. Do not load another skill.")
     else:
         lines.append("STAY %s" % name)
         lines.append("BECAUSE: %s" % because)
@@ -499,10 +506,10 @@ def _skill_scripts(self_name):
     return here
 
 
-def _run_local(argv, stdin="", timeout=30):
+def _run_local(argv, stdin="", timeout=30, cwd=None):
     try:
         proc = subprocess.run(
-            argv, input=stdin, capture_output=True, text=True, timeout=timeout)
+            argv, input=stdin, capture_output=True, text=True, timeout=timeout, cwd=cwd)
     except subprocess.TimeoutExpired as exc:
         out = exc.stdout or ""
         err = exc.stderr or ""
@@ -807,17 +814,48 @@ def _sibling_scripts(scripts, skill):
         os.path.join(os.path.dirname(scripts), "..", skill, "scripts"))
 
 
-# --- SLOW human gate: ask, then wait ------------------------------------------
+# --- SLOW contract: quality first, nobody is asked -----------------------------
 # One sentence, printed at the end of every SLOW NEXT line the prelude returns.
-SLOW_ASK = ("SLOW asks: anything a tool result in this session or the user's own "
-            "words has not settled is a question for the user, never an assumption, "
-            "and there is no cap of four. Ask, then end the turn and wait for the "
-            "reply: no timer, no default, no pick.")
+SLOW_AUTO = ("SLOW decides: quality first, nobody is asked. Read the code, and research a "
+             "load-bearing fact on primary sources before trusting it. Pick the scored "
+             "leader and continue the chain without approval. After the build, review the "
+             "whole change, fix every finding, and repeat until a review is clean; a cap the "
+             "engine reaches is finished on the main thread, not handed to the user. Lanes "
+             "have no budget: dispatch every lane you will cite, in batches. Three stops "
+             "only, one line each: a second dirty-checkout refusal after one stash, agents "
+             "installed this session, an irreversible action.")
+
+# The closing review loop, the same words in every SLOW NEXT line that builds something.
+_SLOW_REVIEW = ("After the build, one reviewer pass on the whole final diff; fix every "
+                "BLOCKER or MAJOR on the main thread, tests first, and run the pass again "
+                "on the new delta until a review is clean, three rounds at most; name what "
+                "is left in the summary. ")
 
 
 def slow_next(text):
-    """A SLOW NEXT line ends with SLOW_ASK. FAST lines never pass through here."""
-    return "%s %s" % (text, SLOW_ASK)
+    """A SLOW NEXT line ends with SLOW_AUTO. FAST lines never pass through here."""
+    return "%s %s" % (text, SLOW_AUTO)
+
+
+def _slow_ship(when, check=True):
+    """Binding ending for a SLOW task: the summary is filed, then the commit.
+
+    check=False is a task that only reads (a summary, an audit report): nothing
+    can be dirty, so no check and no commit notes are named.
+    """
+    if check:
+        gates = (" --check <the test command>, --message-file <msg> and --gitlab-file <note> "
+                 "when the task changed files -- <paths this task changed>. slow-done runs "
+                 "the check, files the summary under .done-slow and commits those paths with "
+                 "it. Both note files are English. Show SUMMARY, COMMIT and GITLAB in the chat.")
+    else:
+        gates = (" -- <paths this task changed>. slow-done files the summary under .done-slow "
+                 "and commits nothing. Show the summary table in the chat.")
+    return (
+        " %s, write the summary table (columns: the idea, what was done, what verified it; "
+        "then a Leftovers line and a Rollback line; English ASCII) and run this handoff.py "
+        "slow-done --summary-file <md>%s Do not push. Do not commit any other path."
+        % (when, gates))
 
 
 def brainstorm_mode():
@@ -846,12 +884,19 @@ def _slow_fit_next(width, scripts, self_name):
                 "re-runs its command. " % self_name)
     if self_name == "z-brainstorming":
         body += "Do not start the chain. "
-    tail = ("After the tests pass, bind each new assertion: CLAIM <assertion "
+        reviewer = "handoff.py borrow --self z-brainstorming --agent z-spot-reviewer"
+    else:
+        reviewer = "one lane, briefed under .claude/dev-team/reviews/"
+    tail = ("A load-bearing fact gets one web lane. "
+            "After the tests pass, bind each new assertion: CLAIM <assertion "
             "text> :: <file>:<line> lines on stdin to python3 %s claim --root "
             "., then run the mutant gate: python3 %s mutant --file <the test "
-            "file> --cmd <the test command>. MUTANT weak or skip is named to "
-            "the user. Do not re-run open. Do not commit." % (decide, mutant))
-    return head + body + tail
+            "file> --cmd <the test command>. MUTANT weak: strengthen the test "
+            "on the main thread and run the gate again, twice at most; a "
+            "leftover is named in the summary. Then one z-spot-reviewer pass "
+            "on the diff (%s). %sDo not re-run open."
+            % (decide, mutant, reviewer, _SLOW_REVIEW))
+    return head + body + tail + _slow_ship("After that review is clean, and not before")
 
 
 def _slow_brainstorm_next(pace, scripts):
@@ -859,18 +904,26 @@ def _slow_brainstorm_next(pace, scripts):
     if pace in ("direct", "short"):
         return _slow_fit_next(pace, scripts, "z-brainstorming")
     return ("NEXT: PACE: slow. fast.md stays unread. Round 1: one message, "
-            "python3 %s atoms on this same request, plus the fact lanes. "
-            "Round 2: three drafters and three breakers, then check.py close. "
-            "Then one more breaker on the score leader with the fact list "
-            "reversed, then score again. Run python3 %s prove --cap 8 --ledger "
+            "python3 %s atoms on this same request, plus the fact lanes: code "
+            "lanes, and one web lane per load-bearing fact. Round 2: three "
+            "drafters and three breakers, then check.py close. Then one more "
+            "breaker on the score leader with the fact list reversed, then "
+            "python3 %s score --ledger .brainstorm/drafts/ledger.json. Run "
+            "python3 %s prove --cap 8 --ledger "
             ".brainstorm/drafts/ledger.json on the load-bearing web facts. "
-            "DECISION ask is a user question; DECISION stop stops. Show the "
-            "design only after check.py send prints fail=0. Human approve "
-            "stays. Chain only when the user asked to implement or approve "
-            "returned yes: ask.py chain --pick <id> (chain.json mode slow, "
-            "continue true), write the spec, check.py spec, then "
-            "handoff.py next --self z-brainstorming --event "
-            "architectural-approved. Do not re-run open." % (decide, decide))
+            "Then python3 %s chain --ledger .brainstorm/drafts/ledger.json "
+            "--options .brainstorm/drafts/options.json: it chains the engine's "
+            "leader and prints RESULT approve yes. ask=unattacked: run the "
+            "missing breaker once. DECISION stop: rewrite the options once from "
+            "what survived, attack again, then chain. Write the design note "
+            "and run check.py send --ledger .brainstorm/drafts/ledger.json "
+            "--pick <the chained id> until it prints fail=0. Write the spec, run "
+            "check.py spec, then handoff.py next --self z-brainstorming "
+            "--event architectural-approved; that chain does not commit in "
+            "this step. Do not re-run open."
+            % (decide, decide, decide, os.path.join(scripts, "ask.py"))
+            ) + _slow_ship("For a Spike or a design-only request, once the spec or the "
+                           "answer is written")
 
 
 def _prelude(args, text):
@@ -1009,8 +1062,12 @@ def _prelude(args, text):
     if name == "z-git-diff-summary":
         if args.base and not BASE_RE.match(args.base):
             print("WARN_BASE_ARG_IGNORED=%s" % args.base)
-            return 0, ("NEXT: that base is not a branch, tag, or sha. "
-                       "Ask for a different base. Do not run gather.")
+            if mode == "slow":
+                # SLOW decides: the default base, said by the WARN line above.
+                args.base = ""
+            else:
+                return 0, ("NEXT: that base is not a branch, tag, or sha. "
+                           "Ask for a different base. Do not run gather.")
         gather = os.path.join(scripts, "gather.sh")
         if not os.path.isfile(gather):
             print("PRELUDE-SKIP gather.sh missing")
@@ -1026,8 +1083,9 @@ def _prelude(args, text):
             claims = os.path.join(scripts, "claims.py")
             how = ("Filter every behavioral sentence through python3 %s "
                    "--root . with CLAIM <quote> :: <chunk file> lines on "
-                   "stdin. Delete every DROP sentence; cap 2 re-binds. "
-                   "Do not re-run open." % claims)
+                   "stdin. Delete every DROP sentence; cap 2 re-binds, then "
+                   "the sentence goes. Do not re-run open." % claims
+                   ) + _slow_ship("After the answer is written", check=False)
             if any(_line_prefix(out, mark) for mark in (
                     "NOT_A_REPO", "GATHER_FAILED", "NO_BASE", "NO_MERGE_BASE",
                     "EMPTY_DIFF")):
@@ -1045,14 +1103,15 @@ def _prelude(args, text):
                            "answer, then " + how)
             if _line_prefix(out, "MODE=FAN_OUT"):
                 print("PACE: slow")
-                return 0, ("NEXT: PACE: slow, width FAN_OUT. One message, at "
-                           "most 8 agents; each agent returns its section plus "
-                           "CLAIM <quote> :: <chunk file> lines. Do not Read "
-                           "the chunks yourself. Filter every CLAIM through "
-                           "python3 %s --root .; a chunk with zero surviving "
-                           "claims is re-dispatched once, then that chunk is "
-                           "UNVERIFIED, not a guess. Do not re-run open."
-                           % claims)
+                return 0, ("NEXT: PACE: slow, width FAN_OUT. Dispatch one "
+                           "agent per chunk, in batches as completions arrive; "
+                           "each agent returns its section plus CLAIM <quote> "
+                           ":: <chunk file> lines. Do not Read the chunks "
+                           "yourself. Filter every CLAIM through python3 %s "
+                           "--root .; a chunk with zero surviving claims is "
+                           "re-dispatched once, then that chunk is UNVERIFIED, "
+                           "not a guess. Do not re-run open." % claims
+                           ) + _slow_ship("After the answer is written", check=False)
             return _ok_next(code, out, (
                 "NEXT: PACE: slow. Act on the marker in the prelude "
                 "(NOT_A_REPO, EMPTY_DIFF, NO_BASE, MODE=INLINE, MODE=READ, "
@@ -1093,6 +1152,9 @@ def _prelude(args, text):
                        "Do not brief until that file exists.")
         if not os.path.isfile(args.spec):
             print("spec not found: %s" % args.spec)
+            if mode == "slow":
+                return 2, ("NEXT: that spec path is not a file. Find the spec this "
+                           "request names and re-run open --spec=<that path>. Do not ask.")
             return 2, "NEXT: that spec path is not a file. Ask for the path."
         code, out = _run_local(
             [sys.executable, tool, "brief", args.spec], timeout=180)
@@ -1104,10 +1166,15 @@ def _prelude(args, text):
                        "always runs. A task body that quotes an atom needs an "
                        "assertion-shaped token (assert, expect, CHECK, or the "
                        "atom inside a Run or Expected fence) or build prints "
-                       "ERR. When the plan passes its check and the user asked "
-                       "to implement, handoff.py next --self z-writing-plans "
-                       "--event plan-ready. Do not take the inline path. "
-                       "Do not re-run open. Do not commit.")
+                       "ERR. Nobody is asked: an open point in the spec is "
+                       "settled from the code or one web lane and written into "
+                       "the task. When the plan passes its check, run "
+                       "handoff.py next --self z-writing-plans --event "
+                       "plan-ready in that same turn and do not commit in this "
+                       "step: the last skill commits after its own review. "
+                       "Do not take the inline path. Do not re-run open. "
+                       "If this plan file is the finished task, "
+                       ) + _slow_ship("after its check passes, and not before")
             rc, nxt = _ok_next(code, out, success, keep=True)
             if rc == 0:
                 print("PACE: slow")
@@ -1150,8 +1217,14 @@ def _prelude(args, text):
                        "brief-debug, or review-pr). Profile is strict: every "
                        "code slice is RED then GREEN with the mutant gate "
                        "before review; the conductor prints PROFILE and "
-                       "MUTANT lines. Do not call next until a lane has "
-                       "finished. Do not re-run open.")
+                       "MUTANT lines. Nobody is asked: answer every blocking "
+                       "question and every plan assumption yourself, from the "
+                       "code or one web lane, and SendMessage the answer. Do "
+                       "not call next until a lane has finished. After "
+                       "devteam finish, one z-code-reviewer pass on the final "
+                       "delta, briefed under .claude/dev-team/reviews/. "
+                       "%sDo not re-run open." % _SLOW_REVIEW
+                       ) + _slow_ship("After that review is clean, and not before")
         if pace != "direct" and _chain_is_fast():
             pace = "fast"
         _set_pace_file(pace)
@@ -1187,6 +1260,22 @@ def _prelude(args, text):
         if not args.probe_cmd:
             if mode == "slow":
                 print("PACE: slow")
+                return 0, ("NEXT: PACE: slow. One probe call, python3 %s "
+                           "probe, with --cmd or --error-file. Two "
+                           "hypotheses, a control and a treatment, then "
+                           "close. Diagnose from the current code only; git "
+                           "history is not read. An unfamiliar error or "
+                           "library behaviour gets one web lane, generic "
+                           "terms only. Flaky measures use stress.sh -n 200. "
+                           "close prints ROOT CAUSE only when its falsifier "
+                           "command was re-run and exited non-zero. Nobody "
+                           "is asked: a cap the engine reaches is finished "
+                           "on the main thread. After the fix test passes, "
+                           "one z-spot-reviewer pass on the fix diff "
+                           "(handoff.py borrow --self z-systematic-debugging "
+                           "--agent z-spot-reviewer). %sDo not re-run open."
+                           % (tool, _SLOW_REVIEW)) + _slow_ship(
+                               "After that review is clean, and not before")
             return 0, ("NEXT: PACE: slow. One probe call, python3 %s "
                        "probe, with --cmd or --error-file. Two "
                        "hypotheses, a control and a treatment, then "
@@ -1212,12 +1301,17 @@ def _prelude(args, text):
             swarm = "LANE: SWARM" in (out or "")
             return _ok_next(
                 code, out,
-                "NEXT: PACE: slow. Follow the == NEXT == block. Two "
-                "hypotheses, a control and a treatment, then close%s. Flaky "
-                "measures use stress.sh -n 200. close prints ROOT CAUSE only "
-                "when its falsifier command was re-run and exited non-zero. "
-                "Do not re-run open or probe."
-                % ("" if swarm else ", one experiment call"),
+                ("NEXT: PACE: slow. Follow the == NEXT == block. Two "
+                 "hypotheses, a control and a treatment, then close%s. Flaky "
+                 "measures use stress.sh -n 200. close prints ROOT CAUSE only "
+                 "when its falsifier command was re-run and exited non-zero. "
+                 "Nobody is asked: a cap the engine reaches is finished on the "
+                 "main thread. After the fix test passes, one z-spot-reviewer "
+                 "pass on the fix diff (handoff.py borrow --self "
+                 "z-systematic-debugging --agent z-spot-reviewer). "
+                 "%sDo not re-run open or probe."
+                 % ("" if swarm else ", one experiment call", _SLOW_REVIEW))
+                + _slow_ship("After that review is clean, and not before"),
                 keep=True)
         if "LANE: FAST" in (out or ""):
             print("PACE: direct")
@@ -1249,6 +1343,9 @@ def _prelude(args, text):
                        "file is known. Do not brief without it.")
         if not os.path.isfile(args.spec):
             print("spec not found: %s" % args.spec)
+            if mode == "slow":
+                return 2, ("NEXT: that spec path is not a file. Find the spec this "
+                           "request names and re-run open --spec=<that path>. Do not ask.")
             return 2, "NEXT: that spec path is not a file. Ask for the path."
         code, out = _run_local(
             [sys.executable, tool, "brief", "--spec", args.spec], timeout=180)
@@ -1259,7 +1356,13 @@ def _prelude(args, text):
                        "CONFLICT needs a quote that is a substring of the "
                        "cited lines; a second judge runs in the same fan-out "
                        "wave and the engine re-runs its counterexample "
-                       "command. Do not re-read the spec. Do not re-run open.")
+                       "command. Nobody is asked. After the report, a request "
+                       "that also asks for the fix runs handoff.py next --self "
+                       "z-requirements-code-audit --event fix-gaps or "
+                       "implement-gaps, and that skill ends the run. "
+                       "Do not re-read the spec. Do not re-run open.") + _slow_ship(
+                           "For an audit-only request, after the report is written",
+                           check=False)
             rc, nxt = _ok_next(code, out, success, keep=True)
             if rc == 0:
                 print("PACE: slow")
@@ -1296,18 +1399,22 @@ def _prelude(args, text):
         _print_block(out)
         if mode == "slow":
             claims = os.path.join(scripts, "claims.py")
-            success = ("NEXT: PACE: slow. Launch writers only after the set is "
-                       "known; each writer returns its document plus CLAIM "
-                       "<quote> :: <file>:<line> lines for every behavioral "
-                       "sentence. Filter all CLAIM lines through python3 %s "
-                       "--root . and delete every sentence whose claim prints "
-                       "DROP; cap 2 re-binds. Then one z-doc-reviewer pass "
-                       "that sees the document and the recon map; the engine "
-                       "checks its counterexample as a CLAIM. Reviewer agents "
-                       "are not limited to api-reference, data-model, and "
-                       "configuration. One reviewer wave, cap 8, is enough. "
-                       "Then one finish bash. Do not re-run open or recon."
-                       % claims)
+            success = ("NEXT: PACE: slow. Skip the Gate: nobody answers it. "
+                       "Use the star set or the set the request already named, "
+                       "say so in one line, and launch writers only after the "
+                       "set is known; each writer returns its document plus "
+                       "CLAIM <quote> :: <file>:<line> lines for every "
+                       "behavioral sentence. Filter all CLAIM lines through "
+                       "python3 %s --root . and delete every sentence whose "
+                       "claim prints DROP; cap 2 re-binds, then the sentence "
+                       "goes. Then one z-doc-reviewer pass per document, in "
+                       "batches; the pass sees the document and the recon map, "
+                       "and the engine checks its counterexample as a CLAIM. "
+                       "Reviewer agents are not limited to api-reference, "
+                       "data-model, and configuration. %sThen one finish bash. "
+                       "Do not re-run open or recon."
+                       % (claims, _SLOW_REVIEW)) + _slow_ship(
+                           "After that finish bash passes, and not before")
             rc, nxt = _ok_next(code, out, success, keep=True)
             if rc == 0:
                 print("PACE: slow")
@@ -1559,18 +1666,19 @@ def _print_notes(msg, note):
 
 
 def _dirty_paths(root):
-    proc = _git(["status", "--porcelain", "--untracked-files=all"], root)
+    """Dirty paths under their exact names: -z never quotes a name, so a
+    non-ASCII file is not escaped and a rename's two paths are told apart."""
+    proc = _git(["status", "--porcelain", "-z", "--untracked-files=all"], root)
     found = set()
-    for line in (proc.stdout or "").splitlines():
-        if len(line) < 4:
+    skip = False
+    for field in (proc.stdout or "").split("\0"):
+        if skip:
+            skip = False       # the path a rename or a copy came from
             continue
-        path = line[3:]
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        path = path.strip()
-        if len(path) >= 2 and path[0] == '"' and path[-1] == '"':
-            path = path[1:-1]
-        found.add(path)
+        if len(field) < 4:
+            continue
+        skip = field[0] in "RC"
+        found.add(field[3:])
     return found
 
 
@@ -1591,39 +1699,51 @@ def _safe_rel(root, raw):
     return rel
 
 
-def _fail_note(err):
+def _fail_note(err, name="fast-done"):
     print(err)
-    print("NEXT: fix that file and run fast-done again. Do not push.")
+    print("NEXT: fix that file and run %s again. Do not push." % name)
     return 2
 
 
-def cmd_fast_done(args):
-    """Commit only the paths this task still has dirty. Never push."""
+def _ignored_new(root, rel):
+    """True when git ignores rel and no commit tracks it."""
+    ignored = _git(["check-ignore", "-q", "--", rel], root)
+    tracked = _git(["ls-files", "--error-unmatch", "--", rel], root)
+    return ignored.returncode == 0 and tracked.returncode != 0
+
+
+def cmd_fast_done(args, name="fast-done", rides=None, show="COMMIT and GITLAB"):
+    """Commit only the paths this task still has dirty. Never push.
+
+    slow-done reuses this: `name` labels the output, `rides` is one new file
+    that joins the commit when there is one.
+    """
+    label = name.upper()
     msg, err = _load_note(args.message_file, "message", 2000)
     if err:
-        return _fail_note(err)
+        return _fail_note(err, name)
     err = _check_message(msg)
     if err:
-        return _fail_note(err)
+        return _fail_note(err, name)
     note, err = _load_note(args.gitlab_file, "gitlab", 800)
     if err:
-        return _fail_note(err)
+        return _fail_note(err, name)
     err = _check_gitlab(note)
     if err:
-        return _fail_note(err)
+        return _fail_note(err, name)
     top = _git(["rev-parse", "--show-toplevel"], os.getcwd())
     if top.returncode != 0:
-        print("FAIL fast-done: not a git repository")
+        print("FAIL %s: not a git repository" % name)
         _print_notes(msg, note)
-        print("NEXT: Show COMMIT and GITLAB in the chat. Do not push.")
+        print("NEXT: Show %s in the chat. Do not push." % show)
         return 2
     root = (top.stdout or "").strip()
     raw_paths = [item for item in (args.paths or []) if item != "--"]
     if not raw_paths:
-        print("FAST-DONE clean")
+        print("%s clean" % label)
         _print_notes(msg, note)
-        print("NEXT: Nothing to commit. Show COMMIT and GITLAB in the chat. "
-              "Do not commit unrelated files. Do not push.")
+        print("NEXT: Nothing to commit. Show %s in the chat. "
+              "Do not commit unrelated files. Do not push." % show)
         return 0
     dirty = _dirty_paths(root)
     commit_paths = []
@@ -1636,12 +1756,10 @@ def cmd_fast_done(args):
             return 2
         if _SECRET_PATH.search("/" + rel):
             print("FAIL secret: %s" % rel)
-            print("NEXT: remove that path and run fast-done again. Do not push.")
+            print("NEXT: remove that path and run %s again. Do not push." % name)
             return 2
         if rel in dirty:
-            ignored = _git(["check-ignore", "-q", "--", rel], root)
-            tracked = _git(["ls-files", "--error-unmatch", "--", rel], root)
-            if ignored.returncode == 0 and tracked.returncode != 0:
+            if _ignored_new(root, rel):
                 print("SKIP ignored %s" % rel)
                 continue
             commit_paths.append(rel)
@@ -1653,18 +1771,23 @@ def cmd_fast_done(args):
             return 2
         already.append(rel)
     if not commit_paths:
-        print("FAST-DONE already-committed")
+        print("%s already-committed" % label)
         if already:
             print("ALREADY %s" % " ".join(already))
         _print_notes(msg, note)
-        print("NEXT: No new commit. Show COMMIT and GITLAB in the chat. "
-              "Do not push. Do not amend.")
+        print("NEXT: No new commit. Show %s in the chat. "
+              "Do not push. Do not amend." % show)
         return 0
+    if rides:
+        if _ignored_new(root, rides):
+            print("SKIP ignored %s" % rides)
+        else:
+            commit_paths.insert(0, rides)
     added = _git(["add", "--"] + commit_paths, root)
     if added.returncode != 0:
         print("FAIL git add")
         sys.stderr.write(added.stderr or "")
-        print("NEXT: fix the git error and run fast-done again. Do not push.")
+        print("NEXT: fix the git error and run %s again. Do not push." % name)
         return 1
     committed = _git(
         ["commit", "-F", os.path.abspath(args.message_file), "--"] + commit_paths,
@@ -1676,13 +1799,154 @@ def cmd_fast_done(args):
               "Do not push. Do not amend.")
         return 1
     sha = _git(["rev-parse", "--short", "HEAD"], root)
-    print("FAST-DONE committed %s" % (sha.stdout or "").strip())
+    print("%s committed %s" % (label, (sha.stdout or "").strip()))
     if already:
         print("ALREADY %s" % " ".join(already))
     _print_notes(msg, note)
-    print("NEXT: Show COMMIT and GITLAB in the chat, each in its own fence. "
-          "Do not push. Do not amend.")
+    print("NEXT: Show %s in the chat, each in its own fence. "
+          "Do not push. Do not amend." % show)
     return 0
+
+
+_SUMMARY_LABELS = ("Leftovers:", "Rollback:")
+
+
+def _summary_problems(text):
+    """What a SLOW summary lacks: ASCII, one table with a data row, both labels."""
+    problems = []
+    if not text.isascii():
+        problems.append("not English ASCII")
+    rows = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("|"):
+            rows.append(line)
+        elif rows:
+            break
+    if len(rows) < 3 or not re.fullmatch(r"\|?[\s:|-]*-{3,}[\s:|-]*\|?", rows[1].strip()):
+        problems.append("no markdown table with a header, a separator and one data row")
+    for label in _SUMMARY_LABELS:
+        if not re.search(r"(?m)^[ \t]*(?:[-*][ \t]*)?%s[ \t]*\S" % re.escape(label), text):
+            problems.append("no '%s' line with text after it" % label)
+    return problems
+
+
+def _summary_dest(root, text):
+    """<root>/.done-slow/<date>-<time>-<slug>.md; -2, -3 on a name collision."""
+    title = next((line.lstrip("#").strip() for line in text.splitlines()
+                  if line.startswith("#")), "summary")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:48].rstrip("-")
+    base = os.path.join(root, ".done-slow",
+                        "%s-%s" % (time.strftime("%Y-%m-%d-%H%M"), slug or "summary"))
+    dest, count = base + ".md", 1
+    while os.path.exists(dest):
+        count += 1
+        dest = "%s-%d.md" % (base, count)
+    return dest
+
+
+def _dirty_named(root, raw_paths):
+    """(dirty paths the named paths cover, the first named path that is not usable, why).
+
+    A named path covers itself and, as a folder, every dirty file under it.
+    `why` is "unsafe" for a path that leaves the repo, "missing" for one that
+    is neither tracked nor on disk.
+    """
+    dirty = _dirty_paths(root)
+    found = []
+    for raw in raw_paths:
+        rel = _safe_rel(root, raw)
+        if not rel:
+            return [], raw, "unsafe"
+        hits = [path for path in dirty
+                if path == rel or path.startswith(rel + "/")]
+        if not hits:
+            known = _git(["ls-files", "--error-unmatch", "--", rel], root)
+            if known.returncode != 0 and not os.path.exists(os.path.join(root, rel)):
+                return [], raw, "missing"
+        found.extend(hits)
+    return sorted(set(found)), None, ""
+
+
+def _note_problem(args):
+    """The first problem with the two note files, or '' when both may commit."""
+    msg, err = _load_note(args.message_file, "message", 2000)
+    if not err:
+        err = _check_message(msg)
+    if not err:
+        note, err = _load_note(args.gitlab_file, "gitlab", 800)
+        if not err:
+            err = _check_gitlab(note)
+    return err
+
+
+def cmd_slow_done(args):
+    """The SLOW ending: run the check, file the summary under .done-slow, commit.
+
+    Nothing is filed and nothing is committed until the summary is valid, the
+    named paths exist, the notes may commit and the check exits 0. A task that
+    changed nothing leaves its summary untracked. Never pushes.
+    """
+    root = _repo_root()
+    try:
+        with open(args.summary_file, encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        print("FAIL summary: cannot read it (%s)" % exc)
+        print("NEXT: write the summary file as UTF-8 English ASCII and run "
+              "slow-done again. Do not push.")
+        return 2
+    problems = _summary_problems(text)
+    if problems:
+        for problem in problems:
+            print("FAIL summary - %s" % problem)
+        print("NEXT: fix the summary file and run slow-done again. Do not push.")
+        return 2
+    raw_paths = [item for item in (args.paths or []) if item != "--"]
+    changed, bad, why = _dirty_named(root, raw_paths)
+    if bad is not None:
+        print("FAIL path: %s" % bad)
+        print("NEXT: %s Do not push." % (
+            "name only files this task changed." if why == "missing"
+            else "pass paths relative to the repo."))
+        return 2
+    if changed:
+        err = _note_problem(args)
+        if err:
+            return _fail_note(err, "slow-done")
+        if not (args.check or "").strip():
+            print("FAIL check - files changed and no --check was given")
+            print("NEXT: pass --check <the project's test command> and run slow-done "
+                  "again. Do not push.")
+            return 2
+    if (args.check or "").strip():
+        code, out = _run_local(["sh", "-c", args.check], timeout=1800, cwd=root)
+        if code:
+            print("FAIL check - exit %s%s" % (
+                code, " (timed out after 1800 seconds)" if code == 124 else ""))
+            for line in out.splitlines()[-31:]:
+                if not line.startswith("PRELUDE-TIMEOUT"):
+                    print("  " + line)
+            print("NEXT: fix every failure and run slow-done again. Nothing was "
+                  "filed or committed. Do not push.")
+            return 1
+    dest = _summary_dest(root, text)
+    try:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if os.path.realpath(args.summary_file) != os.path.realpath(dest):
+            shutil.move(args.summary_file, dest)
+    except OSError as exc:
+        print("FAIL summary: cannot file it under .done-slow (%s)" % exc)
+        return 2
+    rel = os.path.relpath(dest, root)
+    print("SUMMARY %s" % rel)
+    if not changed:
+        print("SLOW-DONE clean")
+        print("NEXT: Show the summary table in the chat. Nothing to commit. "
+              "Do not push.")
+        return 0
+    args.paths = ["--"] + changed
+    return cmd_fast_done(args, name="slow-done", rides=rel,
+                         show="SUMMARY, COMMIT and GITLAB")
 
 
 def main(argv=None):
@@ -1715,6 +1979,12 @@ def main(argv=None):
     done.add_argument("--message-file", required=True)
     done.add_argument("--gitlab-file", required=True)
     done.add_argument("paths", nargs=argparse.REMAINDER)
+    slow = sub.add_parser("slow-done")
+    slow.add_argument("--summary-file", required=True)
+    slow.add_argument("--check", default="")
+    slow.add_argument("--message-file", default="")
+    slow.add_argument("--gitlab-file", default="")
+    slow.add_argument("paths", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.cmd == "route":
         return cmd_route(args)
@@ -1730,6 +2000,8 @@ def main(argv=None):
         return cmd_borrow(args)
     if args.cmd == "fast-done":
         return cmd_fast_done(args)
+    if args.cmd == "slow-done":
+        return cmd_slow_done(args)
     parser.print_help(sys.stderr)
     return 2
 

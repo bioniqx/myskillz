@@ -38,8 +38,8 @@ EOF
 
 | # | Rule | Violation = bug |
 |---|------|-----------------|
-| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. When the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nothing is assumed: ask, then end the turn and wait for the reply. | Launching an agent for one named doc |
-| R1 | **Turn budget ≤ 4 without a Gate, ≤ 5 with one** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. `PACE: direct` ignores this table. | Adding a turn a batch could absorb |
+| R0 | If the prelude printed `PACE: direct`, that `NEXT` line is the whole run. You write the one named doc yourself. No writer, no reviewer, no Gate. A general "document this repo" is `PACE: full`. When the prelude prints `PACE: slow`, follow that `NEXT`. Under SLOW nobody is asked: quality first, the scored leader is picked and built without approval, the change is reviewed and fixed until a review is clean, and `handoff.py slow-done` files the summary table under `.done-slow`. Under SLOW the Gate (section 3.0) is skipped because nobody answers it: use the star set of section 3.1 or the set the user already named, say so in one line, and launch the writers without waiting for a reply. | Launching an agent for one named doc |
+| R1 | **Turn budget ≤ 4 without a Gate, ≤ 5 with one** (cache hit: ≤ 2). Turn = one main-thread message. The Gate question (§3.0) belongs to Turn 2 and the answer starts Turn 3; only the two §5 exceptions may add a turn. `PACE: direct` ignores this table. Under SLOW there is no turn budget. | Adding a turn a batch could absorb |
 | R2 | **One message = all independent calls.** 1 bash + up to 8 Tasks go in ONE message. | Sending calls one at a time |
 | R3 | **Concurrency = 8 subagents max per wave.** More docs → consecutive waves of 8, biggest doc first. Writers start only after the set is known. Reviewers for api-reference, data-model, and configuration, plus one retry, stay within that wave of 8. | 9+ in flight at once, or 1-at-a-time |
 | R4 | **One bash call per phase.** Chain with `;` `&&` `2>/dev/null`. | Two bash calls in one phase |
@@ -90,9 +90,9 @@ Skip the review wave unless a doc written this run is `api-reference.md`, `data-
 | Cache hit (`HEAD` unchanged) + all scopes unchanged | Report `[cached]` list, ask nothing, stop at Turn 2 |
 | User named specific docs | Use exactly those. Confirm in one clause inside Turn 2 |
 | User said nothing specific | Run the Gate (§3.0): adapted numbered list with `[create]`/`[update]` tags, a bare "ok" selects the ★ set. Do not launch writers until the reply |
-| Non-interactive run (nobody to answer) | Use the ★ set (§3.1), state it in one line, skip the Gate |
+| Non-interactive run (nobody to answer), or `PACE: slow` | Use the ★ set (§3.1), state it in one line, skip the Gate |
 | > 8 docs selected | Waves of 8, longest/HIGH first |
-| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `Explore`, a ZCode built-in. Ask which packages to document inside the Gate message |
+| Repo > 3000 files or monorepo | Turn 1 becomes: 1 bash (root recon) + up to 8 read-only shards, one per package — same message. Shards run as `Explore`, a ZCode built-in. Ask which packages to document inside the Gate message; under SLOW nobody is asked: document the packages the user already named, else every package |
 | No git repo | Recon script auto-falls back to a mtime hash; everything else identical |
 | Requirements/spec docs found | Read-only sources. **Never** write into them. Rename any colliding output |
 | Subagents unavailable in this harness | §6 sequential fallback |
@@ -133,7 +133,7 @@ docs already live in `docs/`, else `docs/`.
 
 ### 3.0 Gate — select the docs (Turn 2)
 
-Skip the Gate only when the user already named the docs (map each to its title and file, confirm in one clause) or the run is non-interactive (use the ★ set, say so in one line). Otherwise:
+Skip the Gate only when the user already named the docs (map each to its title and file, confirm in one clause) or the run is non-interactive (use the ★ set, say so in one line). Under SLOW the Gate is always skipped, because nobody answers it: use the docs the user already named, else the star set of section 3.1, say so in one line, and launch the writers without waiting for a reply. Otherwise:
 
 1. Adapt §3.1 to this repo from the manifest, with no new reading: drop rows whose condition fails, dedupe against EXISTING DOCS, and tag each row `[create]` (the doc does not exist yet) or `[update]` (it exists).
 2. Send ONE tight numbered list, ★ rows first and marked. A bare "ok" selects the ★ set, numbers select those rows, and the user may also name a language (default English). In a monorepo add the question "which packages should be documented?" to the same message.
@@ -187,7 +187,7 @@ prints a changed-file list, so a changed `HEAD` makes every scope changed;
 
 Send together, in this order, in a **single message**:
 
-1. **The Gate list (§3.0) or, when the Gate was skipped, one line of intent** — e.g. `Writing 5 docs to docs/: overview, setup-guide, architecture, api-reference, user-guide (say "stop" to change the set).` Do not wait for a reply to the intent line; the Gate list ends the turn.
+1. **The Gate list (§3.0) or, when the Gate was skipped, one line of intent** — e.g. `Writing 5 docs to docs/: overview, setup-guide, architecture, api-reference, user-guide (say "stop" to change the set).` Do not wait for a reply to the intent line; the Gate list ends the turn. Under SLOW there is no Gate list: the intent line names the set you picked under section 3.0, and the writers go out in that same message.
 2. **One bash call** — writes the manifest and the state scaffold, creates the output dir and the index, deterministically, with no subagent. `[cached]` docs keep their previous `scope` and `head` in `state.json`. If the Gate answer changes the set, Turn 3 runs this call again with the final list:
 
 ```bash
@@ -269,7 +269,7 @@ risk=<one clause: what you were least sure about, or "none">
 ## 4. TURN 3 — REVIEW WAVE (api, data model, configuration only)
 
 Skip this turn unless a doc written this run is `api-reference.md`, `data-model.md`, or `configuration.md`. Other docs are checked by the finish bash (commands, links, secrets). Reviewer ≠ the writer, fresh context,
-subagent type `z-doc-reviewer` (the installed ZCode agent, Appendix A; the built-in `general-purpose` agent if it is missing).
+subagent type `z-doc-reviewer` (the installed ZCode agent, Appendix A; the built-in `general-purpose` agent if it is missing). Under SLOW review every document written this run, not only those three: one `z-doc-reviewer` pass per document, in batches (R3), with the review loop rule (one reviewer pass on the whole final diff; fix every BLOCKER or MAJOR on the main thread, tests first, and run the pass again on the new delta until a review is clean, three rounds at most; name what is left in the summary); for a document the test is the finish bash of section 5.
 
 ```
 ROLE: Technical fact-checker with edit rights. Effort: max. No report-then-fix —
@@ -331,7 +331,7 @@ Then:
 - `LOW_HAS_CODE` → one reviewer Task for that doc only (a changed Gate selection is the only other path allowed to add a turn — the two §5 exceptions, R1).
 - **Final summary message** (compact): created / updated / `[cached]` docs with paths · index path ·
   `TODO(human)` questions that need a human · every reviewer `unresolved=` and `human=` value that is not "none" · anything still failing after its one retry ·
-  note that `<state dir>` is a cache and can be gitignored or deleted.
+  note that `<state dir>` is a cache and can be gitignored or deleted. Under SLOW the run then ends with `handoff.py slow-done`: write the summary table (columns: the idea, what was done, what verified it; then a `Leftovers:` line and a `Rollback:` line), a commit message file and a GitLab note file (all three English), then run `handoff.py slow-done --summary-file <md> --check <the finish bash of this section as one command> --message-file <msg> --gitlab-file <note> -- <paths this task changed>`. `slow-done` runs the check, files the summary under `.done-slow/` and commits those paths with it; it never pushes. A cache-hit run changed no file: no check, no notes, and the summary stays untracked.
 
 ---
 
